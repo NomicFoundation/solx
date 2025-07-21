@@ -1,0 +1,557 @@
+[
+  {
+    "contract": "script/deploy/DeployMainnet.s.sol:DeployMainnet",
+    "deployment": {
+      "gas": 8582570,
+      "size": 39690
+    },
+    "functions": {
+      "artGobblers()": {
+        "calls": 120,
+        "min": 2323,
+        "mean": 2323,
+        "median": 2323,
+        "max": 2323
+      },
+      "coldWallet()": {
+        "calls": 20,
+        "min": 238,
+        "mean": 238,
+        "median": 238,
+        "max": 238
+      },
+      "communityReserve()": {
+        "calls": 20,
+        "min": 2346,
+        "mean": 2346,
+        "median": 2346,
+        "max": 2346
+      },
+      "gobblerBaseUri()": {
+        "calls": 20,
+        "min": 514,
+        "mean": 514,
+        "median": 514,
+        "max": 514
+      },
+      "gobblerUnrevealedUri()": {
+        "calls": 20,
+        "min": 526,
+        "mean": 526,
+        "median": 526,
+        "max": 526
+      },
+      "goo()": {
+        "calls": 60,
+        "min": 2323,
+        "mean": 2323,
+        "median": 2323,
+        "max": 2323
+      },
+      "governorWallet()": {
+        "calls": 20,
+        "min": 239,
+        "mean": 239,
+        "median": 239,
+        "max": 239
+      },
+      "pages()": {
+        "calls": 80,
+        "min": 2362,
+        "mean": 2362,
+        "median": 2362,
+        "max": 2362
+      },
+      "pagesBaseUri()": {
+        "calls": 20,
+        "min": 555,
+        "mean": 555,
+        "median": 555,
+        "max": 555
+      },
+      "root()": {
+        "calls": 20,
+        "min": 217,
+        "mean": 217,
+        "median": 217,
+        "max": 217
+      },
+      "run()": {
+        "calls": 140,
+        "min": 6816234,
+        "mean": 6816234,
+        "median": 6816234,
+        "max": 6816234
+      },
+      "teamReserve()": {
+        "calls": 20,
+        "min": 2324,
+        "mean": 2324,
+        "median": 2324,
+        "max": 2324
+      }
+    }
+  },
+  {
+    "contract": "script/deploy/DeployRinkeby.s.sol:DeployRinkeby",
+    "deployment": {
+      "gas": 8588327,
+      "size": 39751
+    },
+    "functions": {
+      "artGobblers()": {
+        "calls": 80,
+        "min": 2323,
+        "mean": 2323,
+        "median": 2323,
+        "max": 2323
+      },
+      "coldWallet()": {
+        "calls": 20,
+        "min": 238,
+        "mean": 238,
+        "median": 238,
+        "max": 238
+      },
+      "communityReserve()": {
+        "calls": 20,
+        "min": 2346,
+        "mean": 2346,
+        "median": 2346,
+        "max": 2346
+      },
+      "gobblerBaseUri()": {
+        "calls": 20,
+        "min": 520,
+        "mean": 520,
+        "median": 520,
+        "max": 520
+      },
+      "gobblerUnrevealedUri()": {
+        "calls": 20,
+        "min": 526,
+        "mean": 526,
+        "median": 526,
+        "max": 526
+      },
+      "goo()": {
+        "calls": 60,
+        "min": 2323,
+        "mean": 2323,
+        "median": 2323,
+        "max": 2323
+      },
+      "mintStart()": {
+        "calls": 20,
+        "min": 231,
+        "mean": 231,
+        "median": 231,
+        "max": 231
+      },
+      "pages()": {
+        "calls": 80,
+        "min": 2362,
+        "mean": 2362,
+        "median": 2362,
+        "max": 2362
+      },
+      "pagesBaseUri()": {
+        "calls": 20,
+        "min": 555,
+        "mean": 555,
+        "median": 555,
+        "max": 555
+      },
+      "root()": {
+        "calls": 20,
+        "min": 224,
+        "mean": 224,
+        "median": 224,
+        "max": 224
+      },
+      "run()": {
+        "calls": 100,
+        "min": 6816234,
+        "mean": 6816234,
+        "median": 6816234,
+        "max": 6816234
+      },
+      "teamReserve()": {
+        "calls": 20,
+        "min": 2324,
+        "mean": 2324,
+        "median": 2324,
+        "max": 2324
+      }
+    }
+  },
+  {
+    "contract": "src/ArtGobblers.sol:ArtGobblers",
+    "deployment": {
+      "gas": 3629891,
+      "size": 17800
+    },
+    "functions": {
+      "BASE_URI()": {
+        "calls": 40,
+        "min": 7195,
+        "mean": 7195,
+        "median": 7195,
+        "max": 7195
+      },
+      "FIRST_LEGENDARY_GOBBLER_ID()": {
+        "calls": 20,
+        "min": 278,
+        "mean": 278,
+        "median": 278,
+        "max": 278
+      },
+      "LEGENDARY_AUCTION_INTERVAL()": {
+        "calls": 340,
+        "min": 261,
+        "mean": 261,
+        "median": 261,
+        "max": 261
+      },
+      "MAX_MINTABLE()": {
+        "calls": 40,
+        "min": 261,
+        "mean": 261,
+        "median": 261,
+        "max": 261
+      },
+      "UNREVEALED_URI()": {
+        "calls": 40,
+        "min": 7178,
+        "mean": 7178,
+        "median": 7178,
+        "max": 7178
+      },
+      "balanceOf(address)": {
+        "calls": 40,
+        "min": 2502,
+        "mean": 2502,
+        "median": 2502,
+        "max": 2502
+      },
+      "claimGobbler(bytes32[])": {
+        "calls": 140,
+        "min": 21787,
+        "mean": 50518,
+        "median": 24109,
+        "max": 114268
+      },
+      "getTargetSaleTime(int256)": {
+        "calls": 60,
+        "min": 480,
+        "mean": 812,
+        "median": 979,
+        "max": 979
+      },
+      "getVRGDAPrice(int256,uint256)": {
+        "calls": 49980,
+        "min": 505,
+        "mean": 1425,
+        "median": 1607,
+        "max": 1607
+      },
+      "gobblerPrice()": {
+        "calls": 1100,
+        "min": 3362,
+        "mean": 3758,
+        "median": 3773,
+        "max": 3773
+      },
+      "gobblerRevealsData()": {
+        "calls": 20,
+        "min": 2444,
+        "mean": 2444,
+        "median": 2444,
+        "max": 2444
+      },
+      "merkleRoot()": {
+        "calls": 20,
+        "min": 275,
+        "mean": 275,
+        "median": 275,
+        "max": 275
+      },
+      "mintFromGoo(uint256,bool)": {
+        "calls": 40,
+        "min": 28702,
+        "mean": 28858,
+        "median": 28858,
+        "max": 29014
+      },
+      "mintLegendaryGobbler(uint256[])": {
+        "calls": 20,
+        "min": 26158,
+        "mean": 26158,
+        "median": 26158,
+        "max": 26158
+      },
+      "mintReservedGobblers(uint256)": {
+        "calls": 20,
+        "min": 45739,
+        "mean": 45739,
+        "median": 45739,
+        "max": 45739
+      },
+      "mintStart()": {
+        "calls": 20,
+        "min": 276,
+        "mean": 276,
+        "median": 276,
+        "max": 276
+      },
+      "owner()": {
+        "calls": 20,
+        "min": 2379,
+        "mean": 2379,
+        "median": 2379,
+        "max": 2379
+      },
+      "ownerOf(uint256)": {
+        "calls": 20,
+        "min": 2452,
+        "mean": 2452,
+        "median": 2452,
+        "max": 2452
+      },
+      "requestRandomSeed()": {
+        "calls": 20,
+        "min": 28579,
+        "mean": 28579,
+        "median": 28579,
+        "max": 28579
+      },
+      "targetPrice()": {
+        "calls": 20,
+        "min": 277,
+        "mean": 277,
+        "median": 277,
+        "max": 277
+      },
+      "tokenURI(uint256)": {
+        "calls": 60,
+        "min": 4655,
+        "mean": 6081,
+        "median": 6795,
+        "max": 6795
+      },
+      "upgradeRandProvider(address)": {
+        "calls": 20,
+        "min": 23892,
+        "mean": 23892,
+        "median": 23892,
+        "max": 23892
+      }
+    }
+  },
+  {
+    "contract": "src/Goo.sol:Goo",
+    "deployment": {
+      "gas": 879733,
+      "size": 4715
+    },
+    "functions": {
+      "artGobblers()": {
+        "calls": 40,
+        "min": 227,
+        "mean": 227,
+        "median": 227,
+        "max": 227
+      },
+      "balanceOf(address)": {
+        "calls": 20,
+        "min": 2435,
+        "mean": 2435,
+        "median": 2435,
+        "max": 2435
+      },
+      "burnForGobblers(address,uint256)": {
+        "calls": 40,
+        "min": 24115,
+        "mean": 28962,
+        "median": 28962,
+        "max": 33810
+      },
+      "burnForPages(address,uint256)": {
+        "calls": 20,
+        "min": 33802,
+        "mean": 33802,
+        "median": 33802,
+        "max": 33802
+      },
+      "mintForGobblers(address,uint256)": {
+        "calls": 262480,
+        "min": 0,
+        "mean": 42032,
+        "median": 28111,
+        "max": 68007
+      },
+      "pages()": {
+        "calls": 40,
+        "min": 222,
+        "mean": 222,
+        "median": 222,
+        "max": 222
+      },
+      "totalSupply()": {
+        "calls": 80,
+        "min": 2316,
+        "mean": 2316,
+        "median": 2316,
+        "max": 2316
+      }
+    }
+  },
+  {
+    "contract": "src/Pages.sol:Pages",
+    "deployment": {
+      "gas": 1675371,
+      "size": 8605
+    },
+    "functions": {
+      "BASE_URI()": {
+        "calls": 40,
+        "min": 7156,
+        "mean": 7156,
+        "median": 7156,
+        "max": 7156
+      },
+      "artGobblers()": {
+        "calls": 40,
+        "min": 255,
+        "mean": 255,
+        "median": 255,
+        "max": 255
+      },
+      "currentId()": {
+        "calls": 40,
+        "min": 2374,
+        "mean": 2374,
+        "median": 2374,
+        "max": 2374
+      },
+      "getTargetSaleTime(int256)": {
+        "calls": 140,
+        "min": 431,
+        "mean": 757,
+        "median": 1003,
+        "max": 1003
+      },
+      "getVRGDAPrice(int256,uint256)": {
+        "calls": 174440,
+        "min": 708,
+        "mean": 1633,
+        "median": 1650,
+        "max": 1650
+      },
+      "goo()": {
+        "calls": 40,
+        "min": 255,
+        "mean": 255,
+        "median": 255,
+        "max": 255
+      },
+      "mintCommunityPages(uint256)": {
+        "calls": 300,
+        "min": 26517,
+        "mean": 70499,
+        "median": 57692,
+        "max": 292034
+      },
+      "mintFromGoo(uint256,bool)": {
+        "calls": 261300,
+        "min": 22030,
+        "mean": 67002,
+        "median": 68268,
+        "max": 102468
+      },
+      "numMintedForCommunity()": {
+        "calls": 20,
+        "min": 2321,
+        "mean": 2321,
+        "median": 2321,
+        "max": 2321
+      },
+      "ownerOf(uint256)": {
+        "calls": 260,
+        "min": 2414,
+        "mean": 2414,
+        "median": 2414,
+        "max": 2414
+      },
+      "pagePrice()": {
+        "calls": 261320,
+        "min": 2848,
+        "mean": 3523,
+        "median": 3420,
+        "max": 3831
+      },
+      "targetPrice()": {
+        "calls": 60,
+        "min": 239,
+        "mean": 239,
+        "median": 239,
+        "max": 239
+      }
+    }
+  },
+  {
+    "contract": "src/utils/GobblerReserve.sol:GobblerReserve",
+    "deployment": {
+      "gas": 272746,
+      "size": 1229
+    },
+    "functions": {
+      "owner()": {
+        "calls": 80,
+        "min": 2276,
+        "mean": 2276,
+        "median": 2276,
+        "max": 2276
+      }
+    }
+  },
+  {
+    "contract": "src/utils/rand/ChainlinkV1RandProvider.sol:ChainlinkV1RandProvider",
+    "deployment": {
+      "gas": 316422,
+      "size": 1669
+    },
+    "functions": {
+      "requestRandomBytes()": {
+        "calls": 20,
+        "min": 21265,
+        "mean": 21265,
+        "median": 21265,
+        "max": 21265
+      }
+    }
+  },
+  {
+    "contract": "test/utils/Utilities.sol:Utilities",
+    "deployment": {
+      "gas": 528483,
+      "size": 2130
+    },
+    "functions": {
+      "createUsers(uint256)": {
+        "calls": 1940,
+        "min": 35959,
+        "mean": 35959,
+        "median": 35959,
+        "max": 35959
+      },
+      "predictContractAddress(address,uint256)": {
+        "calls": 6240,
+        "min": 24829,
+        "mean": 24829,
+        "median": 24829,
+        "max": 24829
+      }
+    }
+  }
+]

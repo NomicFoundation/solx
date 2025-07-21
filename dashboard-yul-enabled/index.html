@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solx vs Solc Gas Comparison</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        solc: '#9C27B0',
+                        solx: '#2196F3',
+                    },
+                    maxWidth: {
+                        '8xl': '88rem'
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-gray-50 min-h-screen w-full">
+    <main class="container mx-auto max-w-7xl w-full px-4 sm:px-6 lg:px-8 py-8">
+        <div class="bg-white rounded-2xl shadow-sm p-6 sm:p-8">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">solx vs solc gas comparison</h1>
+                <p class="text-gray-600">Select a project to view its gas consumption comparison</p>
+            </div>
+            
+            <div class="mb-8 flex justify-center">
+                <select id="projectSelect" class="w-64 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Select a project...</option>
+                </select>
+            </div>
+
+            <div id="loading" class="hidden text-center py-8 text-gray-600">
+                Loading project data...
+            </div>
+
+            <div id="error" class="hidden text-center py-4 px-6 bg-red-50 text-red-600 rounded-lg">
+                <!-- Error messages will be inserted here -->
+            </div>
+
+            <div id="chartContainer" class="space-y-8">
+                <!-- Chart sections will be dynamically added here -->
+            </div>
+        </div>
+    </main>
+
+    <script src="js/reports-data.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script>
+        async function loadProjectData(project) {
+            const compilerSettings = document.getElementById('compilerSettings');
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const chartContainer = document.getElementById('chartContainer');
+
+            // Hide all sections and show loading
+            compilerSettings.classList.remove('active');
+            loading.style.display = 'block';
+            error.style.display = 'none';
+            if (chartContainer) chartContainer.style.display = 'none';
+
+            try {
+                const data = REPORTS_DATA[project];
+                if (!data) {
+                    throw new Error(`No data available for project: ${project}`);
+                }
+
+                // Clear existing settings cards
+                compilerSettings.innerHTML = '';
+
+                // Create settings cards for each report
+                [...data.solc, ...data.solx].forEach(report => {
+                    if (!report.compilerSettings) return;
+
+                    const card = document.createElement('div');
+                    card.className = `settings-card ${report.compiler.type}`;
+                    
+                    const title = report.compiler.version.includes('via-ir') ? 
+                        `${report.compiler.type} ${report.compiler.version}` :
+                        `${report.compiler.type} ${report.compiler.version}`;
+
+                    card.innerHTML = `
+                        <h3>${title}</h3>
+                        <div class="settings-content">
+                            ${report.compiler.type === 'solx' ? 
+                                '<p>Using default settings</p>' :
+                                `<p><strong>Optimizer:</strong> <span>${report.compilerSettings.optimizer ?? '-'}</span></p>
+                                <p><strong>Optimizer Runs:</strong> <span>${report.compilerSettings.optimizer_runs ?? '-'}</span></p>
+                                <p><strong>Via IR:</strong> <span>${report.compilerSettings.via_ir ?? '-'}</span></p>`
+                            }
+                        </div>
+                    `;
+                    compilerSettings.appendChild(card);
+                });
+
+                compilerSettings.classList.add('active');
+
+                // Process and display contract data
+                const gasDiff = calculateGasDiff(data.solc, data.solx);
+                
+                // Clear and show chart container
+                chartContainer.innerHTML = '';
+                chartContainer.style.display = 'block';
+                
+                // Update the chart
+                updateChart(gasDiff);
+            } catch (err) {
+                console.error('Error loading project data:', err);
+                error.textContent = `Error loading project data: ${err.message}`;
+                error.style.display = 'block';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        // Event listener for project selection
+        document.getElementById('projectSelect').addEventListener('change', (event) => {
+            const projectName = event.target.value;
+            if (projectName) {
+                loadProjectData(projectName);
+            }
+        });
+
+        // Initialize the dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            populateProjects();
+        });
+    </script>
+</body>
+</html> 
