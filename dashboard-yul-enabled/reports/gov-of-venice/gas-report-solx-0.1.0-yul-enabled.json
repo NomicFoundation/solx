@@ -1,0 +1,534 @@
+[
+  {
+    "contract": "src/Guild.sol:Guild",
+    "deployment": {
+      "gas": 3286462,
+      "size": 15359
+    },
+    "functions": {
+      "getGravitas(address)": {
+        "calls": 80,
+        "min": 2548,
+        "mean": 2548,
+        "median": 2548,
+        "max": 2548
+      },
+      "getVoteInfo(uint8,address,uint48)": {
+        "calls": 120,
+        "min": 6924,
+        "mean": 6942,
+        "median": 6951,
+        "max": 6951
+      },
+      "gravitasThreshold()": {
+        "calls": 20,
+        "min": 2370,
+        "mean": 2370,
+        "median": 2370,
+        "max": 2370
+      },
+      "guildMasterAddress()": {
+        "calls": 60,
+        "min": 2404,
+        "mean": 2404,
+        "median": 2404,
+        "max": 2404
+      },
+      "guildMasterRewardMultiplier()": {
+        "calls": 40,
+        "min": 2383,
+        "mean": 2383,
+        "median": 2383,
+        "max": 2383
+      },
+      "guildMemberSlash()": {
+        "calls": 60,
+        "min": 2397,
+        "mean": 2397,
+        "median": 2397,
+        "max": 2397
+      },
+      "isGuildMember(address)": {
+        "calls": 2020,
+        "min": 2539,
+        "mean": 2539,
+        "median": 2539,
+        "max": 2539
+      },
+      "memberRewardPerSecond()": {
+        "calls": 20,
+        "min": 2409,
+        "mean": 2409,
+        "median": 2409,
+        "max": 2409
+      },
+      "requestGuildBook()": {
+        "calls": 20,
+        "min": 4682,
+        "mean": 4682,
+        "median": 4682,
+        "max": 4682
+      },
+      "slashForCashReward()": {
+        "calls": 20,
+        "min": 2369,
+        "mean": 2369,
+        "median": 2369,
+        "max": 2369
+      }
+    }
+  },
+  {
+    "contract": "src/MerchantRepublic.sol:MerchantRepublic",
+    "deployment": {
+      "gas": 4007796,
+      "size": 18386
+    },
+    "functions": {
+      "doge()": {
+        "calls": 20,
+        "min": 2355,
+        "mean": 2355,
+        "median": 2355,
+        "max": 2355
+      },
+      "proposalThreshold()": {
+        "calls": 20,
+        "min": 2351,
+        "mean": 2351,
+        "median": 2351,
+        "max": 2351
+      },
+      "silverBalance()": {
+        "calls": 40,
+        "min": 2416,
+        "mean": 2416,
+        "median": 2416,
+        "max": 2416
+      },
+      "state(uint48)": {
+        "calls": 600,
+        "min": 6916,
+        "mean": 11546,
+        "median": 10133,
+        "max": 17599
+      },
+      "votingDelay()": {
+        "calls": 20,
+        "min": 2365,
+        "mean": 2365,
+        "median": 2365,
+        "max": 2365
+      },
+      "votingPeriod()": {
+        "calls": 20,
+        "min": 2374,
+        "mean": 2374,
+        "median": 2374,
+        "max": 2374
+      }
+    }
+  },
+  {
+    "contract": "src/test/utils/MockERC20.sol:MockERC20",
+    "deployment": {
+      "gas": 1325993,
+      "size": 8057
+    },
+    "functions": {
+      "balanceOf(address)": {
+        "calls": 440,
+        "min": 2487,
+        "mean": 2487,
+        "median": 2487,
+        "max": 2487
+      },
+      "getPastVotes(address,uint256)": {
+        "calls": 3200,
+        "min": 5098,
+        "mean": 5098,
+        "median": 5098,
+        "max": 5098
+      },
+      "mint(address,uint256)": {
+        "calls": 13000,
+        "min": 99677,
+        "mean": 101023,
+        "median": 99689,
+        "max": 116777
+      }
+    }
+  },
+  {
+    "contract": "src/test/utils/gov2Test.sol:Commoner",
+    "deployment": {
+      "gas": 1441604,
+      "size": 6370
+    },
+    "functions": {
+      "castVoteForBanishment(uint8,uint256)": {
+        "calls": 600,
+        "min": 66854,
+        "mean": 67529,
+        "median": 66879,
+        "max": 77339
+      },
+      "castVoteForGuildMaster(uint8,uint48)": {
+        "calls": 1260,
+        "min": 33414,
+        "mean": 66511,
+        "median": 66932,
+        "max": 77739
+      },
+      "changeGravitasThreshold(uint256,uint256)": {
+        "calls": 40,
+        "min": 29086,
+        "mean": 40862,
+        "median": 40862,
+        "max": 52639
+      },
+      "changeGuildMasterMultiplier(uint256,uint8)": {
+        "calls": 100,
+        "min": 29164,
+        "mean": 50433,
+        "median": 40278,
+        "max": 74633
+      },
+      "changeGuildMemberSlash(uint256,uint256)": {
+        "calls": 40,
+        "min": 29104,
+        "mean": 40880,
+        "median": 40880,
+        "max": 52657
+      },
+      "changeMaxGuildMembers(uint256,uint256)": {
+        "calls": 40,
+        "min": 29073,
+        "mean": 40849,
+        "median": 40849,
+        "max": 52626
+      },
+      "changeMemberRewardPerSecond(uint256,uint48)": {
+        "calls": 60,
+        "min": 29153,
+        "mean": 47999,
+        "median": 40231,
+        "max": 74615
+      },
+      "changeSlashForCashReward(uint256,uint256)": {
+        "calls": 60,
+        "min": 29092,
+        "mean": 49538,
+        "median": 57441,
+        "max": 62081
+      },
+      "executeProposal(uint48)": {
+        "calls": 100,
+        "min": 82985,
+        "mean": 91743,
+        "median": 82985,
+        "max": 104885
+      },
+      "getGravitas(uint48)": {
+        "calls": 80,
+        "min": 29004,
+        "mean": 29004,
+        "median": 29004,
+        "max": 29004
+      },
+      "getVoteInfoBanishment(uint256)": {
+        "calls": 40,
+        "min": 33780,
+        "mean": 33780,
+        "median": 33780,
+        "max": 33780
+      },
+      "getVoteInfoGuildMaster(uint48)": {
+        "calls": 80,
+        "min": 33806,
+        "mean": 33806,
+        "median": 33806,
+        "max": 33806
+      },
+      "govAcceptDoge()": {
+        "calls": 20,
+        "min": 34407,
+        "mean": 34407,
+        "median": 34407,
+        "max": 34407
+      },
+      "govCancel(uint48)": {
+        "calls": 20,
+        "min": 90713,
+        "mean": 90713,
+        "median": 90713,
+        "max": 90713
+      },
+      "govCastVote(uint48,uint8)": {
+        "calls": 3000,
+        "min": 78058,
+        "mean": 78628,
+        "median": 78058,
+        "max": 95158
+      },
+      "govPropose(address[],uint256[],string[],bytes[],string,uint48[])": {
+        "calls": 200,
+        "min": 431689,
+        "mean": 447014,
+        "median": 448717,
+        "max": 448717
+      },
+      "govSetPendingDoge(address)": {
+        "calls": 20,
+        "min": 52472,
+        "mean": 52472,
+        "median": 52472,
+        "max": 52472
+      },
+      "govSetProposalThreshold(uint256)": {
+        "calls": 20,
+        "min": 35182,
+        "mean": 35182,
+        "median": 35182,
+        "max": 35182
+      },
+      "govSetVotingDelay(uint256)": {
+        "calls": 20,
+        "min": 35093,
+        "mean": 35093,
+        "median": 35093,
+        "max": 35093
+      },
+      "govSetVotingPeriod(uint256)": {
+        "calls": 20,
+        "min": 35060,
+        "mean": 35060,
+        "median": 35060,
+        "max": 35060
+      },
+      "guildCastVoteForProposal(uint8,uint48,uint256)": {
+        "calls": 560,
+        "min": 33697,
+        "mean": 92421,
+        "median": 76147,
+        "max": 180177
+      },
+      "guildMasterAcceptanceCeremony(uint256)": {
+        "calls": 60,
+        "min": 33883,
+        "mean": 33883,
+        "median": 33883,
+        "max": 33883
+      },
+      "init(address,address,address,address)": {
+        "calls": 13000,
+        "min": 111354,
+        "mean": 111355,
+        "median": 111354,
+        "max": 111366
+      },
+      "initializeMerchantRepublic(address,address,address,uint48,uint256,uint256,uint256)": {
+        "calls": 1000,
+        "min": 208483,
+        "mean": 208489,
+        "median": 208489,
+        "max": 208495
+      },
+      "isGuildMember(uint48)": {
+        "calls": 2020,
+        "min": 28993,
+        "mean": 29002,
+        "median": 29005,
+        "max": 29005
+      },
+      "joinGuild(uint48)": {
+        "calls": 20,
+        "min": 33495,
+        "mean": 33495,
+        "median": 33495,
+        "max": 33495
+      },
+      "queueProposal(uint48)": {
+        "calls": 100,
+        "min": 120262,
+        "mean": 120262,
+        "median": 120262,
+        "max": 120262
+      },
+      "sendSilver(address,uint256,uint48)": {
+        "calls": 440,
+        "min": 106028,
+        "mean": 108359,
+        "median": 106028,
+        "max": 123128
+      },
+      "setGuild(address,uint48)": {
+        "calls": 29820,
+        "min": 44032,
+        "mean": 44037,
+        "median": 44032,
+        "max": 44044
+      },
+      "setGuildCouncil(address,address,uint256,uint48)": {
+        "calls": 2260,
+        "min": 53461,
+        "mean": 64559,
+        "median": 73361,
+        "max": 73373
+      },
+      "setSilverSeason()": {
+        "calls": 1000,
+        "min": 53894,
+        "mean": 53894,
+        "median": 53894,
+        "max": 53894
+      },
+      "silverBalance()": {
+        "calls": 40,
+        "min": 28582,
+        "mean": 28582,
+        "median": 28582,
+        "max": 28582
+      },
+      "startApprentiship(uint48)": {
+        "calls": 20,
+        "min": 53178,
+        "mean": 53178,
+        "median": 53178,
+        "max": 53178
+      },
+      "startBanishmentVote(address,uint256)": {
+        "calls": 40,
+        "min": 73577,
+        "mean": 73577,
+        "median": 73577,
+        "max": 73577
+      },
+      "startGuildmasterVote(address,uint256)": {
+        "calls": 120,
+        "min": 73610,
+        "mean": 73610,
+        "median": 73610,
+        "max": 73610
+      }
+    }
+  },
+  {
+    "contract": "src/test/utils/gov2Test.sol:MockConstitution",
+    "deployment": {
+      "gas": 1351923,
+      "size": 6002
+    },
+    "functions": {
+      "GRACE_PERIOD()": {
+        "calls": 100,
+        "min": 231,
+        "mean": 231,
+        "median": 231,
+        "max": 231
+      },
+      "delay()": {
+        "calls": 160,
+        "min": 2353,
+        "mean": 2353,
+        "median": 2353,
+        "max": 2353
+      },
+      "guildCouncilSetMerchantRepublic(address,address)": {
+        "calls": 20,
+        "min": 34389,
+        "mean": 34389,
+        "median": 34389,
+        "max": 34389
+      },
+      "mockEstablishGuild(address,uint48)": {
+        "calls": 2260,
+        "min": 82820,
+        "mean": 93912,
+        "median": 102708,
+        "max": 102720
+      },
+      "mockProposals(address,address)": {
+        "calls": 1000,
+        "min": 66299,
+        "mean": 66299,
+        "median": 66299,
+        "max": 66299
+      },
+      "signTheConstitution(address,uint256)": {
+        "calls": 1000,
+        "min": 71180,
+        "mean": 71180,
+        "median": 71180,
+        "max": 71180
+      }
+    }
+  },
+  {
+    "contract": "src/test/utils/gov2Test.sol:MockGuildCouncil",
+    "deployment": {
+      "gas": 1487319,
+      "size": 6465
+    },
+    "functions": {
+      "availableGuilds()": {
+        "calls": 1280,
+        "min": 4822,
+        "mean": 8163,
+        "median": 9522,
+        "max": 11872
+      },
+      "guildInformation(uint48)": {
+        "calls": 20,
+        "min": 31694,
+        "mean": 31694,
+        "median": 31694,
+        "max": 31694
+      },
+      "merchantRepublicAddress()": {
+        "calls": 20,
+        "min": 2322,
+        "mean": 2322,
+        "median": 2322,
+        "max": 2322
+      },
+      "mockCallGuildProposal(address,uint48)": {
+        "calls": 20,
+        "min": 94112,
+        "mean": 94112,
+        "median": 94112,
+        "max": 94112
+      },
+      "proposalIdToVoteCallTimestamp(uint48)": {
+        "calls": 120,
+        "min": 2467,
+        "mean": 2467,
+        "median": 2467,
+        "max": 2467
+      }
+    }
+  },
+  {
+    "contract": "src/test/utils/proposalTarget.sol:ProposalTarget",
+    "deployment": {
+      "gas": 122832,
+      "size": 259
+    },
+    "functions": {
+      "anotherFlag()": {
+        "calls": 20,
+        "min": 2267,
+        "mean": 2267,
+        "median": 2267,
+        "max": 2267
+      },
+      "flag()": {
+        "calls": 200,
+        "min": 2262,
+        "mean": 2262,
+        "median": 2262,
+        "max": 2262
+      }
+    }
+  }
+]

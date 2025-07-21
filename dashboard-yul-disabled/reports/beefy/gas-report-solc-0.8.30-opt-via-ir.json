@@ -1,0 +1,349 @@
+[
+  {
+    "contract": "contracts/BIFI/infra/BeefyOracle/BeefyOracle.sol:BeefyOracle",
+    "deployment": {
+      "gas": 794797,
+      "size": 3455
+    },
+    "functions": {
+      "getPrice(address)": {
+        "calls": 20,
+        "min": 2428,
+        "mean": 2428,
+        "median": 2428,
+        "max": 2428
+      },
+      "initialize()": {
+        "calls": 200,
+        "min": 68917,
+        "mean": 68917,
+        "median": 68917,
+        "max": 68917
+      },
+      "setOracle(address,address,bytes)": {
+        "calls": 180,
+        "min": 28688,
+        "mean": 31519,
+        "median": 31428,
+        "max": 34992
+      },
+      "setOracles(address[],address[],bytes[])": {
+        "calls": 20,
+        "min": 34373,
+        "mean": 34373,
+        "median": 34373,
+        "max": 34373
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/infra/BeefyOracle/BeefyOracleChainlink.sol:BeefyOracleChainlink",
+    "deployment": {
+      "gas": 239129,
+      "size": 890
+    },
+    "functions": {
+      "validateData(bytes)": {
+        "calls": 180,
+        "min": 806,
+        "mean": 3028,
+        "median": 3306,
+        "max": 3306
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/infra/BeefyOracle/BeefyOracleUniswapV3.sol:BeefyOracleUniswapV3",
+    "deployment": {
+      "gas": 1065587,
+      "size": 4709
+    },
+    "functions": {
+      "validateData(bytes)": {
+        "calls": 20,
+        "min": 5070,
+        "mean": 5070,
+        "median": 5070,
+        "max": 5070
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/strategies/Curve/StrategyConvexCRV.sol:StrategyConvexCRV",
+    "deployment": {
+      "gas": 4004861,
+      "size": 18301
+    },
+    "functions": {
+      "setVault(address)": {
+        "calls": 20,
+        "min": 24387,
+        "mean": 24387,
+        "median": 24387,
+        "max": 24387
+      },
+      "vault()": {
+        "calls": 20,
+        "min": 3846,
+        "mean": 3846,
+        "median": 3846,
+        "max": 3846
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/strategies/Curve/StrategyConvexStaking.sol:StrategyConvexStaking",
+    "deployment": {
+      "gas": 3977628,
+      "size": 18174
+    },
+    "functions": {
+      "setVault(address)": {
+        "calls": 20,
+        "min": 24387,
+        "mean": 24387,
+        "median": 24387,
+        "max": 24387
+      },
+      "vault()": {
+        "calls": 20,
+        "min": 3802,
+        "mean": 3802,
+        "median": 3802,
+        "max": 3802
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/strategies/Curve/StrategyCurveConvexFactory.sol:StrategyCurveConvexFactory",
+    "deployment": {
+      "gas": 3485847,
+      "size": 15900
+    },
+    "functions": {
+      "setVault(address)": {
+        "calls": 20,
+        "min": 24496,
+        "mean": 24496,
+        "median": 24496,
+        "max": 24496
+      },
+      "vault()": {
+        "calls": 20,
+        "min": 3707,
+        "mean": 3707,
+        "median": 3707,
+        "max": 3707
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/strategies/Curve/StrategyCurveConvexL2Factory.sol:StrategyCurveConvexL2Factory",
+    "deployment": {
+      "gas": 3445589,
+      "size": 15713
+    },
+    "functions": {
+      "setVault(address)": {
+        "calls": 20,
+        "min": 24452,
+        "mean": 24452,
+        "median": 24452,
+        "max": 24452
+      },
+      "vault()": {
+        "calls": 20,
+        "min": 3663,
+        "mean": 3663,
+        "median": 3663,
+        "max": 3663
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/strategies/Curve/StrategyFxConvex.sol:StrategyFxConvex",
+    "deployment": {
+      "gas": 3251882,
+      "size": 14816
+    },
+    "functions": {
+      "setVault(address)": {
+        "calls": 20,
+        "min": 24459,
+        "mean": 24459,
+        "median": 24459,
+        "max": 24459
+      },
+      "vault()": {
+        "calls": 20,
+        "min": 3823,
+        "mean": 3823,
+        "median": 3823,
+        "max": 3823
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/strategies/Curve/StrategyStakeDao.sol:StrategyStakeDao",
+    "deployment": {
+      "gas": 2796289,
+      "size": 12711
+    },
+    "functions": {
+      "setVault(address)": {
+        "calls": 20,
+        "min": 24386,
+        "mean": 24386,
+        "median": 24386,
+        "max": 24386
+      },
+      "vault()": {
+        "calls": 20,
+        "min": 3443,
+        "mean": 3443,
+        "median": 3443,
+        "max": 3443
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/strategies/Morpho/StrategyMorpho.sol:StrategyMorpho",
+    "deployment": {
+      "gas": 2827107,
+      "size": 12854
+    },
+    "functions": {
+      "setVault(address)": {
+        "calls": 20,
+        "min": 24408,
+        "mean": 24408,
+        "median": 24408,
+        "max": 24408
+      },
+      "vault()": {
+        "calls": 20,
+        "min": 3443,
+        "mean": 3443,
+        "median": 3443,
+        "max": 3443
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/strategies/Pendle/StrategyEquilibria.sol:StrategyEquilibria",
+    "deployment": {
+      "gas": 3553343,
+      "size": 16212
+    },
+    "functions": {
+      "setVault(address)": {
+        "calls": 20,
+        "min": 24452,
+        "mean": 24452,
+        "median": 24452,
+        "max": 24452
+      },
+      "vault()": {
+        "calls": 20,
+        "min": 3688,
+        "mean": 3688,
+        "median": 3688,
+        "max": 3688
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/strategies/Pendle/StrategyPenpie.sol:StrategyPenpie",
+    "deployment": {
+      "gas": 3220455,
+      "size": 14672
+    },
+    "functions": {
+      "setVault(address)": {
+        "calls": 20,
+        "min": 24540,
+        "mean": 24540,
+        "median": 24540,
+        "max": 24540
+      },
+      "vault()": {
+        "calls": 20,
+        "min": 3619,
+        "mean": 3619,
+        "median": 3619,
+        "max": 3619
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/strategies/Velodrome/StrategyVelodromeGaugeV2.sol:StrategyVelodromeGaugeV2",
+    "deployment": {
+      "gas": 4890893,
+      "size": 22397
+    },
+    "functions": {
+      "setVault(address)": {
+        "calls": 20,
+        "min": 24404,
+        "mean": 24404,
+        "median": 24404,
+        "max": 24404
+      },
+      "vault()": {
+        "calls": 20,
+        "min": 3509,
+        "mean": 3509,
+        "median": 3509,
+        "max": 3509
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/vaults/BeefyVaultV7.sol:BeefyVaultV7",
+    "deployment": {
+      "gas": 1835837,
+      "size": 8269
+    },
+    "functions": {
+      "initialize(address,string,string,uint256)": {
+        "calls": 200,
+        "min": 162850,
+        "mean": 162850,
+        "median": 162850,
+        "max": 162850
+      }
+    }
+  },
+  {
+    "contract": "contracts/BIFI/vaults/BeefyWrapperFactory.sol:BeefyWrapperFactory",
+    "deployment": {
+      "gas": 2008827,
+      "size": 9031
+    },
+    "functions": {
+      "clone(address)": {
+        "calls": 20,
+        "min": 65629,
+        "mean": 65629,
+        "median": 65629,
+        "max": 65629
+      }
+    }
+  },
+  {
+    "contract": "forge/test/vault/util/AddressBook.sol:AddressBook",
+    "deployment": {
+      "gas": 428247,
+      "size": 1760
+    },
+    "functions": {
+      "getBeefyPlatformConfig(string)": {
+        "calls": 40,
+        "min": 29552,
+        "mean": 29582,
+        "median": 29582,
+        "max": 29612
+      }
+    }
+  }
+]

@@ -1,0 +1,302 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Development Container - solx Compiler Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../css/version-box.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">solx Compiler Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="development-container"><a class="header" href="#development-container">Development Container</a></h1>
+<p>The repository ships a <a href="https://containers.dev/">devcontainer</a> at <code>.devcontainer/</code> that reproduces the CI build environment locally: it runs the <code>dev</code> stage of the CI runner Dockerfile (<code>.github/docker/Dockerfile</code>) — the shared <code>base</code> toolchain plus a non-root user and a shared rustup — built from the same definition as the <code>solx-ci-runner</code> CI image. Anything that builds in the container builds in CI, and vice versa.</p>
+<p>It works with VS Code (<strong>Dev Containers: Reopen in Container</strong>), the <a href="https://github.com/devcontainers/cli">devcontainer CLI</a>, and GitHub Codespaces.</p>
+<h2 id="host-requirements"><a class="header" href="#host-requirements">Host requirements</a></h2>
+<p>A cold LLVM build is the dominant cost, and it is resource-hungry:</p>
+<ul>
+<li><strong>CPU:</strong> 8+ cores recommended. The cold build takes roughly an hour on 8 cores.</li>
+<li><strong>Memory:</strong> 16 GB. Each LLVM tool links at 2–4 GB RSS; the container caps parallel link jobs at 2. Docker Desktop's default 8 GB VM will thrash — raise it in Docker Desktop settings.</li>
+<li><strong>Disk:</strong> 64 GB free for Docker. The LLVM build tree alone takes tens of GB (all of it lives in named volumes, not in your checkout).</li>
+</ul>
+<h2 id="what-the-image-contains--and-what-it-deliberately-does-not"><a class="header" href="#what-the-image-contains--and-what-it-deliberately-does-not">What the image contains — and what it deliberately does not</a></h2>
+<p>The container image is the <code>dev</code> stage of the runner Dockerfile — the shared <code>base</code> stage (cmake, ninja, clang/LLD 21, ccache, Node.js) plus a non-root user, a shared rustup layout, and valgrind (from apt; CI's <code>ci</code> stage builds its own pinned version, so valgrind versions may differ between the two). It is <strong>built locally, not pulled</strong>: the published <code>solx-ci-runner</code> package is private, but every source these stages draw from is public, so the devcontainer builds <code>--target dev</code> on your machine (~5–10 minutes the first time, layer-cached afterwards) with no registry authentication at all. The <code>ci</code> stage — a root-homed Rust install, valgrind, cargo coverage/report tools — is CI-only and skipped. One trade-off to know: a locally built image re-resolves apt packages, so it is not bit-for-bit identical to the frozen image CI pulls; for development this does not matter.</p>
+<p>Two things are <strong>not</strong> in any image and are built from source inside the container:</p>
+<ol>
+<li><strong>The custom LLVM framework with the EVM backend</strong> (the <code>solx-llvm</code> submodule). It is not baked into the image because it changes with every submodule bump and weighs several GB — a baked-in copy would bloat every CI image pull and be stale the moment the submodule moves. CI builds it per-job behind an Actions cache keyed on the submodule commit; the devcontainer builds it once locally and keeps it in a named volume, with ccache absorbing most of the cost of rebuilds.</li>
+<li><strong>The solc fork libraries</strong> (the <code>solx-solidity</code> submodule), which <strong>solx</strong> links statically.</li>
+</ol>
+<p>The Rust toolchain itself is also resolved lazily: rustup downloads the version pinned in <code>rust-toolchain.toml</code> on the first <code>cargo</code> invocation, so a toolchain bump never requires an image rebuild.</p>
+<h2 id="getting-started"><a class="header" href="#getting-started">Getting started</a></h2>
+<ol>
+<li>
+<p>Clone the repository (submodules can be left uninitialized; the bootstrap handles them) and open it in VS Code.</p>
+</li>
+<li>
+<p>Run <strong>Dev Containers: Reopen in Container</strong>. The first open builds the <code>dev</code> image (~5–10 min, layer-cached afterwards), then prints the next step.</p>
+</li>
+<li>
+<p>Build the toolchain:</p>
+<pre><code class="language-shell">.devcontainer/bootstrap.sh          # MLIR-enabled build (default)
+.devcontainer/bootstrap.sh --no-mlir  # skip MLIR if you only touch the solc/Yul pipeline
+</code></pre>
+<p>This is the ~1 hour step (cold). It is kept out of the automatic container setup precisely because of that cost — you should know when you are paying it. The wrapper takes two flags: <code>--no-mlir</code> (build LLVM without MLIR — see <a href="#how-llvm-is-installed">How LLVM is installed</a>) and <code>--clean</code> (wipe <code>target-llvm/</code> first — see <a href="#troubleshooting">Troubleshooting</a>).</p>
+</li>
+<li>
+<p>Build and test <strong>solx</strong>:</p>
+<pre><code class="language-shell">cargo build --release
+cargo test
+</code></pre>
+</li>
+</ol>
+<h2 id="how-llvm-is-installed"><a class="header" href="#how-llvm-is-installed">How LLVM is installed</a></h2>
+<p><code>bootstrap.sh</code> is a thin wrapper over the same <code>solx-dev</code> builder CI uses. Step by step:</p>
+<ol>
+<li><code>git submodule update --init --recursive --depth 1</code> — fetches <code>solx-llvm</code> and <code>solx-solidity</code> shallowly, exactly as CI does, but only for submodules that were never initialized. An existing checkout is never moved: if it differs from the recorded commit, the bootstrap prints a warning with that same command and carries on — refreshing is your explicit step (see <a href="#rebuilding-after-a-submodule-bump">Rebuilding after a submodule bump</a>). If you need full history in a submodule (e.g. to bisect), run <code>git fetch --unshallow</code> inside it.</li>
+<li><code>cargo build --release --bin solx-dev</code> — builds the builder. This first <code>cargo</code> call also downloads the pinned Rust toolchain.</li>
+<li><code>./target/release/solx-dev llvm build --enable-assertions --enable-mlir --ccache-variant ccache</code> — configures and builds LLVM:
+<ul>
+<li>The build tree lives in <code>target-llvm/build-final/</code>, the installation in <code>target-llvm/target-final/</code>.</li>
+<li><code>.cargo/config.toml</code> already points <code>LLVM_SYS_211_PREFIX</code>, <code>MLIR_SYS_210_PREFIX</code>, and <code>TABLEGEN_210_PREFIX</code> at that installation, so no environment setup is needed — <code>cargo</code> and rust-analyzer find it as soon as it exists.</li>
+<li>MLIR is enabled by default because the Slang frontend pipeline (<code>cargo test-slang</code>) requires it. To skip it and shave build time if you only work on the solc/Yul pipeline: pass <code>--no-mlir</code> to <code>bootstrap.sh</code>, or — if you drive <code>solx-dev</code> directly — simply omit <code>--enable-mlir</code> (there is no <code>--no-mlir</code> at the <code>solx-dev</code> layer; it is a boolean flag). Either way, keep the LLVM and solc builds consistent — MLIR must be enabled or disabled on both.</li>
+<li>Assertions are enabled, matching CI.</li>
+</ul>
+</li>
+<li><code>./target/release/solx-dev solc build --build-boost --ccache-variant ccache --enable-mlir</code> — builds the solc fork libraries into <code>solx-solidity/build/</code> (again already wired up via <code>SOLC_PREFIX</code>/<code>BOOST_PREFIX</code>). <code>--build-boost</code> downloads and builds a static Boost into <code>solx-solidity/boost/</code> first — the runner image deliberately ships no system Boost, matching how CI builds solc.</li>
+</ol>
+<p>Until step 3 has completed, <code>cargo check</code>/rust-analyzer fail in <code>llvm-sys</code>'s build script with a missing <code>llvm-config</code> — that is the expected symptom of "LLVM not built yet", not a broken container.</p>
+<h3 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h3>
+<p>First stop: <code>.devcontainer/smoke-test.sh</code> checks the container's basic health (non-root user, writable volumes, toolchain on PATH, Rust pin resolution) in under a minute — CI runs the same script to validate devcontainer changes. Known failure modes:</p>
+<ul>
+<li><strong><code>error: Missing manifest in toolchain '1.96.0-…'</code></strong> — an interrupted first <code>cargo</code> run (e.g. Ctrl+C during the toolchain download) leaves a half-extracted toolchain, and it persists in the <code>solx-rustup</code> volume across container rebuilds. Fix: <code>rustup toolchain uninstall &lt;the toolchain from the error&gt;</code>, then rerun; the pinned toolchain reinstalls automatically.</li>
+<li><strong><code>llvm-sys</code> fails with a missing <code>llvm-config</code></strong> — LLVM has not been built yet (or the bootstrap was interrupted before finishing). Rerun <code>.devcontainer/bootstrap.sh</code>; ccache makes the retry cheap.</li>
+<li><strong>The image seems stale (e.g. an old clang after an LLVM apt bump)</strong> — Docker's layer cache only invalidates when the Dockerfile changes, not when upstream apt packages move. Use <strong>Dev Containers: Rebuild Container Without Cache</strong>.</li>
+<li><strong>LLVM build errors after the container image changed</strong> (missing headers like <code>valgrind/valgrind.h</code>, unexplained full rebuilds, mixed-compiler link errors) — the volume-persisted <code>target-llvm/</code> build tree was configured inside the previous image, and CMake's cache remembers toolchain facts that are no longer true. Rerun with <code>.devcontainer/bootstrap.sh --clean</code> (wipes <code>target-llvm/</code> first). Expect a cold rebuild if the compiler actually changed.</li>
+<li><strong>Files vanish or builds break mid-bootstrap in confusing ways</strong> — the workspace is a bind mount: the container and your host checkout are the same files. Switching branches, <code>git clean</code>, or anything else that rewrites the tree on the host while a bootstrap or build runs in the container will break it in nonsensical-looking ways (and a host-side switch to a branch without <code>.devcontainer/</code> may prompt VS Code to recreate the container mid-run). Leave the checkout alone until the build finishes; the bootstrap is idempotent and resumes cheaply after a rerun.</li>
+</ul>
+<h3 id="rebuilding-after-a-submodule-bump"><a class="header" href="#rebuilding-after-a-submodule-bump">Rebuilding after a submodule bump</a></h3>
+<p>Refresh the submodule checkout, then rerun the bootstrap:</p>
+<pre><code class="language-shell">git submodule update --init --recursive --depth 1
+.devcontainer/bootstrap.sh
+</code></pre>
+<p>The bootstrap never moves an initialized submodule itself — skipping the first command just rebuilds the old checkout (it warns when one differs from the recorded commit). The ccache volume persists across container rebuilds, so a rebuild after a typical <code>solx-llvm</code> bump takes minutes, not an hour. Add <code>--clean</code> to <code>solx-dev llvm build</code> if a stale build tree misbehaves.</p>
+<p>For sanitizer or coverage LLVM builds, see <a href="./04-sanitizers.html">Building with Sanitizers</a> — the same flags work inside the container.</p>
+<h2 id="persistence"><a class="header" href="#persistence">Persistence</a></h2>
+<p>Build state lives in Docker named volumes so it survives <strong>Rebuild Container</strong> and stays off the (slow on macOS/Windows) bind mount:</p>
+<div class="table-wrapper"><table><thead><tr><th>Volume</th><th>Mount point</th><th>Holds</th></tr></thead><tbody>
+<tr><td><code>solx-target-&lt;id&gt;</code></td><td><code>target/</code></td><td>solx build artifacts, <code>solx-dev</code></td></tr>
+<tr><td><code>solx-target-slang-&lt;id&gt;</code></td><td><code>target-slang/</code></td><td><code>cargo *-slang</code> alias artifacts</td></tr>
+<tr><td><code>solx-target-llvm-&lt;id&gt;</code></td><td><code>target-llvm/</code></td><td>LLVM build tree + installation</td></tr>
+<tr><td><code>solx-rustup</code></td><td><code>/usr/local/rustup</code></td><td>downloaded Rust toolchains</td></tr>
+<tr><td><code>solx-cargo</code></td><td><code>/usr/local/cargo</code></td><td>cargo registry/git caches</td></tr>
+<tr><td><code>solx-ccache</code></td><td><code>/var/cache/solx-ccache</code></td><td>LLVM compiler cache</td></tr>
+</tbody></table>
+</div>
+<p>The target volumes carry a per-checkout suffix (the devcontainer's <code>${devcontainerId}</code>), so two checkouts or worktrees opened as devcontainers never share a build tree — concurrent builds would contend on cargo locks, and alternating ones thrash fingerprints. The cache volumes are shared across checkouts deliberately: cargo and ccache are safe under concurrent use, and a warm shared ccache is the point of persisting it. rustup is the exception — it has no cross-process locking, so avoid triggering the first toolchain download in two fresh containers at once (recovery, if it happens: the <code>Missing manifest</code> entry under Troubleshooting). Docker never removes named volumes on its own: deleting a checkout leaves its target volumes behind.</p>
+<p>To start truly fresh, or to prune volumes left by deleted checkouts, list them with <code>docker volume ls --filter name=solx-</code> and <code>docker volume rm</code> what you no longer need, in addition to rebuilding the container.</p>
+<h2 id="working-on-the-llvm-fork-itself"><a class="header" href="#working-on-the-llvm-fork-itself">Working on the LLVM fork itself</a></h2>
+<p>The devcontainer is also the intended environment for hacking on <code>solx-llvm</code>: the fork is not built standalone — <code>solx-dev</code> owns the CMake configuration (in <code>solx-dev/src/llvm/</code>), and <code>solx-llvm</code>'s own regression CI drives its builds through a <strong>solx</strong> checkout in the same runner image.</p>
+<ol>
+<li>Point the submodule at your branch: <code>git -C solx-llvm checkout &lt;branch&gt;</code> (after <code>git -C solx-llvm fetch --unshallow origin &lt;branch&gt;</code> if needed). Rerunning <code>bootstrap.sh</code> is safe: it never moves an initialized submodule — it only notes that the checkout differs from the recorded commit.</li>
+<li>Rebuild: <code>./target/release/solx-dev llvm build --enable-assertions --enable-mlir --enable-tests --ccache-variant ccache --extra-args "-DLLVM_PARALLEL_LINK_JOBS='2'"</code>. <code>--enable-tests</code> builds FileCheck, <code>llvm-lit</code>, and the <code>check-*</code> targets so the regression suite runs locally (it implies the full toolset — expect a longer first build); the link-jobs cap keeps peak memory inside the 16 GB host minimum.</li>
+<li>C++ language support: <code>solx-dev</code> exports <code>compile_commands.json</code> into <code>target-llvm/build-final/</code>, and the devcontainer configures clangd to read it, so cross-references in the submodule work after the first build.</li>
+</ol>
+<h2 id="notes-for-slang-contributors"><a class="header" href="#notes-for-slang-contributors">Notes for Slang contributors</a></h2>
+<p>Coming from <code>slang</code>, the moving parts map as follows: there is no Hermit — the system toolchain comes from the CI image and the Rust toolchain from <code>rust-toolchain.toml</code>; the <code>infra</code> CLI's role is split between <code>.devcontainer/bootstrap.sh</code> (one-time environment setup) and <code>solx-dev</code> (LLVM/solc builds, integration test suites). The Slang-frontend crates (<code>solx-slang</code>, <code>solx-mlir</code>) are built and tested via the <code>cargo build-slang</code> / <code>cargo test-slang</code> aliases, which need the MLIR-enabled LLVM build that <code>bootstrap.sh</code> produces by default.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../internals/05-binary-layout.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../developer-guide/01-testing.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../internals/05-binary-layout.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../developer-guide/01-testing.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../js/version-box.js"></script>
+
+
+    </div>
+    </body>
+</html>

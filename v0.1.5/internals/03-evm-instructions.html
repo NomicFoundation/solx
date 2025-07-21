@@ -1,0 +1,309 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>EVM Instructions Reference - solx Compiler Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../css/version-box.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">solx Compiler Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="evm-instructions-reference"><a class="header" href="#evm-instructions-reference">EVM Instructions Reference</a></h1>
+<p>This chapter describes how the LLVM EVM backend models EVM instructions and lowers LLVM IR into final opcode sequences.</p>
+<h2 id="instruction-definitions"><a class="header" href="#instruction-definitions">Instruction Definitions</a></h2>
+<p>The EVM instruction set is defined in the LLVM backend via TableGen.</p>
+<ul>
+<li>It contains opcode definitions, pattern mappings, and EVM-specific pseudo-instructions.</li>
+<li>It covers roughly 180 instruction forms once TableGen expansions are considered (for example <code>DUP1..16</code>, <code>SWAP1..16</code>, and <code>PUSH</code> families).</li>
+<li>Instructions are modeled around <code>i256</code> values, matching the EVM word size.</li>
+</ul>
+<h2 id="address-space-model"><a class="header" href="#address-space-model">Address Space Model</a></h2>
+<p>The backend uses explicit LLVM address spaces to model EVM memory regions:</p>
+<div class="table-wrapper"><table><thead><tr><th>Address space</th><th style="text-align: right">Value</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>AS_STACK</code></td><td style="text-align: right"><code>0</code></td><td>Compiler-managed stack memory model</td></tr>
+<tr><td><code>AS_HEAP</code></td><td style="text-align: right"><code>1</code></td><td>EVM linear memory (<code>MLOAD</code>, <code>MSTORE</code>, <code>MCOPY</code>)</td></tr>
+<tr><td><code>AS_CALL_DATA</code></td><td style="text-align: right"><code>2</code></td><td>Call data region</td></tr>
+<tr><td><code>AS_RETURN_DATA</code></td><td style="text-align: right"><code>3</code></td><td>Return data region</td></tr>
+<tr><td><code>AS_CODE</code></td><td style="text-align: right"><code>4</code></td><td>Code segment</td></tr>
+<tr><td><code>AS_STORAGE</code></td><td style="text-align: right"><code>5</code></td><td>Persistent storage</td></tr>
+<tr><td><code>AS_TSTORAGE</code></td><td style="text-align: right"><code>6</code></td><td>Transient storage</td></tr>
+</tbody></table>
+</div>
+<p>These constants are defined in the EVM backend header.</p>
+<h2 id="core-instruction-categories"><a class="header" href="#core-instruction-categories">Core Instruction Categories</a></h2>
+<h3 id="arithmetic"><a class="header" href="#arithmetic">Arithmetic</a></h3>
+<p>Arithmetic opcodes map directly to <code>i256</code> operations or EVM intrinsics:</p>
+<ul>
+<li><code>ADD</code>, <code>MUL</code>, <code>SUB</code>, <code>DIV</code>, <code>SDIV</code>, <code>MOD</code>, <code>SMOD</code></li>
+<li><code>ADDMOD</code>, <code>MULMOD</code>, <code>EXP</code>, <code>SIGNEXTEND</code></li>
+</ul>
+<p>For example, <code>ADD</code> is selected from LLVM <code>add i256</code> patterns.</p>
+<h3 id="memory"><a class="header" href="#memory">Memory</a></h3>
+<p>Memory instructions operate on the heap address space:</p>
+<ul>
+<li><code>MLOAD</code> maps to a load from <code>AS_HEAP</code></li>
+<li><code>MSTORE</code> maps to a store into <code>AS_HEAP</code></li>
+<li><code>MCOPY</code> lowers memory copy operations in heap memory</li>
+</ul>
+<h3 id="storage"><a class="header" href="#storage">Storage</a></h3>
+<p>Storage instructions map to storage address spaces:</p>
+<ul>
+<li><code>SLOAD</code>, <code>SSTORE</code> use <code>AS_STORAGE</code></li>
+<li><code>TLOAD</code>, <code>TSTORE</code> use <code>AS_TSTORAGE</code></li>
+</ul>
+<h3 id="control-flow"><a class="header" href="#control-flow">Control Flow</a></h3>
+<p>Control flow instructions are selected from LLVM branch forms:</p>
+<ul>
+<li><code>JUMP</code> maps from unconditional <code>br</code></li>
+<li><code>JUMPI</code> maps from conditional <code>br i1</code></li>
+</ul>
+<p>The backend also uses helper pseudos (for example <code>JUMP_UNLESS</code>) that are lowered before emission.</p>
+<h3 id="stack"><a class="header" href="#stack">Stack</a></h3>
+<p>EVM stack manipulation opcodes are emitted as needed:</p>
+<ul>
+<li><code>DUP1..DUP16</code></li>
+<li><code>SWAP1..SWAP16</code></li>
+<li><code>POP</code></li>
+</ul>
+<p>They are introduced and optimized by stackification passes rather than directly authored in frontend IR.</p>
+<h3 id="cryptographic"><a class="header" href="#cryptographic">Cryptographic</a></h3>
+<p><code>SHA3</code>/<code>KECCAK256</code> is represented through EVM-specific intrinsic plumbing:</p>
+<ul>
+<li>Machine instruction: <code>KECCAK256</code></li>
+<li>LLVM intrinsic path: <code>llvm.evm.sha3</code></li>
+</ul>
+<h2 id="runtime-library-evm-stdlibll"><a class="header" href="#runtime-library-evm-stdlibll">Runtime Library (<code>evm-stdlib.ll</code>)</a></h2>
+<p>The backend links helper wrappers from the EVM runtime standard library:</p>
+<ul>
+<li><code>__addmod</code></li>
+<li><code>__mulmod</code></li>
+<li><code>__signextend</code></li>
+<li><code>__exp</code></li>
+<li><code>__byte</code></li>
+<li><code>__sdiv</code></li>
+<li><code>__div</code></li>
+<li><code>__smod</code></li>
+<li><code>__mod</code></li>
+<li><code>__shl</code></li>
+<li><code>__shr</code></li>
+<li><code>__sar</code></li>
+<li><code>__sha3</code></li>
+</ul>
+<p>These wrappers forward to corresponding <code>llvm.evm.*</code> intrinsics.</p>
+<h2 id="stackification-pipeline"><a class="header" href="#stackification-pipeline">Stackification Pipeline</a></h2>
+<p>The late codegen pipeline converts virtual-register machine IR to valid EVM stack code:</p>
+<ol>
+<li><code>EVMSingleUseExpression</code>: reorders machine instructions into expression-friendly form.</li>
+<li><code>EVMBackwardPropagationStackification</code>: performs backward propagation stackification from register form.</li>
+<li><code>EVMStackSolver</code> and <code>EVMStackShuffler</code>: compute and emit low-cost <code>DUP</code>/<code>SWAP</code>/spill-reload sequences.</li>
+<li><code>EVMPeephole</code>: runs late peephole optimizations before final emission.</li>
+</ol>
+<h2 id="stack-depth-limit"><a class="header" href="#stack-depth-limit">Stack Depth Limit</a></h2>
+<p>The EVM stack itself can hold up to 1024 items, but <code>DUP</code> and <code>SWAP</code> instructions can only reach the top 16 positions. The backend enforces this depth-16 manipulation reach.</p>
+<p>This limit is exposed by <code>EVMSubtarget::stackDepthLimit()</code>.</p>
+<h2 id="pseudo-instructions"><a class="header" href="#pseudo-instructions">Pseudo-Instructions</a></h2>
+<p>Several pseudos are used during lowering and removed or expanded before final bytecode:</p>
+<ul>
+<li><code>PUSHDEPLOYADDRESS</code>: materializes deploy-time address usage for libraries.</li>
+<li><code>SELECT</code>: models conditional value selection.</li>
+<li><code>CONST_I256</code>: represents immediate constants before stackification.</li>
+<li><code>COPY_I256</code>: temporary register-copy form before stackification.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../internals/02-evm-assembly-translator.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../internals/04-yul-builtins.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../internals/02-evm-assembly-translator.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../internals/04-yul-builtins.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../js/version-box.js"></script>
+
+
+    </div>
+    </body>
+</html>
