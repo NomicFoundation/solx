@@ -1,0 +1,266 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Building with Sanitizers - solx Compiler Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../css/version-box.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">solx Compiler Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="building-with-sanitizers"><a class="header" href="#building-with-sanitizers">Building with Sanitizers</a></h1>
+<p>This is the guide on building <strong>solx</strong> with sanitizers enabled.</p>
+<h2 id="introduction"><a class="header" href="#introduction">Introduction</a></h2>
+<p>Sanitizers are tools that help find bugs in code. They are used to detect memory corruption, leaks, and undefined behavior.
+The most common sanitizers are <code>AddressSanitizer</code>, <code>MemorySanitizer</code>, and <code>ThreadSanitizer</code>.</p>
+<p>If you are not familiar with sanitizers, see the <a href="https://rustc-dev-guide.rust-lang.org/sanitizers.html">official documentation</a>.</p>
+<h3 id="who-is-this-guide-for"><a class="header" href="#who-is-this-guide-for">Who is this guide for?</a></h3>
+<p>This guide is for developers who want to debug issues with <strong>solx</strong>.</p>
+<h3 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h3>
+<ul>
+<li><a href="https://www.rust-lang.org/tools/install">Rust and Cargo</a></li>
+<li><a href="https://git-scm.com/downloads">Git</a></li>
+<li><a href="https://llvm.org/docs/GettingStarted.html">LLVM compiler</a></li>
+</ul>
+<div class="warning">
+For sanitizers build to work, the host LLVM compiler version that is used to build LLVM <b>MUST</b>
+have the same version as the LLVM compiler that is used internally by `rustc` to build **solx**.
+<p>You can check the LLVM version used by <code>rustc</code> by running the following command <code>rustc --version --verbose</code>.</p>
+</div>
+<h2 id="build-steps"><a class="header" href="#build-steps">Build steps</a></h2>
+<p>The general steps to have a sanitizer enabled build include:</p>
+<ol>
+<li>Build the LLVM framework with the required sanitizer enabled.</li>
+<li>Build <strong>solx</strong> with the LLVM build from the previous step.</li>
+</ol>
+<p>Please, follow the common <a href="../01-installation.html#building-from-source">installation instructions</a>
+until the <code>solx-llvm build</code> step.</p>
+<p>This guide assumes the build with <code>AddressSanitizer</code> enabled.</p>
+<h3 id="build-llvm-with-sanitizer-enabled"><a class="header" href="#build-llvm-with-sanitizer-enabled">Build LLVM with sanitizer enabled</a></h3>
+<p>When building LLVM, use <code>--sanitizer &lt;sanitizer&gt;</code> option and set build type to <code>RelWithDebInfo</code>:</p>
+<pre><code class="language-shell">solx-llvm build --sanitizer=Address --build-type=RelWithDebInfo
+</code></pre>
+<div class="warning">
+Please note that the default Apple Clang compiler is not compatible with Rust.
+You need to install LLVM using Homebrew and specify the path to the LLVM compiler in the `--extra-args` option.
+For example:
+</div>
+<pre><code class="language-shell">solx-llvm build --sanitizer=Address
+</code></pre>
+<h3 id="build-solx-with-the-sanitizer-enabled"><a class="header" href="#build-solx-with-the-sanitizer-enabled">Build <strong>solx</strong> with the sanitizer enabled</a></h3>
+<p>To build <strong>solx</strong> with the sanitizer enabled, you need to set the <code>RUSTFLAGS</code> environment variable
+to <code>-Z sanitizer=address</code> and run the <code>cargo build</code> command.
+Sanitizers build is a feature that is available only for the nightly Rust compiler, it is recommended
+to set <code>RUSTC_BOOTSTRAP=1</code> environment variable before the build.</p>
+<p>It is also mandatory to use <code>--target</code> option to specify the target architecture. Otherwise, the build will fail.
+Please, check the table below to find the correct target for your platform.</p>
+<div class="table-wrapper"><table><thead><tr><th>Platform</th><th>LLVM Target Triple</th></tr></thead><tbody>
+<tr><td>MacOS-arm64</td><td><code>aarch64-apple-darwin</code></td></tr>
+<tr><td>MacOS-x86</td><td><code>x86_64-apple-darwin</code></td></tr>
+<tr><td>Linux-arm64</td><td><code>aarch64-unknown-linux-gnu</code></td></tr>
+<tr><td>Linux-x86</td><td><code>x86_64-unknown-linux-gnu</code></td></tr>
+</tbody></table>
+</div>
+<p>Additionally, for proper reports symbolization it is recommended to set the <code>ASAN_SYMBOLIZER_PATH</code> environment variable.
+For more info, see <a href="https://clang.llvm.org/docs/AddressSanitizer.html#id4">symbolizing reports</a> section of LLVM documentation.</p>
+<p>For example, to build <strong>solx</strong> for MacOS-arm64 with <code>AddressSanitizer</code> enabled, run the following command:</p>
+<pre><code class="language-shell">export RUSTC_BOOTSTRAP=1
+export ASAN_SYMBOLIZER_PATH=$(which llvm-symbolizer) # check the path to llvm-symbolizer
+TARGET=aarch64-apple-darwin # Change to your target
+RUSTFLAGS="-Z sanitizer=address" cargo test --target=${TARGET}
+</code></pre>
+<p>Congratulations! You have successfully built <strong>solx</strong> with the sanitizers enabled.</p>
+<p>Please, refer to the <a href="https://rustc-dev-guide.rust-lang.org/sanitizers.html">official documentation</a>
+for more information on how to use sanitizers and their types.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../03-standard-json.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../03-standard-json.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../js/version-box.js"></script>
+
+
+    </div>
+    </body>
+</html>

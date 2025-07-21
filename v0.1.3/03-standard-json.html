@@ -1,0 +1,548 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Standard JSON - solx Compiler Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="css/version-box.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">solx Compiler Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="standard-json"><a class="header" href="#standard-json">Standard JSON</a></h1>
+<p>Standard JSON is a protocol for interaction with the <strong>solx</strong> and <strong>solc</strong> compilers. This protocol must be implemented by toolkits such as Hardhat.</p>
+<p>The protocol uses two data formats for communication: <a href="#input-json">input JSON</a> and <a href="#output-json">output JSON</a>.</p>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<p>Input JSON can be provided by-value via the <code>--standard-json</code> option:</p>
+<pre><code class="language-shell">solx --standard-json './input.json'
+</code></pre>
+<p>Alternatively, the input JSON can be fed to <strong>solx</strong> via <em>stdin</em>:</p>
+<pre><code class="language-shell">cat './input.json' | solx --standard-json
+</code></pre>
+<p>You can also insert your standard JSON input directly into the command line:</p>
+<pre><code class="language-shell">solx --standard-json
+
+&lt;paste into stdin here and press Ctrl-D&gt;
+</code></pre>
+<blockquote>
+<p>For the sake of interface unification, <strong>solx</strong> will always return with exit code 0 and have its standard JSON output printed to <em>stdout</em>.
+It differs from <strong>solc</strong> that may return with exit code 1 and a free-formed error in some cases, such as when the standard JSON input file is missing, even though <a href="https://docs.soliditylang.org/en/latest/using-the-compiler.html#compiler-input-and-output-json-description">the <strong>solc</strong> documentation claims otherwise</a>.</p>
+</blockquote>
+<h2 id="input-json"><a class="header" href="#input-json">Input JSON</a></h2>
+<p>The input JSON provides the compiler with the source code and settings for the compilation. The example below serves as the specification of the input JSON format.</p>
+<p>This format introduces several <strong>solx</strong>-specific parameters such as <code>settings.optimizer.sizeFallback</code>. These parameters are marked as <code>solx-only</code>.</p>
+<p>On the other hand, parameters that are not mentioned here but are parts of <strong>solc</strong> standard JSON protocol have no effect in <strong>solx</strong>.</p>
+<pre><code class="language-javascript">{
+  // Required: Source code language.
+  // Currently supported: "Solidity", "Yul", "LLVM IR".
+  "language": "Solidity",
+  // Required: Source code files to compile.
+  // The keys here are the "global" names of the source files. Imports can be using other file paths via remappings.
+  "sources": {
+    // In source file entry, either but not both "urls" and "content" must be specified.
+    "myFile.sol": {
+      // Required (unless "content" is used): URL(s) to the source file.
+      "urls": [
+        // In Solidity mode, directories must be added to the command-line via "--allow-paths &lt;path&gt;" for imports to work.
+        // It is possible to specify multiple URLs for a single source file. In this case the first successfully resolved URL will be used.
+        "/tmp/path/to/file.sol"
+      ],
+      // Required (unless "urls" is used): Literal contents of the source file.
+      "content": "contract settable is owned { uint256 private x = 0; function set(uint256 _x) public { if (msg.sender == owner) x = _x; } }"
+    }
+  },
+
+  // Required: Compilation settings.
+  "settings": {
+    // Optional: Optimizer settings.
+    "optimizer": {
+      // Optional, solx-only: Set the LLVM optimizer level.
+      // Available options:
+      // -0: do not optimize, currently unsupported
+      // -1: basic optimizations for gas usage
+      // -2: advanced optimizations for gas usage
+      // -3: all optimizations for gas usage
+      // -s: basic optimizations for bytecode size
+      // -z: all optimizations for bytecode size
+      // Default: 3.
+      "mode": "3",
+      // Optional, solx-only: Re-run the compilation with "mode": "z" if the initial compilation exceeds the EVM bytecode size limit.
+      // Used on a per-contract basis and applied automatically, so some contracts will end up compiled in the initial mode, and others with "mode": "z".
+      // Only activated if "mode" is set to "3", which is the default optimization mode.
+      // Default: false.
+      "sizeFallback": false
+    },
+
+    // Optional: Sorted list of remappings.
+    // Important: Only used with Solidity input.
+    "remappings": [ ":g=/dir" ],
+    // Optional: Addresses of the libraries.
+    // If not all library addresses are provided here, it will result in unlinked bytecode files that will require post-compile-time linking before deployment.
+    // Important: Only used with Solidity, Yul, and LLVM IR input.
+    "libraries": {
+      // The top level key is the name of the source file where the library is used.
+      // If remappings are used, this source file should match the global path after remappings were applied.
+      "myFile.sol": {
+        // Source code library name and address where it is deployed.
+        "MyLib": "0x123123..."
+      }
+    },
+
+    // Optional: Version of EVM solx will produce bytecode for.
+    // Supported EVM versions: "cancun", "prague", "osaka".
+    // For instance, with version "osaka", solx will be producing `clz` instructions, whereas for older EVM versions it will not.
+    // The oldest supported EVM version is "cancun".
+    // Default: "osaka".
+    "evmVersion": "osaka",
+    // Optional: Select the desired output.
+    // Default: no flags are selected, and no output is generated.
+    "outputSelection": {
+      "&lt;path&gt;": {
+        // Available file-level options, must be listed under "&lt;path&gt;"."":
+        "": [
+          // AST of all source files.
+          "ast",
+          // Benchmarks of the solx LLVM-based compilation pipeline and its underlying call to solc.
+          "benchmarks"
+        ],
+        // Available contract-level options, must be listed under "&lt;path&gt;"."&lt;name&gt;":
+        "&lt;name&gt;": [
+          // Solidity ABI.
+          "abi",
+          // Metadata.
+          "metadata",
+          // Developer documentation (natspec).
+          "devdoc",
+          // User documentation (natspec).
+          "userdoc",
+          // Slots, offsets and types of the contract's state variables in storage.
+          "storageLayout",
+          // Slots, offsets and types of the contract's state variables in transient storage.
+          "transientStorageLayout",
+          // Yul produced by solc.
+          // An alias "irOptimized" is supported for compatibility, but it will request unoptimized Yul IR anyway.
+          "ir",
+          // Everything of the below.
+          "evm",
+          // Solidity function hashes.
+          "evm.methodIdentifiers",
+          // EVM assembly produced by solc.
+          "evm.legacyAssembly",
+          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.gasEstimates",
+          // Everything that starts with "evm.bytecode".
+          "evm.bytecode",
+          // Deploy bytecode produced by solx/LLVM.
+          // As long as the solx bytecode linker is in experimental stage, all contracts will be compiled if this key is enabled for at least one contract.
+          "evm.bytecode.object",
+          // Deploy code assembly produced by solx/LLVM.
+          "evm.bytecode.llvmAssembly",
+          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.bytecode.opcodes",
+          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.bytecode.sourceMap",
+          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.bytecode.functionDebugData",
+          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.bytecode.generatedSources",
+          // Everything that starts with "evm.deployedBytecode".
+          "evm.deployedBytecode",
+          // Runtime bytecode produced by solx/LLVM.
+          // As long as the solx bytecode linker is in experimental stage, all contracts will be compiled if this key is enabled for at least one contract.
+          "evm.deployedBytecode.object",
+          // Runtime code assembly produced by solx/LLVM.
+          "evm.deployedBytecode.llvmAssembly",
+          // Link references for linkers that are to resolve library addresses at deploy time.
+          "evm.deployedBytecode.linkReferences",
+          // Resolved automatically by solx/LLVM, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.deployedBytecode.immutableReferences",
+          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.deployedBytecode.opcodes",
+          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.deployedBytecode.sourceMap",
+          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.deployedBytecode.functionDebugData",
+          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.deployedBytecode.generatedSources"
+        ]
+      }
+    },
+    // Optional: Metadata settings.
+    "metadata": {
+      // Optional: Use the given hash method for the metadata hash that is appended to the bytecode.
+      // Available options: "none", "ipfs".
+      // Default: "ipfs".
+      "bytecodeHash": "ipfs",
+      // Optional: Use only literal content and not URLs.
+      // Default: false.
+      "useLiteralContent": true,
+      // Optional: Whether to include CBOR-encoded metadata at the end of bytecode.
+      // Default: true.
+      "appendCBOR": true
+    },
+    // Optional: Enables the IR codegen in solc.
+    "viaIR": true,
+
+    // Optional, solx: Extra LLVM settings.
+    "llvmOptions": [
+      "-key", "value"
+    ]
+  }
+}
+</code></pre>
+<h2 id="output-json"><a class="header" href="#output-json">Output JSON</a></h2>
+<p>The output JSON contains all artifacts produced by <strong>solx</strong> and <strong>solc</strong> together. The example below serves as the specification of the output JSON format.</p>
+<pre><code class="language-javascript">{
+  // Required: File-level outputs.
+  "sources": {
+    "sourceFile.sol": {
+      // Required: Identifier of the source.
+      "id": 1,
+      // Optional: The AST object.
+      // Corresponds to "ast" in the outputSelection settings.
+      "ast": {/* ... */}
+    }
+  },
+
+  // Required: Contract-level outputs.
+  "contracts": {
+    // The source name.
+    "sourceFile.sol": {
+      // The contract name.
+      // If the language only supports one contract per file, this field equals to the source name.
+      "ContractName": {
+        // Optional: The Ethereum Contract ABI (object).
+        // See https://docs.soliditylang.org/en/develop/abi-spec.html.
+        // Corresponds to "abi" in the outputSelection settings.
+        "abi": [/* ... */],
+        // Optional: Storage layout (object).
+        // Corresponds to "storageLayout" in the outputSelection settings.
+        "storageLayout": {/* ... */},
+        // Optional: Transient storage layout (object).
+        // Corresponds to "transientStorageLayout" in the outputSelection settings.
+        "transientStorageLayout": {/* ... */},
+        // Optional: Contract metadata (string).
+        // Corresponds to "metadata" in the outputSelection settings.
+        "metadata": "/* ... */",
+        // Optional: Developer documentation (natspec object).
+        // Corresponds to "devdoc" in the outputSelection settings.
+        "devdoc": {/* ... */},
+        // Optional: User documentation (natspec object).
+        // Corresponds to "userdoc" in the outputSelection settings.
+        "userdoc": {/* ... */},
+        // Optional: Yul produced by solc (string).
+        // Corresponds to "ir" in the outputSelection settings.
+        "ir": "/* ... */",
+        // Optional: EVM target outputs.
+        // Corresponds to "evm" in the outputSelection settings.
+        "evm": {
+          // Optional: EVM assembly produced by solc (object).
+          // Corresponds to "evm.legacyAssembly" in the outputSelection settings.
+          "legacyAssembly": {/* ... */},
+          // Optional: List of function hashes (object).
+          // Corresponds to "evm.methodIdentifiers" in the outputSelection settings.
+          "methodIdentifiers": {
+            // Mapping between the function signature and its hash.
+            "delegate(address)": "5c19a95c"
+          },
+          // Optional: Always empty, Included only to preserve compatibility with some toolkits (object).
+          // Corresponds to "evm.gasEstimates" in the outputSelection settings.
+          "gasEstimates": {},
+          // Optional: Deploy EVM bytecode.
+          // Corresponds to "evm.bytecode" in the outputSelection settings.
+          "bytecode": {
+            // Optional: Bytecode (string).
+            // Corresponds to "evm.bytecode.object" in the outputSelection settings.
+            "object": "5b60806040525f341415601c5763...",
+            // Optional: LLVM text assembly (string).
+            // Corresponds to "evm.bytecode.llvmAssembly" in the outputSelection settings.
+            "llvmAssembly": "/* ... */",
+            // Optional: Link references for linkers that are to resolve library addresses at deploy time (object).
+            // Corresponds to "evm.bytecode.linkReferences" in the outputSelection settings.
+            "linkReferences": {/* ... */},
+            // Optional: Benchmarks of each stage of the compilation on a per-translation unit basis.
+            // Corresponds to "benchmarks" in the outputSelection settings.
+            "benchmarks": {/* ... */},
+            // Optional: Always empty, included only to preserve compatibility with some toolkits (string).
+            // Corresponds to "evm.bytecode.immutableReferences" in the outputSelection settings.
+            "opcodes": {},
+            // Optional: Always empty, Included only to preserve compatibility with some toolkits (string).
+            // Corresponds to "evm.bytecode.sourceMap" in the outputSelection settings.
+            "sourceMap": {},
+            // Optional: Always empty, Included only to preserve compatibility with some toolkits (array).
+            // Corresponds to "evm.bytecode.functionDebugData" in the outputSelection settings.
+            "functionDebugData": {},
+            // Optional: Always empty, Included only to preserve compatibility with some toolkits (object).
+            // Corresponds to "evm.bytecode.generatedSources" in the outputSelection settings.
+            "generatedSources": {}
+          },
+          // Optional: Runtime EVM bytecode.
+          // Corresponds to "evm.deployedBytecode" in the outputSelection settings.
+          "deployedBytecode": {
+            // Optional: Bytecode (string).
+            // Corresponds to "evm.deployedBytecode.object" in the outputSelection settings.
+            "object": "5b60806040525f34141560145760...",
+            // Optional: LLVM text assembly (string).
+            // Corresponds to "evm.deployedBytecode.llvmAssembly" in the outputSelection settings.
+            "llvmAssembly": "/* ... */",
+            // Optional: Link references for linkers that are to resolve library addresses at deploy time (object).
+            // Corresponds to "evm.deployedBytecode.linkReferences" in the outputSelection settings.
+            "linkReferences": {/* ... */},
+            // Optional: Benchmarks of each stage of the compilation on a per-translation unit basis.
+            // Corresponds to "benchmarks" in the outputSelection settings.
+            "benchmarks": {/* ... */},
+            // Optional: Resolved by LLVM automatically, so always returned as an empty object (object).
+            // Included only to preserve compatibility with some toolkits.
+            // Corresponds to "evm.deployedBytecode.immutableReferences" in the outputSelection settings.
+            "immutableReferences": {},
+            // Optional: Always empty, included only to preserve compatibility with some toolkits (string).
+            // Corresponds to "evm.deployedBytecode.opcodes" in the outputSelection settings.
+            "opcodes": {},
+            // Optional: Always empty, Included only to preserve compatibility with some toolkits (string).
+            // Corresponds to "evm.deployedBytecode.sourceMap" in the outputSelection settings.
+            "sourceMap": {},
+            // Optional: Always empty, Included only to preserve compatibility with some toolkits (array).
+            // Corresponds to "evm.deployedBytecode.functionDebugData" in the outputSelection settings.
+            "functionDebugData": {},
+            // Optional: Always empty, Included only to preserve compatibility with some toolkits (object).
+            // Corresponds to "evm.deployedBytecode.generatedSources" in the outputSelection settings.
+            "generatedSources": {}
+          }
+        },
+        // Optional: Benchmarks of the solx LLVM-based compilation pipeline and its underlying call to solc (object).
+        // Corresponds to "benchmarks" in the outputSelection settings.
+        "benchmarks": {/* ... */}
+      }
+    }
+  },
+
+  // Optional: Unset if no messages were emitted.
+  "errors": [
+    {
+      // Optional: Location within the source file.
+      // Unset if the error is unrelated to input sources.
+      "sourceLocation": {
+        /// Required: The source path.
+        "file": "sourceFile.sol",
+        /// Required: The source location start. Equals -1 if unknown.
+        "start": 0,
+        /// Required: The source location end. Equals -1 if unknown.
+        "end": 100
+      },
+      // Required: Message type.
+      // solc errors are listed at https://docs.soliditylang.org/en/latest/using-the-compiler.html#error-types.
+      "type": "Error",
+      // Required: Component the error originates from.
+      "component": "general",
+      // Required: Message severity.
+      // Possible values: "error", "warning", "info".
+      "severity": "error",
+      // Optional: Unique code for the cause of the error.
+      // Only solc produces error codes for now.
+      // solx currently emits errors without codes, but they will be introduced soon.
+      "errorCode": "3141",
+      // Required: Message.
+      "message": "Invalid keyword",
+      // Required: Message formatted using the source location.
+      "formattedMessage": "sourceFile.sol:100: Invalid keyword"
+    }
+  ]
+}
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="02-command-line-interface.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="guides/01-sanitizers.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="02-command-line-interface.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="guides/01-sanitizers.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="js/version-box.js"></script>
+
+
+    </div>
+    </body>
+</html>

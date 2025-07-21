@@ -1,0 +1,83 @@
+[
+  {
+    "contract": "lib/openzeppelin-contracts/contracts/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon",
+    "deployment": {
+      "gas": 0,
+      "size": 1216
+    },
+    "functions": {
+      "implementation()": {
+        "calls": 40,
+        "min": 2258,
+        "mean": 2258,
+        "median": 2258,
+        "max": 2258
+      }
+    }
+  },
+  {
+    "contract": "src/ProxyTester.sol:ProxyTester",
+    "deployment": {
+      "gas": 3126023,
+      "size": 14286
+    },
+    "functions": {
+      "beacon()": {
+        "calls": 40,
+        "min": 2328,
+        "mean": 2328,
+        "median": 2328,
+        "max": 2328
+      },
+      "beaconAddress()": {
+        "calls": 20,
+        "min": 2355,
+        "mean": 2355,
+        "median": 2355,
+        "max": 2355
+      },
+      "deploy(address)": {
+        "calls": 40,
+        "min": 319435,
+        "mean": 352601,
+        "median": 352601,
+        "max": 385768
+      },
+      "deploy(address,address)": {
+        "calls": 40,
+        "min": 583925,
+        "mean": 583925,
+        "median": 583925,
+        "max": 583925
+      },
+      "proxyAddress()": {
+        "calls": 60,
+        "min": 2361,
+        "mean": 2361,
+        "median": 2361,
+        "max": 2361
+      },
+      "setType(string)": {
+        "calls": 80,
+        "min": 26475,
+        "mean": 36582,
+        "median": 36526,
+        "max": 46802
+      },
+      "upgrade(address,address,address)": {
+        "calls": 20,
+        "min": 47399,
+        "mean": 47399,
+        "median": 47399,
+        "max": 47399
+      },
+      "uups()": {
+        "calls": 40,
+        "min": 2348,
+        "mean": 2348,
+        "median": 2348,
+        "max": 2348
+      }
+    }
+  }
+]
