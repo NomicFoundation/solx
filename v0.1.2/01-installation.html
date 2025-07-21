@@ -1,0 +1,446 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Installation - solx Compiler Documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="css/version-box.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">solx Compiler Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
+<p>You can start using <strong>solx</strong> in the following ways:</p>
+<ol>
+<li>
+<p>Use the installation script.</p>
+<pre><code class="language-shell">curl -L https://raw.githubusercontent.com/matter-labs/solx/main/install-solx | bash
+</code></pre>
+<p>The script will download the latest stable release of <strong>solx</strong> and install it in your <code>PATH</code>.</p>
+<blockquote>
+<p>⚠️ The script requires <code>curl</code> to be installed on your system.<br>
+This is the recommended way to install <strong>solx</strong> for MacOS users to bypass gatekeeper checks.</p>
+</blockquote>
+</li>
+<li>
+<p>Download <a href="https://github.com/matter-labs/solx/releases">stable releases</a>. See <a href="#static-executables">Static Executables</a>.</p>
+</li>
+<li>
+<p>Build <strong>solx</strong> from sources. See <a href="#building-from-source">Building from Source</a>.</p>
+</li>
+</ol>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<p>We recommend using <strong>solx</strong> via <a href="https://github.com/foundry-rs/foundry">Foundry</a>. It behaves in the same way as
+<strong>solc</strong> v0.8.30, so you can install <strong>solx</strong> executable as described in the section above and specify:</p>
+<pre><code class="language-toml">[profile.solx]
+solc_version = "/path/to/solx"
+</code></pre>
+<p>As a shortcut, you may also use <code>forge --use /path/to/solx</code> instead.</p>
+<p><strong>solx</strong> works with <strong>Hardhat</strong> as well, but requires additional configuration.</p>
+<h2 id="system-requirements"><a class="header" href="#system-requirements">System Requirements</a></h2>
+<p>It is recommended to have at least 4 GB of RAM to compile large projects. The compilation process is parallelized by default, so the number of threads used is
+equal to the number of CPU cores.</p>
+<blockquote>
+<p>Large projects can consume a lot of RAM during compilation on machines with a high number of cores.
+If you encounter memory issues, consider reducing the number of threads using the <code>--threads</code> option.</p>
+</blockquote>
+<p>The table below outlines the supported platforms and architectures:</p>
+<div class="table-wrapper"><table><thead><tr><th style="text-align: center">CPU/OS</th><th style="text-align: center">MacOS</th><th style="text-align: center">Linux</th><th style="text-align: center">Windows</th></tr></thead><tbody>
+<tr><td style="text-align: center">x86_64</td><td style="text-align: center">✅</td><td style="text-align: center">✅</td><td style="text-align: center">✅</td></tr>
+<tr><td style="text-align: center">arm64</td><td style="text-align: center">✅</td><td style="text-align: center">✅</td><td style="text-align: center">❌</td></tr>
+</tbody></table>
+</div>
+<blockquote>
+<p>Please avoid using outdated distributions of operating systems, as they may lack the necessary dependencies or include outdated versions of them.
+<strong>solx</strong> is only tested on recent versions of popular distributions, such as MacOS 11.0 and Windows 10.</p>
+</blockquote>
+<h2 id="versioning"><a class="header" href="#versioning">Versioning</a></h2>
+<p>The <strong>solx</strong> version consists of three parts:</p>
+<ol>
+<li><strong>solx</strong> version itself.</li>
+<li>Version of <strong>solc</strong> libraries <strong>solx</strong> is statically linked with.</li>
+<li>Revision of the LLVM-friendly fork of <strong>solc</strong> maintained by the <strong>solx</strong> team.</li>
+</ol>
+<p>For instance, the latest revision of the latest version of <strong>solc</strong> is <code>0.8.30-1.0.2</code>. Here are the <strong>solc</strong> revisions released by now:</p>
+<div class="table-wrapper"><table><thead><tr><th style="text-align: left">Revision</th><th style="text-align: left">Fixes</th></tr></thead><tbody>
+<tr><td style="text-align: left"><em>v1.0.0</em></td><td style="text-align: left">Compatibility between EVM assembly and LLVM IR</td></tr>
+<tr><td style="text-align: left"><em>v1.0.1</em></td><td style="text-align: left">A compiler crash with nested try-catch patterns</td></tr>
+<tr><td style="text-align: left"><em>v1.0.2</em></td><td style="text-align: left">Metadata of recursive calls across inheritance</td></tr>
+</tbody></table>
+</div>
+<blockquote>
+<p>We recommend always using the latest version of <strong>solx</strong> to benefit from the latest features and bug fixes.</p>
+</blockquote>
+<h2 id="ethereum-development-toolkits"><a class="header" href="#ethereum-development-toolkits">Ethereum Development Toolkits</a></h2>
+<p>For large codebases, it is more convenient to use <strong>solx</strong> via toolkits such as Foundry and Hardhat.
+These tools manage compiler input and output on a higher level, and provide additional features like incremental compilation and caching.</p>
+<h2 id="static-executables"><a class="header" href="#static-executables">Static Executables</a></h2>
+<p>We ship <strong>solx</strong> binaries on the <a href="https://github.com/matter-labs/solx/releases">releases page of the eponymous repository</a>.
+This repository maintains intuitive and stable naming for the executables and provides a changelog for each release. Tools using <strong>solx</strong> must download the binaries from this repository and cache them locally.</p>
+<blockquote>
+<p>All executables are statically linked and must work on all recent platforms without issues.</p>
+</blockquote>
+<h2 id="building-from-source"><a class="header" href="#building-from-source">Building from Source</a></h2>
+<blockquote>
+<p>Please consider using the pre-built executables before building from source.
+Building from source is only necessary for development, research, and debugging purposes.
+Deployment and production use cases should rely only on <a href="#static-executables">the officially released executables</a>.</p>
+</blockquote>
+<ol>
+<li>
+<p>Install the necessary system-wide dependencies.</p>
+<ul>
+<li>For Linux (Debian):</li>
+</ul>
+<pre><code class="language-shell">apt install cmake ninja-build curl git libssl-dev pkg-config clang lld
+</code></pre>
+<ul>
+<li>For Linux (Arch):</li>
+</ul>
+<pre><code class="language-shell">pacman -Syu which cmake ninja curl git pkg-config clang lld
+</code></pre>
+<ul>
+<li>
+<p>For MacOS:</p>
+<ol>
+<li>
+<p>Install the <strong>Homebrew</strong> package manager by following the instructions at <a href="https://brew.sh">brew.sh</a>.</p>
+</li>
+<li>
+<p>Install the necessary system-wide dependencies:</p>
+<pre><code class="language-shell">brew install cmake ninja coreutils
+</code></pre>
+</li>
+<li>
+<p>Install a recent build of the LLVM/<a href="https://clang.llvm.org">Clang</a> compiler using one of the following tools:</p>
+<ul>
+<li><a href="https://developer.apple.com/xcode/">Xcode</a></li>
+<li><a href="https://developer.apple.com/library/archive/technotes/tn2339/_index.html">Apple’s Command Line Tools</a></li>
+<li>Your preferred package manager.</li>
+</ul>
+</li>
+</ol>
+</li>
+</ul>
+</li>
+<li>
+<p>Install Rust.</p>
+<p>The easiest way to do it is following the latest <a href="https://www.rust-lang.org/tools/install">official instructions</a>.</p>
+</li>
+</ol>
+<blockquote>
+<p>The Rust version used for building is pinned in the <a href="../rust-toolchain.toml">rust-toolchain.toml</a> file at the repository root.
+<strong>cargo</strong> will automatically download the pinned version of <em>rustc</em> when you start building the project.</p>
+</blockquote>
+<ol start="3">
+<li>
+<p>Clone and checkout this repository with submodules.</p>
+<pre><code class="language-shell">git clone https://github.com/matter-labs/solx --recursive
+</code></pre>
+<p>By default, submodules checkout is disabled to prevent cloning large repositories via <code>cargo</code>.
+If you're building locally, ensure all submodules are checked out with:</p>
+<pre><code class="language-shell">git submodule update --recursive --checkout
+</code></pre>
+</li>
+<li>
+<p>Install the Matter Labs LLVM framework builder. This tool clones the <a href="https://github.com/matter-labs/era-compiler-llvm">repository of Matter Labs LLVM Framework</a> and runs a sequence of build commands tuned for the needs of <strong>solx</strong>.</p>
+<pre><code class="language-shell">cargo install compiler-llvm-builder
+</code></pre>
+<p>To fine-tune your build of Matter Labs LLVM framework, refer to the section on <a href="#tuning-the-llvm-build">tuning the Matter Labs LLVM build</a>.</p>
+</li>
+</ol>
+<blockquote>
+<p>Always use the latest version of the builder to benefit from the latest features and bug fixes.
+To check for new versions and update the builder, simply run <code>cargo install compiler-llvm-builder</code> again, even if you have already installed the builder.
+The builder is not the LLVM framework itself, but only a tool to build it.
+By default, it is installed in <code>~/.cargo/bin/</code>, which is usually added to your <code>PATH</code> during the Rust installation process.</p>
+</blockquote>
+<ol start="5">
+<li>
+<p>Build the LLVM framework using the <code>zksync-llvm</code> tool.</p>
+<pre><code class="language-shell"># Navigate to the root of your local copy of this repository.
+cd solx
+# Build the LLVM framework.
+zksync-llvm build
+</code></pre>
+<p>For more information and available build options, run <code>zksync-llvm build --help</code>.</p>
+</li>
+<li>
+<p>Build the <strong>solc</strong> libraries.</p>
+<pre><code class="language-shell">cd era-solidity
+mkdir -pv build
+cd build
+cmake .. \
+   -DPEDANTIC='OFF' \
+   -DTESTS='OFF' \
+   -DCMAKE_BUILD_TYPE='Release' \
+   -DSOL_VERSION_ZKSYNC='0.8.30-1.0.2'
+cmake --build . --config Release --parallel ${YOUR_CPU_COUNT}
+cd ../..
+</code></pre>
+<p>The sequence above may fail with clang v20 and/or Boost 1.88.
+We are currently looking for a solution and will document it when we find one.
+If you encounter compilation errors, try specifying the aforementioned versions to replace your system default:</p>
+<pre><code class="language-shell"># MacOS example
+
+# Install Boost v1.85
+brew install boost@1.85
+
+# Make Boost v1.85 default
+brew unlink boost
+brew link boost@1.85
+
+# Install LLVM with clang v19
+brew install llvm@19
+
+# Re-run the build command
+cmake .. \
+   -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm@19/bin/clang \
+   -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm@19/bin/clang++ \
+   -DPEDANTIC=OFF \
+   -DTESTS=OFF \
+   -DCMAKE_BUILD_TYPE="Release" \
+   -DSOL_VERSION_ZKSYNC="0.8.30-1.0.2"
+cmake --build . --config Release --parallel ${YOUR_CPU_COUNT}
+</code></pre>
+<p>The <code>-DSOL_VERSION_ZKSYNC</code> flag is used to specify the version-revision of the <strong>solc</strong> that is reported by <strong>solx</strong>.
+By default, we recommend keeping the revision at <code>1.0.2</code> to follow our <a href="#versioning">versioning</a>.
+Otherwise, feel free to change it according to your needs.</p>
+</li>
+<li>
+<p>Build the <strong>solx</strong> executable.</p>
+<pre><code class="language-shell">cargo build --release
+</code></pre>
+<p>The <strong>solx</strong> executable will appear as <code>./target/release/solx</code>, where you can run it directly or move it to another location.</p>
+<p>If <strong>cargo</strong> cannot find the LLVM build artifacts, ensure that the <code>LLVM_SYS_191_PREFIX</code> environment variable is not set in your system, as it may be pointing to a location different from the one expected by <strong>solx</strong>.</p>
+</li>
+</ol>
+<h2 id="tuning-the-llvm-build"><a class="header" href="#tuning-the-llvm-build">Tuning the LLVM build</a></h2>
+<ul>
+<li>
+<p>For more information and available build options, run <code>zksync-llvm build --help</code>.</p>
+</li>
+<li>
+<p>Use the <code>--use-ccache</code> option to speed up the build process if you have <a href="https://ccache.dev">ccache</a> installed.</p>
+</li>
+<li>
+<p>To build the Matter Labs LLVM framework using specific C and C++ compilers, pass additional arguments to <a href="https://cmake.org/">CMake</a> using the <code>--extra-args</code> option:</p>
+<pre><code class="language-shell"># Pay special attention to character escaping.
+
+zksync-llvm build \
+  --use-ccache \
+  --extra-args \
+    '\-DCMAKE_C_COMPILER=/opt/homebrew/Cellar/llvm@18/18.1.8/bin/clang' \
+    '\-DCMAKE_BUILD_TYPE=Release' \
+    '\-DCMAKE_CXX_COMPILER=/opt/homebrew/Cellar/llvm@18/18.1.8/bin/clang++' 
+</code></pre>
+</li>
+</ul>
+<h3 id="building-llvm-manually"><a class="header" href="#building-llvm-manually">Building LLVM manually</a></h3>
+<ul>
+<li>
+<p>If you prefer building <a href="https://github.com/matter-labs/era-compiler-llvm">your LLVM framework</a> manually, include the following flags in your CMake command:</p>
+<pre><code class="language-shell"># We recommended using the latest version of CMake.
+
+-DLLVM_TARGETS_TO_BUILD='EVM'
+-DLLVM_ENABLE_PROJECTS='lld'
+-DBUILD_SHARED_LIBS='Off'
+</code></pre>
+</li>
+</ul>
+<blockquote>
+<p>For most users, the <a href="#building-from-source">Matter Labs LLVM builder</a> is the recommended way to build the framework.
+This section was added for compiler toolchain developers and researchers with specific requirements and experience with the LLVM framework.
+We are going to present a more detailed guide for LLVM contributors in the future.</p>
+</blockquote>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+                            <a rel="next prefetch" href="02-command-line-interface.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+                    <a rel="next prefetch" href="02-command-line-interface.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="js/version-box.js"></script>
+
+
+    </div>
+    </body>
+</html>

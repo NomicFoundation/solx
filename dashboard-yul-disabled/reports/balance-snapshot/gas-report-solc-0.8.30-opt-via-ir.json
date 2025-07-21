@@ -1,0 +1,18 @@
+[
+  {
+    "contract": "test/utils/ERC20.sol:ERC20",
+    "deployment": {
+      "gas": 818597,
+      "size": 3787
+    },
+    "functions": {
+      "balanceOf(address)": {
+        "calls": 340,
+        "min": 3230,
+        "mean": 3230,
+        "median": 3230,
+        "max": 3230
+      }
+    }
+  }
+]

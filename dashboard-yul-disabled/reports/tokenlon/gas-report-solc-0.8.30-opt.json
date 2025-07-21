@@ -1,0 +1,406 @@
+[
+  {
+    "contract": "contracts/AllowanceTarget.sol:AllowanceTarget",
+    "deployment": {
+      "gas": 703448,
+      "size": 3444
+    },
+    "functions": {
+      "pause()": {
+        "calls": 80,
+        "min": 23402,
+        "mean": 26580,
+        "median": 27640,
+        "max": 27640
+      },
+      "spendFromUserTo(address,address,address,uint256)": {
+        "calls": 160,
+        "min": 24987,
+        "mean": 50857,
+        "median": 49334,
+        "max": 91027
+      },
+      "unpause()": {
+        "calls": 40,
+        "min": 23403,
+        "mean": 25510,
+        "median": 25510,
+        "max": 27618
+      }
+    }
+  },
+  {
+    "contract": "test/AllowanceTarget.t.sol:AllowanceTargetTest",
+    "deployment": {
+      "gas": 8984811,
+      "size": 42642
+    },
+    "functions": {
+      "externalDeal(address,address,uint256,bool)": {
+        "calls": 800,
+        "min": 316492,
+        "mean": 316564,
+        "median": 316564,
+        "max": 316636
+      }
+    }
+  },
+  {
+    "contract": "test/abstracts/AdminManagement.t.sol:ContractWithAdmin",
+    "deployment": {
+      "gas": 844372,
+      "size": 3776
+    },
+    "functions": {
+      "approveTokens(address[],address[])": {
+        "calls": 40,
+        "min": 25917,
+        "mean": 80692,
+        "median": 80692,
+        "max": 135467
+      },
+      "rescueTokens(address[],address)": {
+        "calls": 40,
+        "min": 25160,
+        "mean": 55469,
+        "median": 55469,
+        "max": 85779
+      }
+    }
+  },
+  {
+    "contract": "test/abstracts/EIP712.t.sol:EIP712Harness",
+    "deployment": {
+      "gas": 331107,
+      "size": 1561
+    },
+    "functions": {
+      "EIP712_DOMAIN_SEPARATOR()": {
+        "calls": 40,
+        "min": 298,
+        "mean": 467,
+        "median": 467,
+        "max": 636
+      },
+      "calculateDomainSeparator()": {
+        "calls": 60,
+        "min": 539,
+        "mean": 539,
+        "median": 539,
+        "max": 539
+      },
+      "exposedGetEIP712Hash(bytes32)": {
+        "calls": 20,
+        "min": 490,
+        "mean": 490,
+        "median": 490,
+        "max": 490
+      },
+      "originalChainId()": {
+        "calls": 20,
+        "min": 184,
+        "mean": 184,
+        "median": 184,
+        "max": 184
+      },
+      "originalEIP712DomainSeparator()": {
+        "calls": 20,
+        "min": 228,
+        "mean": 228,
+        "median": 228,
+        "max": 228
+      }
+    }
+  },
+  {
+    "contract": "test/abstracts/Ownable.t.sol:OwnableTestContract",
+    "deployment": {
+      "gas": 302284,
+      "size": 1251
+    },
+    "functions": {
+      "acceptOwnership()": {
+        "calls": 40,
+        "min": 23392,
+        "mean": 25871,
+        "median": 25871,
+        "max": 28351
+      },
+      "nominateNewOwner(address)": {
+        "calls": 100,
+        "min": 23848,
+        "mean": 42444,
+        "median": 47093,
+        "max": 47093
+      },
+      "nominatedOwner()": {
+        "calls": 60,
+        "min": 2323,
+        "mean": 2323,
+        "median": 2323,
+        "max": 2323
+      },
+      "owner()": {
+        "calls": 60,
+        "min": 2343,
+        "mean": 2343,
+        "median": 2343,
+        "max": 2343
+      },
+      "renounceOwnership()": {
+        "calls": 60,
+        "min": 23369,
+        "mean": 24725,
+        "median": 25312,
+        "max": 25495
+      }
+    }
+  },
+  {
+    "contract": "test/libraries/Asset.t.sol:AssetHarness",
+    "deployment": {
+      "gas": 420284,
+      "size": 1737
+    },
+    "functions": {
+      "exposedGetBalance(address,address)": {
+        "calls": 60,
+        "min": 715,
+        "mean": 2485,
+        "median": 720,
+        "max": 6022
+      },
+      "exposedIsETH(address)": {
+        "calls": 40,
+        "min": 417,
+        "mean": 419,
+        "median": 419,
+        "max": 422
+      },
+      "exposedTransferTo(address,address,uint256)": {
+        "calls": 120,
+        "min": 22347,
+        "mean": 34533,
+        "median": 27257,
+        "max": 56933
+      }
+    }
+  },
+  {
+    "contract": "test/libraries/SignatureValidator.t.sol:NonStandard1271Wallet",
+    "deployment": {
+      "gas": 281629,
+      "size": 1093
+    },
+    "functions": {
+      "isValidSignature(bytes32,bytes)": {
+        "calls": 20,
+        "min": 4375,
+        "mean": 4375,
+        "median": 4375,
+        "max": 4375
+      }
+    }
+  },
+  {
+    "contract": "test/libraries/SignatureValidator.t.sol:SignatureValidatorTest",
+    "deployment": {
+      "gas": 3229415,
+      "size": 15682
+    },
+    "functions": {
+      "isValidSignature(bytes32,bytes)": {
+        "calls": 20,
+        "min": 214,
+        "mean": 214,
+        "median": 214,
+        "max": 214
+      },
+      "validateSignatureWrap(address,bytes32,bytes)": {
+        "calls": 20,
+        "min": 8156,
+        "mean": 8156,
+        "median": 8156,
+        "max": 8156
+      }
+    }
+  },
+  {
+    "contract": "test/mocks/MockDeflationaryERC20.sol:MockDeflationaryERC20",
+    "deployment": {
+      "gas": 735333,
+      "size": 3316
+    },
+    "functions": {
+      "approve(address,uint256)": {
+        "calls": 200,
+        "min": 46511,
+        "mean": 46511,
+        "median": 46511,
+        "max": 46511
+      },
+      "balanceOf(address)": {
+        "calls": 1080,
+        "min": 558,
+        "mean": 1076,
+        "median": 558,
+        "max": 2558
+      },
+      "decimals()": {
+        "calls": 200,
+        "min": 2335,
+        "mean": 2335,
+        "median": 2335,
+        "max": 2335
+      },
+      "totalSupply()": {
+        "calls": 1000,
+        "min": 339,
+        "mean": 739,
+        "median": 339,
+        "max": 2339
+      }
+    }
+  },
+  {
+    "contract": "test/mocks/MockERC1271Wallet.sol:MockERC1271Wallet",
+    "deployment": {
+      "gas": 772690,
+      "size": 3408
+    },
+    "functions": {
+      "isValidSignature(bytes32,bytes)": {
+        "calls": 100,
+        "min": 921,
+        "mean": 3891,
+        "median": 4361,
+        "max": 6522
+      }
+    }
+  },
+  {
+    "contract": "test/mocks/MockERC20.sol:MockERC20",
+    "deployment": {
+      "gas": 689248,
+      "size": 3528
+    },
+    "functions": {
+      "allowance(address,address)": {
+        "calls": 160,
+        "min": 2752,
+        "mean": 2752,
+        "median": 2752,
+        "max": 2752
+      },
+      "approve(address,uint256)": {
+        "calls": 200,
+        "min": 46629,
+        "mean": 46629,
+        "median": 46629,
+        "max": 46629
+      },
+      "balanceOf(address)": {
+        "calls": 1440,
+        "min": 558,
+        "mean": 1446,
+        "median": 558,
+        "max": 2558
+      },
+      "decimals()": {
+        "calls": 200,
+        "min": 2355,
+        "mean": 2355,
+        "median": 2355,
+        "max": 2355
+      },
+      "mint(address,uint256)": {
+        "calls": 200,
+        "min": 68294,
+        "mean": 68296,
+        "median": 68294,
+        "max": 68306
+      },
+      "totalSupply()": {
+        "calls": 1000,
+        "min": 303,
+        "mean": 703,
+        "median": 303,
+        "max": 2303
+      }
+    }
+  },
+  {
+    "contract": "test/mocks/MockNoReturnERC20.sol:MockNoReturnERC20",
+    "deployment": {
+      "gas": 677862,
+      "size": 3037
+    },
+    "functions": {
+      "approve(address,uint256)": {
+        "calls": 200,
+        "min": 46441,
+        "mean": 46441,
+        "median": 46441,
+        "max": 46441
+      },
+      "balanceOf(address)": {
+        "calls": 1100,
+        "min": 558,
+        "mean": 1103,
+        "median": 558,
+        "max": 2558
+      },
+      "decimals()": {
+        "calls": 200,
+        "min": 2335,
+        "mean": 2335,
+        "median": 2335,
+        "max": 2335
+      },
+      "totalSupply()": {
+        "calls": 1000,
+        "min": 339,
+        "mean": 739,
+        "median": 339,
+        "max": 2339
+      }
+    }
+  },
+  {
+    "contract": "test/mocks/MockNoRevertERC20.sol:MockNoRevertERC20",
+    "deployment": {
+      "gas": 683410,
+      "size": 3085
+    },
+    "functions": {
+      "approve(address,uint256)": {
+        "calls": 200,
+        "min": 46630,
+        "mean": 46630,
+        "median": 46630,
+        "max": 46630
+      },
+      "balanceOf(address)": {
+        "calls": 1020,
+        "min": 558,
+        "mean": 989,
+        "median": 558,
+        "max": 2558
+      },
+      "decimals()": {
+        "calls": 200,
+        "min": 2355,
+        "mean": 2355,
+        "median": 2355,
+        "max": 2355
+      },
+      "totalSupply()": {
+        "calls": 1000,
+        "min": 303,
+        "mean": 703,
+        "median": 303,
+        "max": 2303
+      }
+    }
+  }
+]

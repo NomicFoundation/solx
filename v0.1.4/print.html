@@ -1,0 +1,2367 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>solx Compiler Documentation</title>
+        <meta name="robots" content="noindex">
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="css/version-box.css">
+
+
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">solx Compiler Documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
+<p>You can start using <strong>solx</strong> in the following ways:</p>
+<ol>
+<li>
+<p>Use the installation script.</p>
+<pre><code class="language-shell">curl -L https://raw.githubusercontent.com/NomicFoundation/solx/main/install-solx | bash
+</code></pre>
+<p>The script will download the latest stable release of <strong>solx</strong> and install it in your <code>PATH</code>.</p>
+<blockquote>
+<p>⚠️ The script requires <code>curl</code> to be installed on your system.<br>
+This is the recommended way to install <strong>solx</strong> for MacOS users to bypass gatekeeper checks.</p>
+</blockquote>
+</li>
+<li>
+<p>Download <a href="https://github.com/NomicFoundation/solx/releases">stable releases</a>. See <a href="user-guide/01-installation.html#static-executables">Static Executables</a>.</p>
+</li>
+<li>
+<p>Build <strong>solx</strong> from sources. See <a href="user-guide/01-installation.html#building-from-source">Building from Source</a>.</p>
+</li>
+</ol>
+<h2 id="system-requirements"><a class="header" href="#system-requirements">System Requirements</a></h2>
+<p>It is recommended to have at least 4 GB of RAM to compile large projects. The compilation process is parallelized by default, so the number of threads used is
+equal to the number of CPU cores.</p>
+<blockquote>
+<p>Large projects can consume a lot of RAM during compilation on machines with a high number of cores.
+If you encounter memory issues, consider reducing the number of threads using the <code>--threads</code> option.</p>
+</blockquote>
+<p>The table below outlines the supported platforms and architectures:</p>
+<div class="table-wrapper"><table><thead><tr><th style="text-align: center">CPU/OS</th><th style="text-align: center">MacOS</th><th style="text-align: center">Linux</th><th style="text-align: center">Windows</th></tr></thead><tbody>
+<tr><td style="text-align: center">x86_64</td><td style="text-align: center">✅</td><td style="text-align: center">✅</td><td style="text-align: center">✅</td></tr>
+<tr><td style="text-align: center">arm64</td><td style="text-align: center">✅</td><td style="text-align: center">✅</td><td style="text-align: center">❌</td></tr>
+</tbody></table>
+</div>
+<blockquote>
+<p>Please avoid using outdated distributions of operating systems, as they may lack the necessary dependencies or include outdated versions of them.
+<strong>solx</strong> is only tested on recent versions of popular distributions, such as MacOS 11.0 and Windows 10.</p>
+</blockquote>
+<h2 id="versioning"><a class="header" href="#versioning">Versioning</a></h2>
+<p>The <strong>solx</strong> version consists of two parts:</p>
+<ol>
+<li><strong>solx</strong> version itself.</li>
+<li>Version of <strong>solc</strong> libraries <strong>solx</strong> is statically linked with.</li>
+</ol>
+<blockquote>
+<p>We recommend always using the latest version of <strong>solx</strong> to benefit from the latest features and bug fixes.</p>
+</blockquote>
+<h2 id="ethereum-development-toolkits"><a class="header" href="#ethereum-development-toolkits">Ethereum Development Toolkits</a></h2>
+<p>For large codebases, it is more convenient to use <strong>solx</strong> via toolkits such as Hardhat.
+These tools manage compiler input and output on a higher level, and provide additional features like incremental compilation and caching.</p>
+<h2 id="static-executables"><a class="header" href="#static-executables">Static Executables</a></h2>
+<p>We ship <strong>solx</strong> binaries on the <a href="https://github.com/NomicFoundation/solx/releases">releases page of the eponymous repository</a>.
+This repository maintains intuitive and stable naming for the executables and provides a changelog for each release. Tools using <strong>solx</strong> must download the binaries from this repository and cache them locally.</p>
+<blockquote>
+<p>All executables are statically linked and must work on all recent platforms without issues.</p>
+</blockquote>
+<h2 id="building-from-source"><a class="header" href="#building-from-source">Building from Source</a></h2>
+<blockquote>
+<p>Please consider using the pre-built executables before building from source.
+Building from source is only necessary for development, research, and debugging purposes.
+Deployment and production use cases should rely only on <a href="user-guide/01-installation.html#static-executables">the officially released executables</a>.</p>
+</blockquote>
+<ol>
+<li>
+<p>Install the necessary system-wide dependencies.</p>
+<ul>
+<li>For Linux (Debian):</li>
+</ul>
+<pre><code class="language-shell">apt install cmake ninja-build curl git libssl-dev pkg-config clang lld
+</code></pre>
+<ul>
+<li>For Linux (Arch):</li>
+</ul>
+<pre><code class="language-shell">pacman -Syu which cmake ninja curl git pkg-config clang lld
+</code></pre>
+<ul>
+<li>
+<p>For MacOS:</p>
+<ol>
+<li>
+<p>Install the <strong>Homebrew</strong> package manager by following the instructions at <a href="https://brew.sh">brew.sh</a>.</p>
+</li>
+<li>
+<p>Install the necessary system-wide dependencies:</p>
+<pre><code class="language-shell">brew install cmake ninja coreutils
+</code></pre>
+</li>
+<li>
+<p>Install a recent build of the LLVM/<a href="https://clang.llvm.org">Clang</a> compiler using one of the following tools:</p>
+<ul>
+<li><a href="https://developer.apple.com/xcode/">Xcode</a></li>
+<li><a href="https://developer.apple.com/library/archive/technotes/tn2339/_index.html">Apple’s Command Line Tools</a></li>
+<li>Your preferred package manager.</li>
+</ul>
+</li>
+</ol>
+</li>
+</ul>
+</li>
+<li>
+<p>Install Rust.</p>
+<p>The easiest way to do it is following the latest <a href="https://www.rust-lang.org/tools/install">official instructions</a>.</p>
+</li>
+</ol>
+<blockquote>
+<p>The Rust version used for building is pinned in the <code>rust-toolchain.toml</code> file at the repository root.
+<strong>cargo</strong> will automatically download the pinned version of <em>rustc</em> when you start building the project.</p>
+</blockquote>
+<ol start="3">
+<li>
+<p>Clone and checkout this repository with submodules.</p>
+<pre><code class="language-shell">git clone https://github.com/NomicFoundation/solx --recursive
+</code></pre>
+<p>By default, submodules checkout is disabled to prevent cloning large repositories via <code>cargo</code>.
+If you're building locally, ensure all submodules are checked out with:</p>
+<pre><code class="language-shell">git submodule update --recursive --checkout
+</code></pre>
+</li>
+<li>
+<p>Build the development tools.</p>
+<pre><code class="language-shell">cargo build --release --bin solx-dev
+</code></pre>
+</li>
+<li>
+<p>Build the LLVM framework using <strong>solx-dev</strong>.</p>
+<pre><code class="language-shell">./target/release/solx-dev llvm build --enable-mlir
+</code></pre>
+<p>This builds LLVM with the EVM target, MLIR, and LLD projects enabled. The build artifacts will be placed in <code>target-llvm/</code>.</p>
+<p>For more information and available build options, run <code>./target/release/solx-dev llvm build --help</code>.</p>
+</li>
+<li>
+<p>Build the <strong>solc</strong> libraries using <strong>solx-dev</strong>.</p>
+<pre><code class="language-shell">./target/release/solx-dev solc build
+</code></pre>
+<p>This will configure and build the solc libraries in <code>solx-solidity/build/</code>. The command automatically detects MLIR and LLD paths if LLVM was built with those projects.</p>
+<p>For more options, run <code>./target/release/solx-dev solc build --help</code>.</p>
+</li>
+<li>
+<p>Build the <strong>solx</strong> executable.</p>
+<pre><code class="language-shell">cargo build --release
+</code></pre>
+<p>The <strong>solx</strong> executable will appear as <code>./target/release/solx</code>, where you can run it directly or move it to another location.</p>
+<p>If <strong>cargo</strong> cannot find the LLVM build artifacts, ensure that the <code>LLVM_SYS_211_PREFIX</code> environment variable is not set in your system, as it may be pointing to a location different from the one expected by <strong>solx</strong>.</p>
+</li>
+</ol>
+<h2 id="tuning-the-llvm-build"><a class="header" href="#tuning-the-llvm-build">Tuning the LLVM build</a></h2>
+<ul>
+<li>For more information and available build options, run <code>./target/release/solx-dev llvm build --help</code>.</li>
+<li>The <code>--enable-mlir</code> flag enables MLIR support in the LLVM build (required for MLIR-based optimizations). LLD is always built.</li>
+<li>Use the <code>--ccache-variant ccache</code> option to speed up the build process if you have <a href="https://ccache.dev">ccache</a> installed.</li>
+</ul>
+<h3 id="building-llvm-manually"><a class="header" href="#building-llvm-manually">Building LLVM manually</a></h3>
+<p>If you prefer building <a href="https://github.com/matter-labs/solx-llvm">the LLVM framework</a> manually, include the following flags in your CMake command:</p>
+<pre><code class="language-shell"># We recommend using the latest version of CMake.
+
+-DLLVM_TARGETS_TO_BUILD='EVM'
+-DLLVM_ENABLE_PROJECTS='lld;mlir'
+-DLLVM_ENABLE_RTTI='On'
+-DBUILD_SHARED_LIBS='Off'
+</code></pre>
+<blockquote>
+<p>For most users, <strong>solx-dev</strong> is the recommended way to build the framework.
+This section was added for compiler toolchain developers and researchers with specific requirements and experience with the LLVM framework.</p>
+</blockquote>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="command-line-interface-cli"><a class="header" href="#command-line-interface-cli">Command Line Interface (CLI)</a></h1>
+<p>The CLI of <strong>solx</strong> is designed to mimic that of <strong>solc</strong>. There are several main input/output (I/O) modes in the <strong>solx</strong> interface:</p>
+<ul>
+<li><a href="user-guide/02-command-line-interface.html#basic-cli">Basic CLI</a></li>
+<li><a href="user-guide/./03-standard-json.html">Standard JSON</a></li>
+</ul>
+<p>The basic CLI is simpler and suitable for using from the shell. The standard JSON mode is similar to client-server interaction, thus more suitable for using from other applications.</p>
+<blockquote>
+<p>All toolkits using <strong>solx</strong> must be operating in standard JSON mode and follow <a href="user-guide/./03-standard-json.html">its specification</a>.
+It will make the toolkits more robust and future-proof, as the standard JSON mode is the most versatile and used for the majority of popular projects.</p>
+</blockquote>
+<p>This page focuses on the basic CLI mode. For more information on the standard JSON mode, see <a href="user-guide/./03-standard-json.html">this page</a>.</p>
+<h2 id="basic-cli"><a class="header" href="#basic-cli">Basic CLI</a></h2>
+<p>Basic CLI mode is the simplest way to compile a file with the source code.</p>
+<p>To compile a basic Solidity contract, run the simple example from <a href="user-guide/02-command-line-interface.html#--bin">the <em>--bin</em> section</a>.</p>
+<p>The rest of this section describes the available CLI options and their usage. You may also check out <code>solx --help</code> for a quick reference.</p>
+<h3 id="--bin"><a class="header" href="#--bin"><code>--bin</code></a></h3>
+<p>Emits the full bytecode.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Binary:
+34601557630000008480630000001a...
+</code></pre>
+<h3 id="--bin-runtime"><a class="header" href="#--bin-runtime"><code>--bin-runtime</code></a></h3>
+<p>Emits the runtime part of the bytecode.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin-runtime
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Binary of the runtime part:
+34600b57600336116016575b5f5ffd...
+</code></pre>
+<h3 id="--asm"><a class="header" href="#--asm"><code>--asm</code></a></h3>
+<p>Emits the text assembly produced by LLVM.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --asm
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Deploy LLVM EVM assembly:
+        .text
+        .file   "Simple.sol:Simple"
+main:
+.func_begin0:
+        JUMPDEST
+        PUSH1 128
+        PUSH1 64
+...
+
+Runtime LLVM EVM assembly:
+        .text
+        .file   "Simple.sol:Simple.runtime"
+main:
+.func_begin0:
+        JUMPDEST
+        PUSH1 128
+        PUSH1 64
+...
+</code></pre>
+<h3 id="--metadata"><a class="header" href="#--metadata"><code>--metadata</code></a></h3>
+<p>Emits the contract metadata. The metadata is a JSON object that contains information about the contract, such as its name, source code hash, the list of dependencies, compiler versions, and so on.</p>
+<p>The <strong>solx</strong> metadata format is compatible with the <a href="https://docs.soliditylang.org/en/latest/metadata.html#contract-metadata">Solidity metadata format</a>. This means that the metadata output can be used with other tools that support Solidity metadata. Extra <strong>solx</strong> data is inserted into <strong>solc</strong> metadata with this JSON object:</p>
+<pre><code class="language-javascript">{
+  "solx": {
+    "llvm_options": [],
+    "optimizer_settings": {
+      "is_debug_logging_enabled": false,
+      "is_fallback_to_size_enabled": false,
+      "is_verify_each_enabled": false,
+      "level_back_end": "Aggressive",
+      "level_middle_end": "Aggressive",
+      "level_middle_end_size": "Zero"
+    },
+    // Optional: only set for Solidity and Yul contracts.
+    "solc_version": "0.8.34",
+    // Mandatory: current version of solx.
+    "solx_version": "0.1.4"
+  }
+}
+</code></pre>
+<p>Usage:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --metadata
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Metadata:
+{"compiler":{"version":"0.8.34+commit.e2cbf92c"},"language":"Solidity","output":{"abi":[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}],"devdoc":{"kind":"dev","methods":{},"version":1},"userdoc":{"kind":"user","methods":{},"version":1}},"settings":{"compilationTarget":{"Simple.sol":"Simple"},"evmVersion":"osaka","libraries":{},"metadata":{"bytecodeHash":"ipfs"},"optimizer":{"enabled":false,"runs":200},"remappings":[]},"solx":{"llvm_options":[],"optimizer_settings":{"is_debug_logging_enabled":false,"is_fallback_to_size_enabled":false,"is_verify_each_enabled":false,"level_back_end":"Aggressive","level_middle_end":"Aggressive","level_middle_end_size":"Zero"},"solc_version":"0.8.34","solx_version":"0.1.4"},"sources":{"Simple.sol":{"keccak256":"0x402fe0b38cc9d81e8c9f6d07854cca27fbb307f06d8a129998026907a10c7ca1","license":"MIT","urls":["bzz-raw://04714cab56c1f931e3cc1ddae4c7ff0c8832d0849e23966c6326028f6783d45a","dweb:/ipfs/QmehmUFKCtytG8WcWQ676KvqwURfkVYK89VHZEvSzyLc2Z"]}},"version":1}
+</code></pre>
+<h3 id="--ast-json"><a class="header" href="#--ast-json"><code>--ast-json</code></a></h3>
+<p>Emits the AST of each Solidity file.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --ast-json
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+JSON AST:
+{"absolutePath":".../Simple.sol","exportedSymbols":{"Simple":[24]},"id":25,"license":"MIT","nodeType":"SourceUnit","nodes":[ ... ],"src":"32:288:0"}
+</code></pre>
+<blockquote>
+<p>Since <strong>solx</strong> communicates with <strong>solc</strong> only via standard JSON under the hood, the full JSON AST is emitted instead of the compact one.</p>
+</blockquote>
+<h3 id="--abi"><a class="header" href="#--abi"><code>--abi</code></a></h3>
+<p>Emits the contract ABI specification.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --abi
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Contract JSON ABI:
+[{"inputs":[],"name":"first","outputs":[{"internalType":"uint64","name":"","type":"uint64"}],"stateMutability":"pure","type":"function"},{"inputs":[],"name":"second","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"pure","type":"function"}]
+</code></pre>
+<h3 id="--hashes"><a class="header" href="#--hashes"><code>--hashes</code></a></h3>
+<p>Emits the contract function signatures.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --hashes
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Function signatures:
+3df4ddf4: first()
+5a8ac02d: second()
+</code></pre>
+<h3 id="--storage-layout"><a class="header" href="#--storage-layout"><code>--storage-layout</code></a></h3>
+<p>Emits the contract storage layout.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --storage-layout
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Contract Storage Layout:
+{"storage":[{"astId":3,"contract":"Simple.sol:Simple","label":"field_1","offset":0,"slot":"0","type":"t_uint256"},{"astId":5,"contract":"Simple.sol:Simple","label":"field_2","offset":0,"slot":"1","type":"t_uint256"},{"astId":7,"contract":"Simple.sol:Simple","label":"field_3","offset":0,"slot":"2","type":"t_uint256"}],"types":{"t_uint256":{"encoding":"inplace","label":"uint256","numberOfBytes":"32"}}}
+</code></pre>
+<h3 id="--transient-storage-layout"><a class="header" href="#--transient-storage-layout"><code>--transient-storage-layout</code></a></h3>
+<p>Emits the contract transient storage layout.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --transient-storage-layout
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Contract Transient Storage Layout:
+{"storage":[{"astId":3,"contract":"Simple.sol:Simple","label":"field_1","offset":0,"slot":"0","type":"t_uint256"},{"astId":5,"contract":"Simple.sol:Simple","label":"field_2","offset":0,"slot":"1","type":"t_uint256"},{"astId":7,"contract":"Simple.sol:Simple","label":"field_3","offset":0,"slot":"2","type":"t_uint256"}],"types":{"t_uint256":{"encoding":"inplace","label":"uint256","numberOfBytes":"32"}}}
+</code></pre>
+<h3 id="--userdoc"><a class="header" href="#--userdoc"><code>--userdoc</code></a></h3>
+<p>Emits the contract user documentation.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --userdoc
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+User Documentation:
+{"kind":"user","methods":{ ... },"version":1}
+</code></pre>
+<h3 id="--devdoc"><a class="header" href="#--devdoc"><code>--devdoc</code></a></h3>
+<p>Emits the contract developer documentation.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --devdoc
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Developer Documentation:
+{"kind":"dev","methods":{ ... },"version":1}
+</code></pre>
+<h3 id="--asm-solc-json"><a class="header" href="#--asm-solc-json"><code>--asm-solc-json</code></a></h3>
+<p>Emits the <strong>solc</strong> EVM assembly parsed from solc's JSON output.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --asm-solc-json
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+EVM assembly:
+000     PUSH                80
+001     MEMORYGUARD
+002     PUSH                40
+003     MSTORE
+...
+</code></pre>
+<blockquote>
+<p>This is the <strong>solc</strong> EVM assembly output that is translated to LLVM IR by <strong>solx</strong>. For <strong>solx</strong>'s own EVM assembly output emitted by LLVM, use the <a href="user-guide/02-command-line-interface.html#--asm"><code>--asm</code></a> option instead.</p>
+</blockquote>
+<h3 id="--ir-or---ir-optimized"><a class="header" href="#--ir-or---ir-optimized"><code>--ir</code> (or <code>--ir-optimized</code>)</a></h3>
+<p>Emits the <strong>solc</strong> Yul IR.</p>
+<blockquote>
+<p><strong>solx</strong> does not use the Yul optimizer anymore, so the Yul IR is always unoptimized, and it is not possible to emit solc-optimized Yul IR with <strong>solx</strong>.</p>
+</blockquote>
+<pre><code class="language-bash">solx 'Simple.sol' --ir
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+IR:
+/// @use-src 0:"Simple.sol"
+object "Simple_24" {
+    code {
+        {
+            ...
+        }
+    }
+    /// @use-src 0:"Simple.sol"
+    object "Simple_24_deployed" {
+        code {
+            {
+                ...
+            }
+        }
+        data ".metadata" hex"a26469706673582212206c34df79f8cc8ba870a350940cb8623c60d4f6f9c356e2185b812187d9ae55ee64736f6c63430008220033"
+    }
+}
+</code></pre>
+<h3 id="--debug-info"><a class="header" href="#--debug-info"><code>--debug-info</code></a></h3>
+<p>Emits the ELF-wrapped DWARF debug info of the deploy code.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --debug-info
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Debug info:
+7f454c46010201ff...
+</code></pre>
+<h3 id="--debug-info-runtime"><a class="header" href="#--debug-info-runtime"><code>--debug-info-runtime</code></a></h3>
+<p>Emits the ELF-wrapped DWARF debug info of the runtime code.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --debug-info-runtime
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Debug info of the runtime part:
+7f454c46010201ff
+</code></pre>
+<h3 id="--evmla"><a class="header" href="#--evmla"><code>--evmla</code></a></h3>
+<p>Emits EVM legacy assembly (intermediate representation from solc).</p>
+<p>When used with <code>--output-dir</code>, writes <code>.evmla</code> files to the output directory. Without <code>--output-dir</code>, outputs to stdout.</p>
+<p>Usage with <code>--output-dir</code>:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --evmla --output-dir './build/'
+ls './build/'
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">Compiler run successful.
+Simple_sol_Simple.evmla
+Simple_sol_Simple.runtime.evmla
+</code></pre>
+<p>Usage with stdout:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --evmla --bin
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Binary:
+...
+Deploy EVM legacy assembly:
+000     PUSH                80
+...
+</code></pre>
+<h3 id="--ethir"><a class="header" href="#--ethir"><code>--ethir</code></a></h3>
+<p>Emits Ethereal IR (intermediate representation between EVM assembly and LLVM IR).</p>
+<p>When used with <code>--output-dir</code>, writes <code>.ethir</code> files to the output directory. Without <code>--output-dir</code>, outputs to stdout.</p>
+<p>Usage with <code>--output-dir</code>:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --ethir --output-dir './build/'
+ls './build/'
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">Compiler run successful.
+Simple_sol_Simple.ethir
+Simple_sol_Simple.runtime.ethir
+</code></pre>
+<p>Usage with stdout:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --ethir --bin
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Binary:
+...
+Deploy Ethereal IR:
+function main(0, 0, 0, 0, 0) -&gt; 0, 0, 0, 0 {
+...
+</code></pre>
+<h3 id="--emit-llvm-ir"><a class="header" href="#--emit-llvm-ir"><code>--emit-llvm-ir</code></a></h3>
+<p>Emits LLVM IR (both unoptimized and optimized).</p>
+<p>When used with <code>--output-dir</code>, writes <code>.ll</code> files to the output directory. Without <code>--output-dir</code>, outputs to stdout.</p>
+<p>Usage with <code>--output-dir</code>:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --emit-llvm-ir --output-dir './build/'
+ls './build/'
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">Compiler run successful.
+Simple_sol_Simple.optimized.ll
+Simple_sol_Simple.runtime.optimized.ll
+Simple_sol_Simple.runtime.unoptimized.ll
+Simple_sol_Simple.unoptimized.ll
+</code></pre>
+<p>Usage with stdout:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --emit-llvm-ir --bin --via-ir
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Binary:
+...
+Deploy LLVM IR (unoptimized):
+; ModuleID = 'Simple.sol:Simple'
+...
+Deploy LLVM IR:
+; ModuleID = 'Simple.sol:Simple'
+...
+</code></pre>
+<h3 id="--benchmarks"><a class="header" href="#--benchmarks"><code>--benchmarks</code></a></h3>
+<p>Emits benchmarks of the <strong>solx</strong> LLVM-based pipeline and its underlying call to <strong>solc</strong>.</p>
+<pre><code class="language-bash">solx 'Simple.sol' --benchmarks
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">Benchmarks:
+solc_Solidity_Standard_JSON: 6ms
+solx_Solidity_IR_Analysis: 0ms
+solx_Compilation: 75ms
+
+======= Simple.sol:Simple =======
+Benchmarks:
+    Simple.sol:Simple:deploy/EVMAssemblyToLLVMIR/M3B3/SpillArea(0): 0ms
+    Simple.sol:Simple:deploy/InitVerify/M3B3/SpillArea(0): 0ms
+    Simple.sol:Simple:deploy/OptimizeVerify/M3B3/SpillArea(0): 1ms
+    Simple.sol:Simple:runtime/EVMAssemblyToLLVMIR/M3B3/SpillArea(0): 0ms
+    Simple.sol:Simple.runtime:runtime/InitVerify/M3B3/SpillArea(0): 0ms
+    Simple.sol:Simple.runtime:runtime/OptimizeVerify/M3B3/SpillArea(0): 5ms
+</code></pre>
+<h3 id="input-files"><a class="header" href="#input-files">Input Files</a></h3>
+<p><strong>solx</strong> supports multiple input files. The following command compiles two Solidity files and prints the bytecode:</p>
+<pre><code class="language-bash">solx 'Simple.sol' 'Complex.sol' --bin
+</code></pre>
+<p><a href="https://docs.soliditylang.org/en/latest/path-resolution.html#import-remapping">Solidity import remappings</a> are passed the same way as input files, but they are distinguished by a <code>=</code> symbol between source and destination. The following command compiles a Solidity file with a remapping and prints the bytecode:</p>
+<pre><code class="language-bash">solx 'Simple.sol' 'github.com/ethereum/dapp-bin/=/usr/local/lib/dapp-bin/' --bin
+</code></pre>
+<p><strong>solx</strong> does not handle remappings itself, but only passes them through to <em>solc</em>.
+Visit <a href="https://docs.soliditylang.org/en/latest/using-the-compiler.html#base-path-and-import-remapping">the <strong>solc</strong> documentation</a> to learn more about the processing of remappings.</p>
+<h3 id="--libraries"><a class="header" href="#--libraries"><code>--libraries</code></a></h3>
+<p>Specifies the libraries to link with compiled contracts. The option accepts multiple string arguments. The safest way is to wrap each argument in single quotes, and separate them with a space.</p>
+<p>The specifier has the following format: <code>&lt;ContractPath&gt;:&lt;ContractName&gt;=&lt;LibraryAddress&gt;</code>.</p>
+<p>Usage:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin --libraries 'Simple.sol:Simple=0x1234567890abcdef1234567890abcdef12345678'
+</code></pre>
+<h3 id="--base-path---include-path---allow-paths"><a class="header" href="#--base-path---include-path---allow-paths"><code>--base-path</code>, <code>--include-path</code>, <code>--allow-paths</code></a></h3>
+<p>These options are used to specify Solidity import resolution settings. They are not used by <strong>solx</strong> and only passed through to <strong>solc</strong> like import remappings.</p>
+<p>Visit <a href="https://docs.soliditylang.org/en/latest/path-resolution.html">the <strong>solc</strong> documentation</a> to learn more about the processing of these options.</p>
+<h3 id="--output-dir"><a class="header" href="#--output-dir"><code>--output-dir</code></a></h3>
+<p>Specifies the output directory for build artifacts. Can only be used in <a href="user-guide/02-command-line-interface.html#basic-cli">basic CLI</a> mode.</p>
+<p>Usage in basic CLI mode:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin --asm --metadata --output-dir './build/'
+ls './build/'
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">Compiler run successful. Artifact(s) can be found in directory "build".
+Simple_sol_Simple.asm
+Simple_sol_Simple.bin
+Simple_sol_Simple.runtime.asm
+Simple_sol_Simple_llvm.asm
+Simple_sol_Simple_llvm.asm-runtime
+Simple_sol_Simple_meta.json
+</code></pre>
+<h3 id="--overwrite"><a class="header" href="#--overwrite"><code>--overwrite</code></a></h3>
+<p>Overwrites the output files if they already exist in the output directory. By default, <strong>solx</strong> does not overwrite existing files.</p>
+<p>Can only be used in combination with the <a href="user-guide/02-command-line-interface.html#--output-dir"><code>--output-dir</code></a> option.</p>
+<p>Usage:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin --output-dir './build/' --overwrite
+</code></pre>
+<p>If the <code>--overwrite</code> option is not specified and the output files already exist, <strong>solx</strong> will print an error message and exit:</p>
+<pre><code class="language-text">Error: Refusing to overwrite an existing file "./build/Simple_sol_Simple.bin" (use --overwrite to force).
+</code></pre>
+<h3 id="--version"><a class="header" href="#--version"><code>--version</code></a></h3>
+<p>Prints the version of <strong>solx</strong> and the hash of the LLVM commit it was built with.</p>
+<p>Usage:</p>
+<pre><code class="language-bash">solx --version
+</code></pre>
+<h3 id="--help"><a class="header" href="#--help"><code>--help</code></a></h3>
+<p>Prints the help message.</p>
+<p>Usage:</p>
+<pre><code class="language-bash">solx --help
+</code></pre>
+<h2 id="other-io-modes"><a class="header" href="#other-io-modes">Other I/O Modes</a></h2>
+<p>The mode-altering CLI options are mutually exclusive. This means that only one of the options below can be enabled at a time:</p>
+<ul>
+<li><a href="user-guide/02-command-line-interface.html#--standard-json"><code>--standard-json</code></a></li>
+<li><a href="user-guide/02-command-line-interface.html#--yul-or---strict-assembly"><code>--yul</code></a></li>
+<li><a href="user-guide/02-command-line-interface.html#--llvm-ir"><code>--llvm-ir</code></a></li>
+</ul>
+<h3 id="--standard-json"><a class="header" href="#--standard-json"><code>--standard-json</code></a></h3>
+<p>For the standard JSON mode usage, see the <a href="user-guide/./03-standard-json.html">Standard JSON</a> page.</p>
+<h2 id="solx-compilation-settings"><a class="header" href="#solx-compilation-settings"><strong>solx</strong> Compilation Settings</a></h2>
+<p>The options in this section are only configuring the <strong>solx</strong> compiler and do not affect the underlying <strong>solc</strong> compiler.</p>
+<h3 id="--threads"><a class="header" href="#--threads"><code>--threads</code></a></h3>
+<p>Sets the number of threads used for parallel compilation. Each thread compiles a separate translation unit in a child process. By default, the number of threads equals the number of CPU cores.</p>
+<blockquote>
+<p>Large projects can consume a lot of RAM during compilation on machines with a high number of cores.
+If you encounter memory issues, consider reducing the number of threads.</p>
+</blockquote>
+<p>Usage:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin --threads 4
+</code></pre>
+<h3 id="--optimization---o"><a class="header" href="#--optimization---o"><code>--optimization / -O</code></a></h3>
+<p>Sets the optimization level of the LLVM optimizer. Available values are:</p>
+<div class="table-wrapper"><table><thead><tr><th style="text-align: left">Level</th><th style="text-align: left">Meaning</th><th style="text-align: left">Hints</th></tr></thead><tbody>
+<tr><td style="text-align: left">0</td><td style="text-align: left">No optimization</td><td style="text-align: left">For fast compilation during development (unsupported)</td></tr>
+<tr><td style="text-align: left">1</td><td style="text-align: left">Performance: basic</td><td style="text-align: left">For optimization research</td></tr>
+<tr><td style="text-align: left">2</td><td style="text-align: left">Performance: default</td><td style="text-align: left">For optimization research</td></tr>
+<tr><td style="text-align: left">3</td><td style="text-align: left">Performance: aggressive</td><td style="text-align: left">Best performance for production</td></tr>
+<tr><td style="text-align: left">s</td><td style="text-align: left">Size: default</td><td style="text-align: left">For optimization research</td></tr>
+<tr><td style="text-align: left">z</td><td style="text-align: left">Size: aggressive</td><td style="text-align: left">Best size for contracts with size constraints</td></tr>
+</tbody></table>
+</div>
+<p>For most cases, it is fine to keep the default value of <code>3</code>. You should only use the level <code>z</code> if you are ready to deliberately sacrifice performance and optimize for size.</p>
+<blockquote>
+<p>Large contracts may hit the EVM bytecode size limit. In this case, it is recommended to use the <a href="user-guide/02-command-line-interface.html#--optimization-size-fallback"><code>--optimization-size-fallback</code></a> option rather than setting the level to <code>z</code>.</p>
+</blockquote>
+<p>Usage:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin -O3
+</code></pre>
+<p>This option can also be set with an environment variable <code>SOLX_OPTIMIZATION</code>, which is useful for toolkits
+where arbitrary solx-specific options are not supported:</p>
+<pre><code class="language-bash">SOLX_OPTIMIZATION='3' solx 'Simple.sol' --bin
+</code></pre>
+<h3 id="--optimization-size-fallback"><a class="header" href="#--optimization-size-fallback"><code>--optimization-size-fallback</code></a></h3>
+<p>Sets the optimization level to <code>z</code> for contracts that failed to compile due to overrunning the bytecode size constraints.</p>
+<p>Under the hood, this option automatically triggers recompilation of contracts with level <code>z</code>. Contracts that were successfully compiled with <a href="user-guide/02-command-line-interface.html#--optimization---o">the original <code>--optimization</code> setting</a> are not recompiled.</p>
+<blockquote>
+<p>For deployment, it is recommended to have this option enabled in order to mitigate potential issues with EVM bytecode size constraints on a per-contract basis.
+If your environment does not have bytecode size limitations, it is better to disable it to prevent unnecessary recompilations. A good example is running <code>forge test</code>.</p>
+</blockquote>
+<p>Usage:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin -O3 --optimization-size-fallback
+</code></pre>
+<p>This option can also be set with an environment variable <code>SOLX_OPTIMIZATION_SIZE_FALLBACK</code>, which is useful for toolkits
+where arbitrary solx-specific options are not supported:</p>
+<pre><code class="language-bash">SOLX_OPTIMIZATION_SIZE_FALLBACK= solx 'Simple.sol' --bin -O3
+</code></pre>
+<h3 id="--metadata-hash"><a class="header" href="#--metadata-hash"><code>--metadata-hash</code></a></h3>
+<p>Specifies the hash format used for contract metadata.</p>
+<p>Usage with <code>ipfs</code>:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin --metadata-hash 'ipfs'
+</code></pre>
+<p>Output with <code>ipfs</code>:</p>
+<pre><code class="language-text">======= Simple.sol:Simple =======
+Binary:
+34601557630000008480630000001a6080396080f35b5f5ffdfe34600b5760...
+a2646970667358221220579682b419e25ecc4524604eb5f3a8dbe3b15621ca21cc8ada8dcf6196a512df64736f6c637816736f6c783a302e312e343b736f6c633a302e382e33340047
+</code></pre>
+<p>The byte array starting with <code>a2</code> at the end of the bytecode is a CBOR-encoded compiler version data and an optional metadata hash.</p>
+<p>The last two bytes of the metadata (<code>0x0047</code>) are not a part of the CBOR payload, but the length of it, which must be known to correctly decode the payload.</p>
+<p>JSON representation of the CBOR payload:</p>
+<pre><code class="language-javascript">{
+    // Optional: included if `--metadata-hash` is set to `ipfs`.
+    "ipfs": "1220579682b419e25ecc4524604eb5f3a8dbe3b15621ca21cc8ada8dcf6196a512df",
+
+    // Required: consists of semicolon-separated pairs of colon-separated compiler names and versions.
+    // `solx:&lt;version&gt;` is always included.
+    // `solc:&lt;version&gt;` is only included for Solidity and Yul contracts, but not included for LLVM IR ones.
+    "solc": "solx:0.1.4;solc:0.8.34"
+}
+</code></pre>
+<p>For more information on these formats, see the <a href="https://cbor.io/">CBOR</a> and <a href="https://docs.ipfs.tech/">IPFS</a> documentation.</p>
+<h3 id="--no-cbor-metadata"><a class="header" href="#--no-cbor-metadata"><code>--no-cbor-metadata</code></a></h3>
+<p>Disables the CBOR metadata that is appended at the end of bytecode. This option is useful for debugging and research purposes.</p>
+<blockquote>
+<p>It is not recommended to use this option in production, as it is not possible to verify contracts deployed without metadata.</p>
+</blockquote>
+<p>Usage:</p>
+<pre><code class="language-shell">solx 'Simple.sol' --no-cbor-metadata
+</code></pre>
+<h3 id="--llvm-options"><a class="header" href="#--llvm-options"><code>--llvm-options</code></a></h3>
+<p>Specifies additional options for the LLVM framework. The argument must be a single quoted string following a <code>=</code> separator.</p>
+<p>Usage:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin --llvm-options='-key=value'
+</code></pre>
+<blockquote>
+<p>The <code>--llvm-options</code> option is experimental and must only be used by experienced users. All supported options will be documented in the future.</p>
+</blockquote>
+<h2 id="solc-compilation-settings"><a class="header" href="#solc-compilation-settings"><strong>solc</strong> Compilation Settings</a></h2>
+<p>The options in this section are only configuring <strong>solc</strong>, so they are passed directly to its child process, and do not affect the <strong>solx</strong> compiler.</p>
+<h3 id="--via-ir"><a class="header" href="#--via-ir"><code>--via-ir</code></a></h3>
+<p>Switches the <strong>solc</strong> codegen to Yul a.k.a. IR.</p>
+<p>Usage:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin --via-ir
+</code></pre>
+<h3 id="--evm-version"><a class="header" href="#--evm-version"><code>--evm-version</code></a></h3>
+<p>Specifies the EVM version <strong>solx</strong> will produce bytecode for. For instance, with version <em>osaka</em>, <strong>solx</strong> will be producing <code>clz</code> instructions, whereas for older EVM versions it will not.</p>
+<p>Only the following EVM versions are supported:</p>
+<ul>
+<li>cancun</li>
+<li>prague</li>
+<li>osaka (default)</li>
+</ul>
+<p>Usage:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin --evm-version 'osaka'
+</code></pre>
+<h3 id="--metadata-literal"><a class="header" href="#--metadata-literal"><code>--metadata-literal</code></a></h3>
+<p>Tells <strong>solc</strong> to store referenced sources as literal data in the metadata output.</p>
+<blockquote>
+<p>This option only affects the contract metadata output produced by <strong>solc</strong>, and does not affect artifacts produced by <strong>solx</strong>.</p>
+</blockquote>
+<p>Usage:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin --metadata --metadata-literal
+</code></pre>
+<h3 id="--no-import-callback"><a class="header" href="#--no-import-callback"><code>--no-import-callback</code></a></h3>
+<p>Disables the default import resolution callback in <strong>solc</strong>.</p>
+<blockquote>
+<p>This parameter is used by some tooling that resolves all imports by itself, such as Hardhat.</p>
+</blockquote>
+<p>Usage:</p>
+<pre><code class="language-shell">solx 'Simple.sol' --no-import-callback
+</code></pre>
+<h2 id="multi-language-support"><a class="header" href="#multi-language-support">Multi-Language Support</a></h2>
+<p><strong>solx</strong> supports input in multiple programming languages:</p>
+<ul>
+<li><a href="https://soliditylang.org/">Solidity</a></li>
+<li><a href="https://docs.soliditylang.org/en/latest/yul.html">Yul</a></li>
+<li><a href="https://llvm.org/docs/LangRef.html">LLVM IR</a></li>
+</ul>
+<p>The following sections outline how to use <strong>solx</strong> with these languages.</p>
+<h3 id="--yul-or---strict-assembly"><a class="header" href="#--yul-or---strict-assembly"><code>--yul</code> (or <code>--strict-assembly</code>)</a></h3>
+<p>Enables the Yul mode. In this mode, input is expected to be in the Yul language. The output works the same way as with Solidity input.</p>
+<p>Usage:</p>
+<pre><code class="language-bash">solx --yul 'Simple.yul' --bin
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.yul =======
+Binary:
+5b60806040525f341415601c5763...
+</code></pre>
+<h3 id="--llvm-ir"><a class="header" href="#--llvm-ir"><code>--llvm-ir</code></a></h3>
+<p>Enables the LLVM IR mode. In this mode, input is expected to be in the LLVM IR language. The output works the same way as with Solidity input.</p>
+<blockquote>
+<p>In this mode, every input file is treated as runtime code, while deploy code will be generated automatically by <strong>solx</strong>.
+It is not possible to write deploy code manually yet, but it will be supported in the future.</p>
+</blockquote>
+<p>Unlike <strong>solc</strong>, <strong>solx</strong> is an LLVM-based compiler toolchain, so it uses LLVM IR as an intermediate representation. It is not recommended to write LLVM IR manually, but it can be useful for debugging and optimization purposes. LLVM IR is more low-level than Yul and EVM assembly in the <strong>solx</strong> IR hierarchy.</p>
+<p>Usage:</p>
+<pre><code class="language-bash">solx --llvm-ir 'Simple.ll' --bin
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">======= Simple.ll =======
+Binary:
+5b60806040525f341415601c5763...
+</code></pre>
+<h2 id="debugging"><a class="header" href="#debugging">Debugging</a></h2>
+<h3 id="ir-output-flags"><a class="header" href="#ir-output-flags">IR Output Flags</a></h3>
+<p>For selective IR output, use the following flags with <code>--output-dir</code>:</p>
+<ul>
+<li><a href="user-guide/02-command-line-interface.html#--evmla"><code>--evmla</code></a> - EVM legacy assembly</li>
+<li><a href="user-guide/02-command-line-interface.html#--ethir"><code>--ethir</code></a> - Ethereal IR</li>
+<li><a href="user-guide/02-command-line-interface.html#--emit-llvm-ir"><code>--emit-llvm-ir</code></a> - LLVM IR (unoptimized and optimized)</li>
+<li><a href="user-guide/02-command-line-interface.html#--asm"><code>--asm</code></a> - LLVM EVM assembly</li>
+</ul>
+<p>These flags respect the <code>--overwrite</code> option. Without <code>--overwrite</code>, the compiler will refuse to overwrite existing files.</p>
+<h3 id="solx_output_dir-environment-variable"><a class="header" href="#solx_output_dir-environment-variable"><code>SOLX_OUTPUT_DIR</code> Environment Variable</a></h3>
+<p>For debugging purposes, all intermediate build artifacts can be dumped to a directory using the <code>SOLX_OUTPUT_DIR</code> environment variable. This is useful for toolkits where arbitrary solx-specific options are not supported.</p>
+<p>When this environment variable is set, <strong>solx</strong> will output all intermediate representations to the specified directory, always overwriting existing files.</p>
+<p>The intermediate build artifacts include:</p>
+<div class="table-wrapper"><table><thead><tr><th style="text-align: left">Name</th><th style="text-align: left">Extension</th></tr></thead><tbody>
+<tr><td style="text-align: left">EVM Assembly</td><td style="text-align: left"><em>evmla</em></td></tr>
+<tr><td style="text-align: left">EthIR</td><td style="text-align: left"><em>ethir</em></td></tr>
+<tr><td style="text-align: left">Yul</td><td style="text-align: left"><em>yul</em></td></tr>
+<tr><td style="text-align: left">LLVM IR</td><td style="text-align: left"><em>ll</em></td></tr>
+<tr><td style="text-align: left">LLVM Assembly</td><td style="text-align: left"><em>asm</em></td></tr>
+</tbody></table>
+</div>
+<p>Usage:</p>
+<pre><code class="language-bash">SOLX_OUTPUT_DIR='./debug/' solx 'Simple.sol' --bin
+ls './debug/'
+</code></pre>
+<p>Output:</p>
+<pre><code class="language-text">Simple_sol_Simple.evmla
+Simple_sol_Simple.ethir
+Simple_sol_Simple.unoptimized.ll
+Simple_sol_Simple.optimized.ll
+Simple_sol_Simple.asm
+Simple_sol_Simple.runtime.evmla
+Simple_sol_Simple.runtime.ethir
+Simple_sol_Simple.runtime.unoptimized.ll
+Simple_sol_Simple.runtime.optimized.ll
+Simple_sol_Simple.runtime.asm
+</code></pre>
+<p>The output file name is constructed as follows: <code>&lt;ContractPath&gt;_&lt;ContractName&gt;.&lt;Modifiers&gt;.&lt;Extension&gt;</code>.</p>
+<p>Additionally, it is possible to dump the standard JSON input file with the <code>SOLX_STANDARD_JSON_DEBUG</code> environment variable:</p>
+<pre><code class="language-bash">SOLX_STANDARD_JSON_DEBUG='./debug/input.json' solx 'Simple.sol' --bin
+cat './debug/input.json' | jq .
+</code></pre>
+<h3 id="--llvm-verify-each"><a class="header" href="#--llvm-verify-each"><code>--llvm-verify-each</code></a></h3>
+<p>Enables the verification of the LLVM IR after each optimization pass. This option is useful for debugging and research purposes.</p>
+<p>Usage:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin --llvm-verify-each
+</code></pre>
+<h3 id="--llvm-debug-logging"><a class="header" href="#--llvm-debug-logging"><code>--llvm-debug-logging</code></a></h3>
+<p>Enables the debug logging of the LLVM IR optimization passes. This option is useful for debugging and research purposes.</p>
+<p>Usage:</p>
+<pre><code class="language-bash">solx 'Simple.sol' --bin --llvm-debug-logging
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="standard-json"><a class="header" href="#standard-json">Standard JSON</a></h1>
+<p>Standard JSON is a protocol for interaction with the <strong>solx</strong> and <strong>solc</strong> compilers. This protocol must be implemented by toolkits such as Hardhat.</p>
+<p>The protocol uses two data formats for communication: <a href="user-guide/03-standard-json.html#input-json">input JSON</a> and <a href="user-guide/03-standard-json.html#output-json">output JSON</a>.</p>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<p>Input JSON can be provided by-value via the <code>--standard-json</code> option:</p>
+<pre><code class="language-shell">solx --standard-json './input.json'
+</code></pre>
+<p>Alternatively, the input JSON can be fed to <strong>solx</strong> via <em>stdin</em>:</p>
+<pre><code class="language-shell">cat './input.json' | solx --standard-json
+</code></pre>
+<p>You can also insert your standard JSON input directly into the command line:</p>
+<pre><code class="language-shell">solx --standard-json
+
+&lt;paste into stdin here and press Ctrl-D&gt;
+</code></pre>
+<blockquote>
+<p>For the sake of interface unification, <strong>solx</strong> will always return with exit code 0 and have its standard JSON output printed to <em>stdout</em>.
+It differs from <strong>solc</strong> that may return with exit code 1 and a free-formed error in some cases, such as when the standard JSON input file is missing, even though <a href="https://docs.soliditylang.org/en/latest/using-the-compiler.html#compiler-input-and-output-json-description">the <strong>solc</strong> documentation claims otherwise</a>.</p>
+</blockquote>
+<h2 id="input-json"><a class="header" href="#input-json">Input JSON</a></h2>
+<p>The input JSON provides the compiler with the source code and settings for the compilation. The example below serves as the specification of the input JSON format.</p>
+<p>This format introduces several <strong>solx</strong>-specific parameters such as <code>settings.optimizer.sizeFallback</code>. These parameters are marked as <code>solx-only</code>.</p>
+<p>On the other hand, parameters that are not mentioned here but are parts of <strong>solc</strong> standard JSON protocol have no effect in <strong>solx</strong>.</p>
+<pre><code class="language-javascript">{
+  // Required: Source code language.
+  // Currently supported: "Solidity", "Yul", "LLVM IR".
+  "language": "Solidity",
+  // Required: Source code files to compile.
+  // The keys here are the "global" names of the source files. Imports can be using other file paths via remappings.
+  "sources": {
+    // In source file entry, either but not both "urls" and "content" must be specified.
+    "myFile.sol": {
+      // Required (unless "content" is used): URL(s) to the source file.
+      "urls": [
+        // In Solidity mode, directories must be added to the command-line via "--allow-paths &lt;path&gt;" for imports to work.
+        // It is possible to specify multiple URLs for a single source file. In this case the first successfully resolved URL will be used.
+        "/tmp/path/to/file.sol"
+      ],
+      // Required (unless "urls" is used): Literal contents of the source file.
+      "content": "contract settable is owned { uint256 private x = 0; function set(uint256 _x) public { if (msg.sender == owner) x = _x; } }"
+    }
+  },
+
+  // Required: Compilation settings.
+  "settings": {
+    // Optional: Optimizer settings.
+    "optimizer": {
+      // Optional, solx-only: Set the LLVM optimizer level.
+      // Available options:
+      // -0: do not optimize (unsupported)
+      // -1: basic optimizations for gas usage
+      // -2: advanced optimizations for gas usage
+      // -3: all optimizations for gas usage
+      // -s: basic optimizations for bytecode size
+      // -z: all optimizations for bytecode size
+      // Default: 3.
+      "mode": "3",
+      // Optional, solx-only: Re-run the compilation with "mode": "z" if the initial compilation exceeds the EVM bytecode size limit.
+      // Used on a per-contract basis and applied automatically, so some contracts will end up compiled in the initial mode, and others with "mode": "z".
+      // Only activated if "mode" is set to "3", which is the default optimization mode.
+      // Default: false.
+      "sizeFallback": false
+    },
+
+    // Optional: Sorted list of remappings.
+    // Important: Only used with Solidity input.
+    "remappings": [ ":g=/dir" ],
+    // Optional: Addresses of the libraries.
+    // If not all library addresses are provided here, it will result in unlinked bytecode files that will require post-compile-time linking before deployment.
+    // Important: Only used with Solidity, Yul, and LLVM IR input.
+    "libraries": {
+      // The top level key is the name of the source file where the library is used.
+      // If remappings are used, this source file should match the global path after remappings were applied.
+      "myFile.sol": {
+        // Source code library name and address where it is deployed.
+        "MyLib": "0x123123..."
+      }
+    },
+
+    // Optional: Version of EVM solx will produce bytecode for.
+    // Supported EVM versions: "cancun", "prague", "osaka".
+    // For instance, with version "osaka", solx will be producing `clz` instructions, whereas for older EVM versions it will not.
+    // The oldest supported EVM version is "cancun".
+    // Default: "osaka".
+    "evmVersion": "osaka",
+    // Optional: Select the desired output.
+    // Default: no flags are selected, and no output is generated.
+    "outputSelection": {
+      "&lt;path&gt;": {
+        // Available file-level options, must be listed under "&lt;path&gt;"."":
+        "": [
+          // AST of all source files.
+          "ast",
+          // Benchmarks of the solx LLVM-based compilation pipeline and its underlying call to solc.
+          "benchmarks"
+        ],
+        // Available contract-level options, must be listed under "&lt;path&gt;"."&lt;name&gt;":
+        "&lt;name&gt;": [
+          // Solidity ABI.
+          "abi",
+          // Metadata.
+          "metadata",
+          // Developer documentation (natspec).
+          "devdoc",
+          // User documentation (natspec).
+          "userdoc",
+          // Slots, offsets and types of the contract's state variables in storage.
+          "storageLayout",
+          // Slots, offsets and types of the contract's state variables in transient storage.
+          "transientStorageLayout",
+          // Yul produced by solc.
+          // An alias "irOptimized" is supported for compatibility, but it will request unoptimized Yul IR anyway.
+          "ir",
+          // Everything of the below.
+          "evm",
+          // Solidity function hashes.
+          "evm.methodIdentifiers",
+          // EVM assembly produced by solc.
+          "evm.legacyAssembly",
+          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.gasEstimates",
+          // Everything that starts with "evm.bytecode".
+          "evm.bytecode",
+          // Deploy bytecode produced by solx/LLVM.
+          // As long as the solx bytecode linker is in experimental stage, all contracts will be compiled if this key is enabled for at least one contract.
+          "evm.bytecode.object",
+          // Deploy code assembly produced by solx/LLVM.
+          "evm.bytecode.llvmAssembly",
+          // solx-only: EVM legacy assembly IR (internal representation). Only available for non-viaIR mode.
+          "evm.bytecode.evmla",
+          // solx-only: Ethereal IR (internal representation). Only available for non-viaIR mode.
+          "evm.bytecode.ethir",
+          // solx-only: Unoptimized LLVM IR (internal representation).
+          "evm.bytecode.llvmIrUnoptimized",
+          // solx-only: Optimized LLVM IR (internal representation).
+          "evm.bytecode.llvmIr",
+          // ELF-wrapped DWARF debug info produced by solx/LLVM. Only available for Solidity source code input.
+          "evm.bytecode.debugInfo",
+          // Link references for linkers that are to resolve library addresses at deploy time.
+          "evm.bytecode.linkReferences",
+          // Unsupported, but emitted as an empty string to preserve compatibility with some toolkits.
+          "evm.bytecode.opcodes",
+          // Unsupported, but emitted as an empty string to preserve compatibility with some toolkits.
+          "evm.bytecode.sourceMap",
+          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.bytecode.functionDebugData",
+          // Unsupported, but emitted as an empty array to preserve compatibility with some toolkits.
+          "evm.bytecode.generatedSources",
+          // Everything that starts with "evm.deployedBytecode".
+          "evm.deployedBytecode",
+          // Runtime bytecode produced by solx/LLVM.
+          // As long as the solx bytecode linker is in experimental stage, all contracts will be compiled if this key is enabled for at least one contract.
+          "evm.deployedBytecode.object",
+          // Runtime code assembly produced by solx/LLVM.
+          "evm.deployedBytecode.llvmAssembly",
+          // solx-only: EVM legacy assembly IR (internal representation). Only available for non-viaIR mode.
+          "evm.deployedBytecode.evmla",
+          // solx-only: Ethereal IR (internal representation). Only available for non-viaIR mode.
+          "evm.deployedBytecode.ethir",
+          // solx-only: Unoptimized LLVM IR (internal representation).
+          "evm.deployedBytecode.llvmIrUnoptimized",
+          // solx-only: Optimized LLVM IR (internal representation).
+          "evm.deployedBytecode.llvmIr",
+          // Link references for linkers that are to resolve library addresses at deploy time.
+          "evm.deployedBytecode.linkReferences",
+          // Resolved automatically by solx/LLVM, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.deployedBytecode.immutableReferences",
+          // ELF-wrapped DWARF debug info produced by solx/LLVM. Only available for Solidity source code input.
+          "evm.deployedBytecode.debugInfo",
+          // Unsupported, but emitted as an empty string to preserve compatibility with some toolkits.
+          "evm.deployedBytecode.opcodes",
+          // Unsupported, but emitted as an empty string to preserve compatibility with some toolkits.
+          "evm.deployedBytecode.sourceMap",
+          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          "evm.deployedBytecode.functionDebugData",
+          // Unsupported, but emitted as an empty array to preserve compatibility with some toolkits.
+          "evm.deployedBytecode.generatedSources"
+        ]
+      }
+    },
+    // Optional: Metadata settings.
+    "metadata": {
+      // Optional: Use the given hash method for the metadata hash that is appended to the bytecode.
+      // Available options: "none", "ipfs".
+      // Default: "ipfs".
+      "bytecodeHash": "ipfs",
+      // Optional: Use only literal content and not URLs.
+      // Default: false.
+      "useLiteralContent": true,
+      // Optional: Whether to include CBOR-encoded metadata at the end of bytecode.
+      // Default: true.
+      "appendCBOR": true
+    },
+    // Optional: Enables the IR codegen in solc.
+    "viaIR": true,
+
+    // Optional, solx-only: Extra LLVM settings.
+    "llvmOptions": [
+      "-key", "value"
+    ]
+  }
+}
+</code></pre>
+<h2 id="output-json"><a class="header" href="#output-json">Output JSON</a></h2>
+<p>The output JSON contains all artifacts produced by <strong>solx</strong> and <strong>solc</strong> together. The example below serves as the specification of the output JSON format.</p>
+<pre><code class="language-javascript">{
+  // Required: File-level outputs.
+  "sources": {
+    "sourceFile.sol": {
+      // Required: Identifier of the source.
+      "id": 1,
+      // Optional: The AST object.
+      // Corresponds to "ast" in the outputSelection settings.
+      "ast": {/* ... */}
+    }
+  },
+
+  // Required: Contract-level outputs.
+  "contracts": {
+    // The source name.
+    "sourceFile.sol": {
+      // The contract name.
+      // If the language only supports one contract per file, this field equals to the source name.
+      "ContractName": {
+        // Optional: The Ethereum Contract ABI (object).
+        // See https://docs.soliditylang.org/en/develop/abi-spec.html.
+        // Corresponds to "abi" in the outputSelection settings.
+        "abi": [/* ... */],
+        // Optional: Storage layout (object).
+        // Corresponds to "storageLayout" in the outputSelection settings.
+        "storageLayout": {/* ... */},
+        // Optional: Transient storage layout (object).
+        // Corresponds to "transientStorageLayout" in the outputSelection settings.
+        "transientStorageLayout": {/* ... */},
+        // Optional: Contract metadata (string).
+        // Corresponds to "metadata" in the outputSelection settings.
+        "metadata": "/* ... */",
+        // Optional: Developer documentation (natspec object).
+        // Corresponds to "devdoc" in the outputSelection settings.
+        "devdoc": {/* ... */},
+        // Optional: User documentation (natspec object).
+        // Corresponds to "userdoc" in the outputSelection settings.
+        "userdoc": {/* ... */},
+        // Optional: Yul produced by solc (string).
+        // Corresponds to "ir" in the outputSelection settings.
+        "ir": "/* ... */",
+        // Optional: EVM target outputs.
+        // Corresponds to "evm" in the outputSelection settings.
+        "evm": {
+          // Optional: EVM assembly produced by solc (object).
+          // Corresponds to "evm.legacyAssembly" in the outputSelection settings.
+          "legacyAssembly": {/* ... */},
+          // Optional: List of function hashes (object).
+          // Corresponds to "evm.methodIdentifiers" in the outputSelection settings.
+          "methodIdentifiers": {
+            // Mapping between the function signature and its hash.
+            "delegate(address)": "5c19a95c"
+          },
+          // Optional: Always empty, Included only to preserve compatibility with some toolkits (object).
+          // Corresponds to "evm.gasEstimates" in the outputSelection settings.
+          "gasEstimates": {},
+          // Optional: Deploy EVM bytecode.
+          // Corresponds to "evm.bytecode" in the outputSelection settings.
+          "bytecode": {
+            // Optional: Bytecode (string).
+            // Corresponds to "evm.bytecode.object" in the outputSelection settings.
+            "object": "5b60806040525f341415601c5763...",
+            // Optional: LLVM text assembly (string).
+            // Corresponds to "evm.bytecode.llvmAssembly" in the outputSelection settings.
+            "llvmAssembly": "/* ... */",
+            // Optional, solx-only: EVM legacy assembly IR (string). Only available for non-viaIR mode.
+            // Corresponds to "evm.bytecode.evmla" in the outputSelection settings.
+            "evmla": "/* ... */",
+            // Optional, solx-only: Ethereal IR (string). Only available for non-viaIR mode.
+            // Corresponds to "evm.bytecode.ethir" in the outputSelection settings.
+            "ethir": "/* ... */",
+            // Optional, solx-only: Unoptimized LLVM IR (string).
+            // Corresponds to "evm.bytecode.llvmIrUnoptimized" in the outputSelection settings.
+            "llvmIrUnoptimized": "/* ... */",
+            // Optional, solx-only: Optimized LLVM IR (string).
+            // Corresponds to "evm.bytecode.llvmIr" in the outputSelection settings.
+            "llvmIr": "/* ... */",
+            // Optional: ELF-wrapped DWARF debug info (string).
+            // Corresponds to "evm.bytecode.debugInfo" in the outputSelection settings.
+            "debugInfo": "/* ... */",
+            // Optional: Link references for linkers that are to resolve library addresses at deploy time (object).
+            // Corresponds to "evm.bytecode.linkReferences" in the outputSelection settings.
+            "linkReferences": {/* ... */},
+            // Optional: Benchmarks of each stage of the compilation on a per-translation unit basis (array).
+            // Corresponds to "benchmarks" in the outputSelection settings.
+            "benchmarks": [/* ... */],
+            // Optional: Always empty string, included only to preserve compatibility with some toolkits (string).
+            // Corresponds to "evm.bytecode.opcodes" in the outputSelection settings.
+            "opcodes": "",
+            // Optional: Always empty string, included only to preserve compatibility with some toolkits (string).
+            // Corresponds to "evm.bytecode.sourceMap" in the outputSelection settings.
+            "sourceMap": "",
+            // Optional: Always empty object, included only to preserve compatibility with some toolkits (object).
+            // Corresponds to "evm.bytecode.functionDebugData" in the outputSelection settings.
+            "functionDebugData": {},
+            // Optional: Always empty array, included only to preserve compatibility with some toolkits (array).
+            // Corresponds to "evm.bytecode.generatedSources" in the outputSelection settings.
+            "generatedSources": []
+          },
+          // Optional: Runtime EVM bytecode.
+          // Corresponds to "evm.deployedBytecode" in the outputSelection settings.
+          "deployedBytecode": {
+            // Optional: Bytecode (string).
+            // Corresponds to "evm.deployedBytecode.object" in the outputSelection settings.
+            "object": "5b60806040525f34141560145760...",
+            // Optional: LLVM text assembly (string).
+            // Corresponds to "evm.deployedBytecode.llvmAssembly" in the outputSelection settings.
+            "llvmAssembly": "/* ... */",
+            // Optional, solx-only: EVM legacy assembly IR (string). Only available for non-viaIR mode.
+            // Corresponds to "evm.deployedBytecode.evmla" in the outputSelection settings.
+            "evmla": "/* ... */",
+            // Optional, solx-only: Ethereal IR (string). Only available for non-viaIR mode.
+            // Corresponds to "evm.deployedBytecode.ethir" in the outputSelection settings.
+            "ethir": "/* ... */",
+            // Optional, solx-only: Unoptimized LLVM IR (string).
+            // Corresponds to "evm.deployedBytecode.llvmIrUnoptimized" in the outputSelection settings.
+            "llvmIrUnoptimized": "/* ... */",
+            // Optional, solx-only: Optimized LLVM IR (string).
+            // Corresponds to "evm.deployedBytecode.llvmIr" in the outputSelection settings.
+            "llvmIr": "/* ... */",
+            // Optional: ELF-wrapped DWARF debug info (string).
+            // Corresponds to "evm.deployedBytecode.debugInfo" in the outputSelection settings.
+            "debugInfo": "/* ... */",
+            // Optional: Link references for linkers that are to resolve library addresses at deploy time (object).
+            // Corresponds to "evm.deployedBytecode.linkReferences" in the outputSelection settings.
+            "linkReferences": {/* ... */},
+            // Optional: Benchmarks of each stage of the compilation on a per-translation unit basis (array).
+            // Corresponds to "benchmarks" in the outputSelection settings.
+            "benchmarks": [/* ... */],
+            // Optional: Resolved by LLVM automatically, so always returned as an empty object (object).
+            // Included only to preserve compatibility with some toolkits.
+            // Corresponds to "evm.deployedBytecode.immutableReferences" in the outputSelection settings.
+            "immutableReferences": {},
+            // Optional: Always empty string, included only to preserve compatibility with some toolkits (string).
+            // Corresponds to "evm.deployedBytecode.opcodes" in the outputSelection settings.
+            "opcodes": "",
+            // Optional: Always empty string, included only to preserve compatibility with some toolkits (string).
+            // Corresponds to "evm.deployedBytecode.sourceMap" in the outputSelection settings.
+            "sourceMap": "",
+            // Optional: Always empty object, included only to preserve compatibility with some toolkits (object).
+            // Corresponds to "evm.deployedBytecode.functionDebugData" in the outputSelection settings.
+            "functionDebugData": {},
+            // Optional: Always empty array, included only to preserve compatibility with some toolkits (array).
+            // Corresponds to "evm.deployedBytecode.generatedSources" in the outputSelection settings.
+            "generatedSources": []
+          }
+        }
+      }
+    }
+  },
+
+  // Optional: Benchmarks of the solx LLVM-based compilation pipeline and its underlying call to solc (array).
+  // Corresponds to "benchmarks" in the outputSelection settings.
+  "benchmarks": [/* ... */],
+
+  // Optional: Unset if no messages were emitted.
+  "errors": [
+    {
+      // Optional: Location within the source file.
+      // Unset if the error is unrelated to input sources.
+      "sourceLocation": {
+        // Required: The source path.
+        "file": "sourceFile.sol",
+        // Required: The source location start. Equals -1 if unknown.
+        "start": 0,
+        // Required: The source location end. Equals -1 if unknown.
+        "end": 100
+      },
+      // Required: Message type.
+      // solc errors are listed at https://docs.soliditylang.org/en/latest/using-the-compiler.html#error-types.
+      "type": "Error",
+      // Required: Component the error originates from.
+      "component": "general",
+      // Required: Message severity.
+      // Possible values: "error", "warning", "info".
+      "severity": "error",
+      // Optional: Unique code for the cause of the error.
+      // Only solc produces error codes for now.
+      // solx currently emits errors without codes, but they will be introduced soon.
+      "errorCode": "3141",
+      // Required: Message.
+      "message": "Invalid keyword",
+      // Required: Message formatted using the source location.
+      "formattedMessage": "sourceFile.sol:100: Invalid keyword"
+    }
+  ]
+}
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="limitations-and-differences-from-upstream-solc"><a class="header" href="#limitations-and-differences-from-upstream-solc">Limitations and Differences from Upstream solc</a></h1>
+<p>This chapter summarizes where <strong>solx</strong> differs from upstream <strong>solc</strong>, and which limitations currently apply.</p>
+<h2 id="compilation-modes"><a class="header" href="#compilation-modes">Compilation Modes</a></h2>
+<p><strong>solx</strong> supports two codegen pipelines:</p>
+<ul>
+<li><strong>Yul pipeline</strong>: enabled with <code>--via-ir</code> (matching solc's <code>--via-ir</code> flag).</li>
+<li><strong>Legacy EVM assembly pipeline</strong>: the default code generation path.</li>
+</ul>
+<p>The <code>--evmla</code> and <code>--ethir</code> debug flags are only available in the legacy (non-<code>via-ir</code>) pipeline.</p>
+<h2 id="solc-fork-modifications"><a class="header" href="#solc-fork-modifications">solc Fork Modifications</a></h2>
+<p>The <strong>solx-solidity</strong> fork includes the following changes relative to upstream <strong>solc</strong>:</p>
+<ul>
+<li><strong><code>extraMetadata</code> output</strong>: emits user-defined function metadata (name, entry tag, input/output sizes, AST IDs) used during LLVM lowering.</li>
+<li><strong><code>DUPX</code> / <code>SWAPX</code> instructions</strong>: extends stack access beyond depth 16 to avoid classic "stack too deep" failures.</li>
+<li><strong><code>spillAreaSize</code> setting</strong>: configures a memory spill region for values that cannot remain on stack.</li>
+<li><strong>Function pointer dispatch tables</strong>: uses static dispatch through <code>FuncPtrTracker</code> instead of dynamic jump-based dispatch.</li>
+<li><strong>Simplified <code>try/catch</code> in legacy mode</strong>: reduces control-flow complexity for translator compatibility.</li>
+<li><strong>Bypassed EVM bytecode generation</strong>: solx does not use solc's EVM bytecode output; final bytecode is produced by the LLVM backend.</li>
+<li><strong>Disabled optimizer</strong>: the solc optimizer is turned off to preserve function boundaries and metadata validity. All optimization is handled by the LLVM backend.</li>
+</ul>
+<h2 id="behavioral-differences"><a class="header" href="#behavioral-differences">Behavioral Differences</a></h2>
+<ul>
+<li>Generated bytecode can differ from upstream <strong>solc</strong> output because final code generation happens in LLVM.</li>
+<li>Optimization levels map to LLVM optimization pipelines, not upstream <code>solc</code> optimization heuristics.</li>
+<li>Final code size can differ from upstream due to LLVM pass behavior.</li>
+</ul>
+<h2 id="unsupported-features"><a class="header" href="#unsupported-features">Unsupported Features</a></h2>
+<ul>
+<li><code>CALLCODE</code> is rejected at compile time. Use <code>DELEGATECALL</code> instead.</li>
+<li><code>SELFDESTRUCT</code> is rejected at compile time (deprecated by EIP-6049).</li>
+<li><code>PC</code> (program counter) is not supported.</li>
+<li><code>BLOBHASH</code> and <code>BLOBBASEFEE</code> (EIP-4844/EIP-7516) are rejected at compile time.</li>
+<li>Inline assembly marked <code>memory-safe</code> can cause errors when spill-area-based lowering is active.</li>
+<li>Some <code>solc</code> optimizer settings are ignored since the solc optimizer is disabled.</li>
+</ul>
+<h2 id="version-support"><a class="header" href="#version-support">Version Support</a></h2>
+<ul>
+<li>The <strong>solx-solidity</strong> fork tracks upstream <strong>solc</strong> releases.</li>
+<li>The minimum supported Solidity version matches the forked solc version.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="architecture"><a class="header" href="#architecture">Architecture</a></h1>
+<p><strong>solx</strong> is an LLVM-based compiler that translates Solidity source code into optimized EVM bytecode.</p>
+<h2 id="components"><a class="header" href="#components">Components</a></h2>
+<p>The compiler consists of three repositories:</p>
+<ol>
+<li><a href="https://github.com/NomicFoundation/solx">solx</a> — The main compiler executable and Rust crates that translate Yul and EVM assembly to LLVM IR.</li>
+<li><a href="https://github.com/NomicFoundation/solx-solidity">solx-solidity</a> — An LLVM-friendly fork of the Solidity compiler that emits Yul and EVM assembly.</li>
+<li><a href="https://github.com/matter-labs/solx-llvm">solx-llvm</a> — A fork of the LLVM framework with an EVM target backend.</li>
+</ol>
+<h2 id="compilation-pipeline"><a class="header" href="#compilation-pipeline">Compilation Pipeline</a></h2>
+<pre><code class="language-text">                        ┌─────────────────────────────────────────────┐
+                        │                  Frontend                   │
+┌──────────┐            │  ┌────────────────┐       ┌──────────────┐  │
+│ Solidity │ ────────── │  │ solx-solidity  │ ───── │     solx     │  │
+│  source  │            │  │                │       │              │  │
+└──────────┘            │  │ Parsing,       │ Yul / │ Yul &amp; EVM    │  │
+                        │  │ semantic       │ EVM   │ assembly     │  │
+                        │  │ analysis       │ asm   │ translation  │  │
+                        │  └────────────────┘       └──────────────┘  │
+                        └─────────────────────────────────────────────┘
+                                                           │
+                                                        LLVM IR
+                                                           │
+                                                           ▼
+                        ┌─────────────────────────────────────────────┐
+                        │                 Middle-end                  │
+                        │  ┌────────────────────────────────────────┐ │
+                        │  │           LLVM Optimizer               │ │
+                        │  │                                        │ │
+                        │  │  IR transformations and optimizations  │ │
+                        │  └────────────────────────────────────────┘ │
+                        └─────────────────────────────────────────────┘
+                                                           │
+                                                     Optimized IR
+                                                           │
+                                                           ▼
+                        ┌─────────────────────────────────────────────┐
+                        │                  Backend                    │
+                        │  ┌────────────────────────────────────────┐ │
+                        │  │         solx-llvm EVM Target           │ │
+                        │  │                                        │ │
+                        │  │  Instruction selection, register       │ │
+                        │  │  allocation, code emission             │ │
+                        │  └────────────────────────────────────────┘ │
+                        └─────────────────────────────────────────────┘
+                                                           │
+                                                           ▼
+                                                   ┌──────────────┐
+                                                   │ EVM bytecode │
+                                                   └──────────────┘
+</code></pre>
+<h3 id="frontend"><a class="header" href="#frontend">Frontend</a></h3>
+<p>The frontend transforms Solidity source code into LLVM IR:</p>
+<ol>
+<li><strong>solx-solidity</strong> parses the Solidity source, performs semantic analysis, and emits either Yul or EVM assembly.</li>
+<li><strong>solx</strong> reads the Yul or EVM assembly and translates it into LLVM IR.</li>
+</ol>
+<h3 id="middle-end"><a class="header" href="#middle-end">Middle-end</a></h3>
+<p>The LLVM optimizer applies a series of IR transformations to improve code quality and performance. These optimizations are target-independent and work on the LLVM IR representation.</p>
+<h3 id="backend"><a class="header" href="#backend">Backend</a></h3>
+<p>The <strong>solx-llvm</strong> EVM target converts optimized LLVM IR into EVM bytecode. This includes:</p>
+<ul>
+<li>Instruction selection (mapping IR operations to EVM opcodes)</li>
+<li>Register allocation (managing the EVM stack)</li>
+<li>Stackification (converting register-based code to stack-based EVM operations)</li>
+<li>Code emission (generating the final bytecode)</li>
+</ul>
+<h2 id="why-a-fork-of-solc"><a class="header" href="#why-a-fork-of-solc">Why a Fork of solc?</a></h2>
+<p>The <strong>solx-solidity</strong> fork includes modifications to make the Solidity compiler output compatible with LLVM IR generation. The upstream <strong>solc</strong> compiler is designed to emit EVM bytecode directly, but <strong>solx</strong> needs intermediate representations (Yul or EVM assembly) that can be translated to LLVM IR.</p>
+<p>The fork maintains compatibility with upstream <strong>solc</strong> and tracks its releases.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="evm-assembly-translator"><a class="header" href="#evm-assembly-translator">EVM Assembly Translator</a></h1>
+<p>The EVM assembly translator converts legacy EVM assembly (the default <code>solc</code> output) into LLVM IR via an intermediate representation called <strong>Ethereal IR (EthIR)</strong>. The Yul pipeline (<code>--via-ir</code>) bypasses this translator entirely.</p>
+<h2 id="why-ethir"><a class="header" href="#why-ethir">Why EthIR?</a></h2>
+<p>EVM assembly is stack-based with dynamic jumps, making it difficult to translate directly to LLVM IR which requires explicit control flow graphs. EthIR bridges this gap by:</p>
+<ol>
+<li><strong>Tracking stack state</strong> to identify jump destinations at compile time</li>
+<li><strong>Cloning blocks</strong> reachable from predecessors with different stack states</li>
+<li><strong>Reconstructing control flow</strong> from stack-based jumps into a static CFG</li>
+<li><strong>Resolving function calls</strong> using metadata from the solc fork</li>
+</ol>
+<h2 id="translation-pipeline"><a class="header" href="#translation-pipeline">Translation Pipeline</a></h2>
+<pre><code class="language-text">Solidity source
+    │
+    ▼
+solc (solx-solidity fork)
+    │  Emits EVM assembly JSON + extraMetadata
+    ▼
+Assembly parsing
+    │  Parses instructions, resolves dependencies
+    ▼
+Block construction
+    │  Groups instructions between Tag labels
+    ▼
+EthIR traversal
+    │  DFS with stack simulation, block cloning
+    ▼
+LLVM IR generation
+    │  Creates LLVM functions, basic blocks, instructions
+    ▼
+LLVM optimizer
+    │
+    ▼
+EVM bytecode (via LLVM EVM backend)
+</code></pre>
+<h2 id="key-data-structures"><a class="header" href="#key-data-structures">Key Data Structures</a></h2>
+<h3 id="assembly"><a class="header" href="#assembly">Assembly</a></h3>
+<p>The <code>Assembly</code> struct represents the raw solc output. It contains:</p>
+<ul>
+<li><strong>code</strong>: Flat list of instructions (deploy code)</li>
+<li><strong>data["0"]</strong>: Nested assembly for runtime code</li>
+<li><strong>data[hex]</strong>: Referenced data entries — sub-assemblies, hashes, or resolved contract paths (for CREATE/CREATE2)</li>
+</ul>
+<p>Each instruction has a <code>name</code> (opcode), optional <code>value</code> (operand), and optional <code>source</code> location.</p>
+<h3 id="etherealir"><a class="header" href="#etherealir">EtherealIR</a></h3>
+<p>The top-level container holding:</p>
+<ul>
+<li><strong>entry_function</strong>: The main contract function (deploy + runtime)</li>
+<li><strong>defined_functions</strong>: Internal functions discovered during traversal</li>
+</ul>
+<h3 id="function"><a class="header" href="#function">Function</a></h3>
+<p>The <code>Function</code> struct is the core of the translator. It contains:</p>
+<ul>
+<li><strong>blocks</strong>: <code>BTreeMap&lt;BlockKey, Vec&lt;Block&gt;&gt;</code> — maps each block tag to one or more instances (clones for different stack states)</li>
+<li><strong>block_hash_index</strong>: <code>HashMap&lt;BlockKey, HashSet&lt;u64&gt;&gt;</code> — fast duplicate detection by stack hash</li>
+<li><strong>stack_size</strong>: Maximum stack height observed, used to size LLVM stack allocations</li>
+</ul>
+<h3 id="block"><a class="header" href="#block">Block</a></h3>
+<p>Each <code>Block</code> represents a sequence of instructions between two Tag labels:</p>
+<ul>
+<li><strong>key</strong>: <code>BlockKey</code> (code segment + tag number)</li>
+<li><strong>instance</strong>: Clone index (0, 1, 2... for blocks visited with different stack states)</li>
+<li><strong>elements</strong>: Instructions with full stack state snapshots</li>
+<li><strong>initial_stack / stack</strong>: Stack state at entry and after processing</li>
+</ul>
+<h3 id="stack-elements"><a class="header" href="#stack-elements">Stack Elements</a></h3>
+<p>The stack tracks six kinds of values:</p>
+<div class="table-wrapper"><table><thead><tr><th>Variant</th><th>Description</th><th>Example</th></tr></thead><tbody>
+<tr><td><code>Value(String)</code></td><td>Runtime value (opaque)</td><td>Result of <code>ADD</code>, <code>MLOAD</code></td></tr>
+<tr><td><code>Constant(BigUint)</code></td><td>Compile-time 256-bit constant</td><td><code>0x60</code>, <code>0xFFFF</code></td></tr>
+<tr><td><code>Tag(u64)</code></td><td>Block tag (jump target)</td><td>Tag 42</td></tr>
+<tr><td><code>Path(String)</code></td><td>Contract dependency path</td><td><code>"SubContract"</code></td></tr>
+<tr><td><code>Data(String)</code></td><td>Hex data chunk</td><td><code>"deadbeef"</code></td></tr>
+<tr><td><code>ReturnAddress(usize)</code></td><td>Function return marker</td><td>Return with 2 outputs</td></tr>
+</tbody></table>
+</div>
+<h2 id="block-cloning-and-stack-hashing"><a class="header" href="#block-cloning-and-stack-hashing">Block Cloning and Stack Hashing</a></h2>
+<p>The same block may be reached via different code paths with different stack contents. Since the stack determines jump targets (a <code>JUMP</code> pops its destination from the stack), the translator must handle each unique stack state separately.</p>
+<h3 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h3>
+<ol>
+<li>When entering a block, the translator computes a <strong>stack hash</strong> using <code>XxHash3_64</code></li>
+<li>The hash considers only <code>Tag</code> elements — tags determine control flow, while constants and runtime values affect only data flow</li>
+<li>The pair <code>(BlockKey, stack_hash)</code> uniquely identifies a block instance</li>
+<li>If this pair has been visited before, the block is skipped (cycle detection)</li>
+<li>Otherwise, a new block instance is created</li>
+</ol>
+<pre><code class="language-text">Block "process" reached with stack [T_10, V_x]:  → instance 0
+Block "process" reached with stack [T_20, V_y]:  → instance 1 (different tag)
+Block "process" reached with stack [T_10, V_z]:  → instance 0 (same hash, reused)
+</code></pre>
+<h3 id="stack-hash-algorithm"><a class="header" href="#stack-hash-algorithm">Stack Hash Algorithm</a></h3>
+<pre><code class="language-rust ignore">fn hash(&amp;self) -&gt; u64 {
+    let mut hasher = XxHash3_64::default();
+    for element in self.elements.iter() {
+        match element {
+            Element::Tag(tag) =&gt; hasher.write(&amp;tag.to_le_bytes()),
+            _ =&gt; hasher.write_u8(0),
+        }
+    }
+    hasher.finish()
+}</code></pre>
+<p>Only <code>Tag</code> values contribute to the hash. This is intentional: two stack states with the same tags but different runtime values will follow the same control flow path.</p>
+<h2 id="traversal-algorithm"><a class="header" href="#traversal-algorithm">Traversal Algorithm</a></h2>
+<p>The <code>Function::traverse()</code> method performs a depth-first traversal of blocks, simulating EVM execution:</p>
+<pre><code class="language-text">traverse(blocks, extra_metadata):
+    queue ← [(entry_block, empty_stack)]
+    visited ← {}
+
+    while queue is not empty:
+        (block_key, stack) ← queue.pop()
+        hash ← stack.hash()
+
+        if (block_key, hash) in visited:
+            continue
+        visited.add((block_key, hash))
+
+        block ← blocks[block_key].clone_with(stack)
+        for instruction in block:
+            simulate_instruction(instruction, stack)
+            if instruction is JUMP/JUMPI:
+                queue.push((target_tag, stack))
+</code></pre>
+<h3 id="instruction-simulation"><a class="header" href="#instruction-simulation">Instruction Simulation</a></h3>
+<p>For each instruction, the translator:</p>
+<ol>
+<li>Pops the required number of inputs from the simulated stack</li>
+<li>Computes the output (compile-time if possible, runtime value otherwise)</li>
+<li>Pushes the result onto the stack</li>
+<li>For control flow instructions, queues successor blocks</li>
+</ol>
+<h3 id="compile-time-constant-folding"><a class="header" href="#compile-time-constant-folding">Compile-Time Constant Folding</a></h3>
+<p>Arithmetic operations on known values are folded at compile time:</p>
+<div class="table-wrapper"><table><thead><tr><th>Operands</th><th>Result</th></tr></thead><tbody>
+<tr><td><code>Constant + Constant</code></td><td><code>Constant</code> (computed)</td></tr>
+<tr><td><code>Tag + Constant</code></td><td><code>Tag</code> (if result is valid block)</td></tr>
+<tr><td><code>Tag + Tag</code></td><td><code>Tag</code> (if result is valid block)</td></tr>
+<tr><td>Any other combination</td><td><code>Value</code> (runtime, opaque)</td></tr>
+</tbody></table>
+</div>
+<p>This is critical for resolving jump targets: solc often computes jump destinations via <code>PUSH tag</code> + arithmetic.</p>
+<h2 id="function-call-detection"><a class="header" href="#function-call-detection">Function Call Detection</a></h2>
+<p>The translator identifies function calls using <strong>extra metadata</strong> from the solc fork. The <code>extraMetadata</code> JSON field lists all user-defined functions with their:</p>
+<ul>
+<li>Entry tag (in deploy and/or runtime code)</li>
+<li>Input parameter count</li>
+<li>Output return value count</li>
+<li>Function name and AST node ID</li>
+</ul>
+<p>When a <code>JUMP</code> targets a known function entry:</p>
+<ol>
+<li>The stack is split: return address, arguments, and remaining caller state</li>
+<li>A <code>RecursiveCall</code> pseudo-instruction replaces the JUMP</li>
+<li>A new <code>Function</code> is created and recursively traversed from the entry block</li>
+<li>The caller's stack receives <code>output_size</code> opaque return values</li>
+</ol>
+<pre><code class="language-text">Before JUMP to function "add(uint,uint)":
+  Stack: [... | return_tag | arg1 | arg2 | function_entry_tag]
+
+After call detection:
+  Instruction: RecursiveCall add(uint,uint), input=2, output=1
+  Caller stack: [... | return_value]
+  Callee: new Function traversed from entry tag
+</code></pre>
+<h2 id="llvm-ir-generation"><a class="header" href="#llvm-ir-generation">LLVM IR Generation</a></h2>
+<p>After traversal, the translator generates LLVM IR in several phases:</p>
+<h3 id="1-function-declaration"><a class="header" href="#1-function-declaration">1. Function Declaration</a></h3>
+<ul>
+<li><strong>Entry function</strong>: Uses the pre-declared contract entry point</li>
+<li><strong>Defined functions</strong>: Creates private LLVM functions with <code>N × i256</code> parameters and return values (multiple returns use LLVM struct types)</li>
+</ul>
+<h3 id="2-stack-variable-allocation"><a class="header" href="#2-stack-variable-allocation">2. Stack Variable Allocation</a></h3>
+<p>For each function, <code>stack_size</code> stack slots are allocated as LLVM <code>alloca</code> instructions. These represent the simulated EVM stack as addressable memory:</p>
+<pre><code class="language-llvm">%stack_0 = alloca i256    ; bottom of stack
+%stack_1 = alloca i256
+...
+%stack_N = alloca i256    ; top of stack
+</code></pre>
+<p>For defined functions, slot 0 is reserved for the return address marker, and input parameters are stored starting from slot 1.</p>
+<h3 id="3-basic-block-creation"><a class="header" href="#3-basic-block-creation">3. Basic Block Creation</a></h3>
+<p>Each <code>(BlockKey, instance)</code> pair becomes an LLVM <code>BasicBlock</code>:</p>
+<pre><code class="language-llvm">block_runtime_42/0:       ; tag 42, first instance
+  ...
+block_runtime_42/1:       ; tag 42, second instance (different stack state)
+  ...
+</code></pre>
+<h3 id="4-instruction-translation"><a class="header" href="#4-instruction-translation">4. Instruction Translation</a></h3>
+<p>Each EthIR element calls <code>into_llvm()</code> to generate LLVM instructions. Stack operations map to loads/stores on the allocated stack variables:</p>
+<div class="table-wrapper"><table><thead><tr><th>EVM Operation</th><th>LLVM Translation</th></tr></thead><tbody>
+<tr><td><code>PUSH 0x42</code></td><td><code>store i256 66, ptr %stack_N</code></td></tr>
+<tr><td><code>DUP2</code></td><td><code>%v = load i256, ptr %stack_(N-2); store i256 %v, ptr %stack_(N+1)</code></td></tr>
+<tr><td><code>ADD</code></td><td><code>%a = load ...; %b = load ...; %r = add i256 %a, %b; store ...</code></td></tr>
+<tr><td><code>MLOAD</code></td><td><code>%ptr = load ...; %v = load i256, ptr addrspace(1) %ptr; store ...</code></td></tr>
+<tr><td><code>JUMP</code></td><td><code>br label %target_block</code></td></tr>
+<tr><td><code>JUMPI</code></td><td><code>%cond = ...; br i1 %cond, label %taken, label %fallthrough</code></td></tr>
+</tbody></table>
+</div>
+<h2 id="solc-fork-modifications-1"><a class="header" href="#solc-fork-modifications-1">solc Fork Modifications</a></h2>
+<p>The EVM assembly translator relies on several modifications in the <code>solx-solidity</code> fork. The most relevant to this pipeline are:</p>
+<ul>
+<li><strong><code>extraMetadata</code> output</strong>: reports all user-defined functions with entry tags, parameter counts, and AST IDs. Without this, the translator cannot distinguish function calls from arbitrary jumps.</li>
+<li><strong>Dispatch tables for function pointers</strong>: indirect calls are lowered to static dispatch tables instead of dynamic jumps.</li>
+<li><strong><code>DUPX</code> / <code>SWAPX</code> instructions</strong>: extend stack access beyond depth 16, eliminating "stack too deep" errors.</li>
+<li><strong>Disabled optimizer</strong>: the solc optimizer is disabled to preserve function boundaries and metadata validity. All optimization is handled by the LLVM backend.</li>
+</ul>
+<p>For the full list of fork modifications, see <a href="internals/../user-guide/04-limitations.html#solc-fork-modifications">Limitations and Differences from solc</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="evm-instructions-reference"><a class="header" href="#evm-instructions-reference">EVM Instructions Reference</a></h1>
+<p>This chapter describes how the LLVM EVM backend models EVM instructions and lowers LLVM IR into final opcode sequences.</p>
+<h2 id="instruction-definitions"><a class="header" href="#instruction-definitions">Instruction Definitions</a></h2>
+<p>The EVM instruction set is defined in the LLVM backend via TableGen.</p>
+<ul>
+<li>It contains opcode definitions, pattern mappings, and EVM-specific pseudo-instructions.</li>
+<li>It covers roughly 180 instruction forms once TableGen expansions are considered (for example <code>DUP1..16</code>, <code>SWAP1..16</code>, and <code>PUSH</code> families).</li>
+<li>Instructions are modeled around <code>i256</code> values, matching the EVM word size.</li>
+</ul>
+<h2 id="address-space-model"><a class="header" href="#address-space-model">Address Space Model</a></h2>
+<p>The backend uses explicit LLVM address spaces to model EVM memory regions:</p>
+<div class="table-wrapper"><table><thead><tr><th>Address space</th><th style="text-align: right">Value</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>AS_STACK</code></td><td style="text-align: right"><code>0</code></td><td>Compiler-managed stack memory model</td></tr>
+<tr><td><code>AS_HEAP</code></td><td style="text-align: right"><code>1</code></td><td>EVM linear memory (<code>MLOAD</code>, <code>MSTORE</code>, <code>MCOPY</code>)</td></tr>
+<tr><td><code>AS_CALL_DATA</code></td><td style="text-align: right"><code>2</code></td><td>Call data region</td></tr>
+<tr><td><code>AS_RETURN_DATA</code></td><td style="text-align: right"><code>3</code></td><td>Return data region</td></tr>
+<tr><td><code>AS_CODE</code></td><td style="text-align: right"><code>4</code></td><td>Code segment</td></tr>
+<tr><td><code>AS_STORAGE</code></td><td style="text-align: right"><code>5</code></td><td>Persistent storage</td></tr>
+<tr><td><code>AS_TSTORAGE</code></td><td style="text-align: right"><code>6</code></td><td>Transient storage</td></tr>
+</tbody></table>
+</div>
+<p>These constants are defined in the EVM backend header.</p>
+<h2 id="core-instruction-categories"><a class="header" href="#core-instruction-categories">Core Instruction Categories</a></h2>
+<h3 id="arithmetic"><a class="header" href="#arithmetic">Arithmetic</a></h3>
+<p>Arithmetic opcodes map directly to <code>i256</code> operations or EVM intrinsics:</p>
+<ul>
+<li><code>ADD</code>, <code>MUL</code>, <code>SUB</code>, <code>DIV</code>, <code>SDIV</code>, <code>MOD</code>, <code>SMOD</code></li>
+<li><code>ADDMOD</code>, <code>MULMOD</code>, <code>EXP</code>, <code>SIGNEXTEND</code></li>
+</ul>
+<p>For example, <code>ADD</code> is selected from LLVM <code>add i256</code> patterns.</p>
+<h3 id="memory"><a class="header" href="#memory">Memory</a></h3>
+<p>Memory instructions operate on the heap address space:</p>
+<ul>
+<li><code>MLOAD</code> maps to a load from <code>AS_HEAP</code></li>
+<li><code>MSTORE</code> maps to a store into <code>AS_HEAP</code></li>
+<li><code>MCOPY</code> lowers memory copy operations in heap memory</li>
+</ul>
+<h3 id="storage"><a class="header" href="#storage">Storage</a></h3>
+<p>Storage instructions map to storage address spaces:</p>
+<ul>
+<li><code>SLOAD</code>, <code>SSTORE</code> use <code>AS_STORAGE</code></li>
+<li><code>TLOAD</code>, <code>TSTORE</code> use <code>AS_TSTORAGE</code></li>
+</ul>
+<h3 id="control-flow"><a class="header" href="#control-flow">Control Flow</a></h3>
+<p>Control flow instructions are selected from LLVM branch forms:</p>
+<ul>
+<li><code>JUMP</code> maps from unconditional <code>br</code></li>
+<li><code>JUMPI</code> maps from conditional <code>br i1</code></li>
+</ul>
+<p>The backend also uses helper pseudos (for example <code>JUMP_UNLESS</code>) that are lowered before emission.</p>
+<h3 id="stack"><a class="header" href="#stack">Stack</a></h3>
+<p>EVM stack manipulation opcodes are emitted as needed:</p>
+<ul>
+<li><code>DUP1..DUP16</code></li>
+<li><code>SWAP1..SWAP16</code></li>
+<li><code>POP</code></li>
+</ul>
+<p>They are introduced and optimized by stackification passes rather than directly authored in frontend IR.</p>
+<h3 id="cryptographic"><a class="header" href="#cryptographic">Cryptographic</a></h3>
+<p><code>SHA3</code>/<code>KECCAK256</code> is represented through EVM-specific intrinsic plumbing:</p>
+<ul>
+<li>Machine instruction: <code>KECCAK256</code></li>
+<li>LLVM intrinsic path: <code>llvm.evm.sha3</code></li>
+</ul>
+<h2 id="runtime-library-evm-stdlibll"><a class="header" href="#runtime-library-evm-stdlibll">Runtime Library (<code>evm-stdlib.ll</code>)</a></h2>
+<p>The backend links helper wrappers from the EVM runtime standard library:</p>
+<ul>
+<li><code>__addmod</code></li>
+<li><code>__mulmod</code></li>
+<li><code>__signextend</code></li>
+<li><code>__exp</code></li>
+<li><code>__byte</code></li>
+<li><code>__sdiv</code></li>
+<li><code>__div</code></li>
+<li><code>__smod</code></li>
+<li><code>__mod</code></li>
+<li><code>__shl</code></li>
+<li><code>__shr</code></li>
+<li><code>__sar</code></li>
+<li><code>__sha3</code></li>
+</ul>
+<p>These wrappers forward to corresponding <code>llvm.evm.*</code> intrinsics.</p>
+<h2 id="stackification-pipeline"><a class="header" href="#stackification-pipeline">Stackification Pipeline</a></h2>
+<p>The late codegen pipeline converts virtual-register machine IR to valid EVM stack code:</p>
+<ol>
+<li><code>EVMSingleUseExpression</code>: reorders machine instructions into expression-friendly form.</li>
+<li><code>EVMBackwardPropagationStackification</code>: performs backward propagation stackification from register form.</li>
+<li><code>EVMStackSolver</code> and <code>EVMStackShuffler</code>: compute and emit low-cost <code>DUP</code>/<code>SWAP</code>/spill-reload sequences.</li>
+<li><code>EVMPeephole</code>: runs late peephole optimizations before final emission.</li>
+</ol>
+<h2 id="stack-depth-limit"><a class="header" href="#stack-depth-limit">Stack Depth Limit</a></h2>
+<p>The EVM stack itself can hold up to 1024 items, but <code>DUP</code> and <code>SWAP</code> instructions can only reach the top 16 positions. The backend enforces this depth-16 manipulation reach.</p>
+<p>This limit is exposed by <code>EVMSubtarget::stackDepthLimit()</code>.</p>
+<h2 id="pseudo-instructions"><a class="header" href="#pseudo-instructions">Pseudo-Instructions</a></h2>
+<p>Several pseudos are used during lowering and removed or expanded before final bytecode:</p>
+<ul>
+<li><code>PUSHDEPLOYADDRESS</code>: materializes deploy-time address usage for libraries.</li>
+<li><code>SELECT</code>: models conditional value selection.</li>
+<li><code>CONST_I256</code>: represents immediate constants before stackification.</li>
+<li><code>COPY_I256</code>: temporary register-copy form before stackification.</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="yul-builtins-reference"><a class="header" href="#yul-builtins-reference">Yul Builtins Reference</a></h1>
+<p>This chapter lists all Yul builtin functions supported by <strong>solx</strong> and how each is lowered to LLVM IR for the EVM backend.</p>
+<h2 id="lowering-strategies"><a class="header" href="#lowering-strategies">Lowering Strategies</a></h2>
+<p>Yul builtins are lowered through one of three strategies:</p>
+<ul>
+<li><strong>Direct LLVM IR</strong>: the builtin maps to native LLVM integer or memory operations on <code>i256</code>.</li>
+<li><strong>LLVM intrinsic</strong>: the builtin maps to an <code>llvm.evm.*</code> intrinsic that the EVM backend expands to opcodes.</li>
+<li><strong>Address space access</strong>: the builtin maps to a load or store in a typed LLVM address space (see <a href="internals/./03-evm-instructions.html#address-space-model">EVM Instructions: Address Space Model</a>).</li>
+</ul>
+<h2 id="arithmetic-1"><a class="header" href="#arithmetic-1">Arithmetic</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>add</code></td><td>Direct LLVM IR</td><td><code>add i256</code></td></tr>
+<tr><td><code>sub</code></td><td>Direct LLVM IR</td><td><code>sub i256</code></td></tr>
+<tr><td><code>mul</code></td><td>Direct LLVM IR</td><td><code>mul i256</code></td></tr>
+<tr><td><code>div</code></td><td>Direct LLVM IR</td><td>Unsigned; returns 0 when divisor is 0</td></tr>
+<tr><td><code>sdiv</code></td><td>Direct LLVM IR</td><td>Signed; returns 0 when divisor is 0</td></tr>
+<tr><td><code>mod</code></td><td>Direct LLVM IR</td><td>Unsigned; returns 0 when divisor is 0</td></tr>
+<tr><td><code>smod</code></td><td>Direct LLVM IR</td><td>Signed; returns 0 when divisor is 0</td></tr>
+<tr><td><code>addmod</code></td><td>Intrinsic <code>llvm.evm.addmod</code></td><td><code>(x + y) % m</code> without intermediate overflow</td></tr>
+<tr><td><code>mulmod</code></td><td>Intrinsic <code>llvm.evm.mulmod</code></td><td><code>(x * y) % m</code> without intermediate overflow</td></tr>
+<tr><td><code>exp</code></td><td>Intrinsic <code>llvm.evm.exp</code></td><td>Exponentiation</td></tr>
+<tr><td><code>signextend</code></td><td>Intrinsic <code>llvm.evm.signextend</code></td><td>Sign extend from bit <code>(i*8+7)</code></td></tr>
+</tbody></table>
+</div>
+<h2 id="comparison"><a class="header" href="#comparison">Comparison</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>lt</code></td><td>Direct LLVM IR</td><td>Unsigned less-than</td></tr>
+<tr><td><code>gt</code></td><td>Direct LLVM IR</td><td>Unsigned greater-than</td></tr>
+<tr><td><code>slt</code></td><td>Direct LLVM IR</td><td>Signed less-than</td></tr>
+<tr><td><code>sgt</code></td><td>Direct LLVM IR</td><td>Signed greater-than</td></tr>
+<tr><td><code>eq</code></td><td>Direct LLVM IR</td><td>Equality</td></tr>
+<tr><td><code>iszero</code></td><td>Direct LLVM IR</td><td>Check if zero</td></tr>
+</tbody></table>
+</div>
+<h2 id="bitwise"><a class="header" href="#bitwise">Bitwise</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>and</code></td><td>Direct LLVM IR</td><td>Bitwise AND</td></tr>
+<tr><td><code>or</code></td><td>Direct LLVM IR</td><td>Bitwise OR</td></tr>
+<tr><td><code>xor</code></td><td>Direct LLVM IR</td><td>Bitwise XOR</td></tr>
+<tr><td><code>not</code></td><td>Direct LLVM IR</td><td>Bitwise NOT</td></tr>
+<tr><td><code>shl</code></td><td>Direct LLVM IR</td><td>Shift left; shift &gt;= 256 yields 0</td></tr>
+<tr><td><code>shr</code></td><td>Direct LLVM IR</td><td>Logical shift right; shift &gt;= 256 yields 0</td></tr>
+<tr><td><code>sar</code></td><td>Direct LLVM IR</td><td>Arithmetic shift right; shift &gt;= 256 yields sign-extended value</td></tr>
+<tr><td><code>byte</code></td><td>Intrinsic <code>llvm.evm.byte</code></td><td>Extract nth byte</td></tr>
+<tr><td><code>clz</code></td><td>Intrinsic <code>llvm.ctlz</code></td><td>Count leading zeros (requires Osaka EVM version)</td></tr>
+</tbody></table>
+</div>
+<h2 id="hashing"><a class="header" href="#hashing">Hashing</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>keccak256</code></td><td>Intrinsic <code>llvm.evm.sha3</code></td><td>Keccak-256 over memory range</td></tr>
+</tbody></table>
+</div>
+<h2 id="memory-1"><a class="header" href="#memory-1">Memory</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>mload</code></td><td>Address space 1 load</td><td>Load 32 bytes from heap memory</td></tr>
+<tr><td><code>mstore</code></td><td>Address space 1 store</td><td>Store 32 bytes to heap memory</td></tr>
+<tr><td><code>mstore8</code></td><td>Intrinsic <code>llvm.evm.mstore8</code></td><td>Store single byte to memory</td></tr>
+<tr><td><code>mcopy</code></td><td>memcpy in address space 1</td><td>EIP-5656 memory copy</td></tr>
+<tr><td><code>msize</code></td><td>Intrinsic <code>llvm.evm.msize</code></td><td>Highest accessed memory index</td></tr>
+</tbody></table>
+</div>
+<h2 id="storage-1"><a class="header" href="#storage-1">Storage</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>sload</code></td><td>Address space 5 load</td><td>Load from persistent storage</td></tr>
+<tr><td><code>sstore</code></td><td>Address space 5 store</td><td>Store to persistent storage</td></tr>
+<tr><td><code>tload</code></td><td>Address space 6 load</td><td>Load from transient storage (EIP-1153)</td></tr>
+<tr><td><code>tstore</code></td><td>Address space 6 store</td><td>Store to transient storage (EIP-1153)</td></tr>
+</tbody></table>
+</div>
+<h2 id="immutables"><a class="header" href="#immutables">Immutables</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>loadimmutable</code></td><td>Intrinsic <code>llvm.evm.loadimmutable</code></td><td>Load immutable value with metadata identifier</td></tr>
+<tr><td><code>setimmutable</code></td><td>Special</td><td>Set immutable value during deployment</td></tr>
+</tbody></table>
+</div>
+<h2 id="call-data-and-return-data"><a class="header" href="#call-data-and-return-data">Call Data and Return Data</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>calldataload</code></td><td>Address space 2 load</td><td>Load 32 bytes from calldata</td></tr>
+<tr><td><code>calldatasize</code></td><td>Intrinsic <code>llvm.evm.calldatasize</code></td><td>Size of calldata</td></tr>
+<tr><td><code>calldatacopy</code></td><td>memcpy from address space 2 to 1</td><td>Copy calldata to memory</td></tr>
+<tr><td><code>returndatasize</code></td><td>Intrinsic <code>llvm.evm.returndatasize</code></td><td>Size of return data</td></tr>
+<tr><td><code>returndatacopy</code></td><td>memcpy from address space 3 to 1</td><td>Copy return data to memory</td></tr>
+</tbody></table>
+</div>
+<h2 id="code-operations"><a class="header" href="#code-operations">Code Operations</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>codesize</code></td><td>Intrinsic <code>llvm.evm.codesize</code></td><td>Current contract code size</td></tr>
+<tr><td><code>codecopy</code></td><td>memcpy from address space 4 to 1</td><td>Copy code to memory</td></tr>
+<tr><td><code>extcodesize</code></td><td>Intrinsic <code>llvm.evm.extcodesize</code></td><td>External contract code size</td></tr>
+<tr><td><code>extcodecopy</code></td><td>Intrinsic <code>llvm.evm.extcodecopy</code></td><td>Copy external code to memory</td></tr>
+<tr><td><code>extcodehash</code></td><td>Intrinsic <code>llvm.evm.extcodehash</code></td><td>Hash of external contract code</td></tr>
+</tbody></table>
+</div>
+<h2 id="object-and-data-operations"><a class="header" href="#object-and-data-operations">Object and Data Operations</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>datasize</code></td><td>Intrinsic <code>llvm.evm.datasize</code></td><td>Size of a named data object</td></tr>
+<tr><td><code>dataoffset</code></td><td>Intrinsic <code>llvm.evm.dataoffset</code></td><td>Offset of a named data object</td></tr>
+<tr><td><code>datacopy</code></td><td>Same as <code>codecopy</code></td><td>Copy data to memory</td></tr>
+</tbody></table>
+</div>
+<p>These builtins are used by deploy stubs to reference embedded runtime and dependency objects. See <a href="internals/./05-binary-layout.html#datasize--dataoffset-builtins">Binary Layout</a> for details.</p>
+<h2 id="event-logging"><a class="header" href="#event-logging">Event Logging</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>log0</code></td><td>Intrinsic <code>llvm.evm.log0</code></td><td>Log with 0 topics</td></tr>
+<tr><td><code>log1</code></td><td>Intrinsic <code>llvm.evm.log1</code></td><td>Log with 1 topic</td></tr>
+<tr><td><code>log2</code></td><td>Intrinsic <code>llvm.evm.log2</code></td><td>Log with 2 topics</td></tr>
+<tr><td><code>log3</code></td><td>Intrinsic <code>llvm.evm.log3</code></td><td>Log with 3 topics</td></tr>
+<tr><td><code>log4</code></td><td>Intrinsic <code>llvm.evm.log4</code></td><td>Log with 4 topics</td></tr>
+</tbody></table>
+</div>
+<h2 id="contract-calls"><a class="header" href="#contract-calls">Contract Calls</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>call</code></td><td>Intrinsic <code>llvm.evm.call</code></td><td>Call with value transfer</td></tr>
+<tr><td><code>delegatecall</code></td><td>Intrinsic <code>llvm.evm.delegatecall</code></td><td>Call preserving caller and callvalue</td></tr>
+<tr><td><code>staticcall</code></td><td>Intrinsic <code>llvm.evm.staticcall</code></td><td>Read-only call</td></tr>
+</tbody></table>
+</div>
+<p>Note: <code>callcode</code> is rejected at compile time. Use <code>delegatecall</code> instead.</p>
+<h2 id="contract-creation"><a class="header" href="#contract-creation">Contract Creation</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>create</code></td><td>Intrinsic <code>llvm.evm.create</code></td><td>Create new contract</td></tr>
+<tr><td><code>create2</code></td><td>Intrinsic <code>llvm.evm.create2</code></td><td>Create at deterministic address</td></tr>
+</tbody></table>
+</div>
+<h2 id="control-flow-1"><a class="header" href="#control-flow-1">Control Flow</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>return</code></td><td>Intrinsic <code>llvm.evm.return</code></td><td>Return data from execution</td></tr>
+<tr><td><code>revert</code></td><td>Intrinsic <code>llvm.evm.revert</code></td><td>Revert with return data</td></tr>
+<tr><td><code>stop</code></td><td>Intrinsic <code>llvm.evm.stop</code></td><td>Stop execution</td></tr>
+<tr><td><code>invalid</code></td><td>Intrinsic <code>llvm.evm.invalid</code></td><td>Invalid instruction (consumes all gas)</td></tr>
+</tbody></table>
+</div>
+<p>Note: <code>selfdestruct</code> is rejected at compile time (deprecated by EIP-6049).</p>
+<h2 id="block-and-transaction-context"><a class="header" href="#block-and-transaction-context">Block and Transaction Context</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>address</code></td><td>Intrinsic <code>llvm.evm.address</code></td><td>Current contract address</td></tr>
+<tr><td><code>caller</code></td><td>Intrinsic <code>llvm.evm.caller</code></td><td>Message sender</td></tr>
+<tr><td><code>callvalue</code></td><td>Intrinsic <code>llvm.evm.callvalue</code></td><td>Wei sent with call</td></tr>
+<tr><td><code>gas</code></td><td>Intrinsic <code>llvm.evm.gas</code></td><td>Remaining gas</td></tr>
+<tr><td><code>gasprice</code></td><td>Intrinsic <code>llvm.evm.gasprice</code></td><td>Gas price of transaction</td></tr>
+<tr><td><code>balance</code></td><td>Intrinsic <code>llvm.evm.balance</code></td><td>Balance of address</td></tr>
+<tr><td><code>selfbalance</code></td><td>Intrinsic <code>llvm.evm.selfbalance</code></td><td>Current contract balance</td></tr>
+<tr><td><code>origin</code></td><td>Intrinsic <code>llvm.evm.origin</code></td><td>Transaction sender</td></tr>
+</tbody></table>
+</div>
+<h2 id="block-information"><a class="header" href="#block-information">Block Information</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>blockhash</code></td><td>Intrinsic <code>llvm.evm.blockhash</code></td><td>Hash of given block</td></tr>
+<tr><td><code>number</code></td><td>Intrinsic <code>llvm.evm.number</code></td><td>Current block number</td></tr>
+<tr><td><code>timestamp</code></td><td>Intrinsic <code>llvm.evm.timestamp</code></td><td>Block timestamp</td></tr>
+<tr><td><code>coinbase</code></td><td>Intrinsic <code>llvm.evm.coinbase</code></td><td>Block beneficiary</td></tr>
+<tr><td><code>difficulty</code></td><td>Intrinsic <code>llvm.evm.difficulty</code></td><td>Block difficulty (pre-merge)</td></tr>
+<tr><td><code>prevrandao</code></td><td>Intrinsic <code>llvm.evm.difficulty</code></td><td>Previous RANDAO value (EIP-4399, reuses difficulty)</td></tr>
+<tr><td><code>gaslimit</code></td><td>Intrinsic <code>llvm.evm.gaslimit</code></td><td>Block gas limit</td></tr>
+<tr><td><code>chainid</code></td><td>Intrinsic <code>llvm.evm.chainid</code></td><td>Chain ID (EIP-1344)</td></tr>
+<tr><td><code>basefee</code></td><td>Intrinsic <code>llvm.evm.basefee</code></td><td>Base fee per gas (EIP-1559)</td></tr>
+<tr><td><code>blobhash</code></td><td>Rejected at compile time</td><td>Versioned hash of transaction's i-th blob (EIP-4844)</td></tr>
+<tr><td><code>blobbasefee</code></td><td>Rejected at compile time</td><td>Current block's blob base fee (EIP-7516/EIP-4844)</td></tr>
+</tbody></table>
+</div>
+<p>Note: <code>blobhash</code> and <code>blobbasefee</code> are not yet supported and will produce a compile error.</p>
+<h2 id="special-and-meta"><a class="header" href="#special-and-meta">Special and Meta</a></h2>
+<div class="table-wrapper"><table><thead><tr><th>Builtin</th><th>Lowering</th><th>Notes</th></tr></thead><tbody>
+<tr><td><code>pop</code></td><td>Optimized away</td><td>No code generated</td></tr>
+<tr><td><code>linkersymbol</code></td><td>Intrinsic <code>llvm.evm.linkersymbol</code></td><td>Library linker placeholder</td></tr>
+<tr><td><code>memoryguard</code></td><td>Special</td><td>Reserves a memory region; used by solx to configure the spill area for stack-too-deep mitigation</td></tr>
+</tbody></table>
+</div><div style="break-before: page; page-break-before: always;"></div><h1 id="binary-layout-and-linking"><a class="header" href="#binary-layout-and-linking">Binary Layout and Linking</a></h1>
+<p>This chapter describes how <strong>solx</strong> models deploy/runtime bytecode objects, dependency data, and post-compilation linking.</p>
+<h2 id="contract-object-model"><a class="header" href="#contract-object-model">Contract Object Model</a></h2>
+<p>EVM contracts have two code segments:</p>
+<ul>
+<li><strong>Deploy code (init code)</strong>: runs only during contract creation.</li>
+<li><strong>Runtime code</strong>: returned by deploy code and stored as the contract's permanent code.</li>
+</ul>
+<p>Deploy code typically builds runtime bytes in memory and executes <code>RETURN(offset, size)</code>.</p>
+<h2 id="solc-json-assembly-layout"><a class="header" href="#solc-json-assembly-layout"><code>solc</code> JSON Assembly Layout</a></h2>
+<p>In legacy assembly JSON, the object is split into top-level deploy code and nested runtime code:</p>
+<ul>
+<li>Top-level <code>.code</code>: deploy instruction stream.</li>
+<li><code>.data["0"]</code>: runtime object.</li>
+<li><code>.data[&lt;hex&gt;]</code>: additional referenced data objects (for example constructor-time dependencies).</li>
+</ul>
+<p>Conceptually:</p>
+<pre><code class="language-json">{
+  ".code": [ /* deploy instructions */ ],
+  ".data": {
+    "0": { /* runtime assembly object */ },
+    "ab12...": { /* dependency object or hash */ }
+  }
+}
+</code></pre>
+<p>The EVM assembly layer exposes this as <code>Assembly { code, data }</code>, with <code>runtime_code()</code> reading <code>data["0"]</code>.</p>
+<h2 id="dependencies-and-create--create2"><a class="header" href="#dependencies-and-create--create2">Dependencies and <code>CREATE</code> / <code>CREATE2</code></a></h2>
+<p>Factory-style deploy code can reference other contract objects. In assembly, this is represented via data entries and push-style aliases:</p>
+<ul>
+<li><code>PUSH [$]</code> (<code>PUSH_DataOffset</code>) for object offset</li>
+<li><code>PUSH #[$]</code> (<code>PUSH_DataSize</code>) for object size</li>
+<li><code>PUSH data</code> (<code>PUSH_Data</code>) for raw dependency chunks</li>
+</ul>
+<p>These operands are resolved during assembly preprocessing before LLVM lowering.</p>
+<h2 id="deploy-stub-shape"><a class="header" href="#deploy-stub-shape">Deploy Stub Shape</a></h2>
+<p>The minimal deploy stub pattern is:</p>
+<ol>
+<li>Load runtime size (<code>datasize</code>).</li>
+<li>Load runtime offset (<code>dataoffset</code>).</li>
+<li>Copy bytes from code section to memory.</li>
+<li>Return copied bytes.</li>
+</ol>
+<p>The EVM codegen emits this canonical form in <code>minimal_deploy_code()</code> using:</p>
+<ul>
+<li><code>llvm.evm.datasize(metadata !"...")</code></li>
+<li><code>llvm.evm.dataoffset(metadata !"...")</code></li>
+<li><code>llvm.memcpy</code> from <code>addrspace(4)</code> (code) to <code>addrspace(1)</code> (heap)</li>
+<li><code>llvm.evm.return</code></li>
+</ul>
+<h2 id="datasize--dataoffset-builtins"><a class="header" href="#datasize--dataoffset-builtins"><code>datasize</code> / <code>dataoffset</code> Builtins</a></h2>
+<p>Yul builtins <code>datasize(&lt;object&gt;)</code> and <code>dataoffset(&lt;object&gt;)</code> lower to EVM intrinsics with metadata object names.</p>
+<p>In <strong>solx</strong>, these are translated to LLVM intrinsics:</p>
+<ul>
+<li><code>llvm.evm.datasize</code></li>
+<li><code>llvm.evm.dataoffset</code></li>
+</ul>
+<p>This is how deploy stubs reference embedded runtime/dependency objects without hardcoding absolute byte offsets.</p>
+<h2 id="metadata-hash-and-cbor-tail"><a class="header" href="#metadata-hash-and-cbor-tail">Metadata Hash and CBOR Tail</a></h2>
+<p>Runtime bytecode may include CBOR metadata appended at the end.</p>
+<ul>
+<li>The payload can include compiler version info and optional metadata hash fields.</li>
+<li>Hash behavior is configurable with <code>--metadata-hash</code> (for example <code>ipfs</code>).</li>
+<li>CBOR appending can be disabled with <code>--no-cbor-metadata</code>.</li>
+</ul>
+<p>In the build pipeline, metadata bytes are appended to runtime objects before final assembly/linking.</p>
+<h2 id="library-linking"><a class="header" href="#library-linking">Library Linking</a></h2>
+<p>Library references are resolved at link time:</p>
+<ul>
+<li>The linker patches linker symbols with final addresses.</li>
+<li>If a symbol is unresolved, <strong>solx</strong> records its offsets and emits placeholders in hex output.</li>
+<li>Placeholder format follows the common pattern <code>__$&lt;keccak-256-digest&gt;$__</code>.</li>
+</ul>
+<p>Standard JSON output reports unresolved positions through <code>evm.*.linkReferences</code> so external tooling can link later.</p>
+<h2 id="dependency-resolution-and-path-aliasing"><a class="header" href="#dependency-resolution-and-path-aliasing">Dependency Resolution and Path Aliasing</a></h2>
+<p>The assembly preprocessor performs a normalization pass over all contracts before lowering:</p>
+<ol>
+<li>Hash deploy and runtime sub-objects.</li>
+<li>Build <code>hash -&gt; full contract path</code> mapping.</li>
+<li>Rewrite <code>.data</code> entries from embedded objects to stable path references (<code>Data::Path</code>).</li>
+<li>Build index mappings for deploy and runtime dependency tables.</li>
+<li>Replace instruction aliases (<code>PUSH_DataOffset</code>, <code>PUSH_DataSize</code>, <code>PUSH_Data</code>) with resolved identifiers.</li>
+</ol>
+<p>Two details are important:</p>
+<ul>
+<li>Entry <code>"0"</code> is always treated as runtime code and mapped to <code>&lt;contract&gt;.runtime</code>.</li>
+<li>Hex indices are normalized to 32-byte (64 hex char) aliases before lookup, so short keys and padded keys resolve consistently.</li>
+</ul>
+<p>This path aliasing step gives deterministic dependency identifiers for later object assembly and linking.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="testing"><a class="header" href="#testing">Testing</a></h1>
+<p>This page describes how to run tests for the <strong>solx</strong> compiler and the format of test files.</p>
+<h2 id="unit-and-cli-tests"><a class="header" href="#unit-and-cli-tests">Unit and CLI Tests</a></h2>
+<p>Run the standard Rust test suite:</p>
+<pre><code class="language-shell"># Run all tests (unit + CLI)
+cargo test
+
+# Run only unit tests
+cargo test --lib
+
+# Run only CLI/integration tests
+cargo test --test cli
+
+# Run a specific test
+cargo test --test cli -- cli::bin::default
+</code></pre>
+<h2 id="integration-tests"><a class="header" href="#integration-tests">Integration Tests</a></h2>
+<p>The <strong>solx-tester</strong> tool runs integration tests by compiling contracts and executing them with <a href="https://github.com/bluealloy/revm">revm</a>.</p>
+<pre><code class="language-shell"># Build the compiler and tester
+cargo build --release
+
+# Run all integration tests
+./target/release/solx-tester --solidity-compiler ./target/release/solx
+
+# Run tests for a specific file
+./target/release/solx-tester --solidity-compiler ./target/release/solx --path tests/solidity/simple/default.sol
+
+# Run only Yul IR pipeline tests (excludes EVMLA pipeline)
+./target/release/solx-tester --solidity-compiler ./target/release/solx --via-ir
+
+# Run tests with specific optimizer settings
+./target/release/solx-tester --solidity-compiler ./target/release/solx --optimizer M3B3
+
+# Combine filters: Yul IR pipeline with M3B3 optimizer
+./target/release/solx-tester --solidity-compiler ./target/release/solx --via-ir --optimizer M3B3
+</code></pre>
+<h3 id="filtering-options"><a class="header" href="#filtering-options">Filtering Options</a></h3>
+<ul>
+<li><code>--via-ir</code> — Run only tests using the Yul IR pipeline (codegen <code>Y</code>). Without this flag, both Yul IR and EVMLA pipelines are tested.</li>
+<li><code>--optimizer &lt;PATTERN&gt;</code> — Filter by optimizer settings. Examples:
+<ul>
+<li><code>M3B3</code> — Match exact optimizer level</li>
+<li><code>M^B3</code> — Match M3 or Mz with B3</li>
+<li><code>M*B*</code> — Match any M and B levels</li>
+</ul>
+</li>
+<li><code>--path &lt;PATTERN&gt;</code> — Run only tests whose path contains the pattern.</li>
+</ul>
+<h2 id="foundry-and-hardhat-projects"><a class="header" href="#foundry-and-hardhat-projects">Foundry and Hardhat Projects</a></h2>
+<p>The <strong>solx-dev</strong> tool can run tests against real-world Foundry and Hardhat projects:</p>
+<pre><code class="language-shell"># Build solx-dev
+cargo build --release --bin solx-dev
+
+# Run Foundry project tests
+./target/release/solx-dev test foundry --test-config-path solx-dev/foundry-tests.toml
+
+# Run Hardhat project tests
+./target/release/solx-dev test hardhat --test-config-path solx-dev/hardhat-tests.toml
+</code></pre>
+<p>The test configurations list projects that are cloned and tested automatically. See <a href="https://github.com/NomicFoundation/solx/blob/main/solx-dev/foundry-tests.toml">foundry-tests.toml</a> and <a href="https://github.com/NomicFoundation/solx/blob/main/solx-dev/hardhat-tests.toml">hardhat-tests.toml</a> for the full list of tested projects.</p>
+<h2 id="test-collection"><a class="header" href="#test-collection">Test Collection</a></h2>
+<p>This section describes the format of test files used by <strong>solx-tester</strong>.</p>
+<h3 id="test-types"><a class="header" href="#test-types">Test Types</a></h3>
+<p>The repository contains three types of tests:</p>
+<ul>
+<li><strong>Upstream</strong> — Tests following the <a href="https://github.com/NomicFoundation/solx-solidity/tree/0.8.34/test/libsolidity/semanticTests">Solidity semantic test format</a>.</li>
+<li><strong>Simple</strong> — Single-contract tests.</li>
+<li><strong>Complex</strong> — Multi-contract tests and vendored DeFi projects.</li>
+</ul>
+<p>Test data is located in:</p>
+<ul>
+<li><code>tests/solidity/</code> — Solidity test contracts</li>
+<li><code>tests/yul/</code> — Yul test contracts</li>
+<li><code>tests/llvm-ir/</code> — LLVM IR test contracts</li>
+</ul>
+<h3 id="test-format"><a class="header" href="#test-format">Test Format</a></h3>
+<p>Each test comprises source code files and metadata.
+Simple tests have only one source file, and their metadata is written in comments that start with <code>!</code>, for example, <code>//!</code> for Solidity.
+Complex tests use a <code>test.json</code> file to describe their metadata and refer to source code files.</p>
+<h3 id="metadata"><a class="header" href="#metadata">Metadata</a></h3>
+<p>Metadata is a JSON object that contains the following fields:</p>
+<ul>
+<li><code>cases</code> — An array of test cases (described below).</li>
+<li><code>contracts</code> — Used for complex tests to describe the contract instances to deploy. In simple tests, only one <code>Test</code> contract instance is deployed.</li>
+</ul>
+<pre><code class="language-json">"contracts": {
+    "Main": "main.sol:Main",
+    "Callable": "callable.sol:Callable"
+}
+</code></pre>
+<ul>
+<li><code>libraries</code> — An optional field that specifies library addresses for linker:</li>
+</ul>
+<pre><code class="language-json">"libraries": {
+    "libraries/UQ112x112.sol": { "UQ112x112": "UQ112x112" },
+    "libraries/Math.sol": { "Math": "Math" }
+}
+</code></pre>
+<ul>
+<li><code>ignore</code> — An optional flag that disables a test.</li>
+<li><code>modes</code> — An optional field that specifies mode filters. <code>Y</code> stands for Yul pipeline, <code>E</code> for EVM assembly pipeline. Compiler versions can be specified as SemVer ranges:</li>
+</ul>
+<pre><code class="language-json">"modes": [
+    "Y",
+    "E",
+    "E &gt;=0.8.30"
+]
+</code></pre>
+<ul>
+<li><code>group</code> — An optional string field that specifies a test group for benchmarking.</li>
+</ul>
+<h3 id="test-cases"><a class="header" href="#test-cases">Test Cases</a></h3>
+<p>All test cases are executed in a clean context, making them independent of each other.</p>
+<p>Each test case contains the following fields:</p>
+<ul>
+<li><code>name</code> — A string name.</li>
+<li><code>comment</code> — An optional string comment.</li>
+<li><code>inputs</code> — An array of inputs (described below).</li>
+<li><code>expected</code> — The expected return data for the last input.</li>
+<li><code>ignore</code>, <code>modes</code> — Same as in test metadata.</li>
+</ul>
+<h3 id="inputs"><a class="header" href="#inputs">Inputs</a></h3>
+<p>Inputs specify the contract calls in the test case:</p>
+<ul>
+<li><code>comment</code> — An optional string comment.</li>
+<li><code>instance</code> — The contract instance to call. Default: <code>Test</code>.</li>
+<li><code>caller</code> — The caller address. Default: <code>0xdeadbeef01000000000000000000000000000000</code>.</li>
+<li><code>method</code> — The method to call:
+<ol>
+<li><code>#deployer</code> for the deployer call.</li>
+<li><code>#fallback</code> to perform a call with raw calldata.</li>
+<li>Any other string is recognized as a function name. The function selector will be prepended to the calldata.</li>
+</ol>
+</li>
+<li><code>calldata</code> — The input calldata:
+<ol>
+<li>A hexadecimal string: <code>"calldata": "0x00"</code></li>
+<li>A numbers array (hex, decimal, or instance addresses). Each number is padded to 32 bytes: <code>"calldata": ["1", "2"]</code></li>
+</ol>
+</li>
+<li><code>value</code> — An optional <code>msg.value</code>, a decimal number with <code> wei</code> or <code> ETH</code> suffix.</li>
+<li><code>storage</code> — Storage values to set before the call:</li>
+</ul>
+<pre><code class="language-json">"storage": {
+    "Test.address": ["1", "2", "3", "4"]
+}
+</code></pre>
+<ul>
+<li><code>expected</code> — The expected return data:
+<ol>
+<li>An array of numbers: <code>"expected": ["1", "2"]</code></li>
+<li>Extended format with <code>return_data</code>, <code>exception</code>, and <code>events</code>:</li>
+</ol>
+</li>
+</ul>
+<pre><code class="language-json">"expected": {
+    "return_data": ["0x01"],
+    "events": [
+        {
+            "topics": [
+                "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+            ],
+            "values": ["0xff"]
+        }
+    ],
+    "exception": false
+}
+</code></pre>
+<p>The <code>expected</code> field can be an array of objects if different expected data is needed for different compiler versions. Use <code>compiler_version</code> as a SemVer range in extended expected format.</p>
+<p>Notes:</p>
+<ul>
+<li><code>InstanceName.address</code> can be used in expected, calldata, and storage fields to insert a contract instance address.</li>
+<li>If a deployer call is not specified for an instance, it will be generated automatically with empty calldata.</li>
+</ul>
+<h3 id="upstream-solidity-semantic-tests"><a class="header" href="#upstream-solidity-semantic-tests">Upstream Solidity Semantic Tests</a></h3>
+<p>These tests follow the <a href="https://github.com/NomicFoundation/solx-solidity/tree/0.8.34/test/libsolidity/semanticTests">Solidity semantic test format</a>.
+Test descriptions and expected results are embedded as comments in the test file. Lines begin with <code>//</code> for Solidity files. The beginning of the test description is indicated by a comment line containing <code>----</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="debugging-and-inspecting-compiler-output"><a class="header" href="#debugging-and-inspecting-compiler-output">Debugging and Inspecting Compiler Output</a></h1>
+<p>This guide shows how to use <strong>solx</strong> debug flags to inspect intermediate representations at each compilation stage.</p>
+<h2 id="ir-dump-flags"><a class="header" href="#ir-dump-flags">IR Dump Flags</a></h2>
+<p>Each flag writes files to the output directory (<code>-o</code>):</p>
+<div class="table-wrapper"><table><thead><tr><th>Flag</th><th>Extension</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>--evmla</code></td><td><code>.evmla</code></td><td>EVM legacy assembly from solc (legacy pipeline only)</td></tr>
+<tr><td><code>--ethir</code></td><td><code>.ethir</code></td><td>EthIR (translated from EVM assembly, legacy pipeline only)</td></tr>
+<tr><td><code>--ir</code> / <code>--ir-optimized</code></td><td><code>.yul</code></td><td>Yul IR from solc</td></tr>
+<tr><td><code>--emit-llvm-ir</code></td><td><code>.unoptimized.ll</code>, <code>.optimized.ll</code></td><td>LLVM IR before and after optimization</td></tr>
+<tr><td><code>--asm</code></td><td><code>.asm</code></td><td>Final EVM assembly</td></tr>
+</tbody></table>
+</div>
+<p>The <code>--debug-info</code> and <code>--debug-info-runtime</code> flags are output selectors that print deploy and runtime debug info to stdout (or to files when <code>-o</code> is used). They are not IR dump flags.</p>
+<p>Example:</p>
+<pre><code class="language-bash">solx contract.sol -o ./debug --evmla --ethir --emit-llvm-ir --asm --overwrite
+</code></pre>
+<p>This produces one file per contract per stage in <code>./debug/</code>.</p>
+<h2 id="quick-dump-with-solx_output_dir"><a class="header" href="#quick-dump-with-solx_output_dir">Quick Dump with <code>SOLX_OUTPUT_DIR</code></a></h2>
+<p>Setting the <code>SOLX_OUTPUT_DIR</code> environment variable enables all IR dumps at once without listing individual flags:</p>
+<pre><code class="language-bash">export SOLX_OUTPUT_DIR=./ir_dumps
+solx contract.sol
+</code></pre>
+<p>This writes all applicable IR files for every contract, with automatic overwrite. Which files are produced depends on the pipeline used: the Yul pipeline dumps Yul and LLVM IR, while the legacy pipeline dumps EVMLA, EthIR, and LLVM IR.</p>
+<h2 id="benchmarking"><a class="header" href="#benchmarking">Benchmarking</a></h2>
+<p>The <code>--benchmarks</code> flag prints timing information for each pipeline stage:</p>
+<pre><code class="language-bash">solx contract.sol --benchmarks
+</code></pre>
+<p>Output includes per-contract compilation timing in milliseconds.</p>
+<h2 id="llvm-diagnostics"><a class="header" href="#llvm-diagnostics">LLVM Diagnostics</a></h2>
+<p>Two flags control LLVM-level diagnostics:</p>
+<ul>
+<li><code>--llvm-verify-each</code> — runs LLVM IR verification after every optimization pass. Useful for catching miscompilations. Silent on success; only reports errors when verification fails.</li>
+<li><code>--llvm-debug-logging</code> — enables detailed LLVM pass execution logging to stderr. Shows which passes and analyses run, with instruction counts.</li>
+</ul>
+<pre><code class="language-bash">solx contract.sol --llvm-verify-each --llvm-debug-logging
+</code></pre>
+<h2 id="llvm-options-pass-through"><a class="header" href="#llvm-options-pass-through">LLVM Options Pass-Through</a></h2>
+<p>Arbitrary LLVM backend options can be passed with <code>--llvm-options</code>:</p>
+<pre><code class="language-bash">solx contract.sol --llvm-options='-evm-metadata-size 10'
+</code></pre>
+<p>The value must be a single string following <code>=</code>. See the <a href="developer-guide/./03-llvm-options.html">LLVM Options</a> guide for available options, including EVM backend options and standard LLVM diagnostic options like <code>-time-passes</code> and <code>-stats</code>.</p>
+<h2 id="optimization-levels"><a class="header" href="#optimization-levels">Optimization Levels</a></h2>
+<p><strong>solx</strong> maps optimization levels to LLVM pipelines:</p>
+<div class="table-wrapper"><table><thead><tr><th>Flag</th><th>Middle-end</th><th>Size level</th><th>Back-end</th></tr></thead><tbody>
+<tr><td><code>-O1</code></td><td>Less</td><td>Zero</td><td>Less</td></tr>
+<tr><td><code>-O2</code></td><td>Default</td><td>Zero</td><td>Default</td></tr>
+<tr><td><code>-O3</code> (default)</td><td>Aggressive</td><td>Zero</td><td>Aggressive</td></tr>
+<tr><td><code>-Os</code></td><td>Default</td><td>S</td><td>Aggressive</td></tr>
+<tr><td><code>-Oz</code></td><td>Default</td><td>Z</td><td>Aggressive</td></tr>
+</tbody></table>
+</div>
+<p>The default is <code>-O3</code>, optimizing for runtime performance.</p>
+<p>The optimization level can also be set with the <code>SOLX_OPTIMIZATION</code> environment variable (values: <code>1</code>, <code>2</code>, <code>3</code>, <code>s</code>, <code>z</code>).</p>
+<h2 id="size-fallback"><a class="header" href="#size-fallback">Size Fallback</a></h2>
+<p>The <code>--optimization-size-fallback</code> flag (or <code>SOLX_OPTIMIZATION_SIZE_FALLBACK</code> env var) recompiles with <code>-Oz</code> when bytecode exceeds the 24,576-byte EVM contract size limit (EIP-170). When triggered, output files include a <code>.size_fallback</code> suffix.</p>
+<h2 id="spill-area-suffix"><a class="header" href="#spill-area-suffix">Spill Area Suffix</a></h2>
+<p>When the compiler uses a memory spill region to mitigate stack-too-deep errors, output files include an <code>.o{offset}s{size}</code> suffix indicating the spill area parameters. For example: <code>MyContract.o256s1024.ethir</code>.</p>
+<h2 id="typical-debugging-workflow"><a class="header" href="#typical-debugging-workflow">Typical Debugging Workflow</a></h2>
+<ol>
+<li><strong>Reproduce</strong> the issue with a minimal Solidity file.</li>
+<li><strong>Dump all IRs</strong> using <code>SOLX_OUTPUT_DIR</code>:
+<pre><code class="language-bash">SOLX_OUTPUT_DIR=./debug solx contract.sol
+</code></pre>
+</li>
+<li><strong>Inspect stage by stage</strong>:
+<ul>
+<li>Yul pipeline: Yul → LLVM IR (unoptimized) → LLVM IR (optimized) → assembly.</li>
+<li>Legacy pipeline: EVMLA → EthIR → LLVM IR (unoptimized) → LLVM IR (optimized) → assembly.</li>
+</ul>
+</li>
+<li><strong>Narrow down</strong> which stage introduces the problem.</li>
+<li><strong>Use LLVM verification</strong> if the issue is in the optimizer:
+<pre><code class="language-bash">solx contract.sol --llvm-verify-each --emit-llvm-ir -o ./debug --overwrite
+</code></pre>
+</li>
+<li><strong>Compare with solc</strong> using the integration tester:
+<pre><code class="language-bash">cargo run --release --bin solx-tester -- \
+  --solidity-compiler ./target/release/solx \
+  --path contract.sol
+</code></pre>
+</li>
+</ol>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="llvm-options"><a class="header" href="#llvm-options">LLVM Options</a></h1>
+<p>This guide documents LLVM backend options available in <strong>solx</strong> through the <code>--llvm-options</code> flag.</p>
+<h2 id="usage-1"><a class="header" href="#usage-1">Usage</a></h2>
+<p>Pass options as a single string after <code>=</code>:</p>
+<pre><code class="language-bash">solx contract.sol --llvm-options='-option1 value1 -option2 value2'
+</code></pre>
+<h2 id="evm-backend-options"><a class="header" href="#evm-backend-options">EVM Backend Options</a></h2>
+<p>These options are specific to the custom LLVM EVM backend and affect compilation behavior directly.</p>
+<h3 id="-evm-stack-region-size-value"><a class="header" href="#-evm-stack-region-size-value"><code>-evm-stack-region-size &lt;value&gt;</code></a></h3>
+<p>Sets the stack spill region size in bytes. The compiler uses this region to spill values that cannot remain on the EVM stack (stack-too-deep mitigation). Normally set automatically based on optimizer settings. Requires <code>-evm-stack-region-offset</code> to be set as well.</p>
+<h3 id="-evm-stack-region-offset-value"><a class="header" href="#-evm-stack-region-offset-value"><code>-evm-stack-region-offset &lt;value&gt;</code></a></h3>
+<p>Sets the stack spill region memory offset. Normally set automatically to match the solc user memory offset.</p>
+<h3 id="-evm-metadata-size-value"><a class="header" href="#-evm-metadata-size-value"><code>-evm-metadata-size &lt;value&gt;</code></a></h3>
+<p>Sets the metadata size hint used by the backend for gas and code size tradeoff decisions.</p>
+<h2 id="standard-llvm-diagnostic-options"><a class="header" href="#standard-llvm-diagnostic-options">Standard LLVM Diagnostic Options</a></h2>
+<p>Standard LLVM diagnostic options can be passed through <code>--llvm-options</code> and their output is printed to stderr. Some options (such as <code>-debug</code> and <code>-debug-only</code>) require LLVM built with assertions enabled (<code>-DLLVM_ENABLE_ASSERTIONS=ON</code>). When building from source, pass <code>--enable-assertions</code> to <code>solx-dev llvm build</code>.</p>
+<h3 id="-time-passes"><a class="header" href="#-time-passes"><code>-time-passes</code></a></h3>
+<p>Print timing information for each LLVM pass.</p>
+<pre><code class="language-bash">solx contract.sol --bin --llvm-options='-time-passes'
+</code></pre>
+<h3 id="-stats"><a class="header" href="#-stats"><code>-stats</code></a></h3>
+<p>Print statistics from LLVM passes (number of transformations applied, etc.).</p>
+<h3 id="-print-after-all"><a class="header" href="#-print-after-all"><code>-print-after-all</code></a></h3>
+<p>Print LLVM IR after every optimization pass. Produces very large output (tens of thousands of lines) but useful for tracing pass behavior.</p>
+<h3 id="-print-before-all"><a class="header" href="#-print-before-all"><code>-print-before-all</code></a></h3>
+<p>Print LLVM IR before every optimization pass.</p>
+<h3 id="-debug-onlypass-name"><a class="header" href="#-debug-onlypass-name"><code>-debug-only=&lt;pass-name&gt;</code></a></h3>
+<p>Enable debug output for a specific LLVM pass. Note that <code>--llvm-debug-logging</code> controls pass-builder logging specifically, not the general LLVM <code>DEBUG()</code> macro categories.</p>
+<h2 id="cli-debug-flags"><a class="header" href="#cli-debug-flags">CLI Debug Flags</a></h2>
+<p>These are top-level <strong>solx</strong> flags (not passed through <code>--llvm-options</code>):</p>
+<div class="table-wrapper"><table><thead><tr><th>Flag</th><th>Effect</th></tr></thead><tbody>
+<tr><td><code>--llvm-verify-each</code></td><td>Run IR verifier after each LLVM pass. Silent on success; produces an error if verification fails.</td></tr>
+<tr><td><code>--llvm-debug-logging</code></td><td>Enable pass-builder debug logging. Shows which passes and analyses run, with instruction counts.</td></tr>
+</tbody></table>
+</div>
+<p>See the <a href="developer-guide/./02-debugging.html">Debugging</a> guide for the full set of diagnostic flags.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="building-with-sanitizers"><a class="header" href="#building-with-sanitizers">Building with Sanitizers</a></h1>
+<p>This is the guide on building <strong>solx</strong> with sanitizers enabled.</p>
+<h2 id="introduction"><a class="header" href="#introduction">Introduction</a></h2>
+<p>Sanitizers are tools that help find bugs in code. They are used to detect memory corruption, leaks, and undefined behavior.
+The most common sanitizers are <code>AddressSanitizer</code>, <code>MemorySanitizer</code>, and <code>ThreadSanitizer</code>.</p>
+<p>If you are not familiar with sanitizers, see the <a href="https://rustc-dev-guide.rust-lang.org/sanitizers.html">official documentation</a>.</p>
+<h3 id="who-is-this-guide-for"><a class="header" href="#who-is-this-guide-for">Who is this guide for?</a></h3>
+<p>This guide is for developers who want to debug issues with <strong>solx</strong>.</p>
+<h3 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h3>
+<ul>
+<li><a href="https://www.rust-lang.org/tools/install">Rust and Cargo</a></li>
+<li><a href="https://git-scm.com/downloads">Git</a></li>
+<li><a href="https://llvm.org/docs/GettingStarted.html">LLVM compiler</a></li>
+</ul>
+<div class="warning">
+For sanitizers build to work, the host LLVM compiler version that is used to build LLVM <b>MUST</b>
+have the same version as the LLVM compiler that is used internally by `rustc` to build **solx**.
+<p>You can check the LLVM version used by <code>rustc</code> by running the following command <code>rustc --version --verbose</code>.</p>
+</div>
+<h2 id="build-steps"><a class="header" href="#build-steps">Build steps</a></h2>
+<p>The general steps to have a sanitizer enabled build include:</p>
+<ol>
+<li>Build the LLVM framework with the required sanitizer enabled.</li>
+<li>Build <strong>solx</strong> with the LLVM build from the previous step.</li>
+</ol>
+<p>Please, follow the common <a href="developer-guide/../user-guide/01-installation.html#building-from-source">installation instructions</a>
+until the LLVM build step.</p>
+<p>This guide assumes the build with <code>AddressSanitizer</code> enabled.</p>
+<h3 id="build-llvm-with-sanitizer-enabled"><a class="header" href="#build-llvm-with-sanitizer-enabled">Build LLVM with sanitizer enabled</a></h3>
+<p>When building LLVM, use <code>--sanitizer &lt;sanitizer&gt;</code> option and set build type to <code>RelWithDebInfo</code>:</p>
+<pre><code class="language-shell">./target/release/solx-dev llvm build --sanitizer=Address --build-type=RelWithDebInfo
+</code></pre>
+<div class="warning">
+Please note that the default Apple Clang compiler is not compatible with Rust.
+You need to install LLVM using Homebrew and specify the path to the LLVM compiler in the `--extra-args` option.
+For example:
+</div>
+<pre><code class="language-shell">./target/release/solx-dev llvm build --sanitizer=Address --build-type=RelWithDebInfo --extra-args '-DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang' '-DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++'
+</code></pre>
+<h3 id="build-solx-with-the-sanitizer-enabled"><a class="header" href="#build-solx-with-the-sanitizer-enabled">Build <strong>solx</strong> with the sanitizer enabled</a></h3>
+<p>To build <strong>solx</strong> with the sanitizer enabled, you need to set the <code>RUSTFLAGS</code> environment variable
+to <code>-Z sanitizer=address</code> and run the <code>cargo build</code> command.
+Sanitizers build is a feature that is available only for the nightly Rust compiler, it is recommended
+to set <code>RUSTC_BOOTSTRAP=1</code> environment variable before the build.</p>
+<p>It is also mandatory to use <code>--target</code> option to specify the target architecture. Otherwise, the build will fail.
+Please, check the table below to find the correct target for your platform.</p>
+<div class="table-wrapper"><table><thead><tr><th>Platform</th><th>LLVM Target Triple</th></tr></thead><tbody>
+<tr><td>MacOS-arm64</td><td><code>aarch64-apple-darwin</code></td></tr>
+<tr><td>MacOS-x86</td><td><code>x86_64-apple-darwin</code></td></tr>
+<tr><td>Linux-arm64</td><td><code>aarch64-unknown-linux-gnu</code></td></tr>
+<tr><td>Linux-x86</td><td><code>x86_64-unknown-linux-gnu</code></td></tr>
+</tbody></table>
+</div>
+<p>Additionally, for proper reports symbolization it is recommended to set the <code>ASAN_SYMBOLIZER_PATH</code> environment variable.
+For more info, see <a href="https://clang.llvm.org/docs/AddressSanitizer.html#id4">symbolizing reports</a> section of LLVM documentation.</p>
+<p>For example, to build <strong>solx</strong> for MacOS-arm64 with <code>AddressSanitizer</code> enabled, run the following command:</p>
+<pre><code class="language-shell">export RUSTC_BOOTSTRAP=1
+export ASAN_SYMBOLIZER_PATH=$(which llvm-symbolizer) # check the path to llvm-symbolizer
+TARGET=aarch64-apple-darwin # Change to your target
+RUSTFLAGS="-Z sanitizer=address" cargo test --target=${TARGET}
+</code></pre>
+<p>Congratulations! You have successfully built <strong>solx</strong> with the sanitizers enabled.</p>
+<p>Please, refer to the <a href="https://rustc-dev-guide.rust-lang.org/sanitizers.html">official documentation</a>
+for more information on how to use sanitizers and their types.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="js/version-box.js"></script>
+
+        <script>
+        window.addEventListener('load', function() {
+            window.setTimeout(window.print, 100);
+        });
+        </script>
+
+    </div>
+    </body>
+</html>

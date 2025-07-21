@@ -1,0 +1,636 @@
+[
+  {
+    "contract": "test/StdAssertions.t.sol:StdAssertionsTest",
+    "deployment": {
+      "gas": 1216259,
+      "size": 6103
+    },
+    "functions": {
+      "assertEqCallExternal(address,bytes,address,bytes,bool)": {
+        "calls": 10240,
+        "min": 47254,
+        "mean": 54274,
+        "median": 52448,
+        "max": 65718
+      }
+    }
+  },
+  {
+    "contract": "test/StdAssertions.t.sol:TestMockCall",
+    "deployment": {
+      "gas": 208593,
+      "size": 1076
+    },
+    "functions": {
+      "fallback()": {
+        "calls": 40960,
+        "min": 25824,
+        "mean": 29472,
+        "median": 28128,
+        "max": 35974
+      }
+    }
+  },
+  {
+    "contract": "test/StdChains.t.sol:StdChainsMock",
+    "deployment": {
+      "gas": 3608692,
+      "size": 16297
+    },
+    "functions": {
+      "exposed_getChain(string)": {
+        "calls": 100,
+        "min": 22452,
+        "mean": 3548168,
+        "median": 5886797,
+        "max": 5888124
+      },
+      "exposed_getChain(uint256)": {
+        "calls": 80,
+        "min": 21838,
+        "mean": 4422454,
+        "median": 5888672,
+        "max": 5890636
+      },
+      "exposed_setChain(string,(string,uint256,string))": {
+        "calls": 120,
+        "min": 24123,
+        "mean": 2985506,
+        "median": 2957610,
+        "max": 5994894
+      },
+      "exposed_setFallbackToDefaultRpcUrls(bool)": {
+        "calls": 20,
+        "min": 21688,
+        "mean": 21688,
+        "median": 21688,
+        "max": 21688
+      }
+    }
+  },
+  {
+    "contract": "test/StdCheats.t.sol:Bar",
+    "deployment": {
+      "gas": 233643,
+      "size": 678
+    },
+    "functions": {
+      "balanceOf(address)": {
+        "calls": 300,
+        "min": 2551,
+        "mean": 2551,
+        "median": 2551,
+        "max": 2551
+      },
+      "bar(address)": {
+        "calls": 160,
+        "min": 21556,
+        "mean": 21610,
+        "median": 21556,
+        "max": 21772
+      },
+      "origin(address)": {
+        "calls": 60,
+        "min": 21574,
+        "mean": 21574,
+        "median": 21574,
+        "max": 21574
+      },
+      "origin(address,address)": {
+        "calls": 80,
+        "min": 21895,
+        "mean": 21895,
+        "median": 21895,
+        "max": 21895
+      },
+      "totalSupply()": {
+        "calls": 180,
+        "min": 2260,
+        "mean": 2260,
+        "median": 2260,
+        "max": 2260
+      }
+    }
+  },
+  {
+    "contract": "test/StdCheats.t.sol:BarERC1155",
+    "deployment": {
+      "gas": 157662,
+      "size": 383
+    },
+    "functions": {
+      "balanceOf(address,uint256)": {
+        "calls": 300,
+        "min": 2557,
+        "mean": 2557,
+        "median": 2557,
+        "max": 2557
+      },
+      "totalSupply(uint256)": {
+        "calls": 180,
+        "min": 2423,
+        "mean": 2423,
+        "median": 2423,
+        "max": 2423
+      }
+    }
+  },
+  {
+    "contract": "test/StdCheats.t.sol:BarERC721",
+    "deployment": {
+      "gas": 229155,
+      "size": 499
+    },
+    "functions": {
+      "balanceOf(address)": {
+        "calls": 420,
+        "min": 2499,
+        "mean": 2499,
+        "median": 2499,
+        "max": 2499
+      },
+      "ownerOf(uint256)": {
+        "calls": 200,
+        "min": 2444,
+        "mean": 2444,
+        "median": 2444,
+        "max": 2444
+      }
+    }
+  },
+  {
+    "contract": "test/StdCheats.t.sol:MockUSDC",
+    "deployment": {
+      "gas": 128311,
+      "size": 375
+    },
+    "functions": {
+      "isBlackListed(address)": {
+        "calls": 10240,
+        "min": 123,
+        "mean": 123,
+        "median": 123,
+        "max": 123
+      },
+      "isBlacklisted(address)": {
+        "calls": 15380,
+        "min": 2537,
+        "mean": 2537,
+        "median": 2537,
+        "max": 2537
+      },
+      "setBlacklisted(address,bool)": {
+        "calls": 120,
+        "min": 44131,
+        "mean": 44131,
+        "median": 44131,
+        "max": 44131
+      }
+    }
+  },
+  {
+    "contract": "test/StdCheats.t.sol:MockUSDT",
+    "deployment": {
+      "gas": 128311,
+      "size": 375
+    },
+    "functions": {
+      "isBlackListed(address)": {
+        "calls": 15380,
+        "min": 2537,
+        "mean": 2537,
+        "median": 2537,
+        "max": 2537
+      },
+      "isBlacklisted(address)": {
+        "calls": 10260,
+        "min": 123,
+        "mean": 123,
+        "median": 123,
+        "max": 123
+      },
+      "setBlacklisted(address,bool)": {
+        "calls": 120,
+        "min": 44131,
+        "mean": 44131,
+        "median": 44131,
+        "max": 44131
+      }
+    }
+  },
+  {
+    "contract": "test/StdCheats.t.sol:StdCheatsMock",
+    "deployment": {
+      "gas": 457357,
+      "size": 1897
+    },
+    "functions": {
+      "exposed_assumeNotBlacklisted(address,address)": {
+        "calls": 60,
+        "min": 3180,
+        "mean": 7478,
+        "median": 9149,
+        "max": 10106
+      },
+      "exposed_assumeNotPayable(address)": {
+        "calls": 100,
+        "min": 33037,
+        "mean": 208014852,
+        "median": 60423,
+        "max": 1039884927
+      },
+      "exposed_assumePayable(address)": {
+        "calls": 100,
+        "min": 33065,
+        "mean": 208014172,
+        "median": 60457,
+        "max": 1039881356
+      }
+    }
+  },
+  {
+    "contract": "test/StdCheats.t.sol:StdCheatsTest",
+    "deployment": {
+      "gas": 10117770,
+      "size": 50353
+    },
+    "functions": {
+      "_revertDeployCodeTo()": {
+        "calls": 20,
+        "min": 26363,
+        "mean": 26363,
+        "median": 26363,
+        "max": 26363
+      },
+      "deployCodeHelper(string)": {
+        "calls": 20,
+        "min": 58482,
+        "mean": 58482,
+        "median": 58482,
+        "max": 58482
+      }
+    }
+  },
+  {
+    "contract": "test/StdError.t.sol:ErrorsTest",
+    "deployment": {
+      "gas": 286297,
+      "size": 1106
+    },
+    "functions": {
+      "arithmeticError(uint256)": {
+        "calls": 20,
+        "min": 403,
+        "mean": 403,
+        "median": 403,
+        "max": 403
+      },
+      "assertionError()": {
+        "calls": 20,
+        "min": 222,
+        "mean": 222,
+        "median": 222,
+        "max": 222
+      },
+      "divError(uint256)": {
+        "calls": 20,
+        "min": 380,
+        "mean": 380,
+        "median": 380,
+        "max": 380
+      },
+      "encodeStgError()": {
+        "calls": 20,
+        "min": 43616,
+        "mean": 43616,
+        "median": 43616,
+        "max": 43616
+      },
+      "enumConversion(uint256)": {
+        "calls": 20,
+        "min": 319,
+        "mean": 319,
+        "median": 319,
+        "max": 319
+      },
+      "indexOOBError(uint256)": {
+        "calls": 20,
+        "min": 353,
+        "mean": 353,
+        "median": 353,
+        "max": 353
+      },
+      "intern()": {
+        "calls": 20,
+        "min": 21293,
+        "mean": 21293,
+        "median": 21293,
+        "max": 21293
+      },
+      "mem()": {
+        "calls": 20,
+        "min": 256,
+        "mean": 256,
+        "median": 256,
+        "max": 256
+      },
+      "modError(uint256)": {
+        "calls": 20,
+        "min": 358,
+        "mean": 358,
+        "median": 358,
+        "max": 358
+      },
+      "pop()": {
+        "calls": 20,
+        "min": 23362,
+        "mean": 23362,
+        "median": 23362,
+        "max": 23362
+      }
+    }
+  },
+  {
+    "contract": "test/StdMath.t.sol:StdMathMock",
+    "deployment": {
+      "gas": 934124,
+      "size": 3924
+    },
+    "functions": {
+      "exposed_percentDelta(int256,int256)": {
+        "calls": 20,
+        "min": 1109,
+        "mean": 1109,
+        "median": 1109,
+        "max": 1109
+      },
+      "exposed_percentDelta(uint256,uint256)": {
+        "calls": 20,
+        "min": 637,
+        "mean": 637,
+        "median": 637,
+        "max": 637
+      }
+    }
+  },
+  {
+    "contract": "test/StdStorage.t.sol:StdStorageTest",
+    "deployment": {
+      "gas": 5941894,
+      "size": 29509
+    },
+    "functions": {
+      "readNonBoolValue()": {
+        "calls": 20,
+        "min": 181163,
+        "mean": 181163,
+        "median": 181163,
+        "max": 181163
+      }
+    }
+  },
+  {
+    "contract": "test/StdStorage.t.sol:StorageTest",
+    "deployment": {
+      "gas": 864361,
+      "size": 2534
+    },
+    "functions": {
+      "basic()": {
+        "calls": 400,
+        "min": 4484,
+        "mean": 4484,
+        "median": 4484,
+        "max": 4484
+      },
+      "const()": {
+        "calls": 20,
+        "min": 243,
+        "mean": 243,
+        "median": 243,
+        "max": 243
+      },
+      "deep_map(address,address)": {
+        "calls": 160,
+        "min": 2756,
+        "mean": 2756,
+        "median": 2756,
+        "max": 2756
+      },
+      "deep_map_struct(address,address)": {
+        "calls": 400,
+        "min": 4841,
+        "mean": 4841,
+        "median": 4841,
+        "max": 4841
+      },
+      "edgeCaseArray(uint256)": {
+        "calls": 100,
+        "min": 4660,
+        "mean": 4660,
+        "median": 4660,
+        "max": 4660
+      },
+      "exists()": {
+        "calls": 220,
+        "min": 2427,
+        "mean": 2427,
+        "median": 2427,
+        "max": 2427
+      },
+      "extra_sload()": {
+        "calls": 60,
+        "min": 4614,
+        "mean": 4614,
+        "median": 4614,
+        "max": 4614
+      },
+      "getRandomPacked(uint256,uint256)": {
+        "calls": 12972691,
+        "min": 2550,
+        "mean": 2550,
+        "median": 2550,
+        "max": 2550
+      },
+      "getRandomPacked(uint8,uint8[],uint8)": {
+        "calls": 5181440,
+        "min": 3698,
+        "mean": 4271,
+        "median": 4271,
+        "max": 4844
+      },
+      "hidden()": {
+        "calls": 260,
+        "min": 2358,
+        "mean": 2358,
+        "median": 2358,
+        "max": 2358
+      },
+      "map_addr(address)": {
+        "calls": 220,
+        "min": 2627,
+        "mean": 2627,
+        "median": 2627,
+        "max": 2627
+      },
+      "map_bool(address)": {
+        "calls": 100,
+        "min": 2573,
+        "mean": 2573,
+        "median": 2573,
+        "max": 2573
+      },
+      "map_packed(address)": {
+        "calls": 100,
+        "min": 2627,
+        "mean": 2627,
+        "median": 2627,
+        "max": 2627
+      },
+      "map_struct(address)": {
+        "calls": 400,
+        "min": 4711,
+        "mean": 4711,
+        "median": 4711,
+        "max": 4711
+      },
+      "map_uint(uint256)": {
+        "calls": 160,
+        "min": 2503,
+        "mean": 2503,
+        "median": 2503,
+        "max": 2503
+      },
+      "read_struct_lower(address)": {
+        "calls": 691220,
+        "min": 2630,
+        "mean": 2630,
+        "median": 2630,
+        "max": 2630
+      },
+      "read_struct_upper(address)": {
+        "calls": 691200,
+        "min": 2608,
+        "mean": 2608,
+        "median": 2608,
+        "max": 2608
+      },
+      "setRandomPacking(uint256)": {
+        "calls": 20480,
+        "min": 23648,
+        "mean": 28692,
+        "median": 23822,
+        "max": 43931
+      },
+      "tA()": {
+        "calls": 76800,
+        "min": 2426,
+        "mean": 2426,
+        "median": 2426,
+        "max": 2426
+      },
+      "tB()": {
+        "calls": 1305660,
+        "min": 2415,
+        "mean": 2415,
+        "median": 2415,
+        "max": 2415
+      },
+      "tC()": {
+        "calls": 1305600,
+        "min": 2419,
+        "mean": 2419,
+        "median": 2419,
+        "max": 2419
+      },
+      "tD()": {
+        "calls": 76800,
+        "min": 2391,
+        "mean": 2391,
+        "median": 2391,
+        "max": 2391
+      },
+      "tE()": {
+        "calls": 120,
+        "min": 383,
+        "mean": 1716,
+        "median": 2383,
+        "max": 2383
+      },
+      "tF()": {
+        "calls": 60,
+        "min": 2382,
+        "mean": 2382,
+        "median": 2382,
+        "max": 2382
+      },
+      "tG()": {
+        "calls": 160,
+        "min": 2360,
+        "mean": 2360,
+        "median": 2360,
+        "max": 2360
+      },
+      "tH()": {
+        "calls": 60,
+        "min": 2354,
+        "mean": 2354,
+        "median": 2354,
+        "max": 2354
+      }
+    }
+  },
+  {
+    "contract": "test/StdStorage.t.sol:StorageTestTarget",
+    "deployment": {
+      "gas": 1088965,
+      "size": 4844
+    },
+    "functions": {
+      "expectRevertStorageConst()": {
+        "calls": 20,
+        "min": 96208,
+        "mean": 96208,
+        "median": 96208,
+        "max": 96208
+      }
+    }
+  },
+  {
+    "contract": "test/StdUtils.t.sol:StdUtilsMock",
+    "deployment": {
+      "gas": 884029,
+      "size": 3871
+    },
+    "functions": {
+      "exposed_bound(int256,int256,int256)": {
+        "calls": 5140,
+        "min": 468,
+        "mean": 468,
+        "median": 468,
+        "max": 468
+      },
+      "exposed_bound(uint256,uint256,uint256)": {
+        "calls": 5140,
+        "min": 446,
+        "mean": 446,
+        "median": 446,
+        "max": 446
+      },
+      "exposed_bytesToUint(bytes)": {
+        "calls": 20,
+        "min": 821,
+        "mean": 821,
+        "median": 821,
+        "max": 821
+      },
+      "exposed_getTokenBalances(address,address[])": {
+        "calls": 40,
+        "min": 25745,
+        "mean": 28534,
+        "median": 28534,
+        "max": 31324
+      }
+    }
+  }
+]
