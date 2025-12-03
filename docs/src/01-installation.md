@@ -154,16 +154,16 @@ This repository maintains intuitive and stable naming for the executables and pr
 > The builder is not the LLVM framework itself, but only a tool to build it.
 > By default, it is installed in `~/.cargo/bin/`, which is usually added to your `PATH` during the Rust installation process.
 
-5. Build the LLVM framework using the `zksync-llvm` tool.
+5. Build the LLVM framework using the `solx-llvm` tool.
   
    ```shell
    # Navigate to the root of your local copy of this repository.
    cd solx
    # Build the LLVM framework.
-   zksync-llvm build
+   solx-llvm build
    ```
   
-   For more information and available build options, run `zksync-llvm build --help`.
+   For more information and available build options, run `solx-llvm build --help`.
 
 6. Build the **solc** libraries.
 
@@ -220,25 +220,20 @@ This repository maintains intuitive and stable naming for the executables and pr
    
     The **solx** executable will appear as `./target/release/solx`, where you can run it directly or move it to another location.
 
-    If **cargo** cannot find the LLVM build artifacts, ensure that the `LLVM_SYS_191_PREFIX` environment variable is not set in your system, as it may be pointing to a location different from the one expected by **solx**.
+    If **cargo** cannot find the LLVM build artifacts, ensure that the `LLVM_SYS_211_PREFIX` environment variable is not set in your system, as it may be pointing to a location different from the one expected by **solx**.
 
 
 
 ## Tuning the LLVM build
 
-* For more information and available build options, run `zksync-llvm build --help`.
+* For more information and available build options, run `solx-llvm build --help`.
 * Use the `--use-ccache` option to speed up the build process if you have [ccache](https://ccache.dev) installed.
 * To build the Matter Labs LLVM framework using specific C and C++ compilers, pass additional arguments to [CMake](https://cmake.org/) using the `--extra-args` option:
 
   ```shell
   # Pay special attention to character escaping.
 
-  zksync-llvm build \
-    --use-ccache \
-    --extra-args \
-      '\-DCMAKE_C_COMPILER=/opt/homebrew/Cellar/llvm@18/18.1.8/bin/clang' \
-      '\-DCMAKE_BUILD_TYPE=Release' \
-      '\-DCMAKE_CXX_COMPILER=/opt/homebrew/Cellar/llvm@18/18.1.8/bin/clang++' 
+  solx-llvm build --use-ccache
   ```
 
 ### Building LLVM manually

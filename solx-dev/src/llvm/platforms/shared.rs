@@ -39,14 +39,7 @@ pub const SHARED_BUILD_OPTS: [&str; 22] = [
 /// ProgramTest.cpp:23:15: error: '__p__environ' redeclared without 'dllimport' attribute
 ///
 pub fn shared_build_opts_werror() -> Vec<String> {
-    vec![format!(
-        "-DLLVM_ENABLE_WERROR='{}'",
-        if cfg!(target_os = "windows") {
-            "Off"
-        } else {
-            "On"
-        },
-    )]
+    vec!["-DLLVM_ENABLE_WERROR='Off'".to_owned()]
 }
 
 ///
@@ -104,7 +97,7 @@ pub fn shared_build_opts_targets() -> Vec<String> {
         "-DLLVM_TARGETS_TO_BUILD=''".to_owned(),
         format!(
             "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD='{}'",
-            [Platform::EVM, Platform::EraVM]
+            [Platform::EVM]
                 .into_iter()
                 .map(|platform| platform.to_string())
                 .collect::<Vec<String>>()

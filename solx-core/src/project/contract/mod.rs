@@ -132,7 +132,7 @@ impl Contract {
                     optimizer,
                     debug_config.clone(),
                 );
-                inkwell::context::Context::install_stack_error_handler(
+                inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
                 deploy_context.set_solidity_data(solidity_data);
@@ -189,7 +189,7 @@ impl Contract {
                     optimizer.clone(),
                     debug_config.clone(),
                 );
-                inkwell::context::Context::install_stack_error_handler(
+                inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
                 runtime_context.set_solidity_data(solidity_data);
@@ -257,7 +257,7 @@ impl Contract {
                     optimizer,
                     debug_config.clone(),
                 );
-                inkwell::context::Context::install_stack_error_handler(
+                inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
                 deploy_context.set_solidity_data(solidity_data);
@@ -318,7 +318,7 @@ impl Contract {
                     optimizer.clone(),
                     debug_config.clone(),
                 );
-                inkwell::context::Context::install_stack_error_handler(
+                inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
                 runtime_context.set_solidity_data(solidity_data);
@@ -385,7 +385,7 @@ impl Contract {
                     optimizer,
                     debug_config,
                 );
-                inkwell::context::Context::install_stack_error_handler(
+                inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
                 deploy_context.set_solidity_data(solidity_data);
@@ -436,7 +436,7 @@ impl Contract {
                     optimizer,
                     debug_config.clone(),
                 );
-                inkwell::context::Context::install_stack_error_handler(
+                inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
                 runtime_context.set_solidity_data(solidity_data);
