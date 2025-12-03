@@ -616,7 +616,7 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
             name,
         )?;
         self.modify_call_site_value(arguments, call_site_value, function);
-        Ok(call_site_value.try_as_basic_value().left())
+        Ok(call_site_value.try_as_basic_value().basic())
     }
 
     fn build_invoke(

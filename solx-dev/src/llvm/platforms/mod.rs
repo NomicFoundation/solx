@@ -18,9 +18,6 @@ use std::str::FromStr;
 pub enum Platform {
     /// The EVM back end developed by Matter Labs.
     EVM,
-    /// The EraVM back end developed by Matter Labs.
-    /// TODO: remove after the migration
-    EraVM,
 }
 
 impl FromStr for Platform {
@@ -29,7 +26,6 @@ impl FromStr for Platform {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value {
             "EVM" => Ok(Self::EVM),
-            "EraVM" => Ok(Self::EraVM),
             value => Err(format!("Unsupported platform: `{value}`")),
         }
     }
@@ -39,7 +35,6 @@ impl std::fmt::Display for Platform {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::EVM => write!(f, "EVM"),
-            Self::EraVM => write!(f, "EraVM"),
         }
     }
 }
