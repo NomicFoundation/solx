@@ -298,7 +298,7 @@ jobs:
                 jq -r 'select(.key != null) | .key + "=" + (.value | tostring)'
             )
             # for COMPILER in solc solx-llvm.${{ steps.solx.outputs.short-sha }} solx-ToT solx-${{ steps.solx.outputs.latest-release }}; do
-            for COMPILER in solx-llvm.${{ steps.solx.outputs.short-sha }} solx-ToT; do
+            for COMPILER in solc solx-llvm.${{ steps.solx.outputs.short-sha }} solx-ToT; do
               for VIA_IR in true false; do
                 REPO=$(yq ".${PROJECT}.repo" "${TOML_CONFIG}")
                 if [ -d "${GITHUB_WORKSPACE}/projects/${PROJECT}" ]; then
@@ -472,267 +472,267 @@ jobs:
           path: 'benchmark/'
 
 
-  # prepare-md-tables:
-  #   if: ${{ inputs.print-markdown-tables == 'true' }}
-  #   runs-on: solx-linux-amd64
-  #   needs: test
-  #   steps:
+  prepare-md-tables:
+    if: ${{ inputs.print-markdown-tables == 'true' }}
+    runs-on: solx-linux-amd64
+    needs: test
+    steps:
 
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #       with:
-  #         repository: NomicFoundation/solx
-  #         ref: ${{ inputs.solx_candidate_branch || 'main' }}
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: NomicFoundation/solx
+          ref: ${{ inputs.solx_candidate_branch || 'main' }}
 
-  #     - name: Download reports
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         path: data
-  #         merge-multiple: 'true'
+      - name: Download reports
+        uses: actions/download-artifact@v4
+        with:
+          path: data
+          merge-multiple: 'true'
 
-  #     - name: Prepare compatibility table
-  #       run: |
-  #         echo "| Project     | Mode     | Compiled (solc / solx / Total)         | Passed (solc / solx / Total)           |" > report.md
-  #         echo "|-------------|----------|----------------------------------------|-----------------------------------------|" >> report.md
+      - name: Prepare compatibility table
+        run: |
+          echo "| Project     | Mode     | Compiled (solc / solx / Total)         | Passed (solc / solx / Total)           |" > report.md
+          echo "|-------------|----------|----------------------------------------|-----------------------------------------|" >> report.md
 
-  #         PROJECTS=$(yq '. as $root | keys[]' ${BENCHMARKS_TOML} | tr '\n' ' ')
-  #         for PROJECT in ${PROJECTS}; do
-  #           DISABLED=$(yq ".${PROJECT}.disabled" "${BENCHMARKS_TOML}")
-  #           if [[ "${DISABLED}" == "true" ]]; then
-  #             echo "Skipping ${PROJECT} as it is disabled"
-  #             continue
-  #           fi
-  #           for MODE in "default" "viaIR"; do
-  #             if [ "${MODE}" = "default" ]; then
-  #               JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}/build_${PROJECT}.json"
-  #               RUN_JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}/test_${PROJECT}.json"
-  #               RUN_REF_JSON="data/solc/test_${PROJECT}.json"
-  #               BUILD_REF_JSON="data/solc/build_${PROJECT}.json"
-  #             else
-  #               JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}-viaIR/build_${PROJECT}.json"
-  #               RUN_JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}-viaIR/test_${PROJECT}.json"
-  #               RUN_REF_JSON="data/solc-viaIR/test_${PROJECT}.json"
-  #               BUILD_REF_JSON="data/solc-viaIR/build_${PROJECT}.json"
-  #             fi
+          PROJECTS=$(yq '. as $root | keys[]' ${BENCHMARKS_TOML} | tr '\n' ' ')
+          for PROJECT in ${PROJECTS}; do
+            DISABLED=$(yq ".${PROJECT}.disabled" "${BENCHMARKS_TOML}")
+            if [[ "${DISABLED}" == "true" ]]; then
+              echo "Skipping ${PROJECT} as it is disabled"
+              continue
+            fi
+            for MODE in "default" "viaIR"; do
+              if [ "${MODE}" = "default" ]; then
+                JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}/build_${PROJECT}.json"
+                RUN_JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}/test_${PROJECT}.json"
+                RUN_REF_JSON="data/solc/test_${PROJECT}.json"
+                BUILD_REF_JSON="data/solc/build_${PROJECT}.json"
+              else
+                JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}-viaIR/build_${PROJECT}.json"
+                RUN_JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}-viaIR/test_${PROJECT}.json"
+                RUN_REF_JSON="data/solc-viaIR/test_${PROJECT}.json"
+                BUILD_REF_JSON="data/solc-viaIR/build_${PROJECT}.json"
+              fi
 
-  #             # --- Reference (solc) compile totals ---
-  #             REF_COMPILE_TOTAL=0
-  #             REF_COMPILE_PASSED=0
-  #             if jq empty "${BUILD_REF_JSON}" > /dev/null 2>&1 && [ -s "${BUILD_REF_JSON}" ]; then
-  #               REF_COMPILE_TOTAL=$(jq -r '.build_infos[0].source_id_to_path | length' "$BUILD_REF_JSON")
-  #               REF_FAILURES=$(jq -r '[.errors[] | select(.type == "Error")] | length' "$BUILD_REF_JSON")
-  #               REF_COMPILE_PASSED=$((REF_COMPILE_TOTAL - REF_FAILURES))
-  #             fi
+              # --- Reference (solc) compile totals ---
+              REF_COMPILE_TOTAL=0
+              REF_COMPILE_PASSED=0
+              if jq empty "${BUILD_REF_JSON}" > /dev/null 2>&1 && [ -s "${BUILD_REF_JSON}" ]; then
+                REF_COMPILE_TOTAL=$(jq -r '.build_infos[0].source_id_to_path | length' "$BUILD_REF_JSON")
+                REF_FAILURES=$(jq -r '[.errors[] | select(.type == "Error")] | length' "$BUILD_REF_JSON")
+                REF_COMPILE_PASSED=$((REF_COMPILE_TOTAL - REF_FAILURES))
+              fi
 
-  #             # --- Reference (solc) test totals ---
-  #             REF_TEST_TOTAL=0
-  #             REF_TEST_PASSED=0
-  #             if jq empty "${RUN_REF_JSON}" > /dev/null 2>&1 && [ -s "${RUN_REF_JSON}" ]; then
-  #               REF_TEST_RESULTS_JSON=$(
-  #                 jq '
-  #                   reduce to_entries[] as $contract (
-  #                     {total:0, success:0};
-  #                     reduce ($contract.value.test_results | to_entries)[] as $test (
-  #                       .;
-  #                       .total += 1 |
-  #                       .success += (if $test.value.status == "Success" then 1 else 0 end)
-  #                     )
-  #                   )' "${RUN_REF_JSON}"
-  #               )
-  #               REF_TEST_TOTAL=$(echo "${REF_TEST_RESULTS_JSON}" | jq -r '.total')
-  #               REF_TEST_PASSED=$(echo "${REF_TEST_RESULTS_JSON}" | jq -r '.success')
-  #             fi
+              # --- Reference (solc) test totals ---
+              REF_TEST_TOTAL=0
+              REF_TEST_PASSED=0
+              if jq empty "${RUN_REF_JSON}" > /dev/null 2>&1 && [ -s "${RUN_REF_JSON}" ]; then
+                REF_TEST_RESULTS_JSON=$(
+                  jq '
+                    reduce to_entries[] as $contract (
+                      {total:0, success:0};
+                      reduce ($contract.value.test_results | to_entries)[] as $test (
+                        .;
+                        .total += 1 |
+                        .success += (if $test.value.status == "Success" then 1 else 0 end)
+                      )
+                    )' "${RUN_REF_JSON}"
+                )
+                REF_TEST_TOTAL=$(echo "${REF_TEST_RESULTS_JSON}" | jq -r '.total')
+                REF_TEST_PASSED=$(echo "${REF_TEST_RESULTS_JSON}" | jq -r '.success')
+              fi
 
-  #             # --- solx compile results ---
-  #             SOLX_COMPILE_PASSED=0
-  #             if jq empty "${JSON}" > /dev/null 2>&1 && [ -s "${JSON}" ]; then
-  #               SOLX_SRC_TOTAL=$(jq -r '.build_infos[0].source_id_to_path | length' "$JSON")
-  #               SOLX_FAILURES=$(jq -r '[.errors[] | select(.type == "Error")] | length' "$JSON")
-  #               SOLX_COMPILE_PASSED=$((SOLX_SRC_TOTAL - SOLX_FAILURES))
-  #             fi
+              # --- solx compile results ---
+              SOLX_COMPILE_PASSED=0
+              if jq empty "${JSON}" > /dev/null 2>&1 && [ -s "${JSON}" ]; then
+                SOLX_SRC_TOTAL=$(jq -r '.build_infos[0].source_id_to_path | length' "$JSON")
+                SOLX_FAILURES=$(jq -r '[.errors[] | select(.type == "Error")] | length' "$JSON")
+                SOLX_COMPILE_PASSED=$((SOLX_SRC_TOTAL - SOLX_FAILURES))
+              fi
 
-  #             # --- solx test results ---
-  #             SOLX_TEST_PASSED=0
-  #             if jq empty "${RUN_JSON}" > /dev/null 2>&1 && [ -s "${RUN_JSON}" ]; then
-  #               SOLX_TEST_RESULTS_JSON=$(
-  #                 jq '
-  #                   reduce to_entries[] as $contract (
-  #                     {success:0};
-  #                     reduce ($contract.value.test_results | to_entries)[] as $test (
-  #                       .;
-  #                       .success += (if $test.value.status == "Success" then 1 else 0 end)
-  #                     )
-  #                   )' "${RUN_JSON}"
-  #               )
-  #               SOLX_TEST_PASSED=$(echo "${SOLX_TEST_RESULTS_JSON}" | jq -r '.success')
-  #             fi
+              # --- solx test results ---
+              SOLX_TEST_PASSED=0
+              if jq empty "${RUN_JSON}" > /dev/null 2>&1 && [ -s "${RUN_JSON}" ]; then
+                SOLX_TEST_RESULTS_JSON=$(
+                  jq '
+                    reduce to_entries[] as $contract (
+                      {success:0};
+                      reduce ($contract.value.test_results | to_entries)[] as $test (
+                        .;
+                        .success += (if $test.value.status == "Success" then 1 else 0 end)
+                      )
+                    )' "${RUN_JSON}"
+                )
+                SOLX_TEST_PASSED=$(echo "${SOLX_TEST_RESULTS_JSON}" | jq -r '.success')
+              fi
 
-  #             # --- Single-bar generator (10 slots, filled by solx vs solc total) ---
-  #             gen_bar() {
-  #               local passed=$1
-  #               local total=$2
+              # --- Single-bar generator (10 slots, filled by solx vs solc total) ---
+              gen_bar() {
+                local passed=$1
+                local total=$2
 
-  #               local percent=0
-  #               if (( total > 0 )); then
-  #                 percent=$(( passed * 100 / total ))
-  #               fi
-  #               # clamp to [0,100] just in case
-  #               (( percent < 0 )) && percent=0
-  #               (( percent > 100 )) && percent=100
+                local percent=0
+                if (( total > 0 )); then
+                  percent=$(( passed * 100 / total ))
+                fi
+                # clamp to [0,100] just in case
+                (( percent < 0 )) && percent=0
+                (( percent > 100 )) && percent=100
 
-  #               local filled=$(( percent / 10 ))
+                local filled=$(( percent / 10 ))
 
-  #               # Use red unless fully complete
-  #               local fill_char="🟥"
-  #               (( percent == 100 )) && fill_char="🟩"
+                # Use red unless fully complete
+                local fill_char="🟥"
+                (( percent == 100 )) && fill_char="🟩"
 
-  #               local empty_char="⬜"
-  #               local bar=""
-  #               for (( i=1; i<=10; i++ )); do
-  #                 if (( i <= filled )); then
-  #                   bar+="$fill_char"
-  #                 else
-  #                   bar+="$empty_char"
-  #                 fi
-  #               done
-  #               echo "$bar"
-  #             }
+                local empty_char="⬜"
+                local bar=""
+                for (( i=1; i<=10; i++ )); do
+                  if (( i <= filled )); then
+                    bar+="$fill_char"
+                  else
+                    bar+="$empty_char"
+                  fi
+                done
+                echo "$bar"
+              }
 
-  #             # Bars
-  #             COMPILE_BAR=$(gen_bar "$SOLX_COMPILE_PASSED" "$REF_COMPILE_TOTAL")
-  #             TEST_BAR=$(gen_bar "$SOLX_TEST_PASSED" "$REF_TEST_PASSED")
-  #             # if solc total = 0, show full green
-  #             if [ "$REF_TEST_TOTAL" -eq 0 ]; then
-  #               TEST_BAR="🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩"
-  #             fi
-  #             if [ "$REF_COMPILE_TOTAL" -eq 0 ]; then
-  #               COMPILE_BAR="🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩"
-  #             fi
+              # Bars
+              COMPILE_BAR=$(gen_bar "$SOLX_COMPILE_PASSED" "$REF_COMPILE_TOTAL")
+              TEST_BAR=$(gen_bar "$SOLX_TEST_PASSED" "$REF_TEST_PASSED")
+              # if solc total = 0, show full green
+              if [ "$REF_TEST_TOTAL" -eq 0 ]; then
+                TEST_BAR="🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩"
+              fi
+              if [ "$REF_COMPILE_TOTAL" -eq 0 ]; then
+                COMPILE_BAR="🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩"
+              fi
 
-  #             # --- Output rows ---
-  #             if [ "$MODE" = "default" ]; then
-  #               printf "| %-11s | %-8s | %-10s %4d / %4d / %4d | %-10s %4d / %4d / %4d |\n" \
-  #                 "${PROJECT}" "${MODE}" \
-  #                 "${COMPILE_BAR}" "${REF_COMPILE_PASSED}" "${SOLX_COMPILE_PASSED}" "${REF_COMPILE_TOTAL}" \
-  #                 "${TEST_BAR}"    "${REF_TEST_PASSED}"    "${SOLX_TEST_PASSED}"    "${REF_TEST_TOTAL}" >> report.md
-  #             else
-  #               printf "| %-11s | %-8s | %-10s %4d / %4d / %4d | %-10s %4d / %4d / %4d |\n" \
-  #                 "" "${MODE}" \
-  #                 "${COMPILE_BAR}" "${REF_COMPILE_PASSED}" "${SOLX_COMPILE_PASSED}" "${REF_COMPILE_TOTAL}" \
-  #                 "${TEST_BAR}"    "${REF_TEST_PASSED}"    "${SOLX_TEST_PASSED}"    "${REF_TEST_TOTAL}" >> report.md
-  #             fi
-  #           done
-  #         done
+              # --- Output rows ---
+              if [ "$MODE" = "default" ]; then
+                printf "| %-11s | %-8s | %-10s %4d / %4d / %4d | %-10s %4d / %4d / %4d |\n" \
+                  "${PROJECT}" "${MODE}" \
+                  "${COMPILE_BAR}" "${REF_COMPILE_PASSED}" "${SOLX_COMPILE_PASSED}" "${REF_COMPILE_TOTAL}" \
+                  "${TEST_BAR}"    "${REF_TEST_PASSED}"    "${SOLX_TEST_PASSED}"    "${REF_TEST_TOTAL}" >> report.md
+              else
+                printf "| %-11s | %-8s | %-10s %4d / %4d / %4d | %-10s %4d / %4d / %4d |\n" \
+                  "" "${MODE}" \
+                  "${COMPILE_BAR}" "${REF_COMPILE_PASSED}" "${SOLX_COMPILE_PASSED}" "${REF_COMPILE_TOTAL}" \
+                  "${TEST_BAR}"    "${REF_TEST_PASSED}"    "${SOLX_TEST_PASSED}"    "${REF_TEST_TOTAL}" >> report.md
+              fi
+            done
+          done
 
-  #     - name: Prepare compilation and run time table
-  #       run: |
-  #         echo "| Project     | Mode     | Compile (solx/solc/Δs/Δ%)  | Run (solx/solc/Δs/Δ%)  | Size warnings (solx/solc) |" > time_report.md
-  #         echo "|-------------|----------|----------------------------|------------------------|---------------------------|" >> time_report.md
+      - name: Prepare compilation and run time table
+        run: |
+          echo "| Project     | Mode     | Compile (solx/solc/Δs/Δ%)  | Run (solx/solc/Δs/Δ%)  | Size warnings (solx/solc) |" > time_report.md
+          echo "|-------------|----------|----------------------------|------------------------|---------------------------|" >> time_report.md
 
-  #         PROJECTS=$(yq '. as $root | keys[]' ${BENCHMARKS_TOML} | tr '\n' ' ')
-  #         for PROJECT in ${PROJECTS}; do
-  #           DISABLED=$(yq ".${PROJECT}.disabled" "${BENCHMARKS_TOML}")
-  #           if [[ "${DISABLED}" == "true" ]]; then
-  #             echo "Skipping ${PROJECT} as it is disabled"
-  #             continue
-  #           fi
-  #           # TODO: skip cicada for now as solc can't compile it
-  #           if [[ "${PROJECT}" == "cicada" ]]; then
-  #             echo "Skipping ${PROJECT} as it is not supported by solc"
-  #             continue
-  #           fi
-  #           for MODE in "default" "viaIR"; do
-  #             [ "${MODE}" = "viaIR" ] && SUFFIX="-viaIR" || SUFFIX=""
-  #             JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}${SUFFIX}/build_${PROJECT}.json"
-  #             REF_JSON="data/solc${SUFFIX}/build_${PROJECT}.json"
+          PROJECTS=$(yq '. as $root | keys[]' ${BENCHMARKS_TOML} | tr '\n' ' ')
+          for PROJECT in ${PROJECTS}; do
+            DISABLED=$(yq ".${PROJECT}.disabled" "${BENCHMARKS_TOML}")
+            if [[ "${DISABLED}" == "true" ]]; then
+              echo "Skipping ${PROJECT} as it is disabled"
+              continue
+            fi
+            # TODO: skip cicada for now as solc can't compile it
+            if [[ "${PROJECT}" == "cicada" ]]; then
+              echo "Skipping ${PROJECT} as it is not supported by solc"
+              continue
+            fi
+            for MODE in "default" "viaIR"; do
+              [ "${MODE}" = "viaIR" ] && SUFFIX="-viaIR" || SUFFIX=""
+              JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}${SUFFIX}/build_${PROJECT}.json"
+              REF_JSON="data/solc${SUFFIX}/build_${PROJECT}.json"
 
-  #             if [ ! -s "$JSON" ] || [ ! -s "$REF_JSON" ]; then
-  #               echo "No data for ${PROJECT} [$MODE]"
-  #               continue
-  #             fi
+              if [ ! -s "$JSON" ] || [ ! -s "$REF_JSON" ]; then
+                echo "No data for ${PROJECT} [$MODE]"
+                continue
+              fi
 
-  #             if ! (jq empty "${JSON}" > /dev/null 2>&1 && [ -s "${JSON}" ]); then
-  #               echo "Invalid JSON for ${PROJECT} [${MODE}]: ${JSON}"
-  #               continue
-  #             fi
+              if ! (jq empty "${JSON}" > /dev/null 2>&1 && [ -s "${JSON}" ]); then
+                echo "Invalid JSON for ${PROJECT} [${MODE}]: ${JSON}"
+                continue
+              fi
 
-  #             # Bytecode size exceeds limit
-  #             BYTECODE_WARN_SOLX=$(jq '[.errors[] | select(.errorCode == "5574" or .errorCode == "3860")] | length' "${JSON}")
-  #             BYTECODE_WARN_SOLC=$(jq '[.errors[] | select(.errorCode == "5574" or .errorCode == "3860")] | length' "${REF_JSON}")
-  #             BYTECODE_COLUMN=$(printf "%d / %d" "${BYTECODE_WARN_SOLX}" "${BYTECODE_WARN_SOLC}")
+              # Bytecode size exceeds limit
+              BYTECODE_WARN_SOLX=$(jq '[.errors[] | select(.errorCode == "5574" or .errorCode == "3860")] | length' "${JSON}")
+              BYTECODE_WARN_SOLC=$(jq '[.errors[] | select(.errorCode == "5574" or .errorCode == "3860")] | length' "${REF_JSON}")
+              BYTECODE_COLUMN=$(printf "%d / %d" "${BYTECODE_WARN_SOLX}" "${BYTECODE_WARN_SOLC}")
 
-  #             COMPILE_SOLX=$(jq -r '.compile_time // 0' "${JSON}")
-  #             COMPILE_SOLC=$(jq -r '.compile_time // 0' "${REF_JSON}")
-  #             RUN_SOLX=$(jq -r '.exec_time // 0' "${JSON}")
-  #             RUN_SOLC=$(jq -r '.exec_time // 0' "${REF_JSON}")
+              COMPILE_SOLX=$(jq -r '.compile_time // 0' "${JSON}")
+              COMPILE_SOLC=$(jq -r '.compile_time // 0' "${REF_JSON}")
+              RUN_SOLX=$(jq -r '.exec_time // 0' "${JSON}")
+              RUN_SOLC=$(jq -r '.exec_time // 0' "${REF_JSON}")
 
-  #             # Compute differences
-  #             COMPILE_DIFF=$(awk "BEGIN { printf \"%.2f\", ${COMPILE_SOLX} - ${COMPILE_SOLC} }")
-  #             COMPILE_PCT=$(awk -v solc="$COMPILE_SOLC" -v solx="$COMPILE_SOLX" 'BEGIN {
-  #               if (solc == 0)
-  #                 print "N/A";
-  #               else
-  #                 printf "%+.0f%%", ((solx - solc) / solc) * 100
-  #             }')
+              # Compute differences
+              COMPILE_DIFF=$(awk "BEGIN { printf \"%.2f\", ${COMPILE_SOLX} - ${COMPILE_SOLC} }")
+              COMPILE_PCT=$(awk -v solc="$COMPILE_SOLC" -v solx="$COMPILE_SOLX" 'BEGIN {
+                if (solc == 0)
+                  print "N/A";
+                else
+                  printf "%+.0f%%", ((solx - solc) / solc) * 100
+              }')
 
-  #             RUN_DIFF=$(awk "BEGIN { printf \"%.2f\", ${RUN_SOLX} - ${RUN_SOLC} }")
-  #             RUN_PCT=$(awk -v solc="$RUN_SOLC" -v solx="$RUN_SOLX" 'BEGIN {
-  #               if (solc == 0)
-  #                 print "N/A";
-  #               else
-  #                 printf "%+.0f%%", ((solx - solc) / solc) * 100
-  #             }')
+              RUN_DIFF=$(awk "BEGIN { printf \"%.2f\", ${RUN_SOLX} - ${RUN_SOLC} }")
+              RUN_PCT=$(awk -v solc="$RUN_SOLC" -v solx="$RUN_SOLX" 'BEGIN {
+                if (solc == 0)
+                  print "N/A";
+                else
+                  printf "%+.0f%%", ((solx - solc) / solc) * 100
+              }')
 
-  #             # Compile emoji
-  #             COMPILE_EMOJI=$(awk -v solc="$COMPILE_SOLC" -v solx="$COMPILE_SOLX" 'BEGIN {
-  #               diff = solx - solc;
-  #               pct = (solc > 0) ? (diff / solc) * 100 : 0;
-  #               if (pct > 5) print "📈";
-  #               else if (pct < -5) print "📉";
-  #               else print "➖";
-  #             }')
+              # Compile emoji
+              COMPILE_EMOJI=$(awk -v solc="$COMPILE_SOLC" -v solx="$COMPILE_SOLX" 'BEGIN {
+                diff = solx - solc;
+                pct = (solc > 0) ? (diff / solc) * 100 : 0;
+                if (pct > 5) print "📈";
+                else if (pct < -5) print "📉";
+                else print "➖";
+              }')
 
-  #             # Run emoji
-  #             RUN_EMOJI=$(awk -v solc="$RUN_SOLC" -v solx="$RUN_SOLX" 'BEGIN {
-  #               diff = solx - solc;
-  #               pct = (solc > 0) ? (diff / solc) * 100 : 0;
-  #               if (pct > 5) print "📈";
-  #               else if (pct < -5) print "📉";
-  #               else print "➖";
-  #             }')
+              # Run emoji
+              RUN_EMOJI=$(awk -v solc="$RUN_SOLC" -v solx="$RUN_SOLX" 'BEGIN {
+                diff = solx - solc;
+                pct = (solc > 0) ? (diff / solc) * 100 : 0;
+                if (pct > 5) print "📈";
+                else if (pct < -5) print "📉";
+                else print "➖";
+              }')
 
-  #             COMPILE_COLUMN=$(printf "%.2fs / %.2fs / %+0.2fs / %s %s" "$COMPILE_SOLX" "$COMPILE_SOLC" "$COMPILE_DIFF" "$COMPILE_PCT" "$COMPILE_EMOJI")
-  #             RUN_COLUMN=$(printf "%.2fs / %.2fs / %+0.2fs / %s %s" "$RUN_SOLX" "$RUN_SOLC" "$RUN_DIFF" "$RUN_PCT" "$RUN_EMOJI")
+              COMPILE_COLUMN=$(printf "%.2fs / %.2fs / %+0.2fs / %s %s" "$COMPILE_SOLX" "$COMPILE_SOLC" "$COMPILE_DIFF" "$COMPILE_PCT" "$COMPILE_EMOJI")
+              RUN_COLUMN=$(printf "%.2fs / %.2fs / %+0.2fs / %s %s" "$RUN_SOLX" "$RUN_SOLC" "$RUN_DIFF" "$RUN_PCT" "$RUN_EMOJI")
 
-  #             if [ "$MODE" = "default" ]; then
-  #               printf "| %-11s | %-8s | %-28s | %-24s | %-27s |\n" \
-  #                 "${PROJECT}" "${MODE}" "${COMPILE_COLUMN}" "${RUN_COLUMN}" "${BYTECODE_COLUMN}" >> time_report.md
-  #             else
-  #               printf "| %-11s | %-8s | %-28s | %-24s | %-27s |\n" \
-  #                 "" "${MODE}" "${COMPILE_COLUMN}" "${RUN_COLUMN}" "${BYTECODE_COLUMN}" >> time_report.md
-  #             fi
-  #           done
-  #         done
+              if [ "$MODE" = "default" ]; then
+                printf "| %-11s | %-8s | %-28s | %-24s | %-27s |\n" \
+                  "${PROJECT}" "${MODE}" "${COMPILE_COLUMN}" "${RUN_COLUMN}" "${BYTECODE_COLUMN}" >> time_report.md
+              else
+                printf "| %-11s | %-8s | %-28s | %-24s | %-27s |\n" \
+                  "" "${MODE}" "${COMPILE_COLUMN}" "${RUN_COLUMN}" "${BYTECODE_COLUMN}" >> time_report.md
+              fi
+            done
+          done
 
-  #     - name: Update job summary
-  #       run: cat report.md >> "${GITHUB_STEP_SUMMARY}"
+      - name: Update job summary
+        run: cat report.md >> "${GITHUB_STEP_SUMMARY}"
 
-  #     - name: Update job summary with time report
-  #       run: cat time_report.md >> "${GITHUB_STEP_SUMMARY}"
+      - name: Update job summary with time report
+        run: cat time_report.md >> "${GITHUB_STEP_SUMMARY}"
 
-  #     - name: Upload report
-  #       if: ${{ github.event_name == 'pull_request' }}
-  #       uses: mshick/add-pr-comment@v2
-  #       with:
-  #         message-path: report.md
-  #         message-id: 'compatibility-matrix'
+      - name: Upload report
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: mshick/add-pr-comment@v2
+        with:
+          message-path: report.md
+          message-id: 'compatibility-matrix'
 
-  #     - name: Upload time report
-  #       if: ${{ github.event_name == 'pull_request' }}
-  #       uses: mshick/add-pr-comment@v2
-  #       with:
-  #         message-path: time_report.md
-  #         message-id: 'time-report-table'
+      - name: Upload time report
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: mshick/add-pr-comment@v2
+        with:
+          message-path: time_report.md
+          message-id: 'time-report-table'
 
 
   excel-reports:
