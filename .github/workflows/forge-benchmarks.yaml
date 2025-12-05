@@ -504,15 +504,15 @@ jobs:
             fi
             for MODE in "default" "viaIR"; do
               if [ "${MODE}" = "default" ]; then
-                JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}/build_${PROJECT}.json"
-                RUN_JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}/test_${PROJECT}.json"
-                RUN_REF_JSON="tests/solc/test_${PROJECT}.json"
-                BUILD_REF_JSON="tests/solc/build_${PROJECT}.json"
+                JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}/sizes-${PROJECT}.json"
+                RUN_JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}/${PROJECT}.json"
+                RUN_REF_JSON="tests/solc/${PROJECT}.json"
+                BUILD_REF_JSON="tests/solc/sizes-${PROJECT}.json"
               else
-                JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}-viaIR/build_${PROJECT}.json"
-                RUN_JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}-viaIR/test_${PROJECT}.json"
-                RUN_REF_JSON="tests/solc-viaIR/test_${PROJECT}.json"
-                BUILD_REF_JSON="tests/solc-viaIR/build_${PROJECT}.json"
+                JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}-viaIR/sizes-${PROJECT}.json"
+                RUN_JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}-viaIR/${PROJECT}.json"
+                RUN_REF_JSON="tests/solc-viaIR/${PROJECT}.json"
+                BUILD_REF_JSON="tests/solc-viaIR/sizes-${PROJECT}.json"
               fi
 
               # --- Reference (solc) compile totals ---
@@ -643,8 +643,8 @@ jobs:
             fi
             for MODE in "default" "viaIR"; do
               [ "${MODE}" = "viaIR" ] && SUFFIX="-viaIR" || SUFFIX=""
-              JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}${SUFFIX}/build_${PROJECT}.json"
-              REF_JSON="tests/solc${SUFFIX}/build_${PROJECT}.json"
+              JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}${SUFFIX}/sizes-${PROJECT}.json"
+              REF_JSON="tests/solc${SUFFIX}/sizes-${PROJECT}.json"
 
               if [ ! -s "$JSON" ] || [ ! -s "$REF_JSON" ]; then
                 echo "No data for ${PROJECT} [$MODE]"
