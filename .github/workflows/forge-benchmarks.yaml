@@ -193,12 +193,6 @@ jobs:
         project: ${{ fromJSON(needs.prepare-projects.outputs.projects) }}
     steps:
 
-      # - name: Tmp cleanup
-      #   run: |
-      #     rm -rf /__w/solx || true
-      #     sudo rm -rf /__w/solx || true
-      #     mkdir -p /__w/solx/solx
-
       - name: Checkout
         uses: actions/checkout@v5
         with:
@@ -471,6 +465,12 @@ jobs:
           name: results
           path: 'benchmark/'
 
+      - name: Upload jsons
+        uses: actions/upload-artifact@v4
+        with:
+          name: tests
+          path: 'test/'
+
 
   prepare-md-tables:
     if: ${{ inputs.print-markdown-tables == 'true' }}
@@ -487,7 +487,7 @@ jobs:
       - name: Download reports
         uses: actions/download-artifact@v4
         with:
-          path: data
+          path: tests
           merge-multiple: 'true'
 
       - name: Prepare compatibility table
@@ -504,15 +504,15 @@ jobs:
             fi
             for MODE in "default" "viaIR"; do
               if [ "${MODE}" = "default" ]; then
-                JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}/build_${PROJECT}.json"
-                RUN_JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}/test_${PROJECT}.json"
-                RUN_REF_JSON="data/solc/test_${PROJECT}.json"
-                BUILD_REF_JSON="data/solc/build_${PROJECT}.json"
+                JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}/build_${PROJECT}.json"
+                RUN_JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}/test_${PROJECT}.json"
+                RUN_REF_JSON="tests/solc/test_${PROJECT}.json"
+                BUILD_REF_JSON="tests/solc/build_${PROJECT}.json"
               else
-                JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}-viaIR/build_${PROJECT}.json"
-                RUN_JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}-viaIR/test_${PROJECT}.json"
-                RUN_REF_JSON="data/solc-viaIR/test_${PROJECT}.json"
-                BUILD_REF_JSON="data/solc-viaIR/build_${PROJECT}.json"
+                JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}-viaIR/build_${PROJECT}.json"
+                RUN_JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}-viaIR/test_${PROJECT}.json"
+                RUN_REF_JSON="tests/solc-viaIR/test_${PROJECT}.json"
+                BUILD_REF_JSON="tests/solc-viaIR/build_${PROJECT}.json"
               fi
 
               # --- Reference (solc) compile totals ---
@@ -643,8 +643,8 @@ jobs:
             fi
             for MODE in "default" "viaIR"; do
               [ "${MODE}" = "viaIR" ] && SUFFIX="-viaIR" || SUFFIX=""
-              JSON="data/solx-llvm.${{ needs.test.outputs.short-sha }}${SUFFIX}/build_${PROJECT}.json"
-              REF_JSON="data/solc${SUFFIX}/build_${PROJECT}.json"
+              JSON="tests/solx-llvm.${{ needs.test.outputs.short-sha }}${SUFFIX}/build_${PROJECT}.json"
+              REF_JSON="tests/solc${SUFFIX}/build_${PROJECT}.json"
 
               if [ ! -s "$JSON" ] || [ ! -s "$REF_JSON" ]; then
                 echo "No data for ${PROJECT} [$MODE]"

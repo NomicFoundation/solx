@@ -128,12 +128,6 @@ jobs:
         project: ${{ fromJSON(needs.prepare-projects.outputs.projects) }}
     steps:
 
-      # - name: Tmp cleanup
-      #   run: |
-      #     rm -rf /__w/solx || true
-      #     sudo rm -rf /__w/solx || true
-      #     mkdir -p /__w/solx/solx
-
       - name: Checkout
         uses: actions/checkout@v5
         with:
