@@ -1,5 +1,5 @@
 //!
-//! The `solx` tester workflows.
+//! `solx` tester workflows.
 //!
 
 use std::str::FromStr;

@@ -1,9 +1,9 @@
 //!
-//! The `solx` tester summary element passed outcome variant.
+//! `solx` tester summary element passed outcome variant.
 //!
 
 ///
-/// The `solx` tester summary element passed outcome variant.
+/// `solx` tester summary element passed outcome variant.
 ///
 #[derive(Debug)]
 pub enum PassedVariant {

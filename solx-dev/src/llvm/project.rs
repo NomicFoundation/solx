@@ -6,7 +6,7 @@
 /// The list of LLVM projects used as constants.
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum LLVMProject {
+pub enum Project {
     /// The Clang compiler.
     CLANG,
     /// LLD, the LLVM linker.
@@ -17,7 +17,7 @@ pub enum LLVMProject {
     MLIR,
 }
 
-impl std::str::FromStr for LLVMProject {
+impl std::str::FromStr for Project {
     type Err = String;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -31,7 +31,7 @@ impl std::str::FromStr for LLVMProject {
     }
 }
 
-impl std::fmt::Display for LLVMProject {
+impl std::fmt::Display for Project {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Self::CLANG => write!(f, "clang"),

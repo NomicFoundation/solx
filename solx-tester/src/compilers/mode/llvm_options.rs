@@ -1,11 +1,11 @@
 //!
-//! The `solx` tester LLVM options.
+//! `solx` tester LLVM options.
 //!
 
 use std::sync::Mutex;
 
 ///
-/// The `solx` tester LLVM options.
+/// `solx` tester LLVM options.
 ///
 #[derive(Debug, Default, Clone)]
 pub struct LLVMOptions {

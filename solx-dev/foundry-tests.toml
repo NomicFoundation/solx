@@ -1,0 +1,163 @@
+### Template ###
+# [projects.name]
+# url = "https://github.com/.../..." # mandatory: required for running `git clone`
+# description = "A brief description of the project." # mandatory: for logging only
+# requires_yarn = true # optional: whether the project requires `yarn install` before building
+# Environment variables
+# You can set environment variables for the project.
+# They will be set during the compilation and testing phases.
+#
+# [projects.name.env]
+# TEST_ENV = "123"
+# ANOTHER_ENV = "321"
+#
+# [compilers.solx]
+# path = "./target/release/solx" # mandatory: path to the compiler executable
+# description = "a super ultra cool solx compiler" # mandatory: compiler description
+
+[compilers.solc]
+path = "./temp-foundry-compilers/solc-0.8.30"
+description = "solc the latest downloaded from the official repo"
+
+[compilers.solx]
+path = "./target/release/solx"
+description = "solx built from the current commit"
+
+[projects.openzeppelin]
+url = "https://github.com/OpenZeppelin/openzeppelin-contracts"
+description = "A library for secure smart contract development."
+
+[projects.lil-web3]
+url = "https://github.com/m1guelpf/lil-web3"
+description = "lil web3 aims to build really simple, intentionally-limited versions of web3 protocols & apps."
+
+[projects.maple-erc20]
+url = "https://github.com/maple-labs/erc20"
+description = "Basic ERC-20 contract designed to be inherited and extended."
+
+[projects.diamonds]
+url = "https://github.com/Timidan/Foundry-Hardhat-Diamonds"
+description = "A minimal template for Diamonds EIP-2535."
+requires_yarn = true
+
+[projects.lido-core]
+url = "https://github.com/lidofinance/core"
+description = "Lido DAO smart contracts"
+disabled = true # written in Solidity v0.4
+
+[projects.rollcall]
+url = "https://github.com/withtally/rollcall"
+description = "A set of cross chain governance solutions."
+
+[projects.playpen]
+url = "https://github.com/ZeframLou/playpen"
+description = "A set of modern, gas optimized staking pool contracts."
+
+[projects.solmate]
+url = "https://github.com/transmissions11/solmate"
+description = "Modern, opinionated, and gas optimized building blocks for smart contract development."
+
+[projects.prb-math]
+url = "https://github.com/paulrberg/prb-math"
+description = "Solidity library for advanced fixed-point math operations."
+requires_yarn = true
+
+[projects.solady]
+url = "https://github.com/Vectorized/solady"
+description = "Gas optimized Solidity snippets."
+
+[projects.unix]
+url = "https://github.com/refcell/unix"
+description = "A lightweight, extensible foundry library for shell scripting."
+[projects.unix.env]
+EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
+
+[projects.foundry-upgrades]
+url = "https://github.com/odyslam/foundry-upgrades"
+description = "Helper smart contracts to deploy and manage upgradeable contracts."
+
+[projects.art-gobblers]
+url = "https://github.com/antonbaliasnikov/art-gobblers"
+description = "A decentralized art factory and marketplace. Fork with fixed tests."
+
+[projects.lens-core]
+url = "https://github.com/lens-protocol/core"
+description = "Lens protocol, non-custodial social graph."
+requires_yarn = true
+[projects.lens-core.env]
+EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
+
+[projects.balance-snapshot]
+url = "https://github.com/pilagod/balance-snapshot"
+description = "A Solidity library to improve balance change check in Foundry tests."
+
+[projects.diamond-foundry]
+url = "https://github.com/FydeTreasury/Diamond-Foundry"
+description = "a reference implementation for EIP-2535 Diamonds."
+[projects.diamond-foundry.env]
+EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
+
+[projects.fixed-term-loan]
+url = "https://github.com/maple-labs/fixed-term-loan"
+description = "A set of contracts to facilitate on-chain loans."
+disabled = true
+
+[projects.forge-std]
+url = "https://github.com/foundry-rs/forge-std"
+description = "Forge Standard Library is a collection of helpful contracts and libraries for use with Forge and Foundry."
+
+[projects.tokenlon]
+url = "https://github.com/consenlabs/tokenlon-contracts"
+description = "A decentralized exchange and payment settlement protocol."
+[projects.tokenlon.env]
+EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
+
+[projects.uniswap-v4]
+url = "https://github.com/Uniswap/v4-core"
+description = "A new automated market maker protocol."
+
+[projects.beefy]
+url = "https://github.com/beefyfinance/beefy-contracts"
+description = "Official url for strategies and vaults from Beefy."
+requires_yarn = true
+[projects.beefy.env]
+EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
+
+[projects.gov-of-venice]
+url = "https://github.com/pentagonxyz/gov-of-venice"
+description = "A new paradigm in DAO governance."
+
+[projects.cicada]
+url = "https://github.com/a16z/cicada"
+description = "A private on-chain voting protocol based on homomorphic time-lock puzzles."
+[projects.cicada.env]
+EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
+
+[projects.seaport]
+url = "https://github.com/ProjectOpenSea/seaport"
+description = "A marketplace protocol for safely and efficiently buying and selling NFTs."
+category = "huge"
+disabled = true # compilation hangs, required to disable fuzzing tests
+
+[projects.lens-v3]
+url = "https://github.com/lens-protocol/lens-v3"
+description = "Lens Protocol V3"
+requires_yarn = true
+[projects.lens-v3.env]
+EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
+
+[projects.morpho-blue]
+url = "https://github.com/morpho-org/morpho-blue"
+description = "Morpho Blue Protocol"
+requires_yarn = true
+
+[projects.aave-v3]
+url = "https://github.com/aave-dao/aave-v3-origin"
+description = "A non-custodial liquidity protocol on Ethereum."
+requires_yarn = true
+[projects.aave-v3.env]
+EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
+
+[projects.wtf-gas]
+url = "https://github.com/hedgar2017/WTF-gas-optimization"
+description = "WTF Solidity gas optimization techniques"

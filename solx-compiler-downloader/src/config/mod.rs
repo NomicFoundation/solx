@@ -15,8 +15,7 @@ use self::executable::Executable;
 ///
 #[derive(Debug, serde::Deserialize)]
 pub struct Config {
-    /// Compiler executables to download.
-    #[serde(rename = "binaries")]
+    /// Compiler executables to download.executables
     pub executables: BTreeMap<String, Executable>,
     /// Compiler platform directory names.
     pub platforms: Option<HashMap<String, String>>,

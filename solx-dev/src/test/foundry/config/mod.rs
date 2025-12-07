@@ -1,0 +1,37 @@
+//!
+//! `solx` Foundry config.
+//!
+
+pub mod compiler;
+pub mod project;
+
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+
+use self::compiler::Compiler;
+use self::project::Project;
+
+///
+/// `solx` Foundry config.
+///
+#[derive(Debug, serde::Deserialize)]
+pub struct Config {
+    /// List of tested rojects.
+    pub projects: BTreeMap<String, Project>,
+    /// List of downloaded compilers.
+    pub compilers: BTreeMap<String, Compiler>,
+}
+
+impl TryFrom<PathBuf> for Config {
+    type Error = anyhow::Error;
+
+    fn try_from(path: PathBuf) -> Result<Self, Self::Error> {
+        let string = std::fs::read_to_string(path.as_path()).map_err(|error| {
+            anyhow::anyhow!("Foundry test configuration file {path:?} reading: {error}")
+        })?;
+        let config: Self = toml::from_str(string.as_str()).map_err(|error| {
+            anyhow::anyhow!("Foundry test configuration file {path:?} parsing: {error}")
+        })?;
+        Ok(config)
+    }
+}

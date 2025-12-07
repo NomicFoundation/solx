@@ -31,6 +31,23 @@ pub struct Input {
     pub toolchain: String,
 }
 
+impl Input {
+    ///
+    /// Creates a new benchmark input.
+    ///
+    pub fn new<R: Into<Report>, S1: Into<String>, S2: Into<String>>(
+        report: R,
+        project: S1,
+        toolchain: S2,
+    ) -> Self {
+        Self {
+            data: report.into(),
+            project: project.into(),
+            toolchain: toolchain.into(),
+        }
+    }
+}
+
 ///
 /// Enum representing various benchmark formats from tooling.
 ///

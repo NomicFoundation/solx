@@ -24,7 +24,7 @@ use crate::compilers::yul::mode_upstream::Mode as YulUpstreamMode;
 pub enum Mode {
     /// The `solc` upstream mode.
     Solc(SolcMode),
-    /// The `solx` upstream mode.
+    /// `solx` upstream mode.
     Solx(SolxMode),
     /// The `Yul` mode.
     Yul(YulMode),

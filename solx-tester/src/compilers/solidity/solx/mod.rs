@@ -1,5 +1,5 @@
 //!
-//! The `solx` compiler.
+//! `solx` compiler.
 //!
 
 pub mod mode;
@@ -22,12 +22,12 @@ use crate::revm::input::Input as EVMInput;
 use self::mode::Mode as SolxMode;
 
 ///
-/// The `solx` compiler.
+/// `solx` compiler.
 ///
 pub struct SolidityCompiler {
     /// Path to the `solx` executable.
     pub path: PathBuf,
-    /// The `solx` compiler version.
+    /// `solx` compiler version.
     pub version: semver::Version,
 }
 

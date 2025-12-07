@@ -1,26 +1,19 @@
 //!
-//! The `solx` LLVM builder library.
+//! `solx` LLVM tools.
 //!
 
-#![allow(clippy::too_many_arguments)]
-#![allow(clippy::upper_case_acronyms)]
-
-pub(crate) mod build_type;
-pub(crate) mod ccache_variant;
-pub(crate) mod llvm_path;
-pub(crate) mod llvm_project;
-pub(crate) mod lock;
-pub(crate) mod platforms;
-pub(crate) mod sanitizer;
-pub(crate) mod utils;
+pub mod build_type;
+pub mod ccache_variant;
+pub mod path;
+pub mod platforms;
+pub mod project;
+pub mod sanitizer;
 
 pub use self::build_type::BuildType;
 pub use self::ccache_variant::CcacheVariant;
-pub use self::llvm_path::LLVMPath;
-pub use self::llvm_project::LLVMProject;
-pub use self::lock::Lock;
+pub use self::path::Path;
+pub use self::project::Project;
 pub use self::sanitizer::Sanitizer;
-pub use self::utils::exists as executable_exists;
 
 use std::collections::HashSet;
 
@@ -32,18 +25,18 @@ use std::collections::HashSet;
 ///
 pub fn build(
     build_type: BuildType,
-    llvm_projects: HashSet<llvm_project::LLVMProject>,
+    llvm_projects: HashSet<Project>,
     enable_rtti: bool,
     enable_tests: bool,
     enable_coverage: bool,
     extra_args: Vec<String>,
-    ccache_variant: Option<ccache_variant::CcacheVariant>,
+    ccache_variant: Option<CcacheVariant>,
     enable_assertions: bool,
-    sanitizer: Option<sanitizer::Sanitizer>,
+    sanitizer: Option<Sanitizer>,
     enable_valgrind: bool,
     valgrind_options: Vec<String>,
 ) -> anyhow::Result<()> {
-    std::fs::create_dir_all(LLVMPath::DIRECTORY_LLVM_TARGET)?;
+    std::fs::create_dir_all(Path::DIRECTORY_LLVM_TARGET)?;
 
     if cfg!(target_arch = "x86_64") {
         if cfg!(target_os = "linux") {

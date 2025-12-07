@@ -23,5 +23,5 @@ pub type Mode = String;
 pub struct VersionedGroup {
     #[serde(flatten)]
     /// Compiled executables associated with test runs.
-    pub executables: BTreeMap<Mode, Executable>,
+    pub executables: BTreeMap<Option<Mode>, Executable>,
 }

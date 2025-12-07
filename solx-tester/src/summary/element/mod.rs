@@ -1,5 +1,5 @@
 //!
-//! The `solx` tester summary element.
+//! `solx` tester summary element.
 //!
 
 pub mod outcome;
@@ -12,7 +12,7 @@ use self::outcome::passed_variant::PassedVariant;
 use self::outcome::Outcome;
 
 ///
-/// The `solx` tester summary element.
+/// `solx` tester summary element.
 ///
 #[derive(Debug)]
 pub struct Element {

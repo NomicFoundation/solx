@@ -1,5 +1,5 @@
 //!
-//! The `solx` LLVM builder constants.
+//! `solx` LLVM builder constants.
 //!
 
 use std::path::PathBuf;
@@ -7,9 +7,9 @@ use std::path::PathBuf;
 ///
 /// The LLVM path resolver.
 ///
-pub struct LLVMPath {}
+pub struct Path {}
 
-impl LLVMPath {
+impl Path {
     /// The LLVM source directory.
     pub const DIRECTORY_LLVM_SOURCE: &'static str = "./llvm/";
 
@@ -26,29 +26,11 @@ impl LLVMPath {
     }
 
     ///
-    /// Returns the path to the LLVM CRT build directory.
-    ///
-    pub fn llvm_build_crt() -> anyhow::Result<PathBuf> {
-        let mut path = PathBuf::from(Self::DIRECTORY_LLVM_TARGET);
-        path.push("build-crt");
-        crate::utils::absolute_path(path)
-    }
-
-    ///
     /// Returns the path to the LLVM final build directory.
     ///
     pub fn llvm_build_final() -> anyhow::Result<PathBuf> {
         let mut path = PathBuf::from(Self::DIRECTORY_LLVM_TARGET);
         path.push("build-final");
-        crate::utils::absolute_path(path)
-    }
-
-    ///
-    /// Returns the path to the LLVM CRT target directory.
-    ///
-    pub fn llvm_target_crt() -> anyhow::Result<PathBuf> {
-        let mut path = PathBuf::from(Self::DIRECTORY_LLVM_TARGET);
-        path.push("target-crt");
         crate::utils::absolute_path(path)
     }
 

@@ -46,7 +46,7 @@ fn convert() {
             }
         }
     } ] }"#;
-    let input_1 = serde_json::from_str::<solx_benchmark_converter::InputReport>(foundry_report_1)
+    let input_1 = serde_json::from_str::<solx_benchmark_converter::Input>(foundry_report_1)
         .expect("Failed to parse foundry report");
 
     let foundry_report_2 = r#"
@@ -77,7 +77,7 @@ fn convert() {
             }
         }
     } ] }"#;
-    let input_2 = serde_json::from_str::<solx_benchmark_converter::InputReport>(foundry_report_2)
+    let input_2 = serde_json::from_str::<solx_benchmark_converter::Input>(foundry_report_2)
         .expect("Failed to parse foundry report");
 
     let mut benchmark = solx_benchmark_converter::Benchmark::default();

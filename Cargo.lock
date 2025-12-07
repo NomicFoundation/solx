@@ -3804,6 +3804,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sedregex"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19411e23596093f03bbd11dc45603b6329bb4bfec77b9fd13e2b9fc9b02efe3e"
+dependencies = [
+ "regex",
+]
+
+[[package]]
 name = "semver"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4168,6 +4177,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "solx-dev"
+version = "0.1.3"
+dependencies = [
+ "anyhow",
+ "clap",
+ "colored",
+ "fs_extra",
+ "glob",
+ "itertools 0.4.19",
+ "path-slash",
+ "regex",
+ "sedregex",
+ "serde",
+ "serde_json",
+ "solx-benchmark-converter",
+ "solx-compiler-downloader",
+ "solx-standard-json",
+ "solx-utils",
+ "toml",
+]
+
+[[package]]
 name = "solx-evm-assembly"
 version = "0.1.3"
 dependencies = [
@@ -4183,19 +4214,6 @@ dependencies = [
  "solx-utils",
  "solx-yul",
  "twox-hash",
-]
-
-[[package]]
-name = "solx-llvm-builder"
-version = "0.1.3"
-dependencies = [
- "anyhow",
- "clap",
- "fs_extra",
- "path-slash",
- "regex",
- "serde",
- "toml",
 ]
 
 [[package]]
@@ -4270,6 +4288,7 @@ version = "0.1.3"
 dependencies = [
  "anyhow",
  "base58",
+ "colored",
  "hex",
  "ipfs-hasher",
  "semver 1.0.27",

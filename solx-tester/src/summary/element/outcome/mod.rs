@@ -1,5 +1,5 @@
 //!
-//! The `solx` tester summary element outcome.
+//! `solx` tester summary element outcome.
 //!
 
 pub mod passed_variant;
@@ -9,7 +9,7 @@ use crate::test::case::input::output::Output;
 use self::passed_variant::PassedVariant;
 
 ///
-/// The `solx` tester summary element outcome.
+/// `solx` tester summary element outcome.
 ///
 #[derive(Debug)]
 pub enum Outcome {

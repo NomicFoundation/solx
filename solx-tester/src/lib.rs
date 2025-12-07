@@ -1,5 +1,5 @@
 //!
-//! The `solx` tester library.
+//! `solx` tester library.
 //!
 
 #![allow(non_camel_case_types)]
@@ -53,7 +53,7 @@ pub const DEBUG_DIRECTORY: &str = "./debug/";
 type Test = (Arc<dyn Buildable>, Arc<dyn Compiler>, Mode);
 
 ///
-/// The `solx` tester.
+/// `solx` tester.
 ///
 pub struct SolxTester {
     /// The summary.

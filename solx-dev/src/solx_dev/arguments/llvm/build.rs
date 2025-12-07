@@ -1,26 +1,25 @@
 //!
-//! The `solx` LLVM builder arguments.
+//! `solx` LLVM tool arguments.
 //!
 
-use clap::Parser;
+use clap::Args;
 
 ///
-/// The `solx` LLVM builder arguments.
+/// `solx` LLVM tool arguments.
 ///
-#[derive(Parser)]
-#[command(version, about, long_about = None)]
-pub struct Arguments {
-    /// Enables verbose output, e.g. to inspect extra flags.
+#[derive(Args)]
+pub struct Build {
+    /// Enable verbose output, e.g. to inspect extra flags.
     #[arg(short, long)]
     pub verbose: bool,
 
     /// LLVM build type (`Debug`, `Release`, `RelWithDebInfo`, or `MinSizeRel`).
-    #[arg(long, default_value_t = solx_llvm_builder::BuildType::Release)]
-    pub build_type: solx_llvm_builder::BuildType,
+    #[arg(long, default_value_t = solx_dev::LLVMBuildType::Release)]
+    pub build_type: solx_dev::LLVMBuildType,
 
     /// LLVM projects to build LLVM with.
     #[arg(long)]
-    pub llvm_projects: Vec<solx_llvm_builder::LLVMProject>,
+    pub llvm_projects: Vec<solx_dev::LLVMProject>,
 
     /// Whether to build LLVM with run-time type information (RTTI) enabled.
     #[arg(long)]
@@ -41,7 +40,7 @@ pub struct Arguments {
 
     /// Whether to use compiler cache (ccache) to speed-up builds.
     #[arg(long)]
-    pub ccache_variant: Option<solx_llvm_builder::CcacheVariant>,
+    pub ccache_variant: Option<solx_dev::LLVMCcacheVariant>,
 
     /// Whether to build with assertions enabled or not.
     #[arg(long)]
@@ -49,7 +48,7 @@ pub struct Arguments {
 
     /// Build LLVM with sanitizer enabled (`Address`, `Memory`, `MemoryWithOrigins`, `Undefined`, `Thread`, `DataFlow`, or `Address;Undefined`).
     #[arg(long)]
-    pub sanitizer: Option<solx_llvm_builder::Sanitizer>,
+    pub sanitizer: Option<solx_dev::LLVMSanitizer>,
 
     /// Whether to run LLVM unit tests under valgrind or not.
     #[arg(long)]

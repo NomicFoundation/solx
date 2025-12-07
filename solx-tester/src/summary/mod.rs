@@ -1,5 +1,5 @@
 //!
-//! The `solx` tester summary.
+//! `solx` tester summary.
 //!
 
 pub mod benchmark_adapters;
@@ -20,7 +20,7 @@ use self::element::outcome::Outcome;
 use self::element::Element;
 
 ///
-/// The `solx` tester summary.
+/// `solx` tester summary.
 ///
 #[derive(Debug)]
 pub struct Summary {
@@ -131,20 +131,23 @@ impl Summary {
             let run = benchmark
                 .tests
                 .entry(test_name)
-                .or_insert(solx_benchmark_converter::Test::new(
-                    solx_benchmark_converter::TestMetadata::new(selector.clone().into(), tags),
+                .or_insert(solx_benchmark_converter::BenchmarkTest::new(
+                    solx_benchmark_converter::BenchmarkTestMetadata::new(
+                        selector.clone().into(),
+                        tags,
+                    ),
                 ))
                 .toolchain_groups
                 .entry(toolchain.to_string())
                 .or_insert(Default::default())
                 .codegen_groups
-                .entry(codegen)
+                .entry(Some(codegen))
                 .or_insert(Default::default())
                 .versioned_groups
-                .entry(version)
+                .entry(Some(version))
                 .or_insert(Default::default())
                 .executables
-                .entry(optimizations)
+                .entry(Some(optimizations))
                 .or_default();
             if let Some(deploy_size) = deploy_size {
                 run.run.size.push(deploy_size);

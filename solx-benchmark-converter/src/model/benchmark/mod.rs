@@ -28,6 +28,18 @@ pub struct Benchmark {
 
 impl Benchmark {
     ///
+    /// Creates a benchmark from multiple inputs.
+    ///
+    pub fn from_inputs<I: IntoIterator<Item = Input>>(inputs: I) -> anyhow::Result<Self> {
+        let mut benchmark = Benchmark::default();
+        for input in inputs {
+            benchmark.extend(input)?;
+        }
+        benchmark.remove_zero_deploy_gas();
+        Ok(benchmark)
+    }
+
+    ///
     /// Extend the benchmark data with a generic report.
     ///
     pub fn extend(&mut self, input: Input) -> anyhow::Result<()> {
@@ -109,10 +121,6 @@ impl Benchmark {
         project: String,
         foundry_report: FoundryGasReport,
     ) -> anyhow::Result<()> {
-        let codegen = "codegen-unknown";
-        let optimization = "optimization-unknown";
-        let compiler_version = "compiler-version-unknown";
-
         for contract_report in foundry_report.0.into_iter() {
             let selector = TestSelector {
                 project: project.clone(),
@@ -132,13 +140,13 @@ impl Benchmark {
                 .entry(toolchain.clone())
                 .or_default()
                 .codegen_groups
-                .entry(codegen.to_owned())
+                .entry(None)
                 .or_default()
                 .versioned_groups
-                .entry(compiler_version.to_owned())
+                .entry(None)
                 .or_default()
                 .executables
-                .entry(optimization.to_owned())
+                .entry(None)
                 .or_default();
             run.run.gas.push(contract_report.deployment.gas);
 
@@ -164,13 +172,13 @@ impl Benchmark {
                     .entry(toolchain.clone())
                     .or_default()
                     .codegen_groups
-                    .entry(codegen.to_owned())
+                    .entry(None)
                     .or_default()
                     .versioned_groups
-                    .entry(compiler_version.to_owned())
+                    .entry(None)
                     .or_default()
                     .executables
-                    .entry(optimization.to_owned())
+                    .entry(None)
                     .or_default();
                 run.run.gas.push(function_report.mean);
             }
@@ -188,10 +196,6 @@ impl Benchmark {
         project: String,
         foundry_report: FoundrySizeReport,
     ) -> anyhow::Result<()> {
-        let codegen = "codegen-unknown";
-        let optimization = "optimization-unknown";
-        let compiler_version = "compiler-version-unknown";
-
         for (contract_name, contract_report) in foundry_report.0.into_iter() {
             let selector = TestSelector {
                 project: project.clone(),
@@ -211,13 +215,13 @@ impl Benchmark {
                 .entry(toolchain.clone())
                 .or_default()
                 .codegen_groups
-                .entry(codegen.to_owned())
+                .entry(None)
                 .or_default()
                 .versioned_groups
-                .entry(compiler_version.to_owned())
+                .entry(None)
                 .or_default()
                 .executables
-                .entry(optimization.to_owned())
+                .entry(None)
                 .or_default();
             run.run.size.push(contract_report.init_size);
             run.run.runtime_size.push(contract_report.runtime_size);

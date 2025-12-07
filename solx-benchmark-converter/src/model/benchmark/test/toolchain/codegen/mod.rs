@@ -23,5 +23,5 @@ pub type Version = String;
 pub struct CodegenGroup {
     #[serde(flatten)]
     /// Inner groups that differ by the associated language version.
-    pub versioned_groups: BTreeMap<Version, VersionedGroup>,
+    pub versioned_groups: BTreeMap<Option<Version>, VersionedGroup>,
 }

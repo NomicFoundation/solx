@@ -24,6 +24,9 @@
 # External compilers
 /solc-bin*/
 
+# Temporary test projects
+/temp*
+
 # Debug and benchmark artifacts
 /debug/
 /*.json

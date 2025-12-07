@@ -1,5 +1,5 @@
 {
-  "binaries": {
+  "executables": {
     "0.4.12": {
       "is_enabled": false,
       "protocol": "compiler-bin-list",

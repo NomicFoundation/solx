@@ -7,7 +7,7 @@ members = [
     "solx-yul",
     "solx-codegen-evm",
     "solx-utils",
-    "solx-llvm-builder",
+    "solx-dev",
     "solx-tester",
     "solx-benchmark-converter",
     "solx-solc-test-adapter",

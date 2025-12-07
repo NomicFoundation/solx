@@ -1,5 +1,5 @@
 //!
-//! The `solx` tester Solidity mode.
+//! `solx` tester Solidity mode.
 //!
 
 use itertools::Itertools;
@@ -10,7 +10,7 @@ use crate::compilers::mode::imode::IMode;
 use crate::compilers::mode::Mode as ModeWrapper;
 
 ///
-/// The `solx` tester Solidity mode.
+/// `solx` tester Solidity mode.
 ///
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Mode {

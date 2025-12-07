@@ -1,5 +1,5 @@
 //!
-//! The `solx` tester executable.
+//! `solx` tester executable.
 //!
 
 pub(crate) mod arguments;

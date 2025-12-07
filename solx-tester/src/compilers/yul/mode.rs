@@ -1,5 +1,5 @@
 //!
-//! The `solx` tester Yul mode.
+//! `solx` tester Yul mode.
 //!
 
 use crate::compilers::mode::imode::IMode;
@@ -8,7 +8,7 @@ use crate::compilers::mode::llvm_options::LLVMOptions;
 use crate::compilers::mode::Mode as ModeWrapper;
 
 ///
-/// The `solx` tester Yul mode.
+/// `solx` tester Yul mode.
 ///
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Mode {

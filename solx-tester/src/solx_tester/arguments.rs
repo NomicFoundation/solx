@@ -1,5 +1,5 @@
 //!
-//! The `solx` tester arguments.
+//! `solx` tester arguments.
 //!
 
 use std::path::PathBuf;
@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use clap::Parser;
 
 ///
-/// The `solx` tester arguments.
+/// `solx` tester arguments.
 ///
 #[derive(Debug, Parser)]
 #[command(about, long_about = None)]

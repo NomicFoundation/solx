@@ -13,7 +13,7 @@ pub struct Metadata<'a> {
     pub solc_version: Option<semver::Version>,
     /// The LLVM `solc` revision.
     pub solc_llvm_revision: Option<semver::Version>,
-    /// The `solx` compiler version.
+    /// `solx` compiler version.
     pub solx_version: semver::Version,
     /// The LLVM compiler optimizer settings.
     pub optimizer_settings: solx_codegen_evm::OptimizerSettings,

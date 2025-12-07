@@ -34,7 +34,7 @@ fn main() -> anyhow::Result<()> {
         arguments.input_paths
     };
     for path in input_paths.into_iter() {
-        match solx_benchmark_converter::InputReport::try_from(path.as_path()) {
+        match solx_benchmark_converter::Input::try_from(path.as_path()) {
             Ok(input) => benchmark.extend(input)?,
             Err(solx_benchmark_converter::InputReportError::EmptyFile { path }) => {
                 if !arguments.quiet {

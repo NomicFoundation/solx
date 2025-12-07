@@ -138,14 +138,22 @@ impl TryFrom<(Benchmark, Source)> for Xlsx {
                 }
             }
 
-            for (toolchain_name, toolchain_group) in test.toolchain_groups.into_iter() {
+            for (mut toolchain_name, toolchain_group) in test.toolchain_groups.into_iter() {
                 for (codegen_name, codegen_group) in toolchain_group.codegen_groups.into_iter() {
                     for (version_name, version_group) in codegen_group.versioned_groups.into_iter()
                     {
                         for (optimization_name, optimization_group) in
                             version_group.executables.into_iter()
                         {
-                            let toolchain_name = format!("{toolchain_name}-{version_name}-{codegen_name}-{optimization_name}");
+                            if let Some(codegen_name) = codegen_name.as_ref() {
+                                toolchain_name = format!("{toolchain_name}-{codegen_name}");
+                            }
+                            if let Some(version_name) = version_name.as_ref() {
+                                toolchain_name = format!("{toolchain_name}-{version_name}");
+                            }
+                            if let Some(optimization_name) = optimization_name.as_ref() {
+                                toolchain_name = format!("{toolchain_name}-{optimization_name}");
+                            }
                             let toolchain_id = xlsx.get_toolchain_id(toolchain_name.as_str());
 
                             if is_deployer {

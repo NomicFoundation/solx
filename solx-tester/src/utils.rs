@@ -1,5 +1,5 @@
 //!
-//! The `solx` tester utils.
+//! `solx` tester utils.
 //!
 
 use std::path::Path;

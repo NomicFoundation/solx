@@ -1,11 +1,11 @@
 //!
-//! The `solx` tester upstream Yul mode.
+//! `solx` tester upstream Yul mode.
 //!
 
 use crate::compilers::mode::{imode::IMode, Mode as ModeWrapper};
 
 ///
-/// The `solx` tester upstream Yul mode.
+/// `solx` tester upstream Yul mode.
 ///
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Mode {

@@ -2,9 +2,9 @@
 //! The shared options for building various platforms.
 //!
 
-use crate::ccache_variant::CcacheVariant;
-use crate::platforms::Platform;
-use crate::sanitizer::Sanitizer;
+use crate::llvm::ccache_variant::CcacheVariant;
+use crate::llvm::platforms::Platform;
+use crate::llvm::sanitizer::Sanitizer;
 
 /// The build options shared by all platforms.
 pub const SHARED_BUILD_OPTS: [&str; 22] = [

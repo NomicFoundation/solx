@@ -1,5 +1,5 @@
 //!
-//! The `solx` LLVM builder platforms.
+//! `solx` LLVM builder platforms.
 //!
 
 pub mod aarch64_linux_gnu;

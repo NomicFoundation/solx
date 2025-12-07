@@ -4,18 +4,19 @@
 
 pub(crate) mod config;
 
+pub use self::config::compiler_list::CompilerList;
+pub use self::config::executable::protocol::Protocol;
+pub use self::config::Config;
+
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::PermissionsExt;
 
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 
 use colored::Colorize;
-
-use self::config::compiler_list::CompilerList;
-use self::config::executable::protocol::Protocol;
-use self::config::Config;
 
 ///
 /// The compiler downloader.
@@ -26,6 +27,19 @@ pub struct Downloader {
     http_client: reqwest::blocking::Client,
     /// The compiler-bin JSON list metadata.
     compiler_list: Option<CompilerList>,
+}
+
+impl Default for Downloader {
+    fn default() -> Self {
+        let mut http_client_builder = reqwest::blocking::ClientBuilder::new();
+        http_client_builder = http_client_builder.connect_timeout(Duration::from_secs(60));
+        http_client_builder = http_client_builder.pool_idle_timeout(Duration::from_secs(60));
+        http_client_builder = http_client_builder.timeout(Duration::from_secs(60));
+        let http_client = http_client_builder
+            .build()
+            .expect("HTTP client building error");
+        Self::new(http_client)
+    }
 }
 
 impl Downloader {

@@ -1,22 +1,22 @@
 //!
-//! The `solx` LLVM amd64 `linux-gnu` builder.
+//! `solx` LLVM arm64 `linux-gnu` builder.
 //!
 
 use std::collections::HashSet;
 use std::process::Command;
 
-use crate::build_type::BuildType;
-use crate::ccache_variant::CcacheVariant;
-use crate::llvm_path::LLVMPath;
-use crate::llvm_project::LLVMProject;
-use crate::sanitizer::Sanitizer;
+use crate::llvm::build_type::BuildType;
+use crate::llvm::ccache_variant::CcacheVariant;
+use crate::llvm::path::Path;
+use crate::llvm::project::Project;
+use crate::llvm::sanitizer::Sanitizer;
 
 ///
 /// The building sequence.
 ///
 pub fn build(
     build_type: BuildType,
-    llvm_projects: HashSet<LLVMProject>,
+    llvm_projects: HashSet<Project>,
     enable_rtti: bool,
     enable_tests: bool,
     enable_coverage: bool,
@@ -33,9 +33,9 @@ pub fn build(
     crate::utils::exists("lld")?;
     crate::utils::exists("ninja")?;
 
-    let llvm_module_llvm = LLVMPath::llvm_module_llvm()?;
-    let llvm_build_final = LLVMPath::llvm_build_final()?;
-    let llvm_target_final = LLVMPath::llvm_target_final()?;
+    let llvm_module_llvm = Path::llvm_module_llvm()?;
+    let llvm_build_final = Path::llvm_build_final()?;
+    let llvm_target_final = Path::llvm_target_final()?;
 
     crate::utils::command(
         Command::new("cmake")
@@ -65,29 +65,25 @@ pub fn build(
                 .as_str(),
                 "-DLLVM_USE_LINKER='lld'",
             ])
-            .args(crate::platforms::shared::shared_build_opts_targets())
-            .args(crate::platforms::shared::shared_build_opts_tests(
+            .args(crate::llvm::platforms::shared::shared_build_opts_targets())
+            .args(crate::llvm::platforms::shared::shared_build_opts_tests(
                 enable_tests,
             ))
-            .args(crate::platforms::shared::shared_build_opts_coverage(
+            .args(crate::llvm::platforms::shared::shared_build_opts_coverage(
                 enable_coverage,
             ))
-            .args(crate::platforms::shared::shared_build_opts_ccache(
+            .args(crate::llvm::platforms::shared::SHARED_BUILD_OPTS)
+            .args(crate::llvm::platforms::shared::shared_build_opts_werror())
+            .args(extra_args)
+            .args(crate::llvm::platforms::shared::shared_build_opts_ccache(
                 ccache_variant,
             ))
-            .args(crate::platforms::shared::SHARED_BUILD_OPTS)
-            .args(crate::platforms::shared::shared_build_opts_werror())
-            .args(extra_args)
-            .args(crate::platforms::shared::shared_build_opts_assertions(
-                enable_assertions,
-            ))
-            .args(crate::platforms::shared::shared_build_opts_rtti(
+            .args(crate::llvm::platforms::shared::shared_build_opts_assertions(enable_assertions))
+            .args(crate::llvm::platforms::shared::shared_build_opts_rtti(
                 enable_rtti,
             ))
-            .args(crate::platforms::shared::shared_build_opts_sanitizers(
-                sanitizer,
-            ))
-            .args(crate::platforms::shared::shared_build_opts_valgrind(
+            .args(crate::llvm::platforms::shared::shared_build_opts_sanitizers(sanitizer))
+            .args(crate::llvm::platforms::shared::shared_build_opts_valgrind(
                 enable_valgrind,
                 valgrind_options,
             )),

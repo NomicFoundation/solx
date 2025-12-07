@@ -1,0 +1,17 @@
+{
+  "executables": {
+    "0.8.30": {
+      "is_enabled": true,
+      "protocol": "compiler-bin-list",
+      "source": "https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/${PLATFORM}/list.json",
+      "destination": "./temp-foundry-compilers/solc-${VERSION}"
+    }
+  },
+  "platforms": {
+    "linux-amd64": "linux-amd64",
+    "linux-arm64": "linux-amd64",
+    "macos-amd64": "macosx-amd64",
+    "macos-arm64": "macosx-amd64",
+    "windows-amd64": "windows-amd64"
+  }
+}

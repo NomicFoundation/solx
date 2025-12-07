@@ -23,5 +23,5 @@ pub type Codegen = String;
 pub struct ToolchainGroup {
     #[serde(flatten)]
     /// Inner groups that differ by the associated codegen.
-    pub codegen_groups: BTreeMap<Codegen, CodegenGroup>,
+    pub codegen_groups: BTreeMap<Option<Codegen>, CodegenGroup>,
 }

@@ -1,5 +1,5 @@
 //!
-//! The `solx` tester filters.
+//! `solx` tester filters.
 //!
 
 use std::collections::HashSet;
@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use crate::compilers::mode::Mode;
 
 ///
-/// The `solx` tester filters.
+/// `solx` tester filters.
 ///
 #[derive(Debug)]
 pub struct Filters {

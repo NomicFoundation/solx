@@ -25,7 +25,7 @@ use self::source::Source;
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Output {
-    /// File-contract hashmap.
+    /// File-contract mapping.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub contracts: BTreeMap<String, BTreeMap<String, Contract>>,
     /// Source code mapping data.
