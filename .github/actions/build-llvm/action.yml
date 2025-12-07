@@ -83,7 +83,7 @@ runs:
 
     - name: Install LLVM builder
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo build --release --bin solx-dev llvm build
+      run: cargo build --release --bin solx-dev
 
     - name: Define ccache key
       if: inputs.ccache-key == ''

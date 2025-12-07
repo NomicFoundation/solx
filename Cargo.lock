@@ -4193,7 +4193,6 @@ dependencies = [
  "serde_json",
  "solx-benchmark-converter",
  "solx-compiler-downloader",
- "solx-standard-json",
  "solx-utils",
  "toml",
 ]

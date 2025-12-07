@@ -11,8 +11,8 @@ use std::collections::BTreeMap;
 pub struct Build {
     /// File-contract mapping.
     #[serde(default)]
-    pub contracts: BTreeMap<String, BTreeMap<String, solx_standard_json::OutputContract>>,
+    pub contracts: BTreeMap<String, BTreeMap<String, serde_json::Value>>,
     /// Compilation errors and warnings.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub errors: Vec<solx_standard_json::OutputError>,
+    pub errors: Vec<serde_json::Value>,
 }

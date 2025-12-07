@@ -154,7 +154,7 @@ pub fn test(
                     toolchain_name.bright_white().bold()
                 )
                 .as_str(),
-                true,
+                false,
             ) {
                 Ok(build_output) => build_output,
                 Err(_) => {
@@ -169,7 +169,12 @@ pub fn test(
                 }
             };
             for error in build_output.errors.iter() {
-                eprintln!("{}", error.formatted_message);
+                eprintln!(
+                    "{}",
+                    error["formattedMessage"]
+                        .as_str()
+                        .expect("formattedMessage is always a string")
+                );
             }
             let built_contracts_count = build_output
                 .contracts
@@ -179,7 +184,14 @@ pub fn test(
             let build_errors = build_output
                 .errors
                 .iter()
-                .filter(|error| error.severity == "error")
+                .filter(|error| {
+                    error
+                        .as_object()
+                        .expect("Always valid")
+                        .get("severity")
+                        .unwrap_or(&serde_json::Value::String("".to_string()))
+                        == "error"
+                })
                 .count();
             if build_errors > 0 || built_contracts_count == 0 {
                 eprintln!("{} Building Foundry project {} with {} failed with {build_errors} errors and {built_contracts_count} built contracts", solx_utils::cargo_status_error("Error"), project_name.bright_white().bold(), toolchain_name.bright_white().bold());
