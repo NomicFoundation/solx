@@ -23,25 +23,17 @@ pub const XCODE_VERSION_15: u32 = 15;
 pub fn command(command: &mut Command, description: &str) -> anyhow::Result<()> {
     eprintln!("{description}: {command:?}");
 
-    command.stdout(Stdio::piped());
-    command.stderr(Stdio::null());
-    let process = command
-        .spawn()
+    let status = command
+        .status()
         .unwrap_or_else(|error| panic!("{command:?} process spawning error: {error:?}"));
 
-    let result = process
-        .wait_with_output()
-        .unwrap_or_else(|error| panic!("{command:?} subprocess output reading error: {error:?}"));
-
-    if result.status.code() != Some(solx_utils::EXIT_CODE_SUCCESS) {
+    if status.code() != Some(solx_utils::EXIT_CODE_SUCCESS) {
         anyhow::bail!(
-            "{command:?} subprocess failed {}:\n{}\n{}",
-            match result.status.code() {
+            "{command:?} subprocess failed {}",
+            match status.code() {
                 Some(code) => format!("with exit code {code:?}"),
                 None => "without exit code".to_owned(),
             },
-            String::from_utf8_lossy(result.stdout.as_slice()),
-            String::from_utf8_lossy(result.stderr.as_slice()),
         );
     }
 
@@ -94,7 +86,6 @@ pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
 pub fn ninja(build_dir: &Path) -> anyhow::Result<()> {
     let mut ninja = Command::new("ninja");
     ninja.args(["-C", build_dir.to_string_lossy().as_ref()]);
-    ninja.arg("-n");
     command(ninja.arg("install"), "Running ninja install")?;
     Ok(())
 }
