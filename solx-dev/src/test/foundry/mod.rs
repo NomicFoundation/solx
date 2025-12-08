@@ -274,7 +274,7 @@ pub fn test(
                                 result
                                     .reason
                                     .as_ref()
-                                    .expect("Always exists")
+                                    .map_or("<Unknown reason>", |v| v)
                                     .bright_black()
                                     .bold()
                             );
