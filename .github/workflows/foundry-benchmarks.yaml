@@ -89,7 +89,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: excel-reports
-          path: foundry-benchmark-report.xlsx
+          path: ./temp-foundry-reports/foundry-benchmark-report.xlsx
 
       - name: Add PR comment with excel reports link
         if: github.event_name == 'pull_request'
