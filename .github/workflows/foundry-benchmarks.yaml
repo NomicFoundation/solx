@@ -1,28 +1,6 @@
 name: Foundry tests and benchmarks
 
 on:
-  workflow_call:
-    inputs:
-      solx_candidate_branch:
-        description: 'Specific `solx` candidate ref to use for building `solx`.'
-        type: string
-        required: false
-        default: ''
-      solx_reference_branch:
-        description: 'Specific `solx` reference ref to use for building `solx`.'
-        type: string
-        required: false
-        default: ''
-      compiler_llvm_candidate_branch:
-        description: 'Specific LLVM candidate ref to use for building `solx`.'
-        type: string
-        required: false
-        default: ''
-      compiler_llvm_reference_branch:
-        description: 'Specific LLVM reference ref to use for building `solx`.'
-        type: string
-        required: false
-        default: 'main'
   pull_request:
 
 permissions:
@@ -37,45 +15,22 @@ concurrency:
 defaults:
   run:
     shell: bash -ex {0}
-
 jobs:
-
-  build-solx:
+  test:
     runs-on: solx-linux-amd64
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner:latest
     strategy:
       fail-fast: false
-      matrix:
-        type: ["reference", "candidate"]
     steps:
-
-      - name: Checkout source
+      - name: Checkout source (PR head with submodules)
         uses: actions/checkout@v5
         with:
           repository: 'NomicFoundation/solx'
-          submodules: true
-          ref: ${{ matrix.type == 'candidate' && inputs.solx_candidate_branch || inputs.solx_reference_branch || '' }}
-
-      # This step is required to checkout submodules
-      # that are disabled in .gitmodules config
-      - name: Checkout submodules
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --init --force --depth=1 --recursive --checkout
-
-      - name: Remove llvm submodule
-        if: ${{ contains(github.repository, 'era-compiler-llvm') }}
-        run: rm -rf llvm
-
-      - name: Checkout llvm
-        if: ${{ contains(github.repository, 'era-compiler-llvm') }}
-        uses: actions/checkout@v4
-        with:
-          repository: 'matter-labs/era-compiler-llvm'
-          path: llvm
-          ref: ${{ matrix.type == 'candidate' && inputs.compiler_llvm_candidate_branch || inputs.compiler_llvm_reference_branch }}
-
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          submodules: recursive
+  
       - name: Building solc
         uses: ./.github/actions/build-solc
         with:
@@ -91,32 +46,10 @@ jobs:
           ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
 
       - name: Build solx
-        uses: ./.github/actions/build-rust
         env:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-        with:
-          exec_name: 'solx'
-          target: 'x86_64-unknown-linux-gnu'
-          release-suffix: test-${{ matrix.type }}
-
-  test:
-    needs: [build-solx]
-    runs-on: solx-linux-amd64
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          repository: NomicFoundation/solx
-          ref: ${{ inputs.solx_candidate_branch || 'main' }}
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: release*
-          merge-multiple: true
-          path: .
+        run: cargo build --release --bin solx
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
