@@ -55,14 +55,3 @@ features = ["http-rustls-tls", "test", "signing"]
 version = "0.12"
 default-features = false
 features = ["blocking"]
-
-[dependencies.inkwell]
-git = "https://github.com/matter-labs-forks/inkwell"
-branch = "llvm-19"
-default-features = false
-features = [
-    "llvm19-1",
-    "serde",
-    "no-libffi-linking",
-    "target-evm",
-]

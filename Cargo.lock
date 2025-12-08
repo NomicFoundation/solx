@@ -4255,7 +4255,6 @@ dependencies = [
  "colored",
  "glob",
  "hex",
- "inkwell",
  "itertools 0.4.19",
  "lazy_static",
  "md5",
