@@ -74,6 +74,9 @@ pub fn test(
                 .expect("Always valid")
                 .filter_map(Result::ok)
         {
+            if !solidity_file.is_file() {
+                continue;
+            }
             crate::utils::sed_file(
                 solidity_file.as_path(),
                 &[
