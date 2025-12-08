@@ -19,4 +19,7 @@ pub struct Project {
     /// Environment variables required for every command.
     #[serde(default)]
     pub env: HashMap<String, String>,
+    /// Whether the project is disabled.
+    #[serde(default)]
+    pub disabled: bool,
 }

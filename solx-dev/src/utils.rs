@@ -48,15 +48,11 @@ pub fn command(command: &mut Command, description: &str) -> anyhow::Result<()> {
 pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
     command: &mut Command,
     description: &str,
-    print_stderr: bool,
     ignore_failure: bool,
 ) -> anyhow::Result<T> {
     eprintln!("{description}: {command:?}");
 
     command.stdout(Stdio::piped());
-    if !print_stderr {
-        command.stderr(Stdio::null());
-    }
     let process = command
         .spawn()
         .unwrap_or_else(|error| panic!("{command:?} process spawning error: {error:?}"));

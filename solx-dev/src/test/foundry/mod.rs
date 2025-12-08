@@ -26,6 +26,7 @@ pub fn test(
     project_filter: Vec<String>,
 ) -> anyhow::Result<()> {
     crate::utils::exists("git")?;
+    crate::utils::exists("npm")?;
     crate::utils::exists("forge")?;
 
     std::fs::create_dir_all(projects_directory.as_path()).map_err(|error| {
@@ -34,21 +35,20 @@ pub fn test(
             "Creating".bright_green().bold(),
         )
     })?;
-    std::fs::create_dir_all(output_directory.as_path()).map_err(|error| {
-        anyhow::anyhow!(
-            "{} Foundry output reports directory {output_directory:?}: {error}",
-            "Creating".bright_green().bold(),
-        )
-    })?;
 
     let mut benchmark_inputs = Vec::with_capacity(config.projects.len() * 4);
 
-    for (project_name, project) in config.projects.into_iter().filter(|(project_name, _)| {
-        project_filter.is_empty()
-            || project_filter
-                .iter()
-                .any(|element| project_name.contains(element))
-    }) {
+    for (project_name, project) in config
+        .projects
+        .into_iter()
+        .filter(|(project_name, project)| {
+            !project.disabled
+                && (project_filter.is_empty()
+                    || project_filter
+                        .iter()
+                        .any(|element| project_name.contains(element)))
+        })
+    {
         let mut project_directory = crate::utils::absolute_path(projects_directory.as_path())?;
         project_directory.push(project_name.as_str());
         if !project_directory.exists() {
@@ -80,7 +80,8 @@ pub fn test(
             crate::utils::sed_file(
                 solidity_file.as_path(),
                 &[
-                    format!(r#"s/pragma solidity [0-9]\+\.[0-9]\+\.[0-9]\+/pragma solidity {solidity_version}/g"#).as_str(),
+                    format!(r#"s/pragma solidity.*/pragma solidity ={solidity_version};/g"#)
+                        .as_str(),
                 ],
             )?;
         }
@@ -117,23 +118,23 @@ pub fn test(
         crate::utils::sed_file(
             project_directory.join("foundry.toml").as_path(),
             &[
-                r#"s/deny_warnings.*\n//g"#,
-                r#"s/evm_version.*\n//g"#,
-                r#"s/via_ir.*\n//g"#,
-                format!(r#"s/solc.*/solc_version = "{solidity_version}"/g"#).as_str(),
-                format!(r#"s/solc_version.*/solc_version = "{solidity_version}"/g"#).as_str(),
+                r#"s/^deny_warnings.*\n//g"#,
+                r#"s/^evm_version.*\n//g"#,
+                r#"s/^via_ir.*\n//g"#,
+                format!(r#"s/^solc.*/solc_version = "{solidity_version}"/g"#).as_str(),
+                format!(r#"s/^solc_version.*/solc_version = "{solidity_version}"/g"#).as_str(),
             ],
         )?;
 
         clean(project_directory.as_path(), project_name.as_str())?;
 
-        for ((compiler_name, compiler), codegen) in config
+        for ((_identifier, compiler), codegen) in config
             .compilers
             .iter()
             .cartesian_product(["legacy", "viaIR"])
         {
             let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;
-            let toolchain_name = format!("{compiler_name}-{codegen}");
+            let toolchain_name = format!("{}-{codegen}", compiler.name);
 
             let mut forge_build_command = Command::new("forge");
             forge_build_command.arg("build");
@@ -158,7 +159,6 @@ pub fn test(
                     toolchain_name.bright_white().bold()
                 )
                 .as_str(),
-                false,
                 false,
             ) {
                 Ok(build_output) => build_output,
@@ -231,7 +231,6 @@ pub fn test(
                     toolchain_name.bright_white().bold()
                 )
                 .as_str(),
-                false,
                 true,
             )?;
             benchmark_inputs.push(solx_benchmark_converter::Input::new(
@@ -265,7 +264,6 @@ pub fn test(
                     toolchain_name.bright_white().bold()
                 )
                 .as_str(),
-                true,
                 false,
             )?;
             let test_failures_count =
@@ -320,7 +318,6 @@ pub fn test(
                     toolchain_name.bright_white().bold()
                 )
                 .as_str(),
-                true,
                 false,
             )?;
             benchmark_inputs.push(solx_benchmark_converter::Input::new(
@@ -340,6 +337,13 @@ pub fn test(
         solx_benchmark_converter::OutputFormat::Xlsx,
     )
         .try_into()?;
+
+    std::fs::create_dir_all(output_directory.as_path()).map_err(|error| {
+        anyhow::anyhow!(
+            "{} Foundry output reports directory {output_directory:?}: {error}",
+            "Creating".bright_green().bold(),
+        )
+    })?;
     let mut output_path = crate::utils::absolute_path(output_directory)?;
     output_path.push("foundry-benchmark-report.xlsx");
     output.write_to_file(output_path)?;
