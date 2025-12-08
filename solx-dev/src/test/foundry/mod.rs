@@ -44,9 +44,10 @@ pub fn test(
     let mut benchmark_inputs = Vec::with_capacity(config.projects.len() * 4);
 
     for (project_name, project) in config.projects.into_iter().filter(|(project_name, _)| {
-        project_filter
-            .iter()
-            .any(|element| project_name.contains(element))
+        project_filter.is_empty()
+            || project_filter
+                .iter()
+                .any(|element| project_name.contains(element))
     }) {
         let mut project_directory = crate::utils::absolute_path(projects_directory.as_path())?;
         project_directory.push(project_name.as_str());
