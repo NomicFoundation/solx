@@ -49,6 +49,7 @@ pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
     command: &mut Command,
     description: &str,
     print_stderr: bool,
+    ignore_failure: bool,
 ) -> anyhow::Result<T> {
     eprintln!("{description}: {command:?}");
 
@@ -64,7 +65,7 @@ pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
         .wait_with_output()
         .unwrap_or_else(|error| panic!("{command:?} subprocess output reading error: {error:?}"));
 
-    if result.status.code() != Some(solx_utils::EXIT_CODE_SUCCESS) {
+    if !ignore_failure && result.status.code() != Some(solx_utils::EXIT_CODE_SUCCESS) {
         anyhow::bail!(
             "{command:?} subprocess failed {}:\n{}\n{}",
             match result.status.code() {

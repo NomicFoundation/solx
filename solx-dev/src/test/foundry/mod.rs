@@ -159,6 +159,7 @@ pub fn test(
                 )
                 .as_str(),
                 false,
+                false,
             ) {
                 Ok(build_output) => build_output,
                 Err(_) => {
@@ -231,6 +232,7 @@ pub fn test(
                 )
                 .as_str(),
                 false,
+                true,
             )?;
             benchmark_inputs.push(solx_benchmark_converter::Input::new(
                 solx_benchmark_converter::InputReport::FoundrySize(build_sizes_output),
@@ -264,6 +266,7 @@ pub fn test(
                 )
                 .as_str(),
                 true,
+                false,
             )?;
             let test_failures_count =
                 Iterator::flatten(test_output.0.iter().map(|(full_path, file)| {
@@ -318,6 +321,7 @@ pub fn test(
                 )
                 .as_str(),
                 true,
+                false,
             )?;
             benchmark_inputs.push(solx_benchmark_converter::Input::new(
                 solx_benchmark_converter::InputReport::FoundryGas(test_gas_output),

@@ -220,8 +220,18 @@ impl TryFrom<(Benchmark, Source)> for Xlsx {
 
         let comparison_mapping = match source {
             // Source::Tooling => vec![(6, 4), (7, 5), (6, 2), (7, 3), (6, 0), (7, 1)],
-            Source::Tooling => vec![(2, 0), (3, 1)],
-            Source::SolxTester => vec![(2, 6), (3, 7), (0, 4), (1, 5)],
+            Source::Tooling => {
+                if xlsx.toolchains.len() < 4 {
+                    return Ok(xlsx);
+                }
+                vec![(2, 0), (3, 1)]
+            }
+            Source::SolxTester => {
+                if xlsx.toolchains.len() < 8 {
+                    return Ok(xlsx);
+                }
+                vec![(2, 6), (3, 7), (0, 4), (1, 5)]
+            }
         };
 
         for (index, (toolchain_id_1, toolchain_id_2)) in comparison_mapping.into_iter().enumerate()
