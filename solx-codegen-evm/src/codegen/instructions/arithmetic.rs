@@ -215,7 +215,7 @@ pub fn division_signed<'ctx>(
 /// Translates the signed arithmetic remainder.
 ///
 /// The only differences between the EVM and LLVM IR are that 0 must be returned in cases of
-/// division by zero or overflow.
+/// division by 0 or -1.
 ///
 pub fn remainder_signed<'ctx>(
     context: &mut Context<'ctx>,
@@ -224,6 +224,7 @@ pub fn remainder_signed<'ctx>(
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
     let zero_block = context.append_basic_block("remainder_signed_zero");
     let non_zero_block = context.append_basic_block("remainder_signed_non_zero");
+    let non_minus_one_block = context.append_basic_block("remainder_signed_non_minus_one");
     let join_block = context.append_basic_block("remainder_signed_join");
 
     let result_pointer =
@@ -237,6 +238,15 @@ pub fn remainder_signed<'ctx>(
     context.build_conditional_branch(condition, zero_block, non_zero_block)?;
 
     context.set_basic_block(non_zero_block);
+    let condition = context.builder().build_int_compare(
+        inkwell::IntPredicate::EQ,
+        operand_2,
+        context.field_type().const_all_ones(),
+        "remainder_signed_is_minus_one",
+    )?;
+    context.build_conditional_branch(condition, zero_block, non_minus_one_block)?;
+
+    context.set_basic_block(non_minus_one_block);
     let result = context.builder().build_int_signed_rem(
         operand_1,
         operand_2,
