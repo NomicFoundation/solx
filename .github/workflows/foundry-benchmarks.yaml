@@ -23,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - name: Checkout source (PR head with submodules)
+      - name: Checkout source
         uses: actions/checkout@v5
         with:
           repository: 'NomicFoundation/solx'
@@ -84,33 +84,7 @@ jobs:
         run: |
           ./target/release/solx-dev test foundry
 
-      - name: Upload jsons
-        uses: actions/upload-artifact@v4
-        with:
-          name: reports
-          path: 'temp-foundry-reports/'
-
-
-  excel-reports:
-    runs-on: solx-linux-amd64
-    container:
-      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
-    needs: test
-    steps:
-
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-      - name: Download reports
-        uses: actions/download-artifact@v4
-        with:
-          pattern: 'reports'
-          path: 'reports'
-          merge-multiple: 'false'
-
-      - name: Upload Excel reports
+      - name: Upload Excel report
         id: excel-reports
         uses: actions/upload-artifact@v4
         with:
@@ -118,6 +92,7 @@ jobs:
           path: foundry-benchmark-report.xlsx
 
       - name: Add PR comment with excel reports link
+        if: github.event_name == 'pull_request'
         uses: mshick/add-pr-comment@v2
         with:
           message-id: 'excel-reports'
