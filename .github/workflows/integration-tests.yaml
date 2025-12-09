@@ -153,14 +153,14 @@ jobs:
           cat candidate-benchmark.json \
             | jq '{data: ., project: "compiler-tester", toolchain: "candidate"}' > candidate.json
           ./target/release/solx-benchmark-converter --input-source compiler-tester \
-            --output-path benchmarks.xlsx reference.json candidate.json
+            --output-path solx-tester-report.xlsx reference.json candidate.json
 
       - name: Upload Excel reports
         id: excel-report
         uses: actions/upload-artifact@v4
         with:
           name: solx-tester-report
-          path: benchmarks.xlsx
+          path: solx-tester-report.xlsx
 
       - name: Add PR comment with excel reports link
         uses: mshick/add-pr-comment@v2

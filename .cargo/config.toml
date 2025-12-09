@@ -28,3 +28,4 @@ strip = true
 BOOST_PREFIX = { value = "/opt/homebrew/lib/", relative = false, force = false }
 LLVM_SYS_191_PREFIX = { value = "./target-llvm/target-final/", relative = true, force = false }
 SOLC_PREFIX = { value = "./solx-solidity/build/", relative = true, force = false }
+CARGO_BIN_EXE_SOLX = { value = "./target/debug/solx", relative = true, force = false }

@@ -1,4 +1,4 @@
-name: Hardhat tests
+name: Hardhat tests and benchmarks
 
 on:
   workflow_dispatch:

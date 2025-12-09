@@ -5,6 +5,7 @@
 pub mod config;
 pub mod output;
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
@@ -38,6 +39,8 @@ pub fn test(
     })?;
 
     let mut benchmark_inputs = Vec::with_capacity(config.projects.len() * 4);
+    let mut build_correctness_table = BTreeMap::new();
+    let mut test_correctness_table = BTreeMap::new();
 
     for (project_name, project) in config
         .projects
@@ -202,6 +205,10 @@ pub fn test(
                         == "error"
                 })
                 .count();
+            build_correctness_table
+                .entry(project_name.clone())
+                .or_insert_with(BTreeMap::new)
+                .insert(toolchain_name.clone(), build_errors);
             if build_errors > 0 || built_contracts_count == 0 {
                 benchmark_inputs.push(solx_benchmark_converter::Input::new(
                     solx_benchmark_converter::BuildFailuresReport(build_errors),
@@ -299,6 +306,10 @@ pub fn test(
                     })
                 }))
                 .count();
+            test_correctness_table
+                .entry(project_name.clone())
+                .or_insert_with(BTreeMap::new)
+                .insert(toolchain_name.clone(), test_failures_count);
             benchmark_inputs.push(solx_benchmark_converter::Input::new(
                 solx_benchmark_converter::TestFailuresReport(test_failures_count),
                 project_name.clone(),
@@ -372,8 +383,80 @@ pub fn test(
         )
     })?;
     let mut output_path = crate::utils::absolute_path(output_directory)?;
-    output_path.push("foundry-benchmark-report.xlsx");
+    output_path.push("foundry-report.xlsx");
     output.write_to_file(output_path)?;
+
+    let correctness_reference_compiler = config
+        .compilers
+        .values()
+        .find(|compiler| compiler.is_correctness_reference)
+        .ok_or_else(|| {
+            anyhow::anyhow!("No reference compiler specified in the Foundry test configuration")
+        })?
+        .name
+        .clone();
+    let correctness_candidate_compiler = config
+        .compilers
+        .values()
+        .find(|compiler| compiler.is_correctness_candidate)
+        .ok_or_else(|| {
+            anyhow::anyhow!("No candidate compiler specified in the Foundry test configuration")
+        })?
+        .name
+        .clone();
+    let mut errors = Vec::new();
+    for project in build_correctness_table.keys() {
+        for codegen in ["legacy", "viaIR"] {
+            let reference_toolchain = format!("{}-{}", correctness_reference_compiler, codegen);
+            let candidate_toolchain = format!("{}-{}", correctness_candidate_compiler, codegen);
+            let reference_build_errors = build_correctness_table
+                .get(project)
+                .and_then(|toolchains| toolchains.get(&reference_toolchain))
+                .copied()
+                .unwrap_or(usize::MAX);
+            let candidate_build_errors = build_correctness_table
+                .get(project)
+                .and_then(|toolchains| toolchains.get(&candidate_toolchain))
+                .copied()
+                .unwrap_or(usize::MAX);
+            if candidate_build_errors > reference_build_errors {
+                errors.push(format!(
+                    "{} Building correctness mismatch for project {} between reference toolchain {} ({} errors) and candidate toolchain {} ({} errors)",
+                    solx_utils::cargo_status_error("Error"),
+                    project.bright_white().bold(),
+                    reference_toolchain.bright_white().bold(),
+                    reference_build_errors,
+                    candidate_toolchain.bright_white().bold(),
+                    candidate_build_errors
+                ));
+            }
+
+            let reference_test_failures = test_correctness_table
+                .get(project)
+                .and_then(|toolchains| toolchains.get(&reference_toolchain))
+                .copied()
+                .unwrap_or(usize::MAX);
+            let candidate_test_failures = test_correctness_table
+                .get(project)
+                .and_then(|toolchains| toolchains.get(&candidate_toolchain))
+                .copied()
+                .unwrap_or(usize::MAX);
+            if candidate_test_failures > reference_test_failures {
+                errors.push(format!(
+                    "{} Testing correctness mismatch for project {} between reference toolchain {} ({} failures) and candidate toolchain {} ({} failures)",
+                    solx_utils::cargo_status_error("Error"),
+                    project.bright_white().bold(),
+                    reference_toolchain.bright_white().bold(),
+                    reference_test_failures,
+                    candidate_toolchain.bright_white().bold(),
+                    candidate_test_failures
+                ));
+            }
+        }
+    }
+    if !errors.is_empty() {
+        anyhow::bail!(errors.join("\n"));
+    }
 
     Ok(())
 }

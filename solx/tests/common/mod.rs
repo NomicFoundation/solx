@@ -29,7 +29,7 @@ pub static UNIT_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 ///
 pub fn setup() -> anyhow::Result<()> {
     // Set the `solx` binary path
-    let solx_bin = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
+    let solx_bin = Command::new(assert_cmd::cargo::cargo_bin!(env!("CARGO_PKG_NAME")));
     let _ = solx_core::process::EXECUTABLE.set(PathBuf::from(solx_bin.get_program()));
 
     // Enable LLVM pretty stack trace

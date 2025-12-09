@@ -149,7 +149,7 @@ mod tests {
             benchmark: None,
             benchmark_format: solx_benchmark_converter::OutputFormat::Xlsx,
             threads: Some(1),
-            solx: Some(assert_cmd::cargo::cargo_bin("solx")),
+            solx: Some(assert_cmd::cargo::cargo_bin!("SOLX").to_path_buf()),
             toolchain: Some(solx_tester::Toolchain::IrLLVM),
             workflow: solx_tester::Workflow::BuildAndRun,
             solc_bin_config_path: Some(PathBuf::from(

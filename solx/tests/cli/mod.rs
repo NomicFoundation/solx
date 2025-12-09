@@ -7,7 +7,6 @@ use std::process::Command;
 
 use assert_cmd::assert::Assert;
 use assert_cmd::assert::OutputAssertExt;
-use assert_cmd::cargo::CommandCargoExt;
 
 mod abi;
 mod allow_paths;
@@ -53,7 +52,7 @@ mod yul;
 /// Execute `solx` with the given arguments and assert the result.
 ///
 pub fn execute_solx(args: &[&str]) -> anyhow::Result<assert_cmd::assert::Assert> {
-    let mut command = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
+    let mut command = Command::new(assert_cmd::cargo::cargo_bin!(env!("CARGO_PKG_NAME")));
     Ok(command.args(args).assert())
 }
 
@@ -64,7 +63,7 @@ pub fn execute_solx_with_env_vars(
     args: &[&str],
     env_vars: Vec<(&str, String)>,
 ) -> anyhow::Result<assert_cmd::assert::Assert> {
-    let mut command = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
+    let mut command = Command::new(assert_cmd::cargo::cargo_bin!(env!("CARGO_PKG_NAME")));
     for (key, value) in env_vars.into_iter() {
         command.env(key, value);
     }
@@ -81,7 +80,7 @@ pub fn execute_solx_with_stdin(
     let content = std::fs::read_to_string(path)
         .map_err(|error| anyhow::anyhow!("Failed to read file {path}: {error}"))?;
 
-    let mut command = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
+    let mut command = Command::new(assert_cmd::cargo::cargo_bin!(env!("CARGO_PKG_NAME")));
     command.stdin(std::process::Stdio::piped());
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
