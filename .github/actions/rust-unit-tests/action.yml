@@ -65,7 +65,7 @@ runs:
         if [[ ${RUNNER_OS} = Windows ]] || [[ ${RUNNER_OS} = Linux ]]; then
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
-        cargo ${TEST_COMMAND} --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
+        cargo build && cargo ${TEST_COMMAND} --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a release-results.json | grep 'failed'
         if [ $? -eq 0 ]; then
           cargo2junit < release-results.json > "release-${{ inputs.results-xml }}"
