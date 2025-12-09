@@ -2,21 +2,25 @@
 //! Benchmark input format.
 //!
 
+pub mod build_failures;
 pub mod compilation_time;
 pub mod error;
 pub mod foundry_gas;
 pub mod foundry_size;
 pub mod source;
+pub mod test_failures;
 pub mod testing_time;
 
 use std::path::Path;
 
 use crate::model::benchmark::Benchmark;
 
+use self::build_failures::BuildFailuresReport;
 use self::compilation_time::CompilationTimeReport;
 use self::error::Error as InputError;
 use self::foundry_gas::FoundryGasReport;
 use self::foundry_size::FoundrySizeReport;
+use self::test_failures::TestFailuresReport;
 use self::testing_time::TestingTimeReport;
 
 ///
@@ -68,6 +72,10 @@ pub enum Report {
     CompilationTime(CompilationTimeReport),
     /// Testing time report.
     TestingTime(TestingTimeReport),
+    /// Build failures report.
+    BuildFailures(BuildFailuresReport),
+    /// Test failures report.
+    TestFailures(TestFailuresReport),
 }
 
 impl From<Benchmark> for Report {
@@ -97,6 +105,18 @@ impl From<CompilationTimeReport> for Report {
 impl From<TestingTimeReport> for Report {
     fn from(report: TestingTimeReport) -> Self {
         Self::TestingTime(report)
+    }
+}
+
+impl From<BuildFailuresReport> for Report {
+    fn from(report: BuildFailuresReport) -> Self {
+        Self::BuildFailures(report)
+    }
+}
+
+impl From<TestFailuresReport> for Report {
+    fn from(report: TestFailuresReport) -> Self {
+        Self::TestFailures(report)
     }
 }
 

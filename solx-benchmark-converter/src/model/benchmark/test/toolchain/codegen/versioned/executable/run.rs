@@ -25,6 +25,12 @@ pub struct Run {
     /// Testing time in milliseconds.
     #[serde(default)]
     pub testing_time: Vec<u64>,
+    /// Build failures count.
+    #[serde(default)]
+    pub build_failures: usize,
+    /// Test failures count.
+    #[serde(default)]
+    pub test_failures: usize,
 }
 
 impl Run {
@@ -41,6 +47,8 @@ impl Run {
             .extend_from_slice(other.compilation_time.as_slice());
         self.testing_time
             .extend_from_slice(other.testing_time.as_slice());
+        self.build_failures += other.build_failures;
+        self.test_failures += other.test_failures;
     }
 
     ///
@@ -96,5 +104,19 @@ impl Run {
         }
 
         self.testing_time.iter().sum::<u64>() / (self.testing_time.len() as u64)
+    }
+
+    ///
+    /// Build failures count.
+    ///
+    pub fn build_failures_count(&self) -> usize {
+        self.build_failures
+    }
+
+    ///
+    /// Test failures count.
+    ///
+    pub fn test_failures_count(&self) -> usize {
+        self.test_failures
     }
 }

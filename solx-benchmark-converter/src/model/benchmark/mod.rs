@@ -7,9 +7,11 @@ pub mod test;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::input::build_failures::BuildFailuresReport;
 use crate::input::compilation_time::CompilationTimeReport;
 use crate::input::foundry_gas::FoundryGasReport;
 use crate::input::foundry_size::FoundrySizeReport;
+use crate::input::test_failures::TestFailuresReport;
 use crate::input::testing_time::TestingTimeReport;
 use crate::input::Input;
 use crate::input::Report;
@@ -62,6 +64,12 @@ impl Benchmark {
             }
             Report::TestingTime(testing_time) => {
                 self.extend_with_testing_time_report(toolchain, project, testing_time)?;
+            }
+            Report::BuildFailures(build_failures) => {
+                self.extend_with_build_failures_report(toolchain, project, build_failures)?;
+            }
+            Report::TestFailures(test_failures) => {
+                self.extend_with_test_failures_report(toolchain, project, test_failures)?;
             }
         }
         Ok(())
@@ -310,6 +318,82 @@ impl Benchmark {
             .entry(None)
             .or_default();
         run.run.testing_time.push(testing_time.0);
+
+        Ok(())
+    }
+
+    ///
+    /// Extend the benchmark data with a build failures report.
+    ///
+    pub fn extend_with_build_failures_report(
+        &mut self,
+        toolchain: String,
+        project: String,
+        build_failures: BuildFailuresReport,
+    ) -> anyhow::Result<()> {
+        let selector = TestSelector {
+            project: project.clone(),
+            case: None,
+            input: None,
+        };
+        let name = selector.to_string();
+
+        let test = self
+            .tests
+            .entry(name)
+            .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
+        let run = test
+            .toolchain_groups
+            .entry(toolchain.clone())
+            .or_default()
+            .codegen_groups
+            .entry(None)
+            .or_default()
+            .versioned_groups
+            .entry(None)
+            .or_default()
+            .executables
+            .entry(None)
+            .or_default();
+        run.run.build_failures = build_failures.0;
+
+        Ok(())
+    }
+
+    ///
+    /// Extend the benchmark data with a test failures report.
+    ///
+    pub fn extend_with_test_failures_report(
+        &mut self,
+        toolchain: String,
+        project: String,
+        test_failures: TestFailuresReport,
+    ) -> anyhow::Result<()> {
+        let selector = TestSelector {
+            project: project.clone(),
+            case: None,
+            input: None,
+        };
+        let name = selector.to_string();
+
+        let test = self
+            .tests
+            .entry(name)
+            .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
+        let run = test
+            .toolchain_groups
+            .entry(toolchain.clone())
+            .or_default()
+            .codegen_groups
+            .entry(None)
+            .or_default()
+            .versioned_groups
+            .entry(None)
+            .or_default()
+            .executables
+            .entry(None)
+            .or_default();
+        run.run.test_failures = test_failures.0;
 
         Ok(())
     }

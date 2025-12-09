@@ -27,6 +27,10 @@ pub struct Xlsx {
     pub compilation_time_worksheet: Worksheet,
     /// Worksheet for testing time measurements.
     pub testing_time_worksheet: Worksheet,
+    /// Worksheet for build failures report.
+    pub build_failures_worksheet: Worksheet,
+    /// Worksheet for test failures report.
+    pub test_failures_worksheet: Worksheet,
 
     /// Toolchain identifiers.
     pub toolchains: Vec<String>,
@@ -55,6 +59,8 @@ impl Xlsx {
             Worksheet::new("Deploy Size", vec![project_header, contract_header])?;
         let compilation_time_worksheet = Worksheet::new("Compilation Time", vec![project_header])?;
         let testing_time_worksheet = Worksheet::new("Testing Time", vec![project_header])?;
+        let build_failures_worksheet = Worksheet::new("Build Failures", vec![project_header])?;
+        let test_failures_worksheet = Worksheet::new("Test Failures", vec![project_header])?;
 
         Ok(Self {
             runtime_fee_worksheet,
@@ -63,6 +69,8 @@ impl Xlsx {
             deploy_size_worksheet,
             compilation_time_worksheet,
             testing_time_worksheet,
+            build_failures_worksheet,
+            test_failures_worksheet,
 
             toolchains: Vec::with_capacity(8),
             toolchain_ids: HashMap::with_capacity(8),
@@ -95,6 +103,8 @@ impl Xlsx {
         workbook.push_worksheet(self.deploy_size_worksheet.into_inner());
         workbook.push_worksheet(self.compilation_time_worksheet.into_inner());
         workbook.push_worksheet(self.testing_time_worksheet.into_inner());
+        workbook.push_worksheet(self.build_failures_worksheet.into_inner());
+        workbook.push_worksheet(self.test_failures_worksheet.into_inner());
         workbook
     }
 }
@@ -185,6 +195,24 @@ impl TryFrom<(Benchmark, Source)> for Xlsx {
                                     optimization_group.run.average_testing_time(),
                                 )?;
                             }
+                            xlsx.build_failures_worksheet
+                                .add_toolchain_column(toolchain_name.as_str(), toolchain_id)?;
+                            xlsx.build_failures_worksheet.write_test_value(
+                                project.as_str(),
+                                None,
+                                None,
+                                toolchain_id,
+                                optimization_group.run.build_failures_count() as u64,
+                            )?;
+                            xlsx.test_failures_worksheet
+                                .add_toolchain_column(toolchain_name.as_str(), toolchain_id)?;
+                            xlsx.test_failures_worksheet.write_test_value(
+                                project.as_str(),
+                                None,
+                                None,
+                                toolchain_id,
+                                optimization_group.run.test_failures_count() as u64,
+                            )?;
 
                             if contract.is_none() && function.is_none() {
                                 continue;

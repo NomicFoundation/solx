@@ -203,6 +203,11 @@ pub fn test(
                 })
                 .count();
             if build_errors > 0 || built_contracts_count == 0 {
+                benchmark_inputs.push(solx_benchmark_converter::Input::new(
+                    solx_benchmark_converter::BuildFailuresReport(build_errors),
+                    project_name.clone(),
+                    toolchain_name.clone(),
+                ));
                 eprintln!("{} Building Foundry project {} with {} failed with {build_errors} errors and {built_contracts_count} built contracts", solx_utils::cargo_status_error("Error"), project_name.bright_white().bold(), toolchain_name.bright_white().bold());
                 clean(project_directory.as_path(), project_name.as_str())?;
                 continue;
@@ -294,6 +299,11 @@ pub fn test(
                     })
                 }))
                 .count();
+            benchmark_inputs.push(solx_benchmark_converter::Input::new(
+                solx_benchmark_converter::TestFailuresReport(test_failures_count),
+                project_name.clone(),
+                toolchain_name.clone(),
+            ));
 
             let mut forge_test_gas_command = Command::new("forge");
             forge_test_gas_command.arg("test");
