@@ -10,11 +10,13 @@ pub mod model;
 pub mod output;
 pub mod results;
 
+pub use crate::input::compilation_time::CompilationTimeReport;
 pub use crate::input::error::Error as InputReportError;
 pub use crate::input::foundry_gas::FoundryGasReport;
 pub use crate::input::foundry_size::contract::ContractReport as FoundrySizeContractReport;
 pub use crate::input::foundry_size::FoundrySizeReport;
 pub use crate::input::source::Source as InputSource;
+pub use crate::input::testing_time::TestingTimeReport;
 pub use crate::input::Input;
 pub use crate::input::Report as InputReport;
 pub use crate::model::benchmark::test::input::Input as BenchmarkTestInput;

@@ -27,12 +27,6 @@ jobs:
       SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
     steps:
 
-      # - name: Tmp cleanup
-      #   run: |
-      #     rm -rf /__w/solx || true
-      #     sudo rm -rf /__w/solx || true
-      #     mkdir -p /__w/solx/solx
-
       - name: Checkout
         uses: actions/checkout@v5
         with:
@@ -83,12 +77,6 @@ jobs:
       BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
       SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
     steps:
-
-      # - name: Tmp cleanup
-      #   run: |
-      #     rm -rf /__w/solx || true
-      #     sudo rm -rf /__w/solx || true
-      #     mkdir -p /__w/solx/solx
 
       - name: Checkout
         uses: actions/checkout@v5
@@ -168,21 +156,17 @@ jobs:
             --output-path benchmarks.xlsx reference.json candidate.json
 
       - name: Upload Excel reports
-        id: compiler-tester-excel-reports
+        id: excel-report
         uses: actions/upload-artifact@v4
         with:
-          name: excel-reports
+          name: solx-tester-report
           path: benchmarks.xlsx
 
       - name: Add PR comment with excel reports link
         uses: mshick/add-pr-comment@v2
         with:
-          message-id: 'excel-reports'
+          message-id: 'solx-tester-report'
           message: |
-            📊 **Benchmarks Excel report**
+            📊 **solx Tester Report**
 
-            Benchmarks measured for:
-            * candidate commit: ${{ github.sha }}
-            * reference commit: ${{ github.event.pull_request.base.sha }}
-
-            ➡️ [**Download Excel Report**](${{ steps.compiler-tester-excel-reports.outputs.artifact-url }})
+            ➡️ [**Download**](${{ steps.excel-report.outputs.artifact-url }})

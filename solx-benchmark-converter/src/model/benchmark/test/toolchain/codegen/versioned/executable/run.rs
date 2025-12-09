@@ -6,9 +6,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 ///
-/// A run of a test with fixed compiler options (mode).
-///
-/// All fields are vectors to allow for multiple measurements with averaging capabilities.
+/// Run of a test with specific compiler options.
 ///
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Run {
@@ -21,6 +19,12 @@ pub struct Run {
     /// Amount of EVM gas.
     #[serde(default)]
     pub gas: Vec<u64>,
+    /// Compilation time in milliseconds.
+    #[serde(default)]
+    pub compilation_time: Vec<u64>,
+    /// Testing time in milliseconds.
+    #[serde(default)]
+    pub testing_time: Vec<u64>,
 }
 
 impl Run {
@@ -33,6 +37,10 @@ impl Run {
             .extend_from_slice(other.runtime_size.as_slice());
         self.gas
             .extend(other.gas.iter().filter(|value| value < &&(u32::MAX as u64)));
+        self.compilation_time
+            .extend_from_slice(other.compilation_time.as_slice());
+        self.testing_time
+            .extend_from_slice(other.testing_time.as_slice());
     }
 
     ///
@@ -66,5 +74,27 @@ impl Run {
         }
 
         self.gas.iter().sum::<u64>() / (self.gas.len() as u64)
+    }
+
+    ///
+    /// Average compilation time in milliseconds.
+    ///
+    pub fn average_compilation_time(&self) -> u64 {
+        if self.compilation_time.is_empty() {
+            return 0;
+        }
+
+        self.compilation_time.iter().sum::<u64>() / (self.compilation_time.len() as u64)
+    }
+
+    ///
+    /// Average testing time in milliseconds.
+    ///
+    pub fn average_testing_time(&self) -> u64 {
+        if self.testing_time.is_empty() {
+            return 0;
+        }
+
+        self.testing_time.iter().sum::<u64>() / (self.testing_time.len() as u64)
     }
 }

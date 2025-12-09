@@ -3,7 +3,6 @@
 //!
 
 pub(crate) mod arguments;
-pub(crate) mod tests;
 
 use clap::Parser;
 

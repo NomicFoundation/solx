@@ -69,15 +69,14 @@ jobs:
       - name: Install Yarn
         run: npm install -g yarn
 
-      # Some projects might use hardcoded ssh urls
-      # force git to use https instead
+      - name: Build solx-dev
+        run: cargo build --release --bin solx-dev
+
+      # Some projects might use hardcoded ssh URLs: force git to use https instead.
       - name: Git https settings
         run: |
           git config --global url."https://github.com/".insteadOf git@github.com:
           git config --global url."https://".insteadOf git://
-
-      - name: Build solx-dev
-        run: cargo build --release --bin solx-dev
 
       - name: Run tests
         id: tests
@@ -85,16 +84,17 @@ jobs:
           ./target/release/solx-dev test foundry
 
       - name: Upload Excel report
-        id: excel-reports
+        id: excel-report
         uses: actions/upload-artifact@v4
         with:
-          name: excel-reports
-          path: ./temp-foundry-reports/foundry-benchmark-report.xlsx
+          name: foundry-report
+          path: ./temp-foundry-reports/foundry-report.xlsx
 
-      - name: Add PR comment with excel reports link
-        if: github.event_name == 'pull_request'
+      - name: Post PR comment
         uses: mshick/add-pr-comment@v2
         with:
-          message-id: 'excel-reports'
+          message-id: 'foundry-report'
           message: |
-            📊 [**Download Excel Report**](${{ steps.excel-reports.outputs.artifact-url }})
+            📊 **Foundry Projects Report**
+
+            ➡️ [**Download**](${{ steps.excel-report.outputs.artifact-url }})

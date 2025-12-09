@@ -74,12 +74,12 @@ impl Worksheet {
     pub fn write_test_value(
         &mut self,
         project: &str,
-        contract: &str,
+        contract: Option<&str>,
         function: Option<&str>,
         toolchain_id: u16,
         value: u64,
     ) -> anyhow::Result<()> {
-        let row_identifier = format!("{project}/{contract}.{function:?}");
+        let row_identifier = format!("{project}/{contract:?}.{function:?}");
         let row_index = if let Some(index) = self.rows.get(row_identifier.as_str()) {
             *index
         } else {
@@ -92,12 +92,14 @@ impl Worksheet {
                 project.to_owned(),
                 &Self::row_header_format(),
             )?;
-            self.worksheet.write_with_format(
-                row_index,
-                1,
-                contract.to_owned(),
-                &Self::row_header_format(),
-            )?;
+            if let Some(contract) = contract {
+                self.worksheet.write_with_format(
+                    row_index,
+                    1,
+                    contract.to_owned(),
+                    &Self::row_header_format(),
+                )?;
+            }
             if let Some(function) = function {
                 self.worksheet.write_with_format(
                     row_index,

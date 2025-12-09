@@ -7,8 +7,10 @@ pub mod test;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::input::compilation_time::CompilationTimeReport;
 use crate::input::foundry_gas::FoundryGasReport;
 use crate::input::foundry_size::FoundrySizeReport;
+use crate::input::testing_time::TestingTimeReport;
 use crate::input::Input;
 use crate::input::Report;
 
@@ -54,6 +56,12 @@ impl Benchmark {
             }
             Report::FoundrySize(report) => {
                 self.extend_with_foundry_size_report(toolchain, project, report)?;
+            }
+            Report::CompilationTime(compilation_time) => {
+                self.extend_with_compilation_time_report(toolchain, project, compilation_time)?;
+            }
+            Report::TestingTime(testing_time) => {
+                self.extend_with_testing_time_report(toolchain, project, testing_time)?;
             }
         }
         Ok(())
@@ -226,6 +234,82 @@ impl Benchmark {
             run.run.size.push(contract_report.init_size);
             run.run.runtime_size.push(contract_report.runtime_size);
         }
+
+        Ok(())
+    }
+
+    ///
+    /// Extend the benchmark data with a compilation time report.
+    ///
+    pub fn extend_with_compilation_time_report(
+        &mut self,
+        toolchain: String,
+        project: String,
+        compilation_time: CompilationTimeReport,
+    ) -> anyhow::Result<()> {
+        let selector = TestSelector {
+            project: project.clone(),
+            case: None,
+            input: None,
+        };
+        let name = selector.to_string();
+
+        let test = self
+            .tests
+            .entry(name)
+            .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
+        let run = test
+            .toolchain_groups
+            .entry(toolchain.clone())
+            .or_default()
+            .codegen_groups
+            .entry(None)
+            .or_default()
+            .versioned_groups
+            .entry(None)
+            .or_default()
+            .executables
+            .entry(None)
+            .or_default();
+        run.run.compilation_time.push(compilation_time.0);
+
+        Ok(())
+    }
+
+    ///
+    /// Extend the benchmark data with a testing time report.
+    ///
+    pub fn extend_with_testing_time_report(
+        &mut self,
+        toolchain: String,
+        project: String,
+        testing_time: TestingTimeReport,
+    ) -> anyhow::Result<()> {
+        let selector = TestSelector {
+            project: project.clone(),
+            case: None,
+            input: None,
+        };
+        let name = selector.to_string();
+
+        let test = self
+            .tests
+            .entry(name)
+            .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
+        let run = test
+            .toolchain_groups
+            .entry(toolchain.clone())
+            .or_default()
+            .codegen_groups
+            .entry(None)
+            .or_default()
+            .versioned_groups
+            .entry(None)
+            .or_default()
+            .executables
+            .entry(None)
+            .or_default();
+        run.run.testing_time.push(testing_time.0);
 
         Ok(())
     }

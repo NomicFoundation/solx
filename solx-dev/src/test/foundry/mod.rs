@@ -7,6 +7,7 @@ pub mod output;
 
 use std::path::Path;
 use std::process::Command;
+use std::time::Instant;
 
 use colored::Colorize;
 use itertools::Itertools;
@@ -150,6 +151,7 @@ pub fn test(
             for (key, value) in project.env.iter() {
                 forge_build_command.env(key, value);
             }
+            let build_timestamp_start = Instant::now();
             let build_output = match crate::utils::command_with_json_output::<BuildOutput>(
                 &mut forge_build_command,
                 format!(
@@ -173,6 +175,7 @@ pub fn test(
                     continue;
                 }
             };
+            let compilation_time = build_timestamp_start.elapsed().as_millis() as u64;
             for error in build_output.errors.iter() {
                 eprintln!(
                     "{}",
@@ -255,6 +258,7 @@ pub fn test(
             for (key, value) in project.env.iter() {
                 forge_test_command.env(key, value);
             }
+            let test_timestamp_start = Instant::now();
             let test_output = crate::utils::command_with_json_output::<TestOutput>(
                 &mut forge_test_command,
                 format!(
@@ -266,6 +270,7 @@ pub fn test(
                 .as_str(),
                 false,
             )?;
+            let testing_time = test_timestamp_start.elapsed().as_millis() as u64;
             let test_failures_count =
                 Iterator::flatten(test_output.0.iter().map(|(full_path, file)| {
                     file.test_results.iter().filter(move |(test_name, result)| {
@@ -320,8 +325,19 @@ pub fn test(
                 .as_str(),
                 false,
             )?;
+
             benchmark_inputs.push(solx_benchmark_converter::Input::new(
                 solx_benchmark_converter::InputReport::FoundryGas(test_gas_output),
+                project_name.clone(),
+                toolchain_name.clone(),
+            ));
+            benchmark_inputs.push(solx_benchmark_converter::Input::new(
+                solx_benchmark_converter::CompilationTimeReport(compilation_time),
+                project_name.clone(),
+                toolchain_name.clone(),
+            ));
+            benchmark_inputs.push(solx_benchmark_converter::Input::new(
+                solx_benchmark_converter::TestingTimeReport(testing_time),
                 project_name.clone(),
                 toolchain_name.clone(),
             ));

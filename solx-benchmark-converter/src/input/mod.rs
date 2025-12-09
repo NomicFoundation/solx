@@ -2,18 +2,22 @@
 //! Benchmark input format.
 //!
 
+pub mod compilation_time;
 pub mod error;
 pub mod foundry_gas;
 pub mod foundry_size;
 pub mod source;
+pub mod testing_time;
 
 use std::path::Path;
 
 use crate::model::benchmark::Benchmark;
 
+use self::compilation_time::CompilationTimeReport;
 use self::error::Error as InputError;
 use self::foundry_gas::FoundryGasReport;
 use self::foundry_size::FoundrySizeReport;
+use self::testing_time::TestingTimeReport;
 
 ///
 /// Benchmark input format.
@@ -60,23 +64,39 @@ pub enum Report {
     FoundryGas(FoundryGasReport),
     /// Foundry size report.
     FoundrySize(FoundrySizeReport),
+    /// Compilation time report.
+    CompilationTime(CompilationTimeReport),
+    /// Testing time report.
+    TestingTime(TestingTimeReport),
 }
 
 impl From<Benchmark> for Report {
-    fn from(benchmark: Benchmark) -> Self {
-        Self::Native(benchmark)
+    fn from(report: Benchmark) -> Self {
+        Self::Native(report)
     }
 }
 
 impl From<FoundryGasReport> for Report {
-    fn from(foundry_gas_report: FoundryGasReport) -> Self {
-        Self::FoundryGas(foundry_gas_report)
+    fn from(report: FoundryGasReport) -> Self {
+        Self::FoundryGas(report)
     }
 }
 
 impl From<FoundrySizeReport> for Report {
-    fn from(foundry_size_report: FoundrySizeReport) -> Self {
-        Self::FoundrySize(foundry_size_report)
+    fn from(report: FoundrySizeReport) -> Self {
+        Self::FoundrySize(report)
+    }
+}
+
+impl From<CompilationTimeReport> for Report {
+    fn from(report: CompilationTimeReport) -> Self {
+        Self::CompilationTime(report)
+    }
+}
+
+impl From<TestingTimeReport> for Report {
+    fn from(report: TestingTimeReport) -> Self {
+        Self::TestingTime(report)
     }
 }
 
