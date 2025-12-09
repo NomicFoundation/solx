@@ -119,11 +119,12 @@ pub fn test(
         crate::utils::sed_file(
             project_directory.join("foundry.toml").as_path(),
             &[
-                r#"s/deny_warnings.*\n//g"#,
-                r#"s/evm_version.*\n//g"#,
-                r#"s/via_ir.*\n//g"#,
-                format!(r#"s/solc_version = ".*"/solc_version = "{solidity_version}"/g"#).as_str(),
-                format!(r#"s/solc = ".*"/solc_version = "{solidity_version}"/g"#).as_str(),
+                r#"s/deny_warnings\s?=.*\n//g"#,
+                r#"s/evm_version\s?=.*\n//g"#,
+                r#"s/via_ir\s?=.*\n//g"#,
+                format!(r#"s/solc_version\s?=\s?".*"/solc_version = "{solidity_version}"/g"#)
+                    .as_str(),
+                format!(r#"s/solc\s?=\s?".*"/solc_version = "{solidity_version}"/g"#).as_str(),
             ],
         )?;
 
