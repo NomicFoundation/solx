@@ -73,24 +73,6 @@ pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
         );
     }
 
-    // let json_start = result
-    //     .stdout
-    //     .iter()
-    //     .position(|&byte| byte == b'{')
-    //     .unwrap_or_default();
-    // let json_end = result
-    //     .stdout
-    //     .iter()
-    //     .rposition(|&byte| byte == b'}')
-    //     .map(|pos| pos + 1)
-    //     .unwrap_or(result.stdout.len());
-    // if json_start >= json_end {
-    //     anyhow::bail!(
-    //         "{command:?} output parsing: JSON object not found in output:\n{}\n{}",
-    //         String::from_utf8_lossy(result.stdout.as_slice()),
-    //         String::from_utf8_lossy(result.stderr.as_slice()),
-    //     );
-    // }
     solx_utils::deserialize_from_slice::<T>(result.stdout.as_slice())
         .map_err(|error| anyhow::anyhow!("{command:?} output parsing: {error:?}"))
 }
@@ -127,14 +109,31 @@ pub fn path_windows_to_unix<P: AsRef<Path> + PathBufExt>(path: P) -> anyhow::Res
 /// Checks if the tool exists in the system.
 ///
 pub fn exists(name: &str) -> anyhow::Result<()> {
-    eprint!("{} for `{name}`: ", solx_utils::cargo_status_ok("Looking"));
+    let mut log_string = format!("{} for `{name}`: ", solx_utils::cargo_status_ok("Looking"));
 
-    let status = Command::new("which")
-        .arg(name)
-        .status()
-        .map_err(|error| anyhow::anyhow!("`which {name}` process: {error}"))?;
-    if !status.success() {
-        anyhow::bail!("Tool `{name}` is missing. Please install");
+    let mut command = Command::new("which");
+    command.arg(name);
+
+    command.stdout(Stdio::piped());
+    let process = command
+        .spawn()
+        .unwrap_or_else(|error| panic!("{command:?} process spawning error: {error:?}"));
+
+    let result = process
+        .wait_with_output()
+        .unwrap_or_else(|error| panic!("{command:?} subprocess output reading error: {error:?}"));
+
+    let log_result = if !result.status.success() {
+        solx_utils::cargo_status_error("not found")
+    } else {
+        String::from_utf8_lossy(result.stdout.as_slice())
+            .trim()
+            .to_owned()
+    };
+    log_string.push_str(log_result.as_str());
+    eprintln!("{log_string}");
+    if !result.status.success() {
+        anyhow::bail!("Tool `{name}` not found in the system");
     }
     Ok(())
 }

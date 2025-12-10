@@ -102,6 +102,8 @@ pub fn test(
         let mut npm_install_build_system = Command::new("npm");
         npm_install_build_system.current_dir(project_directory.as_path());
         npm_install_build_system.args(["--loglevel", "error"]);
+        npm_install_build_system.arg("--force");
+        npm_install_build_system.arg("--yes");
         npm_install_build_system.arg("install");
         npm_install_build_system.arg("--global");
         npm_install_build_system.arg(build_system.as_str());
@@ -119,6 +121,7 @@ pub fn test(
         if let BuildSystem::Npm = project.build_system {
             build_system_install_command.args(["--loglevel", "error"]);
             build_system_install_command.arg("--force");
+            build_system_install_command.arg("--yes");
         }
         build_system_install_command.arg("install");
         crate::utils::command(
@@ -133,8 +136,9 @@ pub fn test(
         let mut dependency_override_command = Command::new(build_system.as_str());
         dependency_override_command.current_dir(project_directory.as_path());
         if let BuildSystem::Npm = project.build_system {
-            build_system_install_command.args(["--loglevel", "error"]);
-            build_system_install_command.arg("--force");
+            dependency_override_command.args(["--loglevel", "error"]);
+            dependency_override_command.arg("--force");
+            dependency_override_command.arg("--yes");
         }
         dependency_override_command.arg("install");
         dependency_override_command.args(project.dependencies.as_slice());

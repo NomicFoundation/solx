@@ -105,6 +105,10 @@ pub fn test(
             let mut npm_install_yarn = Command::new("npm");
             npm_install_yarn.current_dir(project_directory.as_path());
             npm_install_yarn.arg("install");
+            npm_install_yarn.args(["--loglevel", "error"]);
+            npm_install_yarn.arg("--force");
+            npm_install_yarn.arg("--yes");
+            npm_install_yarn.arg("--global");
             npm_install_yarn.arg(build_system);
             crate::utils::command(
                 &mut npm_install_yarn,
