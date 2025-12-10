@@ -149,8 +149,8 @@ pub fn test(
             project_directory.join("foundry.toml").as_path(),
             &[
                 r#"s/deny_warnings\s*=.*\n//g"#,
-                r#"s/evm_version\s*=.*\n//g"#,
                 r#"s/via_ir\s*=.*\n//g"#,
+                r#"s/evm_version\s*=.*\n//g"#,
                 format!(r#"s/solc_version\s*=\s*".*"/solc_version = "{solidity_version}"/g"#)
                     .as_str(),
                 format!(r#"s/solc\s*=\s*".*"/solc_version = "{solidity_version}"/g"#).as_str(),
@@ -172,6 +172,7 @@ pub fn test(
             if codegen == "viaIR" {
                 forge_build_command.arg("--via-ir");
             }
+            forge_build_command.args(["--evm-version", "cancun"]);
             forge_build_command.arg("--optimize");
             forge_build_command.arg("--no-metadata");
             forge_build_command.arg("--force");
@@ -252,6 +253,7 @@ pub fn test(
             if codegen == "viaIR" {
                 forge_build_sizes_command.arg("--via-ir");
             }
+            forge_build_sizes_command.args(["--evm-version", "cancun"]);
             forge_build_sizes_command.arg("--optimize");
             forge_build_sizes_command.arg("--no-metadata");
             forge_build_sizes_command.arg("--sizes");
@@ -288,6 +290,7 @@ pub fn test(
             }
             forge_test_command.args(["--fuzz-runs", "0"]);
             forge_test_command.args(["--fuzz-seed", "0xdeadbeef"]);
+            forge_test_command.args(["--evm-version", "cancun"]);
             forge_test_command.arg("--optimize");
             forge_test_command.arg("--no-metadata");
             forge_test_command.arg("--json");
@@ -349,6 +352,7 @@ pub fn test(
             }
             forge_test_gas_command.args(["--fuzz-runs", "0"]);
             forge_test_gas_command.args(["--fuzz-seed", "0xdeadbeef"]);
+            forge_test_gas_command.args(["--evm-version", "cancun"]);
             forge_test_gas_command.arg("--optimize");
             forge_test_gas_command.arg("--no-metadata");
             forge_test_gas_command.arg("--gas-report");
@@ -442,12 +446,12 @@ pub fn test(
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&reference_toolchain))
                 .copied()
-                .unwrap_or(usize::MAX);
+                .unwrap_or_default();
             let candidate_build_errors = build_correctness_table
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&candidate_toolchain))
                 .copied()
-                .unwrap_or(usize::MAX);
+                .unwrap_or_default();
             if candidate_build_errors > reference_build_errors {
                 errors.push(format!(
                     "{} Building correctness mismatch for project {} between reference toolchain {} ({} errors) and candidate toolchain {} ({} errors)",
@@ -464,12 +468,12 @@ pub fn test(
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&reference_toolchain))
                 .copied()
-                .unwrap_or(usize::MAX);
+                .unwrap_or_default();
             let candidate_test_failures = test_correctness_table
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&candidate_toolchain))
                 .copied()
-                .unwrap_or(usize::MAX);
+                .unwrap_or_default();
             if candidate_test_failures > reference_test_failures {
                 errors.push(format!(
                     "{} Testing correctness mismatch for project {} between reference toolchain {} ({} failures) and candidate toolchain {} ({} failures)",

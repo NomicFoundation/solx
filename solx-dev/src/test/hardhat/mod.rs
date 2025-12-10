@@ -322,12 +322,12 @@ pub fn test(
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&reference_toolchain))
                 .copied()
-                .unwrap_or(usize::MAX);
+                .unwrap_or_default();
             let candidate_build_errors = build_correctness_table
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&candidate_toolchain))
                 .copied()
-                .unwrap_or(usize::MAX);
+                .unwrap_or_default();
             if candidate_build_errors > reference_build_errors {
                 errors.push(format!(
                     "{} Building correctness mismatch for project {} between reference toolchain {} ({} errors) and candidate toolchain {} ({} errors)",
@@ -344,12 +344,12 @@ pub fn test(
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&reference_toolchain))
                 .copied()
-                .unwrap_or(usize::MAX);
+                .unwrap_or_default();
             let candidate_test_failures = test_correctness_table
                 .get(project)
                 .and_then(|toolchains| toolchains.get(&candidate_toolchain))
                 .copied()
-                .unwrap_or(usize::MAX);
+                .unwrap_or_default();
             if candidate_test_failures > reference_test_failures {
                 errors.push(format!(
                     "{} Testing correctness mismatch for project {} between reference toolchain {} ({} failures) and candidate toolchain {} ({} failures)",

@@ -23,7 +23,7 @@ fn main() {
     match main_inner() {
         Ok(()) => std::process::exit(0),
         Err(error) => {
-            eprintln!("Error: {error:?}");
+            eprintln!("{error:?}");
             std::process::exit(1)
         }
     }
