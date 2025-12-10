@@ -4,7 +4,7 @@
       "is_enabled": true,
       "protocol": "compiler-bin-list",
       "source": "https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/${PLATFORM}/list.json",
-      "destination": "./temp-foundry-compilers/solc-${VERSION}"
+      "destination": "./temp-compilers/solc-${VERSION}"
     }
   },
   "platforms": {

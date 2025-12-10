@@ -56,17 +56,9 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install yq
-        env:
-          YQ_DOWNLOAD_URL: https://github.com/mikefarah/yq/releases/download/v4.45.4/yq_linux_amd64
-        run: |
-          wget "${YQ_DOWNLOAD_URL}"
-          mv yq_linux_amd64 yq
-          chmod +x yq
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 23
+          node-version: 20
 
       - name: Install Yarn
         run: npm install -g yarn bun pnpm

@@ -27,8 +27,6 @@ pub fn test(
     solidity_version: String,
     project_filter: Vec<String>,
 ) -> anyhow::Result<()> {
-    crate::utils::exists("git")?;
-    crate::utils::exists("npm")?;
     crate::utils::exists("forge")?;
 
     std::fs::create_dir_all(projects_directory.as_path()).map_err(|error| {
@@ -56,6 +54,8 @@ pub fn test(
         let mut project_directory = crate::utils::absolute_path(projects_directory.as_path())?;
         project_directory.push(project_name.as_str());
         if !project_directory.exists() {
+            crate::utils::exists("git")?;
+
             let mut clone_command = Command::new("git");
             clone_command.arg("clone");
             clone_command.args(["--depth", "1"]);
@@ -72,7 +72,15 @@ pub fn test(
                 )
                 .as_str(),
             )?;
+        } else {
+            clean(project_directory.as_path(), project_name.as_str())?;
         }
+
+        eprintln!(
+            "{} pragmas in Foundry project {}",
+            solx_utils::cargo_status_ok("Fixing"),
+            project_name.bright_white().bold()
+        );
         for solidity_file in
             glob::glob(format!("{}/**/*.sol", project_directory.to_string_lossy()).as_str())
                 .expect("Always valid")
@@ -91,16 +99,30 @@ pub fn test(
         }
 
         if project.requires_yarn {
-            crate::utils::exists("yarn")?;
+            crate::utils::exists("npm")?;
 
-            let mut yarn_install_command = Command::new("yarn");
+            let build_system = "yarn";
+            let mut npm_install_yarn = Command::new("npm");
+            npm_install_yarn.current_dir(project_directory.as_path());
+            npm_install_yarn.arg("install");
+            npm_install_yarn.arg(build_system);
+            crate::utils::command(
+                &mut npm_install_yarn,
+                format!(
+                    "{} build system {} for Foundry project {project_name}",
+                    solx_utils::cargo_status_ok("Installing"),
+                    build_system.bright_yellow().bold()
+                )
+                .as_str(),
+            )?;
+            let mut yarn_install_command = Command::new(build_system);
             yarn_install_command.args(["--cwd", project_directory.to_string_lossy().as_ref()]);
             yarn_install_command.arg("install");
             crate::utils::command(
                 &mut yarn_install_command,
                 format!(
-                    "{} yarn install for Foundry project {project_name}",
-                    solx_utils::cargo_status_ok("Running")
+                    "{} dependencies for Foundry project {project_name}",
+                    solx_utils::cargo_status_ok("Installing")
                 )
                 .as_str(),
             )?;
@@ -122,16 +144,14 @@ pub fn test(
         crate::utils::sed_file(
             project_directory.join("foundry.toml").as_path(),
             &[
-                r#"s/deny_warnings\s?=.*\n//g"#,
-                r#"s/evm_version\s?=.*\n//g"#,
-                r#"s/via_ir\s?=.*\n//g"#,
-                format!(r#"s/solc_version\s?=\s?".*"/solc_version = "{solidity_version}"/g"#)
+                r#"s/deny_warnings\s*=.*\n//g"#,
+                r#"s/evm_version\s*=.*\n//g"#,
+                r#"s/via_ir\s*=.*\n//g"#,
+                format!(r#"s/solc_version\s*=\s*".*"/solc_version = "{solidity_version}"/g"#)
                     .as_str(),
-                format!(r#"s/solc\s?=\s?".*"/solc_version = "{solidity_version}"/g"#).as_str(),
+                format!(r#"s/solc\s*=\s*".*"/solc_version = "{solidity_version}"/g"#).as_str(),
             ],
         )?;
-
-        clean(project_directory.as_path(), project_name.as_str())?;
 
         for ((_identifier, compiler), codegen) in config
             .compilers
@@ -384,6 +404,11 @@ pub fn test(
     })?;
     let mut output_path = crate::utils::absolute_path(output_directory)?;
     output_path.push("foundry-report.xlsx");
+    eprintln!(
+        "{} the spreadsheet report to {}",
+        solx_utils::cargo_status_ok("Writing"),
+        output_path.to_string_lossy().bright_white().bold()
+    );
     output.write_to_file(output_path)?;
 
     let correctness_reference_compiler = config

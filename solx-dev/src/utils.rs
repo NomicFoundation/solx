@@ -73,6 +73,24 @@ pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
         );
     }
 
+    // let json_start = result
+    //     .stdout
+    //     .iter()
+    //     .position(|&byte| byte == b'{')
+    //     .unwrap_or_default();
+    // let json_end = result
+    //     .stdout
+    //     .iter()
+    //     .rposition(|&byte| byte == b'}')
+    //     .map(|pos| pos + 1)
+    //     .unwrap_or(result.stdout.len());
+    // if json_start >= json_end {
+    //     anyhow::bail!(
+    //         "{command:?} output parsing: JSON object not found in output:\n{}\n{}",
+    //         String::from_utf8_lossy(result.stdout.as_slice()),
+    //         String::from_utf8_lossy(result.stderr.as_slice()),
+    //     );
+    // }
     solx_utils::deserialize_from_slice::<T>(result.stdout.as_slice())
         .map_err(|error| anyhow::anyhow!("{command:?} output parsing: {error:?}"))
 }

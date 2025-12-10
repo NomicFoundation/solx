@@ -78,6 +78,22 @@ fn main_inner() -> anyhow::Result<()> {
                 arguments.valgrind_options,
             )?;
         }
+        Arguments::Test(TestArguments::Hardhat(arguments)) => {
+            let test_config_path = solx_dev::absolute_path(arguments.test_config_path)?;
+            let test_config = solx_dev::HardhatTestConfig::try_from(test_config_path)?;
+
+            let downloader_config_path = solx_dev::absolute_path(arguments.downloader_config_path)?;
+            let downloader = solx_compiler_downloader::Downloader::default();
+            downloader.download(downloader_config_path.as_path())?;
+
+            solx_dev::test_hardhat(
+                test_config,
+                arguments.projects_dir,
+                arguments.output_dir,
+                arguments.solidity_version,
+                arguments.project_filter,
+            )?;
+        }
         Arguments::Test(TestArguments::Foundry(arguments)) => {
             let test_config_path = solx_dev::absolute_path(arguments.test_config_path)?;
             let test_config = solx_dev::FoundryTestConfig::try_from(test_config_path)?;
