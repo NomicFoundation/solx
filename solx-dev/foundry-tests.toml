@@ -41,7 +41,6 @@ description = "lil web3 aims to build really simple, intentionally-limited versi
 [projects.maple-erc20]
 url = "https://github.com/maple-labs/erc20"
 description = "Basic ERC-20 contract designed to be inherited and extended."
-disabled = true # forge REVM error
 
 [projects.diamonds]
 url = "https://github.com/Timidan/Foundry-Hardhat-Diamonds"

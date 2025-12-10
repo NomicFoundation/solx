@@ -151,9 +151,10 @@ pub fn test(
                 r#"s/deny_warnings\s*=.*\n//g"#,
                 r#"s/via_ir\s*=.*\n//g"#,
                 r#"s/evm_version\s*=.*\n//g"#,
-                format!(r#"s/solc_version\s*=\s*".*"/solc_version = "{solidity_version}"/g"#)
+                format!(r#"s/solc_version\s*=\s*["'].*["']/solc_version = '{solidity_version}'/g"#)
                     .as_str(),
-                format!(r#"s/solc\s*=\s*".*"/solc_version = "{solidity_version}"/g"#).as_str(),
+                format!(r#"s/solc\s*=\s*["'].*["']/solc_version = '{solidity_version}'/g"#)
+                    .as_str(),
             ],
         )?;
 
@@ -172,7 +173,10 @@ pub fn test(
             if codegen == "viaIR" {
                 forge_build_command.arg("--via-ir");
             }
-            forge_build_command.args(["--evm-version", "cancun"]);
+            forge_build_command.args([
+                "--evm-version",
+                solx_utils::EVMVersion::Prague.to_string().as_str(),
+            ]);
             forge_build_command.arg("--optimize");
             forge_build_command.arg("--no-metadata");
             forge_build_command.arg("--force");
@@ -253,7 +257,10 @@ pub fn test(
             if codegen == "viaIR" {
                 forge_build_sizes_command.arg("--via-ir");
             }
-            forge_build_sizes_command.args(["--evm-version", "cancun"]);
+            forge_build_sizes_command.args([
+                "--evm-version",
+                solx_utils::EVMVersion::Prague.to_string().as_str(),
+            ]);
             forge_build_sizes_command.arg("--optimize");
             forge_build_sizes_command.arg("--no-metadata");
             forge_build_sizes_command.arg("--sizes");
@@ -290,7 +297,10 @@ pub fn test(
             }
             forge_test_command.args(["--fuzz-runs", "0"]);
             forge_test_command.args(["--fuzz-seed", "0xdeadbeef"]);
-            forge_test_command.args(["--evm-version", "cancun"]);
+            forge_test_command.args([
+                "--evm-version",
+                solx_utils::EVMVersion::Prague.to_string().as_str(),
+            ]);
             forge_test_command.arg("--optimize");
             forge_test_command.arg("--no-metadata");
             forge_test_command.arg("--json");
@@ -352,7 +362,10 @@ pub fn test(
             }
             forge_test_gas_command.args(["--fuzz-runs", "0"]);
             forge_test_gas_command.args(["--fuzz-seed", "0xdeadbeef"]);
-            forge_test_gas_command.args(["--evm-version", "cancun"]);
+            forge_test_gas_command.args([
+                "--evm-version",
+                solx_utils::EVMVersion::Prague.to_string().as_str(),
+            ]);
             forge_test_gas_command.arg("--optimize");
             forge_test_gas_command.arg("--no-metadata");
             forge_test_gas_command.arg("--gas-report");
