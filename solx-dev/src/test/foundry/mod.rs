@@ -39,6 +39,24 @@ pub fn test(
     let mut benchmark_inputs = Vec::with_capacity(config.projects.len() * 4);
     let mut build_correctness_table = BTreeMap::new();
     let mut test_correctness_table = BTreeMap::new();
+    let correctness_reference_compiler = config
+        .compilers
+        .values()
+        .find(|compiler| compiler.is_correctness_reference)
+        .ok_or_else(|| {
+            anyhow::anyhow!("No reference compiler specified in the Foundry test configuration")
+        })?
+        .name
+        .clone();
+    let correctness_candidate_compiler = config
+        .compilers
+        .values()
+        .find(|compiler| compiler.is_correctness_candidate)
+        .ok_or_else(|| {
+            anyhow::anyhow!("No candidate compiler specified in the Foundry test configuration")
+        })?
+        .name
+        .clone();
 
     for (project_name, project) in config
         .projects
@@ -201,6 +219,12 @@ pub fn test(
             ) {
                 Ok(build_output) => build_output,
                 Err(_) => {
+                    if format!("{}-{}", correctness_candidate_compiler, codegen) == toolchain_name {
+                        build_correctness_table
+                            .entry(project_name.clone())
+                            .or_insert_with(BTreeMap::new)
+                            .insert(toolchain_name.clone(), 1);
+                    }
                     eprintln!(
                         "{} Foundry project {} with {} failed",
                         solx_utils::cargo_status_error("Building"),
@@ -431,24 +455,6 @@ pub fn test(
     );
     output.write_to_file(output_path)?;
 
-    let correctness_reference_compiler = config
-        .compilers
-        .values()
-        .find(|compiler| compiler.is_correctness_reference)
-        .ok_or_else(|| {
-            anyhow::anyhow!("No reference compiler specified in the Foundry test configuration")
-        })?
-        .name
-        .clone();
-    let correctness_candidate_compiler = config
-        .compilers
-        .values()
-        .find(|compiler| compiler.is_correctness_candidate)
-        .ok_or_else(|| {
-            anyhow::anyhow!("No candidate compiler specified in the Foundry test configuration")
-        })?
-        .name
-        .clone();
     let mut errors = Vec::new();
     for project in build_correctness_table.keys() {
         for codegen in ["legacy", "viaIR"] {
