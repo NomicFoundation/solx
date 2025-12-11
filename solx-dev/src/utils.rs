@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::process::Stdio;
 
+use colored::Colorize;
 use path_slash::PathBufExt;
 
 /// The minimum required XCode version.
@@ -89,6 +90,29 @@ pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
 
     solx_utils::deserialize_from_slice::<T>(result.stdout.as_slice())
         .map_err(|error| anyhow::anyhow!("{command:?} output parsing: {error:?}"))
+}
+
+///
+/// Removes the project directory after building and testing.
+///
+pub fn remove(project_directory: &Path, project_name: &str) -> anyhow::Result<()> {
+    if !project_directory.exists() {
+        return Ok(());
+    }
+
+    eprintln!(
+        "{} project {}",
+        solx_utils::cargo_status_ok("Removing"),
+        project_name.bright_white().bold()
+    );
+    std::fs::remove_dir_all(project_directory).map_err(|error| {
+        anyhow::anyhow!(
+            "{} project directory {project_directory:?}: {error}",
+            solx_utils::cargo_status_ok("Removing"),
+        )
+    })?;
+
+    Ok(())
 }
 
 ///

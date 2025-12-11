@@ -6,7 +6,6 @@ pub mod config;
 pub mod output;
 
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
 
@@ -27,6 +26,7 @@ pub fn test(
     solidity_version: String,
     project_filter: Vec<String>,
 ) -> anyhow::Result<()> {
+    crate::utils::exists("git")?;
     crate::utils::exists("npm")?;
 
     std::fs::create_dir_all(projects_directory.as_path()).map_err(|error| {
@@ -53,8 +53,13 @@ pub fn test(
     {
         let mut project_directory = crate::utils::absolute_path(projects_directory.as_path())?;
         project_directory.push(project_name.as_str());
-        if !project_directory.exists() {
-            crate::utils::exists("git")?;
+
+        for ((_identifier, compiler), codegen) in config
+            .compilers
+            .iter()
+            .cartesian_product(["legacy", "viaIR"])
+        {
+            crate::utils::remove(project_directory.as_path(), project_name.as_str())?;
 
             let mut clone_command = Command::new("git");
             clone_command.arg("clone");
@@ -72,102 +77,94 @@ pub fn test(
                 )
                 .as_str(),
             )?;
-        } else {
-            clean(project_directory.as_path(), project_name.as_str())?;
-        }
 
-        eprintln!(
-            "{} pragmas in Hardhat project {}",
-            solx_utils::cargo_status_ok("Fixing"),
-            project_name.bright_white().bold()
-        );
-        for solidity_file in
-            glob::glob(format!("{}/**/*.sol", project_directory.to_string_lossy()).as_str())
-                .expect("Always valid")
-                .filter_map(Result::ok)
-        {
-            if !solidity_file.is_file() {
-                continue;
+            eprintln!(
+                "{} pragmas in Hardhat project {}",
+                solx_utils::cargo_status_ok("Fixing"),
+                project_name.bright_white().bold()
+            );
+            for solidity_file in
+                glob::glob(format!("{}/**/*.sol", project_directory.to_string_lossy()).as_str())
+                    .expect("Always valid")
+                    .filter_map(Result::ok)
+            {
+                if !solidity_file.is_file() {
+                    continue;
+                }
+                crate::utils::sed_file(
+                    solidity_file.as_path(),
+                    &[
+                        format!(r#"s/pragma solidity.*/pragma solidity ={solidity_version};/g"#)
+                            .as_str(),
+                    ],
+                )?;
             }
-            crate::utils::sed_file(
-                solidity_file.as_path(),
-                &[
-                    format!(r#"s/pragma solidity.*/pragma solidity ={solidity_version};/g"#)
-                        .as_str(),
-                ],
+
+            let build_system = project.build_system.to_string();
+            let mut npm_install_build_system = Command::new("npm");
+            npm_install_build_system.current_dir(project_directory.as_path());
+            npm_install_build_system.args(["--loglevel", "error"]);
+            npm_install_build_system.arg("--force");
+            npm_install_build_system.arg("--yes");
+            npm_install_build_system.arg("install");
+            npm_install_build_system.arg("--global");
+            npm_install_build_system.arg(build_system.as_str());
+            crate::utils::command(
+                &mut npm_install_build_system,
+                format!(
+                    "{} build system {} for Hardhat project {project_name}",
+                    solx_utils::cargo_status_ok("Installing"),
+                    build_system.bright_yellow().bold()
+                )
+                .as_str(),
             )?;
-        }
-
-        let build_system = project.build_system.to_string();
-        let mut npm_install_build_system = Command::new("npm");
-        npm_install_build_system.current_dir(project_directory.as_path());
-        npm_install_build_system.args(["--loglevel", "error"]);
-        npm_install_build_system.arg("--force");
-        npm_install_build_system.arg("--yes");
-        npm_install_build_system.arg("install");
-        npm_install_build_system.arg("--global");
-        npm_install_build_system.arg(build_system.as_str());
-        crate::utils::command(
-            &mut npm_install_build_system,
-            format!(
-                "{} build system {} for Hardhat project {project_name}",
-                solx_utils::cargo_status_ok("Installing"),
-                build_system.bright_yellow().bold()
-            )
-            .as_str(),
-        )?;
-        let mut build_system_install_command = Command::new(build_system.as_str());
-        build_system_install_command.current_dir(project_directory.as_path());
-        if let BuildSystem::Npm = project.build_system {
-            build_system_install_command.args(["--loglevel", "error"]);
-            build_system_install_command.arg("--force");
-            build_system_install_command.arg("--yes");
-        }
-        build_system_install_command.arg("install");
-        crate::utils::command(
-            &mut build_system_install_command,
-            format!(
-                "{} dependencies for Hardhat project {project_name}",
-                solx_utils::cargo_status_ok("Installing")
-            )
-            .as_str(),
-        )?;
-
-        let mut dependency_override_command = Command::new(build_system.as_str());
-        dependency_override_command.current_dir(project_directory.as_path());
-        match project.build_system {
-            BuildSystem::Npm => {
-                dependency_override_command.args(["--loglevel", "error"]);
-                dependency_override_command.arg("--force");
-                dependency_override_command.arg("--yes");
+            let mut build_system_install_command = Command::new(build_system.as_str());
+            build_system_install_command.current_dir(project_directory.as_path());
+            if let BuildSystem::Npm = project.build_system {
+                build_system_install_command.args(["--loglevel", "error"]);
+                build_system_install_command.arg("--force");
+                build_system_install_command.arg("--yes");
             }
-            BuildSystem::Yarn => {
-                dependency_override_command.arg("--silent");
-            }
-            _ => {}
-        }
-        dependency_override_command.arg("install");
-        dependency_override_command.args(project.dependencies.as_slice());
-        dependency_override_command.arg("--save-dev");
-        crate::utils::command(
-            &mut dependency_override_command,
-            format!(
-                "{} dependences with {} for Hardhat project {project_name}",
-                solx_utils::cargo_status_ok("Overriding"),
-                project
-                    .dependencies
-                    .iter()
-                    .map(|dependency| dependency.bright_yellow().bold())
-                    .join(", ")
-            )
-            .as_str(),
-        )?;
+            build_system_install_command.arg("install");
+            crate::utils::command(
+                &mut build_system_install_command,
+                format!(
+                    "{} dependencies for Hardhat project {project_name}",
+                    solx_utils::cargo_status_ok("Installing")
+                )
+                .as_str(),
+            )?;
 
-        for ((_identifier, compiler), codegen) in config
-            .compilers
-            .iter()
-            .cartesian_product(["legacy", "viaIR"])
-        {
+            let mut dependency_override_command = Command::new(build_system.as_str());
+            dependency_override_command.current_dir(project_directory.as_path());
+            match project.build_system {
+                BuildSystem::Npm => {
+                    dependency_override_command.args(["--loglevel", "error"]);
+                    dependency_override_command.arg("--force");
+                    dependency_override_command.arg("--yes");
+                }
+                BuildSystem::Yarn => {
+                    dependency_override_command.arg("--silent");
+                }
+                _ => {}
+            }
+            dependency_override_command.arg("install");
+            dependency_override_command.args(project.dependencies.as_slice());
+            dependency_override_command.arg("--save-dev");
+            crate::utils::command(
+                &mut dependency_override_command,
+                format!(
+                    "{} dependences with {} for Hardhat project {project_name}",
+                    solx_utils::cargo_status_ok("Overriding"),
+                    project
+                        .dependencies
+                        .iter()
+                        .map(|dependency| dependency.bright_yellow().bold())
+                        .join(", ")
+                )
+                .as_str(),
+            )?;
+
             let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;
             let toolchain_name = format!("{}-{codegen}", compiler.name);
 
@@ -208,7 +205,6 @@ pub fn test(
                     project_name.bright_white().bold(),
                     toolchain_name.bright_white().bold()
                 );
-                clean(project_directory.as_path(), project_name.as_str())?;
                 continue;
             }
             let compilation_time = build_timestamp_start.elapsed().as_millis() as u64;
@@ -273,8 +269,6 @@ pub fn test(
                 project_name.clone(),
                 toolchain_name.clone(),
             ));
-
-            clean(project_directory.as_path(), project_name.as_str())?;
         }
     }
 
@@ -376,25 +370,5 @@ pub fn test(
         anyhow::bail!(errors.join("\n"));
     }
 
-    Ok(())
-}
-
-///
-/// Cleans the project after building and testing.
-///
-pub fn clean(project_directory: &Path, project_name: &str) -> anyhow::Result<()> {
-    let mut npm_clean_command = Command::new("npm");
-    npm_clean_command.current_dir(project_directory.to_string_lossy().as_ref());
-    npm_clean_command.arg("run");
-    npm_clean_command.arg("clean");
-    crate::utils::command(
-        &mut npm_clean_command,
-        format!(
-            "{} Hardhat project {}",
-            solx_utils::cargo_status_ok("Cleaning"),
-            project_name.bright_white().bold()
-        )
-        .as_str(),
-    )?;
     Ok(())
 }

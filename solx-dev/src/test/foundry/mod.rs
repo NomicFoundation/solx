@@ -6,7 +6,6 @@ pub mod config;
 pub mod output;
 
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
 
@@ -28,6 +27,7 @@ pub fn test(
     project_filter: Vec<String>,
 ) -> anyhow::Result<()> {
     crate::utils::exists("forge")?;
+    crate::utils::exists("git")?;
 
     std::fs::create_dir_all(projects_directory.as_path()).map_err(|error| {
         anyhow::anyhow!(
@@ -53,8 +53,13 @@ pub fn test(
     {
         let mut project_directory = crate::utils::absolute_path(projects_directory.as_path())?;
         project_directory.push(project_name.as_str());
-        if !project_directory.exists() {
-            crate::utils::exists("git")?;
+
+        for ((_identifier, compiler), codegen) in config
+            .compilers
+            .iter()
+            .cartesian_product(["legacy", "viaIR"])
+        {
+            crate::utils::remove(project_directory.as_path(), project_name.as_str())?;
 
             let mut clone_command = Command::new("git");
             clone_command.arg("clone");
@@ -72,98 +77,92 @@ pub fn test(
                 )
                 .as_str(),
             )?;
-        } else {
-            clean(project_directory.as_path(), project_name.as_str())?;
-        }
 
-        eprintln!(
-            "{} pragmas in Foundry project {}",
-            solx_utils::cargo_status_ok("Fixing"),
-            project_name.bright_white().bold()
-        );
-        for solidity_file in
-            glob::glob(format!("{}/**/*.sol", project_directory.to_string_lossy()).as_str())
-                .expect("Always valid")
-                .filter_map(Result::ok)
-        {
-            if !solidity_file.is_file() {
-                continue;
+            eprintln!(
+                "{} pragmas in Foundry project {}",
+                solx_utils::cargo_status_ok("Fixing"),
+                project_name.bright_white().bold()
+            );
+            for solidity_file in
+                glob::glob(format!("{}/**/*.sol", project_directory.to_string_lossy()).as_str())
+                    .expect("Always valid")
+                    .filter_map(Result::ok)
+            {
+                if !solidity_file.is_file() {
+                    continue;
+                }
+                crate::utils::sed_file(
+                    solidity_file.as_path(),
+                    &[
+                        format!(r#"s/pragma solidity.*/pragma solidity ={solidity_version};/g"#)
+                            .as_str(),
+                    ],
+                )?;
             }
+
+            if project.requires_yarn {
+                crate::utils::exists("npm")?;
+
+                let build_system = "yarn";
+                let mut npm_install_yarn = Command::new("npm");
+                npm_install_yarn.current_dir(project_directory.as_path());
+                npm_install_yarn.arg("install");
+                npm_install_yarn.args(["--loglevel", "error"]);
+                npm_install_yarn.arg("--force");
+                npm_install_yarn.arg("--yes");
+                npm_install_yarn.arg("--global");
+                npm_install_yarn.arg(build_system);
+                crate::utils::command(
+                    &mut npm_install_yarn,
+                    format!(
+                        "{} build system {} for Foundry project {project_name}",
+                        solx_utils::cargo_status_ok("Installing"),
+                        build_system.bright_yellow().bold()
+                    )
+                    .as_str(),
+                )?;
+                let mut yarn_install_command = Command::new(build_system);
+                yarn_install_command.args(["--cwd", project_directory.to_string_lossy().as_ref()]);
+                yarn_install_command.arg("install");
+                yarn_install_command.arg("--silent");
+                crate::utils::command(
+                    &mut yarn_install_command,
+                    format!(
+                        "{} dependencies for Foundry project {project_name}",
+                        solx_utils::cargo_status_ok("Installing")
+                    )
+                    .as_str(),
+                )?;
+            }
+
+            let mut forge_config_fix_command = Command::new("forge");
+            forge_config_fix_command.current_dir(project_directory.as_path());
+            forge_config_fix_command.arg("config");
+            forge_config_fix_command.arg("--fix");
+            crate::utils::command(
+                &mut forge_config_fix_command,
+                format!(
+                    "{} Foundry project {}",
+                    solx_utils::cargo_status_ok("Fixing"),
+                    project_name.bright_white().bold()
+                )
+                .as_str(),
+            )?;
             crate::utils::sed_file(
-                solidity_file.as_path(),
+                project_directory.join("foundry.toml").as_path(),
                 &[
-                    format!(r#"s/pragma solidity.*/pragma solidity ={solidity_version};/g"#)
+                    r#"s/deny_warnings\s*=.*\n//g"#,
+                    r#"s/via_ir\s*=.*\n//g"#,
+                    r#"s/evm_version\s*=.*\n//g"#,
+                    format!(
+                        r#"s/solc_version\s*=\s*["'].*["']/solc_version = '{solidity_version}'/g"#
+                    )
+                    .as_str(),
+                    format!(r#"s/solc\s*=\s*["'].*["']/solc_version = '{solidity_version}'/g"#)
                         .as_str(),
                 ],
             )?;
-        }
 
-        if project.requires_yarn {
-            crate::utils::exists("npm")?;
-
-            let build_system = "yarn";
-            let mut npm_install_yarn = Command::new("npm");
-            npm_install_yarn.current_dir(project_directory.as_path());
-            npm_install_yarn.arg("install");
-            npm_install_yarn.args(["--loglevel", "error"]);
-            npm_install_yarn.arg("--force");
-            npm_install_yarn.arg("--yes");
-            npm_install_yarn.arg("--global");
-            npm_install_yarn.arg(build_system);
-            crate::utils::command(
-                &mut npm_install_yarn,
-                format!(
-                    "{} build system {} for Foundry project {project_name}",
-                    solx_utils::cargo_status_ok("Installing"),
-                    build_system.bright_yellow().bold()
-                )
-                .as_str(),
-            )?;
-            let mut yarn_install_command = Command::new(build_system);
-            yarn_install_command.args(["--cwd", project_directory.to_string_lossy().as_ref()]);
-            yarn_install_command.arg("install");
-            yarn_install_command.arg("--silent");
-            crate::utils::command(
-                &mut yarn_install_command,
-                format!(
-                    "{} dependencies for Foundry project {project_name}",
-                    solx_utils::cargo_status_ok("Installing")
-                )
-                .as_str(),
-            )?;
-        }
-
-        let mut forge_config_fix_command = Command::new("forge");
-        forge_config_fix_command.current_dir(project_directory.as_path());
-        forge_config_fix_command.arg("config");
-        forge_config_fix_command.arg("--fix");
-        crate::utils::command(
-            &mut forge_config_fix_command,
-            format!(
-                "{} Foundry project {}",
-                solx_utils::cargo_status_ok("Fixing"),
-                project_name.bright_white().bold()
-            )
-            .as_str(),
-        )?;
-        crate::utils::sed_file(
-            project_directory.join("foundry.toml").as_path(),
-            &[
-                r#"s/deny_warnings\s*=.*\n//g"#,
-                r#"s/via_ir\s*=.*\n//g"#,
-                r#"s/evm_version\s*=.*\n//g"#,
-                format!(r#"s/solc_version\s*=\s*["'].*["']/solc_version = '{solidity_version}'/g"#)
-                    .as_str(),
-                format!(r#"s/solc\s*=\s*["'].*["']/solc_version = '{solidity_version}'/g"#)
-                    .as_str(),
-            ],
-        )?;
-
-        for ((_identifier, compiler), codegen) in config
-            .compilers
-            .iter()
-            .cartesian_product(["legacy", "viaIR"])
-        {
             let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;
             let toolchain_name = format!("{}-{codegen}", compiler.name);
 
@@ -205,7 +204,6 @@ pub fn test(
                         project_name.bright_white().bold(),
                         toolchain_name.bright_white().bold()
                     );
-                    clean(project_directory.as_path(), project_name.as_str())?;
                     continue;
                 }
             };
@@ -246,7 +244,6 @@ pub fn test(
                     toolchain_name.clone(),
                 ));
                 eprintln!("{} Building Foundry project {} with {} failed with {build_errors} errors and {built_contracts_count} built contracts", solx_utils::cargo_status_error("Error"), project_name.bright_white().bold(), toolchain_name.bright_white().bold());
-                clean(project_directory.as_path(), project_name.as_str())?;
                 continue;
             }
 
@@ -405,8 +402,6 @@ pub fn test(
                 project_name.clone(),
                 toolchain_name.clone(),
             ));
-
-            clean(project_directory.as_path(), project_name.as_str())?;
         }
     }
 
@@ -508,24 +503,5 @@ pub fn test(
         anyhow::bail!(errors.join("\n"));
     }
 
-    Ok(())
-}
-
-///
-/// Cleans the project after building and testing.
-///
-pub fn clean(project_directory: &Path, project_name: &str) -> anyhow::Result<()> {
-    let mut forge_clean_command = Command::new("forge");
-    forge_clean_command.arg("clean");
-    forge_clean_command.args(["--root", project_directory.to_string_lossy().as_ref()]);
-    crate::utils::command(
-        &mut forge_clean_command,
-        format!(
-            "{} Foundry project {}",
-            solx_utils::cargo_status_ok("Cleaning"),
-            project_name.bright_white().bold()
-        )
-        .as_str(),
-    )?;
     Ok(())
 }
