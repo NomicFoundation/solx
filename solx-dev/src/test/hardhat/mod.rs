@@ -68,7 +68,7 @@ pub fn test(
             clone_command.arg("--shallow-submodules");
             clone_command.arg(project.url.as_str());
             clone_command.arg(project_directory.to_string_lossy().as_ref());
-            crate::utils::command(
+            crate::utils::command_with_retries(
                 &mut clone_command,
                 format!(
                     "{} Hardhat project {}",
@@ -76,6 +76,7 @@ pub fn test(
                     project_name.bright_white().bold()
                 )
                 .as_str(),
+                16,
             )?;
 
             eprintln!(
@@ -109,7 +110,7 @@ pub fn test(
             npm_install_build_system.arg("install");
             npm_install_build_system.arg("--global");
             npm_install_build_system.arg(build_system.as_str());
-            crate::utils::command(
+            crate::utils::command_with_retries(
                 &mut npm_install_build_system,
                 format!(
                     "{} build system {} for Hardhat project {project_name}",
@@ -117,6 +118,7 @@ pub fn test(
                     build_system.bright_yellow().bold()
                 )
                 .as_str(),
+                16,
             )?;
             let mut build_system_install_command = Command::new(build_system.as_str());
             build_system_install_command.current_dir(project_directory.as_path());
@@ -126,13 +128,14 @@ pub fn test(
                 build_system_install_command.arg("--yes");
             }
             build_system_install_command.arg("install");
-            crate::utils::command(
+            crate::utils::command_with_retries(
                 &mut build_system_install_command,
                 format!(
                     "{} dependencies for Hardhat project {project_name}",
                     solx_utils::cargo_status_ok("Installing")
                 )
                 .as_str(),
+                16,
             )?;
 
             let mut dependency_override_command = Command::new(build_system.as_str());
@@ -151,7 +154,7 @@ pub fn test(
             dependency_override_command.arg("install");
             dependency_override_command.args(project.dependencies.as_slice());
             dependency_override_command.arg("--save-dev");
-            crate::utils::command(
+            crate::utils::command_with_retries(
                 &mut dependency_override_command,
                 format!(
                     "{} dependences with {} for Hardhat project {project_name}",
@@ -163,6 +166,7 @@ pub fn test(
                         .join(", ")
                 )
                 .as_str(),
+                16,
             )?;
 
             let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;

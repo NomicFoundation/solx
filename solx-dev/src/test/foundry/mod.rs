@@ -68,7 +68,7 @@ pub fn test(
             clone_command.arg("--shallow-submodules");
             clone_command.arg(project.url.as_str());
             clone_command.arg(project_directory.to_string_lossy().as_ref());
-            crate::utils::command(
+            crate::utils::command_with_retries(
                 &mut clone_command,
                 format!(
                     "{} Foundry project {}",
@@ -76,6 +76,7 @@ pub fn test(
                     project_name.bright_white().bold()
                 )
                 .as_str(),
+                16,
             )?;
 
             eprintln!(
@@ -112,7 +113,7 @@ pub fn test(
                 npm_install_yarn.arg("--yes");
                 npm_install_yarn.arg("--global");
                 npm_install_yarn.arg(build_system);
-                crate::utils::command(
+                crate::utils::command_with_retries(
                     &mut npm_install_yarn,
                     format!(
                         "{} build system {} for Foundry project {project_name}",
@@ -120,18 +121,20 @@ pub fn test(
                         build_system.bright_yellow().bold()
                     )
                     .as_str(),
+                    16,
                 )?;
                 let mut yarn_install_command = Command::new(build_system);
                 yarn_install_command.args(["--cwd", project_directory.to_string_lossy().as_ref()]);
                 yarn_install_command.arg("install");
                 yarn_install_command.arg("--silent");
-                crate::utils::command(
+                crate::utils::command_with_retries(
                     &mut yarn_install_command,
                     format!(
                         "{} dependencies for Foundry project {project_name}",
                         solx_utils::cargo_status_ok("Installing")
                     )
                     .as_str(),
+                    16,
                 )?;
             }
 

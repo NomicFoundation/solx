@@ -44,6 +44,39 @@ pub fn command(command: &mut Command, description: &str) -> anyhow::Result<()> {
 }
 
 ///
+/// Retrying subprocess runner.
+///
+/// Passes all output through and ignores failures and retries `retries` times if specified.
+///
+pub fn command_with_retries(
+    command: &mut Command,
+    description: &str,
+    retries: usize,
+) -> anyhow::Result<()> {
+    for attempt in 0..=retries {
+        eprintln!("{description} (attempt {attempt}): {command:?}");
+
+        let status = command
+            .status()
+            .unwrap_or_else(|error| panic!("{command:?} process spawning error: {error:?}"));
+
+        if status.code() == Some(solx_utils::EXIT_CODE_SUCCESS) {
+            return Ok(());
+        } else {
+            eprintln!(
+                "{command:?} subprocess failed {}",
+                match status.code() {
+                    Some(code) => format!("with exit code {code:?}"),
+                    None => "without exit code".to_owned(),
+                },
+            );
+        }
+    }
+
+    anyhow::bail!("{command:?} subprocess failed after {retries} retries");
+}
+
+///
 /// The subprocess runner.
 ///
 /// Returns a JSON deserialized output.
