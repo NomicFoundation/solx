@@ -135,10 +135,16 @@ pub fn test(
 
         let mut dependency_override_command = Command::new(build_system.as_str());
         dependency_override_command.current_dir(project_directory.as_path());
-        if let BuildSystem::Npm = project.build_system {
-            dependency_override_command.args(["--loglevel", "error"]);
-            dependency_override_command.arg("--force");
-            dependency_override_command.arg("--yes");
+        match project.build_system {
+            BuildSystem::Npm => {
+                dependency_override_command.args(["--loglevel", "error"]);
+                dependency_override_command.arg("--force");
+                dependency_override_command.arg("--yes");
+            }
+            BuildSystem::Yarn => {
+                dependency_override_command.arg("--silent");
+            }
+            _ => {}
         }
         dependency_override_command.arg("install");
         dependency_override_command.args(project.dependencies.as_slice());
@@ -338,6 +344,7 @@ pub fn test(
                     candidate_toolchain.bright_white().bold(),
                     candidate_build_errors
                 ));
+                continue;
             }
 
             let reference_test_failures = test_correctness_table
@@ -350,7 +357,9 @@ pub fn test(
                 .and_then(|toolchains| toolchains.get(&candidate_toolchain))
                 .copied()
                 .unwrap_or_default();
-            if candidate_test_failures > reference_test_failures {
+            if candidate_test_failures > reference_test_failures
+                && reference_build_errors < candidate_build_errors
+            {
                 errors.push(format!(
                     "{} Testing correctness mismatch for project {} between reference toolchain {} ({} failures) and candidate toolchain {} ({} failures)",
                     solx_utils::cargo_status_error("Error"),

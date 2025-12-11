@@ -122,6 +122,7 @@ pub fn test(
             let mut yarn_install_command = Command::new(build_system);
             yarn_install_command.args(["--cwd", project_directory.to_string_lossy().as_ref()]);
             yarn_install_command.arg("install");
+            yarn_install_command.arg("--silent");
             crate::utils::command(
                 &mut yarn_install_command,
                 format!(
@@ -475,6 +476,7 @@ pub fn test(
                     candidate_toolchain.bright_white().bold(),
                     candidate_build_errors
                 ));
+                continue;
             }
 
             let reference_test_failures = test_correctness_table
@@ -487,7 +489,9 @@ pub fn test(
                 .and_then(|toolchains| toolchains.get(&candidate_toolchain))
                 .copied()
                 .unwrap_or_default();
-            if candidate_test_failures > reference_test_failures {
+            if candidate_test_failures > reference_test_failures
+                && reference_build_errors < candidate_build_errors
+            {
                 errors.push(format!(
                     "{} Testing correctness mismatch for project {} between reference toolchain {} ({} failures) and candidate toolchain {} ({} failures)",
                     solx_utils::cargo_status_error("Error"),

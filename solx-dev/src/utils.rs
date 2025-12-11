@@ -2,6 +2,8 @@
 //! The LLVM builder utilities.
 //!
 
+use std::io::BufRead;
+use std::io::BufReader;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -53,9 +55,21 @@ pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
     eprintln!("{description}: {command:?}");
 
     command.stdout(Stdio::piped());
-    let process = command
+    command.stderr(Stdio::piped());
+    let mut process = command
         .spawn()
         .unwrap_or_else(|error| panic!("{command:?} process spawning error: {error:?}"));
+
+    let stderr = process.stderr.take().expect("Failed to take stderr");
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines().map_while(Result::ok) {
+            if line.contains(r#""$message_type":"diagnostic""#) {
+                continue;
+            }
+            eprintln!("{line}");
+        }
+    });
 
     let result = process
         .wait_with_output()
