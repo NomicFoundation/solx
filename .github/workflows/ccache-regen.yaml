@@ -3,7 +3,7 @@ name: Ccache regen
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 20 * * *' # each day at 8 PM GMT
+    - cron: '0 0 * * *' # each day at 8 PM GMT
 
 # Cancel the workflow if any new changes pushed to a feature branch or the trunk
 concurrency:

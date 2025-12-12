@@ -24,6 +24,38 @@ jobs:
     strategy:
       fail-fast: false
     steps:
+      # Build the main branch
+      - name: Checkout source (main)
+        uses: actions/checkout@v5
+        with:
+          repository: 'NomicFoundation/solx'
+          ref: 'main'
+          fetch-depth: 1
+          submodules: recursive
+          path: 'temp-solx-main'
+  
+      - name: Building solc (main)
+        uses: ./temp-solx-main/.github/actions/build-solc
+        with:
+          cmake-build-type: 'Release'
+          working-dir: 'temp-solx-main/solx-solidity'
+
+      - name: Build LLVM (main)
+        uses: ./temp-solx-main/.github/actions/build-llvm
+        with:
+          build-type: Release
+          enable-assertions: 'false'
+          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
+          working-dir: 'temp-solx-main'
+
+      - name: Build solx (main)
+        working-directory: 'temp-solx-main'
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
+        run: cargo build --release --bin solx
+      
+      # Build the PR branch
       - name: Checkout source
         uses: actions/checkout@v5
         with:
