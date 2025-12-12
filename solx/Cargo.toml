@@ -35,6 +35,6 @@ solx-codegen-evm = { path = "../solx-codegen-evm" }
 
 [dev-dependencies.inkwell]
 git = "https://github.com/NomicFoundation/inkwell"
-branch = "az-add-evm-target-facilities"
+branch = "main"
 default-features = false
 features = ["llvm21-1", "serde", "no-libffi-linking", "target-evm"]

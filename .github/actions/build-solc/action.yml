@@ -160,8 +160,6 @@ runs:
           -DCMAKE_BUILD_TYPE="${{ inputs.cmake-build-type }}" ${COMPILER_FLAGS} ${BOOST_CMAKE_FLAGS} ${MLIR_FLAGS} \
           -DCMAKE_CXX_FLAGS="-DJSON_USE_INT64_DOUBLE_CONVERSION -DBOOST_NO_CXX98_FUNCTION_BASE -D_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION" \
           -DSOL_VERSION_ZKSYNC="${{ steps.solc-version.outputs.version }}-${{ inputs.zksync-version }}" \
-          -DSOLC_VERSION_ZKEVM="${{ steps.solc-version.outputs.version }}-${{ inputs.zksync-version }}" \
-          -DSOL_VERSION_ZKEVM="${{ steps.solc-version.outputs.version }}-${{ inputs.zksync-version }}" \
           -DUSE_Z3=OFF \
           -DUSE_CVC4=OFF \
           -DTESTS=0 \
