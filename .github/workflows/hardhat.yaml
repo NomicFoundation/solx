@@ -1,4 +1,4 @@
-name: Hardhat tests and benchmarks
+name: Hardhat Projects
 
 on:
   pull_request:
