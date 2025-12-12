@@ -14,20 +14,13 @@
 
 - [Foundry projects](.github/forge-benchmarks.toml)
 - [Hardhat projects](.github/hardhat-projects.toml)
-- [tests](https://github.com/matter-labs/solx-solidity/tree/0.8.30/test/libsolidity/semanticTests) from the **solc** project
+- [tests](https://github.com/matter-labs/solx-solidity/tree/0.8.30/test/libsolidity/semanticTests) from the **solc** repository
 - [real-life projects](solx-tests/solidity/complex/defi) such as UniswapV2 and Mooniswap
 - [additional tests](solx-tests/solidity) written by the **solx** team
 
-Our mid-term goals:
-
-- emit [ethdebug](https://ethdebug.github.io/format/index.html) for optimized code
-- roll out the MLIR codegen to replace Yul and EVM assembly
-- further reduce gas usage and bytecode size
-- eliminate the need for inline assembly for efficiency
-
 ## Documentation
 
-**solx** documentation is powered by [GitHub Pages](https://matter-labs.github.io/solx/latest/) and provided as an [mdBook](https://github.com/rust-lang/mdBook), while its Markdown sources can be found in [this directory](./docs/src/).
+**solx** documentation is powered by [GitHub Pages](https://nomicfoundation.github.io/solx/latest/) and provided as an [mdBook](https://github.com/rust-lang/mdBook), while its Markdown sources can be found in [this directory](./docs/src/).
 To build the book, follow these [instructions](./docs/README.md).
 
 See also:
@@ -37,7 +30,7 @@ See also:
 
 ## Installation
 
-For the detailed installation and usage guide, visit [the respective page of our documentation](https://matter-labs.github.io/solx/latest/#installation).
+For the detailed installation and usage guide, visit [the respective page of our documentation](https://nomicfoundation.github.io/solx/latest/#installation).
 
 ## Architecture
 

@@ -54,5 +54,5 @@ This will check for common issues such as broken links or missing files.
 
 The book is automatically deployed each time a commit is pushed to the **main** branch or a new release tag is created.
 The generated HTML files are hosted on GitHub Pages and are accessible at:
-* https://matter-labs.github.io/solx/latest/ for the latest documentation.
-* https://matter-labs.github.io/solx/vX.Y.Z/ for the specific version documentation.
+* https://nomicfoundation.github.io/solx/latest/ for the latest documentation.
+* https://nomicfoundation.github.io/solx/vX.Y.Z/ for the specific version documentation.
