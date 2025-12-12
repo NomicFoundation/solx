@@ -47,6 +47,7 @@ jobs:
         with:
           cmake-build-type: 'Release'
           working-dir: 'temp-solx-main/solx-solidity'
+          upload-testing-binary: 'false'
 
       - name: Build LLVM (main)
         uses: ./.github/actions/build-llvm
@@ -69,6 +70,7 @@ jobs:
         with:
           cmake-build-type: 'Release'
           working-dir: 'solx-solidity'
+          upload-testing-binary: 'false'
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
