@@ -1,7 +1,7 @@
 [submodule "llvm"]
 	path = llvm
 	url = https://github.com/matter-labs/era-compiler-llvm
-	branch = main
+	branch = dborisenkov-llvm21
 [submodule "solidity"]
 	path = solx-solidity
 	url = https://github.com/NomicFoundation/solx-solidity

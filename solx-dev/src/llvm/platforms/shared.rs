@@ -104,7 +104,7 @@ pub fn shared_build_opts_targets() -> Vec<String> {
         "-DLLVM_TARGETS_TO_BUILD=''".to_owned(),
         format!(
             "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD='{}'",
-            [Platform::EVM, Platform::EraVM]
+            [Platform::EVM]
                 .into_iter()
                 .map(|platform| platform.to_string())
                 .collect::<Vec<String>>()
