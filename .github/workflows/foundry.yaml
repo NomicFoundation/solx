@@ -24,7 +24,14 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      # Build the main branch
+      - name: Checkout source
+        uses: actions/checkout@v5
+        with:
+          repository: 'NomicFoundation/solx'
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          submodules: recursive
+      
       - name: Checkout source (main)
         uses: actions/checkout@v5
         with:
@@ -34,14 +41,15 @@ jobs:
           submodules: recursive
           path: 'temp-solx-main'
   
+      # Build the main branch
       - name: Building solc (main)
-        uses: ./temp-solx-main/.github/actions/build-solc
+        uses: ./.github/actions/build-solc
         with:
           cmake-build-type: 'Release'
           working-dir: 'temp-solx-main/solx-solidity'
 
       - name: Build LLVM (main)
-        uses: ./temp-solx-main/.github/actions/build-llvm
+        uses: ./.github/actions/build-llvm
         with:
           build-type: Release
           enable-assertions: 'false'
@@ -55,15 +63,7 @@ jobs:
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
         run: cargo build --release --bin solx
       
-      # Build the PR branch
-      - name: Checkout source
-        uses: actions/checkout@v5
-        with:
-          repository: 'NomicFoundation/solx'
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 1
-          submodules: recursive
-  
+      # Build the PR branch  
       - name: Building solc
         uses: ./.github/actions/build-solc
         with:

@@ -1,6 +1,10 @@
 name: 'Build solc'
 description: 'Builds solc executable.'
 inputs:
+  working-dir:
+    description: 'Working directory.'
+    required: false
+    default: '.'
   release-suffix:
     description: 'Release suffix.'
     required: false
@@ -25,10 +29,6 @@ inputs:
     description: 'Boost version.'
     required: false
     default: '1.83.0'
-  working-dir:
-    description: 'Working directory.'
-    required: false
-    default: '.'
   upload-testing-binary:
     description: 'Upload testing binary.'
     required: false
