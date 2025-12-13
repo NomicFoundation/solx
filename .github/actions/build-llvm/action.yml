@@ -4,6 +4,10 @@
 name: 'Build LLVM'
 description: 'Builds backend LLVM framework'
 inputs:
+  working-dir:
+    description: 'Working directory.'
+    required: false
+    default: '.'
   enable-tests:
     description: "Enable tests."
     required: false
@@ -82,6 +86,7 @@ runs:
       run: HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
 
     - name: Install LLVM builder
+      working-directory: ${{ inputs.working-dir }}
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: cargo build --release --bin solx-dev
 
@@ -139,6 +144,7 @@ runs:
     # https://ccache.dev/manual/3.7.12.html#_compiling_in_different_directories
     - name: Build LLVM
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      working-directory: ${{ inputs.working-dir }}
       env:
         VERBOSE: 1
         CCACHE_BASEDIR: ${{ github.workspace }}

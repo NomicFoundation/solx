@@ -1,17 +1,31 @@
 {
-  "executables": {
-    "0.8.30": {
+  "executables": [
+    {
       "is_enabled": true,
       "protocol": "compiler-bin-list",
       "source": "https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/${PLATFORM}/list.json",
-      "destination": "./temp-compilers/solc-${VERSION}"
+      "destination": "./temp-compilers/solc-0.8.30",
+      "version": "0.8.30",
+      "platforms": {
+        "linux-amd64": "linux-amd64",
+        "linux-arm64": "linux-arm64",
+        "macos-amd64": "macosx-amd64",
+        "macos-arm64": "macosx-amd64",
+        "windows-amd64": "windows-amd64"
+      }
+    },
+    {
+      "is_enabled": true,
+      "protocol": "https",
+      "source": "https://github.com/NomicFoundation/solx/releases/download/0.1.2/solx-${PLATFORM}-v0.1.2",
+      "destination": "./temp-compilers/solx-latest",
+      "platforms": {
+        "linux-amd64": "linux-amd64-gnu",
+        "linux-arm64": "linux-arm64-gnu",
+        "macos-amd64": "macosx",
+        "macos-arm64": "macosx",
+        "windows-amd64": "windows-amd64-gnu"
+      }
     }
-  },
-  "platforms": {
-    "linux-amd64": "linux-amd64",
-    "linux-arm64": "linux-amd64",
-    "macos-amd64": "macosx-amd64",
-    "macos-arm64": "macosx-amd64",
-    "windows-amd64": "windows-amd64"
-  }
+  ]
 }
