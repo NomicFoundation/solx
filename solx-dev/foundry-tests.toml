@@ -24,13 +24,18 @@ path = "./temp-compilers/solc-0.8.30"
 description = "solc the latest downloaded from the official repo"
 is_correctness_reference = true
 
+[compilers.solx-latest]
+name = "01.solx-latest"
+path = "./temp-compilers/solc-latest"
+description = "solx downloaded from the latest release"
+
 [compilers.solx-main]
-name = "01.solx-main"
+name = "02.solx-main"
 path = "./temp-solx-main/target/release/solx"
 description = "solx built from the main branch"
 
 [compilers.solx]
-name = "02.solx"
+name = "03.solx"
 path = "./target/release/solx"
 description = "solx built from the current commit"
 is_correctness_candidate = true

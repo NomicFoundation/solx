@@ -3,7 +3,6 @@
 # [projects.name]
 # url = "https://github.com/.../..." # mandatory: required for running `git clone`
 # description = "A brief description of the project." # mandatory: for logging only
-# compile_only = true # optional: compile the project without running tests
 # build_system = "npm" # optional: default is "npm"; possible values: "npm", "yarn", "pnpm", "bun"
 # disabled = false # optional: whether the project is ignored
 #
@@ -15,7 +14,7 @@
 # ANOTHER_ENV = "321"
 #
 # [compilers.solx]
-# name = "solx-latest" # mandatory: used in Excel urlrts; hypens are replaced with '\n'
+# name = "solx-latest" # mandatory: used in Excel reports; hypens are replaced with '\n'
 # path = "./target/release/solx" # mandatory: path to the compiler executable
 # description = "a super ultra cool solx compiler" # mandatory: compiler description
 
@@ -25,13 +24,18 @@ path = "./temp-compilers/solc-0.8.30"
 description = "solc the latest downloaded from the official repo"
 is_correctness_reference = true
 
+[compilers.solx-latest]
+name = "01.solx-latest"
+path = "./temp-compilers/solc-latest"
+description = "solx downloaded from the latest release"
+
 [compilers.solx-main]
-name = "01.solx-main"
+name = "02.solx-main"
 path = "./temp-solx-main/target/release/solx"
 description = "solx built from the main branch"
 
 [compilers.solx]
-name = "02.solx"
+name = "03.solx"
 path = "./target/release/solx"
 description = "solx built from the current commit"
 is_correctness_candidate = true

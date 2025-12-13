@@ -33,8 +33,8 @@ impl Default for Downloader {
     fn default() -> Self {
         let mut http_client_builder = reqwest::blocking::ClientBuilder::new();
         http_client_builder = http_client_builder.connect_timeout(Duration::from_secs(60));
-        http_client_builder = http_client_builder.pool_idle_timeout(Duration::from_secs(60));
-        http_client_builder = http_client_builder.timeout(Duration::from_secs(60));
+        http_client_builder = http_client_builder.pool_idle_timeout(Duration::from_secs(600));
+        http_client_builder = http_client_builder.timeout(Duration::from_secs(3600));
         let http_client = http_client_builder
             .build()
             .expect("HTTP client building error");
@@ -65,26 +65,25 @@ impl Downloader {
             anyhow::anyhow!("Executable downloader config {config_path:?} parsing error: {error}")
         })?;
 
-        let platform_directory = config.get_remote_platform_directory()?;
-
-        for (version, executable) in config.executables.iter() {
+        for executable in config.executables.iter() {
             if !executable.is_enabled {
                 continue;
             }
 
+            let platform_directory = executable.get_remote_platform_directory()?;
+
             let mut source_path = executable
                 .source
-                .replace("${PLATFORM}", platform_directory.as_str())
-                .replace("${VERSION}", version.as_str());
+                .replace("${PLATFORM}", platform_directory.as_str());
 
-            let destination_path = executable
-                .destination
-                .replace("${VERSION}", version.as_str());
             let destination_path = PathBuf::from_str(
-                format!("{destination_path}{}", std::env::consts::EXE_SUFFIX).as_str(),
+                format!("{}{}", executable.destination, std::env::consts::EXE_SUFFIX).as_str(),
             )
             .map_err(|_| {
-                anyhow::anyhow!("Executable `{destination_path}` destination is invalid")
+                anyhow::anyhow!(
+                    "Executable `{}` destination is invalid",
+                    executable.destination
+                )
             })?;
 
             let data = match executable.protocol {
@@ -147,13 +146,17 @@ impl Downloader {
                         return Ok(config);
                     }
 
-                    let source_executable_name =
-                        match compiler_list.releases.get(version.to_string().as_str()) {
-                            Some(source_executable_name) => source_executable_name,
-                            None => anyhow::bail!(
+                    let version = executable.version.as_deref().ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Version is not specified for the compiler-bin-list protocol"
+                        )
+                    })?;
+                    let source_executable_name = match compiler_list.releases.get(version) {
+                        Some(source_executable_name) => source_executable_name,
+                        None => anyhow::bail!(
                             "Executable for version v{version} not found in the compiler JSON list",
                         ),
-                        };
+                    };
                     #[cfg(target_os = "windows")]
                     if !source_executable_name.ends_with(std::env::consts::EXE_SUFFIX) {
                         println!(

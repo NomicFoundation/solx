@@ -289,10 +289,10 @@ impl TryFrom<(Benchmark, Source)> for Xlsx {
 
         let comparison_mapping = match source {
             Source::Tooling => {
-                if xlsx.toolchains.len() < 6 {
+                if xlsx.toolchains.len() < 8 {
                     return Ok(xlsx);
                 }
-                vec![(4, 0), (5, 1), (2, 0), (3, 1)]
+                vec![(6, 4), (7, 5), (6, 2), (7, 3), (6, 0), (7, 1)]
             }
             Source::SolxTester => {
                 if xlsx.toolchains.len() < 8 {
