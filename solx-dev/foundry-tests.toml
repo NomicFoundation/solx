@@ -26,7 +26,7 @@ is_correctness_reference = true
 
 [compilers.solx-latest]
 name = "01.solx-latest"
-path = "./temp-compilers/solc-latest"
+path = "./temp-compilers/solx-latest"
 description = "solx downloaded from the latest release"
 
 [compilers.solx-main]

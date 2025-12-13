@@ -298,7 +298,7 @@ impl TryFrom<(Benchmark, Source)> for Xlsx {
                 if xlsx.toolchains.len() < 8 {
                     return Ok(xlsx);
                 }
-                vec![(2, 6), (3, 7), (0, 4), (1, 5)]
+                vec![(6, 2), (7, 3), (4, 0), (5, 1)]
             }
         };
 
