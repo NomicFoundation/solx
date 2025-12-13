@@ -3,28 +3,38 @@ description: 'Prepares msys2 for Windows builds.'
 runs:
   using: composite
   steps:
-  - name: Setup msys2
-    uses: msys2/setup-msys2@v2
-    id: msys2
-    with:
-      path-type: inherit # Important to correctly update PATH
-      update: true # Update msys2 packages
-      install: >-
-        base-devel
-        git
-        mingw-w64-x86_64-clang
-        mingw-w64-x86_64-lld
-        mingw-w64-x86_64-rust
-        mingw-w64-x86_64-cmake
-        mingw-w64-x86_64-ninja
-        mingw-w64-x86_64-gcc
-        mingw-w64-x86_64-gcc-libs
-        mingw-w64-x86_64-python
+    - name: Setup msys2 (no auto-update)
+      uses: msys2/setup-msys2@v2
+      id: msys2
+      with:
+        path-type: inherit
+        update: true
+        cache: false
 
-  - name: Prepare env
-    shell: 'msys2 {0}'
-    env:
-      MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
-    run: |
-      echo "/c/a/_temp/msys64/mingw64/bin" >> "${GITHUB_PATH}"
-      echo "/c/Users/runneradmin/.cargo/bin" >> "${GITHUB_PATH}"
+    - name: Repair keyring + update + install packages
+      shell: msys2 {0}
+      run: |
+        set -euxo pipefail
+
+        # Keyring repair (fixes "signature is invalid")
+        pacman-key --init
+        pacman-key --populate msys2
+
+        # Now install what you need
+        pacman -S --noconfirm --needed \
+          base-devel \
+          git \
+          mingw-w64-x86_64-clang \
+          mingw-w64-x86_64-lld \
+          mingw-w64-x86_64-rust \
+          mingw-w64-x86_64-cmake \
+          mingw-w64-x86_64-ninja \
+          mingw-w64-x86_64-gcc \
+          mingw-w64-x86_64-gcc-libs \
+          mingw-w64-x86_64-python
+
+    - name: Prepare env
+      shell: msys2 {0}
+      run: |
+        echo "/c/a/_temp/msys64/mingw64/bin" >> "${GITHUB_PATH}"
+        echo "/c/Users/runneradmin/.cargo/bin" >> "${GITHUB_PATH}"
