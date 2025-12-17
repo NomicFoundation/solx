@@ -175,7 +175,7 @@ This repository maintains intuitive and stable naming for the executables and pr
       -DPEDANTIC='OFF' \
       -DTESTS='OFF' \
       -DCMAKE_BUILD_TYPE='Release' \
-      -DSOL_VERSION_ZKSYNC='0.8.31-1.0.2'
+      -DSOL_REVISION_SOLX='0.8.31-1.0.2'
    cmake --build . --config Release --parallel ${YOUR_CPU_COUNT}
    cd ../..
    ```
@@ -204,11 +204,11 @@ This repository maintains intuitive and stable naming for the executables and pr
       -DPEDANTIC=OFF \
       -DTESTS=OFF \
       -DCMAKE_BUILD_TYPE="Release" \
-      -DSOL_VERSION_ZKSYNC="0.8.31-1.0.2"
+      -DSOL_REVISION_SOLX="0.8.31-1.0.2"
    cmake --build . --config Release --parallel ${YOUR_CPU_COUNT}
    ```
 
-   The `-DSOL_VERSION_ZKSYNC` flag is used to specify the version-revision of the **solc** that is reported by **solx**.
+   The `-DSOL_REVISION_SOLX` flag is used to specify the version-revision of the **solc** that is reported by **solx**.
    By default, we recommend keeping the revision at `1.0.2` to follow our [versioning](#versioning).
    Otherwise, feel free to change it according to your needs.
 
