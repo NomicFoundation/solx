@@ -51,6 +51,9 @@ pub enum EVMVersion {
     /// The corresponding EVM version.
     #[serde(rename = "prague")]
     Prague,
+    /// The corresponding EVM version.
+    #[serde(rename = "osaka")]
+    Osaka,
 }
 
 impl FromStr for EVMVersion {
@@ -71,6 +74,7 @@ impl FromStr for EVMVersion {
             "shanghai" => Self::Shanghai,
             "cancun" => Self::Cancun,
             "prague" => Self::Prague,
+            "osaka" => Self::Osaka,
             _ => anyhow::bail!(
                 "Unknown EVM version: {value}. Supported targets: {}",
                 vec![
@@ -86,6 +90,8 @@ impl FromStr for EVMVersion {
                     Self::Paris,
                     Self::Shanghai,
                     Self::Cancun,
+                    Self::Prague,
+                    Self::Osaka,
                 ]
                 .into_iter()
                 .map(|target| target.to_string())
@@ -112,6 +118,7 @@ impl std::fmt::Display for EVMVersion {
             Self::Shanghai => write!(f, "shanghai"),
             Self::Cancun => write!(f, "cancun"),
             Self::Prague => write!(f, "prague"),
+            Self::Osaka => write!(f, "osaka"),
         }
     }
 }

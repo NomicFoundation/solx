@@ -19,7 +19,6 @@ pub use self::test::params::abi_encoder_v1_only::ABIEncoderV1Only;
 pub use self::test::params::compile_to_ewasm::CompileToEwasm;
 pub use self::test::params::compile_via_yul::CompileViaYul;
 pub use self::test::params::evm_version::EVMVersion;
-pub use self::test::params::evm_version::EVM;
 pub use self::test::params::revert_strings::RevertStrings;
 pub use self::test::params::Params;
 pub use self::test::Test;

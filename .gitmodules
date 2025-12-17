@@ -5,4 +5,4 @@
 [submodule "solidity"]
 	path = solx-solidity
 	url = https://github.com/NomicFoundation/solx-solidity
-	branch = 0.8.30
+	branch = app-0.8.31

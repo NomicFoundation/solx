@@ -18,7 +18,7 @@
 //! } ] }
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.8.30;
+pragma solidity >=0.8.31;
 
 contract Lus0bNhO0tbf41q2B {
     int256 public state_NLAdZolVlUbLj8Hq6DkA = int256(0);

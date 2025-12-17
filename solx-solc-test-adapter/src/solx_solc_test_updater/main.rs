@@ -30,11 +30,7 @@ fn main() {
     let mut new_index =
         solx_solc_test_adapter::FSEntity::index(&arguments.source).expect("Failed to update index");
     let changes = old_index
-        .update(
-            &mut new_index,
-            arguments.destination.as_path(),
-            arguments.index_only,
-        )
+        .update(&mut new_index, arguments.source.as_path())
         .expect("Failed to update tests");
 
     println!("{} files created:\n", changes.created.len());

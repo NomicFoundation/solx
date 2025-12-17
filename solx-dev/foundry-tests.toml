@@ -19,8 +19,8 @@
 # description = "a super ultra cool solx compiler" # mandatory: compiler description
 
 [compilers.solc]
-name = "00.solc-0.8.30"
-path = "./temp-compilers/solc-0.8.30"
+name = "00.solc-0.8.31"
+path = "./temp-compilers/solc-0.8.31"
 description = "solc the latest downloaded from the official repo"
 is_correctness_reference = true
 

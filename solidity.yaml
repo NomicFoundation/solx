@@ -992,7 +992,7 @@ entries:
             enabled: true
             version: '>=0.5.0'
           calldata_1d_array_into_2d_memory_array_element.sol:
-            hash: '0xb87a57d76b946b0d1fc77720f551ec5b'
+            hash: '0x6662b96480e5b482cda804e2ad9226fd'
             enabled: true
             version: '>=0.8.12'
           calldata_2d_bytes_to_memory.sol:
@@ -1992,7 +1992,7 @@ entries:
     enabled: true
     entries:
       asm_address_constant_regression.sol:
-        hash: '0x04b486dcd0e7b0ce5d10602d9aedb443'
+        hash: '0x2d7bc8a3e5cd06680accbba1c1b79684'
         enabled: true
         version: '>=0.6.7'
       asm_constant_file_level.sol:
@@ -3917,6 +3917,14 @@ entries:
         hash: '0xd5e64052ab9255c53201c974c5e03bfd'
         enabled: true
         version: '>=0.5.14'
+      clz.sol:
+        hash: '0x1fa7a00f79134a56d2dedb3ffd14a32a'
+        enabled: true
+        version: '>=0.8.31'
+      clz_pre_osaka.sol:
+        hash: '0xe0c639a014bcf60cb12cdf6518bb4d08'
+        enabled: true
+        version: '<0.8.31'
       constant_access.sol:
         hash: '0x98ff30d54b7c5e2573464791c52786d0'
         enabled: true
@@ -3928,7 +3936,7 @@ entries:
       difficulty.sol:
         hash: '0xf5ef282ea9e1d12e807e55359cd3a9c8'
         enabled: false
-        comment: 'difficulty is deprecated'
+        comment: difficulty is deprecated
         version: '>=0.4.16, <=0.8.17'
       external_function_pointer_address.sol:
         hash: '0x0fb62f43c10ef8bf2a431432b884a054'
@@ -5641,7 +5649,7 @@ entries:
       block_difficulty.sol:
         hash: '0x58b235ea108b6fb65447dac818824654'
         enabled: false
-        comment: 'difficulty is deprecated'
+        comment: difficulty is deprecated
         version: '>=0.4.12'
       block_difficulty_post_paris.sol:
         hash: '0xaf0b815498b81d9709b312a43f61514d'
@@ -5667,7 +5675,7 @@ entries:
       block_prevrandao_pre_paris.sol:
         hash: '0x4f1de4a5bf963ccead4e49f5c388a676'
         enabled: false
-        comment: 'difficulty is deprecated'
+        comment: difficulty is deprecated
         version: '>=0.8.18'
       block_timestamp.sol:
         hash: '0xe33341d130db3aae593b9f66b8acdaab'
@@ -5708,7 +5716,7 @@ entries:
       tx_gasprice.sol:
         hash: '0x5c09d2b4345cb02ab730c9a82d7ba332'
         enabled: false
-        comment: 'Different in the REVM test env (0)'
+        comment: Different in the REVM test env (0)
         version: '>=0.4.12'
       tx_origin.sol:
         hash: '0xe79bba8e5d86c43315443dae8a18bcee'
@@ -6137,7 +6145,7 @@ entries:
         - I
         version: '>=0.7.5'
       copy_from_storage.sol:
-        hash: '0x65129cecf8930a429b293268c0198a0d'
+        hash: '0x6ac4e807ced1195f02a8d09c16c48379'
         enabled: true
         modes:
         - Y <=0.8.4

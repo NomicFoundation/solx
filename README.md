@@ -14,7 +14,7 @@
 
 - [Foundry projects](.github/forge-benchmarks.toml)
 - [Hardhat projects](.github/hardhat-projects.toml)
-- [tests](https://github.com/matter-labs/solx-solidity/tree/0.8.30/test/libsolidity/semanticTests) from the **solc** repository
+- [tests](https://github.com/matter-labs/solx-solidity/tree/0.8.31/test/libsolidity/semanticTests) from the **solc** repository
 - [real-life projects](solx-tests/solidity/complex/defi) such as UniswapV2 and Mooniswap
 - [additional tests](solx-tests/solidity) written by the **solx** team
 
@@ -68,7 +68,7 @@ For reference, see [llvm-sys](https://crates.io/crates/llvm-sys) and [Local LLVM
 - All other crates are licensed under the terms of either
   - Apache License, Version 2.0 ([LICENSE-APACHE](./solx-standard-json/LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
   - MIT license ([LICENSE-MIT](./solx-standard-json/LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
-- [`solx-solidity`](https://github.com/matter-labs/solx-solidity/) is licensed under [GNU General Public License v3.0](https://github.com/matter-labs/solx-solidity/blob/0.8.30/LICENSE.txt)
+- [`solx-solidity`](https://github.com/matter-labs/solx-solidity/) is licensed under [GNU General Public License v3.0](https://github.com/matter-labs/solx-solidity/blob/0.8.31/LICENSE.txt)
 - [`era-compiler-llvm`](https://github.com/matter-labs/era-compiler-llvm) is licensed under the terms of Apache License, Version 2.0 with LLVM Exceptions, ([LICENSE](https://github.com/matter-labs/era-compiler-llvm/blob/main/LICENSE) or https://llvm.org/LICENSE.txt)
 
 Additionally, this repository vendors tests and test projects that preserve their original licenses:

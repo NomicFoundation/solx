@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.8.30;
+pragma solidity >=0.8.31;
 pragma abicoder v2;
 
 contract Test {

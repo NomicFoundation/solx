@@ -143,7 +143,7 @@ mod tests {
             quiet: false,
             debug: false,
             trace: false,
-            mode: vec!["Y+M3B3 0.8.30".to_owned()],
+            mode: vec!["Y+M3B3 0.8.31".to_owned()],
             path: vec!["tests/solidity/simple/default.sol".to_owned()],
             group: vec![],
             benchmark: None,
