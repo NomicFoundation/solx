@@ -112,10 +112,7 @@ pub fn test(
                 }
                 crate::utils::sed_file(
                     solidity_file.as_path(),
-                    &[
-                        format!(r#"s/pragma solidity.*/pragma solidity ={solidity_version};/g"#)
-                            .as_str(),
-                    ],
+                    &[r#"s/pragma solidity.*/pragma solidity >=0.8.30;/g"#],
                 )?;
             }
 
@@ -185,6 +182,11 @@ pub fn test(
                 )
                 .as_str(),
                 16,
+            )?;
+
+            crate::utils::sed_file(
+                project_directory.join("hardhat.config.ts").as_path(),
+                &[format!(r#"s/version:\s*["'].*["']/version: "{solidity_version}"/g"#).as_str()],
             )?;
 
             let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;
