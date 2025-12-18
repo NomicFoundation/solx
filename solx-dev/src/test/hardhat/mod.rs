@@ -184,10 +184,30 @@ pub fn test(
                 16,
             )?;
 
-            crate::utils::sed_file(
-                project_directory.join("hardhat.config.ts").as_path(),
-                &[format!(r#"s/version:\s*["'].*["']/version: "{solidity_version}"/g"#).as_str()],
-            )?;
+            let config_file_name = if project_directory.join("hardhat.config.ts").exists() {
+                Some("hardhat.config.ts")
+            } else if project_directory.join("hardhat.config.js").exists() {
+                Some("hardhat.config.js")
+            } else {
+                None
+            };
+            if let Some(config_file_name) = config_file_name {
+                eprintln!(
+                    "{} the configuration file {} of Hardhat project {}",
+                    solx_utils::cargo_status_ok("Fixing"),
+                    config_file_name.bright_white().bold(),
+                    project_name.bright_white().bold(),
+                );
+                crate::utils::sed_file(
+                    project_directory.join(config_file_name).as_path(),
+                    &[
+                        format!(r#"s/version:\s*["']0.8.30["']/version: "{solidity_version}"/g"#)
+                            .as_str(),
+                        format!(r#"s/default:\s*["']0.8.30["']/default: "{solidity_version}"/g"#)
+                            .as_str(),
+                    ],
+                )?;
+            }
 
             let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;
             let toolchain_name = format!("{}-{codegen}", compiler.name);
