@@ -7,6 +7,7 @@ pub mod runtime;
 
 use std::collections::HashMap;
 
+use crate::codegen::attribute::Attribute as StringAttribute;
 use crate::codegen::context::address_space::AddressSpace;
 use crate::context::attribute::Attribute;
 use crate::context::function::block::key::Key as BlockKey;
@@ -143,6 +144,13 @@ impl<'ctx> Function<'ctx> {
             );
         }
 
+        declaration.value.add_attribute(
+            inkwell::attributes::AttributeLoc::Function,
+            llvm.create_string_attribute(
+                StringAttribute::TargetFeatures.to_string().as_str(),
+                format!("+{}", solx_utils::EVMVersion::Osaka).as_str(),
+            ),
+        );
         declaration.value.add_attribute(
             inkwell::attributes::AttributeLoc::Function,
             llvm.create_enum_attribute(Attribute::NoFree as u32, 0),
