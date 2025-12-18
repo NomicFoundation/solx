@@ -41,7 +41,7 @@ inputs:
     required: false
     default: 'false'
   default-target-triple:
-    description: 'Default target to triple build LLVM for. Possible values are `eravm`, `evm`, or leave empty for default target.'
+    description: 'Default target to triple build LLVM for. Set to `evm` or leave empty for the default target.'
     required: false
     default: ''
   extra-args:

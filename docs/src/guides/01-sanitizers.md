@@ -33,7 +33,7 @@ The general steps to have a sanitizer enabled build include:
 2. Build **solx** with the LLVM build from the previous step.
 
 Please, follow the common [installation instructions](../01-installation.md#building-from-source)
-until the `zksync-llvm build` step.
+until the `solx-llvm build` step.
 
 This guide assumes the build with `AddressSanitizer` enabled.
 
@@ -42,7 +42,7 @@ This guide assumes the build with `AddressSanitizer` enabled.
 When building LLVM, use `--sanitizer <sanitizer>` option and set build type to `RelWithDebInfo`:
 
 ```shell
-zksync-llvm build --sanitizer=Address --build-type=RelWithDebInfo
+solx-llvm build --sanitizer=Address --build-type=RelWithDebInfo
 ```
 
 <div class="warning">
@@ -52,9 +52,7 @@ For example:
 </div>
 
 ```shell
-zksync-llvm build --sanitizer=Address \
-  --extra-args '\-DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm/bin/clang' \
-               '\-DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++'
+solx-llvm build --sanitizer=Address
 ```
 
 ### Build **solx** with the sanitizer enabled

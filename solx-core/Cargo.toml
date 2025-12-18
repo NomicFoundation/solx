@@ -31,7 +31,7 @@ solx-codegen-evm = { path = "../solx-codegen-evm" }
 solx-utils = { path = "../solx-utils" }
 
 [dependencies.inkwell]
-git = "https://github.com/matter-labs-forks/inkwell"
-branch = "llvm-19"
+git = "https://github.com/NomicFoundation/inkwell"
+branch = "main"
 default-features = false
-features = ["llvm19-1", "serde", "no-libffi-linking", "target-evm"]
+features = ["llvm21-1", "serde", "no-libffi-linking", "target-evm"]

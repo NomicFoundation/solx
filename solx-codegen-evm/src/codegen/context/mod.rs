@@ -361,7 +361,7 @@ impl<'ctx> Context<'ctx> {
                 call_site_value.add_attribute(
                     inkwell::attributes::AttributeLoc::Param(index as u32),
                     self.llvm
-                        .create_enum_attribute(Attribute::NoCapture as u32, 0),
+                        .create_enum_attribute(Attribute::Captures as u32, 0),
                 );
                 call_site_value.add_attribute(
                     inkwell::attributes::AttributeLoc::Param(index as u32),
@@ -616,7 +616,7 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
             name,
         )?;
         self.modify_call_site_value(arguments, call_site_value, function);
-        Ok(call_site_value.try_as_basic_value().left())
+        Ok(call_site_value.try_as_basic_value().basic())
     }
 
     fn build_invoke(
