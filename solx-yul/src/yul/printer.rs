@@ -226,6 +226,7 @@ pub fn name_identifier(name: &Name) -> String {
             Name::Shr => "shr",
             Name::Sar => "sar",
             Name::Byte => "byte",
+            Name::Clz => "clz",
             Name::Pop => "pop",
 
             Name::AddMod => "addmod",

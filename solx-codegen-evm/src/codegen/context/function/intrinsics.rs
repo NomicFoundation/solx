@@ -140,7 +140,7 @@ pub struct Intrinsics<'ctx> {
 
 impl<'ctx> Intrinsics<'ctx> {
     /// The corresponding intrinsic function name.
-    pub const FUNCTION_CTLZ: &'static str = "llvm.ctlz.i256";
+    pub const FUNCTION_CTLZ: &'static str = "llvm.ctlz";
 
     /// The corresponding intrinsic function name.
     pub const FUNCTION_EXP: &'static str = "llvm.evm.exp";
@@ -961,6 +961,7 @@ impl<'ctx> Intrinsics<'ctx> {
         let field_type = llvm.custom_width_int_type(solx_utils::BIT_LENGTH_FIELD as u32);
 
         match name {
+            name if name == Self::FUNCTION_CTLZ => vec![field_type.as_basic_type_enum()],
             name if name == Self::FUNCTION_MEMORY_MOVE_HEAP => vec![
                 llvm.ptr_type(AddressSpace::Heap.into())
                     .as_basic_type_enum(),

@@ -226,3 +226,22 @@ pub fn byte<'ctx>(
         )?
         .expect("Always exists"))
 }
+
+///
+/// Translates the `clz` instruction.
+///
+pub fn clz<'ctx>(
+    context: &mut Context<'ctx>,
+    operand: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
+    Ok(context
+        .build_call(
+            context.intrinsics().ctlz,
+            &[
+                operand.as_basic_value_enum(),
+                context.bool_const(false).as_basic_value_enum(),
+            ],
+            "ctlz",
+        )?
+        .expect("Always exists"))
+}
