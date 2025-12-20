@@ -16,7 +16,7 @@ inputs:
   solc-version:
     description: 'Solidity version.'
     required: false
-    default: '0.8.31'
+    default: '0.8.33'
   build-type:
     description: 'Build type: candidate or reference'
     required: false

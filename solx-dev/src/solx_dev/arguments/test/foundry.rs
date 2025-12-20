@@ -32,7 +32,7 @@ pub struct Foundry {
     pub compilers_dir: PathBuf,
 
     /// Solidity version to use for pragmas and other anchors.
-    #[arg(long, default_value = "0.8.31")]
+    #[arg(long, default_value = "0.8.33")]
     pub solidity_version: String,
 
     /// Filter to run only projects matching the specified substring.

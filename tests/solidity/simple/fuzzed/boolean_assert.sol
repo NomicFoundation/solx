@@ -19,7 +19,7 @@
 //! } ] }
 // SPDX-License-Identifier: MIT
 
-pragma solidity >=0.8.31;
+pragma solidity >=0.8.30;
 
 contract Test {
     function $_4xN7uxIt7qtlv(

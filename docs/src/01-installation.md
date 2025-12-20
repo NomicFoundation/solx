@@ -19,7 +19,7 @@ You can start using **solx** in the following ways:
 ## Usage
 
 We recommend using **solx** via [Foundry](https://github.com/foundry-rs/foundry). It behaves in the same way as
-**solc** v0.8.31, so you can install **solx** executable as described in the section above and specify:
+**solc** v0.8.33, so you can install **solx** executable as described in the section above and specify:
 
 ```toml
 [profile.solx]
@@ -60,7 +60,7 @@ The **solx** version consists of three parts:
 2. Version of **solc** libraries **solx** is statically linked with.
 3. Revision of the LLVM-friendly fork of **solc** maintained by the **solx** team.
 
-For instance, the latest revision of the latest version of **solc** is `0.8.31-1.0.2`. Here are the **solc** revisions released by now:
+For instance, the latest revision of the latest version of **solc** is `0.8.33-1.0.2`. Here are the **solc** revisions released by now:
 
 | Revision |                         Fixes                        |
 |:---------|:-----------------------------------------------------|
@@ -175,7 +175,7 @@ This repository maintains intuitive and stable naming for the executables and pr
       -DPEDANTIC='OFF' \
       -DTESTS='OFF' \
       -DCMAKE_BUILD_TYPE='Release' \
-      -DSOL_REVISION_SOLX='0.8.31-1.0.2'
+      -DSOL_REVISION_SOLX='0.8.33-1.0.2'
    cmake --build . --config Release --parallel ${YOUR_CPU_COUNT}
    cd ../..
    ```
@@ -204,7 +204,7 @@ This repository maintains intuitive and stable naming for the executables and pr
       -DPEDANTIC=OFF \
       -DTESTS=OFF \
       -DCMAKE_BUILD_TYPE="Release" \
-      -DSOL_REVISION_SOLX="0.8.31-1.0.2"
+      -DSOL_REVISION_SOLX="0.8.33-1.0.2"
    cmake --build . --config Release --parallel ${YOUR_CPU_COUNT}
    ```
 

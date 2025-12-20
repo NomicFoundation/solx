@@ -114,7 +114,7 @@ jobs:
         run: |
           ./target/release/solx-tester \
             --solx ./target/release/solx \
-            --mode '+M^B3 0.8.31' \
+            --mode '+M^B3 0.8.33' \
             --benchmark=${{ matrix.type }}-benchmark.json || true
 
       - name: Upload results
