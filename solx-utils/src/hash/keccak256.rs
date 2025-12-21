@@ -73,7 +73,7 @@ mod tests {
     fn single() {
         assert_eq!(
             super::Keccak256::from_slice("solx".as_bytes()).as_str(),
-            "0x0238fb1ab06c28c32885f9a4842207ac480c2467df26b6c58e201679628c5a5b"
+            "0x8b904e9a94975df70f5804cc15ba7d249cd814144885fecb68de56c7f5d1e627"
         );
     }
 
@@ -86,7 +86,7 @@ mod tests {
                 "best".as_bytes()
             ])
             .as_str(),
-            "0x30277e6e189b3fa474437d451ccbb2409c3b67fda53c6ad5df3f8f0f3873ff6b"
+            "0xc838553f6bb8ac30851f970fa540b2248a9ec0239a02eeebbb1c6a9c2f649be4"
         );
     }
 
@@ -94,7 +94,7 @@ mod tests {
     fn display() {
         assert_eq!(
             super::Keccak256::from_slice("solx".as_bytes()).to_string(),
-            "0x0238fb1ab06c28c32885f9a4842207ac480c2467df26b6c58e201679628c5a5b"
+            "0x8b904e9a94975df70f5804cc15ba7d249cd814144885fecb68de56c7f5d1e627"
         );
     }
 }
