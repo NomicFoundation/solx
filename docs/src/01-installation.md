@@ -4,14 +4,14 @@ You can start using **solx** in the following ways:
 
 1. Use the installation script.
    ```shell
-   curl -L https://raw.githubusercontent.com/matter-labs/solx/main/install-solx | bash
+   curl -L https://raw.githubusercontent.com/NomicFoundation/solx/main/install-solx | bash
    ```
 
    The script will download the latest stable release of **solx** and install it in your `PATH`.
    > ⚠️ The script requires `curl` to be installed on your system.<br>
    > This is the recommended way to install **solx** for MacOS users to bypass gatekeeper checks.
 
-2. Download [stable releases](https://github.com/matter-labs/solx/releases). See [Static Executables](#static-executables).
+2. Download [stable releases](https://github.com/NomicFoundation/solx/releases). See [Static Executables](#static-executables).
 3. Build **solx** from sources. See [Building from Source](#building-from-source).
 
 
@@ -81,7 +81,7 @@ These tools manage compiler input and output on a higher level, and provide addi
 
 ## Static Executables
 
-We ship **solx** binaries on the [releases page of the eponymous repository](https://github.com/matter-labs/solx/releases). 
+We ship **solx** binaries on the [releases page of the eponymous repository](https://github.com/NomicFoundation/solx/releases). 
 This repository maintains intuitive and stable naming for the executables and provides a changelog for each release. Tools using **solx** must download the binaries from this repository and cache them locally.
 
 > All executables are statically linked and must work on all recent platforms without issues.
@@ -132,7 +132,7 @@ This repository maintains intuitive and stable naming for the executables and pr
 3. Clone and checkout this repository with submodules.
 
    ```shell
-   git clone https://github.com/matter-labs/solx --recursive
+   git clone https://github.com/NomicFoundation/solx --recursive
    ```
 
    By default, submodules checkout is disabled to prevent cloning large repositories via `cargo`.
@@ -141,7 +141,7 @@ This repository maintains intuitive and stable naming for the executables and pr
    git submodule update --recursive --checkout
    ```
     
-4. Install the Matter Labs LLVM framework builder. This tool clones the [repository of Matter Labs LLVM Framework](https://github.com/matter-labs/era-compiler-llvm) and runs a sequence of build commands tuned for the needs of **solx**.
+4. Install the Matter Labs LLVM framework builder. This tool clones the [repository of Matter Labs LLVM Framework](https://github.com/matter-labs/solx-llvm) and runs a sequence of build commands tuned for the needs of **solx**.
 
     ```shell
     cargo install compiler-llvm-builder
@@ -238,7 +238,7 @@ This repository maintains intuitive and stable naming for the executables and pr
 
 ### Building LLVM manually
 
-* If you prefer building [your LLVM framework](https://github.com/matter-labs/era-compiler-llvm) manually, include the following flags in your CMake command:
+* If you prefer building [your LLVM framework](https://github.com/matter-labs/solx-llvm) manually, include the following flags in your CMake command:
 
   ```shell
   # We recommended using the latest version of CMake.

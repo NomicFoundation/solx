@@ -3,7 +3,7 @@
     {
       "is_enabled": true,
       "protocol": "https",
-      "source": "https://github.com/matter-labs/solx-solidity/releases/download/mlir-${VERSION}-tag/solc-${PLATFORM}-${VERSION}-mlir",
+      "source": "https://github.com/NomicFoundation/solx-solidity/releases/download/mlir-${VERSION}-tag/solc-${PLATFORM}-${VERSION}-mlir",
       "destination": "./solc-bin-llvm/solc-${VERSION}",
       "version": "0.8.33",
       "platforms": {

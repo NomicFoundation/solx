@@ -7,7 +7,7 @@ on:
 
 # Cancel the workflow if any new changes pushed to a feature branch or the trunk
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

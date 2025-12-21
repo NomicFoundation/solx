@@ -28,7 +28,7 @@ contract Main {
             // now we use 0x00 - 0x44 bytes (68), freeMemoryPointer is dirty
             success := and(
                 // set success to true if call isn't reverted and returned exactly 1 (can't just be non-zero data) or nothing
-                call(gas(), _token, 0, 0, 0x44, 0, 0x20), // <----------- WILL CAUSE FAIL ON EVM BUT OK ON zkSync CHAIN
+                call(gas(), _token, 0, 0, 0x44, 0, 0x20),
                 or(and(eq(mload(0), 1), eq(returndatasize(), 32)), iszero(returndatasize()))
             )
             mstore(0x40, freeMemoryPointer) // restore the freeMemoryPointer

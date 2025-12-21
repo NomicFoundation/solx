@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn single() {
         assert_eq!(
-            super::Keccak256::from_slice("zksync".as_bytes()).as_str(),
+            super::Keccak256::from_slice("solx".as_bytes()).as_str(),
             "0x0238fb1ab06c28c32885f9a4842207ac480c2467df26b6c58e201679628c5a5b"
         );
     }
@@ -81,7 +81,7 @@ mod tests {
     fn multiple() {
         assert_eq!(
             super::Keccak256::from_slices(&[
-                "zksync".as_bytes(),
+                "solx".as_bytes(),
                 "the".as_bytes(),
                 "best".as_bytes()
             ])
@@ -93,7 +93,7 @@ mod tests {
     #[test]
     fn display() {
         assert_eq!(
-            super::Keccak256::from_slice("zksync".as_bytes()).to_string(),
+            super::Keccak256::from_slice("solx".as_bytes()).to_string(),
             "0x0238fb1ab06c28c32885f9a4842207ac480c2467df26b6c58e201679628c5a5b"
         );
     }

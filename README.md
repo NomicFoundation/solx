@@ -4,18 +4,18 @@
 
 # Optimizing Solidity Compiler
 
-**solx** is a new optimizing compiler for EVM developed by [Matter Labs](https://matter-labs.io/).
+**solx** is a new optimizing compiler for EVM developed by [Matter Labs](https://matter-labs.io/) and [Nomic Foundation](https://nomic.foundation/).
 
 > [!WARNING]  
-> The project is in beta state and must be used with caution. Please use it only for testing and experimentation.
+> The project is in beta and must be used with caution. Please use it only for testing and experimentation.
 > If you want to use it in production, make sure to test your contracts thoroughly, or [contact us](#contact-us) first.
 
 **solx** passes multiple test suites, including:
 
 - [Foundry projects](.github/forge-benchmarks.toml)
 - [Hardhat projects](.github/hardhat-projects.toml)
-- [tests](https://github.com/matter-labs/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests) from the **solc** repository
-- [real-life projects](solx-tests/solidity/complex/defi) such as UniswapV2 and Mooniswap
+- [other projects](solx-tests/solidity/complex/defi) such as UniswapV2 and Mooniswap
+- [tests](https://github.com/NomicFoundation/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests) from the **solc** repository
 - [additional tests](solx-tests/solidity) written by the **solx** team
 
 ## Documentation
@@ -37,12 +37,12 @@ For the detailed installation and usage guide, visit [the respective page of our
 **solx** consists of three main parts:
 
 1. **solx** executable from this repository. The repository also contains parts of the compiler front end: Yul and EVM assembly translators.
-2. [solx-solidity](https://github.com/matter-labs/solx-solidity/), an LLVM-friendly fork of [the Solidity compiler](https://github.com/ethereum/solidity),
-  that emits Yul and EVM assembly for **solx**. Despite the repository name, it is not directly related to either ZKsync or ZKsync Era.
-3. [era-compiler-llvm](https://github.com/matter-labs/era-compiler-llvm), a fork of [the LLVM project](https://github.com/llvm/llvm-project)
+2. [solx-solidity](https://github.com/NomicFoundation/solx-solidity/), an LLVM-friendly fork of [the Solidity compiler](https://github.com/ethereum/solidity),
+  that emits Yul and EVM assembly for **solx**.
+3. [solx-llvm](https://github.com/matter-labs/solx-llvm), a fork of [the LLVM project](https://github.com/llvm/llvm-project)
   with an EVM target developed by the **solx** team.
 
-The most important part of the project is the EVM target in LLVM. You can find its sources [here](https://github.com/matter-labs/era-compiler-llvm/tree/main/llvm/lib/Target/EVM).
+The most important part of the project is the EVM target in LLVM. You can find its sources [here](https://github.com/matter-labs/solx-llvm/tree/main/llvm/lib/Target/EVM).
 
 ## Testing
 
@@ -50,7 +50,7 @@ To run the unit and CLI tests, execute `cargo test` at the repository root.
 
 ## Troubleshooting
 
-If you have multiple LLVM builds in your system, ensure that you choose the correct one to build the compiler.
+If you are building *solx** from source and you have multiple LLVM builds in your system, ensure that you choose the correct one to build the compiler.
 The environment variable `LLVM_SYS_211_PREFIX` sets the path to the directory with LLVM build artifacts, which typically ends with `target-llvm/build-final`.
 For example:
 
@@ -68,8 +68,8 @@ For reference, see [llvm-sys](https://crates.io/crates/llvm-sys) and [Local LLVM
 - All other crates are licensed under the terms of either
   - Apache License, Version 2.0 ([LICENSE-APACHE](./solx-standard-json/LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
   - MIT license ([LICENSE-MIT](./solx-standard-json/LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
-- [`solx-solidity`](https://github.com/matter-labs/solx-solidity/) is licensed under [GNU General Public License v3.0](https://github.com/matter-labs/solx-solidity/blob/0.8.33/LICENSE.txt)
-- [`era-compiler-llvm`](https://github.com/matter-labs/era-compiler-llvm) is licensed under the terms of Apache License, Version 2.0 with LLVM Exceptions, ([LICENSE](https://github.com/matter-labs/era-compiler-llvm/blob/main/LICENSE) or https://llvm.org/LICENSE.txt)
+- [`solx-solidity`](https://github.com/NomicFoundation/solx-solidity/) is licensed under [GNU General Public License v3.0](https://github.com/NomicFoundation/solx-solidity/blob/0.8.33/LICENSE.txt)
+- [`solx-llvm`](https://github.com/matter-labs/solx-llvm) is licensed under the terms of Apache License, Version 2.0 with LLVM Exceptions, ([LICENSE](https://github.com/matter-labs/solx-llvm/blob/main/LICENSE) or https://llvm.org/LICENSE.txt)
 
 Additionally, this repository vendors tests and test projects that preserve their original licenses:
 
@@ -77,7 +77,6 @@ Additionally, this repository vendors tests and test projects that preserve thei
 - [UniswapV3](./tests/solidity/complex/defi/UniswapV3)
 - [Mooniswap](./tests/solidity/complex/defi/Mooniswap)
 - [StarkEx Verifier](./tests/solidity/complex/defi/starkex-verifier)
-- [SHIT](./tests/solidity/complex/defi/shitdao)
 
 These projects are modified for the purposes of testing our compiler toolchain and are not used outside of this repository.
 

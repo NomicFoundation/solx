@@ -47,12 +47,6 @@ pub struct Function<'ctx> {
 }
 
 impl<'ctx> Function<'ctx> {
-    /// The near call ABI function prefix.
-    pub const ZKSYNC_NEAR_CALL_ABI_PREFIX: &'static str = "ZKSYNC_NEAR_CALL";
-
-    /// The near call ABI exception handler name.
-    pub const ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER: &'static str = "ZKSYNC_CATCH_NEAR_CALL";
-
     /// The stack hashmap default capacity.
     const STACK_HASHMAP_INITIAL_CAPACITY: usize = 64;
 
