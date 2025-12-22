@@ -64,6 +64,3 @@ unknown-registry = "deny"
 unknown-git = "allow"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = []
-
-[sources.allow-org]
-#github = ["matter-labs"]

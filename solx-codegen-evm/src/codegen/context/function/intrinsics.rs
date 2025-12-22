@@ -15,6 +15,9 @@ use crate::context::function::declaration::Declaration as FunctionDeclaration;
 #[derive(Debug)]
 pub struct Intrinsics<'ctx> {
     /// The corresponding intrinsic function name.
+    pub ctlz: FunctionDeclaration<'ctx>,
+
+    /// The corresponding intrinsic function name.
     pub exp: FunctionDeclaration<'ctx>,
     /// The corresponding intrinsic function name.
     pub signextend: FunctionDeclaration<'ctx>,
@@ -136,6 +139,9 @@ pub struct Intrinsics<'ctx> {
 }
 
 impl<'ctx> Intrinsics<'ctx> {
+    /// The corresponding intrinsic function name.
+    pub const FUNCTION_CTLZ: &'static str = "llvm.ctlz";
+
     /// The corresponding intrinsic function name.
     pub const FUNCTION_EXP: &'static str = "llvm.evm.exp";
 
@@ -316,6 +322,19 @@ impl<'ctx> Intrinsics<'ctx> {
         let calldata_byte_pointer_type = llvm.ptr_type(AddressSpace::Calldata.into());
         let return_data_byte_pointer_type = llvm.ptr_type(AddressSpace::ReturnData.into());
         let code_byte_pointer_type = llvm.ptr_type(AddressSpace::Code.into());
+
+        let ctlz = Self::declare(
+            llvm,
+            module,
+            Self::FUNCTION_CTLZ,
+            field_type.fn_type(
+                &[
+                    field_type.as_basic_type_enum().into(),
+                    bool_type.as_basic_type_enum().into(),
+                ],
+                false,
+            ),
+        );
 
         let exp = Self::declare(
             llvm,
@@ -846,6 +865,8 @@ impl<'ctx> Intrinsics<'ctx> {
         );
 
         Self {
+            ctlz,
+
             exp,
             signextend,
             sha3,
@@ -940,6 +961,7 @@ impl<'ctx> Intrinsics<'ctx> {
         let field_type = llvm.custom_width_int_type(solx_utils::BIT_LENGTH_FIELD as u32);
 
         match name {
+            name if name == Self::FUNCTION_CTLZ => vec![field_type.as_basic_type_enum()],
             name if name == Self::FUNCTION_MEMORY_MOVE_HEAP => vec![
                 llvm.ptr_type(AddressSpace::Heap.into())
                     .as_basic_type_enum(),

@@ -13,7 +13,7 @@ use solx_yul::yul::parser::identifier::Identifier;
 use self::attributes::get_llvm_attributes;
 
 ///
-/// Era-specific part of the parser.
+/// solx-specific part of the parser.
 ///
 #[derive(Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EraDialect {}

@@ -7,6 +7,7 @@ pub mod runtime;
 
 use std::collections::HashMap;
 
+use crate::codegen::attribute::Attribute as StringAttribute;
 use crate::codegen::context::address_space::AddressSpace;
 use crate::context::attribute::Attribute;
 use crate::context::function::block::key::Key as BlockKey;
@@ -46,12 +47,6 @@ pub struct Function<'ctx> {
 }
 
 impl<'ctx> Function<'ctx> {
-    /// The near call ABI function prefix.
-    pub const ZKSYNC_NEAR_CALL_ABI_PREFIX: &'static str = "ZKSYNC_NEAR_CALL";
-
-    /// The near call ABI exception handler name.
-    pub const ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER: &'static str = "ZKSYNC_CATCH_NEAR_CALL";
-
     /// The stack hashmap default capacity.
     const STACK_HASHMAP_INITIAL_CAPACITY: usize = 64;
 
@@ -143,6 +138,13 @@ impl<'ctx> Function<'ctx> {
             );
         }
 
+        declaration.value.add_attribute(
+            inkwell::attributes::AttributeLoc::Function,
+            llvm.create_string_attribute(
+                StringAttribute::TargetFeatures.to_string().as_str(),
+                format!("+{}", solx_utils::EVMVersion::Osaka).as_str(),
+            ),
+        );
         declaration.value.add_attribute(
             inkwell::attributes::AttributeLoc::Function,
             llvm.create_enum_attribute(Attribute::NoFree as u32, 0),

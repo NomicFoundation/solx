@@ -8,9 +8,6 @@ pub mod enabled;
 pub mod test_file;
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::fs::File;
-use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -41,7 +38,7 @@ impl FSEntity {
     pub fn index(path: &Path) -> anyhow::Result<FSEntity> {
         let mut entries = BTreeMap::new();
 
-        for entry in fs::read_dir(path)? {
+        for entry in std::fs::read_dir(path)? {
             let entry = entry?;
             let path = entry.path();
             let entry_type = entry.file_type()?;
@@ -80,14 +77,9 @@ impl FSEntity {
     ///
     /// Updates the new index, tests and returns changes.
     ///
-    pub fn update(
-        &self,
-        new: &mut FSEntity,
-        initial: &Path,
-        index_only: bool,
-    ) -> anyhow::Result<Changes> {
+    pub fn update(&self, new: &mut FSEntity, initial: &Path) -> anyhow::Result<Changes> {
         let mut changes = Changes::default();
-        self.update_recursive(new, initial, &mut changes, index_only)?;
+        self.update_recursive(new, initial, &mut changes)?;
         Ok(changes)
     }
 
@@ -142,7 +134,6 @@ impl FSEntity {
         new: &mut FSEntity,
         current: &Path,
         changes: &mut Changes,
-        index_only: bool,
     ) -> anyhow::Result<()> {
         let (old_entities, new_entities) = match (self, new) {
             (Self::File(old_file), Self::File(new_file)) => {
@@ -168,16 +159,6 @@ impl FSEntity {
                     } else {
                         changes.updated.push(current.to_owned());
                     }
-                    if !index_only {
-                        TestFile::write_to_file(
-                            current,
-                            new_file
-                                .data
-                                .as_ref()
-                                .ok_or_else(|| anyhow::anyhow!("Test data is None: {current:?}"))?
-                                .as_bytes(),
-                        )?;
-                    }
                 }
                 return Ok(());
             }
@@ -201,10 +182,6 @@ impl FSEntity {
             (_, new) => {
                 self.list_recursive(current, &mut changes.deleted);
                 new.list_recursive(current, &mut changes.created);
-                if !index_only {
-                    self.delete(current)?;
-                    new.create_recursive(current)?;
-                }
                 return Ok(());
             }
         };
@@ -213,12 +190,9 @@ impl FSEntity {
             let mut current = current.to_owned();
             current.push(name);
             if let Some(new_entity) = new_entities.get_mut(name) {
-                entity.update_recursive(new_entity, &current, changes, index_only)?;
+                entity.update_recursive(new_entity, &current, changes)?;
             } else {
                 entity.list_recursive(&current, &mut changes.deleted);
-                if !index_only {
-                    entity.delete(&current)?;
-                }
             }
         }
         for (name, entity) in new_entities.iter() {
@@ -226,9 +200,6 @@ impl FSEntity {
                 let mut current = current.to_owned();
                 current.push(name);
                 entity.list_recursive(&current, &mut changes.created);
-                if !index_only {
-                    entity.create_recursive(&current)?;
-                }
             }
         }
 
@@ -268,53 +239,6 @@ impl FSEntity {
             current.push(name);
             entity.into_enabled_list_recursive(&current, accumulator);
         }
-    }
-
-    ///
-    /// Creates files and folders from self.
-    ///
-    fn create_recursive(&self, current: &Path) -> anyhow::Result<()> {
-        let entries = match self {
-            Self::Directory(directory) => &directory.entries,
-            Self::File(test) => {
-                let mut file = File::create(current)
-                    .map_err(|error| anyhow::anyhow!("Failed to create file: {error}"))?;
-                file.write_all(
-                    test.data
-                        .as_ref()
-                        .ok_or_else(|| anyhow::anyhow!("Test data is None: {current:?}"))?
-                        .as_bytes(),
-                )?;
-                return Ok(());
-            }
-        };
-
-        fs::create_dir(current)
-            .map_err(|error| anyhow::anyhow!("Failed to create directory: {error}"))?;
-
-        for (name, entity) in entries.iter() {
-            let mut current = current.to_owned();
-            current.push(name);
-            entity.create_recursive(&current)?;
-        }
-
-        Ok(())
-    }
-
-    ///
-    /// Deletes files and folders from self.
-    ///
-    fn delete(&self, current: &Path) -> anyhow::Result<()> {
-        if let Self::Directory(_) = self {
-            fs::remove_dir_all(current).map_err(|error| {
-                anyhow::anyhow!("Failed to delete directory {current:?}: {error}")
-            })?;
-        } else {
-            fs::remove_file(current)
-                .map_err(|error| anyhow::anyhow!("Failed to delete file {current:?}: {error}"))?;
-        }
-
-        Ok(())
     }
 
     ///

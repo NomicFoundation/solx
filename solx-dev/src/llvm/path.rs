@@ -11,7 +11,7 @@ pub struct Path {}
 
 impl Path {
     /// The LLVM source directory.
-    pub const DIRECTORY_LLVM_SOURCE: &'static str = "./llvm/";
+    pub const DIRECTORY_LLVM_SOURCE: &'static str = "./solx-llvm/";
 
     /// The LLVM target directory.
     pub const DIRECTORY_LLVM_TARGET: &'static str = "./target-llvm/";

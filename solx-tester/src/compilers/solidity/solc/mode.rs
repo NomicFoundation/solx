@@ -83,19 +83,10 @@ impl Mode {
     /// Checks if the mode is compatible with the Ethereum tests params.
     ///
     pub fn check_ethereum_tests_params(&self, params: &solx_solc_test_adapter::Params) -> bool {
-        if !params.evm_version.matches_any(&[
-            solx_solc_test_adapter::EVM::TangerineWhistle,
-            solx_solc_test_adapter::EVM::SpuriousDragon,
-            solx_solc_test_adapter::EVM::Byzantium,
-            solx_solc_test_adapter::EVM::Constantinople,
-            solx_solc_test_adapter::EVM::Petersburg,
-            solx_solc_test_adapter::EVM::Istanbul,
-            solx_solc_test_adapter::EVM::Berlin,
-            solx_solc_test_adapter::EVM::London,
-            solx_solc_test_adapter::EVM::Paris,
-            solx_solc_test_adapter::EVM::Shanghai,
-            solx_solc_test_adapter::EVM::Cancun,
-        ]) {
+        if params
+            .evm_version
+            .matches(&solx_utils::EVMVersion::Homestead)
+        {
             return false;
         }
 

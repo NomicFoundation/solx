@@ -68,6 +68,7 @@ impl Instruction {
             Name::SHL => 2,
             Name::SHR => 2,
             Name::SAR => 2,
+            Name::CLZ => 1,
             Name::BYTE => 2,
 
             Name::ADDMOD => 3,
@@ -221,6 +222,7 @@ impl Instruction {
             Name::SHL => 1,
             Name::SHR => 1,
             Name::SAR => 1,
+            Name::CLZ => 1,
             Name::BYTE => 1,
 
             Name::ADDMOD => 1,

@@ -613,6 +613,10 @@ impl solx_codegen_evm::WriteLLVM for Element {
                 )
                 .map(Some)
             }
+            InstructionName::CLZ => {
+                let arguments = self.pop_arguments_llvm(context)?;
+                solx_codegen_evm::bitwise::clz(context, arguments[0].into_int_value()).map(Some)
+            }
             InstructionName::BYTE => {
                 let arguments = self.pop_arguments_llvm(context)?;
                 solx_codegen_evm::bitwise::byte(

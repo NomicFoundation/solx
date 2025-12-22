@@ -37,6 +37,8 @@ pub enum Name {
     Slt,
     /// `1` if `x > y`, `0` otherwise, for signed numbers in two’s complement
     Sgt,
+    /// the number of leading zeros in the binary representation of `x`
+    Clz,
 
     /// bitwise "or" of `x` and `y`
     Or,
@@ -246,6 +248,7 @@ impl From<&str> for Name {
             "iszero" => Self::IsZero,
             "slt" => Self::Slt,
             "sgt" => Self::Sgt,
+            "clz" => Self::Clz,
 
             "or" => Self::Or,
             "xor" => Self::Xor,

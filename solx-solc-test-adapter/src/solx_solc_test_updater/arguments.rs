@@ -21,14 +21,6 @@ pub struct Arguments {
     pub source: PathBuf,
 
     /// Path of the tests' index.
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "solidity.yaml")]
     pub index: PathBuf,
-
-    /// Destination directory for tests to be updated.
-    #[arg(short, long)]
-    pub destination: PathBuf,
-
-    /// Whether to only update the index, and do not touch the files.
-    #[arg(long)]
-    pub index_only: bool,
 }

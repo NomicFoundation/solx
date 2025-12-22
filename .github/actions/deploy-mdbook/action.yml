@@ -1,0 +1,197 @@
+name: 'Deploy mdbook docs'
+description: 'GitHub Action to automatically build, test and deploy a versioned mdBook project to GitHub Pages.'
+branding:
+  icon: 'book'
+  color: 'blue'
+
+inputs:
+  github-token:
+    description: 'GitHub token for deployment.'
+    required: true
+  version:
+    type: string
+    description: "Version of the documentation to deploy"
+    required: false
+    default: "latest"
+  docs-dir:
+    type: string
+    description: "Directory containing the mdbook documentation"
+    required: false
+    default: "docs"
+  mdbook-version:
+    type: string
+    description: "Version of mdbook to use"
+    required: false
+    default: "latest"
+  enable-tests:
+    type: boolean
+    description: "Disable mdbook tests"
+    required: false
+    default: true
+  publish-branch:
+    type: string
+    description: "Branch to publish the documentation"
+    required: false
+    default: "gh-pages"
+  project:
+    type: string
+    description: "Name of the project to deploy"
+    required: false
+    default: ""
+  deploy:
+    type: boolean
+    description: "Enable or disable the deployment"
+    required: false
+    default: true
+  create-latest-symlink:
+    type: boolean
+    description: "Create a symlink to the latest version"
+    required: false
+    default: false
+
+runs:
+  using: composite
+  steps:
+
+    - name: Check runner OS
+      if: runner.os != 'Linux'
+      shell: 'bash -ex {0}'
+      run: |
+        echo "::error title=⛔ error hint::Only Linux is supported for this action."
+        exit 1
+
+    - name: Install latest mdbook
+      shell: 'bash -ex {0}'
+      env:
+        MDBOOK_DOWNLOAD_URL: "https://github.com/rust-lang/mdBook/releases/download/v0.4.47/mdbook-v0.4.47-x86_64-unknown-linux-musl.tar.gz"
+      run: |
+        echo "::group::Install mdbook"
+        MDBOOK_INSTALL_DIR="${PWD}/.mdbook_$(date +%s)"
+        mkdir -p "${MDBOOK_INSTALL_DIR}"
+        curl -sSL "${MDBOOK_DOWNLOAD_URL}" | tar -xz --directory="${MDBOOK_INSTALL_DIR}"
+        echo "MDBOOK_INSTALL_DIR=${MDBOOK_INSTALL_DIR}" >> "${GITHUB_ENV}"
+        echo "${MDBOOK_INSTALL_DIR}" >> "${GITHUB_PATH}"
+        echo "::endgroup::"
+
+    - name: Install mdbook addons
+      shell: 'bash -ex {0}'
+      env:
+        MDBOOK_MERMAID_DOWNLOAD_URL: "https://github.com/badboy/mdbook-mermaid/releases/download/v0.14.0/mdbook-mermaid-v0.14.0-x86_64-unknown-linux-musl.tar.gz"
+        MDBOOK_ADMONISH_DOWNLOAD_URL: "https://github.com/tommilligan/mdbook-admonish/releases/download/v1.19.0/mdbook-admonish-v1.19.0-x86_64-unknown-linux-musl.tar.gz"
+        MDBOOK_LINKCHECK_URL: "https://github.com/Michael-F-Bryan/mdbook-linkcheck/releases/download/v0.7.7/mdbook-linkcheck.x86_64-unknown-linux-gnu.zip"
+      run: |
+        echo "::group::Install mdbook addons"
+        curl -sSL "${MDBOOK_MERMAID_DOWNLOAD_URL}" | tar -xz --directory="${MDBOOK_INSTALL_DIR}"
+        curl -sSL "${MDBOOK_ADMONISH_DOWNLOAD_URL}" | tar -xz --directory="${MDBOOK_INSTALL_DIR}"
+        cd ${MDBOOK_INSTALL_DIR}
+        curl -sSL "${MDBOOK_LINKCHECK_URL}" -o mdbook-linkcheck.zip
+        unzip mdbook-linkcheck.zip
+        chmod +x mdbook-linkcheck
+        echo "::endgroup::"
+
+    - name: Build Book
+      shell: 'bash -ex {0}'
+      working-directory: ${{ inputs.docs-dir }}
+      id: build-book
+      run: |
+        echo "::group::Building the book"
+        if [ ${{ inputs.version }} == ${{ github.event.repository.default_branch }} ] || [ ${{ inputs.version }} == 'latest' ]; then
+          VERSION=latest
+        else
+          VERSION=${{ inputs.version }}
+        fi
+        mdbook build --dest-dir=${VERSION}
+        if [ -d "${VERSION}/html" ]; then
+          echo "Book is using multiple outputs."
+          echo "Copying the HTML output to the book root directory."
+          mv ./${VERSION}/html/* ./${VERSION}
+          mv ./${VERSION}/html/.[!.]* ./${VERSION}
+        fi
+        echo version=${VERSION} >> "${GITHUB_OUTPUT}"
+        echo "::endgroup::"
+
+    - name: Test Book
+      if: ${{ inputs.enable-tests == 'true' || inputs.enable-tests == true }}
+      shell: 'bash -ex {0}'
+      working-directory: ${{ inputs.docs-dir }}
+      run: |
+        echo "::group::Testing the book"
+        mdbook test
+        echo "::endgroup::"
+
+    - name: Init publishing branch
+      if: ${{ inputs.deploy == 'true' || inputs.deploy == true }}
+      shell: 'bash -ex {0}'
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+      run: |
+        echo "::group::Initizalizing or updating publishing branch"
+        # Configure git
+        git config user.name "Deploy from CI"
+        git config user.email ""
+        # Check if the deploy branch exists
+        if [ $(gh api "/repos/${GITHUB_REPOSITORY}/branches/${{ inputs.publish-branch }}" > /dev/null 2>&1; echo $?) -eq 1 ]; then
+          git checkout --orphan ${{ inputs.publish-branch }}
+          git rm -rf .
+          git commit --allow-empty -m "Initialize ${{ inputs.publish-branch }} branch"
+        else
+          git fetch origin ${{ inputs.publish-branch }}
+          git checkout ${{ inputs.publish-branch }}
+        fi
+        echo "::endgroup::"
+
+    - name: Update versions file
+      if: ${{ inputs.deploy == 'true' || inputs.deploy == true }}
+      shell: 'bash -ex {0}'
+      env:
+        VERSION: ${{ steps.build-book.outputs.version }}
+      run: |
+        echo "::group::Updating versions file"
+        if [ ! -z "${{ inputs.project }}" ]; then
+          mkdir -p "${{ inputs.project }}"
+          cd "${{ inputs.project }}"
+        fi
+        JSON_FILE="versions.json"
+        # Check if the JSON file exists
+        if [ ! -f "${JSON_FILE}" ]; then
+          echo "${JSON_FILE} not found, creating..."
+          echo "{}" > "${JSON_FILE}"
+        fi
+        # Read the current JSON content
+        CURRENT_JSON=$(<"$JSON_FILE")
+        # Check if the new version already exists
+        if echo "${CURRENT_JSON}" | grep -q "\"${VERSION}\":"; then
+          echo "Updating docs for the existing version ${VERSION} in ${JSON_FILE}."
+          exit 0
+        fi
+        # Use jq to update the JSON file
+        UPDATED_JSON=$(echo "${CURRENT_JSON}" | jq --arg version "${VERSION}" --arg url "/${VERSION}" '. + {($version): $url}')
+        # Write the updated JSON back to the file
+        echo "${UPDATED_JSON}" > "${JSON_FILE}"
+        echo "Version ${VERSION} added successfully to ${JSON_FILE}."
+        cat "${JSON_FILE}"
+        echo "::endgroup::"
+
+    - name: Deploy book
+      if: ${{ inputs.deploy == 'true' || inputs.deploy == true }}
+      shell: 'bash -ex {0}'
+      env:
+        VERSION: ${{ steps.build-book.outputs.version }}
+      run: |
+        echo "::group::Deploying the book"
+        BOOK_DIR=$(readlink -f "${{ inputs.docs-dir }}/${VERSION}")
+        [ ! -z "${{ inputs.project }}" ] && cd "${{ inputs.project }}"
+        # Remove the previous version of the book
+        rm -rf ${VERSION}
+        # Move the new version of the book
+        mv "${BOOK_DIR}" "${VERSION}"
+        # Add the new version of the book
+        git add "${VERSION}" versions.json
+        if [ ${{ inputs.create-latest-symlink }} == 'true' ]; then
+          rm -f latest
+          ln -sfn "${VERSION}" latest
+          git add latest
+        fi
+        git commit --amend -m "Deploy ${GITHUB_SHA::7}"
+        git push --force --set-upstream origin ${{ inputs.publish-branch }}
+        echo "::endgroup::"

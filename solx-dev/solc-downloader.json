@@ -2,10 +2,10 @@
   "executables": [
     {
       "is_enabled": true,
-      "protocol": "compiler-bin-list",
-      "source": "https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/${PLATFORM}/list.json",
-      "destination": "./temp-compilers/solc-0.8.30",
-      "version": "0.8.30",
+      "protocol": "https",
+      "source": "https://github.com/argotorg/solc-bin/raw/refs/heads/gh-pages/${PLATFORM}/solc-${PLATFORM}-v0.8.33+commit.fd3a2265",
+      "destination": "./temp-compilers/solc-0.8.33",
+      "version": "0.8.33",
       "platforms": {
         "linux-amd64": "linux-amd64",
         "linux-arm64": "linux-arm64",

@@ -156,6 +156,7 @@ pub fn test(
                 )?;
             }
 
+            let config_file_name = "foundry.toml";
             let mut forge_config_fix_command = Command::new("forge");
             forge_config_fix_command.current_dir(project_directory.as_path());
             forge_config_fix_command.arg("config");
@@ -163,14 +164,15 @@ pub fn test(
             crate::utils::command(
                 &mut forge_config_fix_command,
                 format!(
-                    "{} Foundry project {}",
+                    "{} the configuration file {} of Foundry project {}",
                     solx_utils::cargo_status_ok("Fixing"),
-                    project_name.bright_white().bold()
+                    config_file_name.bright_white().bold(),
+                    project_name.bright_white().bold(),
                 )
                 .as_str(),
             )?;
             crate::utils::sed_file(
-                project_directory.join("foundry.toml").as_path(),
+                project_directory.join(config_file_name).as_path(),
                 &[
                     r#"s/deny_warnings\s*=.*\n//g"#,
                     r#"s/via_ir\s*=.*\n//g"#,

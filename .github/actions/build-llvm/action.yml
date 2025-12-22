@@ -1,4 +1,4 @@
-# The general action to build ZKsync LLVM framework.
+# The general action to build the solx LLVM framework.
 # It is universal for all platforms: Linux, MacOS and Windows.
 
 name: 'Build LLVM'

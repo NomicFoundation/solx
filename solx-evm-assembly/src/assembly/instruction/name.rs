@@ -213,6 +213,8 @@ pub enum Name {
     /// The eponymous EVM instruction.
     SAR,
     /// The eponymous EVM instruction.
+    CLZ,
+    /// The eponymous EVM instruction.
     BYTE,
 
     /// The eponymous EVM instruction.

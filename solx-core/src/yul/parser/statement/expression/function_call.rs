@@ -247,6 +247,10 @@ impl FunctionCall {
                 )
                 .map(Some)
             }
+            Name::Clz => {
+                let arguments = self.pop_arguments_llvm::<1>(context)?;
+                solx_codegen_evm::bitwise::clz(context, arguments[0].into_int_value()).map(Some)
+            }
             Name::Byte => {
                 let arguments = self.pop_arguments_llvm::<2>(context)?;
                 solx_codegen_evm::bitwise::byte(
