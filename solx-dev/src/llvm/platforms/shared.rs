@@ -29,7 +29,7 @@ pub const SHARED_BUILD_OPTS: [&str; 22] = [
     "-DLLVM_OPTIMIZED_TABLEGEN='Off'",
     "-DCMAKE_EXPORT_COMPILE_COMMANDS='On'",
     "-DPython3_FIND_REGISTRY='LAST'", // Use Python version from $PATH, not from registry
-    "-DBUG_REPORT_URL='https://github.com/NomicFoundation/solx-llvm/issues/'",
+    "-DBUG_REPORT_URL='https://github.com/matter-labs/solx-llvm/issues'",
 ];
 
 ///
@@ -110,7 +110,7 @@ pub fn shared_build_opts_targets() -> Vec<String> {
                 .collect::<Vec<String>>()
                 .join(";")
         ),
-        format!("-DLLVM_DEFAULT_TARGET_TRIPLE='{}'", Platform::EVM),
+        format!("-DLLVM_DEFAULT_TARGET_TRIPLE='{}'", solx_utils::Target::EVM),
     ]
 }
 
