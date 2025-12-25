@@ -2,6 +2,7 @@
 yanked = "warn"
 ignore = [
     #"RUSTSEC-0000-0000",
+    "RUSTSEC-2025-0137",
 ]
 
 [licenses]

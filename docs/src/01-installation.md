@@ -180,7 +180,7 @@ This repository maintains intuitive and stable naming for the executables and pr
    cd ../..
    ```
 
-   The sequence above may fail with clang v20 and/or Boost 1.88.
+   The sequence above may fail with clang >19.x and/or Boost >1.85.
    We are currently looking for a solution and will document it when we find one.
    If you encounter compilation errors, try specifying the aforementioned versions to replace your system default:
 
