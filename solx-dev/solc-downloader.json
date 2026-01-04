@@ -3,7 +3,7 @@
     {
       "is_enabled": true,
       "protocol": "https",
-      "source": "https://github.com/argotorg/solc-bin/raw/refs/heads/gh-pages/${PLATFORM}/solc-${PLATFORM}-v0.8.33+commit.fd3a2265",
+      "source": "https://github.com/argotorg/solc-bin/raw/refs/heads/gh-pages/${PLATFORM}/solc-${PLATFORM}-v0.8.33+commit.64118f21",
       "destination": "./temp-compilers/solc-0.8.33",
       "version": "0.8.33",
       "platforms": {

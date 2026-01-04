@@ -5,7 +5,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::model::benchmark::test::selector::Selector;
+use crate::benchmark::test::selector::Selector;
 
 ///
 /// Information associated with a specific test in benchmark.

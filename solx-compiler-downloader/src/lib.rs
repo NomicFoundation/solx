@@ -11,33 +11,39 @@ pub use self::config::Config;
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::PermissionsExt;
 
+use std::fs::OpenOptions;
+use std::io::Seek;
+use std::io::SeekFrom;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
 use colored::Colorize;
+use reqwest::blocking::Client as HttpClient;
+use reqwest::Url;
 
 ///
 /// The compiler downloader.
 ///
 #[derive(Debug)]
 pub struct Downloader {
-    /// The `reqwest` HTTP client.
-    http_client: reqwest::blocking::Client,
+    /// The HTTP client.
+    http_client: HttpClient,
     /// The compiler-bin JSON list metadata.
     compiler_list: Option<CompilerList>,
 }
 
 impl Default for Downloader {
     fn default() -> Self {
-        let mut http_client_builder = reqwest::blocking::ClientBuilder::new();
-        http_client_builder = http_client_builder.connect_timeout(Duration::from_secs(60));
-        http_client_builder = http_client_builder.pool_idle_timeout(Duration::from_secs(600));
-        http_client_builder = http_client_builder.timeout(Duration::from_secs(3600));
-        let http_client = http_client_builder
+        let http_client = HttpClient::builder()
+            .connect_timeout(Duration::from_secs(600))
+            .timeout(Duration::from_secs(600))
+            .pool_idle_timeout(Duration::from_secs(600))
+            .pool_max_idle_per_host(0)
+            .tcp_keepalive(Duration::from_secs(600))
             .build()
-            .expect("HTTP client building error");
+            .expect("Always valid");
         Self::new(http_client)
     }
 }
@@ -46,7 +52,7 @@ impl Downloader {
     ///
     /// A shortcut constructor.
     ///
-    pub fn new(http_client: reqwest::blocking::Client) -> Self {
+    pub fn new(http_client: HttpClient) -> Self {
         Self {
             http_client,
             compiler_list: None,
@@ -86,7 +92,7 @@ impl Downloader {
                 )
             })?;
 
-            let data = match executable.protocol {
+            match executable.protocol {
                 Protocol::File => {
                     source_path += std::env::consts::EXE_SUFFIX;
                     if source_path == destination_path.to_string_lossy() {
@@ -120,13 +126,11 @@ impl Downloader {
                         continue;
                     }
 
-                    let source_url =
-                        reqwest::Url::from_str(source_path.as_str()).expect("Always valid");
                     println!(
-                        " {} executable `{source_url}` => {destination_path:?}",
+                        " {} executable {source_path:?} => {destination_path:?}",
                         "Downloading".bright_green().bold(),
                     );
-                    self.http_client.get(source_url).send()?.bytes()?
+                    self.download_file(source_path.as_str(), destination_path)?;
                 }
                 Protocol::CompilerBinList => {
                     if destination_path.exists() {
@@ -139,7 +143,7 @@ impl Downloader {
 
                     let compiler_list_path = PathBuf::from(source_path.as_str());
                     let compiler_list = self.compiler_list.get_or_insert_with(|| {
-                        CompilerList::try_from(compiler_list_path.as_path())
+                        CompilerList::try_from(compiler_list_path.to_str().expect("Always valid"))
                             .expect("compiler-bin JSON list downloading error")
                     });
                     if compiler_list.releases.is_empty() {
@@ -169,27 +173,110 @@ impl Downloader {
                     source_path.pop();
                     source_path.push(source_executable_name);
 
-                    let source_url =
-                        reqwest::Url::from_str(source_path.to_str().expect("Always valid"))
-                            .expect("Always valid");
                     println!(
-                        " {} executable `{source_url}` => {destination_path:?}",
+                        " {} executable {source_path:?} => {destination_path:?}",
                         "Downloading".bright_green().bold(),
                     );
-                    self.http_client.get(source_url).send()?.bytes()?
+                    self.download_file(
+                        source_path.to_str().expect("Always valid"),
+                        destination_path,
+                    )?;
                 }
-            };
-
-            let mut destination_folder = destination_path.clone();
-            destination_folder.pop();
-            std::fs::create_dir_all(destination_folder)?;
-
-            std::fs::write(&destination_path, data)?;
-
-            #[cfg(target_family = "unix")]
-            std::fs::set_permissions(&destination_path, std::fs::Permissions::from_mode(0o755))?;
+            }
         }
 
         Ok(config)
+    }
+
+    ///
+    /// Downloads a file from a URL to a destination path, with resume support and retries.
+    ///
+    fn download_file(&self, url: &str, destination: impl AsRef<Path>) -> anyhow::Result<()> {
+        std::fs::create_dir_all(destination.as_ref().parent().expect("Always exists"))?;
+
+        let destination = destination.as_ref();
+        let tmp_destination = destination.with_file_name(format!(
+            "{}.part",
+            destination
+                .file_name()
+                .and_then(|name| name.to_str())
+                .expect("Always exists")
+        ));
+
+        let max_attempts = 8;
+        let mut backoff = Duration::from_millis(200);
+
+        for attempt in 1..=max_attempts {
+            let mut file = OpenOptions::new()
+                .create(true)
+                .read(true)
+                .append(true)
+                .open(&tmp_destination)?;
+
+            let url = Url::from_str(url)
+                .map_err(|error| anyhow::anyhow!("URL `{url}` parsing error: {error}"))?;
+            let mut request = self.http_client.get(url);
+            let downloaded_bytes = file.metadata()?.len();
+            if downloaded_bytes > 0 {
+                request = request.header("Range", format!("bytes={downloaded_bytes}-"));
+            }
+
+            let mut response = match request.send() {
+                Ok(response) => response,
+                Err(error) => {
+                    if attempt < max_attempts {
+                        std::thread::sleep(backoff);
+                        backoff = (backoff * 2).min(Duration::from_secs(2));
+                        continue;
+                    }
+                    return Err(anyhow::anyhow!(error));
+                }
+            };
+
+            let status = response.status().as_u16();
+
+            if status == 429 || (500..600).contains(&status) {
+                if attempt < max_attempts {
+                    std::thread::sleep(backoff);
+                    backoff = (backoff * 2).min(Duration::from_secs(2));
+                    continue;
+                }
+                return Err(anyhow::anyhow!("HTTP {}", response.status()));
+            }
+
+            if downloaded_bytes > 0 && status == 200 {
+                drop(file);
+                let _ = std::fs::remove_file(&tmp_destination);
+                backoff = Duration::from_millis(200);
+                continue;
+            }
+
+            if !(200..300).contains(&status) {
+                return Err(anyhow::anyhow!("HTTP {}", response.status()));
+            }
+
+            file.seek(SeekFrom::End(0))?;
+
+            if let Err(error) = response.copy_to(&mut file) {
+                if attempt < max_attempts {
+                    std::thread::sleep(backoff);
+                    backoff = (backoff * 2).min(Duration::from_secs(2));
+                    continue;
+                }
+                return Err(anyhow::anyhow!(error));
+            }
+
+            if destination.exists() {
+                std::fs::remove_file(destination)?;
+            }
+            std::fs::rename(tmp_destination, destination)?;
+
+            #[cfg(target_family = "unix")]
+            std::fs::set_permissions(destination, std::fs::Permissions::from_mode(0o755))?;
+
+            return Ok(());
+        }
+
+        anyhow::bail!("Downloading failed after {max_attempts} attempts");
     }
 }

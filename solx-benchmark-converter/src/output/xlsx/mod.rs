@@ -6,8 +6,8 @@ pub mod worksheet;
 
 use std::collections::HashMap;
 
+use crate::benchmark::Benchmark;
 use crate::input::source::Source;
-use crate::model::benchmark::Benchmark;
 
 use self::worksheet::Worksheet;
 

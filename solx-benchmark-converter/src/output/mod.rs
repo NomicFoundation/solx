@@ -9,8 +9,8 @@ pub mod xlsx;
 
 use std::path::PathBuf;
 
+use crate::benchmark::Benchmark;
 use crate::input::source::Source;
-use crate::model::benchmark::Benchmark;
 use crate::output::format::Format;
 use crate::output::json::Json;
 use crate::output::xlsx::Xlsx;

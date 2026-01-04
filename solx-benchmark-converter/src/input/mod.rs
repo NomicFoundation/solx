@@ -13,7 +13,7 @@ pub mod testing_time;
 
 use std::path::Path;
 
-use crate::model::benchmark::Benchmark;
+use crate::benchmark::Benchmark;
 
 use self::build_failures::BuildFailuresReport;
 use self::compilation_time::CompilationTimeReport;

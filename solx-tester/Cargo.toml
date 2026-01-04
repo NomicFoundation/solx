@@ -50,8 +50,3 @@ git = "https://github.com/jacques-kigo/rust-web3"
 branch = "master"
 default-features = false
 features = ["http-rustls-tls", "test", "signing"]
-
-[dependencies.reqwest]
-version = "0.12"
-default-features = false
-features = ["blocking"]

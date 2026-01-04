@@ -2,7 +2,7 @@
 //! Defines available output formats.
 //!
 
-use crate::model::benchmark::Benchmark;
+use crate::benchmark::Benchmark;
 
 ///
 /// Native JSON format that corresponds to the inner benchmark analyzer data model.

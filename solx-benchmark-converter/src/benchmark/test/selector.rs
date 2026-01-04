@@ -5,7 +5,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::model::benchmark::test::input::Input;
+use crate::benchmark::test::input::Input;
 
 ///
 /// Test selector, unambiously locating a test suite, case, or input.

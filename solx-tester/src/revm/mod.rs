@@ -9,7 +9,6 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::time::Duration;
 use std::time::Instant;
 
 use colored::Colorize;
@@ -141,20 +140,13 @@ impl REVM {
     /// Downloads the necessary compiler executables.
     ///
     pub fn download(executable_download_config_paths: Vec<PathBuf>) -> anyhow::Result<()> {
-        let mut http_client_builder = reqwest::blocking::ClientBuilder::new();
-        http_client_builder = http_client_builder.connect_timeout(Duration::from_secs(60));
-        http_client_builder = http_client_builder.pool_idle_timeout(Duration::from_secs(60));
-        http_client_builder = http_client_builder.timeout(Duration::from_secs(60));
-        let http_client = http_client_builder.build()?;
-
         let download_time_start = Instant::now();
         println!(
             " {} compiler executables",
             "Downloading".bright_green().bold()
         );
         for config_path in executable_download_config_paths.into_iter() {
-            solx_compiler_downloader::Downloader::new(http_client.clone())
-                .download(config_path.as_path())?;
+            solx_compiler_downloader::Downloader::default().download(config_path.as_path())?;
         }
         println!(
             "    {} downloading compiler executables in {}m{:02}s",
