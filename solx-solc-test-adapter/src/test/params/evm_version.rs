@@ -9,7 +9,7 @@ use regex::Regex;
 ///
 /// EVM version param values.
 ///
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum EVMVersion {
     /// Equals specified.
     Equals(solx_utils::EVMVersion),
@@ -22,6 +22,7 @@ pub enum EVMVersion {
     /// Lesser or equals than specified.
     LesserEquals(solx_utils::EVMVersion),
     /// Not specified.
+    #[default]
     Default,
 }
 
@@ -38,6 +39,25 @@ impl EVMVersion {
             Self::LesserEquals(inner) => version <= inner,
             Self::Default => true,
         }
+    }
+
+    ///
+    /// Returns the newest EVM version that matches the requirement.
+    ///
+    pub fn newest_matching(&self) -> solx_utils::EVMVersion {
+        for version in [
+            solx_utils::EVMVersion::Cancun,
+            solx_utils::EVMVersion::Prague,
+            solx_utils::EVMVersion::Osaka,
+        ]
+        .into_iter()
+        .rev()
+        {
+            if self.matches(&version) {
+                return version;
+            }
+        }
+        solx_utils::EVMVersion::default()
     }
 }
 

@@ -231,10 +231,7 @@ impl SolidityCompiler {
         };
 
         let evm_version = match mode {
-            Mode::Solc(mode) if mode.solc_version >= SolcUpstreamCompiler::FIRST_CANCUN_VERSION => {
-                Some(solx_utils::EVMVersion::Cancun)
-            }
-            Mode::Solc(_mode) => None,
+            Mode::Solc(_mode) => test_params.map(|params| params.evm_version.newest_matching()),
             Mode::Solx(_mode) => None,
             Mode::YulUpstream(_mode) => Some(solx_utils::EVMVersion::Cancun),
             mode => anyhow::bail!("Unsupported mode: {mode}"),

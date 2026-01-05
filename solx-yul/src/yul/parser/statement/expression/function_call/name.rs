@@ -288,6 +288,7 @@ impl From<&str> for Name {
             "returndatacopy" => Self::ReturnDataCopy,
             "extcodesize" => Self::ExtCodeSize,
             "extcodehash" => Self::ExtCodeHash,
+            "extcodecopy" => Self::ExtCodeCopy,
 
             "return" => Self::Return,
             "revert" => Self::Revert,
@@ -341,10 +342,130 @@ impl From<&str> for Name {
 
             "callcode" => Self::CallCode,
             "pc" => Self::Pc,
-            "extcodecopy" => Self::ExtCodeCopy,
             "selfdestruct" => Self::SelfDestruct,
 
             input => Self::UserDefined(input.to_owned()),
+        }
+    }
+}
+
+impl std::fmt::Display for Name {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UserDefined(name) => write!(f, "{name}"),
+            Self::Add => write!(f, "add"),
+            Self::Sub => write!(f, "sub"),
+            Self::Mul => write!(f, "mul"),
+            Self::Div => write!(f, "div"),
+            Self::Mod => write!(f, "mod"),
+            Self::Sdiv => write!(f, "sdiv"),
+            Self::Smod => write!(f, "smod"),
+
+            Self::Lt => write!(f, "lt"),
+            Self::Gt => write!(f, "gt"),
+            Self::Eq => write!(f, "eq"),
+            Self::IsZero => write!(f, "iszero"),
+            Self::Slt => write!(f, "slt"),
+            Self::Sgt => write!(f, "sgt"),
+            Self::Clz => write!(f, "clz"),
+
+            Self::Or => write!(f, "or"),
+            Self::Xor => write!(f, "xor"),
+            Self::Not => write!(f, "not"),
+            Self::And => write!(f, "and"),
+            Self::Shl => write!(f, "shl"),
+            Self::Shr => write!(f, "shr"),
+            Self::Sar => write!(f, "sar"),
+            Self::Byte => write!(f, "byte"),
+            Self::Pop => write!(f, "pop"),
+
+            Self::AddMod => write!(f, "addmod"),
+            Self::MulMod => write!(f, "mulmod"),
+            Self::Exp => write!(f, "exp"),
+            Self::SignExtend => write!(f, "signextend"),
+
+            Self::Keccak256 => write!(f, "keccak256"),
+
+            Self::MLoad => write!(f, "mload"),
+            Self::MStore => write!(f, "mstore"),
+            Self::MStore8 => write!(f, "mstore8"),
+            Self::MCopy => write!(f, "mcopy"),
+
+            Self::SLoad => write!(f, "sload"),
+            Self::SStore => write!(f, "sstore"),
+            Self::TLoad => write!(f, "tload"),
+            Self::TStore => write!(f, "tstore"),
+            Self::LoadImmutable => write!(f, "loadimmutable"),
+            Self::SetImmutable => write!(f, "setimmutable"),
+
+            Self::CallDataLoad => write!(f, "calldataload"),
+            Self::CallDataSize => write!(f, "calldatasize"),
+            Self::CallDataCopy => write!(f, "calldatacopy"),
+            Self::CodeSize => write!(f, "codesize"),
+            Self::CodeCopy => write!(f, "codecopy"),
+            Self::ReturnDataSize => write!(f, "returndatasize"),
+            Self::ReturnDataCopy => write!(f, "returndatacopy"),
+            Self::ExtCodeSize => write!(f, "extcodesize"),
+            Self::ExtCodeHash => write!(f, "extcodehash"),
+            Self::ExtCodeCopy => write!(f, "extcodecopy"),
+
+            Self::Return => write!(f, "return"),
+            Self::Revert => write!(f, "revert"),
+
+            Self::Log0 => write!(f, "log0"),
+            Self::Log1 => write!(f, "log1"),
+            Self::Log2 => write!(f, "log2"),
+            Self::Log3 => write!(f, "log3"),
+            Self::Log4 => write!(f, "log4"),
+
+            Self::Call => write!(f, "call"),
+            Self::DelegateCall => write!(f, "delegatecall"),
+            Self::StaticCall => write!(f, "staticcall"),
+
+            Self::Create => write!(f, "create"),
+            Self::Create2 => write!(f, "create2"),
+            Self::DataSize => write!(f, "datasize"),
+            Self::DataCopy => write!(f, "datacopy"),
+            Self::DataOffset => write!(f, "dataoffset"),
+
+            Self::Stop => write!(f, "stop"),
+            Self::Invalid => write!(f, "invalid"),
+
+            Self::LinkerSymbol => write!(f, "linkersymbol"),
+            Self::MemoryGuard => write!(f, "memoryguard"),
+
+            Self::Address => write!(f, "address"),
+            Self::Caller => write!(f, "caller"),
+
+            Self::CallValue => write!(f, "callvalue"),
+            Self::Gas => write!(f, "gas"),
+            Self::Balance => write!(f, "balance"),
+            Self::SelfBalance => write!(f, "selfbalance"),
+            Self::GasLimit => write!(f, "gaslimit"),
+            Self::GasPrice => write!(f, "gasprice"),
+            Self::Origin => write!(f, "origin"),
+            Self::ChainId => write!(f, "chainid"),
+            Self::Timestamp => write!(f, "timestamp"),
+            Self::Number => write!(f, "number"),
+            Self::BlockHash => write!(f, "blockhash"),
+            Self::BlobHash => write!(f, "blobhash"),
+            Self::Difficulty => write!(f, "difficulty"),
+            Self::Prevrandao => write!(f, "prevrandao"),
+            Self::CoinBase => write!(f, "coinbase"),
+            Self::BaseFee => write!(f, "basefee"),
+            Self::BlobBaseFee => write!(f, "blobbasefee"),
+            Self::MSize => write!(f, "msize"),
+
+            Self::UnsafeAsm => write!(f, "unsafeasm"),
+
+            Self::CallCode => write!(f, "callcode"),
+            Self::Pc => write!(f, "pc"),
+            Self::SelfDestruct => write!(f, "selfdestruct"),
+
+            Self::Verbatim {
+                input_size,
+                output_size,
+            } => write!(f, "verbatim({input_size}, {output_size})"),
         }
     }
 }

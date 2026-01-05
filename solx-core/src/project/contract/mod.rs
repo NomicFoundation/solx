@@ -99,6 +99,7 @@ impl Contract {
         contract_name: solx_utils::ContractName,
         contract_ir: IR,
         code_segment: solx_utils::CodeSegment,
+        evm_version: Option<solx_utils::EVMVersion>,
         identifier_paths: BTreeMap<String, String>,
         output_selection: solx_standard_json::InputSelection,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
@@ -129,6 +130,7 @@ impl Contract {
                     deploy_module,
                     llvm_options.clone(),
                     code_segment,
+                    evm_version,
                     optimizer,
                     debug_config.clone(),
                 );
@@ -186,6 +188,7 @@ impl Contract {
                     runtime_module,
                     llvm_options.clone(),
                     code_segment,
+                    evm_version,
                     optimizer.clone(),
                     debug_config.clone(),
                 );
@@ -254,6 +257,7 @@ impl Contract {
                     deploy_module,
                     llvm_options.clone(),
                     code_segment,
+                    evm_version,
                     optimizer,
                     debug_config.clone(),
                 );
@@ -315,6 +319,7 @@ impl Contract {
                     runtime_module,
                     llvm_options.clone(),
                     code_segment,
+                    evm_version,
                     optimizer.clone(),
                     debug_config.clone(),
                 );
@@ -382,6 +387,7 @@ impl Contract {
                     deploy_module,
                     llvm_options,
                     code_segment,
+                    evm_version,
                     optimizer,
                     debug_config,
                 );
@@ -433,6 +439,7 @@ impl Contract {
                     runtime_module,
                     llvm_options.clone(),
                     code_segment,
+                    evm_version,
                     optimizer,
                     debug_config.clone(),
                 );

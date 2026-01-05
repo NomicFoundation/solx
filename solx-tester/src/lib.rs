@@ -55,18 +55,18 @@ type Test = (Arc<dyn Buildable>, Arc<dyn Compiler>, Mode);
 ///
 /// `solx` tester.
 ///
-pub struct SolxTester {
+pub struct SolxTester<'a> {
     /// The summary.
     pub summary: Arc<Mutex<Summary>>,
     /// The filters.
-    pub filters: Filters,
+    pub filters: Filters<'a>,
     /// The debug config.
     pub debug_config: Option<solx_codegen_evm::DebugConfig>,
     /// Actions to perform.
     pub workflow: Workflow,
 }
 
-impl SolxTester {
+impl<'a> SolxTester<'a> {
     /// The Solidity simple tests directory.
     const SOLIDITY_SIMPLE: &'static str = "tests/solidity/simple";
     /// The Solidity complex tests directory.
@@ -81,13 +81,13 @@ impl SolxTester {
     const LLVM_IR_SIMPLE: &'static str = "tests/llvm-ir";
 }
 
-impl SolxTester {
+impl<'a> SolxTester<'a> {
     ///
     /// A shortcut constructor.
     ///
     pub fn new(
         summary: Arc<Mutex<Summary>>,
-        filters: Filters,
+        filters: Filters<'a>,
         debug_config: Option<solx_codegen_evm::DebugConfig>,
         workflow: Workflow,
     ) -> anyhow::Result<Self> {

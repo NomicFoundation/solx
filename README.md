@@ -12,11 +12,11 @@
 
 **solx** passes multiple test suites, including:
 
-- [Foundry projects](.github/forge-benchmarks.toml)
-- [Hardhat projects](.github/hardhat-projects.toml)
-- [other projects](solx-tests/solidity/complex/defi) such as UniswapV2 and Mooniswap
+- [Foundry projects](solx-dev/foundry-tests.toml)
+- [Hardhat projects](solx-dev/hardhat-tests.toml)
+- [other projects](tests/solidity/complex/defi) such as UniswapV2 and Mooniswap
 - [tests](https://github.com/NomicFoundation/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests) from the **solc** repository
-- [additional tests](solx-tests/solidity) written by the **solx** team
+- [additional tests](tests/solidity) written by the **solx** team
 
 ## Documentation
 

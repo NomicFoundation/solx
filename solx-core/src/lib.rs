@@ -193,6 +193,7 @@ pub fn main(
             arguments.libraries.as_slice(),
             &output_selection,
             messages,
+            arguments.evm_version,
             metadata_hash_type,
             append_cbor,
             optimizer_settings,
@@ -205,6 +206,7 @@ pub fn main(
             arguments.libraries.as_slice(),
             &output_selection,
             messages,
+            arguments.evm_version,
             metadata_hash_type,
             append_cbor,
             optimizer_settings,
@@ -271,6 +273,7 @@ pub fn yul_to_evm(
     libraries: &[String],
     output_selection: &solx_standard_json::InputSelection,
     messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
+    evm_version: Option<solx_utils::EVMVersion>,
     metadata_hash_type: solx_utils::MetadataHashType,
     append_cbor: bool,
     optimizer_settings: solx_codegen_evm::OptimizerSettings,
@@ -294,6 +297,7 @@ pub fn yul_to_evm(
     let mut build = project.compile_to_evm(
         messages,
         output_selection,
+        evm_version,
         metadata_hash_type,
         append_cbor,
         optimizer_settings,
@@ -321,6 +325,7 @@ pub fn llvm_ir_to_evm(
     libraries: &[String],
     output_selection: &solx_standard_json::InputSelection,
     messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
+    evm_version: Option<solx_utils::EVMVersion>,
     metadata_hash_type: solx_utils::MetadataHashType,
     append_cbor: bool,
     optimizer_settings: solx_codegen_evm::OptimizerSettings,
@@ -335,6 +340,7 @@ pub fn llvm_ir_to_evm(
     let mut build = project.compile_to_evm(
         messages,
         output_selection,
+        evm_version,
         metadata_hash_type,
         append_cbor,
         optimizer_settings,
@@ -421,6 +427,7 @@ pub fn standard_output_evm(
     let mut build = project.compile_to_evm(
         messages,
         &solc_input.settings.output_selection,
+        evm_version,
         metadata_hash_type,
         append_cbor,
         optimizer_settings.clone(),
@@ -581,6 +588,7 @@ pub fn standard_json_evm(
     let build = project.compile_to_evm(
         messages,
         &solc_input.settings.output_selection,
+        solc_input.settings.evm_version,
         metadata_hash_type,
         append_cbor,
         optimizer_settings.clone(),

@@ -84,13 +84,6 @@ impl Mode {
     /// Checks if the mode is compatible with the Ethereum tests params.
     ///
     pub fn check_ethereum_tests_params(&self, params: &solx_solc_test_adapter::Params) -> bool {
-        if params
-            .evm_version
-            .matches(&solx_utils::EVMVersion::Homestead)
-        {
-            return false;
-        }
-
         if self.via_ir {
             params.compile_via_yul != solx_solc_test_adapter::CompileViaYul::False
                 && params.abi_encoder_v1_only != solx_solc_test_adapter::ABIEncoderV1Only::True

@@ -98,6 +98,11 @@ pub trait IContext<'ctx> {
     fn code_segment(&self) -> Option<solx_utils::CodeSegment>;
 
     ///
+    /// Returns the EVM version.
+    ///
+    fn evm_version(&self) -> solx_utils::EVMVersion;
+
+    ///
     /// Appends a new basic block to the current function.
     ///
     fn append_basic_block(&self, name: &str) -> inkwell::basic_block::BasicBlock<'ctx>;

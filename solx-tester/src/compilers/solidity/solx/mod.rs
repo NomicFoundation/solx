@@ -235,7 +235,7 @@ impl Compiler for SolidityCompiler {
         sources: Vec<(String, String)>,
         libraries: solx_utils::Libraries,
         mode: &Mode,
-        _test_params: Option<&solx_solc_test_adapter::Params>,
+        test_params: Option<&solx_solc_test_adapter::Params>,
         llvm_options: Vec<String>,
         debug_config: Option<solx_codegen_evm::DebugConfig>,
     ) -> anyhow::Result<EVMInput> {
@@ -254,6 +254,8 @@ impl Compiler for SolidityCompiler {
         let libraries = solx_utils::Libraries {
             inner: libraries.inner,
         };
+
+        let evm_version = test_params.map(|params| params.evm_version.newest_matching());
 
         let mut selectors = BTreeSet::new();
         selectors.insert(solx_standard_json::InputSelector::Bytecode);
@@ -276,7 +278,7 @@ impl Compiler for SolidityCompiler {
                     .llvm_optimizer_settings
                     .is_fallback_to_size_enabled,
             ),
-            None,
+            evm_version,
             solx_mode.via_ir,
             &solx_standard_json::InputSelection::new(selectors),
             solx_standard_json::InputMetadata::default(),

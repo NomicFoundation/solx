@@ -51,6 +51,7 @@ pub fn run() -> anyhow::Result<()> {
                 input.contract_name,
                 input.contract_ir,
                 input.code_segment,
+                input.evm_version,
                 input.identifier_paths,
                 input.output_selection,
                 input.immutables,

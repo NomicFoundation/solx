@@ -10,26 +10,26 @@ use crate::compilers::mode::Mode;
 /// `solx` tester filters.
 ///
 #[derive(Debug)]
-pub struct Filters {
+pub struct Filters<'a> {
     /// The path filters.
-    path_filters: HashSet<String>,
+    path_filters: HashSet<&'a str>,
     /// The mode filters.
     mode_filters: HashSet<String>,
     /// The group filters.
     group_filters: HashSet<String>,
 }
 
-impl Filters {
+impl<'a> Filters<'a> {
     ///
     /// A shortcut constructor.
     ///
     pub fn new(
-        path_filters: Vec<String>,
+        path_filters: HashSet<&'a str>,
         mode_filters: Vec<String>,
         group_filters: Vec<String>,
     ) -> Self {
         Self {
-            path_filters: path_filters.into_iter().collect(),
+            path_filters,
             // Mode filters are stripped of spaces so filters like "Y+M3B3
             // 0.2.1 " and "Y +M3B3 0.2.1" become equivalent
             mode_filters: mode_filters

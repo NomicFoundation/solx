@@ -24,39 +24,13 @@ impl FunctionCall {
         context: &mut solx_codegen_evm::Context<'ctx>,
     ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>> {
         let location = self.0.location;
+        let name = self.0.name.clone();
+        let evm_version = context.evm_version();
 
-        match self.0.name {
-            Name::UserDefined(name) => {
-                let mut values = Vec::with_capacity(self.0.arguments.len());
-                for argument in self.0.arguments.into_iter().rev() {
-                    let value = argument
-                        .wrap()
-                        .into_llvm(context)?
-                        .expect("Always exists")
-                        .value;
-                    values.push(value);
-                }
-                values.reverse();
-                let function = context
-                    .get_function(name.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("{location} Undeclared function `{name}`"))?;
-
-                let expected_arguments_count =
-                    function.borrow().declaration().value.count_params() as usize;
-                if expected_arguments_count != values.len() {
-                    anyhow::bail!(
-                        "{location} Function `{name}` expected {expected_arguments_count} arguments, found {}",
-                        values.len()
-                    );
-                }
-
-                let return_value = context.build_call(
-                    function.borrow().declaration(),
-                    values.as_slice(),
-                    format!("{name}_call").as_str(),
-                )?;
-
-                Ok(return_value)
+        match name {
+            Name::UserDefined(name) => self.user_defined(context, name.as_str()),
+            name @ Name::Clz if evm_version < solx_utils::EVMVersion::Osaka => {
+                self.user_defined(context, name.to_string().as_str())
             }
 
             Name::Add => {
@@ -761,6 +735,48 @@ impl FunctionCall {
 
             _ => Ok(None),
         }
+    }
+
+    ///
+    /// Handles a user-defined function.
+    ///
+    fn user_defined<'ctx>(
+        self,
+        context: &mut solx_codegen_evm::Context<'ctx>,
+        name: &str,
+    ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>> {
+        let location = self.0.location;
+
+        let mut values = Vec::with_capacity(self.0.arguments.len());
+        for argument in self.0.arguments.into_iter().rev() {
+            let value = argument
+                .wrap()
+                .into_llvm(context)?
+                .expect("Always exists")
+                .value;
+            values.push(value);
+        }
+        values.reverse();
+        let function = context
+            .get_function(name)
+            .ok_or_else(|| anyhow::anyhow!("{location} Undeclared function `{name}`"))?;
+
+        let expected_arguments_count =
+            function.borrow().declaration().value.count_params() as usize;
+        if expected_arguments_count != values.len() {
+            anyhow::bail!(
+                "{location} Function `{name}` expected {expected_arguments_count} arguments, found {}",
+                values.len()
+            );
+        }
+
+        let return_value = context.build_call(
+            function.borrow().declaration(),
+            values.as_slice(),
+            format!("{name}_call").as_str(),
+        )?;
+
+        Ok(return_value)
     }
 
     ///

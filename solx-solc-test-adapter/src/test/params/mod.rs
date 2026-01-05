@@ -80,9 +80,7 @@ impl TryFrom<&str> for Params {
                         .map_err(|error| anyhow::anyhow!("{} on line {}", error, index + 1))?;
                 }
                 "EVMVersion" => {
-                    evm_version = value
-                        .try_into()
-                        .map_err(|error| anyhow::anyhow!("{} on line {}", error, index + 1))?;
+                    evm_version = value.try_into().unwrap_or_default();
                 }
                 "revertStrings" => {
                     revert_strings = value

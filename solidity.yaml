@@ -199,7 +199,8 @@ entries:
         version: '>=0.6.8'
       return_dynamic_types_cross_call_out_of_range_1.sol:
         hash: '0xb362aebd972eb389f955c1b952f2836e'
-        enabled: true
+        enabled: false
+        comment: Unsupported EVM version
         version: '>=0.4.12'
       return_dynamic_types_cross_call_out_of_range_2.sol:
         hash: '0x0e05f88aa956d670306466cb961d7628'
@@ -3386,7 +3387,8 @@ entries:
         version: '>=0.4.12'
       return_size_shorter_than_expected.sol:
         hash: '0x03e534455c50daa7718065c72e6dcbc9'
-        enabled: true
+        enabled: false
+        comment: Unsupported EVM version
         version: '>=0.4.12'
       return_size_shorter_than_expected_evm_version_after_homestead.sol:
         hash: '0x37fd1b1f80687ef61b730b49fc302aad'
@@ -3944,7 +3946,7 @@ entries:
       clz_pre_osaka.sol:
         hash: '0xe0c639a014bcf60cb12cdf6518bb4d08'
         enabled: true
-        version: <0.8.31
+        version: '>=0.4.12'
       constant_access.sol:
         hash: '0x98ff30d54b7c5e2573464791c52786d0'
         enabled: true

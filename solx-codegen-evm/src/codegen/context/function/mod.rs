@@ -114,6 +114,7 @@ impl<'ctx> Function<'ctx> {
     pub fn set_default_attributes(
         llvm: &'ctx inkwell::context::Context,
         declaration: FunctionDeclaration<'ctx>,
+        evm_version: solx_utils::EVMVersion,
         optimizer: &Optimizer,
     ) {
         if optimizer.settings().level_middle_end == inkwell::OptimizationLevel::None {
@@ -142,7 +143,7 @@ impl<'ctx> Function<'ctx> {
             inkwell::attributes::AttributeLoc::Function,
             llvm.create_string_attribute(
                 StringAttribute::TargetFeatures.to_string().as_str(),
-                format!("+{}", solx_utils::EVMVersion::Osaka).as_str(),
+                format!("+{evm_version}").as_str(),
             ),
         );
         declaration.value.add_attribute(

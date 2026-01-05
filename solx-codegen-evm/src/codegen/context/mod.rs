@@ -53,6 +53,8 @@ pub struct Context<'ctx> {
     llvm_options: Vec<String>,
     /// The current contract code type, which can be deploy or runtime.
     code_segment: solx_utils::CodeSegment,
+    /// The EVM version to produce bytecode for.
+    evm_version: Option<solx_utils::EVMVersion>,
     /// The LLVM intrinsic functions, defined on the LLVM side.
     intrinsics: Intrinsics<'ctx>,
     /// The declared functions.
@@ -88,6 +90,7 @@ impl<'ctx> Context<'ctx> {
         module: inkwell::module::Module<'ctx>,
         llvm_options: Vec<String>,
         code_segment: solx_utils::CodeSegment,
+        evm_version: Option<solx_utils::EVMVersion>,
         optimizer: Optimizer,
         debug_config: Option<DebugConfig>,
     ) -> Self {
@@ -101,6 +104,7 @@ impl<'ctx> Context<'ctx> {
             optimizer,
             module,
             code_segment,
+            evm_version,
             intrinsics,
             functions: HashMap::with_capacity(Self::FUNCTIONS_HASHMAP_INITIAL_CAPACITY),
             current_function: None,
@@ -484,6 +488,10 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
         Some(self.code_segment.to_owned())
     }
 
+    fn evm_version(&self) -> solx_utils::EVMVersion {
+        self.evm_version.unwrap_or_default()
+    }
+
     fn append_basic_block(&self, name: &str) -> inkwell::basic_block::BasicBlock<'ctx> {
         self.llvm()
             .append_basic_block(self.current_function().borrow().declaration().value, name)
@@ -562,7 +570,12 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
             entry_block,
             return_block,
         );
-        Function::set_default_attributes(self.llvm, function.declaration(), &self.optimizer);
+        Function::set_default_attributes(
+            self.llvm,
+            function.declaration(),
+            self.evm_version.unwrap_or_default(),
+            &self.optimizer,
+        );
 
         let function = Rc::new(RefCell::new(function));
         self.functions.insert(name.to_string(), function.clone());

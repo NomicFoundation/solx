@@ -82,7 +82,12 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
 
     let summary = solx_tester::Summary::new(arguments.verbose, arguments.quiet).wrap();
 
-    let filters = solx_tester::Filters::new(arguments.path, arguments.mode, arguments.group);
+    let path_filters = arguments
+        .path
+        .iter()
+        .map(|path| path.strip_prefix("./").unwrap_or(path.as_str()))
+        .collect();
+    let filters = solx_tester::Filters::new(path_filters, arguments.mode, arguments.group);
 
     let compiler_tester = solx_tester::SolxTester::new(
         summary.clone(),

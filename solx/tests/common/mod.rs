@@ -139,6 +139,7 @@ pub fn build_solidity_standard_json(
     let build = project.compile_to_evm(
         Arc::new(Mutex::new(vec![])),
         &input.settings.output_selection,
+        input.settings.evm_version,
         metadata_hash_type,
         input.settings.metadata.append_cbor,
         optimizer_settings,
@@ -193,6 +194,7 @@ pub fn build_yul_standard_json(
     let build = project.compile_to_evm(
         Arc::new(Mutex::new(vec![])),
         &input.settings.output_selection,
+        input.settings.evm_version,
         solx_utils::MetadataHashType::IPFS,
         input.settings.metadata.append_cbor,
         optimizer_settings,
@@ -243,6 +245,7 @@ pub fn build_llvm_ir_standard_json(
     let build = project.compile_to_evm(
         Arc::new(Mutex::new(vec![])),
         &input.settings.output_selection,
+        input.settings.evm_version,
         solx_utils::MetadataHashType::IPFS,
         input.settings.metadata.append_cbor,
         optimizer_settings,

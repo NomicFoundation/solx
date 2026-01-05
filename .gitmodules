@@ -5,4 +5,4 @@
 [submodule "solx-llvm"]
 	path = solx-llvm
 	url = https://github.com/matter-labs/solx-llvm
-	branch = llvm-21
+	branch = main
