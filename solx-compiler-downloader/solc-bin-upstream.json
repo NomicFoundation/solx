@@ -1,6 +1,48 @@
 {
   "executables": [
     {
+      "is_enabled": false,
+      "protocol": "compiler-bin-list",
+      "source": "https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/${PLATFORM}/list.json",
+      "destination": "./solc-bin-upstream/solc-0.8.30",
+      "version": "0.8.30",
+      "platforms": {
+        "linux-amd64": "linux-amd64",
+        "linux-arm64": "linux-arm64",
+        "macos-amd64": "macosx-amd64",
+        "macos-arm64": "macosx-amd64",
+        "windows-amd64": "windows-amd64"
+      }
+    },
+    {
+      "is_enabled": false,
+      "protocol": "compiler-bin-list",
+      "source": "https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/${PLATFORM}/list.json",
+      "destination": "./solc-bin-upstream/solc-0.8.31",
+      "version": "0.8.31",
+      "platforms": {
+        "linux-amd64": "linux-amd64",
+        "linux-arm64": "linux-arm64",
+        "macos-amd64": "macosx-amd64",
+        "macos-arm64": "macosx-amd64",
+        "windows-amd64": "windows-amd64"
+      }
+    },
+    {
+      "is_enabled": false,
+      "protocol": "compiler-bin-list",
+      "source": "https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/${PLATFORM}/list.json",
+      "destination": "./solc-bin-upstream/solc-0.8.32",
+      "version": "0.8.32",
+      "platforms": {
+        "linux-amd64": "linux-amd64",
+        "linux-arm64": "linux-arm64",
+        "macos-amd64": "macosx-amd64",
+        "macos-arm64": "macosx-amd64",
+        "windows-amd64": "windows-amd64"
+      }
+    },
+    {
       "is_enabled": true,
       "protocol": "compiler-bin-list",
       "source": "https://raw.githubusercontent.com/ethereum/solc-bin/gh-pages/${PLATFORM}/list.json",

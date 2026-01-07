@@ -250,7 +250,7 @@ impl REVM {
             .db_mut()
             .basic(address)
             .expect("Always exists")
-            .expect("Always exists");
+            .unwrap_or_default();
         let mut existing_storage = self
             .db_mut()
             .cache
