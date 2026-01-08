@@ -247,7 +247,7 @@ impl Solc {
             .expect("LLVM revision parsing: missing version.")
             .split('-')
             .nth(1)
-            .expect("LLVM revision parsing: missing revision.")
+            .expect("LLVM revision parsing: missing `solx` revision.")
             .parse::<semver::Version>()
             .unwrap_or_else(|error| panic!("LLVM revision parsing: {error}."));
 

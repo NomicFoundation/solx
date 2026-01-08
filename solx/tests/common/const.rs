@@ -176,6 +176,10 @@ pub const TEST_JSON_METADATA_HASH_NONE_NO_METADATA: &str =
 /// A test input file.
 pub const TEST_JSON_NO_CBOR_METADATA: &str = "tests/data/standard_json_input/no_cbor_metadata.json";
 
+/// A test input file.
+pub const TEST_JSON_EVM_VERSION_TOO_OLD: &str =
+    "tests/data/standard_json_input/evm_version_too_old.json";
+
 /// The broken input file path.
 pub const TEST_BROKEN_INPUT_PATH: &str = "tests/data/broken.bad";
 

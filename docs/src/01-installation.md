@@ -16,22 +16,6 @@ You can start using **solx** in the following ways:
 
 
 
-## Usage
-
-We recommend using **solx** via [Foundry](https://github.com/foundry-rs/foundry). It behaves in the same way as
-**solc** v0.8.33, so you can install **solx** executable as described in the section above and specify:
-
-```toml
-[profile.solx]
-solc_version = "/path/to/solx"
-```
-
-As a shortcut, you may also use `forge --use /path/to/solx` instead.
-
-**solx** works with **Hardhat** as well, but requires additional configuration.
-
-
-
 ## System Requirements
 
 It is recommended to have at least 4 GB of RAM to compile large projects. The compilation process is parallelized by default, so the number of threads used is
@@ -74,7 +58,7 @@ For instance, the latest revision of the latest version of **solc** is `0.8.33-1
 
 ## Ethereum Development Toolkits
 
-For large codebases, it is more convenient to use **solx** via toolkits such as Foundry and Hardhat.
+For large codebases, it is more convenient to use **solx** via toolkits such as Hardhat.
 These tools manage compiler input and output on a higher level, and provide additional features like incremental compilation and caching.
 
 

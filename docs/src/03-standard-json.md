@@ -1,6 +1,6 @@
 # Standard JSON
 
-Standard JSON is a protocol for interaction with the **solx** and **solc** compilers. This protocol must be implemented by toolkits such as Hardhat and Foundry.
+Standard JSON is a protocol for interaction with the **solx** and **solc** compilers. This protocol must be implemented by toolkits such as Hardhat.
 
 The protocol uses two data formats for communication: [input JSON](#input-json) and [output JSON](#output-json).
 
@@ -98,12 +98,12 @@ On the other hand, parameters that are not mentioned here but are parts of **sol
       }
     },
 
-    // Optional: Version of EVM solc will produce IR for.
-    // Affects type checking and code generation.
-    // Can be "homestead", "tangerineWhistle", "spuriousDragon", "byzantium", "constantinople", "petersburg", "istanbul", "berlin", "london", "paris", "shanghai", "cancun" or "prague".
-    // Only used with Solidity, and only affects Yul and EVM assembly codegen. For instance, with version "cancun", solc will produce `MCOPY` instructions, whereas with older EVM versions it will not.
-    // Default: "cancun".
-    "evmVersion": "cancun",
+    // Optional: Version of EVM solx will produce bytecode for.
+    // Supported EVM versions: "cancun", "prague", "osaka".
+    // For instance, with version "osaka", solx will be producing `clz` instructions, whereas for older EVM versions it will not.
+    // The oldest supported EVM version is "cancun".
+    // Default: "osaka".
+    "evmVersion": "osaka",
     // Optional: Select the desired output.
     // Default: no flags are selected, and no output is generated.
     "outputSelection": {

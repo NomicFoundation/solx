@@ -626,34 +626,19 @@ solx 'Simple.sol' --bin --via-ir
 
 ### `--evm-version`
 
-Specifies the EVM version **solc** will produce artifacts for. Only artifacts such as Yul and EVM assembly are known to be affected by this option. For instance, if the EVM version is set to *cancun*, then Yul and EVM assembly may contain `MCOPY` instructions, so no calls to the Identity precompile (address `0x04`) will be made.
+Specifies the EVM version **solx** will produce bytecode for. For instance, with version *osaka*, **solx** will be producing `clz` instructions, whereas for older EVM versions it will not.
 
-> EVM version only affects IR artifacts produced by **solc** and only indirectly affects EVM bytecode produced by **solx**.
+Only the following EVM versions are supported:
 
-The default value is chosen by **solc**. For instance, **solc** v0.8.24 and older use **shanghai** by default, whereas newer ones use *cancun*.
-
-The following values are allowed, however have in mind that newer EVM versions are only supported by newer versions of *solc*:
-- homestead
-- tangerineWhistle
-- spuriousDragon
-- byzantium
-- constantinople
-- petersburg
-- istanbul
-- berlin
-- london
-- paris
-- shanghai
 - cancun
 - prague
+- osaka
 
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin --evm-version 'cancun'
+solx 'Simple.sol' --bin --evm-version 'osaka'
 ```
-
-For more information on how **solc** handles EVM versions, see its [EVM version documentation](https://docs.soliditylang.org/en/latest/using-the-compiler.html#setting-the-evm-version-to-target).
 
 
 

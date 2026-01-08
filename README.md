@@ -12,11 +12,11 @@
 
 **solx** passes multiple test suites, including:
 
-- [Foundry projects](solx-dev/foundry-tests.toml)
-- [Hardhat projects](solx-dev/hardhat-tests.toml)
-- [other projects](tests/solidity/complex/defi) such as UniswapV2 and Mooniswap
+- [Foundry projects](./solx-dev/foundry-tests.toml)
+- [Hardhat projects](./solx-dev/hardhat-tests.toml)
+- [other projects](./tests/solidity/complex/defi) such as UniswapV2 and Mooniswap
 - [tests](https://github.com/NomicFoundation/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests) from the **solc** repository
-- [additional tests](tests/solidity) written by the **solx** team
+- [additional tests](./tests/solidity) written by the **solx** team
 
 ## Documentation
 
@@ -25,7 +25,7 @@ To build the book, follow these [instructions](./docs/README.md).
 
 See also:
 
-- [Solidity Documentation](https://docs.soliditylang.org/en/latest/)
+- [Solidity Documentation](https://docs.soliditylang.org/en/v0.8.33/)
 - [LLVM Documentation](https://llvm.org/docs/)
 
 ## Installation
