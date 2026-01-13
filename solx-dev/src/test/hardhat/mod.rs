@@ -79,6 +79,11 @@ pub fn test(
         {
             crate::utils::remove(project_directory.as_path(), project_name.as_str())?;
 
+            let solidity_version = compiler
+                .solidity_version
+                .as_deref()
+                .unwrap_or(solidity_version.as_str());
+
             let mut clone_command = Command::new("git");
             clone_command.arg("clone");
             clone_command.args(["--depth", "1"]);
@@ -112,7 +117,10 @@ pub fn test(
                 }
                 crate::utils::sed_file(
                     solidity_file.as_path(),
-                    &[r#"s/pragma solidity.*/pragma solidity >=0.8.30;/g"#],
+                    &[
+                        format!(r#"s/pragma solidity.*/pragma solidity >={solidity_version};/g"#)
+                            .as_str(),
+                    ],
                 )?;
             }
 

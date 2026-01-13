@@ -28,6 +28,7 @@ is_correctness_reference = true
 name = "01.solx-latest"
 path = "./temp-compilers/solx-latest"
 description = "solx downloaded from the latest release"
+solidity_version = "0.8.30"
 
 [compilers.solx-main]
 name = "02.solx-main"

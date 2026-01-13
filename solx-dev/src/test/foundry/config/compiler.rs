@@ -13,6 +13,8 @@ pub struct Compiler {
     pub path: String,
     /// Compiler description.
     pub description: String,
+    /// Solidity/solc version, if different from the current commit.
+    pub solidity_version: Option<String>,
     /// Whether the compiler is a correctness reference.
     #[serde(default)]
     pub is_correctness_reference: bool,
