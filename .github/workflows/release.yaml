@@ -278,6 +278,10 @@ jobs:
     needs: prepare-release
     uses: ./.github/workflows/deploy-docs.yaml
     secrets: inherit
+    permissions:
+      id-token: write
+      attestations: write
+      contents: write
 
   check-install-script:
     if: github.ref_type == 'tag'
