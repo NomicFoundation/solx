@@ -59,11 +59,11 @@ jobs:
         id: prepare-matrix
         run: |
           # Define general matrix parameters
-          WINDOWS='{"name":"Windows","runner":"windows-2022-github-hosted-64core","release-suffix":"windows-amd64-gnu"}'
+          WINDOWS='{"name":"Windows","runner":"solx-windows-amd64","release-suffix":"windows-amd64-gnu"}'
           MACOS_AMD64='{"name":"MacOS-x86","runner":"macos-latest-large","release-suffix":"macosx-amd64"}'
           MACOS_ARM64='{"name":"MacOS-arm64","runner":"macos-latest-xlarge","release-suffix":"macosx-arm64"}'
           LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"solx-linux-amd64","image":"ghcr.io/matter-labs/zksync-llvm-runner:latest","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
-          LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"matterlabs-ci-runner-arm","image":"ghcr.io/matter-labs/zksync-llvm-runner:latest","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
+          LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"solx-linux-arm64","image":"ghcr.io/matter-labs/zksync-llvm-runner:latest","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
           # Disable platforms for non-tag builds if user requested
           if [ ${GITHUB_REF_TYPE} != tag ]; then
             [ ${{ github.event.inputs.release_windows_amd64 }} != true ] && WINDOWS=
