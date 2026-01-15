@@ -16,15 +16,35 @@ EOF
 REPO="NomicFoundation/solx"
 DEFAULT_INSTALL_DIR="${HOME}/.local/bin"
 BINARY_NAME="solx"
+VERSION=""
 
-# Parse optional install directory
-if [[ "$1" =~ ^--install-dir= ]]; then
-  INSTALL_DIR="${1#--install-dir=}"
-elif [[ -n "$1" ]]; then
-  INSTALL_DIR="$1"
-else
-  INSTALL_DIR="${DEFAULT_INSTALL_DIR}"
-fi
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --install-dir=*)
+      INSTALL_DIR="${1#--install-dir=}"
+      shift
+      ;;
+    --version=*)
+      VERSION="${1#--version=}"
+      shift
+      ;;
+    -v=*)
+      VERSION="${1#-v=}"
+      shift
+      ;;
+    *)
+      # Positional argument - treat as install directory for backwards compatibility
+      if [[ -z "${INSTALL_DIR}" ]]; then
+        INSTALL_DIR="$1"
+      fi
+      shift
+      ;;
+  esac
+done
+
+# Set default install directory if not specified
+INSTALL_DIR="${INSTALL_DIR:-${DEFAULT_INSTALL_DIR}}"
 
 # Detect OS and architecture
 OS=$(uname -s)
@@ -50,8 +70,7 @@ case "$OS" in
     ;;
 esac
 
-# Get latest release tag from GitHub
-echo "🔍 Fetching latest solx release..."
+# Check for curl
 if ! command -v curl >/dev/null 2>&1; then
   echo "❌ curl is not installed. Please install curl to proceed."
   exit 1
@@ -65,19 +84,28 @@ else
   AUTH_HEADER=""
 fi
 
-LATEST_TAG=$(curl -s ${AUTH_HEADER} "https://api.github.com/repos/${REPO}/releases/latest" | \
-  sed -n 's/.*"tag_name": *"\(.*\)".*/\1/p')
+# Determine version to install
+if [[ -n "${VERSION}" ]]; then
+  # Use specified version
+  TAG="${VERSION}"
+  echo "📌 Using specified version: ${TAG}"
+else
+  # Get latest release tag from GitHub
+  echo "🔍 Fetching latest solx release..."
+  TAG=$(curl -s ${AUTH_HEADER} "https://api.github.com/repos/${REPO}/releases/latest" | \
+    sed -n 's/.*"tag_name": *"\(.*\)".*/\1/p')
 
-if [ -z "${LATEST_TAG}" ]; then
-  echo "❌ Failed to get latest solx release."
-  exit 1
+  if [ -z "${TAG}" ]; then
+    echo "❌ Failed to get latest solx release."
+    exit 1
+  fi
+
+  echo "✅ Latest version: ${TAG}"
 fi
 
-echo "✅ Latest version: ${LATEST_TAG}"
-
 # Construct the download URL
-ASSET_NAME="solx-${PLATFORM}-v${LATEST_TAG}"
-DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${LATEST_TAG}/${ASSET_NAME}"
+ASSET_NAME="solx-${PLATFORM}-v${TAG}"
+DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET_NAME}"
 
 # Download the binary
 TMP_DIR=$(mktemp -d)
