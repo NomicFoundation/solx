@@ -82,6 +82,7 @@ impl Selection {
                     | Selector::BytecodeOpcodes
                     | Selector::BytecodeLinkReferences
                     | Selector::BytecodeSourceMap
+                    | Selector::BytecodeDebugInfo
                     | Selector::BytecodeFunctionDebugData
                     | Selector::BytecodeGeneratedSources
                         if contract.contains(&Selector::Bytecode)
@@ -95,6 +96,7 @@ impl Selection {
                     | Selector::RuntimeBytecodeLinkReferences
                     | Selector::RuntimeBytecodeImmutableReferences
                     | Selector::RuntimeBytecodeSourceMap
+                    | Selector::RuntimeBytecodeDebugInfo
                     | Selector::RuntimeBytecodeFunctionDebugData
                     | Selector::RuntimeBytecodeGeneratedSources
                         if contract.contains(&Selector::RuntimeBytecode)

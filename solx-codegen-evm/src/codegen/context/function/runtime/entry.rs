@@ -41,6 +41,7 @@ where
         let function_type = context.function_type::<inkwell::types::BasicTypeEnum>(vec![], 0);
         let function = context.add_function(
             crate::r#const::ENTRY_FUNCTION_NAME,
+            None,
             function_type,
             0,
             Some(inkwell::module::Linkage::External),

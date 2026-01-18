@@ -3,6 +3,7 @@
 //!
 
 pub mod attribute;
+pub mod debug_info;
 pub mod function;
 pub mod r#loop;
 pub mod pointer;
@@ -18,6 +19,7 @@ use inkwell::values::BasicValue;
 use crate::debug_config::DebugConfig;
 use crate::optimizer::Optimizer;
 
+use self::debug_info::DebugInfo;
 use self::function::declaration::Declaration as FunctionDeclaration;
 use self::pointer::Pointer;
 use self::r#loop::Loop;
@@ -83,9 +85,24 @@ pub trait IContext<'ctx> {
     fn optimizer(&self) -> &Optimizer;
 
     ///
+    /// Returns the debug info reference.
+    ///
+    fn debug_info(&self) -> &DebugInfo<'ctx>;
+
+    ///
+    /// Creates and returns the current debug info location.
+    ///
+    fn create_debug_info_location(&self) -> Option<inkwell::debug_info::DILocation<'ctx>>;
+
+    ///
     /// Returns the debug config reference.
     ///
     fn debug_config(&self) -> Option<&DebugConfig>;
+
+    ///
+    /// Returns the full contract name.
+    ///
+    fn contract_name(&self) -> &solx_utils::ContractName;
 
     ///
     /// Sets the code type.
@@ -148,6 +165,7 @@ pub trait IContext<'ctx> {
     fn add_function(
         &mut self,
         name: &str,
+        ast_id: Option<usize>,
         r#type: inkwell::types::FunctionType<'ctx>,
         return_values_length: usize,
         linkage: Option<inkwell::module::Linkage>,
@@ -182,11 +200,14 @@ pub trait IContext<'ctx> {
         T: BasicType<'ctx> + Clone + Copy,
     {
         let pointer = self.builder().build_alloca(r#type, name)?;
-        self.basic_block()
-            .get_last_instruction()
-            .expect("Always exists")
-            .set_alignment(solx_utils::BYTE_LENGTH_FIELD as u32)
-            .map_err(|error| anyhow::anyhow!(error))?;
+
+        if let Some(instruction) = pointer.as_instruction_value() {
+            instruction
+                .set_alignment(solx_utils::BYTE_LENGTH_FIELD as u32)
+                .map_err(|error| anyhow::anyhow!(error))?;
+            instruction.set_debug_location(self.create_debug_info_location());
+        }
+
         Ok(Pointer::new(r#type, Self::AddressSpace::stack(), pointer))
     }
 
@@ -210,11 +231,13 @@ pub trait IContext<'ctx> {
             solx_utils::BYTE_LENGTH_BYTE
         };
 
-        self.basic_block()
-            .get_last_instruction()
-            .expect("Always exists")
-            .set_alignment(alignment as u32)
-            .map_err(|error| anyhow::anyhow!(error))?;
+        if let Some(instruction) = value.as_instruction_value() {
+            instruction
+                .set_alignment(alignment as u32)
+                .map_err(|error| anyhow::anyhow!(error))?;
+            instruction.set_debug_location(self.create_debug_info_location());
+        }
+
         Ok(value)
     }
 
@@ -242,6 +265,8 @@ pub trait IContext<'ctx> {
         instruction
             .set_alignment(alignment as u32)
             .map_err(|error| anyhow::anyhow!(error))?;
+        instruction.set_debug_location(self.create_debug_info_location());
+
         Ok(())
     }
 
@@ -262,7 +287,132 @@ pub trait IContext<'ctx> {
             self.builder()
                 .build_gep(pointer.r#type, pointer.value, indexes, name)?
         };
+
+        if let Some(instruction) = value.as_instruction() {
+            instruction.set_debug_location(self.create_debug_info_location());
+        }
+
         Ok(Pointer::new(element_type, pointer.address_space, value))
+    }
+
+    ///
+    /// Builds a binary operator instruction.
+    ///
+    fn build_binary_operator<F>(
+        &self,
+        operator: F,
+        left: inkwell::values::IntValue<'ctx>,
+        right: inkwell::values::IntValue<'ctx>,
+        name: &str,
+    ) -> anyhow::Result<inkwell::values::IntValue<'ctx>>
+    where
+        F: Fn(
+            &inkwell::builder::Builder<'ctx>,
+            inkwell::values::IntValue<'ctx>,
+            inkwell::values::IntValue<'ctx>,
+            &str,
+        ) -> Result<inkwell::values::IntValue<'ctx>, inkwell::builder::BuilderError>,
+    {
+        let value = operator(self.builder(), left, right, name)?;
+        if let Some(instruction) = value.as_instruction() {
+            instruction.set_debug_location(self.create_debug_info_location());
+        }
+        Ok(value)
+    }
+
+    ///
+    /// Builds a right shift instruction.
+    ///
+    fn build_right_shift(
+        &self,
+        left: inkwell::values::IntValue<'ctx>,
+        right: inkwell::values::IntValue<'ctx>,
+        sign_extend: bool,
+        name: &str,
+    ) -> anyhow::Result<inkwell::values::IntValue<'ctx>> {
+        let value = self
+            .builder()
+            .build_right_shift(left, right, sign_extend, name)?;
+        if let Some(instruction) = value.as_instruction() {
+            instruction.set_debug_location(self.create_debug_info_location());
+        }
+        Ok(value)
+    }
+
+    ///
+    /// Builds a truncate instruction.
+    ///
+    fn build_bit_cast_instruction<F>(
+        &self,
+        operator: F,
+        value: inkwell::values::IntValue<'ctx>,
+        target_type: inkwell::types::IntType<'ctx>,
+        name: &str,
+    ) -> anyhow::Result<inkwell::values::IntValue<'ctx>>
+    where
+        F: Fn(
+            &inkwell::builder::Builder<'ctx>,
+            inkwell::values::IntValue<'ctx>,
+            inkwell::types::IntType<'ctx>,
+            &str,
+        ) -> Result<inkwell::values::IntValue<'ctx>, inkwell::builder::BuilderError>,
+    {
+        let truncated_value = operator(self.builder(), value, target_type, name)?;
+        if let Some(instruction) = truncated_value.as_instruction() {
+            instruction.set_debug_location(self.create_debug_info_location());
+        }
+        Ok(truncated_value)
+    }
+
+    ///
+    /// Builds an extract-value instruction.
+    ///
+    fn build_extract_value(
+        &self,
+        value: inkwell::values::StructValue<'ctx>,
+        index: u32,
+        name: &str,
+    ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
+        let extracted_value = self.builder().build_extract_value(value, index, name)?;
+        if let Some(instruction) = extracted_value.as_instruction_value() {
+            instruction.set_debug_location(self.create_debug_info_location());
+        }
+        Ok(extracted_value)
+    }
+
+    ///
+    /// Builds an int-to-ptr instruction.
+    ///
+    fn build_int_to_ptr(
+        &self,
+        value: inkwell::values::IntValue<'ctx>,
+        target_type: inkwell::types::PointerType<'ctx>,
+        name: &str,
+    ) -> anyhow::Result<inkwell::values::PointerValue<'ctx>> {
+        let pointer_value = self.builder().build_int_to_ptr(value, target_type, name)?;
+        if let Some(instruction) = pointer_value.as_instruction() {
+            instruction.set_debug_location(self.create_debug_info_location());
+        }
+        Ok(pointer_value)
+    }
+
+    ///
+    /// Builds a comparison instruction.
+    ///
+    fn build_int_compare(
+        &self,
+        predicate: inkwell::IntPredicate,
+        left: inkwell::values::IntValue<'ctx>,
+        right: inkwell::values::IntValue<'ctx>,
+        name: &str,
+    ) -> anyhow::Result<inkwell::values::IntValue<'ctx>> {
+        let value = self
+            .builder()
+            .build_int_compare(predicate, left, right, name)?;
+        if let Some(instruction) = value.as_instruction() {
+            instruction.set_debug_location(self.create_debug_info_location());
+        }
+        Ok(value)
     }
 
     ///
@@ -280,8 +430,11 @@ pub trait IContext<'ctx> {
             return Ok(());
         }
 
-        self.builder()
+        let instruction_value = self
+            .builder()
             .build_conditional_branch(comparison, then_block, else_block)?;
+        instruction_value.set_debug_location(self.create_debug_info_location());
+
         Ok(())
     }
 
@@ -298,8 +451,30 @@ pub trait IContext<'ctx> {
             return Ok(());
         }
 
-        self.builder()
+        let instruction_value = self
+            .builder()
             .build_unconditional_branch(destination_block)?;
+        instruction_value.set_debug_location(self.create_debug_info_location());
+
+        Ok(())
+    }
+
+    ///
+    /// Builds a switch instruction.
+    ///
+    fn build_switch(
+        &self,
+        value: inkwell::values::IntValue<'ctx>,
+        default_block: inkwell::basic_block::BasicBlock<'ctx>,
+        branches: &[(
+            inkwell::values::IntValue<'ctx>,
+            inkwell::basic_block::BasicBlock<'ctx>,
+        )],
+    ) -> anyhow::Result<()> {
+        let instruction_value = self
+            .builder()
+            .build_switch(value, default_block, branches)?;
+        instruction_value.set_debug_location(self.create_debug_info_location());
         Ok(())
     }
 
@@ -360,6 +535,15 @@ pub trait IContext<'ctx> {
             name,
         )?;
 
+        let instruction_value = match call_site_value.try_as_basic_value() {
+            inkwell::values::ValueKind::Basic(inner) => inner.as_instruction_value(),
+            inkwell::values::ValueKind::Instruction(inner) => Some(inner),
+        };
+        if let Some(instruction_value) = instruction_value {
+            let debug_location = self.create_debug_info_location();
+            instruction_value.set_debug_location(debug_location);
+        }
+
         call_site_value.set_alignment_attribute(inkwell::attributes::AttributeLoc::Param(0), 1);
         call_site_value.set_alignment_attribute(inkwell::attributes::AttributeLoc::Param(1), 1);
         Ok(())
@@ -375,7 +559,8 @@ pub trait IContext<'ctx> {
             return Ok(());
         }
 
-        self.builder().build_return(value)?;
+        let instruction_value = self.builder().build_return(value)?;
+        instruction_value.set_debug_location(self.create_debug_info_location());
         Ok(())
     }
 
@@ -389,7 +574,8 @@ pub trait IContext<'ctx> {
             return Ok(());
         }
 
-        self.builder().build_unreachable()?;
+        let instruction_value = self.builder().build_unreachable()?;
+        instruction_value.set_debug_location(self.create_debug_info_location());
         Ok(())
     }
 

@@ -15,7 +15,7 @@ use path_slash::PathExt;
 /// Solidity compiler arguments.
 ///
 #[derive(Debug, Parser)]
-#[command(about, long_about = None)]
+#[command(about, long_about = "LLVM-based Solidity compiler for the EVM")]
 pub struct Arguments {
     /// Print the version and exit.
     #[arg(long)]
@@ -130,6 +130,10 @@ pub struct Arguments {
     /// Emit assembly of the compiled contracts.
     #[arg(long = "asm")]
     pub output_assembly: bool,
+
+    /// Emit debug info of the compiled contracts.
+    #[arg(long = "debug-info")]
+    pub output_debug_info: bool,
 
     /// Emit metadata of the compiled project.
     #[arg(long = "metadata")]
@@ -287,6 +291,7 @@ impl Arguments {
             if self.output_bytecode
                 || self.output_bytecode_runtime
                 || self.output_assembly
+                || self.output_debug_info
                 || self.output_metadata
                 || self.output_abi
                 || self.output_hashes

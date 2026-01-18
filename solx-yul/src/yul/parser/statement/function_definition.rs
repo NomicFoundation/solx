@@ -4,11 +4,8 @@
 
 use std::collections::BTreeSet;
 
-use serde::Deserialize;
-use serde::Serialize;
-
-use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
+use crate::yul::lexer::token::lexeme::keyword::Keyword;
 use crate::yul::lexer::token::lexeme::symbol::Symbol;
 use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::location::Location;
@@ -27,7 +24,7 @@ use crate::yul::parser::statement::expression::function_call::name::Name as Func
 /// 1. The hoisted declaration
 /// 2. The definition, which now has the access to all function signatures
 ///
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(bound = "P: serde::de::DeserializeOwned")]
 pub struct FunctionDefinition<P>
 where
@@ -45,6 +42,8 @@ where
     pub body: Block<P>,
     /// The function LLVM attributes encoded in the identifier.
     pub attributes: BTreeSet<P::FunctionAttribute>,
+    /// The Solidity AST node ID, if any.
+    pub ast_id: Option<usize>,
 }
 
 impl<P> FunctionDefinition<P>
@@ -55,9 +54,31 @@ where
     /// The element parser.
     ///
     pub fn parse(lexer: &mut Lexer, initial: Option<Token>) -> Result<Self, Error> {
-        let token = crate::yul::parser::take_or_next(initial, lexer)?;
+        let mut token = crate::yul::parser::take_or_next(initial, lexer)?;
 
-        let (location, identifier) = match token {
+        let ast_id = token
+            .take_ast_id()
+            .map_err(|error| ParserError::DebugInfoParseError {
+                location: token.location,
+                details: error.to_string(),
+            })?;
+
+        match token {
+            Token {
+                lexeme: Lexeme::Keyword(Keyword::Function),
+                ..
+            } => {}
+            token => {
+                return Err(ParserError::InvalidToken {
+                    location: token.location,
+                    expected: vec!["function"],
+                    found: token.lexeme.to_string(),
+                }
+                .into());
+            }
+        }
+
+        let (location, identifier) = match lexer.next()? {
             Token {
                 lexeme: Lexeme::Identifier(identifier),
                 location,
@@ -150,11 +171,12 @@ where
             result,
             body,
             attributes,
+            ast_id,
         })
     }
 
     ///
-    /// Gets the list of unlinked deployable libraries.
+    /// Get the list of unlinked deployable libraries.
     ///
     pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
         self.body.get_unlinked_libraries()
@@ -163,7 +185,7 @@ where
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
         self.body.accumulate_evm_dependencies(dependencies);
     }
 }

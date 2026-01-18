@@ -52,7 +52,9 @@ pub fn store<'ctx>(
         None => return Ok(()),
     };
     for offset in offsets.into_iter() {
-        let immutable_offset = context.builder().build_int_add(
+        let immutable_offset = Context::build_binary_operator(
+            context,
+            inkwell::builder::Builder::build_int_add,
             base_offset,
             context.field_const(offset),
             "setimmutable_offset",

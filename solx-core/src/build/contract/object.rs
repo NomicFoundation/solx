@@ -22,6 +22,8 @@ pub struct Object {
     pub bytecode: Option<Vec<u8>>,
     /// Hexadecimal bytecode.
     pub bytecode_hex: Option<String>,
+    /// Debug info.
+    pub debug_info: Option<Vec<u8>>,
     /// Whether IR codegen is used.
     pub via_ir: bool,
     /// Code segment.
@@ -31,7 +33,7 @@ pub struct Object {
     /// Immutables of the runtime code.
     pub immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
     /// Dependencies.
-    pub dependencies: solx_yul::Dependencies,
+    pub dependencies: solx_codegen_evm::Dependencies,
     /// Linker symbols that were not provided at compile time.
     /// Such symbols must be resolved by tooling before deployment.
     pub unlinked_symbols: BTreeMap<String, Vec<u64>>,
@@ -57,11 +59,12 @@ impl Object {
         contract_name: solx_utils::ContractName,
         assembly: Option<String>,
         bytecode: Option<Vec<u8>>,
+        debug_info: Option<Vec<u8>>,
         via_ir: bool,
         code_segment: solx_utils::CodeSegment,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         metadata_bytes: Option<Vec<u8>>,
-        dependencies: solx_yul::Dependencies,
+        dependencies: solx_codegen_evm::Dependencies,
         is_size_fallback: bool,
         warnings: Vec<solx_codegen_evm::Warning>,
         benchmarks: Vec<(String, u64)>,
@@ -73,6 +76,7 @@ impl Object {
             assembly,
             bytecode,
             bytecode_hex,
+            debug_info,
             via_ir,
             code_segment,
             immutables,
@@ -214,19 +218,15 @@ impl Object {
     ///
     /// Extracts warnings in standard JSON format.
     ///
-    pub fn take_warnings_standard_json(
-        &mut self,
-        path: &str,
-    ) -> Vec<solx_standard_json::OutputError> {
+    pub fn take_warnings_standard_json(&mut self) -> Vec<solx_standard_json::OutputError> {
         self.warnings
             .drain(..)
             .map(|warning| {
                 solx_standard_json::OutputError::new_warning_with_data(
+                    Some(&self.contract_name),
                     warning.code(),
                     warning.to_string(),
-                    Some(solx_standard_json::OutputErrorSourceLocation::new(
-                        path.to_owned(),
-                    )),
+                    None,
                     None,
                 )
             })

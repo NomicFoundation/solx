@@ -133,6 +133,7 @@ pub fn build_solidity_standard_json(
         via_ir,
         &mut output,
         None,
+        None,
     )?;
     output.check_errors()?;
 

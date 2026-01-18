@@ -1,18 +1,18 @@
 //!
-//! The mapped error location.
+//! Line-column source code location.
 //!
 
-use crate::output::error::source_location::SourceLocation;
+use crate::contract_name::ContractName;
 
 ///
-/// The mapped error location.
+/// Line-column source code location.
 ///
-/// It can be resolved from `solc` AST error location if the source code is provided.
+/// It can be resolved from a solc AST source code location if the source code is provided.
 ///
-#[derive(Debug)]
-pub struct MappedLocation<'a> {
-    /// The source file path.
-    pub path: String,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MappedLocation {
+    /// The contract name.
+    pub contract_name: ContractName,
     /// The line number.
     pub line: Option<usize>,
     /// The column number.
@@ -20,16 +20,16 @@ pub struct MappedLocation<'a> {
     /// The error area length.
     pub length: Option<usize>,
     /// The source code line to print.
-    pub source_code_line: Option<&'a str>,
+    pub source_code_line: Option<String>,
 }
 
-impl<'a> MappedLocation<'a> {
+impl MappedLocation {
     ///
     /// A shortcut constructor.
     ///
-    pub fn new(path: String) -> Self {
+    pub fn new(contract_name: ContractName) -> Self {
         Self {
-            path,
+            contract_name,
             line: None,
             column: None,
             length: None,
@@ -41,14 +41,14 @@ impl<'a> MappedLocation<'a> {
     /// A shortcut constructor.
     ///
     pub fn new_with_location(
-        path: String,
+        contract_name: ContractName,
         line: usize,
         column: usize,
         length: usize,
-        source_code_line: Option<&'a str>,
+        source_code_line: Option<String>,
     ) -> Self {
         Self {
-            path,
+            contract_name,
             line: Some(line),
             column: Some(column),
             length: Some(length),
@@ -59,54 +59,63 @@ impl<'a> MappedLocation<'a> {
     ///
     /// A shortcut constructor from `solc` AST source location.
     ///
-    pub fn try_from_source_location(
-        source_location: &SourceLocation,
-        source_code: Option<&'a str>,
+    pub fn from_solc_location(
+        contract_name: &ContractName,
+        start: Option<isize>,
+        end: Option<isize>,
+        source_code: Option<&str>,
     ) -> Self {
         let source_code = match source_code {
             Some(source_code) => source_code,
-            None => return Self::new(source_location.file.to_owned()),
+            None => return Self::new(contract_name.to_owned()),
         };
-        if source_location.start <= 0 || source_location.end <= 0 {
-            return Self::new(source_location.file.to_owned());
+        let start = start.unwrap_or_default();
+        let end = end.unwrap_or_default();
+        if start <= 0 || end <= 0 {
+            return Self::new(contract_name.to_owned());
         }
-        let start = source_location.start as usize;
-        let end = source_location.end as usize;
+        let start = start as usize;
+        let end = end as usize;
 
-        let mut cursor = 1;
+        let mut cursor = 0;
         for (line, source_line) in source_code.lines().enumerate() {
             let cursor_next = cursor + source_line.len() + 1;
 
             if cursor <= start && start <= cursor_next {
-                let line = line + 1;
                 let column = start - cursor;
+                let (line, column) = if column - 1 == source_line.len() {
+                    (line + 2, 1)
+                } else {
+                    (line + 1, start - cursor + 1)
+                };
                 let length = end - start;
                 return Self::new_with_location(
-                    source_location.file.to_owned(),
+                    contract_name.to_owned(),
                     line,
                     column,
                     length,
-                    Some(source_line),
+                    Some(source_line.to_owned()),
                 );
             }
 
             cursor = cursor_next;
         }
 
-        Self::new(source_location.file.to_owned())
+        Self::new(contract_name.to_owned())
     }
 }
 
-impl std::fmt::Display for MappedLocation<'_> {
+impl std::fmt::Display for MappedLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut path = self.path.clone();
+        let mut path = self.contract_name.path.clone();
         if let Some(line) = self.line {
             path.push(':');
             path.push_str(line.to_string().as_str());
             if let Some(column) = self.column {
                 path.push(':');
                 path.push_str(column.to_string().as_str());
-                if let (Some(source_code_line), Some(length)) = (self.source_code_line, self.length)
+                if let (Some(source_code_line), Some(length)) =
+                    (self.source_code_line.as_ref(), self.length)
                 {
                     let line_number_length = line.to_string().len();
                     writeln!(f, "{} --> {path}", " ".repeat(line_number_length))?;

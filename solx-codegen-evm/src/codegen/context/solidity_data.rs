@@ -25,6 +25,15 @@ pub struct SolidityData {
     /// but we still want to try compiling the deploy code to check for other errors including stack-too-deep.
     /// In this case, `immutables` is `None`, and `immutables_dummy` is used to allocated the offsets of the immutables.
     immutables_dummy: BTreeMap<String, u64>,
+
+    /// Current Solidity source ID.
+    /// Inferred from the debug info emitted by `solc` into its IRs.
+    source_id: usize,
+    /// Current Solidity source code location.
+    current_solc_location: Option<solx_utils::DebugInfoSolcLocation>,
+
+    /// Solidity AST debug info.
+    debug_info: Option<solx_utils::DebugInfo>,
 }
 
 impl ISolidityData for SolidityData {
@@ -38,16 +47,78 @@ impl ISolidityData for SolidityData {
             }
         }
     }
+
+    fn set_source_id(&mut self, source_id: usize) {
+        self.source_id = source_id;
+    }
+
+    fn get_source_id(&self) -> usize {
+        self.source_id
+    }
+
+    fn debug_info_contract_definition(
+        &self,
+        name: &str,
+    ) -> Option<&solx_utils::DebugInfoContractDefinition> {
+        self.debug_info
+            .as_ref()?
+            .contract_definitions
+            .get(&self.source_id)?
+            .get(name)
+    }
+
+    fn debug_info_function_definition(
+        &self,
+        node_id: usize,
+    ) -> Option<&solx_utils::DebugInfoFunctionDefinition> {
+        self.debug_info
+            .as_ref()?
+            .function_definitions
+            .get(&self.source_id)?
+            .get(&node_id)
+    }
+
+    fn set_debug_info_solc_location(&mut self, solc_location: solx_utils::DebugInfoSolcLocation) {
+        self.current_solc_location = Some(solc_location);
+    }
+
+    fn get_debug_info_solc_location(&self) -> Option<&solx_utils::DebugInfoSolcLocation> {
+        self.current_solc_location.as_ref()
+    }
+
+    fn get_solx_location(&self) -> Option<&solx_utils::DebugInfoMappedLocation> {
+        let debug_info = self.debug_info.as_ref()?;
+        let solc_location = self.get_debug_info_solc_location()?;
+
+        debug_info
+            .ast_nodes
+            .get(&self.source_id)?
+            .values()
+            .find_map(|function_call| {
+                if function_call.solc_location.start == solc_location.start {
+                    Some(&function_call.mapped_location)
+                } else {
+                    None
+                }
+            })
+    }
 }
 
 impl SolidityData {
     ///
     /// A shortcut constructor.
     ///
-    pub fn new(immutables: Option<BTreeMap<String, BTreeSet<u64>>>) -> Self {
+    pub fn new(
+        immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
+        source_id: usize,
+        debug_info: Option<solx_utils::DebugInfo>,
+    ) -> Self {
         Self {
             immutables,
             immutables_dummy: BTreeMap::new(),
+            source_id,
+            current_solc_location: None,
+            debug_info,
         }
     }
 

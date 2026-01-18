@@ -16,7 +16,6 @@ use crate::input::source::Source as InputSource;
 
 use self::contract::Contract;
 use self::error::collectable::Collectable as CollectableError;
-use self::error::source_location::SourceLocation as JsonOutputErrorSourceLocation;
 use self::error::Error as JsonOutputError;
 use self::source::Source;
 
@@ -78,6 +77,11 @@ impl Output {
     /// Prunes the output JSON and prints it to stdout.
     ///
     pub fn write_and_exit(mut self, output_selection: &InputSettingsSelection) -> ! {
+        for (path, source) in self.sources.iter_mut() {
+            if !output_selection.check_selection(path.as_str(), None, InputSettingsSelector::AST) {
+                source.ast = None;
+            }
+        }
         for (path, file) in self.contracts.iter_mut() {
             for (name, contract) in file.iter_mut() {
                 if !output_selection.check_selection(
@@ -137,13 +141,65 @@ impl Output {
     ///
     /// Please do not push project-general errors without paths here.
     ///
-    pub fn push_error(&mut self, path: Option<String>, error: anyhow::Error) {
-        self.errors.push(JsonOutputError::new_error_with_data(
-            None,
+    pub fn push_error(&mut self, contract_name: &solx_utils::ContractName, error: anyhow::Error) {
+        self.errors.push(JsonOutputError::new_error_contract(
+            Some(contract_name),
             error,
-            path.map(JsonOutputErrorSourceLocation::new),
-            None,
         ));
+    }
+
+    ///
+    /// Extracts the debug info from all source code files.
+    ///
+    pub fn get_debug_info(&self, sources: &BTreeMap<String, InputSource>) -> solx_utils::DebugInfo {
+        let mut contract_definitions_map: BTreeMap<
+            usize,
+            BTreeMap<String, solx_utils::DebugInfoContractDefinition>,
+        > = BTreeMap::new();
+        let mut function_definitions_map: BTreeMap<
+            usize,
+            BTreeMap<usize, solx_utils::DebugInfoFunctionDefinition>,
+        > = BTreeMap::new();
+        let mut ast_nodes_map: BTreeMap<usize, BTreeMap<usize, solx_utils::DebugInfoAstNode>> =
+            BTreeMap::new();
+
+        for (path, source) in self.sources.iter() {
+            let contract_name =
+                solx_utils::ContractName::new(path.to_owned(), None, Some(source.id));
+
+            if let Some(ref ast_json) = source.ast {
+                let contract_definitions = Source::get_ast_nodes(
+                    &Source::contract_definition,
+                    &contract_name,
+                    ast_json,
+                    sources,
+                );
+                let contract_definitions_map_entry =
+                    contract_definitions_map.entry(source.id).or_default();
+                contract_definitions_map_entry.extend(contract_definitions);
+
+                let function_definitions = Source::get_ast_nodes(
+                    &Source::function_definition,
+                    &contract_name,
+                    ast_json,
+                    sources,
+                );
+                let function_definitions_map_entry =
+                    function_definitions_map.entry(source.id).or_default();
+                function_definitions_map_entry.extend(function_definitions);
+
+                let ast_nodes =
+                    Source::get_ast_nodes(&Source::ast_node, &contract_name, ast_json, sources);
+                let ast_nodes_map_entry = ast_nodes_map.entry(source.id).or_default();
+                ast_nodes_map_entry.extend(ast_nodes);
+            }
+        }
+
+        solx_utils::DebugInfo::new(
+            contract_definitions_map,
+            function_definitions_map,
+            ast_nodes_map,
+        )
     }
 }
 

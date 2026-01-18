@@ -30,6 +30,7 @@ impl solx_codegen_evm::WriteLLVM for FunctionDefinition {
 
         context.add_function(
             self.0.identifier.as_str(),
+            self.0.ast_id,
             function_type,
             self.0.result.len(),
             Some(inkwell::module::Linkage::Private),
@@ -124,94 +125,5 @@ impl solx_codegen_evm::WriteLLVM for FunctionDefinition {
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-///
-/// This module contains only dialect-specific tests.
-///
-mod tests {
-    use std::collections::BTreeSet;
-
-    use crate::yul::parser::dialect::era::EraDialect;
-    use solx_yul::yul::lexer::token::location::Location;
-    use solx_yul::yul::lexer::Lexer;
-    use solx_yul::yul::parser::error::Error;
-    use solx_yul::yul::parser::statement::object::Object;
-
-    #[test]
-    fn error_invalid_attributes_single() {
-        let input = r#"
-object "Test" {
-    code {
-        {
-            return(0, 0)
-        }
-    }
-    object "Test_deployed" {
-        code {
-            {
-                return(0, 0)
-            }
-
-            function test_$llvm_UnknownAttribute_llvm$_test() -> result {
-                result := 42
-            }
-        }
-    }
-}
-    "#;
-        let mut invalid_attributes = BTreeSet::new();
-        invalid_attributes.insert("UnknownAttribute".to_owned());
-
-        let mut lexer = Lexer::new(input);
-        let result = Object::<EraDialect>::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
-        assert_eq!(
-            result,
-            Err(Error::InvalidAttributes {
-                location: Location::new(14, 22),
-                values: invalid_attributes,
-            }
-            .into())
-        );
-    }
-
-    #[test]
-    fn error_invalid_attributes_multiple_repeated() {
-        let input = r#"
-object "Test" {
-    code {
-        {
-            return(0, 0)
-        }
-    }
-    object "Test_deployed" {
-        code {
-            {
-                return(0, 0)
-            }
-
-            function test_$llvm_UnknownAttribute1_UnknownAttribute1_UnknownAttribute2_llvm$_test() -> result {
-                result := 42
-            }
-        }
-    }
-}
-    "#;
-        let mut invalid_attributes = BTreeSet::new();
-        invalid_attributes.insert("UnknownAttribute1".to_owned());
-        invalid_attributes.insert("UnknownAttribute2".to_owned());
-
-        let mut lexer = Lexer::new(input);
-        let result = Object::<EraDialect>::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
-        assert_eq!(
-            result,
-            Err(Error::InvalidAttributes {
-                location: Location::new(14, 22),
-                values: invalid_attributes,
-            }
-            .into())
-        );
     }
 }

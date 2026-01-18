@@ -3,6 +3,7 @@
 //!
 
 use solx_codegen_evm::IContext;
+use solx_codegen_evm::ISolidityData;
 
 use crate::declare_wrapper;
 use crate::yul::parser::dialect::era::EraDialect;
@@ -15,6 +16,12 @@ declare_wrapper!(
 
 impl solx_codegen_evm::WriteLLVM for Switch {
     fn into_llvm(self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
+        if let Some((solidity_data, solc_location)) =
+            context.solidity_mut().zip(self.0.solc_location)
+        {
+            solidity_data.set_debug_info_solc_location(solc_location);
+        }
+
         let scrutinee = self.0.expression.wrap().into_llvm(context)?;
 
         if self.0.cases.is_empty() {
@@ -52,7 +59,7 @@ impl solx_codegen_evm::WriteLLVM for Switch {
         };
 
         context.set_basic_block(current_block);
-        context.builder().build_switch(
+        context.build_switch(
             scrutinee.expect("Always exists").to_llvm().into_int_value(),
             default_block,
             branches.as_slice(),

@@ -17,6 +17,8 @@ use crate::context::function::evmla_data::EVMLAData as FunctionEVMLAData;
 use crate::context::function::r#return::Return as FunctionReturn;
 use crate::context::pointer::Pointer;
 use crate::context::traits::evmla_function::IEVMLAFunction;
+use crate::context::traits::solidity_data::ISolidityData;
+use crate::context::IContext;
 use crate::optimizer::settings::size_level::SizeLevel;
 use crate::optimizer::Optimizer;
 
@@ -44,6 +46,10 @@ pub struct Function<'ctx> {
 
     /// The EVM legacy assembly compiler data.
     evmla_data: Option<FunctionEVMLAData<'ctx>>,
+    /// solc-style debug info location.
+    solc_debug_info_location: Option<solx_utils::DebugInfoSolcLocation>,
+    /// solx-style (line and column) debug info location.
+    solx_debug_info_location: Option<solx_utils::DebugInfoMappedLocation>,
 }
 
 impl<'ctx> Function<'ctx> {
@@ -56,7 +62,6 @@ impl<'ctx> Function<'ctx> {
     pub fn new(
         name: String,
         declaration: FunctionDeclaration<'ctx>,
-        r#return: FunctionReturn<'ctx, AddressSpace>,
 
         entry_block: inkwell::basic_block::BasicBlock<'ctx>,
         return_block: inkwell::basic_block::BasicBlock<'ctx>,
@@ -65,12 +70,14 @@ impl<'ctx> Function<'ctx> {
             name,
             declaration,
             stack: HashMap::with_capacity(Self::STACK_HASHMAP_INITIAL_CAPACITY),
-            r#return,
+            r#return: FunctionReturn::none(),
 
             entry_block,
             return_block,
 
             evmla_data: None,
+            solc_debug_info_location: None,
+            solx_debug_info_location: None,
         }
     }
 
@@ -203,6 +210,66 @@ impl<'ctx> Function<'ctx> {
     }
 
     ///
+    /// Sets the function debug info.
+    ///
+    pub fn set_debug_info(&mut self, context: &impl IContext<'ctx>, ast_id: Option<usize>) {
+        let solidity_data = match context.solidity() {
+            Some(data) => data,
+            None => return,
+        };
+        let contract_debug_info_location = match solidity_data.debug_info_contract_definition(
+            context
+                .contract_name()
+                .name
+                .as_deref()
+                .unwrap_or(context.contract_name().path.as_str()),
+        ) {
+            Some(definition) => definition,
+            None => return,
+        };
+        let function_definition =
+            ast_id.and_then(|ast_id| solidity_data.debug_info_function_definition(ast_id));
+        let solc_debug_info_location = function_definition
+            .map(|function_definition| function_definition.solc_location.to_owned())
+            .unwrap_or(contract_debug_info_location.solc_location.to_owned());
+        let solx_debug_info_location = function_definition
+            .map(|function_definition| function_definition.mapped_location.to_owned())
+            .unwrap_or(contract_debug_info_location.mapped_location.to_owned());
+        let function_name = function_definition
+            .map(|function_definition| function_definition.name.as_str())
+            .unwrap_or(self.name.as_str());
+        let line = match solx_debug_info_location.line {
+            Some(line) => line,
+            None => return,
+        };
+
+        self.declaration
+            .value
+            .set_subprogram(context.debug_info().create_function(
+                function_name,
+                line,
+                ast_id.is_none(),
+            ));
+
+        self.solc_debug_info_location = Some(solc_debug_info_location);
+        self.solx_debug_info_location = Some(solx_debug_info_location);
+    }
+
+    ///
+    /// Returns the solc-style function debug info location.
+    ///
+    pub fn solc_debug_info_location(&self) -> Option<&solx_utils::DebugInfoSolcLocation> {
+        self.solc_debug_info_location.as_ref()
+    }
+
+    ///
+    /// Returns the solx-style function debug info location.
+    ///
+    pub fn solx_debug_info_location(&self) -> Option<&solx_utils::DebugInfoMappedLocation> {
+        self.solx_debug_info_location.as_ref()
+    }
+
+    ///
     /// Saves the pointer to a stack variable, returning the pointer to the shadowed variable,
     /// if it exists.
     ///
@@ -226,6 +293,13 @@ impl<'ctx> Function<'ctx> {
     ///
     pub fn remove_stack_pointer(&mut self, name: &str) {
         self.stack.remove(name);
+    }
+
+    ///
+    /// Sets the function return entity.
+    ///
+    pub fn set_return(&mut self, r#return: FunctionReturn<'ctx, AddressSpace>) {
+        self.r#return = r#return;
     }
 
     ///

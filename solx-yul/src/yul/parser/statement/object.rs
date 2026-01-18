@@ -5,7 +5,6 @@
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 
-use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
 use crate::yul::lexer::token::lexeme::literal::Literal;
 use crate::yul::lexer::token::lexeme::symbol::Symbol;
@@ -38,6 +37,8 @@ where
     /// objects are duplicates of the upper-level objects describing the dependencies, so only
     /// their identifiers are preserved. The identifiers are used to address upper-level objects.
     pub factory_dependencies: HashSet<String>,
+    /// Solidity source ID.
+    pub source_id: Option<usize>,
 }
 
 impl<P> Object<P>
@@ -52,7 +53,15 @@ where
         initial: Option<Token>,
         code_segment: solx_utils::CodeSegment,
     ) -> Result<Self, Error> {
-        let token = crate::yul::parser::take_or_next(initial, lexer)?;
+        let mut token = crate::yul::parser::take_or_next(initial, lexer)?;
+
+        let source_id =
+            token
+                .take_source_id()
+                .map_err(|error| ParserError::DebugInfoParseError {
+                    location: token.location,
+                    details: error.to_string(),
+                })?;
 
         let location = match token {
             Token {
@@ -108,6 +117,7 @@ where
             inner_object = match lexer.peek()? {
                 Token {
                     lexeme: Lexeme::Identifier(identifier),
+                    ref comments,
                     ..
                 } if identifier.inner.as_str() == "object" => {
                     let mut object = Self::parse(lexer, None, solx_utils::CodeSegment::Runtime)?;
@@ -139,6 +149,7 @@ where
                 } => break,
                 ref token @ Token {
                     lexeme: Lexeme::Identifier(ref identifier),
+                    ref comments,
                     ..
                 } if identifier.inner.as_str() == "object" => {
                     let dependency = Self::parse(
@@ -172,6 +183,7 @@ where
             code,
             inner_object,
             factory_dependencies,
+            source_id,
         })
     }
 
@@ -189,8 +201,11 @@ where
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn get_evm_dependencies(&self, runtime_code: Option<&Self>) -> Dependencies {
-        let mut dependencies = Dependencies::new(self.identifier.as_str());
+    pub fn get_evm_dependencies(
+        &self,
+        runtime_code: Option<&Self>,
+    ) -> solx_codegen_evm::Dependencies {
+        let mut dependencies = solx_codegen_evm::Dependencies::new(self.identifier.as_str());
         self.code.accumulate_evm_dependencies(&mut dependencies);
 
         if let Some(runtime_code) = runtime_code {

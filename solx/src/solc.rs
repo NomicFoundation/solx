@@ -70,6 +70,10 @@ impl solx_core::Solc for Solc {
         input_json
             .settings
             .output_selection
+            .set_selector(solx_standard_json::InputSelector::AST);
+        input_json
+            .settings
+            .output_selection
             .set_selector(solx_standard_json::InputSelector::Metadata);
         input_json
             .settings

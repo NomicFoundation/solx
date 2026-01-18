@@ -19,13 +19,15 @@ pub struct ContractName {
     /// For Solidity, The format is `<absolute file path>:<contract name>`.
     /// For other languages, `<absolute file path>`.
     pub full_path: String,
+    /// Source code ID for Solidity contracts.
+    pub id: Option<usize>,
 }
 
 impl ContractName {
     ///
     /// A shortcut constructor.
     ///
-    pub fn new(path: String, name: Option<String>) -> Self {
+    pub fn new(path: String, name: Option<String>, id: Option<usize>) -> Self {
         let full_path = match name {
             Some(ref name) => format!("{path}:{name}"),
             None => path.clone(),
@@ -35,6 +37,7 @@ impl ContractName {
             path,
             name,
             full_path,
+            id,
         }
     }
 }

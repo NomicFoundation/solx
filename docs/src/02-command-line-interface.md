@@ -486,7 +486,7 @@ Sets the optimization level of the LLVM optimizer. Available values are:
 
 | Level | Meaning                      | Hints                                            |
 |:------|:-----------------------------|:-------------------------------------------------|
-| 0     | No optimization              | For fast compilation during development (unsupported, but coming soon)
+| 0     | No optimization              | For fast compilation during development (unsupported)
 | 1     | Performance: basic           | For optimization research
 | 2     | Performance: default         | For optimization research
 | 3     | Performance: aggressive      | Best performance for production

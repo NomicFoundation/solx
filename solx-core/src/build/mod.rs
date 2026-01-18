@@ -94,10 +94,12 @@ impl Build {
                     let assembled_object = match object.assemble(all_objects.as_slice()) {
                         Ok(assembled_object) => assembled_object,
                         Err(error) => {
-                            self.messages
-                                .lock()
-                                .expect("Sync")
-                                .push(solx_standard_json::OutputError::new_error(&error));
+                            self.messages.lock().expect("Sync").push(
+                                solx_standard_json::OutputError::new_error_contract(
+                                    Some(&object.contract_name),
+                                    &error,
+                                ),
+                            );
                             return Self::new(BTreeMap::new(), ast_jsons, self.messages);
                         }
                     };
@@ -138,10 +140,12 @@ impl Build {
         for contract in self.contracts.values_mut() {
             for object in contract.objects_mut().into_iter() {
                 if let Err(error) = object.link(&linker_symbols) {
-                    self.messages
-                        .lock()
-                        .expect("Sync")
-                        .push(solx_standard_json::OutputError::new_error(&error));
+                    self.messages.lock().expect("Sync").push(
+                        solx_standard_json::OutputError::new_error_contract(
+                            Some(&object.contract_name),
+                            &error,
+                        ),
+                    );
                     return Self::new(BTreeMap::new(), ast_jsons, self.messages);
                 }
             }
@@ -293,17 +297,13 @@ impl Build {
                 standard_json.errors.extend(
                     deploy_object_result
                         .as_mut()
-                        .map(|object| {
-                            object.take_warnings_standard_json(contract.name.full_path.as_str())
-                        })
+                        .map(|object| object.take_warnings_standard_json())
                         .unwrap_or_default(),
                 );
                 standard_json.errors.extend(
                     runtime_object_result
                         .as_mut()
-                        .map(|object| {
-                            object.take_warnings_standard_json(contract.name.full_path.as_str())
-                        })
+                        .map(|object| object.take_warnings_standard_json())
                         .unwrap_or_default(),
                 );
                 if deploy_object_result.is_err() || runtime_object_result.is_err() {
@@ -424,17 +424,13 @@ impl solx_standard_json::CollectableError for Build {
             warnings.extend(
                 deploy_object_result
                     .as_mut()
-                    .map(|object| {
-                        object.take_warnings_standard_json(contract.name.full_path.as_str())
-                    })
+                    .map(|object| object.take_warnings_standard_json())
                     .unwrap_or_default(),
             );
             warnings.extend(
                 runtime_object_result
                     .as_mut()
-                    .map(|object| {
-                        object.take_warnings_standard_json(contract.name.full_path.as_str())
-                    })
+                    .map(|object| object.take_warnings_standard_json())
                     .unwrap_or_default(),
             );
         }

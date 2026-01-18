@@ -31,9 +31,9 @@ impl Identifier {
         if !input.starts_with(Self::can_begin) {
             return None;
         }
-        let end = input.find(Self::cannot_continue).unwrap_or(input.len());
+        let end_position = input.find(Self::cannot_continue).unwrap_or(input.len());
 
-        let inner = input[..end].to_string();
+        let inner = input[..end_position].to_string();
         let length = inner.len();
 
         if let Some(token) = Keyword::parse(inner.as_str()) {

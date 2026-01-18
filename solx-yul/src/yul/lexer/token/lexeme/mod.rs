@@ -26,8 +26,10 @@ pub enum Lexeme {
     Identifier(Identifier),
     /// The literal lexeme.
     Literal(Literal),
-    /// The comment lexeme.
-    Comment,
+    /// The single-line comment lexeme.
+    SingleLineComment(String),
+    /// The multi-line comment lexeme. (unused)
+    MultiLineComment,
     /// The end-of-file lexeme.
     EndOfFile,
 }
@@ -39,7 +41,8 @@ impl std::fmt::Display for Lexeme {
             Self::Symbol(inner) => write!(f, "{inner}"),
             Self::Identifier(inner) => write!(f, "{inner}"),
             Self::Literal(inner) => write!(f, "{inner}"),
-            Self::Comment => Ok(()),
+            Self::SingleLineComment(inner) => write!(f, "{inner}"),
+            Self::MultiLineComment => Ok(()),
             Self::EndOfFile => write!(f, "EOF"),
         }
     }

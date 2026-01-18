@@ -68,7 +68,7 @@ On the other hand, parameters that are not mentioned here but are parts of **sol
     "optimizer": {
       // Optional, solx-only: Set the LLVM optimizer level.
       // Available options:
-      // -0: do not optimize, currently unsupported
+      // -0: do not optimize (unsupported)
       // -1: basic optimizations for gas usage
       // -2: advanced optimizations for gas usage
       // -3: all optimizations for gas usage

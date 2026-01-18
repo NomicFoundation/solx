@@ -23,6 +23,8 @@ pub struct Literal {
     pub inner: LexicalLiteral,
     /// The type, if it has been explicitly specified.
     pub yul_type: Option<Type>,
+    /// The solc source code location.
+    pub solc_location: Option<solx_utils::DebugInfoSolcLocation>,
 }
 
 impl Literal {
@@ -30,7 +32,15 @@ impl Literal {
     /// The element parser.
     ///
     pub fn parse(lexer: &mut Lexer, initial: Option<Token>) -> Result<Self, Error> {
-        let token = crate::yul::parser::take_or_next(initial, lexer)?;
+        let mut token = crate::yul::parser::take_or_next(initial, lexer)?;
+
+        let solc_location =
+            token
+                .take_solidity_location()
+                .map_err(|error| ParserError::DebugInfoParseError {
+                    location: token.location,
+                    details: error.to_string(),
+                })?;
 
         let (location, literal) = match token {
             Token {
@@ -63,6 +73,7 @@ impl Literal {
             location,
             inner: literal,
             yul_type,
+            solc_location,
         })
     }
 }
