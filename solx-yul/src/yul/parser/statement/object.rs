@@ -37,8 +37,8 @@ where
     /// objects are duplicates of the upper-level objects describing the dependencies, so only
     /// their identifiers are preserved. The identifiers are used to address upper-level objects.
     pub factory_dependencies: HashSet<String>,
-    /// Solidity source ID.
-    pub source_id: Option<usize>,
+    /// Used Solidity source IDs.
+    pub source_ids: BTreeSet<usize>,
 }
 
 impl<P> Object<P>
@@ -55,9 +55,9 @@ where
     ) -> Result<Self, Error> {
         let mut token = crate::yul::parser::take_or_next(initial, lexer)?;
 
-        let source_id =
+        let source_ids =
             token
-                .take_source_id()
+                .take_source_ids()
                 .map_err(|error| ParserError::DebugInfoParseError {
                     location: token.location,
                     details: error.to_string(),
@@ -183,7 +183,7 @@ where
             code,
             inner_object,
             factory_dependencies,
-            source_id,
+            source_ids,
         })
     }
 

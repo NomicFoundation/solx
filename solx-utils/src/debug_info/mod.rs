@@ -11,6 +11,7 @@ pub mod mapped_location;
 pub mod solc_location;
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use self::ast_node::AstNode;
 use self::contract_definition::ContractDefinition;
@@ -50,6 +51,18 @@ impl DebugInfo {
             function_definitions,
             ast_nodes,
         }
+    }
+
+    ///
+    /// Retains only the debug info for the specified source IDs.
+    ///
+    pub fn retain_source_ids(&mut self, source_ids: &BTreeSet<usize>) {
+        self.contract_definitions
+            .retain(|source_id, _| source_ids.contains(source_id));
+        self.function_definitions
+            .retain(|source_id, _| source_ids.contains(source_id));
+        self.ast_nodes
+            .retain(|source_id, _| source_ids.contains(source_id));
     }
 }
 

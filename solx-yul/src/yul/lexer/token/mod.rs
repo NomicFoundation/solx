@@ -5,6 +5,7 @@
 pub mod lexeme;
 pub mod location;
 
+use std::collections::BTreeSet;
 use std::str::FromStr;
 
 use crate::yul::parser::debug_info::DebugInfo;
@@ -51,19 +52,20 @@ impl Token {
     }
 
     ///
-    /// Takes the source code ID from the comments, if any.
+    /// Takes the source code IDs from the comments, if any.
     ///
-    pub fn take_source_id(&mut self) -> anyhow::Result<Option<usize>> {
+    pub fn take_source_ids(&mut self) -> anyhow::Result<BTreeSet<usize>> {
         Ok(self
             .comments
             .drain(..)
             .map(|comment| DebugInfo::from_str(comment.as_str()))
             .collect::<Result<Vec<DebugInfo>, _>>()?
             .into_iter()
-            .find_map(|debug_info| match debug_info {
+            .filter_map(|debug_info| match debug_info {
                 DebugInfo::UseSource { id, .. } => Some(id),
                 _ => None,
-            }))
+            })
+            .collect())
     }
 
     ///

@@ -481,11 +481,22 @@ impl Project {
                 let legacy_assembly = contract.legacy_assembly.take();
                 let yul = contract.yul.take();
 
+                let mut deploy_debug_info = self.debug_info.clone();
+                let mut runtime_debug_info = self.debug_info.clone();
+
                 let (deploy_code_ir, runtime_code_ir): (ContractIR, ContractIR) = match contract.ir
                 {
                     Some(ContractIR::Yul(mut deploy_code)) => {
                         let runtime_code: ContractYul =
                             *deploy_code.runtime_code.take().expect("Always exists");
+
+                        if let Some(ref mut debug_info) = deploy_debug_info {
+                            debug_info.retain_source_ids(&deploy_code.object.0.source_ids);
+                        }
+                        if let Some(ref mut debug_info) = runtime_debug_info {
+                            debug_info.retain_source_ids(&runtime_code.object.0.source_ids);
+                        }
+
                         (deploy_code.into(), runtime_code.into())
                     }
                     Some(ContractIR::EVMLegacyAssembly(mut deploy_code)) => {
@@ -547,7 +558,7 @@ impl Project {
                         solx_utils::CodeSegment::Runtime,
                         evm_version,
                         self.identifier_paths.clone(),
-                        self.debug_info.clone(),
+                        runtime_debug_info,
                         output_selection.to_owned(),
                         None,
                         metadata_bytes,
@@ -573,7 +584,7 @@ impl Project {
                         solx_utils::CodeSegment::Deploy,
                         evm_version,
                         self.identifier_paths.clone(),
-                        self.debug_info.clone(),
+                        deploy_debug_info,
                         output_selection.to_owned(),
                         immutables,
                         None,
