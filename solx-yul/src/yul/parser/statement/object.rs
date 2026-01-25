@@ -38,7 +38,7 @@ where
     /// their identifiers are preserved. The identifiers are used to address upper-level objects.
     pub factory_dependencies: HashSet<String>,
     /// Used Solidity source IDs.
-    pub source_ids: BTreeSet<usize>,
+    pub source_ids: HashSet<usize>,
 }
 
 impl<P> Object<P>
@@ -55,7 +55,7 @@ where
     ) -> Result<Self, Error> {
         let mut token = crate::yul::parser::take_or_next(initial, lexer)?;
 
-        let source_ids =
+        let source_ids: HashSet<usize> =
             token
                 .take_source_ids()
                 .map_err(|error| ParserError::DebugInfoParseError {

@@ -185,6 +185,26 @@ impl Selection {
     }
 
     ///
+    /// Checks if the debug info is requested for at least one contract.
+    ///
+    pub fn is_debug_info_set_for_any(&self) -> bool {
+        for file in self.inner.values() {
+            for contract in file.values() {
+                if contract.contains(&Selector::EVM)
+                    || contract.contains(&Selector::Bytecode)
+                    || contract.contains(&Selector::BytecodeDebugInfo)
+                    || contract.contains(&Selector::RuntimeBytecode)
+                    || contract.contains(&Selector::RuntimeBytecodeDebugInfo)
+                    || contract.contains(&Selector::Any)
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    ///
     /// Whether the selection is empty.
     ///
     pub fn is_empty(&self) -> bool {

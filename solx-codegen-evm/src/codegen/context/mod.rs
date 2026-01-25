@@ -70,7 +70,7 @@ pub struct Context<'ctx> {
     loop_stack: Vec<Loop<'ctx>>,
 
     /// The debug info of the current module.
-    debug_info: DebugInfo<'ctx>,
+    debug_info: Option<DebugInfo<'ctx>>,
     /// The debug configuration telling whether to dump the needed IRs.
     debug_config: Option<DebugConfig>,
 
@@ -100,11 +100,16 @@ impl<'ctx> Context<'ctx> {
         code_segment: solx_utils::CodeSegment,
         evm_version: Option<solx_utils::EVMVersion>,
         optimizer: Optimizer,
+        output_debug_info: bool,
         debug_config: Option<DebugConfig>,
     ) -> Self {
         let builder = llvm.create_builder();
         let intrinsics = Intrinsics::new(llvm, &module);
-        let debug_info = DebugInfo::new(&module, contract_name.path.as_str());
+        let debug_info = if output_debug_info {
+            Some(DebugInfo::new(&module, contract_name.path.as_str()))
+        } else {
+            None
+        };
 
         Self {
             llvm,
@@ -136,7 +141,6 @@ impl<'ctx> Context<'ctx> {
         &mut self,
         output_assembly: bool,
         output_bytecode: bool,
-        output_debug_info: bool,
         is_size_fallback: bool,
         profiler: &mut Profiler,
     ) -> anyhow::Result<EVMBuild> {
@@ -153,7 +157,10 @@ impl<'ctx> Context<'ctx> {
         target_machine.set_target_data(self.module());
         target_machine.set_asm_verbosity(true);
 
-        self.debug_info.finalize(self);
+        if let Some(debug_info) = self.debug_info.take() {
+            debug_info.finalize(self);
+            self.debug_info = Some(debug_info);
+        }
 
         let spill_area = self
             .optimizer
@@ -243,7 +250,7 @@ impl<'ctx> Context<'ctx> {
                 "EmitBytecode",
                 self.optimizer.settings(),
             );
-            let (bytecode_buffer, debug_info_buffer) = if output_debug_info {
+            let (bytecode_buffer, debug_info_buffer) = if self.debug_info.is_some() {
                 let (bytecode_buffer, debug_info_buffer) = target_machine
                     .write_to_memory_buffer_with_debug_info(
                         self.module(),
@@ -295,13 +302,7 @@ impl<'ctx> Context<'ctx> {
                     for function in self.module.get_functions() {
                         Function::set_size_attributes(self.llvm, function);
                     }
-                    return self.build(
-                        output_assembly,
-                        output_bytecode,
-                        output_debug_info,
-                        true,
-                        profiler,
-                    );
+                    return self.build(output_assembly, output_bytecode, true, profiler);
                 } else {
                     warnings.push(match self.code_segment {
                         solx_utils::CodeSegment::Deploy => Warning::DeployCodeSize {
@@ -514,11 +515,12 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
         &self.optimizer
     }
 
-    fn debug_info(&self) -> &DebugInfo<'ctx> {
-        &self.debug_info
+    fn debug_info(&self) -> Option<&DebugInfo<'ctx>> {
+        self.debug_info.as_ref()
     }
 
     fn create_debug_info_location(&self) -> Option<inkwell::debug_info::DILocation<'ctx>> {
+        let debug_info = self.debug_info.as_ref()?;
         let current_function = self
             .current_function
             .as_ref()
@@ -538,7 +540,7 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
                     None,
                 )
             });
-        self.debug_info.create_location(
+        debug_info.create_location(
             self,
             current_location.line.unwrap_or_default(),
             current_location.column.unwrap_or_default(),

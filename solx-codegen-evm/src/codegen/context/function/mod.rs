@@ -213,6 +213,10 @@ impl<'ctx> Function<'ctx> {
     /// Sets the function debug info.
     ///
     pub fn set_debug_info(&mut self, context: &impl IContext<'ctx>, ast_id: Option<usize>) {
+        let debug_info = match context.debug_info() {
+            Some(debug_info) => debug_info,
+            None => return,
+        };
         let solidity_data = match context.solidity() {
             Some(data) => data,
             None => return,
@@ -245,11 +249,7 @@ impl<'ctx> Function<'ctx> {
 
         self.declaration
             .value
-            .set_subprogram(context.debug_info().create_function(
-                function_name,
-                line,
-                ast_id.is_none(),
-            ));
+            .set_subprogram(debug_info.create_function(function_name, line, ast_id.is_none()));
 
         self.solc_debug_info_location = Some(solc_debug_info_location);
         self.solx_debug_info_location = Some(solx_debug_info_location);

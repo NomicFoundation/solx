@@ -7,6 +7,7 @@ pub mod error;
 pub mod source;
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -152,16 +153,16 @@ impl Output {
     /// Extracts the debug info from all source code files.
     ///
     pub fn get_debug_info(&self, sources: &BTreeMap<String, InputSource>) -> solx_utils::DebugInfo {
-        let mut contract_definitions_map: BTreeMap<
+        let mut contract_definitions_map: HashMap<
             usize,
-            BTreeMap<String, solx_utils::DebugInfoContractDefinition>,
-        > = BTreeMap::new();
-        let mut function_definitions_map: BTreeMap<
+            HashMap<String, solx_utils::DebugInfoContractDefinition>,
+        > = HashMap::new();
+        let mut function_definitions_map: HashMap<
             usize,
-            BTreeMap<usize, solx_utils::DebugInfoFunctionDefinition>,
-        > = BTreeMap::new();
-        let mut ast_nodes_map: BTreeMap<usize, BTreeMap<usize, solx_utils::DebugInfoAstNode>> =
-            BTreeMap::new();
+            HashMap<usize, solx_utils::DebugInfoFunctionDefinition>,
+        > = HashMap::new();
+        let mut ast_nodes_map: HashMap<usize, HashMap<usize, solx_utils::DebugInfoAstNode>> =
+            HashMap::new();
 
         for (path, source) in self.sources.iter() {
             let contract_name =

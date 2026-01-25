@@ -5,7 +5,7 @@
 pub mod lexeme;
 pub mod location;
 
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 use std::str::FromStr;
 
 use crate::yul::parser::debug_info::DebugInfo;
@@ -54,7 +54,7 @@ impl Token {
     ///
     /// Takes the source code IDs from the comments, if any.
     ///
-    pub fn take_source_ids(&mut self) -> anyhow::Result<BTreeSet<usize>> {
+    pub fn take_source_ids(&mut self) -> anyhow::Result<HashSet<usize>> {
         Ok(self
             .comments
             .drain(..)

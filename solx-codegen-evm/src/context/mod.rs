@@ -87,7 +87,7 @@ pub trait IContext<'ctx> {
     ///
     /// Returns the debug info reference.
     ///
-    fn debug_info(&self) -> &DebugInfo<'ctx>;
+    fn debug_info(&self) -> Option<&DebugInfo<'ctx>>;
 
     ///
     /// Creates and returns the current debug info location.

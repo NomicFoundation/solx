@@ -139,6 +139,12 @@ impl Contract {
                     code_segment,
                     evm_version,
                     optimizer,
+                    language == solx_standard_json::InputLanguage::Solidity
+                        && output_selection.check_selection(
+                            contract_name.path.as_str(),
+                            contract_name.name.as_deref(),
+                            solx_standard_json::InputSelector::BytecodeDebugInfo,
+                        ),
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
@@ -167,12 +173,6 @@ impl Contract {
                         solx_standard_json::InputSelector::BytecodeLLVMAssembly,
                     ),
                     output_bytecode,
-                    language == solx_standard_json::InputLanguage::Solidity
-                        && output_selection.check_selection(
-                            contract_name.path.as_str(),
-                            contract_name.name.as_deref(),
-                            solx_standard_json::InputSelector::BytecodeDebugInfo,
-                        ),
                     false,
                     &mut profiler,
                 )?;
@@ -207,6 +207,12 @@ impl Contract {
                     code_segment,
                     evm_version,
                     optimizer.clone(),
+                    language == solx_standard_json::InputLanguage::Solidity
+                        && output_selection.check_selection(
+                            contract_name.path.as_str(),
+                            contract_name.name.as_deref(),
+                            solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                        ),
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
@@ -238,12 +244,6 @@ impl Contract {
                         solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
                     ),
                     output_bytecode,
-                    language == solx_standard_json::InputLanguage::Solidity
-                        && output_selection.check_selection(
-                            contract_name.path.as_str(),
-                            contract_name.name.as_deref(),
-                            solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-                        ),
                     false,
                     &mut profiler,
                 )?;
@@ -286,6 +286,12 @@ impl Contract {
                     code_segment,
                     evm_version,
                     optimizer,
+                    language == solx_standard_json::InputLanguage::Solidity
+                        && output_selection.check_selection(
+                            contract_name.path.as_str(),
+                            contract_name.name.as_deref(),
+                            solx_standard_json::InputSelector::BytecodeDebugInfo,
+                        ),
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
@@ -316,12 +322,6 @@ impl Contract {
                         solx_standard_json::InputSelector::BytecodeLLVMAssembly,
                     ),
                     output_bytecode,
-                    language == solx_standard_json::InputLanguage::Solidity
-                        && output_selection.check_selection(
-                            contract_name.path.as_str(),
-                            contract_name.name.as_deref(),
-                            solx_standard_json::InputSelector::BytecodeDebugInfo,
-                        ),
                     false,
                     &mut profiler,
                 )?;
@@ -358,6 +358,12 @@ impl Contract {
                     code_segment,
                     evm_version,
                     optimizer.clone(),
+                    language == solx_standard_json::InputLanguage::Solidity
+                        && output_selection.check_selection(
+                            contract_name.path.as_str(),
+                            contract_name.name.as_deref(),
+                            solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                        ),
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
@@ -388,12 +394,6 @@ impl Contract {
                         solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
                     ),
                     output_bytecode,
-                    language == solx_standard_json::InputLanguage::Solidity
-                        && output_selection.check_selection(
-                            contract_name.path.as_str(),
-                            contract_name.name.as_deref(),
-                            solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-                        ),
                     false,
                     &mut profiler,
                 )?;
@@ -436,6 +436,7 @@ impl Contract {
                     code_segment,
                     evm_version,
                     optimizer,
+                    false,
                     debug_config,
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
@@ -451,7 +452,6 @@ impl Contract {
                         solx_standard_json::InputSelector::BytecodeLLVMAssembly,
                     ),
                     output_bytecode,
-                    false,
                     false,
                     &mut profiler,
                 )?;
@@ -493,6 +493,7 @@ impl Contract {
                     code_segment,
                     evm_version,
                     optimizer,
+                    false,
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
@@ -508,7 +509,6 @@ impl Contract {
                         solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
                     ),
                     output_bytecode,
-                    false,
                     false,
                     &mut profiler,
                 )?;
