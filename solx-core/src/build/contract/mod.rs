@@ -461,7 +461,6 @@ impl Contract {
                     .expect("Always exists")
                     .debug_info
                     .take()
-                    .map(hex::encode)
                     .expect("Always exists");
                 Self::write_to_file(output_path.as_path(), debug_info, overwrite)?;
             }
@@ -486,7 +485,6 @@ impl Contract {
                     .expect("Always exists")
                     .debug_info
                     .take()
-                    .map(hex::encode)
                     .expect("Always exists");
                 Self::write_to_file(output_path.as_path(), debug_info, overwrite)?;
             }

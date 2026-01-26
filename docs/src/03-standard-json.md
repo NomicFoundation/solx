@@ -147,6 +147,8 @@ On the other hand, parameters that are not mentioned here but are parts of **sol
           "evm.bytecode.object",
           // Deploy code assembly produced by solx/LLVM.
           "evm.bytecode.llvmAssembly",
+          // ELF-wrapped DWARF debug info produced by solx/LLVM. Only available for Solidity source code input.
+          "evm.bytecode.debugInfo",
           // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
           "evm.bytecode.opcodes",
           // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
@@ -166,6 +168,8 @@ On the other hand, parameters that are not mentioned here but are parts of **sol
           "evm.deployedBytecode.linkReferences",
           // Resolved automatically by solx/LLVM, but emitted as an empty object to preserve compatibility with some toolkits.
           "evm.deployedBytecode.immutableReferences",
+          // ELF-wrapped DWARF debug info produced by solx/LLVM. Only available for Solidity source code input.
+          "evm.deployedBytecode.debugInfo",
           // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
           "evm.deployedBytecode.opcodes",
           // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
@@ -273,6 +277,9 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
             // Optional: LLVM text assembly (string).
             // Corresponds to "evm.bytecode.llvmAssembly" in the outputSelection settings.
             "llvmAssembly": "/* ... */",
+            // Optional: ELF-wrapped DWARF debug info (string).
+            // Corresponds to "evm.bytecode.debugInfo" in the outputSelection settings.
+            "debugInfo": "/* ... */",
             // Optional: Link references for linkers that are to resolve library addresses at deploy time (object).
             // Corresponds to "evm.bytecode.linkReferences" in the outputSelection settings.
             "linkReferences": {/* ... */},
@@ -301,6 +308,9 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
             // Optional: LLVM text assembly (string).
             // Corresponds to "evm.deployedBytecode.llvmAssembly" in the outputSelection settings.
             "llvmAssembly": "/* ... */",
+            // Optional: ELF-wrapped DWARF debug info (string).
+            // Corresponds to "evm.deployedBytecode.debugInfo" in the outputSelection settings.
+            "debugInfo": "/* ... */",
             // Optional: Link references for linkers that are to resolve library addresses at deploy time (object).
             // Corresponds to "evm.deployedBytecode.linkReferences" in the outputSelection settings.
             "linkReferences": {/* ... */},

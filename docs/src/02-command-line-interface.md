@@ -292,7 +292,7 @@ EVM assembly:
 
 Emits the **solc** Yul IR.
 
-> **solx** does not use the Yul optimizer anymore, so the Yul IR is always unoptimized, and it is not possible to emit optimized Yul IR with **solx**.
+> **solx** does not use the Yul optimizer anymore, so the Yul IR is always unoptimized, and it is not possible to emit solc-optimized Yul IR with **solx**.
 
 ```bash
 solx 'Simple.sol' --ir
@@ -320,6 +320,26 @@ object "Test_26" {
         data ".metadata" hex"a2646970667358221220ccbacddd0734a08eedf3a12f841c7e8c7127e2457a91f6e68f5fac6df7b9c88a64736f6c634300081e0033"
     }
 }
+```
+
+
+
+### `--debug-info`
+
+Emits the ELF-wrapped DWARF debug info.
+
+```bash
+solx 'Simple.sol' --debug-info
+```
+
+Output:
+
+```text
+======= Simple.sol:Simple =======
+Debug info:
+7f454c46010201ff...
+Debug info of the runtime part:
+7f454c46010201ff
 ```
 
 

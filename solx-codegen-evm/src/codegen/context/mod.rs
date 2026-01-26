@@ -243,7 +243,7 @@ impl<'ctx> Context<'ctx> {
         let assembly = assembly_buffer
             .map(|assembly_buffer| String::from_utf8_lossy(assembly_buffer.as_slice()).to_string());
 
-        if output_bytecode {
+        if output_bytecode || self.debug_info.is_some() {
             let run_emit_bytecode = profiler.start_evm_translation_unit(
                 contract_path,
                 self.code_segment,

@@ -267,10 +267,11 @@ impl Arguments {
                 || self.output_ast_json
                 || self.output_asm_solc_json
                 || self.output_ir
+                || self.output_debug_info
                 || self.output_benchmarks
             {
                 messages.push(solx_standard_json::OutputError::new_error(
-                    "ABI, hashes, userdoc, devdoc, storage layout, transient storage layout, AST, EVM assembly, Yul can be only emitted for Solidity contracts.",
+                    "ABI, hashes, userdoc, devdoc, storage layout, transient storage layout, AST, EVM assembly, Yul, debug info, benchmarks can be only emitted for Solidity contracts.",
                 ));
             }
 
