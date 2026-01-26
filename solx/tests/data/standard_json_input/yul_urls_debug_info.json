@@ -1,18 +1,18 @@
 {
-  "language": "Solidity",
-  "sources":
-  {
-    "A":
-    {
+  "language": "Yul",
+  "sources": {
+    "Test": {
       "urls": [
-        "tests/data/contracts/solidity/Recursion.sol"
+        "tests/data/contracts/yul/Test.yul"
       ]
     }
   },
   "settings": {
     "optimizer": {
-      "mode": "3",
-      "sizeFallback": true
+      "enabled": true
+    },
+    "metadata": {
+      "useLiteralContent": true
     },
     "outputSelection": {
       "*": {
@@ -24,13 +24,12 @@
           "evm.methodIdentifiers",
           "evm.bytecode.object",
           "evm.bytecode.debugInfo",
+          "evm.bytecode.llvmAssembly",
           "evm.deployedBytecode.object",
-          "evm.deployedBytecode.debugInfo"
+          "evm.deployedBytecode.debugInfo",
+          "evm.deployedBytecode.llvmAssembly"
         ]
       }
-    },
-    "metadata": {
-      "hashType": "ipfs"
     },
     "libraries": {}
   }

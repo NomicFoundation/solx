@@ -123,6 +123,8 @@ pub fn main(
     }
     if arguments.output_debug_info {
         selectors.insert(solx_standard_json::InputSelector::BytecodeDebugInfo);
+    }
+    if arguments.output_debug_info_runtime {
         selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo);
     }
     if arguments.output_metadata {
@@ -286,6 +288,12 @@ pub fn yul_to_evm(
     llvm_options: Vec<String>,
     debug_config: Option<solx_codegen_evm::DebugConfig>,
 ) -> anyhow::Result<EVMBuild> {
+    if output_selection.is_debug_info_set_for_any() {
+        anyhow::bail!(solx_standard_json::OutputError::new_error(
+            "Debug info is only supported for Solidity source code input."
+        ));
+    }
+
     let libraries = solx_utils::Libraries::try_from(libraries)?;
     let linker_symbols = libraries.as_linker_symbols()?;
 
@@ -338,6 +346,12 @@ pub fn llvm_ir_to_evm(
     llvm_options: Vec<String>,
     debug_config: Option<solx_codegen_evm::DebugConfig>,
 ) -> anyhow::Result<EVMBuild> {
+    if output_selection.is_debug_info_set_for_any() {
+        anyhow::bail!(solx_standard_json::OutputError::new_error(
+            "Debug info is only supported for Solidity source code input."
+        ));
+    }
+
     let libraries = solx_utils::Libraries::try_from(libraries)?;
     let linker_symbols = libraries.as_linker_symbols()?;
 
@@ -557,6 +571,16 @@ pub fn standard_json_evm(
             (solc_output, project)
         }
         solx_standard_json::InputLanguage::Yul => {
+            if solc_input
+                .settings
+                .output_selection
+                .is_debug_info_set_for_any()
+            {
+                anyhow::bail!(solx_standard_json::OutputError::new_error(
+                    "Debug info is only supported for Solidity source code input."
+                ));
+            }
+
             let run_solc_validate_yul = profiler.start_pipeline_element("solc_Yul_Validation");
             let mut solc_output = solc.validate_yul_standard_json(&mut solc_input)?;
             run_solc_validate_yul.borrow_mut().finish();
@@ -581,6 +605,16 @@ pub fn standard_json_evm(
             (solc_output, project)
         }
         solx_standard_json::InputLanguage::LLVMIR => {
+            if solc_input
+                .settings
+                .output_selection
+                .is_debug_info_set_for_any()
+            {
+                anyhow::bail!(solx_standard_json::OutputError::new_error(
+                    "Debug info is only supported for Solidity source code input."
+                ));
+            }
+
             let mut solc_output = solx_standard_json::Output::new(&solc_input.sources);
 
             let run_solx_llvm_ir_project = profiler.start_pipeline_element("solx_LLVM_IR_Analysis");

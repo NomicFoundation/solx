@@ -326,7 +326,7 @@ object "Test_26" {
 
 ### `--debug-info`
 
-Emits the ELF-wrapped DWARF debug info.
+Emits the ELF-wrapped DWARF debug info of the deploy code.
 
 ```bash
 solx 'Simple.sol' --debug-info
@@ -338,6 +338,22 @@ Output:
 ======= Simple.sol:Simple =======
 Debug info:
 7f454c46010201ff...
+```
+
+
+
+### `--debug-info-runtime`
+
+Emits the ELF-wrapped DWARF debug info of the runtime code.
+
+```bash
+solx 'Simple.sol' --debug-info-runtime
+```
+
+Output:
+
+```text
+======= Simple.sol:Simple =======
 Debug info of the runtime part:
 7f454c46010201ff
 ```

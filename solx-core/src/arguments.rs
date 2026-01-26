@@ -135,6 +135,10 @@ pub struct Arguments {
     #[arg(long = "debug-info")]
     pub output_debug_info: bool,
 
+    /// Emit runtime bytecode debug info of the compiled contracts.
+    #[arg(long = "debug-info-runtime")]
+    pub output_debug_info_runtime: bool,
+
     /// Emit metadata of the compiled project.
     #[arg(long = "metadata")]
     pub output_metadata: bool,
@@ -241,6 +245,12 @@ impl Arguments {
             ));
         }
 
+        if !self.via_ir && (self.output_debug_info || self.output_debug_info_runtime) {
+            messages.push(solx_standard_json::OutputError::new_error(
+                "`debug-info` and `debug-info-runtime` require `via-ir` to be enabled.",
+            ));
+        }
+
         if self.yul || self.llvm_ir {
             if self.base_path.is_some() {
                 messages.push(solx_standard_json::OutputError::new_error(
@@ -268,6 +278,7 @@ impl Arguments {
                 || self.output_asm_solc_json
                 || self.output_ir
                 || self.output_debug_info
+                || self.output_debug_info_runtime
                 || self.output_benchmarks
             {
                 messages.push(solx_standard_json::OutputError::new_error(
@@ -293,6 +304,7 @@ impl Arguments {
                 || self.output_bytecode_runtime
                 || self.output_assembly
                 || self.output_debug_info
+                || self.output_debug_info_runtime
                 || self.output_metadata
                 || self.output_abi
                 || self.output_hashes

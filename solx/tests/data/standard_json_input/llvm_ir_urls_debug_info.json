@@ -1,16 +1,15 @@
 {
-  "language": "Solidity",
-  "sources":
-  {
-    "A":
-    {
-      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; contract C {}"
+  "language": "LLVM IR",
+  "sources": {
+    "Test": {
+      "urls": [
+        "tests/data/contracts/llvm_ir/Test.ll"
+      ]
     }
   },
   "settings": {
     "optimizer": {
-      "mode": "3",
-      "sizeFallback": true
+      "enabled": true
     },
     "outputSelection": {
       "*": {
@@ -28,7 +27,8 @@
       }
     },
     "metadata": {
-      "useLiteralContent": true
-    }
+      "hashType": "ipfs"
+    },
+    "libraries": {}
   }
 }
