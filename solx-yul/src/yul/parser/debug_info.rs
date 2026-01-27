@@ -12,12 +12,7 @@ use crate::yul::lexer::token::lexeme::comment::single_line::Comment as SingleLin
 #[derive(Debug)]
 pub enum DebugInfo {
     /// Source code identifier.
-    UseSource {
-        /// Source code ID.
-        id: usize,
-        /// Source code path.
-        path: String,
-    },
+    UseSource(Vec<(usize, String)>),
     /// AST node identifier.
     AstId(usize),
     /// Source code location.
@@ -38,10 +33,20 @@ impl FromStr for DebugInfo {
 
         match parts[1] {
             "@use-src" => {
-                let src_parts = parts[2].splitn(2, ':').collect::<Vec<&str>>();
-                let id = src_parts[0].parse::<usize>()?;
-                let path = src_parts[1].trim_matches('"').to_string();
-                Ok(Self::UseSource { id, path })
+                let mut sources = Vec::with_capacity(parts.len() - 2);
+                for part in parts[2..].iter() {
+                    let src_parts = part.splitn(2, ':').collect::<Vec<&str>>();
+                    let id = match src_parts[0].parse::<usize>() {
+                        Ok(id) => id,
+                        Err(_) => break,
+                    };
+                    let path = match src_parts.get(1) {
+                        Some(path) => path.trim_matches('"').to_string(),
+                        None => break,
+                    };
+                    sources.push((id, path));
+                }
+                Ok(Self::UseSource(sources))
             }
             "@ast-id" => {
                 let id = parts[2].parse::<usize>()?;

@@ -61,9 +61,12 @@ impl Token {
             .map(|comment| DebugInfo::from_str(comment.as_str()))
             .collect::<Result<Vec<DebugInfo>, _>>()?
             .into_iter()
-            .filter_map(|debug_info| match debug_info {
-                DebugInfo::UseSource { id, .. } => Some(id),
-                _ => None,
+            .flat_map(|debug_info| match debug_info {
+                DebugInfo::UseSource(sources) => sources
+                    .into_iter()
+                    .map(|(id, _)| id)
+                    .collect::<HashSet<usize>>(),
+                _ => HashSet::new(),
             })
             .collect())
     }
