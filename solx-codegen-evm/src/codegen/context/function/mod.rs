@@ -221,13 +221,7 @@ impl<'ctx> Function<'ctx> {
             Some(data) => data,
             None => return,
         };
-        let contract_debug_info_location = match solidity_data.debug_info_contract_definition(
-            context
-                .contract_name()
-                .name
-                .as_deref()
-                .unwrap_or(context.contract_name().path.as_str()),
-        ) {
+        let contract_debug_info_location = match solidity_data.debug_info_contract_definition() {
             Some(definition) => definition,
             None => return,
         };

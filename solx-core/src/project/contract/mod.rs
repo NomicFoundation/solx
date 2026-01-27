@@ -119,7 +119,10 @@ impl Contract {
 
         let solidity_data = solx_codegen_evm::ContextSolidityData::new(
             immutables,
-            contract_name.id.unwrap_or_default(),
+            contract_name
+                .name
+                .clone()
+                .unwrap_or_else(|| contract_name.full_path.clone()),
             debug_info,
         );
         let optimizer = solx_codegen_evm::Optimizer::new(optimizer_settings.clone());

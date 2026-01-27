@@ -118,7 +118,11 @@ impl Source {
     ) -> Option<solx_utils::DebugInfoFunctionDefinition> {
         let ast = ast.as_object()?;
 
-        (ast.get("nodeType")?.as_str()? == "FunctionDefinition").as_option()?;
+        let is_function = ast.get("nodeType")?.as_str()? == "FunctionDefinition";
+        let is_modifier = ast.get("nodeType")?.as_str()? == "ModifierDefinition";
+        let is_storage_variable = (ast.get("nodeType")?.as_str()? == "VariableDeclaration")
+            && ast.contains_key("functionSelector");
+        (is_function || is_modifier || is_storage_variable).as_option()?;
 
         let ast_id = ast.get("id")?.as_u64()? as usize;
         let name = ast.get("name")?.as_str()?.to_owned();

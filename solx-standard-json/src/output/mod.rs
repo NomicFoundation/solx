@@ -153,54 +153,41 @@ impl Output {
     /// Extracts the debug info from all source code files.
     ///
     pub fn get_debug_info(&self, sources: &BTreeMap<String, InputSource>) -> solx_utils::DebugInfo {
-        let mut contract_definitions_map: HashMap<
-            usize,
-            HashMap<String, solx_utils::DebugInfoContractDefinition>,
-        > = HashMap::new();
-        let mut function_definitions_map: HashMap<
-            usize,
-            HashMap<usize, solx_utils::DebugInfoFunctionDefinition>,
-        > = HashMap::new();
-        let mut ast_nodes_map: HashMap<usize, HashMap<usize, solx_utils::DebugInfoAstNode>> =
+        let mut contract_definitions: HashMap<String, solx_utils::DebugInfoContractDefinition> =
             HashMap::new();
+        let mut function_definitions: HashMap<usize, solx_utils::DebugInfoFunctionDefinition> =
+            HashMap::new();
+        let mut ast_nodes: HashMap<usize, solx_utils::DebugInfoAstNode> = HashMap::new();
 
         for (path, source) in self.sources.iter() {
             let contract_name =
                 solx_utils::ContractName::new(path.to_owned(), None, Some(source.id));
 
             if let Some(ref ast_json) = source.ast {
-                let contract_definitions = Source::get_ast_nodes(
+                contract_definitions.extend(Source::get_ast_nodes(
                     &Source::contract_definition,
                     &contract_name,
                     ast_json,
                     sources,
-                );
-                let contract_definitions_map_entry =
-                    contract_definitions_map.entry(source.id).or_default();
-                contract_definitions_map_entry.extend(contract_definitions);
+                ));
 
-                let function_definitions = Source::get_ast_nodes(
+                function_definitions.extend(Source::get_ast_nodes(
                     &Source::function_definition,
                     &contract_name,
                     ast_json,
                     sources,
-                );
-                let function_definitions_map_entry =
-                    function_definitions_map.entry(source.id).or_default();
-                function_definitions_map_entry.extend(function_definitions);
+                ));
 
-                let ast_nodes =
-                    Source::get_ast_nodes(&Source::ast_node, &contract_name, ast_json, sources);
-                let ast_nodes_map_entry = ast_nodes_map.entry(source.id).or_default();
-                ast_nodes_map_entry.extend(ast_nodes);
+                ast_nodes.extend(Source::get_ast_nodes(
+                    &Source::ast_node,
+                    &contract_name,
+                    ast_json,
+                    sources,
+                ));
             }
         }
 
-        solx_utils::DebugInfo::new(
-            contract_definitions_map,
-            function_definitions_map,
-            ast_nodes_map,
-        )
+        solx_utils::DebugInfo::new(contract_definitions, function_definitions, ast_nodes)
     }
 }
 

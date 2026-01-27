@@ -14,22 +14,9 @@ pub trait ISolidityData {
     fn offsets(&mut self, id: &str) -> Option<BTreeSet<u64>>;
 
     ///
-    /// Sets the current Solidity source ID.
-    ///
-    fn set_source_id(&mut self, source_id: usize);
-
-    ///
-    /// Returns the current Solidity source ID.
-    ///
-    fn get_source_id(&self) -> usize;
-
-    ///
     /// Returns the AST contract definition by its name.
     ///
-    fn debug_info_contract_definition(
-        &self,
-        name: &str,
-    ) -> Option<&solx_utils::DebugInfoContractDefinition>;
+    fn debug_info_contract_definition(&self) -> Option<&solx_utils::DebugInfoContractDefinition>;
 
     ///
     /// Returns the AST function definition by its AST node ID.
