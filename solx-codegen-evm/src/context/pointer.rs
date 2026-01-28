@@ -88,11 +88,8 @@ where
             "Stack pointers cannot be addressed"
         );
 
-        let value = context.builder().build_int_to_ptr(
-            offset,
-            context.ptr_type(address_space.into()),
-            name,
-        )?;
+        let value =
+            context.build_int_to_ptr(offset, context.ptr_type(address_space.into()), name)?;
         Ok(Self::new(r#type, address_space, value))
     }
 

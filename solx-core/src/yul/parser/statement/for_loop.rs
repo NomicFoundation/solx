@@ -3,6 +3,7 @@
 //!
 
 use solx_codegen_evm::IContext;
+use solx_codegen_evm::ISolidityData;
 
 use crate::declare_wrapper;
 use crate::yul::parser::dialect::era::EraDialect;
@@ -17,6 +18,12 @@ declare_wrapper!(
 
 impl solx_codegen_evm::WriteLLVM for ForLoop {
     fn into_llvm(self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
+        if let Some((solidity_data, solc_location)) =
+            context.solidity_mut().zip(self.0.solc_location)
+        {
+            solidity_data.set_debug_info_solc_location(solc_location);
+        }
+
         self.0.initializer.wrap().into_llvm(context)?;
 
         let condition_block = context.append_basic_block("for_condition");
@@ -31,12 +38,13 @@ impl solx_codegen_evm::WriteLLVM for ForLoop {
             .expect("Always exists")
             .to_llvm()
             .into_int_value();
-        let condition = context.builder().build_int_z_extend_or_bit_cast(
+        let condition = context.build_bit_cast_instruction(
+            inkwell::builder::Builder::build_int_z_extend_or_bit_cast,
             condition,
             context.field_type(),
             "for_condition_extended",
         )?;
-        let condition = context.builder().build_int_compare(
+        let condition = context.build_int_compare(
             inkwell::IntPredicate::NE,
             condition,
             context.field_const(0),

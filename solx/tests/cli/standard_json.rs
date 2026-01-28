@@ -18,7 +18,8 @@ fn default() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("bytecode"))
-        .stdout(predicate::str::contains("object"));
+        .stdout(predicate::str::contains("object"))
+        .stdout(predicate::str::contains("debugInfo"));
 
     Ok(())
 }
@@ -34,7 +35,8 @@ fn stdin() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("bytecode"))
-        .stdout(predicate::str::contains("object"));
+        .stdout(predicate::str::contains("object"))
+        .stdout(predicate::str::contains("debugInfo"));
 
     Ok(())
 }
@@ -53,7 +55,8 @@ fn stdin_hyphen() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("bytecode"))
-        .stdout(predicate::str::contains("object"));
+        .stdout(predicate::str::contains("object"))
+        .stdout(predicate::str::contains("debugInfo"));
 
     Ok(())
 }
@@ -87,7 +90,9 @@ fn recursion() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains("bytecode"));
+        .stdout(predicate::str::contains("bytecode"))
+        .stdout(predicate::str::contains("object"))
+        .stdout(predicate::str::contains("debugInfo"));
 
     Ok(())
 }
@@ -105,64 +110,14 @@ fn fuzzed_simple_use_expression() -> anyhow::Result<()> {
     result
         .success()
         .stdout(predicate::str::contains("bytecode"))
-        .stdout(predicate::str::contains("object"));
+        .stdout(predicate::str::contains("object"))
+        .stdout(predicate::str::contains("debugInfo"));
 
     Ok(())
 }
 
 #[test]
-fn yul() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        "--standard-json",
-        crate::common::TEST_YUL_STANDARD_JSON_PATH,
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains("bytecode"));
-
-    Ok(())
-}
-
-#[test]
-fn yul_urls() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        "--standard-json",
-        crate::common::TEST_YUL_STANDARD_JSON_URLS_PATH,
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains("bytecode"));
-
-    Ok(())
-}
-
-#[test]
-fn yul_urls_invalid() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        "--standard-json",
-        crate::common::TEST_YUL_STANDARD_JSON_URLS_INVALID_PATH,
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result.success().stdout(predicate::str::contains(
-        "DeclarationError: Function \\\"mdelete\\\" not found.",
-    ));
-
-    Ok(())
-}
-
-#[test]
-fn invalid_input_yul() -> anyhow::Result<()> {
+fn invalid_input() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &["--standard-json", crate::common::TEST_YUL_CONTRACT_PATH];
@@ -380,6 +335,7 @@ fn select_evm() -> anyhow::Result<()> {
         .success()
         .stdout(predicate::str::contains("bytecode"))
         .stdout(predicate::str::contains("deployedBytecode"))
+        .stdout(predicate::str::contains("debugInfo"))
         .stdout(predicate::str::contains("llvmAssembly"))
         .stdout(predicate::str::contains("opcodes"))
         .stdout(predicate::str::contains("linkReferences"));
@@ -527,6 +483,7 @@ fn select_all(path: &str) -> anyhow::Result<()> {
         .stdout(predicate::str::contains("\"llvmAssembly\"").count(2))
         .stdout(predicate::str::contains("\"opcodes\"").count(2))
         .stdout(predicate::str::contains("\"linkReferences\"").count(2))
+        .stdout(predicate::str::contains("\"debugInfo\"").count(2))
         .stdout(predicate::str::contains("\"sourceMap\"").count(2))
         .stdout(predicate::str::contains("\"functionDebugData\"").count(2))
         .stdout(predicate::str::contains("\"generatedSources\"").count(2))

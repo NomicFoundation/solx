@@ -100,6 +100,24 @@ impl TargetMachine {
     }
 
     ///
+    /// Writes the LLVM module and debug info to memory buffers.
+    ///
+    pub fn write_to_memory_buffer_with_debug_info(
+        &self,
+        module: &inkwell::module::Module,
+        file_type: inkwell::targets::FileType,
+    ) -> Result<
+        (
+            inkwell::memory_buffer::MemoryBuffer,
+            inkwell::memory_buffer::MemoryBuffer,
+        ),
+        inkwell::support::LLVMString,
+    > {
+        self.target_machine
+            .write_to_memory_buffer_with_dbg(module, file_type)
+    }
+
+    ///
     /// Runs the optimization passes on `module`.
     ///
     pub fn run_optimization_passes(

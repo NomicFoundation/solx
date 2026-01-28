@@ -1,0 +1,36 @@
+{
+  "language": "Yul",
+  "sources": {
+    "Test": {
+      "urls": [
+        "tests/data/contracts/yul/Test.yul"
+      ]
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true
+    },
+    "metadata": {
+      "useLiteralContent": true
+    },
+    "outputSelection": {
+      "*": {
+        "": [
+          "ast"
+        ],
+        "*": [
+          "abi",
+          "evm.methodIdentifiers",
+          "evm.bytecode.object",
+          "evm.bytecode.debugInfo",
+          "evm.bytecode.llvmAssembly",
+          "evm.deployedBytecode.object",
+          "evm.deployedBytecode.debugInfo",
+          "evm.deployedBytecode.llvmAssembly"
+        ]
+      }
+    },
+    "libraries": {}
+  }
+}

@@ -4,8 +4,8 @@
 
 use std::collections::BTreeSet;
 
-use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
+use crate::yul::lexer::token::lexeme::keyword::Keyword;
 use crate::yul::lexer::token::lexeme::symbol::Symbol;
 use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::location::Location;
@@ -27,6 +27,8 @@ pub struct VariableDeclaration {
     pub bindings: Vec<Identifier>,
     /// The variable initializing expression.
     pub expression: Option<Expression>,
+    /// The solc source code location.
+    pub solc_location: Option<solx_utils::DebugInfoSolcLocation>,
 }
 
 impl VariableDeclaration {
@@ -37,10 +39,33 @@ impl VariableDeclaration {
         lexer: &mut Lexer,
         initial: Option<Token>,
     ) -> Result<(Self, Option<Token>), Error> {
-        let token = crate::yul::parser::take_or_next(initial, lexer)?;
+        let mut token = crate::yul::parser::take_or_next(initial, lexer)?;
         let location = token.location;
 
-        let (bindings, next) = Identifier::parse_typed_list(lexer, Some(token))?;
+        let solc_location =
+            token
+                .take_solidity_location()
+                .map_err(|error| ParserError::DebugInfoParseError {
+                    location: token.location,
+                    details: error.to_string(),
+                })?;
+
+        match token {
+            Token {
+                lexeme: Lexeme::Keyword(Keyword::Let),
+                ..
+            } => {}
+            ref token => {
+                return Err(ParserError::InvalidToken {
+                    location: token.location,
+                    expected: vec!["let"],
+                    found: token.lexeme.to_string(),
+                }
+                .into());
+            }
+        }
+
+        let (bindings, next) = Identifier::parse_typed_list(lexer, None)?;
         for binding in bindings.iter() {
             match FunctionName::from(binding.inner.as_str()) {
                 FunctionName::UserDefined(_) => continue,
@@ -65,6 +90,7 @@ impl VariableDeclaration {
                         location,
                         bindings,
                         expression: None,
+                        solc_location,
                     },
                     Some(token),
                 ))
@@ -78,6 +104,7 @@ impl VariableDeclaration {
                 location,
                 bindings,
                 expression: Some(expression),
+                solc_location,
             },
             None,
         ))
@@ -97,7 +124,7 @@ impl VariableDeclaration {
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
         if let Some(ref expression) = self.expression {
             expression.accumulate_evm_dependencies(dependencies);
         }

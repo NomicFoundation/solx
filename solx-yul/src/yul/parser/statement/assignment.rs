@@ -4,7 +4,6 @@
 
 use std::collections::BTreeSet;
 
-use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
 use crate::yul::lexer::token::lexeme::symbol::Symbol;
 use crate::yul::lexer::token::lexeme::Lexeme;
@@ -26,6 +25,8 @@ pub struct Assignment {
     pub bindings: Vec<Identifier>,
     /// The initializing expression.
     pub initializer: Expression,
+    /// The solc source code location.
+    pub solc_location: Option<solx_utils::DebugInfoSolcLocation>,
 }
 
 impl Assignment {
@@ -33,7 +34,15 @@ impl Assignment {
     /// The element parser.
     ///
     pub fn parse(lexer: &mut Lexer, initial: Option<Token>) -> Result<Self, Error> {
-        let token = crate::yul::parser::take_or_next(initial, lexer)?;
+        let mut token = crate::yul::parser::take_or_next(initial, lexer)?;
+
+        let solc_location =
+            token
+                .take_solidity_location()
+                .map_err(|error| ParserError::DebugInfoParseError {
+                    location: token.location,
+                    details: error.to_string(),
+                })?;
 
         let (location, identifier) = match token {
             Token {
@@ -63,6 +72,7 @@ impl Assignment {
                     location,
                     bindings: vec![Identifier::new(location, identifier.inner)],
                     initializer: Expression::parse(lexer, None)?,
+                    solc_location,
                 })
             }
             Token {
@@ -93,6 +103,7 @@ impl Assignment {
                     location,
                     bindings: identifiers,
                     initializer: Expression::parse(lexer, None)?,
+                    solc_location,
                 })
             }
             token => Err(ParserError::InvalidToken {
@@ -114,7 +125,7 @@ impl Assignment {
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
         self.initializer.accumulate_evm_dependencies(dependencies);
     }
 }

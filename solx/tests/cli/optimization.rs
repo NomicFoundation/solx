@@ -5,7 +5,7 @@
 use predicates::prelude::*;
 use test_case::test_case;
 
-// TODO: #[test_case('0')] when -O0 is supported
+// #[test_case('0')] // TODO: enable when supported
 #[test_case('1')]
 #[test_case('2')]
 #[test_case('3')]
@@ -26,7 +26,7 @@ fn all(level: char) -> anyhow::Result<()> {
     Ok(())
 }
 
-// TODO: #[test_case('0')] when -O0 is supported
+// #[test_case('0')] // TODO: enable when supported
 #[test_case('1')]
 #[test_case('2')]
 #[test_case('3')]

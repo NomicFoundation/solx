@@ -3,6 +3,7 @@
 //!
 
 use solx_codegen_evm::IContext;
+use solx_codegen_evm::ISolidityData;
 use solx_yul::yul::parser::statement::Statement;
 
 use crate::declare_wrapper;
@@ -36,6 +37,13 @@ impl solx_codegen_evm::WriteLLVM for Block {
 
         context.set_current_function(current_function.as_str())?;
         context.set_basic_block(current_block);
+
+        if let Some((solidity_data, solc_location)) =
+            context.solidity_mut().zip(self.0.solc_location)
+        {
+            solidity_data.set_debug_info_solc_location(solc_location);
+        }
+
         for statement in local_statements.into_iter() {
             if context.basic_block().get_terminator().is_some() {
                 break;
@@ -53,15 +61,33 @@ impl solx_codegen_evm::WriteLLVM for Block {
                 Statement::IfConditional(statement) => statement.wrap().into_llvm(context)?,
                 Statement::Switch(statement) => statement.wrap().into_llvm(context)?,
                 Statement::ForLoop(statement) => statement.wrap().into_llvm(context)?,
-                Statement::Continue(_location) => {
+                Statement::Continue(statement) => {
+                    if let Some((solidity_data, solc_location)) =
+                        context.solidity_mut().zip(statement.solc_location)
+                    {
+                        solidity_data.set_debug_info_solc_location(solc_location);
+                    }
+
                     context.build_unconditional_branch(context.r#loop().continue_block)?;
                     break;
                 }
-                Statement::Break(_location) => {
+                Statement::Break(statement) => {
+                    if let Some((solidity_data, solc_location)) =
+                        context.solidity_mut().zip(statement.solc_location)
+                    {
+                        solidity_data.set_debug_info_solc_location(solc_location);
+                    }
+
                     context.build_unconditional_branch(context.r#loop().join_block)?;
                     break;
                 }
-                Statement::Leave(_location) => {
+                Statement::Leave(statement) => {
+                    if let Some((solidity_data, solc_location)) =
+                        context.solidity_mut().zip(statement.solc_location)
+                    {
+                        solidity_data.set_debug_info_solc_location(solc_location);
+                    }
+
                     context.build_unconditional_branch(
                         context.current_function().borrow().return_block(),
                     )?;
@@ -72,6 +98,12 @@ impl solx_codegen_evm::WriteLLVM for Block {
                     statement.location(),
                 ),
             }
+        }
+
+        if let Some((solidity_data, solc_location)) =
+            context.solidity_mut().zip(self.0.end_solc_location)
+        {
+            solidity_data.set_debug_info_solc_location(solc_location);
         }
 
         Ok(())

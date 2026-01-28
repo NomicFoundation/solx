@@ -146,6 +146,10 @@ pub const TEST_YUL_STANDARD_JSON_URLS_INVALID_PATH: &str =
     "tests/data/standard_json_input/yul_urls_invalid.json";
 
 /// A test input file.
+pub const TEST_YUL_STANDARD_JSON_URLS_DEBUG_INFO_PATH: &str =
+    "tests/data/standard_json_input/yul_urls_debug_info.json";
+
+/// A test input file.
 pub const TEST_LLVM_IR_STANDARD_JSON_PATH: &str =
     "tests/data/standard_json_input/llvm_ir_urls.json";
 
@@ -156,6 +160,10 @@ pub const TEST_LLVM_IR_STANDARD_JSON_INVALID_PATH: &str =
 /// A test input file.
 pub const TEST_LLVM_IR_STANDARD_JSON_MISSING_FILE_PATH: &str =
     "tests/data/standard_json_input/llvm_ir_urls_missing_file.json";
+
+/// A test input file.
+pub const TEST_LLVM_IR_STANDARD_JSON_DEBUG_INFO_PATH: &str =
+    "tests/data/standard_json_input/llvm_ir_urls_debug_info.json";
 
 /// A test input file.
 pub const TEST_JSON_METADATA_HASH_IPFS_AND_METADATA: &str =

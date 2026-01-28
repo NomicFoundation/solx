@@ -1152,7 +1152,7 @@ impl solx_codegen_evm::WriteLLVM for Element {
                     Some(value) if value.is_struct_value() => {
                         let return_value = value.into_struct_value();
                         for index in 0..output_size {
-                            let value = context.builder().build_extract_value(
+                            let value = context.build_extract_value(
                                 return_value,
                                 index as u32,
                                 format!("return_value_element_{index}").as_str(),

@@ -4,18 +4,20 @@
 
 pub mod assignment;
 pub mod block;
+pub mod r#break;
 pub mod code;
+pub mod r#continue;
 pub mod expression;
 pub mod for_loop;
 pub mod function_definition;
 pub mod if_conditional;
+pub mod leave;
 pub mod object;
 pub mod switch;
 pub mod variable_declaration;
 
 use std::collections::BTreeSet;
 
-use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
 use crate::yul::lexer::token::lexeme::keyword::Keyword;
 use crate::yul::lexer::token::lexeme::Lexeme;
@@ -31,7 +33,10 @@ use self::expression::Expression;
 use self::for_loop::ForLoop;
 use self::function_definition::FunctionDefinition;
 use self::if_conditional::IfConditional;
+use self::leave::Leave;
 use self::object::Object;
+use self::r#break::Break;
+use self::r#continue::Continue;
 use self::switch::Switch;
 use self::variable_declaration::VariableDeclaration;
 
@@ -67,11 +72,11 @@ where
     /// The `for` statement.
     ForLoop(ForLoop<P>),
     /// The `continue` statement.
-    Continue(Location),
+    Continue(Continue),
     /// The `break` statement.
-    Break(Location),
+    Break(Break),
     /// The `leave` statement.
-    Leave(Location),
+    Leave(Leave),
 }
 
 impl<P> Statement<P>
@@ -105,50 +110,53 @@ where
             } if identifier.inner.as_str() == "code" => {
                 Ok((Statement::Code(Code::parse(lexer, None)?), None))
             }
-            Token {
+            token @ Token {
                 lexeme: Lexeme::Keyword(Keyword::Function),
                 ..
             } => Ok((
-                Statement::FunctionDefinition(FunctionDefinition::parse(lexer, None)?),
+                Statement::FunctionDefinition(FunctionDefinition::parse(lexer, Some(token))?),
                 None,
             )),
-            Token {
+            token @ Token {
                 lexeme: Lexeme::Keyword(Keyword::Let),
                 ..
             } => {
-                let (statement, next) = VariableDeclaration::parse(lexer, None)?;
+                let (statement, next) = VariableDeclaration::parse(lexer, Some(token))?;
                 Ok((Statement::VariableDeclaration(statement), next))
             }
-            Token {
+            token @ Token {
                 lexeme: Lexeme::Keyword(Keyword::If),
                 ..
             } => Ok((
-                Statement::IfConditional(IfConditional::parse(lexer, None)?),
+                Statement::IfConditional(IfConditional::parse(lexer, Some(token))?),
+                None,
+            )),
+            token @ Token {
+                lexeme: Lexeme::Keyword(Keyword::Switch),
+                ..
+            } => Ok((Statement::Switch(Switch::parse(lexer, Some(token))?), None)),
+            token @ Token {
+                lexeme: Lexeme::Keyword(Keyword::For),
+                ..
+            } => Ok((
+                Statement::ForLoop(ForLoop::parse(lexer, Some(token))?),
                 None,
             )),
             Token {
-                lexeme: Lexeme::Keyword(Keyword::Switch),
-                ..
-            } => Ok((Statement::Switch(Switch::parse(lexer, None)?), None)),
-            Token {
-                lexeme: Lexeme::Keyword(Keyword::For),
-                ..
-            } => Ok((Statement::ForLoop(ForLoop::parse(lexer, None)?), None)),
-            Token {
                 lexeme: Lexeme::Keyword(Keyword::Continue),
-                location,
                 ..
-            } => Ok((Statement::Continue(location), None)),
+            } => Ok((
+                Statement::Continue(Continue::parse(lexer, Some(token))?),
+                None,
+            )),
             Token {
                 lexeme: Lexeme::Keyword(Keyword::Break),
-                location,
                 ..
-            } => Ok((Statement::Break(location), None)),
+            } => Ok((Statement::Break(Break::parse(lexer, Some(token))?), None)),
             Token {
                 lexeme: Lexeme::Keyword(Keyword::Leave),
-                location,
                 ..
-            } => Ok((Statement::Leave(location), None)),
+            } => Ok((Statement::Leave(Leave::parse(lexer, Some(token))?), None)),
             token => Err(ParserError::InvalidToken {
                 location: token.location,
                 expected: vec![
@@ -185,7 +193,7 @@ where
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
         match self {
             Self::Object(_) => {}
             Self::Code(inner) => inner.accumulate_evm_dependencies(dependencies),
@@ -218,9 +226,9 @@ where
             Self::IfConditional(inner) => inner.location,
             Self::Switch(inner) => inner.location,
             Self::ForLoop(inner) => inner.location,
-            Self::Continue(location) => *location,
-            Self::Break(location) => *location,
-            Self::Leave(location) => *location,
+            Self::Continue(inner) => inner.location,
+            Self::Break(inner) => inner.location,
+            Self::Leave(inner) => inner.location,
         }
     }
 }

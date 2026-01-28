@@ -15,7 +15,7 @@ use path_slash::PathExt;
 /// Solidity compiler arguments.
 ///
 #[derive(Debug, Parser)]
-#[command(about, long_about = None)]
+#[command(about, long_about = "LLVM-based Solidity compiler for the EVM")]
 pub struct Arguments {
     /// Print the version and exit.
     #[arg(long)]
@@ -131,6 +131,14 @@ pub struct Arguments {
     #[arg(long = "asm")]
     pub output_assembly: bool,
 
+    /// Emit debug info of the compiled contracts.
+    #[arg(long = "debug-info")]
+    pub output_debug_info: bool,
+
+    /// Emit runtime bytecode debug info of the compiled contracts.
+    #[arg(long = "debug-info-runtime")]
+    pub output_debug_info_runtime: bool,
+
     /// Emit metadata of the compiled project.
     #[arg(long = "metadata")]
     pub output_metadata: bool,
@@ -237,6 +245,12 @@ impl Arguments {
             ));
         }
 
+        if !self.via_ir && (self.output_debug_info || self.output_debug_info_runtime) {
+            messages.push(solx_standard_json::OutputError::new_error(
+                "`debug-info` and `debug-info-runtime` require `via-ir` to be enabled.",
+            ));
+        }
+
         if self.yul || self.llvm_ir {
             if self.base_path.is_some() {
                 messages.push(solx_standard_json::OutputError::new_error(
@@ -263,10 +277,12 @@ impl Arguments {
                 || self.output_ast_json
                 || self.output_asm_solc_json
                 || self.output_ir
+                || self.output_debug_info
+                || self.output_debug_info_runtime
                 || self.output_benchmarks
             {
                 messages.push(solx_standard_json::OutputError::new_error(
-                    "ABI, hashes, userdoc, devdoc, storage layout, transient storage layout, AST, EVM assembly, Yul can be only emitted for Solidity contracts.",
+                    "ABI, hashes, userdoc, devdoc, storage layout, transient storage layout, AST, EVM assembly, Yul, debug info, benchmarks can be only emitted for Solidity contracts.",
                 ));
             }
 
@@ -287,6 +303,8 @@ impl Arguments {
             if self.output_bytecode
                 || self.output_bytecode_runtime
                 || self.output_assembly
+                || self.output_debug_info
+                || self.output_debug_info_runtime
                 || self.output_metadata
                 || self.output_abi
                 || self.output_hashes

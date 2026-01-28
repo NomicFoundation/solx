@@ -18,13 +18,9 @@ pub fn compare<'ctx>(
     operand_2: inkwell::values::IntValue<'ctx>,
     operation: inkwell::IntPredicate,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
-    let result = context.builder().build_int_compare(
-        operation,
-        operand_1,
-        operand_2,
-        "comparison_result",
-    )?;
-    let result = context.builder().build_int_z_extend_or_bit_cast(
+    let result = context.build_int_compare(operation, operand_1, operand_2, "comparison_result")?;
+    let result = context.build_bit_cast_instruction(
+        inkwell::builder::Builder::build_int_z_extend_or_bit_cast,
         result,
         context.field_type(),
         "comparison_result_extended",

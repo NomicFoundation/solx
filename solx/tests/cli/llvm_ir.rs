@@ -231,3 +231,20 @@ fn standard_json_missing_file() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn standard_json_debug_info() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::TEST_LLVM_IR_STANDARD_JSON_DEBUG_INFO_PATH,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains(
+        "Error: Debug info is only supported for Solidity source code input.",
+    ));
+
+    Ok(())
+}

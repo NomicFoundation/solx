@@ -9,8 +9,5 @@
 #![allow(clippy::should_implement_trait)]
 #![allow(clippy::result_large_err)]
 
-pub mod dependencies;
 pub mod util;
 pub mod yul;
-
-pub use crate::dependencies::Dependencies;

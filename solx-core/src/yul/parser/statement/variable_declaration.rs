@@ -5,6 +5,7 @@
 use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 use solx_codegen_evm::IContext;
+use solx_codegen_evm::ISolidityData;
 
 use crate::declare_wrapper;
 use crate::yul::parser::wrapper::Wrap;
@@ -19,6 +20,12 @@ impl solx_codegen_evm::WriteLLVM for VariableDeclaration {
         mut self,
         context: &mut solx_codegen_evm::Context<'ctx>,
     ) -> anyhow::Result<()> {
+        if let Some((solidity_data, solc_location)) =
+            context.solidity_mut().zip(self.0.solc_location)
+        {
+            solidity_data.set_debug_info_solc_location(solc_location);
+        }
+
         if self.0.bindings.len() == 1 {
             let identifier = self.0.bindings.remove(0);
             let r#type = identifier

@@ -20,6 +20,9 @@ pub struct Bytecode {
     /// Text assembly from LLVM.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub llvm_assembly: Option<String>,
+    /// DWARF debug info from LLVM.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub debug_info: Option<String>,
     /// Link references placeholder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub link_references: Option<BTreeMap<String, BTreeMap<String, Vec<LinkReference>>>>,
@@ -51,6 +54,7 @@ impl Bytecode {
     pub fn new(
         object: Option<String>,
         llvm_assembly: Option<String>,
+        debug_info: Option<String>,
         unlinked_symbols: Option<BTreeMap<String, Vec<u64>>>,
         benchmarks: Vec<(String, u64)>,
 
@@ -84,6 +88,7 @@ impl Bytecode {
         Self {
             object,
             llvm_assembly,
+            debug_info,
             link_references,
             benchmarks,
 
@@ -99,8 +104,14 @@ impl Bytecode {
     /// Checks if all key fields are empty.
     ///
     pub fn is_empty(&self) -> bool {
-        self.object.is_none()
-            && self.llvm_assembly.is_none()
+        (match self.object.as_ref() {
+            Some(object) => object.is_empty(),
+            None => true,
+        }) && self.llvm_assembly.is_none()
+            && (match self.debug_info.as_ref() {
+                Some(debug_info) => debug_info.is_empty(),
+                None => true,
+            })
             && self.link_references.is_none()
             && self.benchmarks.is_empty()
             && self.opcodes.is_none()

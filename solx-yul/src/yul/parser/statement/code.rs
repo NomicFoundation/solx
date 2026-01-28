@@ -4,7 +4,6 @@
 
 use std::collections::BTreeSet;
 
-use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
 use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::location::Location;
@@ -70,7 +69,7 @@ where
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
         self.block.accumulate_evm_dependencies(dependencies);
     }
 }

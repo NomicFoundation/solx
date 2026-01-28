@@ -15,10 +15,14 @@ pub fn or<'ctx>(
     operand_1: inkwell::values::IntValue<'ctx>,
     operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
-    Ok(context
-        .builder()
-        .build_or(operand_1, operand_2, "or_result")?
-        .as_basic_value_enum())
+    Ok(Context::build_binary_operator(
+        context,
+        inkwell::builder::Builder::build_or,
+        operand_1,
+        operand_2,
+        "or_result",
+    )?
+    .as_basic_value_enum())
 }
 
 ///
@@ -29,10 +33,14 @@ pub fn xor<'ctx>(
     operand_1: inkwell::values::IntValue<'ctx>,
     operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
-    Ok(context
-        .builder()
-        .build_xor(operand_1, operand_2, "xor_result")?
-        .as_basic_value_enum())
+    Ok(Context::build_binary_operator(
+        context,
+        inkwell::builder::Builder::build_xor,
+        operand_1,
+        operand_2,
+        "xor_result",
+    )?
+    .as_basic_value_enum())
 }
 
 ///
@@ -43,10 +51,14 @@ pub fn and<'ctx>(
     operand_1: inkwell::values::IntValue<'ctx>,
     operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
-    Ok(context
-        .builder()
-        .build_and(operand_1, operand_2, "and_result")?
-        .as_basic_value_enum())
+    Ok(Context::build_binary_operator(
+        context,
+        inkwell::builder::Builder::build_and,
+        operand_1,
+        operand_2,
+        "and_result",
+    )?
+    .as_basic_value_enum())
 }
 
 ///
@@ -65,7 +77,7 @@ pub fn shift_left<'ctx>(
     let join_block = context.append_basic_block("shift_left_join");
 
     let result_pointer = context.build_alloca(context.field_type(), "shift_left_result_pointer")?;
-    let condition_is_overflow = context.builder().build_int_compare(
+    let condition_is_overflow = context.build_int_compare(
         inkwell::IntPredicate::UGT,
         operand_1,
         context.field_const((solx_utils::BIT_LENGTH_FIELD - 1) as u64),
@@ -78,7 +90,9 @@ pub fn shift_left<'ctx>(
     context.build_unconditional_branch(join_block)?;
 
     context.set_basic_block(non_overflow_block);
-    let value = context.builder().build_left_shift(
+    let value = Context::build_binary_operator(
+        context,
+        inkwell::builder::Builder::build_left_shift,
         operand_2,
         operand_1,
         "shift_left_non_overflow_result",
@@ -108,7 +122,7 @@ pub fn shift_right<'ctx>(
 
     let result_pointer =
         context.build_alloca(context.field_type(), "shift_right_result_pointer")?;
-    let condition_is_overflow = context.builder().build_int_compare(
+    let condition_is_overflow = context.build_int_compare(
         inkwell::IntPredicate::UGT,
         operand_1,
         context.field_const((solx_utils::BIT_LENGTH_FIELD - 1) as u64),
@@ -121,7 +135,7 @@ pub fn shift_right<'ctx>(
     context.build_unconditional_branch(join_block)?;
 
     context.set_basic_block(non_overflow_block);
-    let value = context.builder().build_right_shift(
+    let value = context.build_right_shift(
         operand_2,
         operand_1,
         false,
@@ -158,7 +172,7 @@ pub fn shift_right_arithmetic<'ctx>(
         context.field_type(),
         "shift_right_arithmetic_result_pointer",
     )?;
-    let condition_is_overflow = context.builder().build_int_compare(
+    let condition_is_overflow = context.build_int_compare(
         inkwell::IntPredicate::UGT,
         operand_1,
         context.field_const((solx_utils::BIT_LENGTH_FIELD - 1) as u64),
@@ -167,13 +181,14 @@ pub fn shift_right_arithmetic<'ctx>(
     context.build_conditional_branch(condition_is_overflow, overflow_block, non_overflow_block)?;
 
     context.set_basic_block(overflow_block);
-    let sign_bit = context.builder().build_right_shift(
+    let sign_bit = context.build_right_shift(
         operand_2,
         context.field_const((solx_utils::BIT_LENGTH_FIELD - 1) as u64),
         false,
         "shift_right_arithmetic_sign_bit",
     )?;
-    let condition_is_negative = context.builder().build_int_truncate_or_bit_cast(
+    let condition_is_negative = context.build_bit_cast_instruction(
+        inkwell::builder::Builder::build_int_truncate_or_bit_cast,
         sign_bit,
         context.bool_type(),
         "shift_right_arithmetic_sign_bit_truncated",
@@ -193,7 +208,7 @@ pub fn shift_right_arithmetic<'ctx>(
     context.build_unconditional_branch(join_block)?;
 
     context.set_basic_block(non_overflow_block);
-    let value = context.builder().build_right_shift(
+    let value = context.build_right_shift(
         operand_2,
         operand_1,
         true,

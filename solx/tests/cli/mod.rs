@@ -17,6 +17,8 @@ mod base_path;
 mod benchmarks;
 mod bin;
 mod bin_runtime;
+mod debug_info;
+mod debug_info_runtime;
 mod debug_output_dir;
 mod devdoc;
 mod empty;

@@ -14,6 +14,8 @@ use crate::project::contract::ir::IR as ContractIR;
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Input {
+    /// The input contract language.
+    pub language: solx_standard_json::InputLanguage,
     /// The `solc` compiler version, used only for Solidity and Yul projects.
     pub solc_version: Option<solx_standard_json::Version>,
     /// The input contract name.
@@ -26,6 +28,8 @@ pub struct Input {
     pub evm_version: Option<solx_utils::EVMVersion>,
     /// The mapping of auxiliary identifiers, e.g. Yul object names, to full contract paths.
     pub identifier_paths: BTreeMap<String, String>,
+    /// Solidity debug info.
+    pub debug_info: Option<solx_utils::DebugInfo>,
     /// Output selection for the compilation.
     pub output_selection: solx_standard_json::InputSelection,
     /// Immutables produced by the runtime code run.
@@ -45,12 +49,14 @@ impl Input {
     /// A shortcut constructor.
     ///
     pub fn new(
+        language: solx_standard_json::InputLanguage,
         solc_version: Option<solx_standard_json::Version>,
         contract_name: solx_utils::ContractName,
         contract_ir: ContractIR,
         code_segment: solx_utils::CodeSegment,
         evm_version: Option<solx_utils::EVMVersion>,
         identifier_paths: BTreeMap<String, String>,
+        debug_info: Option<solx_utils::DebugInfo>,
         output_selection: solx_standard_json::InputSelection,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         metadata_bytes: Option<Vec<u8>>,
@@ -59,12 +65,14 @@ impl Input {
         debug_config: Option<solx_codegen_evm::DebugConfig>,
     ) -> Self {
         Self {
+            language,
             solc_version,
             contract_name,
             contract_ir,
             code_segment,
             evm_version,
             identifier_paths,
+            debug_info,
             output_selection,
             immutables,
             metadata_bytes,

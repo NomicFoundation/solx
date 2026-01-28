@@ -50,6 +50,9 @@ impl Contract {
             && self.devdoc.is_none()
             && self.userdoc.is_none()
             && self.ir.is_none()
-            && self.evm.is_none()
+            && match self.evm.as_ref() {
+                Some(evm) => evm.is_empty(),
+                None => true,
+            }
     }
 }

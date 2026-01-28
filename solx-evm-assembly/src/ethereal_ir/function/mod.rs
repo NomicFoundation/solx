@@ -1172,6 +1172,7 @@ impl solx_codegen_evm::WriteLLVM for Function {
                 );
                 context.add_function(
                     self.name.as_str(),
+                    None, // TODO: EVM assembly support
                     r#type,
                     output_size,
                     Some(inkwell::module::Linkage::Private),

@@ -20,7 +20,7 @@ pub struct Arguments {
     /// If only one path is provided, it is treated as a directory with JSON files.
     pub input_paths: Vec<PathBuf>,
 
-    /// Input source: `tooling` (default) or `compiler-tester`.
+    /// Input source: `tooling` (default) or `solx-tester`.
     #[structopt(long = "input-source", default_value_t = solx_benchmark_converter::InputSource::Tooling)]
     pub input_source: solx_benchmark_converter::InputSource,
 

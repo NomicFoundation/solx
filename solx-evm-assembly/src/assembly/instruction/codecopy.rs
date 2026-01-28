@@ -14,7 +14,9 @@ pub fn dependency<'ctx>(
     offset: inkwell::values::IntValue<'ctx>,
     value: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<()> {
-    let offset = context.builder().build_int_add(
+    let offset = solx_codegen_evm::Context::build_binary_operator(
+        context,
+        inkwell::builder::Builder::build_int_add,
         offset,
         context.field_const((solx_utils::BYTE_LENGTH_X32 + solx_utils::BYTE_LENGTH_FIELD) as u64),
         "datacopy_dependency_offset",

@@ -149,10 +149,10 @@ jobs:
       - name: Run benchmark converter
         run: |
           cat reference-benchmark.json \
-            | jq '{data: ., project: "compiler-tester", toolchain: "00.solx-main"}' > reference.json
+            | jq '{data: ., project: "solx-tester", toolchain: "00.solx-main"}' > reference.json
           cat candidate-benchmark.json \
-            | jq '{data: ., project: "compiler-tester", toolchain: "01.solx"}' > candidate.json
-          ./target/release/solx-benchmark-converter --input-source compiler-tester \
+            | jq '{data: ., project: "solx-tester", toolchain: "01.solx"}' > candidate.json
+          ./target/release/solx-benchmark-converter --input-source solx-tester \
             --output-path solx-tester-report.xlsx reference.json candidate.json
 
       - name: Upload Excel reports

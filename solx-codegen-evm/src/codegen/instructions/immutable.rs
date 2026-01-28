@@ -47,12 +47,18 @@ pub fn store<'ctx>(
         }
     }
 
-    let offsets = match context.solidity_mut().expect("Always exists").offsets(id) {
+    let offsets = match context
+        .solidity_mut()
+        .expect("Always exists")
+        .immutable_offsets(id)
+    {
         Some(offsets) => offsets,
         None => return Ok(()),
     };
     for offset in offsets.into_iter() {
-        let immutable_offset = context.builder().build_int_add(
+        let immutable_offset = Context::build_binary_operator(
+            context,
+            inkwell::builder::Builder::build_int_add,
             base_offset,
             context.field_const(offset),
             "setimmutable_offset",
