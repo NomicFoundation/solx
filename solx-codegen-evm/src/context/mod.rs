@@ -693,11 +693,6 @@ pub trait IContext<'ctx> {
     }
 
     ///
-    /// Sets the Solidity data.
-    ///
-    fn set_solidity_data(&mut self, data: Self::SolidityData);
-
-    ///
     /// Returns the Solidity data reference.
     ///
     /// # Panics

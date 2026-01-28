@@ -25,7 +25,7 @@ impl FromStr for DebugInfo {
     type Err = anyhow::Error;
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
-        let parts = string.split_whitespace().collect::<Vec<&str>>();
+        let parts = string.splitn(3, ' ').collect::<Vec<&str>>();
 
         if parts[0] != SingleLineComment::DEBUG_INFO_START {
             anyhow::bail!("Not a debug info comment");
@@ -34,27 +34,34 @@ impl FromStr for DebugInfo {
         match parts[1] {
             "@use-src" => {
                 let mut sources = Vec::with_capacity(parts.len() - 2);
-                for part in parts[2..].iter() {
+                for part in parts[2].split(", ") {
                     let src_parts = part.splitn(2, ':').collect::<Vec<&str>>();
-                    let id = match src_parts[0].parse::<usize>() {
-                        Ok(id) => id,
-                        Err(_) => break,
-                    };
-                    let path = match src_parts.get(1) {
-                        Some(path) => path.trim_matches('"').to_string(),
-                        None => break,
-                    };
+                    let id = src_parts[0]
+                        .parse::<usize>()
+                        .map_err(|_| anyhow::anyhow!("Invalid Yul @use-src source ID"))?;
+                    let path = (*src_parts
+                        .get(1)
+                        .ok_or_else(|| anyhow::anyhow!("Invalid Yul @use-src source path"))?)
+                    .trim_matches('"')
+                    .to_owned();
                     sources.push((id, path));
                 }
                 Ok(Self::UseSource(sources))
             }
             "@ast-id" => {
-                let id = parts[2].parse::<usize>()?;
+                let id = parts[2]
+                    .split_whitespace()
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid Yul @ast-id tag"))?
+                    .parse::<usize>()?;
                 Ok(Self::AstId(id))
             }
             "@src" => {
                 let location = solx_utils::DebugInfoSolcLocation::parse(
-                    parts[2],
+                    parts[2]
+                        .split_whitespace()
+                        .next()
+                        .ok_or_else(|| anyhow::anyhow!("Invalid Yul @src tag"))?,
                     solx_utils::DebugInfoSolcLocationOrdering::Yul,
                 )?;
                 Ok(Self::SourceLocation(location))

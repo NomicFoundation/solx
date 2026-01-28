@@ -2,8 +2,6 @@
 //! Line-column source code location.
 //!
 
-use crate::contract_name::ContractName;
-
 ///
 /// Line-column source code location.
 ///
@@ -11,8 +9,8 @@ use crate::contract_name::ContractName;
 ///
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MappedLocation {
-    /// The contract name.
-    pub contract_name: ContractName,
+    /// The contract path.
+    pub path: String,
     /// The line number.
     pub line: Option<usize>,
     /// The column number.
@@ -27,9 +25,9 @@ impl MappedLocation {
     ///
     /// A shortcut constructor.
     ///
-    pub fn new(contract_name: ContractName) -> Self {
+    pub fn new(path: String) -> Self {
         Self {
-            contract_name,
+            path,
             line: None,
             column: None,
             length: None,
@@ -41,14 +39,14 @@ impl MappedLocation {
     /// A shortcut constructor.
     ///
     pub fn new_with_location(
-        contract_name: ContractName,
+        path: String,
         line: usize,
         column: usize,
         length: usize,
         source_code_line: Option<String>,
     ) -> Self {
         Self {
-            contract_name,
+            path,
             line: Some(line),
             column: Some(column),
             length: Some(length),
@@ -60,19 +58,19 @@ impl MappedLocation {
     /// A shortcut constructor from `solc` AST source location.
     ///
     pub fn from_solc_location(
-        contract_name: &ContractName,
+        path: String,
         start: Option<isize>,
         end: Option<isize>,
         source_code: Option<&str>,
     ) -> Self {
         let source_code = match source_code {
             Some(source_code) => source_code,
-            None => return Self::new(contract_name.to_owned()),
+            None => return Self::new(path),
         };
         let start = start.unwrap_or_default();
         let end = end.unwrap_or_default();
         if start <= 0 || end <= 0 {
-            return Self::new(contract_name.to_owned());
+            return Self::new(path);
         }
         let start = start as usize;
         let end = end as usize;
@@ -90,7 +88,7 @@ impl MappedLocation {
                 };
                 let length = end - start;
                 return Self::new_with_location(
-                    contract_name.to_owned(),
+                    path,
                     line,
                     column,
                     length,
@@ -101,13 +99,13 @@ impl MappedLocation {
             cursor = cursor_next;
         }
 
-        Self::new(contract_name.to_owned())
+        Self::new(path)
     }
 }
 
 impl std::fmt::Display for MappedLocation {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut path = self.contract_name.path.clone();
+        let mut path = self.path.clone();
         if let Some(line) = self.line {
             path.push(':');
             path.push_str(line.to_string().as_str());

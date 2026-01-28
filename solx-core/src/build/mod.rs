@@ -96,7 +96,7 @@ impl Build {
                         Err(error) => {
                             self.messages.lock().expect("Sync").push(
                                 solx_standard_json::OutputError::new_error_contract(
-                                    Some(&object.contract_name),
+                                    Some(object.contract_name.path.as_str()),
                                     &error,
                                 ),
                             );
@@ -142,7 +142,7 @@ impl Build {
                 if let Err(error) = object.link(&linker_symbols) {
                     self.messages.lock().expect("Sync").push(
                         solx_standard_json::OutputError::new_error_contract(
-                            Some(&object.contract_name),
+                            Some(object.contract_name.path.as_str()),
                             &error,
                         ),
                     );

@@ -48,7 +48,7 @@ impl Error {
     /// A shortcut constructor.
     ///
     pub fn new<S>(
-        contract_name: Option<&solx_utils::ContractName>,
+        path: Option<&str>,
         r#type: &str,
         error_code: Option<isize>,
         message: S,
@@ -68,16 +68,11 @@ impl Error {
         };
         formatted_message.push('\n');
         if let Some(source_location) = source_location.as_ref() {
-            let contract_name = contract_name.cloned().unwrap_or_else(|| {
-                solx_utils::ContractName::new(source_location.file.to_owned(), None, None)
-            });
-            let source_code = sources.and_then(|sources| {
-                sources
-                    .get(contract_name.path.as_str())
-                    .and_then(|source| source.content())
-            });
+            let path = path.unwrap_or(source_location.file.as_str());
+            let source_code =
+                sources.and_then(|sources| sources.get(path).and_then(|source| source.content()));
             let mapped_location = solx_utils::DebugInfoMappedLocation::from_solc_location(
-                &contract_name,
+                path.to_owned(),
                 source_location.start,
                 source_location.end,
                 source_code,
@@ -111,23 +106,19 @@ impl Error {
     ///
     /// Creates a new simple error with a contract data.
     ///
-    pub fn new_error_contract<S>(
-        contract_name: Option<&solx_utils::ContractName>,
-        message: S,
-    ) -> Self
+    pub fn new_error_contract<S>(path: Option<&str>, message: S) -> Self
     where
         S: std::fmt::Display,
     {
-        let source_location = contract_name
-            .map(|contract_name| SourceLocation::new(contract_name.path.clone(), None, None));
-        Self::new_error_with_data(contract_name, None, message, source_location, None)
+        let source_location = path.map(|path| SourceLocation::new(path.to_owned(), None, None));
+        Self::new_error_with_data(path, None, message, source_location, None)
     }
 
     ///
     /// Creates a new error with optional code location and error code.
     ///
     pub fn new_error_with_data<S>(
-        contract_name: Option<&solx_utils::ContractName>,
+        path: Option<&str>,
         error_code: Option<isize>,
         message: S,
         source_location: Option<SourceLocation>,
@@ -136,31 +127,24 @@ impl Error {
     where
         S: std::fmt::Display,
     {
-        Self::new(
-            contract_name,
-            "Error",
-            error_code,
-            message,
-            source_location,
-            sources,
-        )
+        Self::new(path, "Error", error_code, message, source_location, sources)
     }
 
     ///
     /// Creates a new warning with optional code location and error code.
     ///
-    pub fn new_warning<S>(contract_name: Option<&solx_utils::ContractName>, message: S) -> Self
+    pub fn new_warning<S>(path: Option<&str>, message: S) -> Self
     where
         S: std::fmt::Display,
     {
-        Self::new_warning_with_data(contract_name, None, message, None, None)
+        Self::new_warning_with_data(path, None, message, None, None)
     }
 
     ///
     /// Creates a new warning with optional code location and error code.
     ///
     pub fn new_warning_with_data<S>(
-        contract_name: Option<&solx_utils::ContractName>,
+        path: Option<&str>,
         error_code: Option<isize>,
         message: S,
         source_location: Option<SourceLocation>,
@@ -170,7 +154,7 @@ impl Error {
         S: std::fmt::Display,
     {
         Self::new(
-            contract_name,
+            path,
             "Warning",
             error_code,
             message,

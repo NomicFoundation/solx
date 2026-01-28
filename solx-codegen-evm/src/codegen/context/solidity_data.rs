@@ -26,8 +26,8 @@ pub struct SolidityData {
     /// In this case, `immutables` is `None`, and `immutables_dummy` is used to allocated the offsets of the immutables.
     immutables_dummy: BTreeMap<String, u64>,
 
-    /// Current Solidity contract full path.
-    contract_name: String,
+    /// Solidity source code files IDs used in the translation unit.
+    source_ids: BTreeMap<usize, String>,
     /// Current Solidity source code location.
     current_solc_location: Option<solx_utils::DebugInfoSolcLocation>,
 
@@ -36,7 +36,7 @@ pub struct SolidityData {
 }
 
 impl ISolidityData for SolidityData {
-    fn offsets(&mut self, id: &str) -> Option<BTreeSet<u64>> {
+    fn immutable_offsets(&mut self, id: &str) -> Option<BTreeSet<u64>> {
         match self.immutables.as_ref() {
             Some(immutables) => immutables.get(id).cloned(),
             None => {
@@ -47,11 +47,19 @@ impl ISolidityData for SolidityData {
         }
     }
 
+    fn sources(&self) -> &BTreeMap<usize, String> {
+        &self.source_ids
+    }
+
     fn debug_info_contract_definition(&self) -> Option<&solx_utils::DebugInfoContractDefinition> {
-        self.debug_info
-            .as_ref()?
-            .contract_definitions
-            .get(self.contract_name.as_str())
+        let contract_definitions = &self.debug_info.as_ref()?.contract_definitions;
+        assert!(
+            contract_definitions.len() == 1,
+            "Expected exactly one contract definition, found {}",
+            contract_definitions.len()
+        );
+
+        contract_definitions.values().next()
     }
 
     fn debug_info_function_definition(
@@ -81,6 +89,10 @@ impl ISolidityData for SolidityData {
             }
         })
     }
+
+    fn debug_info(&self) -> Option<&solx_utils::DebugInfo> {
+        self.debug_info.as_ref()
+    }
 }
 
 impl SolidityData {
@@ -89,13 +101,13 @@ impl SolidityData {
     ///
     pub fn new(
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
-        contract_name: String,
+        source_ids: BTreeMap<usize, String>,
         debug_info: Option<solx_utils::DebugInfo>,
     ) -> Self {
         Self {
             immutables,
             immutables_dummy: BTreeMap::new(),
-            contract_name,
+            source_ids,
             current_solc_location: None,
             debug_info,
         }

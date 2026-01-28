@@ -2,6 +2,7 @@
 //! The LLVM IR Solidity data trait.
 //!
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 ///
@@ -11,7 +12,12 @@ pub trait ISolidityData {
     ///
     /// Returns all runtime code offsets for the specified `id`.
     ///
-    fn offsets(&mut self, id: &str) -> Option<BTreeSet<u64>>;
+    fn immutable_offsets(&mut self, id: &str) -> Option<BTreeSet<u64>>;
+
+    ///
+    /// Returns the Solidity source code file IDs and paths used in the translation unit.
+    ///
+    fn sources(&self) -> &BTreeMap<usize, String>;
 
     ///
     /// Returns the AST contract definition by its name.
@@ -40,4 +46,9 @@ pub trait ISolidityData {
     /// Gets the current solx-style source code location.
     ///
     fn get_solx_location(&self) -> Option<&solx_utils::DebugInfoMappedLocation>;
+
+    ///
+    /// Returns a reference to the Solidity AST debug info.
+    ///
+    fn debug_info(&self) -> Option<&solx_utils::DebugInfo>;
 }

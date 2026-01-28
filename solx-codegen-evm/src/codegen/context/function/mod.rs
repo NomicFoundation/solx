@@ -243,7 +243,12 @@ impl<'ctx> Function<'ctx> {
 
         self.declaration
             .value
-            .set_subprogram(debug_info.create_function(function_name, line, ast_id.is_none()));
+            .set_subprogram(debug_info.create_function(
+                function_name,
+                solc_debug_info_location.source_id,
+                line,
+                ast_id.is_none(),
+            ));
 
         self.solc_debug_info_location = Some(solc_debug_info_location);
         self.solx_debug_info_location = Some(solx_debug_info_location);

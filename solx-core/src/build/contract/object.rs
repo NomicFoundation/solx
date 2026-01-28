@@ -223,7 +223,7 @@ impl Object {
             .drain(..)
             .map(|warning| {
                 solx_standard_json::OutputError::new_warning_with_data(
-                    Some(&self.contract_name),
+                    Some(self.contract_name.path.as_str()),
                     warning.code(),
                     warning.to_string(),
                     None,

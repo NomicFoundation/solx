@@ -47,7 +47,11 @@ pub fn store<'ctx>(
         }
     }
 
-    let offsets = match context.solidity_mut().expect("Always exists").offsets(id) {
+    let offsets = match context
+        .solidity_mut()
+        .expect("Always exists")
+        .immutable_offsets(id)
+    {
         Some(offsets) => offsets,
         None => return Ok(()),
     };

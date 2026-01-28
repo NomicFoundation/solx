@@ -142,11 +142,9 @@ impl Output {
     ///
     /// Please do not push project-general errors without paths here.
     ///
-    pub fn push_error(&mut self, contract_name: &solx_utils::ContractName, error: anyhow::Error) {
-        self.errors.push(JsonOutputError::new_error_contract(
-            Some(contract_name),
-            error,
-        ));
+    pub fn push_error(&mut self, path: &str, error: anyhow::Error) {
+        self.errors
+            .push(JsonOutputError::new_error_contract(Some(path), error));
     }
 
     ///
@@ -160,27 +158,24 @@ impl Output {
         let mut ast_nodes: HashMap<usize, solx_utils::DebugInfoAstNode> = HashMap::new();
 
         for (path, source) in self.sources.iter() {
-            let contract_name =
-                solx_utils::ContractName::new(path.to_owned(), None, Some(source.id));
-
             if let Some(ref ast_json) = source.ast {
                 contract_definitions.extend(Source::get_ast_nodes(
                     &Source::contract_definition,
-                    &contract_name,
+                    path.as_str(),
                     ast_json,
                     sources,
                 ));
 
                 function_definitions.extend(Source::get_ast_nodes(
                     &Source::function_definition,
-                    &contract_name,
+                    path.as_str(),
                     ast_json,
                     sources,
                 ));
 
                 ast_nodes.extend(Source::get_ast_nodes(
                     &Source::ast_node,
-                    &contract_name,
+                    path.as_str(),
                     ast_json,
                     sources,
                 ));

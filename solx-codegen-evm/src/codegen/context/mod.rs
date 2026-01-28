@@ -101,12 +101,17 @@ impl<'ctx> Context<'ctx> {
         evm_version: Option<solx_utils::EVMVersion>,
         optimizer: Optimizer,
         output_debug_info: bool,
+        solidity_data: Option<SolidityData>,
         debug_config: Option<DebugConfig>,
     ) -> Self {
         let builder = llvm.create_builder();
         let intrinsics = Intrinsics::new(llvm, &module);
         let debug_info = if output_debug_info {
-            Some(DebugInfo::new(&module, contract_name.path.as_str()))
+            solidity_data
+                .as_ref()
+                .filter(|solidity_data| solidity_data.debug_info().is_some())
+                .map(|solidity_data| solidity_data.sources())
+                .map(|sources| DebugInfo::new(&module, sources))
         } else {
             None
         };
@@ -128,7 +133,7 @@ impl<'ctx> Context<'ctx> {
             debug_info,
             debug_config,
 
-            solidity_data: None,
+            solidity_data,
             yul_data: None,
             evmla_data: None,
         }
@@ -533,7 +538,7 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
             .cloned()
             .unwrap_or_else(|| {
                 solx_utils::DebugInfoMappedLocation::new_with_location(
-                    self.contract_name.to_owned(),
+                    self.contract_name.path.to_owned(),
                     1,
                     1,
                     0,
@@ -731,10 +736,6 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
         name: &str,
     ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>> {
         Self::build_call(self, function, arguments, name)
-    }
-
-    fn set_solidity_data(&mut self, data: Self::SolidityData) {
-        self.solidity_data = Some(data);
     }
 
     fn solidity(&self) -> Option<&Self::SolidityData> {

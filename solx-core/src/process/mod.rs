@@ -62,7 +62,7 @@ pub fn run() -> anyhow::Result<()> {
             .map(EVMOutput::new)
             .map_err(|error| match error {
                 Error::Generic(error) => solx_standard_json::OutputError::new_error_contract(
-                    Some(&input.contract_name),
+                    Some(input.contract_name.path.as_str()),
                     error,
                 )
                 .into(),
@@ -95,7 +95,7 @@ where
     let mut command = Command::new(executable.as_path());
     command.stdin(std::process::Stdio::piped());
     command.stdout(std::process::Stdio::piped());
-    // command.stderr(std::process::Stdio::piped());
+    command.stderr(std::process::Stdio::piped());
     command.arg("--recursive-process");
     command.arg(contract_name.path.as_str());
 
@@ -135,7 +135,7 @@ where
             String::from_utf8_lossy(result.stderr.as_slice()),
         );
         Err(solx_standard_json::OutputError::new_error_contract(
-            Some(contract_name),
+            Some(contract_name.path.as_str()),
             message,
         ))?;
     }

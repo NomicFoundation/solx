@@ -140,12 +140,7 @@ impl Project {
                 .remove(path.as_str())
                 .expect("Always exists");
             for (name, contract) in file.into_iter() {
-                let id = solc_output
-                    .sources
-                    .get(path.as_str())
-                    .expect("Always exists")
-                    .id;
-                let name = solx_utils::ContractName::new(path.clone(), Some(name), Some(id));
+                let name = solx_utils::ContractName::new(path.clone(), Some(name));
                 input_contracts.push((name, contract));
             }
         }
@@ -209,7 +204,7 @@ impl Project {
                 Ok(contract) => {
                     contracts.insert(contract_name.full_path, contract);
                 }
-                Err(error) => solc_output.push_error(&contract_name, error),
+                Err(error) => solc_output.push_error(contract_name.path.as_str(), error),
             }
         }
         Ok(Project::new(
@@ -272,7 +267,7 @@ impl Project {
         let results = sources
             .into_par_iter()
             .map(|(path, mut source)| {
-                let mut name = solx_utils::ContractName::new(path.clone(), None, None);
+                let mut name = solx_utils::ContractName::new(path.clone(), None);
 
                 let source_code = match source.try_resolve() {
                     Ok(()) => source.take_content().expect("Always exists"),
@@ -328,7 +323,9 @@ impl Project {
                     contracts.insert(contract_name.full_path, contract);
                 }
                 Err(error) => match solc_output {
-                    Some(ref mut solc_output) => solc_output.push_error(&contract_name, error),
+                    Some(ref mut solc_output) => {
+                        solc_output.push_error(contract_name.path.as_str(), error)
+                    }
                     None => anyhow::bail!(error),
                 },
             }
@@ -382,11 +379,11 @@ impl Project {
         let results = sources
             .into_par_iter()
             .map(|(path, mut source)| {
-                let name = solx_utils::ContractName::new(path.clone(), None, None);
+                let contract_name = solx_utils::ContractName::new(path.clone(), None);
 
                 let source_code = match source.try_resolve() {
                     Ok(()) => source.take_content().expect("Always exists"),
-                    Err(error) => return (name, Err(error)),
+                    Err(error) => return (contract_name, Err(error)),
                 };
 
                 let metadata = if output_selection.check_selection(
@@ -405,7 +402,7 @@ impl Project {
                 };
 
                 let contract = Contract::new(
-                    name.clone(),
+                    contract_name.clone(),
                     Some(
                         ContractLLVMIR::new(
                             path.clone(),
@@ -425,7 +422,7 @@ impl Project {
                     None,
                 );
 
-                (name, Ok(contract))
+                (contract_name, Ok(contract))
             })
             .collect::<Vec<(solx_utils::ContractName, anyhow::Result<Contract>)>>();
 
@@ -436,7 +433,9 @@ impl Project {
                     contracts.insert(contract_name.full_path, contract);
                 }
                 Err(error) => match solc_output {
-                    Some(ref mut solc_output) => solc_output.push_error(&contract_name, error),
+                    Some(ref mut solc_output) => {
+                        solc_output.push_error(contract_name.path.as_str(), error)
+                    }
                     None => anyhow::bail!(error),
                 },
             }
@@ -491,10 +490,16 @@ impl Project {
                             *deploy_code.runtime_code.take().expect("Always exists");
 
                         if let Some(ref mut debug_info) = deploy_debug_info {
-                            debug_info.retain_source_ids(&deploy_code.object.0.source_ids);
+                            debug_info.retain_source_ids(&deploy_code.object.0.sources);
+                            if let Some(contract_name) = contract_name.name.as_deref() {
+                                debug_info.retain_current_contract(contract_name);
+                            }
                         }
                         if let Some(ref mut debug_info) = runtime_debug_info {
-                            debug_info.retain_source_ids(&runtime_code.object.0.source_ids);
+                            debug_info.retain_source_ids(&runtime_code.object.0.sources);
+                            if let Some(contract_name) = contract_name.name.as_deref() {
+                                debug_info.retain_current_contract(contract_name);
+                            }
                         }
 
                         (deploy_code.into(), runtime_code.into())

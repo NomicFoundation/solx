@@ -116,20 +116,27 @@ impl Contract {
         if let Some(ref metadata_bytes) = metadata_bytes {
             optimizer_settings.set_metadata_size(metadata_bytes.len() as u64);
         }
-
-        let solidity_data = solx_codegen_evm::ContextSolidityData::new(
-            immutables,
-            contract_name
-                .name
-                .clone()
-                .unwrap_or_else(|| contract_name.full_path.clone()),
-            debug_info,
-        );
         let optimizer = solx_codegen_evm::Optimizer::new(optimizer_settings.clone());
-        let output_bytecode = output_selection.is_bytecode_set_for_any();
 
+        let output_bytecode = output_selection.is_bytecode_set_for_any();
         match (contract_ir, code_segment) {
             (IR::Yul(mut yul), solx_utils::CodeSegment::Deploy) => {
+                let output_debug_info = language == solx_standard_json::InputLanguage::Solidity
+                    && output_selection.check_selection(
+                        contract_name.path.as_str(),
+                        contract_name.name.as_deref(),
+                        solx_standard_json::InputSelector::BytecodeDebugInfo,
+                    );
+                let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
+                    Some(solx_codegen_evm::ContextSolidityData::new(
+                        immutables,
+                        yul.object.0.sources.clone(),
+                        debug_info,
+                    ))
+                } else {
+                    None
+                };
+
                 let deploy_code_identifier = yul.object.0.identifier.clone();
 
                 let deploy_llvm = inkwell::context::Context::create();
@@ -142,20 +149,13 @@ impl Contract {
                     code_segment,
                     evm_version,
                     optimizer,
-                    language == solx_standard_json::InputLanguage::Solidity
-                        && output_selection.check_selection(
-                            contract_name.path.as_str(),
-                            contract_name.name.as_deref(),
-                            solx_standard_json::InputSelector::BytecodeDebugInfo,
-                        ),
+                    output_debug_info,
+                    solidity_data,
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
-                if let solx_standard_json::InputLanguage::Solidity = language {
-                    deploy_context.set_solidity_data(solidity_data);
-                }
                 deploy_context
                     .set_yul_data(solx_codegen_evm::ContextYulData::new(identifier_paths));
                 let run_yul_lowering = profiler.start_evm_translation_unit(
@@ -197,6 +197,22 @@ impl Contract {
                 Ok(deploy_object)
             }
             (IR::Yul(mut yul), solx_utils::CodeSegment::Runtime) => {
+                let output_debug_info = language == solx_standard_json::InputLanguage::Solidity
+                    && output_selection.check_selection(
+                        contract_name.path.as_str(),
+                        contract_name.name.as_deref(),
+                        solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                    );
+                let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
+                    Some(solx_codegen_evm::ContextSolidityData::new(
+                        immutables,
+                        yul.object.0.sources.clone(),
+                        debug_info,
+                    ))
+                } else {
+                    None
+                };
+
                 let runtime_code_identifier = yul.object.0.identifier.clone();
 
                 let runtime_llvm = inkwell::context::Context::create();
@@ -210,20 +226,13 @@ impl Contract {
                     code_segment,
                     evm_version,
                     optimizer.clone(),
-                    language == solx_standard_json::InputLanguage::Solidity
-                        && output_selection.check_selection(
-                            contract_name.path.as_str(),
-                            contract_name.name.as_deref(),
-                            solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-                        ),
+                    output_debug_info,
+                    solidity_data,
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
-                if let solx_standard_json::InputLanguage::Solidity = language {
-                    runtime_context.set_solidity_data(solidity_data);
-                }
                 runtime_context.set_yul_data(solx_codegen_evm::ContextYulData::new(
                     identifier_paths.clone(),
                 ));
@@ -269,6 +278,22 @@ impl Contract {
                 Ok(runtime_object)
             }
             (IR::EVMLegacyAssembly(mut deploy_code), solx_utils::CodeSegment::Deploy) => {
+                let output_debug_info = language == solx_standard_json::InputLanguage::Solidity
+                    && output_selection.check_selection(
+                        contract_name.path.as_str(),
+                        contract_name.name.as_deref(),
+                        solx_standard_json::InputSelector::BytecodeDebugInfo,
+                    );
+                let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
+                    Some(solx_codegen_evm::ContextSolidityData::new(
+                        immutables,
+                        BTreeMap::new(),
+                        None, // TODO
+                    ))
+                } else {
+                    None
+                };
+
                 let evmla_data = solx_codegen_evm::ContextEVMLAData::new(
                     solc_version.expect("Always exists").default,
                 );
@@ -289,20 +314,13 @@ impl Contract {
                     code_segment,
                     evm_version,
                     optimizer,
-                    language == solx_standard_json::InputLanguage::Solidity
-                        && output_selection.check_selection(
-                            contract_name.path.as_str(),
-                            contract_name.name.as_deref(),
-                            solx_standard_json::InputSelector::BytecodeDebugInfo,
-                        ),
+                    output_debug_info,
+                    solidity_data,
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
-                if let solx_standard_json::InputLanguage::Solidity = language {
-                    deploy_context.set_solidity_data(solidity_data);
-                }
                 deploy_context.set_evmla_data(evmla_data);
                 let run_evm_assembly_lowering = profiler.start_evm_translation_unit(
                     contract_name.full_path.as_str(),
@@ -346,6 +364,22 @@ impl Contract {
                 Ok(deploy_object)
             }
             (IR::EVMLegacyAssembly(mut runtime_code), solx_utils::CodeSegment::Runtime) => {
+                let output_debug_info = language == solx_standard_json::InputLanguage::Solidity
+                    && output_selection.check_selection(
+                        contract_name.path.as_str(),
+                        contract_name.name.as_deref(),
+                        solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                    );
+                let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
+                    Some(solx_codegen_evm::ContextSolidityData::new(
+                        immutables,
+                        BTreeMap::new(),
+                        None, // TODO
+                    ))
+                } else {
+                    None
+                };
+
                 let runtime_code_identifier = format!("{}.{code_segment}", contract_name.full_path);
                 let evmla_data = solx_codegen_evm::ContextEVMLAData::new(
                     solc_version.expect("Always exists").default,
@@ -361,20 +395,13 @@ impl Contract {
                     code_segment,
                     evm_version,
                     optimizer.clone(),
-                    language == solx_standard_json::InputLanguage::Solidity
-                        && output_selection.check_selection(
-                            contract_name.path.as_str(),
-                            contract_name.name.as_deref(),
-                            solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-                        ),
+                    output_debug_info,
+                    solidity_data,
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
-                if let solx_standard_json::InputLanguage::Solidity = language {
-                    runtime_context.set_solidity_data(solidity_data);
-                }
                 runtime_context.set_evmla_data(evmla_data.clone());
                 let run_evm_assembly_lowering = profiler.start_evm_translation_unit(
                     contract_name.full_path.as_str(),
@@ -440,14 +467,12 @@ impl Contract {
                     evm_version,
                     optimizer,
                     false,
+                    None,
                     debug_config,
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
-                if let solx_standard_json::InputLanguage::Solidity = language {
-                    deploy_context.set_solidity_data(solidity_data);
-                }
                 let deploy_build = deploy_context.build(
                     output_selection.check_selection(
                         contract_name.path.as_str(),
@@ -497,14 +522,12 @@ impl Contract {
                     evm_version,
                     optimizer,
                     false,
+                    None,
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
-                if let solx_standard_json::InputLanguage::Solidity = language {
-                    runtime_context.set_solidity_data(solidity_data);
-                }
                 let runtime_build = runtime_context.build(
                     output_selection.check_selection(
                         contract_name.path.as_str(),

@@ -2,6 +2,7 @@
 //! The Yul object.
 //!
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 
@@ -37,8 +38,8 @@ where
     /// objects are duplicates of the upper-level objects describing the dependencies, so only
     /// their identifiers are preserved. The identifiers are used to address upper-level objects.
     pub factory_dependencies: HashSet<String>,
-    /// Used Solidity source IDs.
-    pub source_ids: HashSet<usize>,
+    /// Used Solidity source IDs and paths.
+    pub sources: BTreeMap<usize, String>,
 }
 
 impl<P> Object<P>
@@ -55,7 +56,7 @@ where
     ) -> Result<Self, Error> {
         let mut token = crate::yul::parser::take_or_next(initial, lexer)?;
 
-        let source_ids: HashSet<usize> =
+        let sources: BTreeMap<usize, String> =
             token
                 .take_source_ids()
                 .map_err(|error| ParserError::DebugInfoParseError {
@@ -183,7 +184,7 @@ where
             code,
             inner_object,
             factory_dependencies,
-            source_ids,
+            sources,
         })
     }
 

@@ -36,33 +36,29 @@ impl Source {
     ///
     pub fn get_ast_nodes<K, V, F>(
         getter: &F,
-        contract_name: &solx_utils::ContractName,
+        path: &str,
         ast: &serde_json::Value,
         sources: &BTreeMap<String, StandardJsonInputSource>,
     ) -> BTreeMap<K, V>
     where
         K: std::cmp::Ord,
         V: solx_utils::IDebugInfoAstNode<Key = K>,
-        F: Fn(
-            &solx_utils::ContractName,
-            &serde_json::Value,
-            &BTreeMap<String, StandardJsonInputSource>,
-        ) -> Option<V>,
+        F: Fn(&str, &serde_json::Value, &BTreeMap<String, StandardJsonInputSource>) -> Option<V>,
     {
         let mut ast_nodes = BTreeMap::new();
-        if let Some(ast_node) = getter(contract_name, ast, sources) {
+        if let Some(ast_node) = getter(path, ast, sources) {
             ast_nodes.insert(ast_node.index_id(), ast_node);
         }
 
         match ast {
             serde_json::Value::Array(array) => {
                 for element in array.iter() {
-                    ast_nodes.extend(Self::get_ast_nodes(getter, contract_name, element, sources));
+                    ast_nodes.extend(Self::get_ast_nodes(getter, path, element, sources));
                 }
             }
             serde_json::Value::Object(object) => {
                 for (_key, value) in object.iter() {
-                    ast_nodes.extend(Self::get_ast_nodes(getter, contract_name, value, sources));
+                    ast_nodes.extend(Self::get_ast_nodes(getter, path, value, sources));
                 }
             }
             _ => {}
@@ -75,7 +71,7 @@ impl Source {
     /// Returns a contract definition if the AST node is so.
     ///
     pub fn contract_definition(
-        contract_name: &solx_utils::ContractName,
+        path: &str,
         ast: &serde_json::Value,
         sources: &BTreeMap<String, StandardJsonInputSource>,
     ) -> Option<solx_utils::DebugInfoContractDefinition> {
@@ -91,10 +87,10 @@ impl Source {
         )
         .ok()?;
         let source_code = sources
-            .get(contract_name.path.as_str())
+            .get(path)
             .and_then(|source| source.content.as_deref());
         let mapped_location = solx_utils::DebugInfoMappedLocation::from_solc_location(
-            contract_name,
+            path.to_owned(),
             Some(solc_location.start),
             Some(solc_location.end),
             source_code,
@@ -112,7 +108,7 @@ impl Source {
     /// Returns a function definition if the AST node is so.
     ///
     pub fn function_definition(
-        contract_name: &solx_utils::ContractName,
+        path: &str,
         ast: &serde_json::Value,
         sources: &BTreeMap<String, StandardJsonInputSource>,
     ) -> Option<solx_utils::DebugInfoFunctionDefinition> {
@@ -132,10 +128,10 @@ impl Source {
         )
         .ok()?;
         let source_code = sources
-            .get(contract_name.path.as_str())
+            .get(path)
             .and_then(|source| source.content.as_deref());
         let mapped_location = solx_utils::DebugInfoMappedLocation::from_solc_location(
-            contract_name,
+            path.to_owned(),
             Some(solc_location.start),
             Some(solc_location.end),
             source_code,
@@ -153,7 +149,7 @@ impl Source {
     /// Returns an AST node if the JSON object is one.
     ///
     pub fn ast_node(
-        contract_name: &solx_utils::ContractName,
+        path: &str,
         ast: &serde_json::Value,
         sources: &BTreeMap<String, StandardJsonInputSource>,
     ) -> Option<solx_utils::DebugInfoAstNode> {
@@ -166,10 +162,10 @@ impl Source {
         )
         .ok()?;
         let source_code = sources
-            .get(contract_name.path.as_str())
+            .get(path)
             .and_then(|source| source.content.as_deref());
         let mapped_location = solx_utils::DebugInfoMappedLocation::from_solc_location(
-            contract_name,
+            path.to_owned(),
             Some(solc_location.start),
             Some(solc_location.end),
             source_code,
