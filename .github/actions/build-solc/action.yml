@@ -44,7 +44,7 @@ inputs:
   enable-mlir:
     description: 'Enable MLIR support.'
     required: false
-    default: 'false'
+    default: 'true'
 
 runs:
   using: "composite"
