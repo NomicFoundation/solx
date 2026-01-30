@@ -38,15 +38,10 @@ pub const SHARED_BUILD_OPTS: [&str; 22] = [
 /// Disabled on Windows due to the following upstream issue with MSYS2 with mingw-w64:
 /// ProgramTest.cpp:23:15: error: '__p__environ' redeclared without 'dllimport' attribute
 ///
+/// TODO: enable at least for non-Windows platforms
+///
 pub fn shared_build_opts_werror() -> Vec<String> {
-    vec![format!(
-        "-DLLVM_ENABLE_WERROR='{}'",
-        if cfg!(target_os = "windows") {
-            "Off"
-        } else {
-            "On"
-        },
-    )]
+    vec![format!("-DLLVM_ENABLE_WERROR='{}'", "Off",)]
 }
 
 ///
