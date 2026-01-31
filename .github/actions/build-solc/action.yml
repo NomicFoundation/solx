@@ -93,7 +93,7 @@ runs:
       uses: ./.github/actions/build-llvm
       with:
         enable-assertions: true
-        llvm-projects: "mlir"
+        llvm-projects: "mlir lld"
         enable-rtti: true
 
     - name: Build solc
