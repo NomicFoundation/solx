@@ -96,18 +96,19 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
 
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: RelWithDebInfo
+          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
+          enable-assertions: 'true'
+          enable-mlir: 'true'
+
       - name: Building solc
         uses: ./.github/actions/build-solc
         with:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
-
-      - name: Build LLVM
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: RelWithDebInfo
-          enable-assertions: 'true'
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
 
       - name: Run tests
         uses: ./.github/actions/rust-unit-tests

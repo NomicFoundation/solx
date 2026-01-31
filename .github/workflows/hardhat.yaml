@@ -40,6 +40,15 @@ jobs:
           fetch-depth: 1
           submodules: recursive
           path: 'temp-solx-main'
+
+      - name: Build LLVM (main)
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: Release
+          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
+          working-dir: 'temp-solx-main'
+          enable-assertions: 'false'
+          enable-mlir: 'true'
   
       # Build the main branch
       - name: Building solc (main)
@@ -49,20 +58,20 @@ jobs:
           working-dir: 'temp-solx-main/solx-solidity'
           upload-testing-binary: 'false'
 
-      - name: Build LLVM (main)
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: Release
-          enable-assertions: 'false'
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
-          working-dir: 'temp-solx-main'
-
       - name: Build solx (main)
         working-directory: 'temp-solx-main'
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
         run: cargo build --release --bin solx
+
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: Release
+          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
+          enable-assertions: 'false'
+          enable-mlir: 'true'
       
       # Build the PR branch  
       - name: Building solc
@@ -71,13 +80,6 @@ jobs:
           cmake-build-type: 'Release'
           working-dir: 'solx-solidity'
           upload-testing-binary: 'false'
-
-      - name: Build LLVM
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: Release
-          enable-assertions: 'false'
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
 
       - name: Build solx
         env:
