@@ -39,7 +39,7 @@ inputs:
   enable-rtti:
     description: 'Enable RTTI for LLVM.'
     required: false
-    default: 'false'
+    default: 'true'
   default-target-triple:
     description: 'Default target to triple build LLVM for. Set to `evm` or leave empty for the default target.'
     required: false

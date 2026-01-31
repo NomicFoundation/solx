@@ -102,18 +102,19 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
 
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: Release
+          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
+          enable-assertions: 'false'
+          enable-mlir: 'true'
+
       - name: Building solc
         uses: ./.github/actions/build-solc
         with:
           cmake-build-type: 'Release'
           working-dir: 'solx-solidity'
-
-      - name: Build LLVM
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: Release
-          enable-assertions: 'false'
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
 
       - name: Build solx
         uses: ./.github/actions/build-rust
