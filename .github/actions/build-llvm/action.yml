@@ -23,7 +23,7 @@ inputs:
   llvm-projects:
     description: "LLVM projects to build. Sets up LLVM_ENABLE_PROJECTS variable."
     required: false
-    default: 'mlir'
+    default: 'mlir lld'
   sanitizer:
     description: 'A sanitizer to build LLVM with. Possible values are Address, Memory, MemoryWithOrigins, Undefined, Thread, DataFlow, and Address;Undefined'
     required: false
