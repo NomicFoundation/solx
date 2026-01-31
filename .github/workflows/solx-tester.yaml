@@ -37,19 +37,20 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --init --force --recursive --depth 1 --checkout
 
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: 'RelWithDebInfo'
+          ccache-key: 'llvm-Linux-X64-gnu'
+          enable-assertions: false
+          enable-mlir: 'true'
+
       - name: Building solc
         uses: ./.github/actions/build-solc
         with:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
           upload-testing-binary: false
-
-      - name: Build LLVM
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: 'RelWithDebInfo'
-          enable-assertions: false
-          ccache-key: 'llvm-Linux-X64-gnu'
 
       - name: Build tester
         run: cargo build --release --bin solx-tester
@@ -89,6 +90,14 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --init --force --recursive --depth 1 --checkout
 
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: 'Release'
+          ccache-key: 'llvm-Linux-X64-gnu'
+          enable-assertions: false
+          enable-mlir: 'true'
+
       - name: Building solc
         uses: ./.github/actions/build-solc
         with:
@@ -96,13 +105,6 @@ jobs:
           working-dir: 'solx-solidity'
           upload-testing-binary: false
           build-type: ${{ matrix.type }}
-
-      - name: Build LLVM
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: 'Release'
-          enable-assertions: false
-          ccache-key: 'llvm-Linux-X64-gnu'
 
       - name: Build tester
         run: cargo build --release --bin solx-tester

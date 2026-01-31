@@ -18,7 +18,7 @@ pub struct Build {
     pub build_type: solx_dev::LLVMBuildType,
 
     /// LLVM projects to build LLVM with.
-    #[arg(long)]
+    #[arg(long, num_args = 1..)]
     pub llvm_projects: Vec<solx_dev::LLVMProject>,
 
     /// Whether to build LLVM with run-time type information (RTTI) enabled.

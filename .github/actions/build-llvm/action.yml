@@ -23,7 +23,7 @@ inputs:
   llvm-projects:
     description: "LLVM projects to build. Sets up LLVM_ENABLE_PROJECTS variable."
     required: false
-    default: ''
+    default: 'mlir lld'
   sanitizer:
     description: 'A sanitizer to build LLVM with. Possible values are Address, Memory, MemoryWithOrigins, Undefined, Thread, DataFlow, and Address;Undefined'
     required: false
@@ -39,7 +39,7 @@ inputs:
   enable-rtti:
     description: 'Enable RTTI for LLVM.'
     required: false
-    default: 'false'
+    default: 'true'
   default-target-triple:
     description: 'Default target to triple build LLVM for. Set to `evm` or leave empty for the default target.'
     required: false
