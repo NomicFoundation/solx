@@ -126,7 +126,7 @@ The compiler supports three input languages:
 
 ## Configuration Files
 
-- `rust-toolchain.toml` - Pinned Rust version (1.92.0)
+- `rust-toolchain.toml` - Pinned Rust version (1.93.0)
 - `solx-dev/foundry-tests.toml` - Foundry project test configuration
 - `solx-dev/hardhat-tests.toml` - Hardhat project test configuration
 - `solx-compiler-downloader/solc-bin-*.json` - Compiler version references
