@@ -128,7 +128,7 @@ impl REVM {
     pub fn execute_transaction(
         &mut self,
         tx: revm::context::TxEnv,
-    ) -> Result<revm::context::result::ExecutionResult, revm::context::result::EVMError<Infallible>>
+    ) -> Result<revm::context::result::ExecutionResult, revm::context::result::EVMError<revm::database_interface::bal::EvmDatabaseError<Infallible>>>
     {
         match self {
             REVM::Default(vm) => vm.transact_commit(tx),
@@ -212,6 +212,7 @@ impl REVM {
             code_hash: revm::primitives::KECCAK_EMPTY,
             code: None,
             nonce,
+            account_id: None,
         };
 
         self.db_mut().insert_account(address, account_info);
@@ -368,6 +369,7 @@ impl REVM {
                 code_hash: FixedBytes::from(U256::ZERO),
                 code: None,
                 nonce: 1,
+                account_id: None,
             },
             PlainStorage::default(),
         );
@@ -382,6 +384,7 @@ impl REVM {
                 .expect("Always valid"),
                 code: None,
                 nonce: 1,
+                account_id: None,
             },
             PlainStorage::default(),
         );
