@@ -132,19 +132,23 @@ impl TryFrom<(Benchmark, Source)> for Xlsx {
                 .as_ref()
                 .and_then(|input| input.runtime_name());
 
-            let blacklist = vec![(
-                "aave-v3",
-                "lib/solidity-utils/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy",
-                "fallback()",
-            ), (
-                "solady",
-                "test/utils/mocks/MockMulticallable.sol:MockMulticallable",
-                "multicallBrutalized(bytes[])",
-            ), (
-                "solady",
-                "src/accounts/ERC6551Proxy.sol:ERC6551Proxy",
-                "fallback()",
-            )];
+            let blacklist = vec![
+                (
+                    "aave-v3",
+                    "lib/solidity-utils/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy",
+                    "fallback()",
+                ),
+                (
+                    "solady",
+                    "test/utils/mocks/MockMulticallable.sol:MockMulticallable",
+                    "multicallBrutalized(bytes[])",
+                ),
+                (
+                    "solady",
+                    "src/accounts/ERC6551Proxy.sol:ERC6551Proxy",
+                    "fallback()",
+                ),
+            ];
             for (project_b, contract_b, function_b) in blacklist.into_iter() {
                 if project.as_str() == project_b
                     && contract == Some(contract_b)

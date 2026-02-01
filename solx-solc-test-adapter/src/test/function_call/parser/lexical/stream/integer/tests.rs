@@ -2,9 +2,9 @@
 //! The lexical integer literal parser tests.
 //!
 
-use super::parse;
 use super::Error;
 use super::Output;
+use super::parse;
 use crate::test::function_call::parser::lexical::token::lexeme::literal::integer::Integer;
 
 #[test]

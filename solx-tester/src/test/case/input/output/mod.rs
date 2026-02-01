@@ -8,8 +8,8 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use crate::compilers::mode::Mode;
-use crate::directories::matter_labs::test::metadata::case::input::expected::variant::Variant as MatterLabsTestExpectedVariant;
 use crate::directories::matter_labs::test::metadata::case::input::expected::Expected as MatterLabsTestExpected;
+use crate::directories::matter_labs::test::metadata::case::input::expected::variant::Variant as MatterLabsTestExpectedVariant;
 use crate::revm::revm_type_conversions::revm_bytes_to_vec_value;
 use crate::revm::revm_type_conversions::revm_topics_to_vec_value;
 use crate::test::case::input::value::Value;

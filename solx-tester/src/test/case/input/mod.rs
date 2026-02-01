@@ -21,8 +21,8 @@ use crate::compilers::mode::Mode;
 use crate::directories::matter_labs::test::metadata::case::input::Input as MatterLabsTestInput;
 use crate::revm::REVM;
 use crate::summary::Summary;
-use crate::test::instance::Instance;
 use crate::test::InputContext;
+use crate::test::instance::Instance;
 
 use self::balance::Balance;
 use self::calldata::Calldata;

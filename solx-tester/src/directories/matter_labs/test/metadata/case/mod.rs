@@ -13,8 +13,8 @@ use crate::revm::address_iterator::AddressIterator;
 use crate::test::case::input::value::Value;
 use crate::test::instance::Instance;
 
-use self::input::expected::Expected;
 use self::input::Input;
+use self::input::expected::Expected;
 
 ///
 /// The Matter Labs compiler test metadata case.

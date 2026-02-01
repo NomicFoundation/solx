@@ -2,12 +2,12 @@
 //! The type variant.
 //!
 
+use crate::test::function_call::parser::syntax::Identifier;
 use crate::test::function_call::parser::syntax::tree::event::Event;
 use crate::test::function_call::parser::syntax::tree::gas::Gas;
 use crate::test::function_call::parser::syntax::tree::literal::Literal;
 use crate::test::function_call::parser::syntax::tree::r#type::Type;
 use crate::test::function_call::parser::syntax::tree::value::Value;
-use crate::test::function_call::parser::syntax::Identifier;
 
 ///
 /// The type variant.

@@ -7,12 +7,12 @@ use std::collections::HashSet;
 
 use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
+use crate::yul::lexer::Lexer;
+use crate::yul::lexer::token::Token;
+use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::lexeme::literal::Literal;
 use crate::yul::lexer::token::lexeme::symbol::Symbol;
-use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::location::Location;
-use crate::yul::lexer::token::Token;
-use crate::yul::lexer::Lexer;
 use crate::yul::parser::dialect::Dialect;
 use crate::yul::parser::error::Error as ParserError;
 use crate::yul::parser::statement::code::Code;
@@ -132,20 +132,18 @@ where
         }
 
         loop {
-            match lexer.next()? {
+            let token = lexer.next()?;
+            match &token {
                 Token {
                     lexeme: Lexeme::Symbol(Symbol::BracketCurlyRight),
                     ..
                 } => break,
-                ref token @ Token {
-                    lexeme: Lexeme::Identifier(ref identifier),
+                Token {
+                    lexeme: Lexeme::Identifier(identifier),
                     ..
                 } if identifier.inner.as_str() == "object" => {
-                    let dependency = Self::parse(
-                        lexer,
-                        Some(token.to_owned()),
-                        solx_utils::CodeSegment::Deploy,
-                    )?;
+                    let dependency =
+                        Self::parse(lexer, Some(token), solx_utils::CodeSegment::Deploy)?;
                     factory_dependencies.insert(dependency.identifier);
                 }
                 Token {
@@ -155,7 +153,7 @@ where
                     let _identifier = lexer.next()?;
                     let _metadata = lexer.next()?;
                 }
-                token => {
+                _ => {
                     return Err(ParserError::InvalidToken {
                         location: token.location,
                         expected: vec!["object", "}"],
@@ -207,8 +205,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::yul::lexer::token::location::Location;
     use crate::yul::lexer::Lexer;
+    use crate::yul::lexer::token::location::Location;
     use crate::yul::parser::dialect::DefaultDialect;
     use crate::yul::parser::error::Error;
     use crate::yul::parser::statement::object::Object;

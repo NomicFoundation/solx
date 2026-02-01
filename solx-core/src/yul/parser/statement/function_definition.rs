@@ -135,8 +135,8 @@ mod tests {
     use std::collections::BTreeSet;
 
     use crate::yul::parser::dialect::era::EraDialect;
-    use solx_yul::yul::lexer::token::location::Location;
     use solx_yul::yul::lexer::Lexer;
+    use solx_yul::yul::lexer::token::location::Location;
     use solx_yul::yul::parser::error::Error;
     use solx_yul::yul::parser::statement::object::Object;
 

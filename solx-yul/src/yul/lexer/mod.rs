@@ -9,14 +9,14 @@ pub mod token;
 mod tests;
 
 use self::error::Error;
+use self::token::Token;
+use self::token::lexeme::Lexeme;
 use self::token::lexeme::comment::Comment;
 use self::token::lexeme::identifier::Identifier;
 use self::token::lexeme::literal::integer::Integer as IntegerLiteral;
 use self::token::lexeme::literal::string::String as StringLiteral;
 use self::token::lexeme::symbol::Symbol;
-use self::token::lexeme::Lexeme;
 use self::token::location::Location;
-use self::token::Token;
 
 ///
 /// The compiler lexer.
@@ -122,8 +122,8 @@ impl<'a> Lexer<'a> {
     /// Peeks the next lexeme without advancing the iterator.
     ///
     pub fn peek(&mut self) -> Result<Token, Error> {
-        match self.peeked {
-            Some(ref peeked) => Ok(peeked.clone()),
+        match self.peeked.as_ref() {
+            Some(peeked) => Ok(peeked.clone()),
             None => {
                 let peeked = self.next()?;
                 self.peeked = Some(peeked.clone());

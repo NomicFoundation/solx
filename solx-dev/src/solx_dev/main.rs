@@ -12,9 +12,9 @@ use std::str::FromStr;
 
 use clap::Parser;
 
+use self::arguments::Arguments;
 use self::arguments::llvm::LLVM as LLVMArguments;
 use self::arguments::test::Test as TestArguments;
-use self::arguments::Arguments;
 
 ///
 /// The entry.

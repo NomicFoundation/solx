@@ -17,11 +17,11 @@ use std::collections::BTreeSet;
 
 use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
-use crate::yul::lexer::token::lexeme::keyword::Keyword;
-use crate::yul::lexer::token::lexeme::Lexeme;
-use crate::yul::lexer::token::location::Location;
-use crate::yul::lexer::token::Token;
 use crate::yul::lexer::Lexer;
+use crate::yul::lexer::token::Token;
+use crate::yul::lexer::token::lexeme::Lexeme;
+use crate::yul::lexer::token::lexeme::keyword::Keyword;
+use crate::yul::lexer::token::location::Location;
 use crate::yul::parser::error::Error as ParserError;
 
 use self::assignment::Assignment;
@@ -87,14 +87,14 @@ where
     ) -> Result<(Self, Option<Token>), Error> {
         let token = crate::yul::parser::take_or_next(initial, lexer)?;
 
-        match token {
-            ref token @ Token {
-                lexeme: Lexeme::Identifier(ref identifier),
+        match &token {
+            Token {
+                lexeme: Lexeme::Identifier(identifier),
                 ..
             } if identifier.inner.as_str() == "object" => Ok((
                 Statement::Object(Object::parse(
                     lexer,
-                    Some(token.to_owned()),
+                    Some(token),
                     solx_utils::CodeSegment::Deploy,
                 )?),
                 None,
@@ -138,17 +138,17 @@ where
                 lexeme: Lexeme::Keyword(Keyword::Continue),
                 location,
                 ..
-            } => Ok((Statement::Continue(location), None)),
+            } => Ok((Statement::Continue(*location), None)),
             Token {
                 lexeme: Lexeme::Keyword(Keyword::Break),
                 location,
                 ..
-            } => Ok((Statement::Break(location), None)),
+            } => Ok((Statement::Break(*location), None)),
             Token {
                 lexeme: Lexeme::Keyword(Keyword::Leave),
                 location,
                 ..
-            } => Ok((Statement::Leave(location), None)),
+            } => Ok((Statement::Leave(*location), None)),
             token => Err(ParserError::InvalidToken {
                 location: token.location,
                 expected: vec![

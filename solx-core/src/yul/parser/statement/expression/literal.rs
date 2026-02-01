@@ -8,9 +8,9 @@ use inkwell::values::BasicValue;
 use num::Num;
 use num::One;
 use num::Zero;
+use solx_yul::yul::lexer::token::lexeme::literal::Literal as LexicalLiteral;
 use solx_yul::yul::lexer::token::lexeme::literal::boolean::Boolean as BooleanLiteral;
 use solx_yul::yul::lexer::token::lexeme::literal::integer::Integer as IntegerLiteral;
-use solx_yul::yul::lexer::token::lexeme::literal::Literal as LexicalLiteral;
 
 declare_wrapper!(
     solx_yul::yul::parser::statement::expression::literal::Literal,

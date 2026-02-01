@@ -12,16 +12,16 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::compilers::mode::Mode;
 use crate::compilers::Compiler;
+use crate::compilers::mode::Mode;
 use crate::directories::Buildable;
 use crate::filters::Filters;
 use crate::revm::address_iterator::AddressIterator;
 use crate::summary::Summary;
+use crate::test::Test;
 use crate::test::case::Case;
 use crate::test::description::TestDescription;
 use crate::test::selector::TestSelector;
-use crate::test::Test;
 
 use self::metadata::Metadata;
 

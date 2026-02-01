@@ -9,23 +9,23 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::Path;
 
+use crate::compilers::Compiler;
 use crate::compilers::cache::Cache;
 use crate::compilers::mode::Mode;
 use crate::compilers::solidity::cache_key::CacheKey;
 use crate::compilers::solidity::codegen::Codegen;
 use crate::compilers::solidity::solx::mode::Mode as SolxMode;
 use crate::compilers::yul::mode_upstream::Mode as YulUpstreamMode;
-use crate::compilers::Compiler;
 use crate::revm::input::Input as EVMInput;
 use crate::toolchain::Toolchain;
 
+use self::compiler::Compiler as SolcUpstreamCompiler;
+use self::compiler::standard_json::input::Input as SolcStandardJsonInput;
 use self::compiler::standard_json::input::language::Language as SolcStandardJsonInputLanguage;
 use self::compiler::standard_json::input::settings::debug::Debug as SolcStandardJsonInputDebug;
 use self::compiler::standard_json::input::settings::optimizer::Optimizer as SolcStandardJsonInputOptimizer;
 use self::compiler::standard_json::input::settings::selection::Selection as SolcStandardJsonInputSelection;
-use self::compiler::standard_json::input::Input as SolcStandardJsonInput;
 use self::compiler::standard_json::output::Output as SolcStandardJsonOutput;
-use self::compiler::Compiler as SolcUpstreamCompiler;
 use self::mode::Mode as SolcMode;
 
 ///

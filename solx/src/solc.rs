@@ -16,7 +16,7 @@ pub struct Solc {
 }
 
 #[link(name = "solc", kind = "static")]
-extern "C" {
+unsafe extern "C" {
     ///
     /// Pass standard JSON input to the Solidity compiler.
     ///

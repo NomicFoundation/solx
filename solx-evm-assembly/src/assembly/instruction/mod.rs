@@ -388,9 +388,9 @@ impl std::fmt::Display for Instruction {
             Name::Tag => write!(f, "{name:4}"),
             _ => write!(f, "{name:20}"),
         }?;
-        match self.value {
-            Some(ref value) if value.len() <= 64 => write!(f, "{value}")?,
-            Some(ref value) => write!(f, "... {}", &value[value.len() - 60..])?,
+        match self.value.as_ref() {
+            Some(value) if value.len() <= 64 => write!(f, "{value}")?,
+            Some(value) => write!(f, "... {}", &value[value.len() - 60..])?,
             None => {}
         }
         Ok(())

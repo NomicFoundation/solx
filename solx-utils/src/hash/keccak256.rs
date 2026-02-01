@@ -2,8 +2,8 @@
 //! Keccak-256 hash utilities.
 //!
 
-use sha3::digest::FixedOutput;
 use sha3::Digest;
+use sha3::digest::FixedOutput;
 
 ///
 /// Keccak-256 hash utilities.

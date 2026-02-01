@@ -71,7 +71,7 @@ pub fn parse(input: &str) -> Result<Output, Error> {
                         });
                     }
                     None => return Err(Error::UnexpectedEnd),
-                }
+                };
             }
         }
     }

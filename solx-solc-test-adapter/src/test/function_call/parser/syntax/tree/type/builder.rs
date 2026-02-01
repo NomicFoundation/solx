@@ -4,8 +4,8 @@
 
 use crate::test::function_call::parser::lexical::Keyword;
 use crate::test::function_call::parser::lexical::Location;
-use crate::test::function_call::parser::syntax::tree::r#type::variant::Variant as TypeVariant;
 use crate::test::function_call::parser::syntax::tree::r#type::Type;
+use crate::test::function_call::parser::syntax::tree::r#type::variant::Variant as TypeVariant;
 
 ///
 /// The type builder.

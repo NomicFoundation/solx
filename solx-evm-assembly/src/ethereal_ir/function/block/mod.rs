@@ -8,11 +8,11 @@ use std::collections::BTreeSet;
 
 use num::Zero;
 
-use crate::assembly::instruction::name::Name as InstructionName;
 use crate::assembly::instruction::Instruction;
+use crate::assembly::instruction::name::Name as InstructionName;
 
-use self::element::stack::Stack as ElementStack;
 use self::element::Element;
+use self::element::stack::Stack as ElementStack;
 
 ///
 /// The Ethereal IR block.

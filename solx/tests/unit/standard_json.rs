@@ -12,22 +12,24 @@ fn standard_json_yul_solc() {
     .expect("Standard JSON reading error");
     let solc_output = crate::common::build_yul_standard_json(solc_input).expect("Test failure");
 
-    assert!(!solc_output
-        .contracts
-        .get("Test")
-        .expect("The `Test` contract is missing")
-        .get("Return")
-        .expect("The `Return` contract is missing")
-        .evm
-        .as_ref()
-        .expect("The `evm` field is missing")
-        .bytecode
-        .as_ref()
-        .expect("The `bytecode` field is missing")
-        .object
-        .as_ref()
-        .expect("The `object` field is missing")
-        .is_empty())
+    assert!(
+        !solc_output
+            .contracts
+            .get("Test")
+            .expect("The `Test` contract is missing")
+            .get("Return")
+            .expect("The `Return` contract is missing")
+            .evm
+            .as_ref()
+            .expect("The `evm` field is missing")
+            .bytecode
+            .as_ref()
+            .expect("The `bytecode` field is missing")
+            .object
+            .as_ref()
+            .expect("The `object` field is missing")
+            .is_empty()
+    )
 }
 
 #[test]
@@ -39,22 +41,24 @@ fn standard_json_yul_solc_validated() {
 
     let solc_output = crate::common::build_yul_standard_json(solc_input).expect("Test failure");
 
-    assert!(!solc_output
-        .contracts
-        .get("Test")
-        .expect("The `Test` contract is missing")
-        .get("Return")
-        .expect("The `Return` contract is missing")
-        .evm
-        .as_ref()
-        .expect("The `evm` field is missing")
-        .bytecode
-        .as_ref()
-        .expect("The `bytecode` field is missing")
-        .object
-        .as_ref()
-        .expect("The `object` field is missing")
-        .is_empty())
+    assert!(
+        !solc_output
+            .contracts
+            .get("Test")
+            .expect("The `Test` contract is missing")
+            .get("Return")
+            .expect("The `Return` contract is missing")
+            .evm
+            .as_ref()
+            .expect("The `evm` field is missing")
+            .bytecode
+            .as_ref()
+            .expect("The `bytecode` field is missing")
+            .object
+            .as_ref()
+            .expect("The `object` field is missing")
+            .is_empty()
+    )
 }
 
 #[test]
@@ -65,22 +69,24 @@ fn standard_json_yul_solc_urls() {
     .expect("Standard JSON reading error");
     let solc_output = crate::common::build_yul_standard_json(solc_input).expect("Test failure");
 
-    assert!(!solc_output
-        .contracts
-        .get("Test")
-        .expect("The `Test` contract is missing")
-        .get("Return")
-        .expect("The `Return` contract is missing")
-        .evm
-        .as_ref()
-        .expect("The `evm` field is missing")
-        .bytecode
-        .as_ref()
-        .expect("The `bytecode` field is missing")
-        .object
-        .as_ref()
-        .expect("The `object` field is missing")
-        .is_empty())
+    assert!(
+        !solc_output
+            .contracts
+            .get("Test")
+            .expect("The `Test` contract is missing")
+            .get("Return")
+            .expect("The `Return` contract is missing")
+            .evm
+            .as_ref()
+            .expect("The `evm` field is missing")
+            .bytecode
+            .as_ref()
+            .expect("The `bytecode` field is missing")
+            .object
+            .as_ref()
+            .expect("The `object` field is missing")
+            .is_empty()
+    )
 }
 
 #[test]
@@ -92,22 +98,24 @@ fn standard_json_yul_solc_urls_validated() {
 
     let solc_output = crate::common::build_yul_standard_json(solc_input).expect("Test failure");
 
-    assert!(!solc_output
-        .contracts
-        .get("Test")
-        .expect("The `Test` contract is missing")
-        .get("Return")
-        .expect("The `Return` contract is missing")
-        .evm
-        .as_ref()
-        .expect("The `evm` field is missing")
-        .bytecode
-        .as_ref()
-        .expect("The `bytecode` field is missing")
-        .object
-        .as_ref()
-        .expect("The `object` field is missing")
-        .is_empty())
+    assert!(
+        !solc_output
+            .contracts
+            .get("Test")
+            .expect("The `Test` contract is missing")
+            .get("Return")
+            .expect("The `Return` contract is missing")
+            .evm
+            .as_ref()
+            .expect("The `evm` field is missing")
+            .bytecode
+            .as_ref()
+            .expect("The `bytecode` field is missing")
+            .object
+            .as_ref()
+            .expect("The `object` field is missing")
+            .is_empty()
+    )
 }
 
 #[test]
@@ -118,20 +126,22 @@ fn standard_json_llvm_ir_urls() {
     .expect("Standard JSON reading error");
     let solc_output = crate::common::build_llvm_ir_standard_json(solc_input).expect("Test failure");
 
-    assert!(!solc_output
-        .contracts
-        .get("Test")
-        .expect("The `Test` contract is missing")
-        .get("Test")
-        .expect("The `Test` contract is missing")
-        .evm
-        .as_ref()
-        .expect("The `evm` field is missing")
-        .bytecode
-        .as_ref()
-        .expect("The `bytecode` field is missing")
-        .object
-        .as_ref()
-        .expect("The `object` field is missing")
-        .is_empty())
+    assert!(
+        !solc_output
+            .contracts
+            .get("Test")
+            .expect("The `Test` contract is missing")
+            .get("Test")
+            .expect("The `Test` contract is missing")
+            .evm
+            .as_ref()
+            .expect("The `evm` field is missing")
+            .bytecode
+            .as_ref()
+            .expect("The `bytecode` field is missing")
+            .object
+            .as_ref()
+            .expect("The `object` field is missing")
+            .is_empty()
+    )
 }

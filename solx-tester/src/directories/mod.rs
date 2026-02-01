@@ -9,8 +9,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::compilers::mode::Mode;
 use crate::compilers::Compiler;
+use crate::compilers::mode::Mode;
 use crate::filters::Filters;
 use crate::summary::Summary;
 use crate::test::Test;

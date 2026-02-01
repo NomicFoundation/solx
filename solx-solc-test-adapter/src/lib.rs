@@ -10,18 +10,18 @@ pub mod test;
 use std::ops::Add;
 use std::str::FromStr;
 
-pub use self::index::enabled::EnabledTest;
 pub use self::index::FSEntity;
+pub use self::index::enabled::EnabledTest;
+pub use self::test::Test;
+pub use self::test::function_call::FunctionCall;
 pub use self::test::function_call::event::Event;
 pub use self::test::function_call::gas_option::GasOption;
-pub use self::test::function_call::FunctionCall;
+pub use self::test::params::Params;
 pub use self::test::params::abi_encoder_v1_only::ABIEncoderV1Only;
 pub use self::test::params::compile_to_ewasm::CompileToEwasm;
 pub use self::test::params::compile_via_yul::CompileViaYul;
 pub use self::test::params::evm_version::EVMVersion;
 pub use self::test::params::revert_strings::RevertStrings;
-pub use self::test::params::Params;
-pub use self::test::Test;
 
 /// The default contract address.
 pub const DEFAULT_CONTRACT_ADDRESS: &str = "c06afe3a8444fc0004668591e8306bfb9968e79e";

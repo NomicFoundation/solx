@@ -4,14 +4,14 @@
 
 use super::error::Error;
 use super::stream::TokenStream;
+use super::token::Token;
+use super::token::lexeme::Lexeme;
 use super::token::lexeme::identifier::Identifier;
 use super::token::lexeme::keyword::Keyword;
-use super::token::lexeme::literal::integer::Integer;
 use super::token::lexeme::literal::Literal;
+use super::token::lexeme::literal::integer::Integer;
 use super::token::lexeme::symbol::Symbol;
-use super::token::lexeme::Lexeme;
 use super::token::location::Location;
-use super::token::Token;
 
 #[test]
 fn ok() {

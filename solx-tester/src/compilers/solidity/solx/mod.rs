@@ -15,8 +15,8 @@ use itertools::Itertools;
 
 use solx_standard_json::CollectableError;
 
-use crate::compilers::mode::Mode;
 use crate::compilers::Compiler;
+use crate::compilers::mode::Mode;
 use crate::revm::input::Input as EVMInput;
 
 use self::mode::Mode as SolxMode;

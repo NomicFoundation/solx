@@ -6,15 +6,15 @@ use std::collections::BTreeSet;
 
 use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
-use crate::yul::lexer::token::lexeme::symbol::Symbol;
-use crate::yul::lexer::token::lexeme::Lexeme;
-use crate::yul::lexer::token::location::Location;
-use crate::yul::lexer::token::Token;
 use crate::yul::lexer::Lexer;
+use crate::yul::lexer::token::Token;
+use crate::yul::lexer::token::lexeme::Lexeme;
+use crate::yul::lexer::token::lexeme::symbol::Symbol;
+use crate::yul::lexer::token::location::Location;
 use crate::yul::parser::error::Error as ParserError;
 use crate::yul::parser::identifier::Identifier;
-use crate::yul::parser::statement::expression::function_call::name::Name as FunctionName;
 use crate::yul::parser::statement::expression::Expression;
+use crate::yul::parser::statement::expression::function_call::name::Name as FunctionName;
 
 ///
 /// The Yul variable declaration statement.
@@ -49,7 +49,7 @@ impl VariableDeclaration {
                         location: binding.location,
                         identifier: binding.inner.to_owned(),
                     }
-                    .into())
+                    .into());
                 }
             }
         }
@@ -67,7 +67,7 @@ impl VariableDeclaration {
                         expression: None,
                     },
                     Some(token),
-                ))
+                ));
             }
         }
 
@@ -98,7 +98,7 @@ impl VariableDeclaration {
     /// Get the list of EVM dependencies.
     ///
     pub fn accumulate_evm_dependencies(&self, dependencies: &mut Dependencies) {
-        if let Some(ref expression) = self.expression {
+        if let Some(expression) = self.expression.as_ref() {
             expression.accumulate_evm_dependencies(dependencies);
         }
     }
@@ -106,8 +106,8 @@ impl VariableDeclaration {
 
 #[cfg(test)]
 mod tests {
-    use crate::yul::lexer::token::location::Location;
     use crate::yul::lexer::Lexer;
+    use crate::yul::lexer::token::location::Location;
     use crate::yul::parser::dialect::DefaultDialect;
     use crate::yul::parser::error::Error;
     use crate::yul::parser::statement::object::Object;

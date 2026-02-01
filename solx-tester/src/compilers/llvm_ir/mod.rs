@@ -11,9 +11,9 @@ use std::sync::Arc;
 
 use solx_standard_json::CollectableError as SolxCollectableError;
 
+use crate::compilers::Compiler;
 use crate::compilers::mode::Mode;
 use crate::compilers::solidity::solx::SolidityCompiler as SolxCompiler;
-use crate::compilers::Compiler;
 use crate::revm::input::Input as EVMInput;
 
 use self::mode::Mode as LLVMMode;

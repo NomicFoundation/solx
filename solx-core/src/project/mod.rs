@@ -12,18 +12,18 @@ use std::sync::Mutex;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 
-use crate::build::contract::Contract as EVMContractBuild;
 use crate::build::Build as EVMBuild;
+use crate::build::contract::Contract as EVMContractBuild;
 use crate::error::Error;
 use crate::process::input::Input as EVMProcessInput;
 use crate::process::output::Output as EVMProcessOutput;
 
+use self::contract::Contract;
+use self::contract::ir::IR as ContractIR;
 use self::contract::ir::evmla::EVMLegacyAssembly as ContractEVMLegacyAssembly;
 use self::contract::ir::llvm_ir::LLVMIR as ContractLLVMIR;
 use self::contract::ir::yul::Yul as ContractYul;
-use self::contract::ir::IR as ContractIR;
 use self::contract::metadata::Metadata as ContractMetadata;
-use self::contract::Contract;
 
 ///
 /// The project representation.
@@ -317,8 +317,8 @@ impl Project {
                 Ok(contract) => {
                     contracts.insert(path, contract);
                 }
-                Err(error) => match solc_output {
-                    Some(ref mut solc_output) => solc_output.push_error(Some(path), error),
+                Err(error) => match solc_output.as_mut() {
+                    Some(solc_output) => solc_output.push_error(Some(path), error),
                     None => anyhow::bail!(error),
                 },
             }
@@ -422,8 +422,8 @@ impl Project {
                 Ok(contract) => {
                     contracts.insert(path, contract);
                 }
-                Err(error) => match solc_output {
-                    Some(ref mut solc_output) => solc_output.push_error(Some(path), error),
+                Err(error) => match solc_output.as_mut() {
+                    Some(solc_output) => solc_output.push_error(Some(path), error),
                     None => anyhow::bail!(error),
                 },
             }
@@ -670,8 +670,11 @@ impl Project {
             result = crate::process::call(path, input);
             pass_count += 1;
             match result {
-                Err(Error::StackTooDeep(ref stack_too_deep)) => {
-                    assert!(pass_count <= 2, "Stack too deep error is not resolved after {pass_count} passes: {stack_too_deep}");
+                Err(Error::StackTooDeep(stack_too_deep)) => {
+                    assert!(
+                        pass_count <= 2,
+                        "Stack too deep error is not resolved after {pass_count} passes: {stack_too_deep}"
+                    );
 
                     if stack_too_deep.is_size_fallback {
                         input.optimizer_settings.switch_to_size_fallback();

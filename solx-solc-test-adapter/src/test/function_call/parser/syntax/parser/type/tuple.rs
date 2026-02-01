@@ -13,8 +13,8 @@ use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
 use crate::test::function_call::parser::syntax::error::ParsingError;
 use crate::test::function_call::parser::syntax::parser;
 use crate::test::function_call::parser::syntax::parser::r#type::Parser as TypeParser;
-use crate::test::function_call::parser::syntax::tree::r#type::builder::Builder as TypeBuilder;
 use crate::test::function_call::parser::syntax::tree::r#type::Type;
+use crate::test::function_call::parser::syntax::tree::r#type::builder::Builder as TypeBuilder;
 
 ///
 /// The parser state.
@@ -70,7 +70,7 @@ impl Parser {
                             self.state = State::TypeOrParenthesisRight;
                         }
                         Token { lexeme, location } => {
-                            return Err(SyntaxError::new(location, vec!["("], lexeme).into())
+                            return Err(SyntaxError::new(location, vec!["("], lexeme).into());
                         }
                     }
                 }
@@ -102,7 +102,7 @@ impl Parser {
                             ..
                         } => return Ok((self.builder.finish(), None)),
                         Token { lexeme, location } => {
-                            return Err(SyntaxError::new(location, vec![",", ")"], lexeme).into())
+                            return Err(SyntaxError::new(location, vec![",", ")"], lexeme).into());
                         }
                     }
                 }
@@ -131,8 +131,8 @@ mod tests {
     use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
     use crate::test::function_call::parser::syntax::error::ParsingError;
 
-    use crate::test::function_call::parser::syntax::tree::r#type::variant::Variant as TypeVariant;
     use crate::test::function_call::parser::syntax::tree::r#type::Type;
+    use crate::test::function_call::parser::syntax::tree::r#type::variant::Variant as TypeVariant;
 
     #[test]
     fn ok_empty() {

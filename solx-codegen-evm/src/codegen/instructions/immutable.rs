@@ -2,11 +2,11 @@
 //! Translates the contract immutable operations.
 //!
 
-use crate::codegen::context::address_space::AddressSpace;
 use crate::codegen::context::Context;
+use crate::codegen::context::address_space::AddressSpace;
+use crate::context::IContext;
 use crate::context::pointer::Pointer;
 use crate::context::traits::solidity_data::ISolidityData;
-use crate::context::IContext;
 
 ///
 /// Translates the `loadimmutable` instruction.

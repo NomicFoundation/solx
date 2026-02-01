@@ -7,8 +7,8 @@ use std::sync::Mutex;
 
 use revm::DatabaseRef;
 
-use crate::revm::revm_type_conversions::web3_address_to_revm_address;
 use crate::revm::REVM;
+use crate::revm::revm_type_conversions::web3_address_to_revm_address;
 use crate::summary::Summary;
 use crate::test::case::input::identifier::InputIdentifier;
 use crate::test::context::input::InputContext;

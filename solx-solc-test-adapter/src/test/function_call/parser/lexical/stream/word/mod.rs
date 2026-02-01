@@ -9,11 +9,11 @@ pub mod output;
 
 use std::str::FromStr;
 
+use crate::test::function_call::parser::lexical::token::lexeme::Lexeme;
 use crate::test::function_call::parser::lexical::token::lexeme::identifier::Error as IdentifierError;
 use crate::test::function_call::parser::lexical::token::lexeme::identifier::Identifier;
-use crate::test::function_call::parser::lexical::token::lexeme::literal::boolean::Boolean;
 use crate::test::function_call::parser::lexical::token::lexeme::literal::Literal;
-use crate::test::function_call::parser::lexical::token::lexeme::Lexeme;
+use crate::test::function_call::parser::lexical::token::lexeme::literal::boolean::Boolean;
 
 use self::output::Output;
 

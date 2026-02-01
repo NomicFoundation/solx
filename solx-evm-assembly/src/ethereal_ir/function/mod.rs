@@ -25,16 +25,16 @@ use num::Zero;
 use solx_codegen_evm::IContext;
 use solx_codegen_evm::IEVMLAFunction;
 
-use crate::assembly::instruction::name::Name as InstructionName;
 use crate::assembly::instruction::Instruction;
-use crate::ethereal_ir::function::block::element::stack::element::Element;
+use crate::assembly::instruction::name::Name as InstructionName;
 use crate::ethereal_ir::function::block::element::stack::Stack;
-use crate::extra_metadata::defined_function::DefinedFunction as ExtraMetadataDefinedFunction;
+use crate::ethereal_ir::function::block::element::stack::element::Element;
 use crate::extra_metadata::ExtraMetadata;
+use crate::extra_metadata::defined_function::DefinedFunction as ExtraMetadataDefinedFunction;
 
-use self::block::element::stack::element::Element as StackElement;
-use self::block::element::Element as BlockElement;
 use self::block::Block;
+use self::block::element::Element as BlockElement;
+use self::block::element::stack::element::Element as StackElement;
 use self::queue_element::QueueElement;
 use self::r#type::Type;
 use self::visited_element::VisitedElement;
@@ -99,7 +99,7 @@ impl Function {
         let mut visited_blocks = BTreeSet::new();
 
         let code_segments = match self.code_segment {
-            Some(ref code_segment) => vec![*code_segment],
+            Some(code_segment) => vec![code_segment],
             None => vec![
                 solx_utils::CodeSegment::Deploy,
                 solx_utils::CodeSegment::Runtime,
@@ -249,10 +249,10 @@ impl Function {
         queue: &mut Vec<QueueElement>,
         queue_element: &mut QueueElement,
     ) -> anyhow::Result<()> {
-        let (stack_output, queue_element) = match block_element.instruction {
+        let (stack_output, queue_element) = match &block_element.instruction {
             Instruction {
                 name: InstructionName::PUSH_Tag,
-                value: Some(ref tag),
+                value: Some(tag),
                 ..
             } => {
                 let tag: num::BigUint = tag.parse().expect("Always valid");
@@ -360,7 +360,7 @@ impl Function {
             }
             Instruction {
                 name: InstructionName::Tag,
-                value: Some(ref tag),
+                value: Some(tag),
                 ..
             } => {
                 let tag: num::BigUint = tag.parse().expect("Always valid");
@@ -592,7 +592,7 @@ impl Function {
                     | InstructionName::PUSH30
                     | InstructionName::PUSH31
                     | InstructionName::PUSH32,
-                value: Some(ref constant),
+                value: Some(constant),
                 ..
             } => (
                 vec![
@@ -606,12 +606,12 @@ impl Function {
                     InstructionName::PUSH_DataOffset
                     | InstructionName::PUSH_DataSize
                     | InstructionName::PUSHLIB,
-                value: Some(ref path),
+                value: Some(path),
                 ..
             } => (vec![StackElement::Path(path.to_owned())], None),
             Instruction {
                 name: InstructionName::PUSH_Data,
-                value: Some(ref data),
+                value: Some(data),
                 ..
             } => (vec![StackElement::Data(data.to_owned())], None),
             ref instruction @ Instruction {

@@ -6,9 +6,9 @@ use std::collections::BTreeSet;
 
 use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
-use crate::yul::lexer::token::location::Location;
-use crate::yul::lexer::token::Token;
 use crate::yul::lexer::Lexer;
+use crate::yul::lexer::token::Token;
+use crate::yul::lexer::token::location::Location;
 use crate::yul::parser::dialect::Dialect;
 use crate::yul::parser::statement::block::Block;
 use crate::yul::parser::statement::expression::Expression;

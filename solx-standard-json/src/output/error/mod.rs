@@ -63,7 +63,7 @@ impl Error {
             format!("{type}: {message_trimmed}")
         };
         formatted_message.push('\n');
-        if let Some(ref source_location) = source_location {
+        if let Some(source_location) = source_location.as_ref() {
             let source_code = sources.and_then(|sources| {
                 sources
                     .get(source_location.file.as_str())

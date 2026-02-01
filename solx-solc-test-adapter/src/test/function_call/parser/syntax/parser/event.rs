@@ -17,9 +17,9 @@ use crate::test::function_call::parser::syntax::error::ParsingError;
 use crate::test::function_call::parser::syntax::parser;
 use crate::test::function_call::parser::syntax::parser::literal::Parser as LiteralParser;
 use crate::test::function_call::parser::syntax::parser::r#type::Parser as TypeParser;
+use crate::test::function_call::parser::syntax::tree::event::Event;
 use crate::test::function_call::parser::syntax::tree::event::builder::Builder as EventBuilder;
 use crate::test::function_call::parser::syntax::tree::event::literal::EventLiteral;
-use crate::test::function_call::parser::syntax::tree::event::Event;
 use crate::test::function_call::parser::syntax::tree::identifier::Identifier;
 
 ///
@@ -347,16 +347,16 @@ mod tests {
     use crate::test::function_call::parser::lexical::TokenStream;
 
     use super::Parser;
-    use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
-    use crate::test::function_call::parser::syntax::error::ParsingError;
-    use crate::test::function_call::parser::syntax::tree::event::literal::EventLiteral;
-    use crate::test::function_call::parser::syntax::tree::event::variant::Variant;
-    use crate::test::function_call::parser::syntax::tree::event::Event;
-    use crate::test::function_call::parser::syntax::tree::literal::alignment::Alignment;
-    use crate::test::function_call::parser::syntax::tree::literal::Literal;
-    use crate::test::function_call::parser::syntax::tree::r#type::variant::Variant as TypeVariant;
     use crate::test::function_call::parser::syntax::Identifier;
     use crate::test::function_call::parser::syntax::Type;
+    use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
+    use crate::test::function_call::parser::syntax::error::ParsingError;
+    use crate::test::function_call::parser::syntax::tree::event::Event;
+    use crate::test::function_call::parser::syntax::tree::event::literal::EventLiteral;
+    use crate::test::function_call::parser::syntax::tree::event::variant::Variant;
+    use crate::test::function_call::parser::syntax::tree::literal::Literal;
+    use crate::test::function_call::parser::syntax::tree::literal::alignment::Alignment;
+    use crate::test::function_call::parser::syntax::tree::r#type::variant::Variant as TypeVariant;
 
     #[test]
     fn ok() {

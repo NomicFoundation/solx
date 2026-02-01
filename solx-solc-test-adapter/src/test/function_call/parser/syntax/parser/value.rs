@@ -14,8 +14,8 @@ use crate::test::function_call::parser::lexical::TokenStream;
 use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
 use crate::test::function_call::parser::syntax::error::ParsingError;
 use crate::test::function_call::parser::syntax::parser;
-use crate::test::function_call::parser::syntax::tree::value::builder::Builder as ValueBuilder;
 use crate::test::function_call::parser::syntax::tree::value::Value;
+use crate::test::function_call::parser::syntax::tree::value::builder::Builder as ValueBuilder;
 
 ///
 /// The parser state.
@@ -111,8 +111,8 @@ mod tests {
     use super::Parser;
     use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
     use crate::test::function_call::parser::syntax::error::ParsingError;
-    use crate::test::function_call::parser::syntax::tree::value::unit::Unit;
     use crate::test::function_call::parser::syntax::tree::value::Value;
+    use crate::test::function_call::parser::syntax::tree::value::unit::Unit;
 
     #[test]
     fn ok() {
