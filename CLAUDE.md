@@ -131,6 +131,15 @@ The compiler supports three input languages:
 - `solx-dev/hardhat-tests.toml` - Hardhat project test configuration
 - `solx-compiler-downloader/solc-bin-*.json` - Compiler version references
 
+## Code Style
+
+- **Imports**: One item per line (no grouped imports like `use foo::{A, B}`), for easy `dd` deletion in vim
+- **Variable names**: No contractions - use `error` not `e`, `address` not `addr`, `transaction` not `tx`
+- **References**: Prefer `.as_ref()` over `&` for Option/Result types
+- **Control flow**: Reduce nesting with `let ... else { continue }` pattern in loops instead of nested `if let`
+- **Function ordering**: In test modules, place test functions (`#[test] fn ...`) above helper/private functions
+- **Before committing**: Always run `cargo fmt` and `cargo clippy` before every commit
+
 ## Documentation
 
 Documentation is in `docs/` as an mdBook project:

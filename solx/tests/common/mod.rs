@@ -220,6 +220,83 @@ pub fn build_yul_standard_json(
 }
 
 ///
+/// Builds the Solidity project with debug info enabled and returns the standard JSON output.
+///
+pub fn build_solidity_standard_json_debug_info(
+    sources: BTreeMap<String, String>,
+) -> anyhow::Result<solx_standard_json::Output> {
+    self::setup()?;
+
+    let solc_compiler = solx::Solc::default();
+
+    solx_codegen_evm::initialize_target();
+
+    let sources: BTreeMap<String, solx_standard_json::InputSource> = sources
+        .into_iter()
+        .map(|(path, source)| (path, solx_standard_json::InputSource::from(source)))
+        .collect();
+
+    let mut selectors = BTreeSet::new();
+    selectors.insert(solx_standard_json::InputSelector::BytecodeObject);
+    selectors.insert(solx_standard_json::InputSelector::BytecodeDebugInfo);
+    selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeObject);
+    selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo);
+    let output_selection = solx_standard_json::InputSelection::new(selectors);
+
+    let mut input = solx_standard_json::Input::try_from_solidity_sources(
+        sources,
+        solx_utils::Libraries::default(),
+        BTreeSet::new(),
+        solx_standard_json::InputOptimizer::default(),
+        None,
+        true, // via_ir must be true for debug info
+        &output_selection,
+        solx_standard_json::InputMetadata::default(),
+        vec![],
+    )?;
+
+    let mut output = {
+        let _lock = UNIT_TEST_LOCK.lock();
+        solc_compiler.standard_json(&mut input, true, None, &[], None)
+    }?;
+    output.check_errors()?;
+
+    input.resolve_sources()?;
+    let debug_info = output.get_debug_info(&input.sources);
+
+    let project = solx_core::Project::try_from_solc_output(
+        solc_compiler.version(),
+        solx_utils::Libraries::default(),
+        true, // via_ir
+        &mut output,
+        Some(debug_info),
+        None,
+    )?;
+    output.check_errors()?;
+
+    let build = project.compile_to_evm(
+        Arc::new(Mutex::new(vec![])),
+        &input.settings.output_selection,
+        input.settings.evm_version,
+        solx_utils::MetadataHashType::None,
+        false, // no CBOR metadata for cleaner bytecode
+        solx_codegen_evm::OptimizerSettings::cycles(),
+        vec![],
+        None,
+    )?;
+    build.check_errors()?;
+
+    let build = if input.settings.output_selection.is_bytecode_set_for_any() {
+        build.link(BTreeMap::new())
+    } else {
+        build
+    };
+    build.write_to_standard_json(&mut output, &input.settings.output_selection, true, vec![])?;
+    output.check_errors()?;
+    Ok(output)
+}
+
+///
 /// Builds the LLVM IR standard JSON and returns the standard JSON output.
 ///
 pub fn build_llvm_ir_standard_json(

@@ -30,6 +30,9 @@ assert_cmd = "2.0"
 predicates = "3.1"
 tempfile = "3.19"
 test-case = "3.3"
+object = "0.36"
+gimli = "0.31"
+hex = "0.4"
 
 solx-codegen-evm = { path = "../solx-codegen-evm" }
 

@@ -128,8 +128,12 @@ impl REVM {
     pub fn execute_transaction(
         &mut self,
         tx: revm::context::TxEnv,
-    ) -> Result<revm::context::result::ExecutionResult, revm::context::result::EVMError<revm::database_interface::bal::EvmDatabaseError<Infallible>>>
-    {
+    ) -> Result<
+        revm::context::result::ExecutionResult,
+        revm::context::result::EVMError<
+            revm::database_interface::bal::EvmDatabaseError<Infallible>,
+        >,
+    > {
         match self {
             REVM::Default(vm) => vm.transact_commit(tx),
             REVM::Tracing(vm) => vm.inspect_tx_commit(tx),
