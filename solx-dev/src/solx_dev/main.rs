@@ -14,6 +14,7 @@ use clap::Parser;
 
 use self::arguments::Arguments;
 use self::arguments::llvm::LLVM as LLVMArguments;
+use self::arguments::solc::Solc as SolcArguments;
 use self::arguments::test::Test as TestArguments;
 
 ///
@@ -76,6 +77,16 @@ fn main_inner() -> anyhow::Result<()> {
                 arguments.sanitizer,
                 arguments.enable_valgrind,
                 arguments.valgrind_options,
+            )?;
+        }
+        Arguments::Solc(SolcArguments::Build(arguments)) => {
+            solx_dev::solc_build(
+                arguments.build_type,
+                arguments.revision,
+                arguments.pedantic,
+                arguments.tests,
+                arguments.extra_args,
+                arguments.clean,
             )?;
         }
         Arguments::Test(TestArguments::Hardhat(arguments)) => {
