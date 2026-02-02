@@ -22,24 +22,61 @@
 name = "00.solc-0.8.33"
 path = "./temp-compilers/solc-0.8.33"
 description = "solc the latest downloaded from the official repo"
-is_correctness_reference = true
+disabled = true
 
 [compilers.solx-latest]
 name = "01.solx-latest"
 path = "./temp-compilers/solx-latest"
 description = "solx downloaded from the latest release"
 solidity_version = "0.8.30"
+disabled = true
 
 [compilers.solx-main]
 name = "02.solx-main"
 path = "./temp-solx-main/target/release/solx"
 description = "solx built from the main branch"
+disabled = true
 
 [compilers.solx]
 name = "03.solx"
 path = "./target/release/solx"
 description = "solx built from the current commit"
+is_correctness_reference = true
 is_correctness_candidate = true
+
+# Comparisons for Excel diff columns.
+# Each comparison generates a diff column showing (left - right) / right as percentage.
+# The 'left' and 'right' values should match the full toolchain name: "{compiler.name}-{codegen}".
+# Comparisons are only included if both referenced compilers are enabled.
+[[comparisons]]
+left = "03.solx-legacy"
+right = "01.solx-latest-legacy"
+disabled = true
+
+[[comparisons]]
+left = "03.solx-viaIR"
+right = "01.solx-latest-viaIR"
+disabled = true
+
+[[comparisons]]
+left = "03.solx-legacy"
+right = "02.solx-main-legacy"
+disabled = true
+
+[[comparisons]]
+left = "03.solx-viaIR"
+right = "02.solx-main-viaIR"
+disabled = true
+
+[[comparisons]]
+left = "03.solx-legacy"
+right = "00.solc-0.8.33-legacy"
+disabled = true
+
+[[comparisons]]
+left = "03.solx-viaIR"
+right = "00.solc-0.8.33-viaIR"
+disabled = true
 
 [projects.hardhat-v2]
 url = "https://github.com/antonbaliasnikov/hardhat-template"

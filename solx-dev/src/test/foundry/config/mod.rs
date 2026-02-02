@@ -2,12 +2,14 @@
 //! `solx` Foundry config.
 //!
 
+pub mod comparison;
 pub mod compiler;
 pub mod project;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use self::comparison::Comparison;
 use self::compiler::Compiler;
 use self::project::Project;
 
@@ -20,6 +22,9 @@ pub struct Config {
     pub projects: BTreeMap<String, Project>,
     /// List of downloaded compilers.
     pub compilers: BTreeMap<String, Compiler>,
+    /// List of comparisons for Excel diff columns.
+    #[serde(default)]
+    pub comparisons: Vec<Comparison>,
 }
 
 impl TryFrom<PathBuf> for Config {

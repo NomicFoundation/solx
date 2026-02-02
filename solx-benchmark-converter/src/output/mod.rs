@@ -2,6 +2,7 @@
 //! Benchmark analyzer output.
 //!
 
+pub mod comparison;
 pub mod file;
 pub mod format;
 pub mod json;
@@ -11,6 +12,7 @@ use std::path::PathBuf;
 
 use crate::benchmark::Benchmark;
 use crate::input::source::Source;
+use crate::output::comparison::Comparison;
 use crate::output::format::Format;
 use crate::output::json::Json;
 use crate::output::xlsx::Xlsx;
@@ -65,16 +67,27 @@ impl Output {
     }
 }
 
+impl TryFrom<(Benchmark, Vec<Comparison>, Format)> for Output {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        (benchmark, comparisons, output_format): (Benchmark, Vec<Comparison>, Format),
+    ) -> Result<Self, Self::Error> {
+        Ok(match output_format {
+            Format::Json => Json::from(benchmark).into(),
+            Format::Xlsx => Xlsx::try_from((benchmark, comparisons))?.into(),
+        })
+    }
+}
+
 impl TryFrom<(Benchmark, Source, Format)> for Output {
     type Error = anyhow::Error;
 
     fn try_from(
-        (benchmark, input_source, output_format): (Benchmark, Source, Format),
+        (benchmark, source, output_format): (Benchmark, Source, Format),
     ) -> Result<Self, Self::Error> {
-        Ok(match output_format {
-            Format::Json => Json::from(benchmark).into(),
-            Format::Xlsx => Xlsx::try_from((benchmark, input_source))?.into(),
-        })
+        let comparisons = source.default_comparisons();
+        (benchmark, comparisons, output_format).try_into()
     }
 }
 
