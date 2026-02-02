@@ -14,9 +14,9 @@
 
 - [Foundry projects](./solx-dev/foundry-tests.toml)
 - [Hardhat projects](./solx-dev/hardhat-tests.toml)
-- [other projects](./tests/solidity/complex/defi) such as UniswapV2 and Mooniswap
-- [tests](https://github.com/NomicFoundation/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests) from the **solc** repository
-- [additional tests](./tests/solidity) written by the **solx** team
+- [DeFi protocols](./tests/solidity/complex/defi): UniswapV2, UniswapV3, Mooniswap, StarkEx
+- [Semantic tests](https://github.com/NomicFoundation/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests) from the **solc** repository
+- [Additional tests](./tests/solidity) written by the **solx** team
 
 ## Documentation
 
@@ -32,25 +32,30 @@ See also:
 
 For the detailed installation and usage guide, visit [the respective page of our documentation](https://nomicfoundation.github.io/solx/latest/#installation).
 
+## Quick Start
+
+```shell
+# Compile a Solidity file
+solx Contract.sol --bin --abi
+
+# Compile with optimizations
+solx Contract.sol --bin --abi -O3
+
+# Output to a directory
+solx Contract.sol --bin --abi -o ./build
+```
+
 ## Architecture
 
-**solx** consists of three main parts:
-
-1. **solx** executable from this repository. The repository also contains parts of the compiler front end: Yul and EVM assembly translators.
-2. [solx-solidity](https://github.com/NomicFoundation/solx-solidity/), an LLVM-friendly fork of [the Solidity compiler](https://github.com/ethereum/solidity),
-  that emits Yul and EVM assembly for **solx**.
-3. [solx-llvm](https://github.com/matter-labs/solx-llvm), a fork of [the LLVM project](https://github.com/llvm/llvm-project)
-  with an EVM target developed by the **solx** team.
-
-The most important part of the project is the EVM target in LLVM. You can find its sources [here](https://github.com/matter-labs/solx-llvm/tree/main/llvm/lib/Target/EVM).
+For details on the compilation pipeline and components, see [the architecture documentation](https://nomicfoundation.github.io/solx/latest/04-architecture.html).
 
 ## Testing
 
-To run the unit and CLI tests, execute `cargo test` at the repository root.
+For details on running unit tests, integration tests, and project tests, see [the testing documentation](https://nomicfoundation.github.io/solx/latest/05-testing.html).
 
 ## Troubleshooting
 
-If you are building *solx** from source and you have multiple LLVM builds in your system, ensure that you choose the correct one to build the compiler.
+If you are building **solx** from source and you have multiple LLVM builds in your system, ensure that you choose the correct one to build the compiler.
 The environment variable `LLVM_SYS_211_PREFIX` sets the path to the directory with LLVM build artifacts, which typically ends with `target-llvm/build-final`.
 For example:
 

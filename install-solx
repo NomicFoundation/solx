@@ -1,15 +1,14 @@
-#!/bin/bash -e
+#!/bin/bash
+set -euo pipefail
 
 cat << "EOF"
- .oooooo..o           oooo
-d8P'    `Y8           `888
-Y88bo.       .ooooo.   888  oooo    ooo
- `"Y8888o.  d88' `88b  888   `88b..8P'
-     `"Y88b 888   888  888     Y888'
-oo     .d8P 888   888  888   .o8"'88b
-8""88888P'  `Y8bod8P' o888o o88'   888o
+  ____    ___   _     __  __
+ / ___|  / _ \ | |    \ \/ /
+ \___ \ | | | || |     \  /
+  ___) || |_| || |___  /  \
+ |____/  \___/ |_____|/_/\_\
 
-           S O L X  Installer
+         Installer
 EOF
 
 # Default values
@@ -18,29 +17,38 @@ DEFAULT_INSTALL_DIR="${HOME}/.local/bin"
 BINARY_NAME="solx"
 VERSION=""
 
+# Cleanup on exit
+TMP_DIR=""
+cleanup() {
+    if [[ -n "${TMP_DIR}" && -d "${TMP_DIR}" ]]; then
+        rm -rf "${TMP_DIR}"
+    fi
+}
+trap cleanup EXIT
+
 # Parse arguments
 while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --install-dir=*)
-      INSTALL_DIR="${1#--install-dir=}"
-      shift
-      ;;
-    --version=*)
-      VERSION="${1#--version=}"
-      shift
-      ;;
-    -v=*)
-      VERSION="${1#-v=}"
-      shift
-      ;;
-    *)
-      # Positional argument - treat as install directory for backwards compatibility
-      if [[ -z "${INSTALL_DIR}" ]]; then
-        INSTALL_DIR="$1"
-      fi
-      shift
-      ;;
-  esac
+    case "$1" in
+        --install-dir=*)
+            INSTALL_DIR="${1#--install-dir=}"
+            shift
+            ;;
+        --version=*)
+            VERSION="${1#--version=}"
+            shift
+            ;;
+        -v=*)
+            VERSION="${1#-v=}"
+            shift
+            ;;
+        *)
+            # Positional argument - treat as install directory for backwards compatibility
+            if [[ -z "${INSTALL_DIR:-}" ]]; then
+                INSTALL_DIR="$1"
+            fi
+            shift
+            ;;
+    esac
 done
 
 # Set default install directory if not specified
@@ -51,56 +59,56 @@ OS=$(uname -s)
 ARCH=$(uname -m)
 
 case "$OS" in
-  Darwin)
-    PLATFORM="macosx"
-    ;;
-  Linux)
-    if [[ "${ARCH}" == "x86_64" ]]; then
-      PLATFORM="linux-amd64-gnu"
-    elif [[ "${ARCH}" == "aarch64" || "${ARCH}" == "arm64" ]]; then
-      PLATFORM="linux-arm64-gnu"
-    else
-      echo "❌ Unsupported architecture: ${ARCH}"
-      exit 1
-    fi
-    ;;
-  *)
-    echo "❌ Unsupported OS: $OS"
-    exit 1
-    ;;
+    Darwin)
+        PLATFORM="macosx"
+        ;;
+    Linux)
+        if [[ "${ARCH}" == "x86_64" ]]; then
+            PLATFORM="linux-amd64-gnu"
+        elif [[ "${ARCH}" == "aarch64" || "${ARCH}" == "arm64" ]]; then
+            PLATFORM="linux-arm64-gnu"
+        else
+            echo "Unsupported architecture: ${ARCH}"
+            exit 1
+        fi
+        ;;
+    *)
+        echo "Unsupported OS: ${OS}"
+        exit 1
+        ;;
 esac
 
 # Check for curl
 if ! command -v curl >/dev/null 2>&1; then
-  echo "❌ curl is not installed. Please install curl to proceed."
-  exit 1
+    echo "curl is not installed. Please install curl to proceed."
+    exit 1
 fi
 
-# Check for GITHUB_TOKEN to bypass rate limits
-if [[ -n ${GITHUB_TOKEN} ]]; then
-  # Use GITHUB_TOKEN if set
-  AUTH_HEADER="--header \"Authorization: token ${GITHUB_TOKEN}\""
-else
-  AUTH_HEADER=""
+# Build curl options array
+CURL_OPTS=(-s)
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    CURL_OPTS+=(-H "Authorization: token ${GITHUB_TOKEN}")
 fi
 
 # Determine version to install
 if [[ -n "${VERSION}" ]]; then
-  # Use specified version
-  TAG="${VERSION}"
-  echo "📌 Using specified version: ${TAG}"
+    # Use specified version, strip leading 'v' if present
+    TAG="${VERSION#v}"
+    echo "Using specified version: ${TAG}"
 else
-  # Get latest release tag from GitHub
-  echo "🔍 Fetching latest solx release..."
-  TAG=$(curl -s ${AUTH_HEADER} "https://api.github.com/repos/${REPO}/releases/latest" | \
-    sed -n 's/.*"tag_name": *"\(.*\)".*/\1/p')
+    # Get latest release tag from GitHub
+    echo "Fetching latest solx release..."
+    RELEASE_INFO=$(curl "${CURL_OPTS[@]}" "https://api.github.com/repos/${REPO}/releases/latest")
+    TAG=$(echo "${RELEASE_INFO}" | sed -n 's/.*"tag_name": *"\(.*\)".*/\1/p')
 
-  if [ -z "${TAG}" ]; then
-    echo "❌ Failed to get latest solx release."
-    exit 1
-  fi
+    if [[ -z "${TAG}" ]]; then
+        echo "Failed to get latest solx release."
+        echo "This may be due to GitHub API rate limiting."
+        echo "Try setting GITHUB_TOKEN or use --version=X.Y.Z"
+        exit 1
+    fi
 
-  echo "✅ Latest version: ${TAG}"
+    echo "Latest version: ${TAG}"
 fi
 
 # Construct the download URL
@@ -109,60 +117,72 @@ DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET_NAME}"
 
 # Download the binary
 TMP_DIR=$(mktemp -d)
-echo "⬇️  Downloading solx from ${DOWNLOAD_URL}..."
-curl -L "${DOWNLOAD_URL}" -o "${TMP_DIR}/${BINARY_NAME}"
+echo "Downloading solx from ${DOWNLOAD_URL}..."
+if ! curl -L --fail "${DOWNLOAD_URL}" -o "${TMP_DIR}/${BINARY_NAME}"; then
+    echo "Failed to download solx."
+    echo "Please check that version ${TAG} exists for platform ${PLATFORM}."
+    exit 1
+fi
 
 # Make it executable
 chmod +x "${TMP_DIR}/${BINARY_NAME}"
 
 # Create install directory if needed
-if [ ! -d "${INSTALL_DIR}" ]; then
-  echo "📁 Creating installation directory: ${INSTALL_DIR}"
-  mkdir -p "${INSTALL_DIR}"
+if [[ ! -d "${INSTALL_DIR}" ]]; then
+    echo "Creating installation directory: ${INSTALL_DIR}"
+    mkdir -p "${INSTALL_DIR}"
 fi
 
 # Move to install directory
-if [ -w "${INSTALL_DIR}" ]; then
-  mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+if [[ -w "${INSTALL_DIR}" ]]; then
+    mv "${TMP_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
 else
-  echo "❌ Installing to ${INSTALL_DIR} requires write permissions."
-  echo "Please check your permissions or run with sudo."
-  exit 1
+    echo "Installing to ${INSTALL_DIR} requires write permissions."
+    echo "Please check your permissions or run with sudo."
+    exit 1
 fi
 
 # Ensure solx is in PATH
 if ! command -v "${BINARY_NAME}" >/dev/null 2>&1; then
-  echo "🔧 Adding ${INSTALL_DIR} to PATH..."
+    echo "Adding ${INSTALL_DIR} to PATH..."
 
-  SHELL_NAME=$(basename "${SHELL}")
-  case "${SHELL_NAME}" in
-    bash)
-      PROFILE_FILE="${HOME}/.bashrc"
-      ;;
-    zsh)
-      PROFILE_FILE="${HOME}/.zshrc"
-      ;;
-    fish)
-      PROFILE_FILE="${HOME}/.config/fish/config.fish"
-      ;;
-    *)
-      PROFILE_FILE="${HOME}/.profile"
-      ;;
-  esac
+    SHELL_NAME=$(basename "${SHELL}")
+    case "${SHELL_NAME}" in
+        bash)
+            PROFILE_FILE="${HOME}/.bashrc"
+            PATH_LINE="export PATH=\"${INSTALL_DIR}:\$PATH\""
+            ;;
+        zsh)
+            PROFILE_FILE="${HOME}/.zshrc"
+            PATH_LINE="export PATH=\"${INSTALL_DIR}:\$PATH\""
+            ;;
+        fish)
+            PROFILE_FILE="${HOME}/.config/fish/config.fish"
+            PATH_LINE="fish_add_path ${INSTALL_DIR}"
+            ;;
+        *)
+            PROFILE_FILE="${HOME}/.profile"
+            PATH_LINE="export PATH=\"${INSTALL_DIR}:\$PATH\""
+            ;;
+    esac
 
-  if ! grep -q "${INSTALL_DIR}" "$PROFILE_FILE" 2>/dev/null; then
-    echo "export PATH=\"${INSTALL_DIR}:\$PATH\"" >> "${PROFILE_FILE}"
-    echo "✅ Added ${INSTALL_DIR} to PATH in ${PROFILE_FILE}"
-  fi
+    if [[ -f "${PROFILE_FILE}" ]] && grep -q "${INSTALL_DIR}" "${PROFILE_FILE}" 2>/dev/null; then
+        echo "${INSTALL_DIR} already in ${PROFILE_FILE}"
+    else
+        echo "${PATH_LINE}" >> "${PROFILE_FILE}"
+        echo "Added ${INSTALL_DIR} to PATH in ${PROFILE_FILE}"
+    fi
 
-  export PATH="${INSTALL_DIR}:${PATH}"
+    export PATH="${INSTALL_DIR}:${PATH}"
 fi
 
 # Verify installation
-echo "🧪 Verifying installation..."
-if "${BINARY_NAME}" --version 2>/dev/null; then
-  echo "🎉 solx installed successfully."
+echo "Verifying installation..."
+if "${INSTALL_DIR}/${BINARY_NAME}" --version; then
+    echo ""
+    echo "solx installed successfully to ${INSTALL_DIR}/${BINARY_NAME}"
 else
-  echo "⚠️ solx installed but could not run \`solx --version\`"
-  echo "Please check your installation in ${INSTALL_DIR}."
+    echo "solx installed but could not run 'solx --version'"
+    echo "Please check your installation in ${INSTALL_DIR}."
+    exit 1
 fi
