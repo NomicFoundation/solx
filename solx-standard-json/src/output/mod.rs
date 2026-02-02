@@ -7,6 +7,7 @@ pub mod error;
 pub mod source;
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -17,7 +18,6 @@ use crate::input::source::Source as InputSource;
 use self::contract::Contract;
 use self::error::Error as JsonOutputError;
 use self::error::collectable::Collectable as CollectableError;
-use self::error::source_location::SourceLocation as JsonOutputErrorSourceLocation;
 use self::source::Source;
 
 ///
@@ -78,6 +78,11 @@ impl Output {
     /// Prunes the output JSON and prints it to stdout.
     ///
     pub fn write_and_exit(mut self, output_selection: &InputSettingsSelection) -> ! {
+        for (path, source) in self.sources.iter_mut() {
+            if !output_selection.check_selection(path.as_str(), None, InputSettingsSelector::AST) {
+                source.ast = None;
+            }
+        }
         for (path, file) in self.contracts.iter_mut() {
             for (name, contract) in file.iter_mut() {
                 if !output_selection.check_selection(
@@ -137,13 +142,47 @@ impl Output {
     ///
     /// Please do not push project-general errors without paths here.
     ///
-    pub fn push_error(&mut self, path: Option<String>, error: anyhow::Error) {
-        self.errors.push(JsonOutputError::new_error_with_data(
-            None,
-            error,
-            path.map(JsonOutputErrorSourceLocation::new),
-            None,
-        ));
+    pub fn push_error(&mut self, path: &str, error: anyhow::Error) {
+        self.errors
+            .push(JsonOutputError::new_error_contract(Some(path), error));
+    }
+
+    ///
+    /// Extracts the debug info from all source code files.
+    ///
+    pub fn get_debug_info(&self, sources: &BTreeMap<String, InputSource>) -> solx_utils::DebugInfo {
+        let mut contract_definitions: HashMap<String, solx_utils::DebugInfoContractDefinition> =
+            HashMap::new();
+        let mut function_definitions: HashMap<usize, solx_utils::DebugInfoFunctionDefinition> =
+            HashMap::new();
+        let mut ast_nodes: HashMap<usize, solx_utils::DebugInfoAstNode> = HashMap::new();
+
+        for (path, source) in self.sources.iter() {
+            if let Some(ref ast_json) = source.ast {
+                contract_definitions.extend(Source::get_ast_nodes(
+                    &Source::contract_definition,
+                    path.as_str(),
+                    ast_json,
+                    sources,
+                ));
+
+                function_definitions.extend(Source::get_ast_nodes(
+                    &Source::function_definition,
+                    path.as_str(),
+                    ast_json,
+                    sources,
+                ));
+
+                ast_nodes.extend(Source::get_ast_nodes(
+                    &Source::ast_node,
+                    path.as_str(),
+                    ast_json,
+                    sources,
+                ));
+            }
+        }
+
+        solx_utils::DebugInfo::new(contract_definitions, function_definitions, ast_nodes)
     }
 }
 

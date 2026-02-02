@@ -76,15 +76,15 @@ impl EthereumTest {
         if !filters.check_mode(mode) {
             return None;
         }
-        if let Some(filters) = self.index_entity.modes.as_ref() {
-            if !mode.check_extended_filters(filters.as_slice()) {
-                return None;
-            }
+        if let Some(filters) = self.index_entity.modes.as_ref()
+            && !mode.check_extended_filters(filters.as_slice())
+        {
+            return None;
         }
-        if let Some(versions) = self.index_entity.version.as_ref() {
-            if !mode.check_version(versions) {
-                return None;
-            }
+        if let Some(versions) = self.index_entity.version.as_ref()
+            && !mode.check_version(versions)
+        {
+            return None;
         }
         if !mode.check_ethereum_tests_params(&self.test.params) {
             return None;

@@ -73,7 +73,7 @@ where
         solx_codegen_evm::Pointer::new_stack_field(context, condition_pointer),
         format!("conditional_{block_key}_condition").as_str(),
     )?;
-    let condition = context.builder().build_int_compare(
+    let condition = context.build_int_compare(
         inkwell::IntPredicate::NE,
         condition.into_int_value(),
         context.field_const(0),

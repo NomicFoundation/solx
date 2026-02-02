@@ -74,16 +74,16 @@ impl Keyword {
         let end = input.find(Self::cannot_continue).unwrap_or(input.len());
         let input = &input[..end];
 
-        if let Some(input) = input.strip_prefix("int") {
-            if let Ok(bitlength) = input.parse::<usize>() {
-                return Some(Self::Int(bitlength));
-            }
+        if let Some(input) = input.strip_prefix("int")
+            && let Ok(bitlength) = input.parse::<usize>()
+        {
+            return Some(Self::Int(bitlength));
         }
 
-        if let Some(input) = input.strip_prefix("uint") {
-            if let Ok(bitlength) = input.parse::<usize>() {
-                return Some(Self::Uint(bitlength));
-            }
+        if let Some(input) = input.strip_prefix("uint")
+            && let Ok(bitlength) = input.parse::<usize>()
+        {
+            return Some(Self::Uint(bitlength));
         }
 
         Some(match input {

@@ -17,7 +17,7 @@
     {
       "is_enabled": true,
       "protocol": "https",
-      "source": "https://github.com/NomicFoundation/solx/releases/download/0.1.2/solx-${PLATFORM}-v0.1.2",
+      "source": "https://github.com/NomicFoundation/solx/releases/download/0.1.3/solx-${PLATFORM}-v0.1.3",
       "destination": "./temp-compilers/solx-latest",
       "platforms": {
         "linux-amd64": "linux-amd64-gnu",

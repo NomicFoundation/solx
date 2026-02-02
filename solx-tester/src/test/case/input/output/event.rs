@@ -127,10 +127,10 @@ impl Event {
 
 impl PartialEq<Self> for Event {
     fn eq(&self, other: &Self) -> bool {
-        if let (Some(address1), Some(address2)) = (self.address, other.address) {
-            if address1 != address2 {
-                return false;
-            }
+        if let (Some(address1), Some(address2)) = (self.address, other.address)
+            && address1 != address2
+        {
+            return false;
         };
 
         if self.topics.len() != other.topics.len() {
@@ -143,20 +143,18 @@ impl PartialEq<Self> for Event {
         for index in 0..self.topics.len() {
             if let (Value::Known(value1), Value::Known(value2)) =
                 (&self.topics[index], &other.topics[index])
+                && value1 != value2
             {
-                if value1 != value2 {
-                    return false;
-                }
+                return false;
             }
         }
 
         for index in 0..self.values.len() {
             if let (Value::Known(value1), Value::Known(value2)) =
                 (&self.values[index], &other.values[index])
+                && value1 != value2
             {
-                if value1 != value2 {
-                    return false;
-                }
+                return false;
             }
         }
 

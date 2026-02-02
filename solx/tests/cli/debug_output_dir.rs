@@ -2,8 +2,6 @@
 //! CLI tests for the eponymous option.
 //!
 
-use std::path::PathBuf;
-
 use tempfile::TempDir;
 
 #[test]
@@ -129,7 +127,7 @@ fn standard_json_debug() -> anyhow::Result<()> {
     result.success();
 
     assert!(output_directory.path().exists());
-    assert!(PathBuf::from(input_json_output_path).exists());
+    assert!(input_json_output_path.exists());
 
     Ok(())
 }

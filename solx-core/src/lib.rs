@@ -8,6 +8,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::should_implement_trait)]
 #![allow(clippy::result_large_err)]
+#![allow(clippy::large_enum_variant)]
 
 pub mod arguments;
 pub mod build;
@@ -55,7 +56,7 @@ pub fn main(
         let version = solc.version();
         writeln!(
             std::io::stdout(),
-            "{DEFAULT_EXECUTABLE_NAME}, {DEFAULT_PACKAGE_DESCRIPTION} v{}, LLVM revision: v{}, LLVM build: {}",
+            "{DEFAULT_EXECUTABLE_NAME}, {DEFAULT_PACKAGE_DESCRIPTION} v{}, solc revision: v{}, LLVM build: {}",
             env!("CARGO_PKG_VERSION"),
             version.llvm_revision,
             inkwell::support::get_commit_id().to_string(),
@@ -90,7 +91,8 @@ pub fn main(
                     .contains(&optimization.as_str())
                 {
                     anyhow::bail!(
-                        "Invalid value `{optimization}` for environment variable '{SOLX_OPTIMIZATION_ENV}': only values 1, 2, 3, s, z are supported."
+                        "Invalid value `{optimization}` for environment variable '{SOLX_OPTIMIZATION_ENV}': only values {} are supported.",
+                        solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.join(", ")
                     );
                 }
                 solx_codegen_evm::OptimizerSettings::try_from_cli(
@@ -118,6 +120,12 @@ pub fn main(
     if arguments.output_assembly {
         selectors.insert(solx_standard_json::InputSelector::BytecodeLLVMAssembly);
         selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly);
+    }
+    if arguments.output_debug_info {
+        selectors.insert(solx_standard_json::InputSelector::BytecodeDebugInfo);
+    }
+    if arguments.output_debug_info_runtime {
+        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo);
     }
     if arguments.output_metadata {
         selectors.insert(solx_standard_json::InputSelector::Metadata);
@@ -280,6 +288,12 @@ pub fn yul_to_evm(
     llvm_options: Vec<String>,
     debug_config: Option<solx_codegen_evm::DebugConfig>,
 ) -> anyhow::Result<EVMBuild> {
+    if output_selection.is_debug_info_set_for_any() {
+        anyhow::bail!(solx_standard_json::OutputError::new_error(
+            "Debug info is only supported for Solidity source code input."
+        ));
+    }
+
     let libraries = solx_utils::Libraries::try_from(libraries)?;
     let linker_symbols = libraries.as_linker_symbols()?;
 
@@ -332,6 +346,12 @@ pub fn llvm_ir_to_evm(
     llvm_options: Vec<String>,
     debug_config: Option<solx_codegen_evm::DebugConfig>,
 ) -> anyhow::Result<EVMBuild> {
+    if output_selection.is_debug_info_set_for_any() {
+        anyhow::bail!(solx_standard_json::OutputError::new_error(
+            "Debug info is only supported for Solidity source code input."
+        ));
+    }
+
     let libraries = solx_utils::Libraries::try_from(libraries)?;
     let linker_symbols = libraries.as_linker_symbols()?;
 
@@ -410,6 +430,8 @@ pub fn standard_output_evm(
     solc_output.check_errors()?;
 
     let linker_symbols = solc_input.settings.libraries.as_linker_symbols()?;
+    solc_input.resolve_sources()?;
+    let debug_info = solc_output.get_debug_info(&solc_input.sources);
 
     let run_solx_project = profiler.start_pipeline_element("solx_Solidity_IR_Analysis");
     let project = Project::try_from_solc_output(
@@ -417,6 +439,7 @@ pub fn standard_output_evm(
         solc_input.settings.libraries.clone(),
         via_ir,
         &mut solc_output,
+        Some(debug_info),
         debug_config.as_ref(),
     )?;
     run_solx_project.borrow_mut().finish();
@@ -478,7 +501,8 @@ pub fn standard_json_evm(
         if !solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.contains(&optimization.as_str())
         {
             anyhow::bail!(
-                "Invalid value `{optimization}` for environment variable '{SOLX_OPTIMIZATION_ENV}': only values 1, 2, 3, s, z are supported."
+                "Invalid value `{optimization}` for environment variable '{SOLX_OPTIMIZATION_ENV}': only values {} are supported.",
+                solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.join(", ")
             );
         }
         optimization.chars().next().expect("Always exists")
@@ -518,6 +542,10 @@ pub fn standard_json_evm(
                 allow_paths,
             )?;
             run_solc_standard_json.borrow_mut().finish();
+
+            solc_input.resolve_sources()?;
+            let function_definitions = solc_output.get_debug_info(&solc_input.sources);
+
             if solc_output.has_errors() {
                 solc_output.write_and_exit(&solc_input.settings.output_selection);
             }
@@ -532,6 +560,7 @@ pub fn standard_json_evm(
                 solc_input.settings.libraries.clone(),
                 via_ir,
                 &mut solc_output,
+                Some(function_definitions),
                 debug_config.as_ref(),
             )?;
             run_solx_project.borrow_mut().finish();
@@ -542,6 +571,16 @@ pub fn standard_json_evm(
             (solc_output, project)
         }
         solx_standard_json::InputLanguage::Yul => {
+            if solc_input
+                .settings
+                .output_selection
+                .is_debug_info_set_for_any()
+            {
+                anyhow::bail!(solx_standard_json::OutputError::new_error(
+                    "Debug info is only supported for Solidity source code input."
+                ));
+            }
+
             let run_solc_validate_yul = profiler.start_pipeline_element("solc_Yul_Validation");
             let mut solc_output = solc.validate_yul_standard_json(&mut solc_input)?;
             run_solc_validate_yul.borrow_mut().finish();
@@ -566,6 +605,16 @@ pub fn standard_json_evm(
             (solc_output, project)
         }
         solx_standard_json::InputLanguage::LLVMIR => {
+            if solc_input
+                .settings
+                .output_selection
+                .is_debug_info_set_for_any()
+            {
+                anyhow::bail!(solx_standard_json::OutputError::new_error(
+                    "Debug info is only supported for Solidity source code input."
+                ));
+            }
+
             let mut solc_output = solx_standard_json::Output::new(&solc_input.sources);
 
             let run_solx_llvm_ir_project = profiler.start_pipeline_element("solx_LLVM_IR_Analysis");

@@ -124,11 +124,10 @@ impl<'a> SolxTester<'a> {
                     self.summary.clone(),
                     &self.filters,
                     specialized_debug_config,
-                ) {
-                    if let Workflow::BuildAndRun = self.workflow {
-                        test.run_revm(self.summary.clone(), enable_trace)
-                    };
-                }
+                ) && let Workflow::BuildAndRun = self.workflow
+                {
+                    test.run_revm(self.summary.clone(), enable_trace)
+                };
             })
             .collect();
 

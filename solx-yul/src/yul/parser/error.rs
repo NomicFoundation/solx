@@ -49,4 +49,12 @@ pub enum Error {
         /// The list of invalid attributes.
         values: BTreeSet<String>,
     },
+    /// Debug info parsing.
+    #[error("{location} Failed to parse debug info: {details}")]
+    DebugInfoParseError {
+        /// The invalid token location.
+        location: Location,
+        /// The error details.
+        details: String,
+    },
 }

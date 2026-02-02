@@ -2,10 +2,10 @@
 //! The Yul object.
 //!
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
 
-use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
 use crate::yul::lexer::Lexer;
 use crate::yul::lexer::token::Token;
@@ -38,6 +38,8 @@ where
     /// objects are duplicates of the upper-level objects describing the dependencies, so only
     /// their identifiers are preserved. The identifiers are used to address upper-level objects.
     pub factory_dependencies: HashSet<String>,
+    /// Used Solidity source IDs and paths.
+    pub sources: BTreeMap<usize, String>,
 }
 
 impl<P> Object<P>
@@ -52,7 +54,15 @@ where
         initial: Option<Token>,
         code_segment: solx_utils::CodeSegment,
     ) -> Result<Self, Error> {
-        let token = crate::yul::parser::take_or_next(initial, lexer)?;
+        let mut token = crate::yul::parser::take_or_next(initial, lexer)?;
+
+        let sources: BTreeMap<usize, String> =
+            token
+                .take_source_ids()
+                .map_err(|error| ParserError::DebugInfoParseError {
+                    location: token.location,
+                    details: error.to_string(),
+                })?;
 
         let location = match token {
             Token {
@@ -122,24 +132,23 @@ where
                 lexeme: Lexeme::Identifier(identifier),
                 ..
             } = lexer.peek()?
+                && identifier.inner.as_str() == "data"
             {
-                if identifier.inner.as_str() == "data" {
-                    let _data = lexer.next()?;
-                    let _identifier = lexer.next()?;
-                    let _metadata = lexer.next()?;
-                }
+                let _data = lexer.next()?;
+                let _identifier = lexer.next()?;
+                let _metadata = lexer.next()?;
             };
         }
 
         loop {
             let token = lexer.next()?;
-            match &token {
+            match token {
                 Token {
                     lexeme: Lexeme::Symbol(Symbol::BracketCurlyRight),
                     ..
                 } => break,
                 Token {
-                    lexeme: Lexeme::Identifier(identifier),
+                    lexeme: Lexeme::Identifier(ref identifier),
                     ..
                 } if identifier.inner.as_str() == "object" => {
                     let dependency =
@@ -147,13 +156,13 @@ where
                     factory_dependencies.insert(dependency.identifier);
                 }
                 Token {
-                    lexeme: Lexeme::Identifier(identifier),
+                    lexeme: Lexeme::Identifier(ref identifier),
                     ..
                 } if identifier.inner.as_str() == "data" => {
                     let _identifier = lexer.next()?;
                     let _metadata = lexer.next()?;
                 }
-                _ => {
+                token => {
                     return Err(ParserError::InvalidToken {
                         location: token.location,
                         expected: vec!["object", "}"],
@@ -170,6 +179,7 @@ where
             code,
             inner_object,
             factory_dependencies,
+            sources,
         })
     }
 
@@ -187,16 +197,19 @@ where
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn get_evm_dependencies(&self, runtime_code: Option<&Self>) -> Dependencies {
-        let mut dependencies = Dependencies::new(self.identifier.as_str());
+    pub fn get_evm_dependencies(
+        &self,
+        runtime_code: Option<&Self>,
+    ) -> solx_codegen_evm::Dependencies {
+        let mut dependencies = solx_codegen_evm::Dependencies::new(self.identifier.as_str());
         self.code.accumulate_evm_dependencies(&mut dependencies);
 
-        if let Some(runtime_code) = runtime_code {
-            if !dependencies.inner.contains(&runtime_code.identifier) {
-                dependencies
-                    .inner
-                    .insert(0, runtime_code.identifier.to_owned());
-            }
+        if let Some(runtime_code) = runtime_code
+            && !dependencies.inner.contains(&runtime_code.identifier)
+        {
+            dependencies
+                .inner
+                .insert(0, runtime_code.identifier.to_owned());
         }
 
         dependencies

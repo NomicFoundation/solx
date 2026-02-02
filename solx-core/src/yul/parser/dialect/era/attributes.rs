@@ -15,7 +15,7 @@ pub const LLVM_ATTRIBUTE_PREFIX: &str = "$llvm_";
 pub const LLVM_ATTRIBUTE_SUFFIX: &str = "_llvm$";
 
 ///
-/// Gets the list of LLVM attributes provided in the function name.
+/// Get the list of LLVM attributes provided in the function name.
 ///
 pub(crate) fn get_llvm_attributes(
     identifier: &Identifier,

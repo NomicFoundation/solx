@@ -19,7 +19,7 @@ impl std::str::FromStr for Source {
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         match string.to_lowercase().as_str() {
             "tooling" => Ok(Self::Tooling),
-            "compiler-tester" => Ok(Self::SolxTester),
+            "solx-tester" => Ok(Self::SolxTester),
             string => anyhow::bail!(
                 "Unknown input source `{string}`. Supported values: {}",
                 vec![Self::Tooling, Self::SolxTester]
@@ -36,7 +36,7 @@ impl std::fmt::Display for Source {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Tooling => write!(f, "tooling"),
-            Self::SolxTester => write!(f, "compiler-tester"),
+            Self::SolxTester => write!(f, "solx-tester"),
         }
     }
 }

@@ -15,4 +15,5 @@ thiserror = "2.0"
 
 serde = { version = "1.0", "features" = [ "derive" ] }
 
+solx-codegen-evm = { path = "../solx-codegen-evm" }
 solx-utils = { path = "../solx-utils" }

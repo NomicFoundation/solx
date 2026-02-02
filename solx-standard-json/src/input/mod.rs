@@ -253,4 +253,14 @@ impl Input {
             ),
         }
     }
+
+    ///
+    /// Resolves the sources by applying library links and remappings.
+    ///
+    pub fn resolve_sources(&mut self) -> anyhow::Result<()> {
+        for source in self.sources.values_mut() {
+            source.try_resolve()?
+        }
+        Ok(())
+    }
 }
