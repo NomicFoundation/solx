@@ -4151,7 +4151,6 @@ dependencies = [
  "anyhow",
  "serde",
  "solx-codegen-evm",
- "solx-standard-json",
  "solx-utils",
  "thiserror 2.0.18",
 ]

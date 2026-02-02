@@ -46,8 +46,9 @@ fn main() -> anyhow::Result<()> {
     }
     benchmark.remove_zero_deploy_gas();
 
+    let comparisons = Vec::new();
     let output: solx_benchmark_converter::Output =
-        (benchmark, arguments.input_source, arguments.output_format).try_into()?;
+        (benchmark, comparisons, arguments.output_format).try_into()?;
     output.write_to_file(arguments.output_path)?;
 
     Ok(())

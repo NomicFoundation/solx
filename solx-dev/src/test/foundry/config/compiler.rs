@@ -21,4 +21,7 @@ pub struct Compiler {
     /// Whether the compiler is a correctness candidate.
     #[serde(default)]
     pub is_correctness_candidate: bool,
+    /// Whether the compiler is disabled.
+    #[serde(default)]
+    pub disabled: bool,
 }
