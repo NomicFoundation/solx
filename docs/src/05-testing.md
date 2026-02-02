@@ -55,8 +55,6 @@ cargo build --release --bin solx-dev
 
 The test configurations list projects that are cloned and tested automatically. See [foundry-tests.toml](https://github.com/NomicFoundation/solx/blob/main/solx-dev/foundry-tests.toml) and [hardhat-tests.toml](https://github.com/NomicFoundation/solx/blob/main/solx-dev/hardhat-tests.toml) for the full list of tested projects.
 
-
-
 ## Test Collection
 
 This section describes the format of test files used by **solx-tester**.
@@ -65,13 +63,14 @@ This section describes the format of test files used by **solx-tester**.
 
 The repository contains three types of tests:
 
-- **Ethereum** — Tests following the [Solidity semantic test format](https://github.com/ethereum/solidity/tree/develop/test/libsolidity/semanticTests).
+- **Upstream** — Tests following the [Solidity semantic test format](https://github.com/NomicFoundation/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests).
 - **Simple** — Single-contract tests.
 - **Complex** — Multi-contract tests and vendored DeFi projects.
 
 Test data is located in:
 - `tests/solidity/` — Solidity test contracts
 - `tests/yul/` — Yul test contracts
+- `tests/llvm-ir/` — LLVM IR test contracts
 
 ### Test Format
 
@@ -84,14 +83,13 @@ Complex tests use a `test.json` file to describe their metadata and refer to sou
 Metadata is a JSON object that contains the following fields:
 
 - `cases` — An array of test cases (described below).
-- `contracts` — Used for complex tests to describe the contract instances to deploy:
+- `contracts` — Used for complex tests to describe the contract instances to deploy. In simple tests, only one `Test` contract instance is deployed.
 ```json
 "contracts": {
     "Main": "main.sol:Main",
     "Callable": "callable.sol:Callable"
 }
 ```
-In simple tests, only one `Test` contract instance is deployed.
 - `libraries` — An optional field that specifies library addresses for linker:
 ```json
 "libraries": {
@@ -100,13 +98,12 @@ In simple tests, only one `Test` contract instance is deployed.
 }
 ```
 - `ignore` — An optional flag that disables a test.
-- `modes` — An optional field that specifies mode filters. Compiler versions can be specified as SemVer ranges:
+- `modes` — An optional field that specifies mode filters. `Y` stands for Yul pipeline, `E` for EVM assembly pipeline. Compiler versions can be specified as SemVer ranges:
 ```json
 "modes": [
-    "Y-",
-    "E-",
-    "E+ >=0.4",
-    "E+ <0.5"
+    "Y+",
+    "E+",
+    "E+ >=0.8.30"
 ]
 ```
 - `group` — An optional string field that specifies a test group for benchmarking.
@@ -168,7 +165,7 @@ Notes:
 - `InstanceName.address` can be used in expected, calldata, and storage fields to insert a contract instance address.
 - If a deployer call is not specified for an instance, it will be generated automatically with empty calldata.
 
-### Ethereum Solidity Semantic Tests
+### Upstream Solidity Semantic Tests
 
-These tests follow the [Solidity semantic test format](https://github.com/ethereum/solidity/tree/develop/test/libsolidity/semanticTests).
+These tests follow the [Solidity semantic test format](https://github.com/NomicFoundation/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests).
 Test descriptions and expected results are embedded as comments in the test file. Lines begin with `//` for Solidity files. The beginning of the test description is indicated by a comment line containing `----`.
