@@ -22,8 +22,7 @@
 name = "00.solc-0.8.33"
 path = "./temp-compilers/solc-0.8.33"
 description = "solc the latest downloaded from the official repo"
-is_correctness_reference = true
-disabled = false
+disabled = true
 
 [compilers.solx-latest]
 name = "01.solx-latest"
@@ -35,7 +34,8 @@ disabled = true
 name = "02.solx-main"
 path = "./temp-solx-main/target/release/solx"
 description = "solx built from the main branch"
-disabled = true
+is_correctness_reference = true
+disabled = false
 
 [compilers.solx]
 name = "03.solx"
