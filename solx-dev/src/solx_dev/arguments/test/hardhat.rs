@@ -20,7 +20,10 @@ pub struct Hardhat {
     pub test_config_path: PathBuf,
 
     /// Hardhat compiler downloader configuration path.
-    #[arg(long, default_value = "./solx-dev/solc-downloader.json")]
+    #[arg(
+        long,
+        default_value = "./solx-compiler-downloader/solc-downloader.json"
+    )]
     pub downloader_config_path: PathBuf,
 
     /// Hardhat projects temporary directory path.
