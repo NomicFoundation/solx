@@ -117,9 +117,10 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
 
     if let Some(path) = arguments.benchmark {
         let benchmark = summary.benchmark(toolchain)?;
+        let comparisons = Vec::new();
         let output: solx_benchmark_converter::Output = (
             benchmark,
-            solx_benchmark_converter::InputSource::SolxTester,
+            comparisons,
             arguments.benchmark_format,
         )
             .try_into()?;
