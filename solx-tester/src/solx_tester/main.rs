@@ -72,8 +72,8 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
     let mut executable_download_config_paths = Vec::with_capacity(1);
     if let Some(path) = match toolchain {
         solx_tester::Toolchain::IrLLVM => None,
-        solx_tester::Toolchain::Solc => Some("./solx-compiler-downloader/solc-bin-upstream.json"),
-        solx_tester::Toolchain::SolcLLVM => Some("./solx-compiler-downloader/solc-bin-llvm.json"),
+        solx_tester::Toolchain::Solc => Some("./solx-compiler-downloader/solc-upstream.json"),
+        solx_tester::Toolchain::SolcLLVM => Some("./solx-compiler-downloader/solc-llvm.json"),
     }
     .map(PathBuf::from)
     {

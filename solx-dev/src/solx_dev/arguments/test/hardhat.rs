@@ -22,7 +22,7 @@ pub struct Hardhat {
     /// Hardhat compiler downloader configuration path.
     #[arg(
         long,
-        default_value = "./solx-compiler-downloader/solc-downloader.json"
+        default_value = "./solx-compiler-downloader/dev-compilers.json"
     )]
     pub downloader_config_path: PathBuf,
 
