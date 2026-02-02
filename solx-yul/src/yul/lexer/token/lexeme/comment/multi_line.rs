@@ -32,6 +32,10 @@ impl Comment {
             None => end_position,
         };
 
-        Token::new(Location::new(lines, columns), Lexeme::Comment, length)
+        Token::new(
+            Location::new(lines, columns),
+            Lexeme::MultiLineComment,
+            length,
+        )
     }
 }

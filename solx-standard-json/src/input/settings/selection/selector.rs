@@ -61,9 +61,12 @@ pub enum Selector {
     /// The deploy bytecode link references.
     #[serde(rename = "evm.bytecode.linkReferences")]
     BytecodeLinkReferences,
-    /// The deploy bytecode source maps.
+    /// The deploy bytecode source maps (solc-style, unused).
     #[serde(rename = "evm.bytecode.sourceMap")]
     BytecodeSourceMap,
+    /// The deploy bytecode debug info (DWARF).
+    #[serde(rename = "evm.bytecode.debugInfo")]
+    BytecodeDebugInfo,
     /// The deploy bytecode function debug data.
     #[serde(rename = "evm.bytecode.functionDebugData")]
     BytecodeFunctionDebugData,
@@ -88,9 +91,12 @@ pub enum Selector {
     /// The runtime bytecode immutable references.
     #[serde(rename = "evm.deployedBytecode.immutableReferences")]
     RuntimeBytecodeImmutableReferences,
-    /// The runtime bytecode source maps.
+    /// The runtime bytecode source maps (solc-style, unused).
     #[serde(rename = "evm.deployedBytecode.sourceMap")]
     RuntimeBytecodeSourceMap,
+    /// The runtime bytecode debug info (DWARF).
+    #[serde(rename = "evm.deployedBytecode.debugInfo")]
+    RuntimeBytecodeDebugInfo,
     /// The runtime bytecode function debug data.
     #[serde(rename = "evm.deployedBytecode.functionDebugData")]
     RuntimeBytecodeFunctionDebugData,
@@ -120,12 +126,14 @@ impl Selector {
                 | Self::BytecodeLLVMAssembly
                 | Self::BytecodeLinkReferences
                 | Self::BytecodeSourceMap
+                | Self::BytecodeDebugInfo
                 | Self::BytecodeFunctionDebugData
                 | Self::BytecodeGeneratedSources
                 | Self::RuntimeBytecode
                 | Self::RuntimeBytecodeObject
                 | Self::RuntimeBytecodeLLVMAssembly
                 | Self::RuntimeBytecodeSourceMap
+                | Self::RuntimeBytecodeDebugInfo
                 | Self::RuntimeBytecodeFunctionDebugData
                 | Self::RuntimeBytecodeGeneratedSources
                 | Self::RuntimeBytecodeLinkReferences
@@ -146,6 +154,7 @@ impl Selector {
                 Self::BytecodeOpcodes,
                 Self::BytecodeLinkReferences,
                 Self::BytecodeSourceMap,
+                Self::BytecodeDebugInfo,
                 Self::BytecodeFunctionDebugData,
                 Self::BytecodeGeneratedSources,
                 Self::RuntimeBytecode,
@@ -155,6 +164,7 @@ impl Selector {
                 Self::RuntimeBytecodeLinkReferences,
                 Self::RuntimeBytecodeImmutableReferences,
                 Self::RuntimeBytecodeSourceMap,
+                Self::RuntimeBytecodeDebugInfo,
                 Self::RuntimeBytecodeFunctionDebugData,
                 Self::RuntimeBytecodeGeneratedSources,
                 Self::GasEstimates,
@@ -165,6 +175,7 @@ impl Selector {
                 Self::BytecodeOpcodes,
                 Self::BytecodeLinkReferences,
                 Self::BytecodeSourceMap,
+                Self::BytecodeDebugInfo,
                 Self::BytecodeFunctionDebugData,
                 Self::BytecodeGeneratedSources,
             ],
@@ -175,6 +186,7 @@ impl Selector {
                 Self::RuntimeBytecodeLinkReferences,
                 Self::RuntimeBytecodeImmutableReferences,
                 Self::RuntimeBytecodeSourceMap,
+                Self::RuntimeBytecodeDebugInfo,
                 Self::RuntimeBytecodeFunctionDebugData,
                 Self::RuntimeBytecodeGeneratedSources,
             ],
@@ -197,6 +209,7 @@ impl Selector {
                 Self::BytecodeOpcodes,
                 Self::BytecodeLinkReferences,
                 Self::BytecodeSourceMap,
+                Self::BytecodeDebugInfo,
                 Self::BytecodeFunctionDebugData,
                 Self::BytecodeGeneratedSources,
                 Self::RuntimeBytecode,
@@ -206,6 +219,7 @@ impl Selector {
                 Self::RuntimeBytecodeLinkReferences,
                 Self::RuntimeBytecodeImmutableReferences,
                 Self::RuntimeBytecodeSourceMap,
+                Self::RuntimeBytecodeDebugInfo,
                 Self::RuntimeBytecodeFunctionDebugData,
                 Self::RuntimeBytecodeGeneratedSources,
                 Self::GasEstimates,

@@ -5,6 +5,7 @@
 use inkwell::values::BasicValue;
 
 use solx_codegen_evm::IContext;
+use solx_codegen_evm::ISolidityData;
 use solx_yul::yul::parser::statement::expression::function_call::name::Name;
 
 use crate::declare_wrapper;
@@ -23,6 +24,12 @@ impl FunctionCall {
         mut self,
         context: &mut solx_codegen_evm::Context<'ctx>,
     ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>> {
+        if let Some((solidity_data, solc_location)) =
+            context.solidity_mut().zip(self.0.solc_location.clone())
+        {
+            solidity_data.set_debug_info_solc_location(solc_location);
+        }
+
         let location = self.0.location;
         let name = self.0.name.clone();
         let evm_version = context.evm_version();

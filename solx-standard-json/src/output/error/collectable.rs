@@ -1,5 +1,5 @@
 //!
-//! The collectable errors trait.
+//! Collectable errors trait.
 //!
 
 use std::io::Write;
@@ -7,7 +7,7 @@ use std::io::Write;
 use crate::output::error::Error;
 
 ///
-/// The collectable errors trait.
+/// Collectable errors trait.
 ///
 /// Should be implemented by entities that can collect errors, and perform actions
 /// on them as a list upon request.

@@ -16,6 +16,7 @@ serde_json.workspace = true
 semver.workspace = true
 num.workspace = true
 rayon.workspace = true
+boolinator = "2.4"
 
 solx-evm-assembly = { path = "../solx-evm-assembly" }
 solx-utils = { path = "../solx-utils" }

@@ -4,7 +4,6 @@
 
 use std::collections::BTreeSet;
 
-use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
 use crate::yul::lexer::Lexer;
 use crate::yul::lexer::token::Token;
@@ -30,6 +29,10 @@ where
     pub location: Location,
     /// The block statements.
     pub statements: Vec<Statement<P>>,
+    /// The solc source code location.
+    pub solc_location: Option<solx_utils::DebugInfoSolcLocation>,
+    /// The solc source code location before the end of the block.
+    pub end_solc_location: Option<solx_utils::DebugInfoSolcLocation>,
 }
 
 impl<P> Block<P>
@@ -40,7 +43,15 @@ where
     /// The element parser.
     ///
     pub fn parse(lexer: &mut Lexer, initial: Option<Token>) -> Result<Self, Error> {
-        let token = crate::yul::parser::take_or_next(initial, lexer)?;
+        let mut token = crate::yul::parser::take_or_next(initial, lexer)?;
+
+        let solc_location =
+            token
+                .take_solidity_location()
+                .map_err(|error| ParserError::DebugInfoParseError {
+                    location: token.location,
+                    details: error.to_string(),
+                })?;
 
         let mut statements = Vec::new();
 
@@ -61,6 +72,7 @@ where
         };
 
         let mut remaining = None;
+        let end_solc_location;
 
         loop {
             match crate::yul::parser::take_or_next(remaining.take(), lexer)? {
@@ -109,10 +121,18 @@ where
                     lexeme: Lexeme::Symbol(Symbol::BracketCurlyLeft),
                     ..
                 } => statements.push(Block::parse(lexer, Some(token)).map(Statement::Block)?),
-                Token {
+                mut token @ Token {
                     lexeme: Lexeme::Symbol(Symbol::BracketCurlyRight),
                     ..
-                } => break,
+                } => {
+                    end_solc_location = token.take_solidity_location().map_err(|error| {
+                        ParserError::DebugInfoParseError {
+                            location: token.location,
+                            details: error.to_string(),
+                        }
+                    })?;
+                    break;
+                }
                 token => {
                     return Err(ParserError::InvalidToken {
                         location: token.location,
@@ -127,6 +147,8 @@ where
         Ok(Self {
             location,
             statements,
+            solc_location,
+            end_solc_location,
         })
     }
 
@@ -144,7 +166,7 @@ where
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
         for statement in self.statements.iter() {
             statement.accumulate_evm_dependencies(dependencies);
         }

@@ -40,19 +40,18 @@ pub fn run() -> anyhow::Result<()> {
         ciborium::de::from_reader_with_recursion_limit(buffer.as_slice(), usize::MAX)
             .map_err(|error| anyhow::anyhow!("Input deserialziing error: {error}"))?;
 
-    let source_location =
-        solx_standard_json::OutputErrorSourceLocation::new(input.contract_name.path.clone());
-
     let result = Builder::new()
         .stack_size(crate::WORKER_THREAD_STACK_SIZE)
         .spawn(move || {
             Contract::compile_to_evm(
+                input.language,
                 input.solc_version,
-                input.contract_name,
+                input.contract_name.clone(),
                 input.contract_ir,
                 input.code_segment,
                 input.evm_version,
                 input.identifier_paths,
+                input.debug_info,
                 input.output_selection,
                 input.immutables,
                 input.metadata_bytes,
@@ -62,11 +61,9 @@ pub fn run() -> anyhow::Result<()> {
             )
             .map(EVMOutput::new)
             .map_err(|error| match error {
-                Error::Generic(error) => solx_standard_json::OutputError::new_error_with_data(
-                    None,
+                Error::Generic(error) => solx_standard_json::OutputError::new_error_contract(
+                    Some(input.contract_name.path.as_str()),
                     error,
-                    Some(source_location),
-                    None,
                 )
                 .into(),
                 error => error,
@@ -85,7 +82,7 @@ pub fn run() -> anyhow::Result<()> {
 ///
 /// Runs this process recursively to compile a single contract.
 ///
-pub fn call<I, O>(path: &str, input: &I) -> crate::Result<O>
+pub fn call<I, O>(contract_name: &solx_utils::ContractName, input: &I) -> crate::Result<O>
 where
     I: serde::Serialize,
     O: serde::de::DeserializeOwned,
@@ -100,7 +97,7 @@ where
     command.stdout(std::process::Stdio::piped());
     command.stderr(std::process::Stdio::piped());
     command.arg("--recursive-process");
-    command.arg(path);
+    command.arg(contract_name.path.as_str());
 
     let mut process = command
         .spawn()
@@ -137,13 +134,9 @@ where
             String::from_utf8_lossy(result.stdout.as_slice()),
             String::from_utf8_lossy(result.stderr.as_slice()),
         );
-        Err(solx_standard_json::OutputError::new_error_with_data(
-            None,
+        Err(solx_standard_json::OutputError::new_error_contract(
+            Some(contract_name.path.as_str()),
             message,
-            Some(solx_standard_json::OutputErrorSourceLocation::new(
-                path.to_owned(),
-            )),
-            None,
         ))?;
     }
 

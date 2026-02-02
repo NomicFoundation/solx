@@ -131,7 +131,7 @@ impl Assembly {
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_yul::Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
         if let Some(code) = self.code.as_ref() {
             for instruction in code.iter() {
                 match instruction.name {

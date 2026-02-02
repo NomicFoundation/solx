@@ -42,7 +42,7 @@ pub fn test(
     let correctness_reference_compiler = config
         .compilers
         .values()
-        .find(|compiler| compiler.is_correctness_reference)
+        .find(|compiler| !compiler.disabled && compiler.is_correctness_reference)
         .ok_or_else(|| {
             anyhow::anyhow!("No reference compiler specified in the Hardhat test configuration")
         })?
@@ -51,7 +51,7 @@ pub fn test(
     let correctness_candidate_compiler = config
         .compilers
         .values()
-        .find(|compiler| compiler.is_correctness_candidate)
+        .find(|compiler| !compiler.disabled && compiler.is_correctness_candidate)
         .ok_or_else(|| {
             anyhow::anyhow!("No candidate compiler specified in the Hardhat test configuration")
         })?
@@ -75,6 +75,7 @@ pub fn test(
         for ((_identifier, compiler), codegen) in config
             .compilers
             .iter()
+            .filter(|(_identifier, compiler)| !compiler.disabled)
             .cartesian_product(["legacy", "viaIR"])
         {
             crate::utils::remove(project_directory.as_path(), project_name.as_str())?;
@@ -324,9 +325,40 @@ pub fn test(
     }
 
     let benchmark = solx_benchmark_converter::Benchmark::from_inputs(benchmark_inputs.into_iter())?;
+    let enabled_compiler_names: std::collections::HashSet<&str> = config
+        .compilers
+        .values()
+        .filter(|compiler| !compiler.disabled)
+        .map(|compiler| compiler.name.as_str())
+        .collect();
+    let comparisons: Vec<solx_benchmark_converter::OutputComparison> = config
+        .comparisons
+        .iter()
+        .filter(|comparison| {
+            if comparison.disabled {
+                return false;
+            }
+            let left_compiler = comparison
+                .left
+                .trim_end_matches("-legacy")
+                .trim_end_matches("-viaIR");
+            let right_compiler = comparison
+                .right
+                .trim_end_matches("-legacy")
+                .trim_end_matches("-viaIR");
+            enabled_compiler_names.contains(left_compiler)
+                && enabled_compiler_names.contains(right_compiler)
+        })
+        .map(|comparison| {
+            solx_benchmark_converter::OutputComparison::new(
+                comparison.left.clone(),
+                comparison.right.clone(),
+            )
+        })
+        .collect();
     let output: solx_benchmark_converter::Output = (
         benchmark,
-        solx_benchmark_converter::InputSource::Tooling,
+        comparisons,
         solx_benchmark_converter::OutputFormat::Xlsx,
     )
         .try_into()?;

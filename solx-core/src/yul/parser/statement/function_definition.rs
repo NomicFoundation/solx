@@ -30,6 +30,7 @@ impl solx_codegen_evm::WriteLLVM for FunctionDefinition {
 
         context.add_function(
             self.0.identifier.as_str(),
+            self.0.ast_id,
             function_type,
             self.0.result.len(),
             Some(inkwell::module::Linkage::Private),

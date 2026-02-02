@@ -4,6 +4,7 @@
 
 use inkwell::types::BasicType;
 use solx_codegen_evm::IContext;
+use solx_codegen_evm::ISolidityData;
 
 use crate::declare_wrapper;
 use crate::yul::parser::wrapper::Wrap;
@@ -15,6 +16,12 @@ declare_wrapper!(
 
 impl solx_codegen_evm::WriteLLVM for Assignment {
     fn into_llvm(mut self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
+        if let Some((solidity_data, solc_location)) =
+            context.solidity_mut().zip(self.0.solc_location)
+        {
+            solidity_data.set_debug_info_solc_location(solc_location);
+        }
+
         let value = match self.0.initializer.wrap().into_llvm(context)? {
             Some(value) => value,
             None => return Ok(()),

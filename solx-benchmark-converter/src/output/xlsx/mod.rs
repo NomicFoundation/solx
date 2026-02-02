@@ -7,7 +7,7 @@ pub mod worksheet;
 use std::collections::HashMap;
 
 use crate::benchmark::Benchmark;
-use crate::input::source::Source;
+use crate::output::comparison::Comparison;
 
 use self::worksheet::Worksheet;
 
@@ -109,10 +109,12 @@ impl Xlsx {
     }
 }
 
-impl TryFrom<(Benchmark, Source)> for Xlsx {
+impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
     type Error = anyhow::Error;
 
-    fn try_from((benchmark, source): (Benchmark, Source)) -> Result<Self, Self::Error> {
+    fn try_from(
+        (benchmark, comparisons): (Benchmark, Vec<Comparison>),
+    ) -> Result<Self, Self::Error> {
         let mut xlsx = Self::new()?;
 
         'outer: for test in benchmark.tests.into_values() {
@@ -291,20 +293,14 @@ impl TryFrom<(Benchmark, Source)> for Xlsx {
         xlsx.testing_time_worksheet
             .set_totals(xlsx.toolchain_ids.len())?;
 
-        let comparison_mapping = match source {
-            Source::Tooling => {
-                if xlsx.toolchains.len() < 8 {
-                    return Ok(xlsx);
-                }
-                vec![(6, 4), (7, 5), (6, 2), (7, 3), (6, 0), (7, 1)]
-            }
-            Source::SolxTester => {
-                if xlsx.toolchains.len() < 8 {
-                    return Ok(xlsx);
-                }
-                vec![(6, 2), (7, 3), (4, 0), (5, 1)]
-            }
-        };
+        let comparison_mapping: Vec<(u16, u16)> = comparisons
+            .iter()
+            .filter_map(|comparison| {
+                let left_id = xlsx.toolchain_ids.get(comparison.left.as_str())?;
+                let right_id = xlsx.toolchain_ids.get(comparison.right.as_str())?;
+                Some((*left_id, *right_id))
+            })
+            .collect();
 
         for (index, (toolchain_id_1, toolchain_id_2)) in comparison_mapping.into_iter().enumerate()
         {

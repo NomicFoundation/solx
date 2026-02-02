@@ -14,6 +14,8 @@ use crate::codegen::warning::Warning;
 pub struct Build {
     /// Bytecode.
     pub bytecode: Option<Vec<u8>>,
+    /// Debug info.
+    pub debug_info: Option<Vec<u8>>,
     /// Text assembly.
     pub assembly: Option<String>,
     /// Mapping with immutables.
@@ -30,6 +32,7 @@ impl Build {
     ///
     pub fn new(
         bytecode: Option<Vec<u8>>,
+        debug_info: Option<Vec<u8>>,
         assembly: Option<String>,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         is_size_fallback: bool,
@@ -37,6 +40,7 @@ impl Build {
     ) -> Self {
         Self {
             bytecode,
+            debug_info,
             assembly,
             immutables,
             is_size_fallback,

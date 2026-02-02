@@ -7,7 +7,6 @@ pub mod literal;
 
 use std::collections::BTreeSet;
 
-use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
 use crate::yul::lexer::Lexer;
 use crate::yul::lexer::token::Token;
@@ -93,7 +92,7 @@ impl Expression {
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
         match self {
             Self::FunctionCall(inner) => inner.accumulate_evm_dependencies(dependencies),
             Self::Identifier(_) => {}

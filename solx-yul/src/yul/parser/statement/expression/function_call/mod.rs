@@ -6,7 +6,6 @@ pub mod name;
 
 use std::collections::BTreeSet;
 
-use crate::dependencies::Dependencies;
 use crate::yul::error::Error;
 use crate::yul::lexer::Lexer;
 use crate::yul::lexer::token::Token;
@@ -31,6 +30,8 @@ pub struct FunctionCall {
     pub name: Name,
     /// The function arguments expression list.
     pub arguments: Vec<Expression>,
+    /// The solc source code location.
+    pub solc_location: Option<solx_utils::DebugInfoSolcLocation>,
 }
 
 impl FunctionCall {
@@ -38,7 +39,15 @@ impl FunctionCall {
     /// The element parser.
     ///
     pub fn parse(lexer: &mut Lexer, initial: Option<Token>) -> Result<Self, Error> {
-        let token = crate::yul::parser::take_or_next(initial, lexer)?;
+        let mut token = crate::yul::parser::take_or_next(initial, lexer)?;
+
+        let solc_location =
+            token
+                .take_solidity_location()
+                .map_err(|error| ParserError::DebugInfoParseError {
+                    location: token.location,
+                    details: error.to_string(),
+                })?;
 
         let (location, name) = match token {
             Token {
@@ -91,6 +100,7 @@ impl FunctionCall {
             location,
             name,
             arguments,
+            solc_location,
         })
     }
 
@@ -120,7 +130,7 @@ impl FunctionCall {
     ///
     /// Get the list of EVM dependencies.
     ///
-    pub fn accumulate_evm_dependencies(&self, dependencies: &mut Dependencies) {
+    pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
         match self.name {
             Name::DataSize | Name::DataOffset => {
                 if let Expression::Literal(Literal {
