@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use inkwell::debug_info::AsDIScope;
+use inkwell::debug_info::DIFlagsConstants;
 use num::Zero;
 
 use crate::codegen::context::Context;
@@ -97,7 +98,7 @@ impl<'ctx> DebugInfo<'ctx> {
 
         let mut flags = inkwell::debug_info::DIFlags::zero();
         if is_artificial {
-            flags |= llvm_sys::debuginfo::LLVMDIFlagArtificial;
+            flags |= inkwell::debug_info::DIFlags::ARTIFICIAL;
         }
 
         self.builder.create_function(

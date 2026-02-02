@@ -85,13 +85,14 @@ pub fn test(
                 .as_deref()
                 .unwrap_or(solidity_version.as_str());
 
+            let project_directory_str = project_directory.to_string_lossy();
             let mut clone_command = Command::new("git");
             clone_command.arg("clone");
             clone_command.args(["--depth", "1"]);
             clone_command.arg("--recurse-submodules");
             clone_command.arg("--shallow-submodules");
             clone_command.arg(project.url.as_str());
-            clone_command.arg(project_directory.to_string_lossy().as_ref());
+            clone_command.arg(&*project_directory_str);
             crate::utils::command_with_retries(
                 &mut clone_command,
                 format!(
@@ -219,10 +220,11 @@ pub fn test(
             }
 
             let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;
+            let compiler_path_str = compiler_path.to_string_lossy();
             let toolchain_name = format!("{}-{codegen}", compiler.name);
 
             let mut npm_compile_command = Command::new("npm");
-            npm_compile_command.current_dir(project_directory.to_string_lossy().as_ref());
+            npm_compile_command.current_dir(&*project_directory_str);
             npm_compile_command.arg("run");
             npm_compile_command.arg("compile");
             for (key, value) in project.env.iter() {
@@ -230,7 +232,7 @@ pub fn test(
             }
             if toolchain_name.starts_with("solx") {
                 npm_compile_command.env("USE_SOLX", "true");
-                npm_compile_command.env("SOLX", compiler_path.to_string_lossy().as_ref());
+                npm_compile_command.env("SOLX", &*compiler_path_str);
             }
             npm_compile_command.env("VIA_IR", (codegen == "viaIR").to_string());
             let build_timestamp_start = Instant::now();
@@ -262,20 +264,18 @@ pub fn test(
             let compilation_time = build_timestamp_start.elapsed().as_millis() as u64;
 
             let mut npm_test_command = Command::new("npm");
-            npm_test_command.current_dir(project_directory.to_string_lossy().as_ref());
+            npm_test_command.current_dir(&*project_directory_str);
             npm_test_command.arg("run");
             npm_test_command.arg("test");
             for (key, value) in project.env.iter() {
                 npm_test_command.env(key, value);
             }
             let npm_test_report_path = project_directory.join("junit-report.json");
-            npm_test_command.env(
-                "JUNIT_REPORT",
-                npm_test_report_path.to_string_lossy().as_ref(),
-            );
+            let npm_test_report_path_str = npm_test_report_path.to_string_lossy();
+            npm_test_command.env("JUNIT_REPORT", &*npm_test_report_path_str);
             if toolchain_name.starts_with("solx") {
                 npm_test_command.env("USE_SOLX", "true");
-                npm_test_command.env("SOLX", compiler_path.to_string_lossy().as_ref());
+                npm_test_command.env("SOLX", &*compiler_path_str);
             }
             npm_test_command.env("VIA_IR", (codegen == "viaIR").to_string());
             let test_timestamp_start = Instant::now();

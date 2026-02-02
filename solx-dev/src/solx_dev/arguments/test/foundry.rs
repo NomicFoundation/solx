@@ -20,7 +20,7 @@ pub struct Foundry {
     pub test_config_path: PathBuf,
 
     /// Foundry compiler downloader configuration path.
-    #[arg(long, default_value = "./solx-dev/solc-downloader.json")]
+    #[arg(long, default_value = "./solx-compiler-downloader/dev-compilers.json")]
     pub downloader_config_path: PathBuf,
 
     /// Foundry projects temporary directory path.

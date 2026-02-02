@@ -14,15 +14,14 @@ path = "src/solx_solc_test_updater/main.rs"
 doctest = false
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
-anyhow = "1.0"
-colored = "3.0"
-
-serde = { version = "1.0", features = [ "derive" ] }
-serde_yaml = "0.9"
-semver = { version = "1.0", features = [ "serde" ] }
-regex = "1.11"
-md5 = "0.7"
+anyhow.workspace = true
+clap.workspace = true
+colored.workspace = true
+serde.workspace = true
+serde_yaml.workspace = true
+semver.workspace = true
+md5.workspace = true
+regex.workspace = true
 
 solx-utils = { path = "../solx-utils" }
 

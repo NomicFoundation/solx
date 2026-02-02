@@ -24,7 +24,7 @@ impl AddressIterator {
         increment_nonce: bool,
     ) -> web3::types::Address {
         let mut stream = rlp::RlpStream::new_list(2);
-        stream.append(caller);
+        stream.append(&caller.as_bytes());
         stream.append(&self.nonce(caller));
 
         let hash = solx_utils::Keccak256Hash::from_slice(&stream.out());

@@ -152,7 +152,7 @@ jobs:
             | jq '{data: ., project: "solx-tester", toolchain: "00.solx-main"}' > reference.json
           cat candidate-benchmark.json \
             | jq '{data: ., project: "solx-tester", toolchain: "01.solx"}' > candidate.json
-          ./target/release/solx-benchmark-converter --input-source solx-tester \
+          ./target/release/solx-benchmark-converter \
             --output-path solx-tester-report.xlsx reference.json candidate.json
 
       - name: Upload Excel reports

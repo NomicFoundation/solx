@@ -237,10 +237,10 @@ fn parse_debug_info_functions(debug_info_hex: &str) -> anyhow::Result<HashMap<St
                         }
                         gimli::DW_AT_linkage_name => {
                             // Fallback to linkage name if name not set
-                            if name.is_none() {
-                                if let Ok(value) = dwarf.attr_string(&unit, attr.value()) {
-                                    name = Some(value.to_string_lossy().into_owned());
-                                }
+                            if name.is_none()
+                                && let Ok(value) = dwarf.attr_string(&unit, attr.value())
+                            {
+                                name = Some(value.to_string_lossy().into_owned());
                             }
                         }
                         _ => {}

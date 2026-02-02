@@ -10,21 +10,13 @@ license = "MIT OR Apache-2.0"
 doctest = false
 
 [dependencies]
-anyhow = "1.0"
-thiserror = "2.0"
-semver = "1.0"
-serde = { version = "1.0", features = [ "derive" ] }
-num = "0.4"
-itertools = "0.14"
-indexmap = { version = "2.11", features = ["serde"] }
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+semver.workspace = true
+num.workspace = true
+itertools.workspace = true
+inkwell.workspace = true
+indexmap = { version = "2.13", features = ["serde"] }
 
 solx-utils = { path = "../solx-utils" }
-
-[dependencies.inkwell]
-git = "https://github.com/NomicFoundation/inkwell"
-branch = "az-add-debug-info-endpoint"
-default-features = false
-features = ["llvm21-1", "serde", "no-libffi-linking", "target-evm"]
-[dependencies.llvm-sys]
-git = "https://github.com/NomicFoundation/llvm-sys.rs"
-branch = "az-add-debug-info-endpoint"

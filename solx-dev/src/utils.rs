@@ -153,7 +153,8 @@ pub fn remove(project_directory: &Path, project_name: &str) -> anyhow::Result<()
 ///
 pub fn ninja(build_dir: &Path) -> anyhow::Result<()> {
     let mut ninja = Command::new("ninja");
-    ninja.args(["-C", build_dir.to_string_lossy().as_ref()]);
+    let build_dir_str = build_dir.to_string_lossy();
+    ninja.args(["-C", &*build_dir_str]);
     command(ninja.arg("install"), "Running ninja install")?;
     Ok(())
 }
