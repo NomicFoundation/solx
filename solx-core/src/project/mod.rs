@@ -43,6 +43,9 @@ pub struct Project {
     pub identifier_paths: BTreeMap<String, String>,
     /// The library addresses.
     pub libraries: solx_utils::Libraries,
+    /// Solidity function definitions.
+    #[serde(skip)]
+    pub debug_info: Option<solx_utils::DebugInfo>,
 }
 
 impl Project {
@@ -55,6 +58,7 @@ impl Project {
         contracts: BTreeMap<String, Contract>,
         ast_jsons: Option<BTreeMap<String, Option<serde_json::Value>>>,
         libraries: solx_utils::Libraries,
+        debug_info: Option<solx_utils::DebugInfo>,
     ) -> Self {
         let mut identifier_paths = BTreeMap::new();
         for (path, contract) in contracts.iter() {
@@ -76,6 +80,7 @@ impl Project {
             ast_jsons,
             identifier_paths,
             libraries,
+            debug_info,
         }
     }
 
@@ -87,6 +92,7 @@ impl Project {
         libraries: solx_utils::Libraries,
         via_ir: bool,
         solc_output: &mut solx_standard_json::Output,
+        debug_info: Option<solx_utils::DebugInfo>,
         debug_config: Option<&solx_codegen_evm::DebugConfig>,
     ) -> anyhow::Result<Self> {
         if !via_ir {
@@ -172,7 +178,7 @@ impl Project {
                 };
                 let ir = match result {
                     Some(Ok(Some(ir))) => Some(ir),
-                    Some(Err(error)) => return (name.full_path, Err(error)),
+                    Some(Err(error)) => return (name, Err(error)),
                     Some(Ok(None)) | None => None,
                 };
                 let contract = Contract::new(
@@ -188,17 +194,17 @@ impl Project {
                     legacy_assembly,
                     contract.ir,
                 );
-                (name.full_path, Ok(contract))
+                (name, Ok(contract))
             })
-            .collect::<BTreeMap<String, anyhow::Result<Contract>>>();
+            .collect::<Vec<(solx_utils::ContractName, anyhow::Result<Contract>)>>();
 
         let mut contracts = BTreeMap::new();
-        for (path, result) in results.into_iter() {
+        for (contract_name, result) in results.into_iter() {
             match result {
                 Ok(contract) => {
-                    contracts.insert(path, contract);
+                    contracts.insert(contract_name.full_path, contract);
                 }
-                Err(error) => solc_output.push_error(Some(path), error),
+                Err(error) => solc_output.push_error(contract_name.path.as_str(), error),
             }
         }
         Ok(Project::new(
@@ -207,6 +213,7 @@ impl Project {
             contracts,
             Some(ast_jsons),
             libraries,
+            debug_info,
         ))
     }
 
@@ -260,9 +267,11 @@ impl Project {
         let results = sources
             .into_par_iter()
             .map(|(path, mut source)| {
+                let mut name = solx_utils::ContractName::new(path.clone(), None);
+
                 let source_code = match source.try_resolve() {
                     Ok(()) => source.take_content().expect("Always exists"),
-                    Err(error) => return (path, Err(error)),
+                    Err(error) => return (name, Err(error)),
                 };
 
                 let metadata = if output_selection.check_selection(
@@ -286,16 +295,12 @@ impl Project {
                     debug_config,
                 ) {
                     Ok(ir) => ir,
-                    Err(error) => return (path, Err(error)),
+                    Err(error) => return (name, Err(error)),
                 };
+                name.name = ir.as_ref().map(|ir| ir.object.0.identifier.to_owned());
 
-                let name = solx_utils::ContractName::new(
-                    path.clone(),
-                    ir.as_ref().map(|ir| ir.object.0.identifier.to_owned()),
-                );
-                let full_path = name.full_path.clone();
                 let contract = Contract::new(
-                    name,
+                    name.clone(),
                     ir.map(ContractIR::from),
                     metadata,
                     None,
@@ -307,18 +312,18 @@ impl Project {
                     None,
                     None,
                 );
-                (full_path, Ok(contract))
+                (name, Ok(contract))
             })
-            .collect::<BTreeMap<String, anyhow::Result<Contract>>>();
+            .collect::<Vec<(solx_utils::ContractName, anyhow::Result<Contract>)>>();
 
         let mut contracts = BTreeMap::new();
-        for (path, result) in results.into_iter() {
+        for (contract_name, result) in results.into_iter() {
             match result {
                 Ok(contract) => {
-                    contracts.insert(path, contract);
+                    contracts.insert(contract_name.full_path, contract);
                 }
                 Err(error) => match solc_output.as_mut() {
-                    Some(solc_output) => solc_output.push_error(Some(path), error),
+                    Some(solc_output) => solc_output.push_error(contract_name.path.as_str(), error),
                     None => anyhow::bail!(error),
                 },
             }
@@ -329,6 +334,7 @@ impl Project {
             contracts,
             None,
             libraries,
+            None,
         ))
     }
 
@@ -371,9 +377,11 @@ impl Project {
         let results = sources
             .into_par_iter()
             .map(|(path, mut source)| {
+                let contract_name = solx_utils::ContractName::new(path.clone(), None);
+
                 let source_code = match source.try_resolve() {
                     Ok(()) => source.take_content().expect("Always exists"),
-                    Err(error) => return (path, Err(error)),
+                    Err(error) => return (contract_name, Err(error)),
                 };
 
                 let metadata = if output_selection.check_selection(
@@ -392,7 +400,7 @@ impl Project {
                 };
 
                 let contract = Contract::new(
-                    solx_utils::ContractName::new(path.clone(), None),
+                    contract_name.clone(),
                     Some(
                         ContractLLVMIR::new(
                             path.clone(),
@@ -412,18 +420,18 @@ impl Project {
                     None,
                 );
 
-                (path, Ok(contract))
+                (contract_name, Ok(contract))
             })
-            .collect::<BTreeMap<String, anyhow::Result<Contract>>>();
+            .collect::<Vec<(solx_utils::ContractName, anyhow::Result<Contract>)>>();
 
         let mut contracts = BTreeMap::new();
-        for (path, result) in results.into_iter() {
+        for (contract_name, result) in results.into_iter() {
             match result {
                 Ok(contract) => {
-                    contracts.insert(path, contract);
+                    contracts.insert(contract_name.full_path, contract);
                 }
                 Err(error) => match solc_output.as_mut() {
-                    Some(solc_output) => solc_output.push_error(Some(path), error),
+                    Some(solc_output) => solc_output.push_error(contract_name.path.as_str(), error),
                     None => anyhow::bail!(error),
                 },
             }
@@ -434,6 +442,7 @@ impl Project {
             contracts,
             None,
             libraries,
+            None,
         ))
     }
 
@@ -467,11 +476,28 @@ impl Project {
                 let legacy_assembly = contract.legacy_assembly.take();
                 let yul = contract.yul.take();
 
+                let mut deploy_debug_info = self.debug_info.clone();
+                let mut runtime_debug_info = self.debug_info.clone();
+
                 let (deploy_code_ir, runtime_code_ir): (ContractIR, ContractIR) = match contract.ir
                 {
                     Some(ContractIR::Yul(mut deploy_code)) => {
                         let runtime_code: ContractYul =
                             *deploy_code.runtime_code.take().expect("Always exists");
+
+                        if let Some(ref mut debug_info) = deploy_debug_info {
+                            debug_info.retain_source_ids(&deploy_code.object.0.sources);
+                            if let Some(contract_name) = contract_name.name.as_deref() {
+                                debug_info.retain_current_contract(contract_name);
+                            }
+                        }
+                        if let Some(ref mut debug_info) = runtime_debug_info {
+                            debug_info.retain_source_ids(&runtime_code.object.0.sources);
+                            if let Some(contract_name) = contract_name.name.as_deref() {
+                                debug_info.retain_current_contract(contract_name);
+                            }
+                        }
+
                         (deploy_code.into(), runtime_code.into())
                     }
                     Some(ContractIR::EVMLegacyAssembly(mut deploy_code)) => {
@@ -526,12 +552,14 @@ impl Project {
                     );
 
                     let mut input = EVMProcessInput::new(
+                        self.language,
                         self.solc_version.clone(),
                         contract_name.clone(),
                         runtime_code_ir,
                         solx_utils::CodeSegment::Runtime,
                         evm_version,
                         self.identifier_paths.clone(),
+                        runtime_debug_info,
                         output_selection.to_owned(),
                         None,
                         metadata_bytes,
@@ -540,7 +568,7 @@ impl Project {
                         debug_config.clone(),
                     );
 
-                    let result = Self::run_multi_pass_pipeline(path.as_str(), &mut input);
+                    let result = Self::run_multi_pass_pipeline(&contract_name, &mut input);
                     (result, metadata)
                 };
 
@@ -550,12 +578,14 @@ impl Project {
                     .and_then(|output| output.object.immutables.to_owned());
                 let deploy_object_result: crate::Result<EVMProcessOutput> = {
                     let mut input = EVMProcessInput::new(
+                        self.language,
                         self.solc_version.clone(),
                         contract_name.clone(),
                         deploy_code_ir,
                         solx_utils::CodeSegment::Deploy,
                         evm_version,
                         self.identifier_paths.clone(),
+                        deploy_debug_info,
                         output_selection.to_owned(),
                         immutables,
                         None,
@@ -564,7 +594,7 @@ impl Project {
                         debug_config.clone(),
                     );
 
-                    Self::run_multi_pass_pipeline(path.as_str(), &mut input)
+                    Self::run_multi_pass_pipeline(&contract_name, &mut input)
                 };
 
                 let build = EVMContractBuild::new(
@@ -661,13 +691,13 @@ impl Project {
     /// and turning on the size fallback to overcome the EVM bytecode size limit.
     ///
     fn run_multi_pass_pipeline(
-        path: &str,
+        contract_name: &solx_utils::ContractName,
         input: &mut EVMProcessInput,
     ) -> crate::Result<EVMProcessOutput> {
         let mut result: crate::Result<EVMProcessOutput>;
         let mut pass_count = 0;
         loop {
-            result = crate::process::call(path, input);
+            result = crate::process::call(contract_name, input);
             pass_count += 1;
             match result {
                 Err(Error::StackTooDeep(stack_too_deep)) => {

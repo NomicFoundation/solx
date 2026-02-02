@@ -8,6 +8,7 @@
     }
   },
   "settings": {
+    "viaIR": true,
     "optimizer": {
       "mode": "3",
       "sizeFallback": true
@@ -21,7 +22,9 @@
           "abi",
           "evm.methodIdentifiers",
           "evm.bytecode.object",
-          "evm.deployedBytecode.object"
+          "evm.bytecode.debugInfo",
+          "evm.deployedBytecode.object",
+          "evm.deployedBytecode.debugInfo"
         ]
       }
     },

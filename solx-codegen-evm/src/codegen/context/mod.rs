@@ -13,12 +13,15 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use inkwell::types::BasicType;
+use inkwell::values::BasicValue;
 
+use crate::ISolidityData;
 use crate::codegen::build::Build as EVMBuild;
 use crate::codegen::profiler::Profiler;
 use crate::codegen::warning::Warning;
 use crate::context::IContext;
 use crate::context::attribute::Attribute;
+use crate::context::debug_info::DebugInfo;
 use crate::context::function::declaration::Declaration as FunctionDeclaration;
 use crate::context::function::r#return::Return as FunctionReturn;
 use crate::context::r#loop::Loop;
@@ -51,6 +54,8 @@ pub struct Context<'ctx> {
     module: inkwell::module::Module<'ctx>,
     /// The extra LLVM options.
     llvm_options: Vec<String>,
+    /// The full contract name.
+    contract_name: solx_utils::ContractName,
     /// The current contract code type, which can be deploy or runtime.
     code_segment: solx_utils::CodeSegment,
     /// The EVM version to produce bytecode for.
@@ -64,6 +69,8 @@ pub struct Context<'ctx> {
     /// The loop context stack.
     loop_stack: Vec<Loop<'ctx>>,
 
+    /// The debug info of the current module.
+    debug_info: Option<DebugInfo<'ctx>>,
     /// The debug configuration telling whether to dump the needed IRs.
     debug_config: Option<DebugConfig>,
 
@@ -89,13 +96,25 @@ impl<'ctx> Context<'ctx> {
         llvm: &'ctx inkwell::context::Context,
         module: inkwell::module::Module<'ctx>,
         llvm_options: Vec<String>,
+        contract_name: solx_utils::ContractName,
         code_segment: solx_utils::CodeSegment,
         evm_version: Option<solx_utils::EVMVersion>,
         optimizer: Optimizer,
+        output_debug_info: bool,
+        solidity_data: Option<SolidityData>,
         debug_config: Option<DebugConfig>,
     ) -> Self {
         let builder = llvm.create_builder();
         let intrinsics = Intrinsics::new(llvm, &module);
+        let debug_info = if output_debug_info {
+            solidity_data
+                .as_ref()
+                .filter(|solidity_data| solidity_data.debug_info().is_some())
+                .map(|solidity_data| solidity_data.sources())
+                .map(|sources| DebugInfo::new(&module, sources))
+        } else {
+            None
+        };
 
         Self {
             llvm,
@@ -103,6 +122,7 @@ impl<'ctx> Context<'ctx> {
             llvm_options,
             optimizer,
             module,
+            contract_name,
             code_segment,
             evm_version,
             intrinsics,
@@ -110,9 +130,10 @@ impl<'ctx> Context<'ctx> {
             current_function: None,
             loop_stack: Vec::with_capacity(Self::LOOP_STACK_INITIAL_CAPACITY),
 
+            debug_info,
             debug_config,
 
-            solidity_data: None,
+            solidity_data,
             yul_data: None,
             evmla_data: None,
         }
@@ -140,6 +161,11 @@ impl<'ctx> Context<'ctx> {
             TargetMachine::new(self.optimizer.settings(), self.llvm_options.as_slice())?;
         target_machine.set_target_data(self.module());
         target_machine.set_asm_verbosity(true);
+
+        if let Some(debug_info) = self.debug_info.take() {
+            debug_info.finalize(self);
+            self.debug_info = Some(debug_info);
+        }
 
         let spill_area = self
             .optimizer
@@ -222,18 +248,34 @@ impl<'ctx> Context<'ctx> {
         let assembly = assembly_buffer
             .map(|assembly_buffer| String::from_utf8_lossy(assembly_buffer.as_slice()).to_string());
 
-        if output_bytecode {
+        if output_bytecode || self.debug_info.is_some() {
             let run_emit_bytecode = profiler.start_evm_translation_unit(
                 contract_path,
                 self.code_segment,
                 "EmitBytecode",
                 self.optimizer.settings(),
             );
-            let bytecode_buffer = target_machine
-                .write_to_memory_buffer(self.module(), inkwell::targets::FileType::Object)
-                .map_err(|error| {
-                    anyhow::anyhow!("{} bytecode emitting: {error}", self.code_segment)
-                })?;
+            let (bytecode_buffer, debug_info_buffer) = if self.debug_info.is_some() {
+                let (bytecode_buffer, debug_info_buffer) = target_machine
+                    .write_to_memory_buffer_with_debug_info(
+                        self.module(),
+                        inkwell::targets::FileType::Object,
+                    )
+                    .map_err(|error| {
+                        anyhow::anyhow!(
+                            "{} bytecode and debug info emitting: {error}",
+                            self.code_segment
+                        )
+                    })?;
+                (bytecode_buffer, Some(debug_info_buffer))
+            } else {
+                let bytecode_buffer = target_machine
+                    .write_to_memory_buffer(self.module(), inkwell::targets::FileType::Object)
+                    .map_err(|error| {
+                        anyhow::anyhow!("{} bytecode emitting: {error}", self.code_segment)
+                    })?;
+                (bytecode_buffer, None)
+            };
             run_emit_bytecode.borrow_mut().finish();
 
             let immutables = match self.code_segment {
@@ -279,6 +321,7 @@ impl<'ctx> Context<'ctx> {
             }
             Ok(EVMBuild::new(
                 Some(bytecode_buffer.as_slice().to_vec()),
+                debug_info_buffer.map(|buffer| buffer.as_slice().to_vec()),
                 assembly,
                 immutables,
                 is_size_fallback,
@@ -286,6 +329,7 @@ impl<'ctx> Context<'ctx> {
             ))
         } else {
             Ok(EVMBuild::new(
+                None,
                 None,
                 assembly,
                 None,
@@ -476,8 +520,44 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
         &self.optimizer
     }
 
+    fn debug_info(&self) -> Option<&DebugInfo<'ctx>> {
+        self.debug_info.as_ref()
+    }
+
+    fn create_debug_info_location(&self) -> Option<inkwell::debug_info::DILocation<'ctx>> {
+        let debug_info = self.debug_info.as_ref()?;
+        let current_function = self
+            .current_function
+            .as_ref()
+            .expect("Always exists")
+            .borrow();
+        let current_location = self
+            .solidity()
+            .and_then(|solidity_data| solidity_data.get_solx_location())
+            .or(current_function.solx_debug_info_location())
+            .cloned()
+            .unwrap_or_else(|| {
+                solx_utils::DebugInfoMappedLocation::new_with_location(
+                    self.contract_name.path.to_owned(),
+                    1,
+                    1,
+                    0,
+                    None,
+                )
+            });
+        debug_info.create_location(
+            self,
+            current_location.line.unwrap_or_default(),
+            current_location.column.unwrap_or_default(),
+        )
+    }
+
     fn debug_config(&self) -> Option<&DebugConfig> {
         self.debug_config.as_ref()
+    }
+
+    fn contract_name(&self) -> &solx_utils::ContractName {
+        &self.contract_name
     }
 
     fn set_code_segment(&mut self, code_segment: solx_utils::CodeSegment) {
@@ -535,6 +615,7 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
     fn add_function(
         &mut self,
         name: &str,
+        ast_id: Option<usize>,
         r#type: inkwell::types::FunctionType<'ctx>,
         return_values_length: usize,
         linkage: Option<inkwell::module::Linkage>,
@@ -544,6 +625,23 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
         let entry_block = self.llvm.append_basic_block(value, "entry");
         let return_block = self.llvm.append_basic_block(value, "return");
 
+        let mut function = Function::new(
+            name.to_owned(),
+            FunctionDeclaration::new(r#type, value),
+            entry_block,
+            return_block,
+        );
+        Function::set_default_attributes(
+            self.llvm,
+            function.declaration(),
+            self.evm_version.unwrap_or_default(),
+            &self.optimizer,
+        );
+        function.set_debug_info(self, ast_id);
+        let function = Rc::new(RefCell::new(function));
+        self.functions.insert(name.to_string(), function.clone());
+
+        self.set_current_function(name)?;
         let r#return = match return_values_length {
             0 => FunctionReturn::none(),
             1 => {
@@ -562,24 +660,7 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
                 FunctionReturn::compound(pointer, size)
             }
         };
-
-        let function = Function::new(
-            name.to_owned(),
-            FunctionDeclaration::new(r#type, value),
-            r#return,
-            entry_block,
-            return_block,
-        );
-        Function::set_default_attributes(
-            self.llvm,
-            function.declaration(),
-            self.evm_version.unwrap_or_default(),
-            &self.optimizer,
-        );
-
-        let function = Rc::new(RefCell::new(function));
-        self.functions.insert(name.to_string(), function.clone());
-
+        function.borrow_mut().set_return(r#return);
         Ok(function)
     }
 
@@ -598,6 +679,12 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
             self.functions.get(name).cloned().ok_or_else(|| {
                 anyhow::anyhow!("Failed to activate an undeclared function `{name}`")
             })?;
+        if let Some((solidity_data, solc_debug_info_location)) = self
+            .solidity_mut()
+            .zip(function.borrow().solc_debug_info_location())
+        {
+            solidity_data.set_debug_info_solc_location(solc_debug_info_location.to_owned());
+        }
         self.current_function = Some(function);
         Ok(())
     }
@@ -628,6 +715,16 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
             arguments,
             name,
         )?;
+
+        let instruction_value = match call_site_value.try_as_basic_value() {
+            inkwell::values::ValueKind::Basic(inner) => inner.as_instruction_value(),
+            inkwell::values::ValueKind::Instruction(inner) => Some(inner),
+        };
+        if let Some(instruction_value) = instruction_value {
+            let debug_location = self.create_debug_info_location();
+            instruction_value.set_debug_location(debug_location);
+        }
+
         self.modify_call_site_value(arguments, call_site_value, function);
         Ok(call_site_value.try_as_basic_value().basic())
     }
@@ -639,10 +736,6 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
         name: &str,
     ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>> {
         Self::build_call(self, function, arguments, name)
-    }
-
-    fn set_solidity_data(&mut self, data: Self::SolidityData) {
-        self.solidity_data = Some(data);
     }
 
     fn solidity(&self) -> Option<&Self::SolidityData> {

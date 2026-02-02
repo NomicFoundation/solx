@@ -36,7 +36,7 @@ rayon = "1.10"
 lazy_static = "1.5"
 assert_cmd = "2.0"
 
-revm = "33.1"
+revm = "34.0"
 
 solx-standard-json = { path = "../solx-standard-json" }
 solx-codegen-evm = { path = "../solx-codegen-evm" }

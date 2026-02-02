@@ -1,69 +1,35 @@
 //!
-//! The `solc --standard-json` output error source location.
+//! `solc --standard-json` output error location.
 //!
 
-use std::collections::BTreeMap;
-
 ///
-/// The `solc --standard-json` output error source location.
+/// `solc --standard-json` output error location.
 ///
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceLocation {
-    /// The source file path.
+    /// File path.
     pub file: String,
-    /// The start location.
-    pub start: isize,
-    /// The end location.
-    pub end: isize,
+    /// Start location.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start: Option<isize>,
+    /// End location.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end: Option<isize>,
 }
 
 impl SourceLocation {
     ///
     /// A shortcut constructor.
     ///
-    pub fn new(file: String) -> Self {
+    pub fn new<S>(file: S, start: Option<isize>, end: Option<isize>) -> Self
+    where
+        S: Into<String>,
+    {
         Self {
-            file,
-            start: -1,
-            end: -1,
-        }
-    }
-
-    ///
-    /// A shortcut constructor.
-    ///
-    /// Please note that `start` and `end` are not line and column,
-    /// but absolute char offsets in the source code file.
-    ///
-    pub fn new_with_offsets(file: String, start: isize, end: isize) -> Self {
-        Self { file, start, end }
-    }
-
-    ///
-    /// A shortcut constructor from a `solc` AST node.
-    ///
-    pub fn try_from_ast(source: &str, id_paths: &BTreeMap<usize, &String>) -> Option<Self> {
-        let mut parts = source.split(':');
-        let start = parts
-            .next()
-            .map(|string| string.parse::<isize>())
-            .and_then(Result::ok)
-            .unwrap_or_default();
-        let length = parts
-            .next()
-            .map(|string| string.parse::<isize>())
-            .and_then(Result::ok)
-            .unwrap_or_default();
-        let path = parts
-            .next()
-            .and_then(|string| string.parse::<usize>().ok())
-            .and_then(|file_id| id_paths.get(&file_id))?;
-
-        Some(Self::new_with_offsets(
-            (*path).to_owned(),
+            file: file.into(),
             start,
-            start + length,
-        ))
+            end,
+        }
     }
 }

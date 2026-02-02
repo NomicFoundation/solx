@@ -14,7 +14,10 @@
     "outputSelection": {
       "*": {
         "*": [
-          "evm.bytecode.object"
+          "evm.bytecode.object",
+          "evm.bytecode.debugInfo",
+          "evm.deployedBytecode.object",
+          "evm.deployedBytecode.debugInfo"
         ]
       }
     }

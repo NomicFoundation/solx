@@ -4,10 +4,12 @@
 
 use crate::declare_wrapper;
 use crate::yul::parser::wrapper::Wrap;
+
 use inkwell::values::BasicValue;
 use num::Num;
 use num::One;
 use num::Zero;
+use solx_codegen_evm::ISolidityData;
 use solx_yul::yul::lexer::token::lexeme::literal::Literal as LexicalLiteral;
 use solx_yul::yul::lexer::token::lexeme::literal::boolean::Boolean as BooleanLiteral;
 use solx_yul::yul::lexer::token::lexeme::literal::integer::Integer as IntegerLiteral;
@@ -21,10 +23,19 @@ impl Literal {
     ///
     /// Converts the literal into its LLVM.
     ///
-    pub fn into_llvm<'ctx, C>(self, context: &C) -> anyhow::Result<solx_codegen_evm::Value<'ctx>>
+    pub fn into_llvm<'ctx, C>(
+        self,
+        context: &mut C,
+    ) -> anyhow::Result<solx_codegen_evm::Value<'ctx>>
     where
         C: solx_codegen_evm::IContext<'ctx>,
     {
+        if let Some((solidity_data, solc_location)) =
+            context.solidity_mut().zip(self.0.solc_location)
+        {
+            solidity_data.set_debug_info_solc_location(solc_location);
+        }
+
         match self.0.inner {
             LexicalLiteral::Boolean(inner) => {
                 let value = self

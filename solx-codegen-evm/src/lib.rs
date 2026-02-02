@@ -9,6 +9,7 @@ pub(crate) mod codegen;
 pub(crate) mod r#const;
 pub(crate) mod context;
 pub(crate) mod debug_config;
+pub(crate) mod dependencies;
 pub(crate) mod optimizer;
 pub(crate) mod target_machine;
 
@@ -69,6 +70,7 @@ pub use self::context::traits::yul_data::IYulData;
 pub use self::context::value::Value;
 pub use self::debug_config::DebugConfig;
 pub use self::debug_config::ir_type::IRType;
+pub use self::dependencies::Dependencies;
 pub use self::optimizer::Optimizer;
 pub use self::optimizer::settings::Settings as OptimizerSettings;
 pub use self::optimizer::settings::size_level::SizeLevel;

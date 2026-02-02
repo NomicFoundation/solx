@@ -12,6 +12,7 @@ use self::error::Error;
 use self::token::Token;
 use self::token::lexeme::Lexeme;
 use self::token::lexeme::comment::Comment;
+use self::token::lexeme::comment::single_line::Comment as SingleLineComment;
 use self::token::lexeme::identifier::Identifier;
 use self::token::lexeme::literal::integer::Integer as IntegerLiteral;
 use self::token::lexeme::literal::string::String as StringLiteral;
@@ -30,6 +31,8 @@ pub struct Lexer<'a> {
     location: Location,
     /// The peeked lexeme, waiting to be fetched.
     peeked: Option<Token>,
+    /// Comments accumulated so far.
+    comments: Vec<String>,
 }
 
 impl<'a> Lexer<'a> {
@@ -42,6 +45,7 @@ impl<'a> Lexer<'a> {
             offset: 0,
             location: Location::default(),
             peeked: None,
+            comments: Vec::new(),
         }
     }
 
@@ -67,15 +71,35 @@ impl<'a> Lexer<'a> {
                 continue;
             }
 
-            if let Some(token) = Comment::parse(input) {
-                self.offset += token.length;
-                self.location
-                    .shift_down(token.location.line, token.location.column);
+            if let Some(Token {
+                lexeme: Lexeme::SingleLineComment(inner),
+                length,
+                location,
+                ..
+            }) = Comment::parse(input)
+            {
+                self.offset += length;
+                self.location.shift_down(location.line, location.column);
+                if input.starts_with(SingleLineComment::DEBUG_INFO_START) {
+                    self.comments.push(inner);
+                }
+                continue;
+            }
+            if let Some(Token {
+                lexeme: Lexeme::MultiLineComment,
+                length,
+                location,
+                ..
+            }) = Comment::parse(input)
+            {
+                self.offset += length;
+                self.location.shift_down(location.line, location.column);
                 continue;
             }
 
             if let Some(mut token) = StringLiteral::parse(input) {
                 token.location = self.location;
+                token.set_comments(self.comments.drain(..).collect());
 
                 self.offset += token.length;
                 self.location.shift_right(token.length);
@@ -84,6 +108,7 @@ impl<'a> Lexer<'a> {
 
             if let Some(mut token) = IntegerLiteral::parse(input) {
                 token.location = self.location;
+                token.set_comments(self.comments.drain(..).collect());
 
                 self.offset += token.length;
                 self.location.shift_right(token.length);
@@ -92,6 +117,7 @@ impl<'a> Lexer<'a> {
 
             if let Some(mut token) = Identifier::parse(input) {
                 token.location = self.location;
+                token.set_comments(self.comments.drain(..).collect());
 
                 self.offset += token.length;
                 self.location.shift_right(token.length);
@@ -100,6 +126,7 @@ impl<'a> Lexer<'a> {
 
             if let Some(mut token) = Symbol::parse(input) {
                 token.location = self.location;
+                token.set_comments(self.comments.drain(..).collect());
 
                 self.offset += token.length;
                 self.location.shift_right(token.length);
@@ -115,7 +142,9 @@ impl<'a> Lexer<'a> {
             });
         }
 
-        Ok(Token::new(self.location, Lexeme::EndOfFile, 0))
+        let mut token = Token::new(self.location, Lexeme::EndOfFile, 0);
+        token.set_comments(self.comments.drain(..).collect());
+        Ok(token)
     }
 
     ///

@@ -129,7 +129,7 @@ fn invalid_input() -> anyhow::Result<()> {
 }
 
 #[test]
-fn standard_json() -> anyhow::Result<()> {
+fn invalid_standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
@@ -141,6 +141,76 @@ fn standard_json() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result.success().stdout(predicate::str::contains(
         "Only one mode is allowed at the same time:",
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn standard_json_default() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::TEST_YUL_STANDARD_JSON_PATH,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("bytecode"))
+        .stdout(predicate::str::contains("object"));
+
+    Ok(())
+}
+
+#[test]
+fn standard_json_default_urls() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::TEST_YUL_STANDARD_JSON_URLS_PATH,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("bytecode"))
+        .stdout(predicate::str::contains("object"));
+
+    Ok(())
+}
+
+#[test]
+fn standard_json_default_urls_invalid() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::TEST_YUL_STANDARD_JSON_URLS_INVALID_PATH,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains(
+        "DeclarationError: Function \\\"mdelete\\\" not found.",
+    ));
+
+    Ok(())
+}
+
+#[test]
+fn standard_json_default_urls_debug_info() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::TEST_YUL_STANDARD_JSON_URLS_DEBUG_INFO_PATH,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains(
+        "Error: Debug info is only supported for Solidity source code input.",
     ));
 
     Ok(())

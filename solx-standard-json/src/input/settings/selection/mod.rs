@@ -82,6 +82,7 @@ impl Selection {
                     | Selector::BytecodeOpcodes
                     | Selector::BytecodeLinkReferences
                     | Selector::BytecodeSourceMap
+                    | Selector::BytecodeDebugInfo
                     | Selector::BytecodeFunctionDebugData
                     | Selector::BytecodeGeneratedSources
                         if contract.contains(&Selector::Bytecode)
@@ -95,6 +96,7 @@ impl Selection {
                     | Selector::RuntimeBytecodeLinkReferences
                     | Selector::RuntimeBytecodeImmutableReferences
                     | Selector::RuntimeBytecodeSourceMap
+                    | Selector::RuntimeBytecodeDebugInfo
                     | Selector::RuntimeBytecodeFunctionDebugData
                     | Selector::RuntimeBytecodeGeneratedSources
                         if contract.contains(&Selector::RuntimeBytecode)
@@ -174,6 +176,23 @@ impl Selection {
                     || contract.contains(&Selector::RuntimeBytecode)
                     || contract.contains(&Selector::RuntimeBytecodeObject)
                     || contract.contains(&Selector::Any)
+                {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    ///
+    /// Checks if the debug info is requested for at least one contract.
+    ///
+    pub fn is_debug_info_set_for_any(&self) -> bool {
+        for file in self.inner.values() {
+            for contract in file.values() {
+                if contract.contains(&Selector::EVM)
+                    || contract.contains(&Selector::BytecodeDebugInfo)
+                    || contract.contains(&Selector::RuntimeBytecodeDebugInfo)
                 {
                     return true;
                 }

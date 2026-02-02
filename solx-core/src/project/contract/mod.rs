@@ -95,12 +95,14 @@ impl Contract {
     /// Compiles the specified contract to EVM, returning its build artifacts.
     ///
     pub fn compile_to_evm(
+        language: solx_standard_json::InputLanguage,
         solc_version: Option<solx_standard_json::Version>,
         contract_name: solx_utils::ContractName,
         contract_ir: IR,
         code_segment: solx_utils::CodeSegment,
         evm_version: Option<solx_utils::EVMVersion>,
         identifier_paths: BTreeMap<String, String>,
+        debug_info: Option<solx_utils::DebugInfo>,
         output_selection: solx_standard_json::InputSelection,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         metadata_bytes: Option<Vec<u8>>,
@@ -114,13 +116,27 @@ impl Contract {
         if let Some(metadata_bytes) = metadata_bytes.as_ref() {
             optimizer_settings.set_metadata_size(metadata_bytes.len() as u64);
         }
-
-        let solidity_data = solx_codegen_evm::ContextSolidityData::new(immutables);
         let optimizer = solx_codegen_evm::Optimizer::new(optimizer_settings.clone());
-        let output_bytecode = output_selection.is_bytecode_set_for_any();
 
+        let output_bytecode = output_selection.is_bytecode_set_for_any();
         match (contract_ir, code_segment) {
             (IR::Yul(mut yul), solx_utils::CodeSegment::Deploy) => {
+                let output_debug_info = language == solx_standard_json::InputLanguage::Solidity
+                    && output_selection.check_selection(
+                        contract_name.path.as_str(),
+                        contract_name.name.as_deref(),
+                        solx_standard_json::InputSelector::BytecodeDebugInfo,
+                    );
+                let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
+                    Some(solx_codegen_evm::ContextSolidityData::new(
+                        immutables,
+                        yul.object.0.sources.clone(),
+                        debug_info,
+                    ))
+                } else {
+                    None
+                };
+
                 let deploy_code_identifier = yul.object.0.identifier.clone();
 
                 let deploy_llvm = inkwell::context::Context::create();
@@ -129,15 +145,17 @@ impl Contract {
                     &deploy_llvm,
                     deploy_module,
                     llvm_options.clone(),
+                    contract_name.clone(),
                     code_segment,
                     evm_version,
                     optimizer,
+                    output_debug_info,
+                    solidity_data,
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
-                deploy_context.set_solidity_data(solidity_data);
                 deploy_context
                     .set_yul_data(solx_codegen_evm::ContextYulData::new(identifier_paths));
                 let run_yul_lowering = profiler.start_evm_translation_unit(
@@ -166,6 +184,7 @@ impl Contract {
                     contract_name.clone(),
                     deploy_build.assembly,
                     deploy_build.bytecode,
+                    deploy_build.debug_info,
                     true,
                     code_segment,
                     None,
@@ -178,6 +197,22 @@ impl Contract {
                 Ok(deploy_object)
             }
             (IR::Yul(mut yul), solx_utils::CodeSegment::Runtime) => {
+                let output_debug_info = language == solx_standard_json::InputLanguage::Solidity
+                    && output_selection.check_selection(
+                        contract_name.path.as_str(),
+                        contract_name.name.as_deref(),
+                        solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                    );
+                let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
+                    Some(solx_codegen_evm::ContextSolidityData::new(
+                        immutables,
+                        yul.object.0.sources.clone(),
+                        debug_info,
+                    ))
+                } else {
+                    None
+                };
+
                 let runtime_code_identifier = yul.object.0.identifier.clone();
 
                 let runtime_llvm = inkwell::context::Context::create();
@@ -187,15 +222,17 @@ impl Contract {
                     &runtime_llvm,
                     runtime_module,
                     llvm_options.clone(),
+                    contract_name.clone(),
                     code_segment,
                     evm_version,
                     optimizer.clone(),
+                    output_debug_info,
+                    solidity_data,
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
-                runtime_context.set_solidity_data(solidity_data);
                 runtime_context.set_yul_data(solx_codegen_evm::ContextYulData::new(
                     identifier_paths.clone(),
                 ));
@@ -228,6 +265,7 @@ impl Contract {
                     contract_name.clone(),
                     runtime_build.assembly,
                     runtime_build.bytecode,
+                    runtime_build.debug_info,
                     true,
                     code_segment,
                     Some(immutables),
@@ -240,12 +278,28 @@ impl Contract {
                 Ok(runtime_object)
             }
             (IR::EVMLegacyAssembly(mut deploy_code), solx_utils::CodeSegment::Deploy) => {
+                let output_debug_info = language == solx_standard_json::InputLanguage::Solidity
+                    && output_selection.check_selection(
+                        contract_name.path.as_str(),
+                        contract_name.name.as_deref(),
+                        solx_standard_json::InputSelector::BytecodeDebugInfo,
+                    );
+                let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
+                    Some(solx_codegen_evm::ContextSolidityData::new(
+                        immutables,
+                        BTreeMap::new(),
+                        None, // TODO
+                    ))
+                } else {
+                    None
+                };
+
                 let evmla_data = solx_codegen_evm::ContextEVMLAData::new(
                     solc_version.expect("Always exists").default,
                 );
                 let deploy_code_identifier = contract_name.full_path.to_owned();
                 let mut deploy_code_dependencies =
-                    solx_yul::Dependencies::new(deploy_code_identifier.as_str());
+                    solx_codegen_evm::Dependencies::new(deploy_code_identifier.as_str());
                 deploy_code
                     .assembly
                     .accumulate_evm_dependencies(&mut deploy_code_dependencies);
@@ -256,15 +310,17 @@ impl Contract {
                     &deploy_llvm,
                     deploy_module,
                     llvm_options.clone(),
+                    contract_name.clone(),
                     code_segment,
                     evm_version,
                     optimizer,
+                    output_debug_info,
+                    solidity_data,
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
-                deploy_context.set_solidity_data(solidity_data);
                 deploy_context.set_evmla_data(evmla_data);
                 let run_evm_assembly_lowering = profiler.start_evm_translation_unit(
                     contract_name.full_path.as_str(),
@@ -295,6 +351,7 @@ impl Contract {
                     contract_name.clone(),
                     deploy_build.assembly,
                     deploy_build.bytecode,
+                    deploy_build.debug_info,
                     false,
                     code_segment,
                     None,
@@ -307,6 +364,22 @@ impl Contract {
                 Ok(deploy_object)
             }
             (IR::EVMLegacyAssembly(mut runtime_code), solx_utils::CodeSegment::Runtime) => {
+                let output_debug_info = language == solx_standard_json::InputLanguage::Solidity
+                    && output_selection.check_selection(
+                        contract_name.path.as_str(),
+                        contract_name.name.as_deref(),
+                        solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                    );
+                let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
+                    Some(solx_codegen_evm::ContextSolidityData::new(
+                        immutables,
+                        BTreeMap::new(),
+                        None, // TODO
+                    ))
+                } else {
+                    None
+                };
+
                 let runtime_code_identifier = format!("{}.{code_segment}", contract_name.full_path);
                 let evmla_data = solx_codegen_evm::ContextEVMLAData::new(
                     solc_version.expect("Always exists").default,
@@ -318,15 +391,17 @@ impl Contract {
                     &runtime_llvm,
                     runtime_module,
                     llvm_options.clone(),
+                    contract_name.clone(),
                     code_segment,
                     evm_version,
                     optimizer.clone(),
+                    output_debug_info,
+                    solidity_data,
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
-                runtime_context.set_solidity_data(solidity_data);
                 runtime_context.set_evmla_data(evmla_data.clone());
                 let run_evm_assembly_lowering = profiler.start_evm_translation_unit(
                     contract_name.full_path.as_str(),
@@ -358,6 +433,7 @@ impl Contract {
                     contract_name.clone(),
                     runtime_build.assembly,
                     runtime_build.bytecode,
+                    runtime_build.debug_info,
                     false,
                     code_segment,
                     Some(immutables),
@@ -386,15 +462,17 @@ impl Contract {
                     &deploy_llvm,
                     deploy_module,
                     llvm_options,
+                    contract_name.clone(),
                     code_segment,
                     evm_version,
                     optimizer,
+                    false,
+                    None,
                     debug_config,
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
-                deploy_context.set_solidity_data(solidity_data);
                 let deploy_build = deploy_context.build(
                     output_selection.check_selection(
                         contract_name.path.as_str(),
@@ -410,6 +488,7 @@ impl Contract {
                     contract_name.clone(),
                     deploy_build.assembly,
                     deploy_build.bytecode,
+                    deploy_build.debug_info,
                     false,
                     code_segment,
                     None,
@@ -438,15 +517,17 @@ impl Contract {
                     &runtime_llvm,
                     runtime_module,
                     llvm_options.clone(),
+                    contract_name.clone(),
                     code_segment,
                     evm_version,
                     optimizer,
+                    false,
+                    None,
                     debug_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
-                runtime_context.set_solidity_data(solidity_data);
                 let runtime_build = runtime_context.build(
                     output_selection.check_selection(
                         contract_name.path.as_str(),
@@ -462,6 +543,7 @@ impl Contract {
                     contract_name.clone(),
                     runtime_build.assembly,
                     runtime_build.bytecode,
+                    runtime_build.debug_info,
                     false,
                     code_segment,
                     Some(BTreeMap::new()),

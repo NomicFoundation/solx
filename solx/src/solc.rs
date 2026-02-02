@@ -64,9 +64,21 @@ impl solx_core::Solc for Solc {
         include_paths: &[String],
         mut allow_paths: Option<String>,
     ) -> anyhow::Result<solx_standard_json::Output> {
+        let is_debug_info_requested = input_json
+            .settings
+            .output_selection
+            .is_debug_info_set_for_any();
         let original_output_selection = input_json.settings.output_selection.to_owned();
         input_json.settings.output_selection.normalize();
         input_json.settings.output_selection.retain_solc();
+        if is_debug_info_requested
+            && input_json.language == solx_standard_json::InputLanguage::Solidity
+        {
+            input_json
+                .settings
+                .output_selection
+                .set_selector(solx_standard_json::InputSelector::AST);
+        }
         input_json
             .settings
             .output_selection

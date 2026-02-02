@@ -258,7 +258,7 @@ impl Function {
                 let tag: num::BigUint = tag.parse().expect("Always valid");
                 (vec![Element::Tag(tag & num::BigUint::from(u64::MAX))], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::JUMP,
                 ..
             } => {
@@ -320,7 +320,7 @@ impl Function {
                     )),
                 )
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::JUMPI,
                 ..
             } => {
@@ -614,7 +614,7 @@ impl Function {
                 value: Some(data),
                 ..
             } => (vec![StackElement::Data(data.to_owned())], None),
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::PUSHDEPLOYADDRESS,
                 ..
             } => (
@@ -622,7 +622,7 @@ impl Function {
                 None,
             ),
 
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::ADD,
                 ..
             } => {
@@ -651,7 +651,7 @@ impl Function {
 
                 (vec![result], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::SUB,
                 ..
             } => {
@@ -680,7 +680,7 @@ impl Function {
 
                 (vec![result], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::MUL,
                 ..
             } => {
@@ -709,7 +709,7 @@ impl Function {
 
                 (vec![result], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::DIV,
                 ..
             } => {
@@ -746,7 +746,7 @@ impl Function {
 
                 (vec![result], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::MOD,
                 ..
             } => {
@@ -779,7 +779,7 @@ impl Function {
 
                 (vec![result], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::SHL,
                 ..
             } => {
@@ -806,7 +806,7 @@ impl Function {
 
                 (vec![result], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::SHR,
                 ..
             } => {
@@ -833,7 +833,7 @@ impl Function {
 
                 (vec![result], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::OR,
                 ..
             } => {
@@ -858,7 +858,7 @@ impl Function {
 
                 (vec![result], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::XOR,
                 ..
             } => {
@@ -883,7 +883,7 @@ impl Function {
 
                 (vec![result], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::AND,
                 ..
             } => {
@@ -909,7 +909,7 @@ impl Function {
                 (vec![result], None)
             }
 
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::LT,
                 ..
             } => {
@@ -924,7 +924,7 @@ impl Function {
 
                 (vec![result], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::GT,
                 ..
             } => {
@@ -939,7 +939,7 @@ impl Function {
 
                 (vec![result], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::EQ,
                 ..
             } => {
@@ -954,7 +954,7 @@ impl Function {
 
                 (vec![result], None)
             }
-            ref instruction @ Instruction {
+            instruction @ Instruction {
                 name: InstructionName::ISZERO,
                 ..
             } => {
@@ -975,7 +975,7 @@ impl Function {
                 (vec![result], None)
             }
 
-            ref instruction => (
+            instruction => (
                 vec![Element::value(instruction.name.to_string()); instruction.output_size()],
                 None,
             ),
@@ -1172,6 +1172,7 @@ impl solx_codegen_evm::WriteLLVM for Function {
                 );
                 context.add_function(
                     self.name.as_str(),
+                    None, // TODO: EVM assembly support
                     r#type,
                     output_size,
                     Some(inkwell::module::Linkage::Private),
