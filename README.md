@@ -50,7 +50,7 @@ To run the unit and CLI tests, execute `cargo test` at the repository root.
 
 ## Troubleshooting
 
-If you are building *solx** from source and you have multiple LLVM builds in your system, ensure that you choose the correct one to build the compiler.
+If you are building **solx** from source and you have multiple LLVM builds in your system, ensure that you choose the correct one to build the compiler.
 The environment variable `LLVM_SYS_211_PREFIX` sets the path to the directory with LLVM build artifacts, which typically ends with `target-llvm/build-final`.
 For example:
 
