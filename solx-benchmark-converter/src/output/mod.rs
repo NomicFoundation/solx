@@ -11,7 +11,6 @@ pub mod xlsx;
 use std::path::PathBuf;
 
 use crate::benchmark::Benchmark;
-use crate::input::source::Source;
 use crate::output::comparison::Comparison;
 use crate::output::format::Format;
 use crate::output::json::Json;
@@ -77,17 +76,6 @@ impl TryFrom<(Benchmark, Vec<Comparison>, Format)> for Output {
             Format::Json => Json::from(benchmark).into(),
             Format::Xlsx => Xlsx::try_from((benchmark, comparisons))?.into(),
         })
-    }
-}
-
-impl TryFrom<(Benchmark, Source, Format)> for Output {
-    type Error = anyhow::Error;
-
-    fn try_from(
-        (benchmark, source, output_format): (Benchmark, Source, Format),
-    ) -> Result<Self, Self::Error> {
-        let comparisons = source.default_comparisons();
-        (benchmark, comparisons, output_format).try_into()
     }
 }
 

@@ -22,6 +22,7 @@
 name = "00.solc-0.8.33"
 path = "./temp-compilers/solc-0.8.33"
 description = "solc the latest downloaded from the official repo"
+is_correctness_reference = true
 disabled = false
 
 [compilers.solx-latest]
@@ -40,7 +41,6 @@ disabled = true
 name = "03.solx"
 path = "./target/release/solx"
 description = "solx built from the current commit"
-is_correctness_reference = true
 is_correctness_candidate = true
 
 # Comparisons for Excel diff columns.
