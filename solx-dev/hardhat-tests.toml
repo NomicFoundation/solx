@@ -1,22 +1,30 @@
-### Template ###
+# Hardhat project test configuration.
 #
-# [projects.name]
-# url = "https://github.com/.../..." # mandatory: required for running `git clone`
-# description = "A brief description of the project." # mandatory: for logging only
-# build_system = "npm" # optional: default is "npm"; possible values: "npm", "yarn", "pnpm", "bun"
-# disabled = false # optional: whether the project is ignored
+# Compilers:
+#   [compilers.<id>]
+#   name = "00.solc"              # Display name in reports (hyphens become newlines)
+#   path = "./path/to/compiler"   # Path to compiler executable
+#   description = "..."           # Compiler description
+#   solidity_version = "0.8.30"   # Override Solidity version (optional)
+#   is_correctness_reference = true/false  # Reference for correctness checks
+#   is_correctness_candidate = true/false  # Candidate for correctness checks
+#   disabled = true/false         # Whether to skip this compiler
 #
-# Environment variables
-# You can set environment variables for the project.
-# They will be set during the compilation and testing phases.
-# [projects.name.env]
-# TEST_ENV = "123"
-# ANOTHER_ENV = "321"
+# Projects:
+#   [projects.<name>]
+#   url = "https://github.com/..."  # Git repository URL
+#   description = "..."             # Project description
+#   build_system = "npm"            # npm, yarn, pnpm, or bun (default: npm)
+#   dependencies = ["pkg@version"]  # Additional npm dependencies to install
+#   disabled = true/false           # Whether to skip this project
+#   [projects.<name>.env]
+#   VAR = "value"                   # Environment variables for build/test
 #
-# [compilers.solx]
-# name = "solx-latest" # mandatory: used in Excel reports; hypens are replaced with '\n'
-# path = "./target/release/solx" # mandatory: path to the compiler executable
-# description = "a super ultra cool solx compiler" # mandatory: compiler description
+# Comparisons:
+#   [[comparisons]]
+#   left = "03.solx-legacy"         # Left toolchain: {compiler.name}-{codegen}
+#   right = "02.solx-main-legacy"   # Right toolchain: {compiler.name}-{codegen}
+#   disabled = true/false           # Whether to skip this comparison
 
 [compilers.solc]
 name = "00.solc-0.8.33"
@@ -43,6 +51,7 @@ name = "03.solx"
 path = "./target/release/solx"
 description = "solx built from the current commit"
 is_correctness_candidate = true
+disabled = false
 
 # Comparisons for Excel diff columns.
 # Each comparison generates a diff column showing (left - right) / right as percentage.
