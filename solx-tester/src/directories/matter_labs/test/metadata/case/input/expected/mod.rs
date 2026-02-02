@@ -8,8 +8,8 @@ use serde::Deserialize;
 
 use crate::compilers::mode::Mode;
 
-use self::variant::extended::Extended;
 use self::variant::Variant;
+use self::variant::extended::Extended;
 
 ///
 /// The Matter Labs compiler test metadata expected data variant.

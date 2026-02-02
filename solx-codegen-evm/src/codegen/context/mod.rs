@@ -17,20 +17,20 @@ use inkwell::types::BasicType;
 use crate::codegen::build::Build as EVMBuild;
 use crate::codegen::profiler::Profiler;
 use crate::codegen::warning::Warning;
+use crate::context::IContext;
 use crate::context::attribute::Attribute;
 use crate::context::function::declaration::Declaration as FunctionDeclaration;
 use crate::context::function::r#return::Return as FunctionReturn;
 use crate::context::r#loop::Loop;
-use crate::context::IContext;
 use crate::debug_config::DebugConfig;
-use crate::optimizer::settings::Settings as OptimizerSettings;
 use crate::optimizer::Optimizer;
+use crate::optimizer::settings::Settings as OptimizerSettings;
 use crate::target_machine::TargetMachine;
 
 use self::address_space::AddressSpace;
 use self::evmla_data::EVMLAData;
-use self::function::intrinsics::Intrinsics;
 use self::function::Function;
+use self::function::intrinsics::Intrinsics;
 use self::solidity_data::SolidityData;
 use self::yul_data::YulData;
 
@@ -147,7 +147,7 @@ impl<'ctx> Context<'ctx> {
             .spill_area_size()
             .map(|spill_area_size| (crate::r#const::SOLC_USER_MEMORY_OFFSET, spill_area_size));
 
-        if let Some(ref debug_config) = self.debug_config {
+        if let Some(debug_config) = self.debug_config.as_ref() {
             debug_config.dump_llvm_ir_unoptimized(
                 contract_path,
                 self.module(),
@@ -173,7 +173,7 @@ impl<'ctx> Context<'ctx> {
         self.optimizer
             .run(&target_machine, self.module())
             .map_err(|error| anyhow::anyhow!("{} code optimizing: {error}", self.code_segment))?;
-        if let Some(ref debug_config) = self.debug_config {
+        if let Some(debug_config) = self.debug_config.as_ref() {
             debug_config.dump_llvm_ir_optimized(
                 contract_path,
                 self.module(),
@@ -204,7 +204,7 @@ impl<'ctx> Context<'ctx> {
                 )
                 .map_err(|error| anyhow::anyhow!("assembly emitting: {error}"))?;
 
-            if let Some(ref debug_config) = self.debug_config {
+            if let Some(debug_config) = self.debug_config.as_ref() {
                 let assembly_text = String::from_utf8_lossy(assembly_buffer.as_slice());
                 debug_config.dump_assembly(
                     contract_path,

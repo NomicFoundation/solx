@@ -8,8 +8,8 @@ use colored::Colorize;
 
 use crate::test::description::TestDescription;
 
-use self::outcome::passed_variant::PassedVariant;
 use self::outcome::Outcome;
+use self::outcome::passed_variant::PassedVariant;
 
 ///
 /// `solx` tester summary element.

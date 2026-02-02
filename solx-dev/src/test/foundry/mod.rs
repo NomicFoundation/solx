@@ -277,7 +277,12 @@ pub fn test(
                     project_name.clone(),
                     toolchain_name.clone(),
                 ));
-                eprintln!("{} Building Foundry project {} with {} failed with {build_errors} errors and {built_contracts_count} built contracts", solx_utils::cargo_status_error("Error"), project_name.bright_white().bold(), toolchain_name.bright_white().bold());
+                eprintln!(
+                    "{} Building Foundry project {} with {} failed with {build_errors} errors and {built_contracts_count} built contracts",
+                    solx_utils::cargo_status_error("Error"),
+                    project_name.bright_white().bold(),
+                    toolchain_name.bright_white().bold()
+                );
                 continue;
             }
 

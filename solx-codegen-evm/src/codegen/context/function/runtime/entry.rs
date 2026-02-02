@@ -2,9 +2,9 @@
 //! The entry function.
 //!
 
+use crate::codegen::WriteLLVM;
 use crate::codegen::attribute::Attribute;
 use crate::codegen::context::Context;
-use crate::codegen::WriteLLVM;
 use crate::context::IContext;
 
 ///

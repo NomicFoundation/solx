@@ -18,8 +18,8 @@ use crate::test::function_call::parser::lexical::TokenStream;
 use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
 use crate::test::function_call::parser::syntax::error::ParsingError;
 use crate::test::function_call::parser::syntax::parser;
-use crate::test::function_call::parser::syntax::tree::r#type::builder::Builder as TypeBuilder;
 use crate::test::function_call::parser::syntax::tree::r#type::Type;
+use crate::test::function_call::parser::syntax::tree::r#type::builder::Builder as TypeBuilder;
 
 ///
 /// The parser state.
@@ -105,7 +105,7 @@ impl Parser {
                             ],
                             lexeme,
                         )
-                        .into())
+                        .into());
                     }
                 },
                 State::BracketSquareLeftOrEnd => {
@@ -159,7 +159,7 @@ impl Parser {
                                 vec!["{positive decimal integer literal}", "]"],
                                 lexeme,
                             )
-                            .into())
+                            .into());
                         }
                     }
                 }
@@ -172,7 +172,7 @@ impl Parser {
                             self.state = State::BracketSquareLeftOrEnd;
                         }
                         Token { lexeme, location } => {
-                            return Err(SyntaxError::new(location, vec!["]"], lexeme).into())
+                            return Err(SyntaxError::new(location, vec!["]"], lexeme).into());
                         }
                     }
                 }
@@ -196,8 +196,8 @@ mod tests {
     use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
     use crate::test::function_call::parser::syntax::error::ParsingError;
 
-    use crate::test::function_call::parser::syntax::tree::r#type::variant::Variant as TypeVariant;
     use crate::test::function_call::parser::syntax::tree::r#type::Type;
+    use crate::test::function_call::parser::syntax::tree::r#type::variant::Variant as TypeVariant;
 
     #[test]
     fn ok_integer() {

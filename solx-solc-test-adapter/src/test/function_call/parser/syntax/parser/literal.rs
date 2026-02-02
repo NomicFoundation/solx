@@ -13,9 +13,9 @@ use crate::test::function_call::parser::lexical::TokenStream;
 use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
 use crate::test::function_call::parser::syntax::error::ParsingError;
 use crate::test::function_call::parser::syntax::parser;
+use crate::test::function_call::parser::syntax::tree::literal::Literal;
 use crate::test::function_call::parser::syntax::tree::literal::alignment::Alignment;
 use crate::test::function_call::parser::syntax::tree::literal::builder::Builder as LiteralBuilder;
-use crate::test::function_call::parser::syntax::tree::literal::Literal;
 
 ///
 /// The parser state.
@@ -155,10 +155,10 @@ mod tests {
     use super::Parser;
     use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
     use crate::test::function_call::parser::syntax::error::ParsingError;
+    use crate::test::function_call::parser::syntax::tree::literal::Literal;
     use crate::test::function_call::parser::syntax::tree::literal::alignment::Alignment;
     use crate::test::function_call::parser::syntax::tree::literal::hex::Literal as HexLiteral;
     use crate::test::function_call::parser::syntax::tree::literal::integer::Literal as IntegerLiteral;
-    use crate::test::function_call::parser::syntax::tree::literal::Literal;
 
     #[test]
     fn ok_integer() {

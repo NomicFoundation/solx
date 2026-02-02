@@ -26,8 +26,8 @@ impl ContractName {
     /// A shortcut constructor.
     ///
     pub fn new(path: String, name: Option<String>) -> Self {
-        let full_path = match name {
-            Some(ref name) => format!("{path}:{name}"),
+        let full_path = match name.as_ref() {
+            Some(name) => format!("{path}:{name}"),
             None => path.clone(),
         };
 

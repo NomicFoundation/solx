@@ -13,9 +13,9 @@ use solx_codegen_evm::IContext;
 use crate::assembly::instruction::Instruction;
 use crate::extra_metadata::ExtraMetadata;
 
+use self::function::Function;
 use self::function::block::Block;
 use self::function::r#type::Type as FunctionType;
-use self::function::Function;
 
 ///
 /// Ethereal IR of EVM bytecode.

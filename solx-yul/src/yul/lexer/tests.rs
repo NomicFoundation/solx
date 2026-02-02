@@ -2,10 +2,10 @@
 //! The Yul IR lexer tests.
 //!
 
+use crate::yul::lexer::Lexer;
 use crate::yul::lexer::error::Error;
 use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::location::Location;
-use crate::yul::lexer::Lexer;
 
 #[test]
 fn default() {

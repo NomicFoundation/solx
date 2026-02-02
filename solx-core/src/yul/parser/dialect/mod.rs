@@ -11,8 +11,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use solx_yul::yul::error::Error;
-use solx_yul::yul::lexer::token::location::Location;
 use solx_yul::yul::lexer::Lexer;
+use solx_yul::yul::lexer::token::location::Location;
 
 use solx_yul::yul::parser::identifier::Identifier;
 

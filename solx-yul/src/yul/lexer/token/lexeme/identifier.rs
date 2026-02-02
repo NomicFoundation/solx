@@ -2,10 +2,10 @@
 //! The identifier lexeme.
 //!
 
-use crate::yul::lexer::token::lexeme::keyword::Keyword;
-use crate::yul::lexer::token::lexeme::Lexeme;
-use crate::yul::lexer::token::location::Location;
 use crate::yul::lexer::token::Token;
+use crate::yul::lexer::token::lexeme::Lexeme;
+use crate::yul::lexer::token::lexeme::keyword::Keyword;
+use crate::yul::lexer::token::location::Location;
 
 ///
 /// The identifier lexeme.

@@ -17,8 +17,8 @@ use solx_standard_json::CollectableError;
 
 use crate::error::Error;
 
-use self::contract::object::Object as ContractObject;
 use self::contract::Contract;
+use self::contract::object::Object as ContractObject;
 
 ///
 /// The Solidity project build.

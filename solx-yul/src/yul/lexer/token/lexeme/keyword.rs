@@ -2,11 +2,11 @@
 //! The keyword lexeme.
 //!
 
-use crate::yul::lexer::token::lexeme::literal::boolean::Boolean as BooleanLiteral;
-use crate::yul::lexer::token::lexeme::literal::Literal;
-use crate::yul::lexer::token::lexeme::Lexeme;
-use crate::yul::lexer::token::location::Location;
 use crate::yul::lexer::token::Token;
+use crate::yul::lexer::token::lexeme::Lexeme;
+use crate::yul::lexer::token::lexeme::literal::Literal;
+use crate::yul::lexer::token::lexeme::literal::boolean::Boolean as BooleanLiteral;
+use crate::yul::lexer::token::location::Location;
 
 ///
 /// The keyword lexeme.

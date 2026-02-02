@@ -15,8 +15,8 @@ use crate::test::function_call::parser::lexical::TokenStream;
 use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
 use crate::test::function_call::parser::syntax::error::ParsingError;
 use crate::test::function_call::parser::syntax::parser;
-use crate::test::function_call::parser::syntax::tree::gas::builder::Builder as GasBuilder;
 use crate::test::function_call::parser::syntax::tree::gas::Gas;
+use crate::test::function_call::parser::syntax::tree::gas::builder::Builder as GasBuilder;
 
 ///
 /// The parser state.
@@ -170,8 +170,8 @@ mod tests {
     use super::Parser;
     use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
     use crate::test::function_call::parser::syntax::error::ParsingError;
-    use crate::test::function_call::parser::syntax::tree::gas::variant::Variant;
     use crate::test::function_call::parser::syntax::tree::gas::Gas;
+    use crate::test::function_call::parser::syntax::tree::gas::variant::Variant;
 
     #[test]
     fn ok() {

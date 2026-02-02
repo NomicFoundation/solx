@@ -3,11 +3,11 @@
 //!
 
 use crate::yul::error::Error;
-use crate::yul::lexer::token::lexeme::symbol::Symbol;
-use crate::yul::lexer::token::lexeme::Lexeme;
-use crate::yul::lexer::token::location::Location;
-use crate::yul::lexer::token::Token;
 use crate::yul::lexer::Lexer;
+use crate::yul::lexer::token::Token;
+use crate::yul::lexer::token::lexeme::Lexeme;
+use crate::yul::lexer::token::lexeme::symbol::Symbol;
+use crate::yul::lexer::token::location::Location;
 use crate::yul::parser::r#type::Type;
 
 ///

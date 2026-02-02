@@ -4,8 +4,8 @@
 
 use itertools::Itertools;
 
-use crate::compilers::mode::imode::IMode;
 use crate::compilers::mode::Mode as ModeWrapper;
+use crate::compilers::mode::imode::IMode;
 use crate::compilers::solidity::codegen::Codegen;
 
 ///

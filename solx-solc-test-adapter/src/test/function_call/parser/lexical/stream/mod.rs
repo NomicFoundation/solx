@@ -19,11 +19,11 @@ use self::integer::error::Error as IntegerParserError;
 use self::string::error::Error as StringParserError;
 use self::symbol::error::Error as SymbolParserError;
 use crate::test::function_call::parser::lexical::error::Error;
+use crate::test::function_call::parser::lexical::token::Token;
+use crate::test::function_call::parser::lexical::token::lexeme::Lexeme;
 use crate::test::function_call::parser::lexical::token::lexeme::identifier::Identifier;
 use crate::test::function_call::parser::lexical::token::lexeme::literal::Literal;
-use crate::test::function_call::parser::lexical::token::lexeme::Lexeme;
 use crate::test::function_call::parser::lexical::token::location::Location;
-use crate::test::function_call::parser::lexical::token::Token;
 
 ///
 /// A token stream is initialized for each input file.

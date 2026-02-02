@@ -45,11 +45,7 @@ impl TryFrom<Keyword> for Boolean {
 
 impl From<bool> for Boolean {
     fn from(value: bool) -> Self {
-        if value {
-            Self::True
-        } else {
-            Self::False
-        }
+        if value { Self::True } else { Self::False }
     }
 }
 

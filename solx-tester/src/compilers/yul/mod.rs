@@ -12,11 +12,11 @@ use std::sync::Arc;
 
 use solx_standard_json::CollectableError as SolxCollectableError;
 
-use crate::compilers::mode::Mode;
-use crate::compilers::solidity::solc::compiler::standard_json::input::language::Language as SolcStandardJsonInputLanguage;
-use crate::compilers::solidity::solc::SolidityCompiler as SolcCompiler;
-use crate::compilers::solidity::solx::SolidityCompiler as SolxCompiler;
 use crate::compilers::Compiler;
+use crate::compilers::mode::Mode;
+use crate::compilers::solidity::solc::SolidityCompiler as SolcCompiler;
+use crate::compilers::solidity::solc::compiler::standard_json::input::language::Language as SolcStandardJsonInputLanguage;
+use crate::compilers::solidity::solx::SolidityCompiler as SolxCompiler;
 use crate::revm::input::Input as EVMInput;
 use crate::toolchain::Toolchain;
 

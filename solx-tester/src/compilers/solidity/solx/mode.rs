@@ -6,8 +6,8 @@ use itertools::Itertools;
 
 use crate::compilers::mode::llvm_options::LLVMOptions;
 
-use crate::compilers::mode::imode::IMode;
 use crate::compilers::mode::Mode as ModeWrapper;
+use crate::compilers::mode::imode::IMode;
 
 ///
 /// `solx` tester Solidity mode.

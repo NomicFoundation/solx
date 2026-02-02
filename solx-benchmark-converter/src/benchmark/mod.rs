@@ -7,19 +7,19 @@ pub mod test;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use crate::input::Input;
+use crate::input::Report;
 use crate::input::build_failures::BuildFailuresReport;
 use crate::input::compilation_time::CompilationTimeReport;
 use crate::input::foundry_gas::FoundryGasReport;
 use crate::input::foundry_size::FoundrySizeReport;
 use crate::input::test_failures::TestFailuresReport;
 use crate::input::testing_time::TestingTimeReport;
-use crate::input::Input;
-use crate::input::Report;
 
+use self::test::Test;
 use self::test::input::Input as TestInput;
 use self::test::metadata::Metadata as TestMetadata;
 use self::test::selector::Selector as TestSelector;
-use self::test::Test;
 
 ///
 /// The benchmark representation.

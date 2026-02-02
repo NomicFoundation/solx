@@ -2,22 +2,22 @@
 //! Printers for all Yul AST node types
 //!
 
-use crate::util::printer::print_list_comma_separated;
 use crate::util::printer::IPrinter;
+use crate::util::printer::print_list_comma_separated;
+use crate::yul::parser::statement::Statement;
 use crate::yul::parser::statement::assignment::Assignment;
 use crate::yul::parser::statement::block::Block;
 use crate::yul::parser::statement::code::Code;
-use crate::yul::parser::statement::expression::function_call::name::Name;
-use crate::yul::parser::statement::expression::function_call::FunctionCall;
-use crate::yul::parser::statement::expression::literal::Literal;
 use crate::yul::parser::statement::expression::Expression;
+use crate::yul::parser::statement::expression::function_call::FunctionCall;
+use crate::yul::parser::statement::expression::function_call::name::Name;
+use crate::yul::parser::statement::expression::literal::Literal;
 use crate::yul::parser::statement::for_loop::ForLoop;
 use crate::yul::parser::statement::function_definition::FunctionDefinition;
 use crate::yul::parser::statement::if_conditional::IfConditional;
 use crate::yul::parser::statement::object::Object;
 use crate::yul::parser::statement::switch::Switch;
 use crate::yul::parser::statement::variable_declaration::VariableDeclaration;
-use crate::yul::parser::statement::Statement;
 use crate::yul::visitor::Visitor;
 
 use super::parser::dialect::Dialect;

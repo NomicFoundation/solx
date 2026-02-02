@@ -8,9 +8,9 @@ pub mod identifier;
 pub mod statement;
 pub mod r#type;
 
+use crate::yul::lexer::Lexer;
 use crate::yul::lexer::error::Error as LexerError;
 use crate::yul::lexer::token::Token;
-use crate::yul::lexer::Lexer;
 
 ///
 /// Returns the `token` value if it is `Some(_)`, otherwise takes the next token from the `stream`.

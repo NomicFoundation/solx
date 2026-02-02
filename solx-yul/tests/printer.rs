@@ -7,8 +7,8 @@
 use solx_yul::util::printer::write_printer::WritePrinter;
 use solx_yul::yul::lexer::Lexer;
 use solx_yul::yul::parser::dialect::DefaultDialect;
-use solx_yul::yul::parser::statement::expression::Expression;
 use solx_yul::yul::parser::statement::Statement;
+use solx_yul::yul::parser::statement::expression::Expression;
 use solx_yul::yul::visitor::Visitor;
 
 fn print_expression(input: &str) -> String {
@@ -94,8 +94,7 @@ continue
 
     #[test]
     fn test_let() {
-        let expected =
-  "object \"ecadd\" {\n  code  { }\n  object \"ecadd_deployed\" {\n    code  {\n      let x\n      let a := 4\n       }\n    \n    }\n  }\n";
+        let expected = "object \"ecadd\" {\n  code  { }\n  object \"ecadd_deployed\" {\n    code  {\n      let x\n      let a := 4\n       }\n    \n    }\n  }\n";
         assert_eq!(
             print_statement(
                 r#"
@@ -162,8 +161,7 @@ if lt(a, b) { sstore(0, 1) }
 
     #[test]
     fn test_switch() {
-        let expected =
-  "object \"ecadd\" {\n  code  { }\n  object \"ecadd_deployed\" {\n    code {  {\n      let x := 0\n      switch calldataload(4)\n      case 0   { x := calldataload(0x24) }\n      default { x := calldataload(0x44) }\n      \n      sstore(0, div(x, 2))\n       }\n     }\n    }\n  }\n";
+        let expected = "object \"ecadd\" {\n  code  { }\n  object \"ecadd_deployed\" {\n    code {  {\n      let x := 0\n      switch calldataload(4)\n      case 0   { x := calldataload(0x24) }\n      default { x := calldataload(0x44) }\n      \n      sstore(0, div(x, 2))\n       }\n     }\n    }\n  }\n";
         assert_eq!(
             print_statement(
                 r#"

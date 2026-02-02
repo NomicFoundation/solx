@@ -19,17 +19,17 @@ pub mod solc;
 pub mod yul;
 
 pub use self::arguments::Arguments;
-pub use self::build::contract::Contract as EVMContractBuild;
 pub use self::build::Build as EVMBuild;
-pub use self::error::stack_too_deep::StackTooDeep as StackTooDeepError;
+pub use self::build::contract::Contract as EVMContractBuild;
+pub use self::r#const::*;
 pub use self::error::Error;
+pub use self::error::stack_too_deep::StackTooDeep as StackTooDeepError;
+pub use self::process::EXECUTABLE;
 pub use self::process::input::Input as EVMProcessInput;
 pub use self::process::output::Output as EVMProcessOutput;
 pub use self::process::run as run_recursive;
-pub use self::process::EXECUTABLE;
-pub use self::project::contract::Contract as ProjectContract;
 pub use self::project::Project;
-pub use self::r#const::*;
+pub use self::project::contract::Contract as ProjectContract;
 pub use self::solc::Solc;
 
 use std::collections::BTreeSet;
@@ -171,7 +171,7 @@ pub fn main(
             .ok()
             .map(PathBuf::from))
     {
-        Some(ref debug_output_directory) => {
+        Some(debug_output_directory) => {
             std::fs::create_dir_all(debug_output_directory.as_path())?;
             Some(solx_codegen_evm::DebugConfig::new(
                 debug_output_directory.to_owned(),

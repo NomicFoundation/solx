@@ -32,8 +32,8 @@ impl Executable {
     /// Returns the remote platform directory name for the specified platform.
     ///
     pub fn get_remote_platform_directory(&self) -> anyhow::Result<String> {
-        let platforms = match self.platforms {
-            Some(ref platform) => platform,
+        let platforms = match self.platforms.as_ref() {
+            Some(platform) => platform,
             None => anyhow::bail!("Platforms are not defined"),
         };
 

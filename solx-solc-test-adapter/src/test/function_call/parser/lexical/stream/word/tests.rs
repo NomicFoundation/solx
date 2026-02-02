@@ -2,13 +2,13 @@
 //! The lexical word parser tests.
 //!
 
-use super::parse;
 use super::Output;
+use super::parse;
+use crate::test::function_call::parser::lexical::token::lexeme::Lexeme;
 use crate::test::function_call::parser::lexical::token::lexeme::identifier::Identifier;
 use crate::test::function_call::parser::lexical::token::lexeme::keyword::Keyword;
-use crate::test::function_call::parser::lexical::token::lexeme::literal::boolean::Boolean;
 use crate::test::function_call::parser::lexical::token::lexeme::literal::Literal;
-use crate::test::function_call::parser::lexical::token::lexeme::Lexeme;
+use crate::test::function_call::parser::lexical::token::lexeme::literal::boolean::Boolean;
 
 #[test]
 fn ok_identifier() {

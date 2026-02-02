@@ -8,14 +8,14 @@ use std::sync::Mutex;
 use revm::context::result::ExecutionResult;
 
 use crate::summary::Summary;
+use crate::test::InputContext;
 use crate::test::case::input::calldata::Calldata;
 use crate::test::case::input::identifier::InputIdentifier;
 use crate::test::case::input::output::Output;
 use crate::test::description::TestDescription;
-use crate::test::InputContext;
 
-use crate::revm::revm_type_conversions::revm_bytes_to_vec_value;
 use crate::revm::REVM;
+use crate::revm::revm_type_conversions::revm_bytes_to_vec_value;
 
 ///
 /// The EVM deploy contract call input variant.

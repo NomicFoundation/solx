@@ -8,8 +8,8 @@ use std::sync::Mutex;
 
 use revm::context::result::ExecutionResult;
 
-use crate::revm::revm_type_conversions::revm_bytes_to_vec_value;
 use crate::revm::REVM;
+use crate::revm::revm_type_conversions::revm_bytes_to_vec_value;
 use crate::summary::Summary;
 use crate::test::case::input::calldata::Calldata;
 use crate::test::case::input::identifier::InputIdentifier;

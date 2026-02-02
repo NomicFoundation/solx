@@ -2,10 +2,10 @@
 //! The integer literal lexeme.
 //!
 
+use crate::yul::lexer::token::Token;
 use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::lexeme::Literal;
 use crate::yul::lexer::token::location::Location;
-use crate::yul::lexer::token::Token;
 
 ///
 /// The integer literal lexeme.

@@ -2,7 +2,7 @@
 //! `solx` tester upstream Yul mode.
 //!
 
-use crate::compilers::mode::{imode::IMode, Mode as ModeWrapper};
+use crate::compilers::mode::{Mode as ModeWrapper, imode::IMode};
 
 ///
 /// `solx` tester upstream Yul mode.

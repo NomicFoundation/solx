@@ -12,8 +12,8 @@ use std::time::Instant;
 use colored::Colorize;
 use itertools::Itertools;
 
-use self::config::project::build_system::BuildSystem;
 use self::config::Config;
+use self::config::project::build_system::BuildSystem;
 use self::output::test::Test as TestOutput;
 
 ///
