@@ -60,12 +60,12 @@ disabled = true
 [[comparisons]]
 left = "03.solx-legacy"
 right = "02.solx-main-legacy"
-disabled = true
+disabled = false
 
 [[comparisons]]
 left = "03.solx-viaIR"
 right = "02.solx-main-viaIR"
-disabled = true
+disabled = false
 
 [[comparisons]]
 left = "03.solx-legacy"
