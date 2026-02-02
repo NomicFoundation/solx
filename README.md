@@ -14,9 +14,9 @@
 
 - [Foundry projects](./solx-dev/foundry-tests.toml)
 - [Hardhat projects](./solx-dev/hardhat-tests.toml)
-- [other projects](./tests/solidity/complex/defi) such as UniswapV2 and Mooniswap
-- [tests](https://github.com/NomicFoundation/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests) from the **solc** repository
-- [additional tests](./tests/solidity) written by the **solx** team
+- [DeFi protocols](./tests/solidity/complex/defi): UniswapV2, UniswapV3, Mooniswap, StarkEx
+- [Semantic tests](https://github.com/NomicFoundation/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests) from the **solc** repository
+- [Additional tests](./tests/solidity) written by the **solx** team
 
 ## Documentation
 
@@ -32,6 +32,19 @@ See also:
 
 For the detailed installation and usage guide, visit [the respective page of our documentation](https://nomicfoundation.github.io/solx/latest/#installation).
 
+## Quick Start
+
+```shell
+# Compile a Solidity file
+solx Contract.sol --bin --abi
+
+# Compile with optimizations
+solx Contract.sol --bin --abi -O3
+
+# Output to a directory
+solx Contract.sol --bin --abi -o ./build
+```
+
 ## Architecture
 
 **solx** consists of three main parts:
@@ -46,7 +59,16 @@ The most important part of the project is the EVM target in LLVM. You can find i
 
 ## Testing
 
-To run the unit and CLI tests, execute `cargo test` at the repository root.
+```shell
+# Run unit and CLI tests
+cargo test
+
+# Run integration tests with solx-tester
+cargo build --release
+./target/release/solx-tester --solx ./target/release/solx
+```
+
+For more testing options, see [solx-tester](./solx-tester/) documentation.
 
 ## Troubleshooting
 
