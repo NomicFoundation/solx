@@ -125,13 +125,13 @@ This repository maintains intuitive and stable naming for the executables and pr
    git submodule update --recursive --checkout
    ```
     
-4. Install the Matter Labs LLVM framework builder. This tool clones the [repository of Matter Labs LLVM Framework](https://github.com/matter-labs/solx-llvm) and runs a sequence of build commands tuned for the needs of **solx**.
+4. Install the LLVM framework builder. This tool clones the [solx LLVM framework repository](https://github.com/matter-labs/solx-llvm) and runs a sequence of build commands tuned for the needs of **solx**.
 
     ```shell
     cargo install compiler-llvm-builder
     ```
 
-    To fine-tune your build of Matter Labs LLVM framework, refer to the section on [tuning the Matter Labs LLVM build](#tuning-the-llvm-build).
+    To fine-tune your build of the LLVM framework, refer to the section on [tuning the LLVM build](#tuning-the-llvm-build).
 
 > Always use the latest version of the builder to benefit from the latest features and bug fixes.
 > To check for new versions and update the builder, simply run `cargo install compiler-llvm-builder` again, even if you have already installed the builder.
@@ -212,7 +212,7 @@ This repository maintains intuitive and stable naming for the executables and pr
 
 * For more information and available build options, run `solx-llvm build --help`.
 * Use the `--use-ccache` option to speed up the build process if you have [ccache](https://ccache.dev) installed.
-* To build the Matter Labs LLVM framework using specific C and C++ compilers, pass additional arguments to [CMake](https://cmake.org/) using the `--extra-args` option:
+* To build the LLVM framework using specific C and C++ compilers, pass additional arguments to [CMake](https://cmake.org/) using the `--extra-args` option:
 
   ```shell
   # Pay special attention to character escaping.
@@ -225,13 +225,13 @@ This repository maintains intuitive and stable naming for the executables and pr
 * If you prefer building [your LLVM framework](https://github.com/matter-labs/solx-llvm) manually, include the following flags in your CMake command:
 
   ```shell
-  # We recommended using the latest version of CMake.
+  # We recommend using the latest version of CMake.
 
   -DLLVM_TARGETS_TO_BUILD='EVM'
   -DLLVM_ENABLE_PROJECTS='lld'
   -DBUILD_SHARED_LIBS='Off'
   ```
 
-> For most users, the [Matter Labs LLVM builder](#building-from-source) is the recommended way to build the framework.
+> For most users, the [LLVM builder](#building-from-source) is the recommended way to build the framework.
 > This section was added for compiler toolchain developers and researchers with specific requirements and experience with the LLVM framework.
 > We are going to present a more detailed guide for LLVM contributors in the future.

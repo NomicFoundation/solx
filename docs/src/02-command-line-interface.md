@@ -42,7 +42,7 @@ Binary:
 
 
 
-### `--bin`
+### `--bin-runtime`
 
 Emits the runtime part of the bytecode.
 
@@ -155,7 +155,7 @@ JSON AST:
 {"absolutePath":".../Simple.sol","exportedSymbols":{"Test":[26]},"id":27,"license":"MIT","nodeType":"SourceUnit","nodes":[ ... ],"src":"506:265:0"}
 ```
 
-> Since **solx** communicates with **solc** only via standard JSON under the hood, full JSON AST instead is emitted instead of the compact one.
+> Since **solx** communicates with **solc** only via standard JSON under the hood, the full JSON AST is emitted instead of the compact one.
 
 
 
@@ -445,7 +445,7 @@ Output:
 ```text
 Compiler run successful. Artifact(s) can be found in directory "build".
 ...
-Test.zasm       Test.zbin       Test_meta.json
+Test.asm        Test.bin        Test_meta.json
 ```
 
 
@@ -605,7 +605,7 @@ JSON representation of the CBOR payload:
     // Required: consists of semicolon-separated pairs of colon-separated compiler names and versions.
     // `solx:<version>` is always included.
     // `solc:<version>;llvm:<version>` is only included for Solidity and Yul contracts, but not included for LLVM IR ones.
-    // `llvm` stands for the revision of Matter Labs fork of solc, that solx is statically linked with.
+    // `llvm` stands for the revision of the LLVM-friendly fork of solc that solx is statically linked with.
     "solc": "solx:0.1.3;solc:0.8.33;llvm:1.0.2"
 }
 ```
