@@ -191,11 +191,8 @@ impl Selection {
         for file in self.inner.values() {
             for contract in file.values() {
                 if contract.contains(&Selector::EVM)
-                    || contract.contains(&Selector::Bytecode)
                     || contract.contains(&Selector::BytecodeDebugInfo)
-                    || contract.contains(&Selector::RuntimeBytecode)
                     || contract.contains(&Selector::RuntimeBytecodeDebugInfo)
-                    || contract.contains(&Selector::Any)
                 {
                     return true;
                 }
