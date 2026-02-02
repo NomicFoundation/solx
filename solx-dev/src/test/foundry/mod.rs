@@ -84,13 +84,14 @@ pub fn test(
                 .as_deref()
                 .unwrap_or(solidity_version.as_str());
 
+            let project_directory_str = project_directory.to_string_lossy();
             let mut clone_command = Command::new("git");
             clone_command.arg("clone");
             clone_command.args(["--depth", "1"]);
             clone_command.arg("--recurse-submodules");
             clone_command.arg("--shallow-submodules");
             clone_command.arg(project.url.as_str());
-            clone_command.arg(project_directory.to_string_lossy().as_ref());
+            clone_command.arg(&*project_directory_str);
             crate::utils::command_with_retries(
                 &mut clone_command,
                 format!(
@@ -147,7 +148,7 @@ pub fn test(
                     16,
                 )?;
                 let mut yarn_install_command = Command::new(build_system);
-                yarn_install_command.args(["--cwd", project_directory.to_string_lossy().as_ref()]);
+                yarn_install_command.args(["--cwd", &*project_directory_str]);
                 yarn_install_command.arg("install");
                 yarn_install_command.arg("--silent");
                 crate::utils::command_with_retries(
@@ -192,12 +193,13 @@ pub fn test(
             )?;
 
             let compiler_path = crate::utils::absolute_path(compiler.path.as_str())?;
+            let compiler_path_str = compiler_path.to_string_lossy();
             let toolchain_name = format!("{}-{codegen}", compiler.name);
 
             let mut forge_build_command = Command::new("forge");
             forge_build_command.arg("build");
-            forge_build_command.args(["--root", project_directory.to_string_lossy().as_ref()]);
-            forge_build_command.args(["--use", compiler_path.to_string_lossy().as_ref()]);
+            forge_build_command.args(["--root", &*project_directory_str]);
+            forge_build_command.args(["--use", &*compiler_path_str]);
             if codegen == "viaIR" {
                 forge_build_command.arg("--via-ir");
             }
@@ -288,9 +290,8 @@ pub fn test(
 
             let mut forge_build_sizes_command = Command::new("forge");
             forge_build_sizes_command.arg("build");
-            forge_build_sizes_command
-                .args(["--root", project_directory.to_string_lossy().as_ref()]);
-            forge_build_sizes_command.args(["--use", compiler_path.to_string_lossy().as_ref()]);
+            forge_build_sizes_command.args(["--root", &*project_directory_str]);
+            forge_build_sizes_command.args(["--use", &*compiler_path_str]);
             if codegen == "viaIR" {
                 forge_build_sizes_command.arg("--via-ir");
             }
@@ -327,8 +328,8 @@ pub fn test(
 
             let mut forge_test_command = Command::new("forge");
             forge_test_command.arg("test");
-            forge_test_command.args(["--root", project_directory.to_string_lossy().as_ref()]);
-            forge_test_command.args(["--use", compiler_path.to_string_lossy().as_ref()]);
+            forge_test_command.args(["--root", &*project_directory_str]);
+            forge_test_command.args(["--use", &*compiler_path_str]);
             if codegen == "viaIR" {
                 forge_test_command.arg("--via-ir");
             }
@@ -392,8 +393,8 @@ pub fn test(
 
             let mut forge_test_gas_command = Command::new("forge");
             forge_test_gas_command.arg("test");
-            forge_test_gas_command.args(["--root", project_directory.to_string_lossy().as_ref()]);
-            forge_test_gas_command.args(["--use", compiler_path.to_string_lossy().as_ref()]);
+            forge_test_gas_command.args(["--root", &*project_directory_str]);
+            forge_test_gas_command.args(["--use", &*compiler_path_str]);
             if codegen == "viaIR" {
                 forge_test_gas_command.arg("--via-ir");
             }

@@ -37,20 +37,20 @@ pub fn build(
     let llvm_build_final = Path::llvm_build_final()?;
     let llvm_target_final = Path::llvm_target_final()?;
 
+    let llvm_module_llvm_str = llvm_module_llvm.to_string_lossy();
+    let llvm_build_final_str = llvm_build_final.to_string_lossy();
+    let llvm_target_final_str = llvm_target_final.to_string_lossy();
+
     crate::utils::command(
         Command::new("cmake")
             .args([
                 "-S",
-                llvm_module_llvm.to_string_lossy().as_ref(),
+                &*llvm_module_llvm_str,
                 "-B",
-                llvm_build_final.to_string_lossy().as_ref(),
+                &*llvm_build_final_str,
                 "-G",
                 "Ninja",
-                format!(
-                    "-DCMAKE_INSTALL_PREFIX='{}'",
-                    llvm_target_final.to_string_lossy().as_ref(),
-                )
-                .as_str(),
+                format!("-DCMAKE_INSTALL_PREFIX='{llvm_target_final_str}'",).as_str(),
                 format!("-DCMAKE_BUILD_TYPE='{build_type}'").as_str(),
                 "-DCMAKE_C_COMPILER='clang'",
                 "-DCMAKE_CXX_COMPILER='clang++'",

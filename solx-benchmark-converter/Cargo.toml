@@ -11,15 +11,14 @@ name = "solx-benchmark-converter"
 path = "src/benchmark_converter/main.rs"
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
-anyhow = "1.0"
-thiserror = "1.0"
-colored = "3.0"
-glob = "0.3"
-semver = "1.0"
-
-serde = { version = "1.0", features = [ "derive" ] }
-serde_json = "1.0"
-rust_xlsxwriter = "0.89"
+anyhow.workspace = true
+clap.workspace = true
+thiserror.workspace = true
+colored.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+semver.workspace = true
+glob.workspace = true
+rust_xlsxwriter = "0.93"
 
 solx-utils = { path = "../solx-utils" }

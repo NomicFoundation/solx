@@ -122,12 +122,11 @@ where
                 lexeme: Lexeme::Identifier(identifier),
                 ..
             } = lexer.peek()?
+                && identifier.inner.as_str() == "data"
             {
-                if identifier.inner.as_str() == "data" {
-                    let _data = lexer.next()?;
-                    let _identifier = lexer.next()?;
-                    let _metadata = lexer.next()?;
-                }
+                let _data = lexer.next()?;
+                let _identifier = lexer.next()?;
+                let _metadata = lexer.next()?;
             };
         }
 
@@ -191,12 +190,12 @@ where
         let mut dependencies = Dependencies::new(self.identifier.as_str());
         self.code.accumulate_evm_dependencies(&mut dependencies);
 
-        if let Some(runtime_code) = runtime_code {
-            if !dependencies.inner.contains(&runtime_code.identifier) {
-                dependencies
-                    .inner
-                    .insert(0, runtime_code.identifier.to_owned());
-            }
+        if let Some(runtime_code) = runtime_code
+            && !dependencies.inner.contains(&runtime_code.identifier)
+        {
+            dependencies
+                .inner
+                .insert(0, runtime_code.identifier.to_owned());
         }
 
         dependencies

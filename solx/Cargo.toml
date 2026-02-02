@@ -14,11 +14,11 @@ path = "src/solx.rs"
 doctest = false
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
-anyhow = "1.0"
-serde = { version = "1.0", "features" = [ "derive" ] }
-serde_json = { version = "1.0", features = [ "arbitrary_precision" ] }
-semver = { version = "1.0", features = [ "serde" ] }
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+semver.workspace = true
 libc = "0.2"
 
 solx-core = { path = "../solx-core" }
@@ -26,15 +26,10 @@ solx-standard-json = { path = "../solx-standard-json" }
 solx-utils = { path = "../solx-utils" }
 
 [dev-dependencies]
-assert_cmd = "2.0"
+assert_cmd = "2.1"
 predicates = "3.1"
-tempfile = "3.19"
+tempfile = "3.24"
 test-case = "3.3"
 
 solx-codegen-evm = { path = "../solx-codegen-evm" }
-
-[dev-dependencies.inkwell]
-git = "https://github.com/NomicFoundation/inkwell"
-branch = "main"
-default-features = false
-features = ["llvm21-1", "serde", "no-libffi-linking", "target-evm"]
+inkwell.workspace = true

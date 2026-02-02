@@ -101,10 +101,10 @@ impl Case {
     /// Copies the final expected data to the last input.
     ///
     pub fn normalize_expected(&mut self) {
-        if let Some(input) = self.inputs.last_mut() {
-            if input.expected.is_none() {
-                input.expected.clone_from(&self.expected);
-            }
+        if let Some(input) = self.inputs.last_mut()
+            && input.expected.is_none()
+        {
+            input.expected.clone_from(&self.expected);
         }
     }
 

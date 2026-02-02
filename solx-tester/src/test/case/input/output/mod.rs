@@ -193,10 +193,9 @@ impl PartialEq<Self> for Output {
         for index in 0..self.return_data.len() {
             if let (Value::Known(value_1), Value::Known(value_2)) =
                 (&self.return_data[index], &other.return_data[index])
+                && value_1 != value_2
             {
-                if value_1 != value_2 {
-                    return false;
-                }
+                return false;
             }
         }
 

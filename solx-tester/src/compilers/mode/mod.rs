@@ -81,10 +81,10 @@ impl Mode {
                     Some(version) => version,
                     None => return true,
                 };
-                if let Ok(version_req) = semver::VersionReq::parse(version) {
-                    if self.check_version(&version_req) {
-                        return true;
-                    }
+                if let Ok(version_req) = semver::VersionReq::parse(version)
+                    && self.check_version(&version_req)
+                {
+                    return true;
                 }
             }
         }

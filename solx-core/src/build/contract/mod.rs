@@ -100,75 +100,75 @@ impl Contract {
             writeln!(std::io::stdout(), "EVM assembly:\n{legacy_assembly}")?;
         }
 
-        if let Some(deploy_object_result) = self.deploy_object_result.as_mut() {
-            if output_selection.check_selection(
+        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
+            && output_selection.check_selection(
                 self.name.path.as_str(),
                 self.name.name.as_deref(),
                 solx_standard_json::InputSelector::BytecodeLLVMAssembly,
-            ) {
-                let deploy_assembly = deploy_object_result
-                    .as_mut()
-                    .expect("Always exists")
-                    .assembly
-                    .take()
-                    .expect("Always exists");
-                writeln!(
-                    std::io::stdout(),
-                    "Deploy LLVM EVM assembly:\n{deploy_assembly}"
-                )?;
-            }
+            )
+        {
+            let deploy_assembly = deploy_object_result
+                .as_mut()
+                .expect("Always exists")
+                .assembly
+                .take()
+                .expect("Always exists");
+            writeln!(
+                std::io::stdout(),
+                "Deploy LLVM EVM assembly:\n{deploy_assembly}"
+            )?;
         }
-        if let Some(runtime_object_result) = self.runtime_object_result.as_mut() {
-            if output_selection.check_selection(
+        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
+            && output_selection.check_selection(
                 self.name.path.as_str(),
                 self.name.name.as_deref(),
                 solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
-            ) {
-                let runtime_assembly = runtime_object_result
-                    .as_mut()
-                    .expect("Always exists")
-                    .assembly
-                    .take()
-                    .expect("Always exists");
-                writeln!(
-                    std::io::stdout(),
-                    "Runtime LLVM EVM assembly:\n{runtime_assembly}"
-                )?;
-            }
+            )
+        {
+            let runtime_assembly = runtime_object_result
+                .as_mut()
+                .expect("Always exists")
+                .assembly
+                .take()
+                .expect("Always exists");
+            writeln!(
+                std::io::stdout(),
+                "Runtime LLVM EVM assembly:\n{runtime_assembly}"
+            )?;
         }
 
-        if let Some(deploy_object_result) = self.deploy_object_result.as_mut() {
-            if output_selection.check_selection(
+        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
+            && output_selection.check_selection(
                 self.name.path.as_str(),
                 self.name.name.as_deref(),
                 solx_standard_json::InputSelector::BytecodeObject,
-            ) {
-                let bytecode_hex = deploy_object_result
-                    .as_mut()
-                    .expect("Always exists")
-                    .bytecode_hex
-                    .take()
-                    .expect("Always exists");
-                writeln!(std::io::stdout(), "Binary:\n{bytecode_hex}")?;
-            }
+            )
+        {
+            let bytecode_hex = deploy_object_result
+                .as_mut()
+                .expect("Always exists")
+                .bytecode_hex
+                .take()
+                .expect("Always exists");
+            writeln!(std::io::stdout(), "Binary:\n{bytecode_hex}")?;
         }
-        if let Some(runtime_object_result) = self.runtime_object_result.as_mut() {
-            if output_selection.check_selection(
+        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
+            && output_selection.check_selection(
                 self.name.path.as_str(),
                 self.name.name.as_deref(),
                 solx_standard_json::InputSelector::RuntimeBytecodeObject,
-            ) {
-                let bytecode_hex = runtime_object_result
-                    .as_mut()
-                    .expect("Always exists")
-                    .bytecode_hex
-                    .take()
-                    .expect("Always exists");
-                writeln!(
-                    std::io::stdout(),
-                    "Binary of the runtime part:\n{bytecode_hex}"
-                )?;
-            }
+            )
+        {
+            let bytecode_hex = runtime_object_result
+                .as_mut()
+                .expect("Always exists")
+                .bytecode_hex
+                .take()
+                .expect("Always exists");
+            writeln!(
+                std::io::stdout(),
+                "Binary of the runtime part:\n{bytecode_hex}"
+            )?;
         }
 
         if output_selection.check_selection(
@@ -264,27 +264,26 @@ impl Contract {
         }
         if let (Some(deploy_object_result), Some(runtime_object_result)) =
             (self.deploy_object_result, self.runtime_object_result)
-        {
-            if output_selection.check_selection(
+            && output_selection.check_selection(
                 self.name.path.as_str(),
                 self.name.name.as_deref(),
                 solx_standard_json::InputSelector::Benchmarks,
-            ) {
-                writeln!(std::io::stdout(), "Benchmarks:")?;
-                for (name, value) in deploy_object_result
-                    .expect("Always exists")
-                    .benchmarks
-                    .into_iter()
-                {
-                    writeln!(std::io::stdout(), "    {name}: {value}ms")?;
-                }
-                for (name, value) in runtime_object_result
-                    .expect("Always exists")
-                    .benchmarks
-                    .into_iter()
-                {
-                    writeln!(std::io::stdout(), "    {name}: {value}ms")?;
-                }
+            )
+        {
+            writeln!(std::io::stdout(), "Benchmarks:")?;
+            for (name, value) in deploy_object_result
+                .expect("Always exists")
+                .benchmarks
+                .into_iter()
+            {
+                writeln!(std::io::stdout(), "    {name}: {value}ms")?;
+            }
+            for (name, value) in runtime_object_result
+                .expect("Always exists")
+                .benchmarks
+                .into_iter()
+            {
+                writeln!(std::io::stdout(), "    {name}: {value}ms")?;
             }
         }
 
@@ -317,92 +316,90 @@ impl Contract {
         .to_string_lossy()
         .replace(['\\', '/', '.'], "_");
 
-        if let Some(deploy_object_result) = self.deploy_object_result.as_mut() {
-            if output_selection.check_selection(
+        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
+            && output_selection.check_selection(
                 self.name.path.as_str(),
                 self.name.name.as_deref(),
                 solx_standard_json::InputSelector::BytecodeObject,
-            ) {
-                let output_name = format!(
-                    "{contract_path}_{}.{}",
-                    self.name.name.as_deref().unwrap_or(contract_name),
-                    solx_utils::EXTENSION_EVM_BINARY
-                );
-                let mut output_path = output_directory.to_owned();
-                output_path.push(output_name.as_str());
+            )
+        {
+            let output_name = format!(
+                "{contract_path}_{}.{}",
+                self.name.name.as_deref().unwrap_or(contract_name),
+                solx_utils::EXTENSION_EVM_BINARY
+            );
+            let mut output_path = output_directory.to_owned();
+            output_path.push(output_name.as_str());
 
-                let bytecode_hex = deploy_object_result
-                    .as_mut()
-                    .expect("Always exists")
-                    .bytecode_hex
-                    .take()
-                    .expect("Always exists");
-                Self::write_to_file(output_path.as_path(), bytecode_hex, overwrite)?;
-            }
+            let bytecode_hex = deploy_object_result
+                .as_mut()
+                .expect("Always exists")
+                .bytecode_hex
+                .take()
+                .expect("Always exists");
+            Self::write_to_file(output_path.as_path(), bytecode_hex, overwrite)?;
         }
-        if let Some(runtime_object_result) = self.runtime_object_result.as_mut() {
-            if output_selection.check_selection(
+        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
+            && output_selection.check_selection(
                 self.name.path.as_str(),
                 self.name.name.as_deref(),
                 solx_standard_json::InputSelector::RuntimeBytecodeObject,
-            ) {
-                let output_name = format!(
-                    "{contract_path}_{}.{}-{}",
-                    self.name.name.as_deref().unwrap_or(contract_name),
-                    solx_utils::EXTENSION_EVM_BINARY,
-                    solx_utils::CodeSegment::Runtime,
-                );
-                let mut output_path = output_directory.to_owned();
-                output_path.push(output_name.as_str());
+            )
+        {
+            let output_name = format!(
+                "{contract_path}_{}.{}-{}",
+                self.name.name.as_deref().unwrap_or(contract_name),
+                solx_utils::EXTENSION_EVM_BINARY,
+                solx_utils::CodeSegment::Runtime,
+            );
+            let mut output_path = output_directory.to_owned();
+            output_path.push(output_name.as_str());
 
-                let bytecode_hex = runtime_object_result
-                    .as_mut()
-                    .expect("Always exists")
-                    .bytecode_hex
-                    .take()
-                    .expect("Always exists");
-                Self::write_to_file(output_path.as_path(), bytecode_hex, overwrite)?;
-            }
+            let bytecode_hex = runtime_object_result
+                .as_mut()
+                .expect("Always exists")
+                .bytecode_hex
+                .take()
+                .expect("Always exists");
+            Self::write_to_file(output_path.as_path(), bytecode_hex, overwrite)?;
         }
 
         if let (Some(deploy_object_result), Some(runtime_object_result)) = (
             self.deploy_object_result.as_mut(),
             self.runtime_object_result.as_mut(),
+        ) && output_selection.check_selection(
+            self.name.path.as_str(),
+            self.name.name.as_deref(),
+            solx_standard_json::InputSelector::BytecodeLLVMAssembly,
         ) {
-            if output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::BytecodeLLVMAssembly,
-            ) {
-                for (object, code_segment) in [
-                    deploy_object_result.as_mut(),
-                    runtime_object_result.as_mut(),
-                ]
-                .iter_mut()
-                .zip([
-                    solx_utils::CodeSegment::Deploy,
-                    solx_utils::CodeSegment::Runtime,
-                ]) {
-                    let output_name = format!(
-                        "{contract_path}_{}_llvm.{}{}",
-                        self.name.name.as_deref().unwrap_or(contract_name),
-                        solx_utils::EXTENSION_EVM_ASSEMBLY,
-                        match code_segment {
-                            solx_utils::CodeSegment::Deploy => "".to_owned(),
-                            solx_utils::CodeSegment::Runtime => format!("-{code_segment}"),
-                        },
-                    );
-                    let mut output_path = output_directory.to_owned();
-                    output_path.push(output_name.as_str());
+            for (object, code_segment) in [
+                deploy_object_result.as_mut(),
+                runtime_object_result.as_mut(),
+            ]
+            .iter_mut()
+            .zip([
+                solx_utils::CodeSegment::Deploy,
+                solx_utils::CodeSegment::Runtime,
+            ]) {
+                let output_name = format!(
+                    "{contract_path}_{}_llvm.{}{}",
+                    self.name.name.as_deref().unwrap_or(contract_name),
+                    solx_utils::EXTENSION_EVM_ASSEMBLY,
+                    match code_segment {
+                        solx_utils::CodeSegment::Deploy => "".to_owned(),
+                        solx_utils::CodeSegment::Runtime => format!("-{code_segment}"),
+                    },
+                );
+                let mut output_path = output_directory.to_owned();
+                output_path.push(output_name.as_str());
 
-                    let assembly = object
-                        .as_mut()
-                        .expect("Always exists")
-                        .assembly
-                        .take()
-                        .expect("Always exists");
-                    Self::write_to_file(output_path.as_path(), assembly, overwrite)?;
-                }
+                let assembly = object
+                    .as_mut()
+                    .expect("Always exists")
+                    .assembly
+                    .take()
+                    .expect("Always exists");
+                Self::write_to_file(output_path.as_path(), assembly, overwrite)?;
             }
         }
 
@@ -566,36 +563,35 @@ impl Contract {
         }
         if let (Some(deploy_object_result), Some(runtime_object_result)) =
             (self.deploy_object_result, self.runtime_object_result)
-        {
-            if output_selection.check_selection(
+            && output_selection.check_selection(
                 self.name.path.as_str(),
                 self.name.name.as_deref(),
                 solx_standard_json::InputSelector::Benchmarks,
-            ) {
-                let output_name = format!("{contract_path}_benchmarks.txt",);
-                let mut output_path = output_directory.to_owned();
-                output_path.push(output_name.as_str());
+            )
+        {
+            let output_name = format!("{contract_path}_benchmarks.txt",);
+            let mut output_path = output_directory.to_owned();
+            output_path.push(output_name.as_str());
 
-                let mut output = String::with_capacity(4096);
-                output.push_str("Benchmarks:\n");
-                for (name, value) in deploy_object_result
-                    .as_ref()
-                    .expect("Always exists")
-                    .benchmarks
-                    .iter()
-                {
-                    output.push_str(format!("{name}: {value}ms\n").as_str());
-                }
-                for (name, value) in runtime_object_result
-                    .as_ref()
-                    .expect("Always exists")
-                    .benchmarks
-                    .iter()
-                {
-                    output.push_str(format!("{name}: {value}ms\n").as_str());
-                }
-                Self::write_to_file(output_path.as_path(), output, overwrite)?;
+            let mut output = String::with_capacity(4096);
+            output.push_str("Benchmarks:\n");
+            for (name, value) in deploy_object_result
+                .as_ref()
+                .expect("Always exists")
+                .benchmarks
+                .iter()
+            {
+                output.push_str(format!("{name}: {value}ms\n").as_str());
             }
+            for (name, value) in runtime_object_result
+                .as_ref()
+                .expect("Always exists")
+                .benchmarks
+                .iter()
+            {
+                output.push_str(format!("{name}: {value}ms\n").as_str());
+            }
+            Self::write_to_file(output_path.as_path(), output, overwrite)?;
         }
 
         Ok(())
