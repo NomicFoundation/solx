@@ -270,6 +270,7 @@ jobs:
           body: ${{ steps.build_changelog.outputs.changelog }}
           tag_name: ${{ steps.release.outputs.version_or_sha }}
           target_commitish: ${{ steps.release.outputs.full_sha }}
+          prerelease: ${{ github.ref_type != 'tag' }}
           make_latest: ${{ github.ref_type == 'tag' }}
           files: releases/**/**
 

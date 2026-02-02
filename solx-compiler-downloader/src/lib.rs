@@ -4,9 +4,9 @@
 
 pub(crate) mod config;
 
+pub use self::config::Config;
 pub use self::config::compiler_list::CompilerList;
 pub use self::config::executable::protocol::Protocol;
-pub use self::config::Config;
 
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::PermissionsExt;
@@ -20,8 +20,8 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use colored::Colorize;
-use reqwest::blocking::Client as HttpClient;
 use reqwest::Url;
+use reqwest::blocking::Client as HttpClient;
 
 ///
 /// The compiler downloader.

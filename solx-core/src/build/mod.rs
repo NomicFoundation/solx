@@ -17,8 +17,8 @@ use solx_standard_json::CollectableError;
 
 use crate::error::Error;
 
-use self::contract::object::Object as ContractObject;
 use self::contract::Contract;
+use self::contract::object::Object as ContractObject;
 
 ///
 /// The Solidity project build.
@@ -276,16 +276,16 @@ impl Build {
         benchmarks: Vec<(String, u64)>,
     ) -> anyhow::Result<()> {
         for (path, ast_json) in self.ast_jsons.iter_mut().flatten() {
-            if let Some(source) = standard_json.sources.get_mut(path.as_str()) {
-                if let Some(ast_json) = ast_json.take().filter(|_| {
+            if let Some(source) = standard_json.sources.get_mut(path.as_str())
+                && let Some(ast_json) = ast_json.take().filter(|_| {
                     output_selection.check_selection(
                         path.as_str(),
                         None,
                         solx_standard_json::InputSelector::AST,
                     )
-                }) {
-                    source.ast = Some(ast_json);
-                }
+                })
+            {
+                source.ast = Some(ast_json);
             }
         }
 

@@ -8,7 +8,7 @@ pub mod llvm_options;
 use std::collections::HashSet;
 use std::fmt::Display;
 
-use imode::{mode_to_string_aux, IMode};
+use imode::{IMode, mode_to_string_aux};
 
 use crate::compilers::llvm_ir::mode::Mode as LLVMMode;
 use crate::compilers::solidity::solc::mode::Mode as SolcMode;
@@ -81,10 +81,10 @@ impl Mode {
                     Some(version) => version,
                     None => return true,
                 };
-                if let Ok(version_req) = semver::VersionReq::parse(version) {
-                    if self.check_version(&version_req) {
-                        return true;
-                    }
+                if let Ok(version_req) = semver::VersionReq::parse(version)
+                    && self.check_version(&version_req)
+                {
+                    return true;
                 }
             }
         }

@@ -2,8 +2,8 @@
 //! The LLVM IR EVMLA function trait.
 //!
 
-use crate::context::function::block::key::Key as BlockKey;
 use crate::context::function::block::Block;
+use crate::context::function::block::key::Key as BlockKey;
 
 ///
 /// The LLVM IR EVMLA function trait.

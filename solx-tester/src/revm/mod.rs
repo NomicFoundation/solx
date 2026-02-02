@@ -13,15 +13,15 @@ use std::time::Instant;
 
 use colored::Colorize;
 use revm::{
+    ExecuteCommitEvm, InspectCommitEvm,
     context::ContextTr,
     context::Evm,
-    database::{states::plain_account::PlainStorage, CacheState, Database},
-    handler::{instructions::EthInstructions, EthFrame, EthPrecompiles},
+    database::{CacheState, Database, states::plain_account::PlainStorage},
+    handler::{EthFrame, EthPrecompiles, instructions::EthInstructions},
     inspector::inspectors::TracerEip3155,
     interpreter::interpreter::EthInterpreter,
     primitives::{Address, FixedBytes, U256},
     state::AccountInfo,
-    ExecuteCommitEvm, InspectCommitEvm,
 };
 
 use crate::revm::revm_type_conversions::web3_u256_to_revm_u256;
@@ -115,9 +115,9 @@ impl REVM {
                 EthPrecompiles::default(),
             ))
         };
-        match evm {
-            REVM::Default(ref mut evm) => Self::set_data(evm),
-            REVM::Tracing(ref mut evm) => Self::set_data(evm),
+        match &mut evm {
+            REVM::Default(evm) => Self::set_data(evm),
+            REVM::Tracing(evm) => Self::set_data(evm),
         }
         evm
     }

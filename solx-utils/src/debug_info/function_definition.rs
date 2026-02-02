@@ -2,9 +2,9 @@
 //! solc AST function definition.
 //!
 
+use crate::debug_info::IDebugInfoAstNode;
 use crate::debug_info::mapped_location::MappedLocation;
 use crate::debug_info::solc_location::SolcLocation;
-use crate::debug_info::IDebugInfoAstNode;
 
 ///
 /// solc AST function definition.

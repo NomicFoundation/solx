@@ -19,5 +19,5 @@ resolver = "2"
 authors = [
     "The Matter Labs Team <hello@matterlabs.dev>",
 ]
-edition = "2021"
+edition = "2024"
 version = "0.1.4"

@@ -7,11 +7,11 @@ pub mod case;
 use std::collections::BTreeSet;
 
 use crate::yul::error::Error;
-use crate::yul::lexer::token::lexeme::keyword::Keyword;
-use crate::yul::lexer::token::lexeme::Lexeme;
-use crate::yul::lexer::token::location::Location;
-use crate::yul::lexer::token::Token;
 use crate::yul::lexer::Lexer;
+use crate::yul::lexer::token::Token;
+use crate::yul::lexer::token::lexeme::Lexeme;
+use crate::yul::lexer::token::lexeme::keyword::Keyword;
+use crate::yul::lexer::token::location::Location;
 use crate::yul::parser::dialect::Dialect;
 use crate::yul::parser::error::Error as ParserError;
 use crate::yul::parser::statement::block::Block;
@@ -76,7 +76,7 @@ where
                 lexeme: Lexeme::Keyword(Keyword::Switch),
                 ..
             } => {}
-            ref token => {
+            token => {
                 return Err(ParserError::InvalidToken {
                     location: token.location,
                     expected: vec!["switch"],
@@ -173,8 +173,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::yul::lexer::token::location::Location;
     use crate::yul::lexer::Lexer;
+    use crate::yul::lexer::token::location::Location;
     use crate::yul::parser::dialect::DefaultDialect;
     use crate::yul::parser::error::Error;
     use crate::yul::parser::statement::object::Object;

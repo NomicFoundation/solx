@@ -83,10 +83,10 @@ impl Contract {
     /// - the module name for LLVM IR
     ///
     pub fn identifier(&self) -> &str {
-        match self.ir {
-            Some(IR::Yul(ref yul)) => yul.object.0.identifier.as_str(),
-            Some(IR::EVMLegacyAssembly(ref evm)) => evm.assembly.full_path(),
-            Some(IR::LLVMIR(ref llvm_ir)) => llvm_ir.path.as_str(),
+        match self.ir.as_ref() {
+            Some(IR::Yul(yul)) => yul.object.0.identifier.as_str(),
+            Some(IR::EVMLegacyAssembly(evm)) => evm.assembly.full_path(),
+            Some(IR::LLVMIR(llvm_ir)) => llvm_ir.path.as_str(),
             None => self.name.full_path.as_str(),
         }
     }
@@ -113,7 +113,7 @@ impl Contract {
         use solx_codegen_evm::WriteLLVM;
         let mut profiler = solx_codegen_evm::Profiler::default();
 
-        if let Some(ref metadata_bytes) = metadata_bytes {
+        if let Some(metadata_bytes) = metadata_bytes.as_ref() {
             optimizer_settings.set_metadata_size(metadata_bytes.len() as u64);
         }
         let optimizer = solx_codegen_evm::Optimizer::new(optimizer_settings.clone());

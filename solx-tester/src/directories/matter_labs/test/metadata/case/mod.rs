@@ -13,8 +13,8 @@ use crate::revm::address_iterator::AddressIterator;
 use crate::test::case::input::value::Value;
 use crate::test::instance::Instance;
 
-use self::input::expected::Expected;
 use self::input::Input;
+use self::input::expected::Expected;
 
 ///
 /// The Matter Labs compiler test metadata case.
@@ -101,10 +101,10 @@ impl Case {
     /// Copies the final expected data to the last input.
     ///
     pub fn normalize_expected(&mut self) {
-        if let Some(input) = self.inputs.last_mut() {
-            if input.expected.is_none() {
-                input.expected.clone_from(&self.expected);
-            }
+        if let Some(input) = self.inputs.last_mut()
+            && input.expected.is_none()
+        {
+            input.expected.clone_from(&self.expected);
         }
     }
 

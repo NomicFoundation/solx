@@ -7,12 +7,12 @@ use std::collections::BTreeSet;
 use std::collections::HashSet;
 
 use crate::yul::error::Error;
+use crate::yul::lexer::Lexer;
+use crate::yul::lexer::token::Token;
+use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::lexeme::literal::Literal;
 use crate::yul::lexer::token::lexeme::symbol::Symbol;
-use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::location::Location;
-use crate::yul::lexer::token::Token;
-use crate::yul::lexer::Lexer;
 use crate::yul::parser::dialect::Dialect;
 use crate::yul::parser::error::Error as ParserError;
 use crate::yul::parser::statement::code::Code;
@@ -118,7 +118,6 @@ where
             inner_object = match lexer.peek()? {
                 Token {
                     lexeme: Lexeme::Identifier(identifier),
-                    ref comments,
                     ..
                 } if identifier.inner.as_str() == "object" => {
                     let mut object = Self::parse(lexer, None, solx_utils::CodeSegment::Runtime)?;
@@ -133,35 +132,31 @@ where
                 lexeme: Lexeme::Identifier(identifier),
                 ..
             } = lexer.peek()?
+                && identifier.inner.as_str() == "data"
             {
-                if identifier.inner.as_str() == "data" {
-                    let _data = lexer.next()?;
-                    let _identifier = lexer.next()?;
-                    let _metadata = lexer.next()?;
-                }
+                let _data = lexer.next()?;
+                let _identifier = lexer.next()?;
+                let _metadata = lexer.next()?;
             };
         }
 
         loop {
-            match lexer.next()? {
+            let token = lexer.next()?;
+            match token {
                 Token {
                     lexeme: Lexeme::Symbol(Symbol::BracketCurlyRight),
                     ..
                 } => break,
-                ref token @ Token {
+                Token {
                     lexeme: Lexeme::Identifier(ref identifier),
-                    ref comments,
                     ..
                 } if identifier.inner.as_str() == "object" => {
-                    let dependency = Self::parse(
-                        lexer,
-                        Some(token.to_owned()),
-                        solx_utils::CodeSegment::Deploy,
-                    )?;
+                    let dependency =
+                        Self::parse(lexer, Some(token), solx_utils::CodeSegment::Deploy)?;
                     factory_dependencies.insert(dependency.identifier);
                 }
                 Token {
-                    lexeme: Lexeme::Identifier(identifier),
+                    lexeme: Lexeme::Identifier(ref identifier),
                     ..
                 } if identifier.inner.as_str() == "data" => {
                     let _identifier = lexer.next()?;
@@ -209,12 +204,12 @@ where
         let mut dependencies = solx_codegen_evm::Dependencies::new(self.identifier.as_str());
         self.code.accumulate_evm_dependencies(&mut dependencies);
 
-        if let Some(runtime_code) = runtime_code {
-            if !dependencies.inner.contains(&runtime_code.identifier) {
-                dependencies
-                    .inner
-                    .insert(0, runtime_code.identifier.to_owned());
-            }
+        if let Some(runtime_code) = runtime_code
+            && !dependencies.inner.contains(&runtime_code.identifier)
+        {
+            dependencies
+                .inner
+                .insert(0, runtime_code.identifier.to_owned());
         }
 
         dependencies
@@ -223,8 +218,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::yul::lexer::token::location::Location;
     use crate::yul::lexer::Lexer;
+    use crate::yul::lexer::token::location::Location;
     use crate::yul::parser::dialect::DefaultDialect;
     use crate::yul::parser::error::Error;
     use crate::yul::parser::statement::object::Object;

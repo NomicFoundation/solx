@@ -5,8 +5,8 @@
 use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 
-use crate::context::traits::address_space::IAddressSpace;
 use crate::context::IContext;
+use crate::context::traits::address_space::IAddressSpace;
 
 ///
 /// The LLVM pointer.

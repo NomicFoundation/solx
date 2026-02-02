@@ -4,8 +4,8 @@
 
 use crate::test::function_call::parser::lexical::Keyword;
 use crate::test::function_call::parser::lexical::Location;
-use crate::test::function_call::parser::syntax::tree::gas::variant::Variant as GasVariant;
 use crate::test::function_call::parser::syntax::tree::gas::Gas;
+use crate::test::function_call::parser::syntax::tree::gas::variant::Variant as GasVariant;
 
 ///
 /// The gas option builder.

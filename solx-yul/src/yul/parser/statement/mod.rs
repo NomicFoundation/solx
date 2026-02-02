@@ -19,24 +19,24 @@ pub mod variable_declaration;
 use std::collections::BTreeSet;
 
 use crate::yul::error::Error;
-use crate::yul::lexer::token::lexeme::keyword::Keyword;
-use crate::yul::lexer::token::lexeme::Lexeme;
-use crate::yul::lexer::token::location::Location;
-use crate::yul::lexer::token::Token;
 use crate::yul::lexer::Lexer;
+use crate::yul::lexer::token::Token;
+use crate::yul::lexer::token::lexeme::Lexeme;
+use crate::yul::lexer::token::lexeme::keyword::Keyword;
+use crate::yul::lexer::token::location::Location;
 use crate::yul::parser::error::Error as ParserError;
 
 use self::assignment::Assignment;
 use self::block::Block;
+use self::r#break::Break;
 use self::code::Code;
+use self::r#continue::Continue;
 use self::expression::Expression;
 use self::for_loop::ForLoop;
 use self::function_definition::FunctionDefinition;
 use self::if_conditional::IfConditional;
 use self::leave::Leave;
 use self::object::Object;
-use self::r#break::Break;
-use self::r#continue::Continue;
 use self::switch::Switch;
 use self::variable_declaration::VariableDeclaration;
 
@@ -93,19 +93,19 @@ where
         let token = crate::yul::parser::take_or_next(initial, lexer)?;
 
         match token {
-            ref token @ Token {
+            Token {
                 lexeme: Lexeme::Identifier(ref identifier),
                 ..
             } if identifier.inner.as_str() == "object" => Ok((
                 Statement::Object(Object::parse(
                     lexer,
-                    Some(token.to_owned()),
+                    Some(token),
                     solx_utils::CodeSegment::Deploy,
                 )?),
                 None,
             )),
             Token {
-                lexeme: Lexeme::Identifier(identifier),
+                lexeme: Lexeme::Identifier(ref identifier),
                 ..
             } if identifier.inner.as_str() == "code" => {
                 Ok((Statement::Code(Code::parse(lexer, None)?), None))
@@ -142,18 +142,18 @@ where
                 Statement::ForLoop(ForLoop::parse(lexer, Some(token))?),
                 None,
             )),
-            Token {
+            token @ Token {
                 lexeme: Lexeme::Keyword(Keyword::Continue),
                 ..
             } => Ok((
                 Statement::Continue(Continue::parse(lexer, Some(token))?),
                 None,
             )),
-            Token {
+            token @ Token {
                 lexeme: Lexeme::Keyword(Keyword::Break),
                 ..
             } => Ok((Statement::Break(Break::parse(lexer, Some(token))?), None)),
-            Token {
+            token @ Token {
                 lexeme: Lexeme::Keyword(Keyword::Leave),
                 ..
             } => Ok((Statement::Leave(Leave::parse(lexer, Some(token))?), None)),

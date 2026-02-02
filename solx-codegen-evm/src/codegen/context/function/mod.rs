@@ -9,18 +9,18 @@ use std::collections::HashMap;
 
 use crate::codegen::attribute::Attribute as StringAttribute;
 use crate::codegen::context::address_space::AddressSpace;
+use crate::context::IContext;
 use crate::context::attribute::Attribute;
-use crate::context::function::block::key::Key as BlockKey;
 use crate::context::function::block::Block;
+use crate::context::function::block::key::Key as BlockKey;
 use crate::context::function::declaration::Declaration as FunctionDeclaration;
 use crate::context::function::evmla_data::EVMLAData as FunctionEVMLAData;
 use crate::context::function::r#return::Return as FunctionReturn;
 use crate::context::pointer::Pointer;
 use crate::context::traits::evmla_function::IEVMLAFunction;
 use crate::context::traits::solidity_data::ISolidityData;
-use crate::context::IContext;
-use crate::optimizer::settings::size_level::SizeLevel;
 use crate::optimizer::Optimizer;
+use crate::optimizer::settings::size_level::SizeLevel;
 
 ///
 /// The LLVM IR generator function.

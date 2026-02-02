@@ -19,8 +19,8 @@ use crate::test::function_call::parser::syntax::parser::gas::Parser as GasParser
 use crate::test::function_call::parser::syntax::parser::literal::Parser as LiteralParser;
 use crate::test::function_call::parser::syntax::parser::r#type::Parser as TypeParser;
 use crate::test::function_call::parser::syntax::parser::value::Parser as ValueParser;
-use crate::test::function_call::parser::syntax::tree::call::builder::Builder as CallBuilder;
 use crate::test::function_call::parser::syntax::tree::call::Call;
+use crate::test::function_call::parser::syntax::tree::call::builder::Builder as CallBuilder;
 use crate::test::function_call::parser::syntax::tree::identifier::Identifier;
 
 ///
@@ -131,7 +131,7 @@ impl Parser {
                             vec!["library", "{identifier}", "("],
                             lexeme,
                         )
-                        .into())
+                        .into());
                     }
                 },
                 State::Library => match parser::take_or_next(self.next.take(), stream.clone())? {
@@ -142,7 +142,7 @@ impl Parser {
                         self.state = State::ColonLibrary;
                     }
                     Token { lexeme, location } => {
-                        return Err(SyntaxError::new(location, vec![":"], lexeme).into())
+                        return Err(SyntaxError::new(location, vec![":"], lexeme).into());
                     }
                 },
                 State::ColonLibrary => {
@@ -168,7 +168,7 @@ impl Parser {
                                 vec!["{identifier}", "{string literal}"],
                                 lexeme,
                             )
-                            .into())
+                            .into());
                         }
                     }
                 }
@@ -180,7 +180,7 @@ impl Parser {
                         self.state = State::ColonSource;
                     }
                     Token { lexeme, location } => {
-                        return Err(SyntaxError::new(location, vec![":"], lexeme).into())
+                        return Err(SyntaxError::new(location, vec![":"], lexeme).into());
                     }
                 },
                 State::ColonSource => {
@@ -285,7 +285,7 @@ impl Parser {
                         self.state = State::CommaType;
                     }
                     Token { lexeme, location } => {
-                        return Err(SyntaxError::new(location, vec![")", ","], lexeme).into())
+                        return Err(SyntaxError::new(location, vec![")", ","], lexeme).into());
                     }
                 },
                 State::CommaType => {
@@ -596,18 +596,18 @@ mod tests {
     use super::Parser;
     use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
     use crate::test::function_call::parser::syntax::error::ParsingError;
-    use crate::test::function_call::parser::syntax::tree::call::variant::Variant as CallVariant;
     use crate::test::function_call::parser::syntax::tree::call::Call;
+    use crate::test::function_call::parser::syntax::tree::call::variant::Variant as CallVariant;
 
-    use crate::test::function_call::parser::syntax::tree::event::variant::Variant as EventVariant;
     use crate::test::function_call::parser::syntax::tree::event::Event;
-    use crate::test::function_call::parser::syntax::tree::gas::variant::Variant as GasVariant;
+    use crate::test::function_call::parser::syntax::tree::event::variant::Variant as EventVariant;
     use crate::test::function_call::parser::syntax::tree::gas::Gas;
+    use crate::test::function_call::parser::syntax::tree::gas::variant::Variant as GasVariant;
 
-    use crate::test::function_call::parser::syntax::tree::r#type::variant::Variant as TypeVariant;
-    use crate::test::function_call::parser::syntax::tree::value::unit::Unit;
-    use crate::test::function_call::parser::syntax::tree::value::Value;
     use crate::test::function_call::parser::syntax::Identifier;
+    use crate::test::function_call::parser::syntax::tree::r#type::variant::Variant as TypeVariant;
+    use crate::test::function_call::parser::syntax::tree::value::Value;
+    use crate::test::function_call::parser::syntax::tree::value::unit::Unit;
 
     use crate::test::function_call::parser::syntax::Type;
 

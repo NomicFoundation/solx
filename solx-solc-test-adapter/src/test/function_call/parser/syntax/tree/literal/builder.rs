@@ -4,12 +4,12 @@
 
 use crate::test::function_call::parser::lexical::Literal as LexicalLiteral;
 use crate::test::function_call::parser::lexical::Location;
+use crate::test::function_call::parser::syntax::tree::literal::Literal;
 use crate::test::function_call::parser::syntax::tree::literal::alignment::Alignment;
 use crate::test::function_call::parser::syntax::tree::literal::boolean::Literal as BooleanLiteral;
 use crate::test::function_call::parser::syntax::tree::literal::hex::Literal as HexLiteral;
 use crate::test::function_call::parser::syntax::tree::literal::integer::Literal as IntegerLiteral;
 use crate::test::function_call::parser::syntax::tree::literal::string::Literal as StringLiteral;
-use crate::test::function_call::parser::syntax::tree::literal::Literal;
 
 ///
 /// The literal builder.

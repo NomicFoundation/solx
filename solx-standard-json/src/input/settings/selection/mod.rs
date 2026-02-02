@@ -75,7 +75,7 @@ impl Selection {
                     | Selector::GasEstimates
                         if contract.contains(&Selector::EVM) =>
                     {
-                        return true
+                        return true;
                     }
                     Selector::BytecodeObject
                     | Selector::BytecodeLLVMAssembly
@@ -88,7 +88,7 @@ impl Selection {
                         if contract.contains(&Selector::Bytecode)
                             || contract.contains(&Selector::EVM) =>
                     {
-                        return true
+                        return true;
                     }
                     Selector::RuntimeBytecodeObject
                     | Selector::RuntimeBytecodeLLVMAssembly
@@ -102,12 +102,12 @@ impl Selection {
                         if contract.contains(&Selector::RuntimeBytecode)
                             || contract.contains(&Selector::EVM) =>
                     {
-                        return true
+                        return true;
                     }
                     selector
                         if contract.contains(&Selector::Any) || contract.contains(&selector) =>
                     {
-                        return true
+                        return true;
                     }
                     _ => {}
                 }

@@ -10,11 +10,11 @@ use num::ToPrimitive;
 use solx_codegen_evm::IContext;
 use solx_codegen_evm::IEVMLAFunction;
 
-use crate::assembly::instruction::name::Name as InstructionName;
 use crate::assembly::instruction::Instruction;
+use crate::assembly::instruction::name::Name as InstructionName;
 
-use self::stack::element::Element as StackElement;
 use self::stack::Stack;
+use self::stack::element::Element as StackElement;
 
 ///
 /// The Ethereal IR block element.

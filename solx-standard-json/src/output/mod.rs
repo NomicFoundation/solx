@@ -11,13 +11,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::input::settings::selection::selector::Selector as InputSettingsSelector;
 use crate::input::settings::selection::Selection as InputSettingsSelection;
+use crate::input::settings::selection::selector::Selector as InputSettingsSelector;
 use crate::input::source::Source as InputSource;
 
 use self::contract::Contract;
-use self::error::collectable::Collectable as CollectableError;
 use self::error::Error as JsonOutputError;
+use self::error::collectable::Collectable as CollectableError;
 use self::source::Source;
 
 ///
@@ -92,7 +92,7 @@ impl Output {
                 ) {
                     contract.ir = None;
                 }
-                if let Some(ref mut evm) = contract.evm {
+                if let Some(evm) = contract.evm.as_mut() {
                     if !output_selection.check_selection(
                         path.as_str(),
                         Some(name.as_str()),

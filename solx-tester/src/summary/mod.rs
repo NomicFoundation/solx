@@ -15,9 +15,9 @@ use crate::test::case::input::output::Output;
 use crate::test::description::TestDescription;
 use crate::toolchain::Toolchain;
 
-use self::element::outcome::passed_variant::PassedVariant;
-use self::element::outcome::Outcome;
 use self::element::Element;
+use self::element::outcome::Outcome;
+use self::element::outcome::passed_variant::PassedVariant;
 
 ///
 /// `solx` tester summary.

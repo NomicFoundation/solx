@@ -3,8 +3,8 @@
 //!
 
 use crate::test::function_call::parser::lexical::Location;
-use crate::test::function_call::parser::syntax::tree::call::variant::Variant;
 use crate::test::function_call::parser::syntax::tree::call::Call;
+use crate::test::function_call::parser::syntax::tree::call::variant::Variant;
 use crate::test::function_call::parser::syntax::tree::event::Event;
 use crate::test::function_call::parser::syntax::tree::gas::Gas;
 use crate::test::function_call::parser::syntax::tree::identifier::Identifier;

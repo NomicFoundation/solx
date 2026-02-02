@@ -7,9 +7,9 @@ use std::sync::Mutex;
 
 use crate::revm::REVM;
 use crate::summary::Summary;
+use crate::test::InputContext;
 use crate::test::case::input::identifier::InputIdentifier;
 use crate::test::description::TestDescription;
-use crate::test::InputContext;
 
 ///
 /// The storage emptiness check input variant.

@@ -4,10 +4,10 @@
 
 use inkwell::values::BasicValue;
 
-use crate::codegen::context::address_space::AddressSpace;
 use crate::codegen::context::Context;
-use crate::context::pointer::Pointer;
+use crate::codegen::context::address_space::AddressSpace;
 use crate::context::IContext;
+use crate::context::pointer::Pointer;
 
 ///
 /// Translates the `return` instruction.

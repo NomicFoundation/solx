@@ -3,9 +3,9 @@
 //!
 
 use crate::test::function_call::parser::lexical::Location;
+use crate::test::function_call::parser::syntax::tree::event::Event;
 use crate::test::function_call::parser::syntax::tree::event::literal::EventLiteral;
 use crate::test::function_call::parser::syntax::tree::event::variant::Variant;
-use crate::test::function_call::parser::syntax::tree::event::Event;
 use crate::test::function_call::parser::syntax::tree::identifier::Identifier;
 use crate::test::function_call::parser::syntax::tree::r#type::Type;
 

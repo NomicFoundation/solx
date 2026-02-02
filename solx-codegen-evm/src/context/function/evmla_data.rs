@@ -4,8 +4,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::context::function::block::key::Key as BlockKey;
 use crate::context::function::block::Block;
+use crate::context::function::block::key::Key as BlockKey;
 
 ///
 /// The LLVM function EVM legacy assembly data.

@@ -13,6 +13,6 @@ pub mod assembly;
 pub mod ethereal_ir;
 pub mod extra_metadata;
 
-pub use self::assembly::Assembly;
-pub use self::extra_metadata::defined_function::DefinedFunction as ExtraMetadataRecursiveFunction;
-pub use self::extra_metadata::ExtraMetadata;
+pub use crate::assembly::Assembly;
+pub use crate::extra_metadata::ExtraMetadata;
+pub use crate::extra_metadata::defined_function::DefinedFunction as ExtraMetadataRecursiveFunction;

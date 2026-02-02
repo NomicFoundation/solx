@@ -21,8 +21,8 @@ use crate::optimizer::Optimizer;
 
 use self::debug_info::DebugInfo;
 use self::function::declaration::Declaration as FunctionDeclaration;
-use self::pointer::Pointer;
 use self::r#loop::Loop;
+use self::pointer::Pointer;
 use self::traits::address_space::IAddressSpace;
 use self::traits::evmla_data::IEVMLAData;
 use self::traits::evmla_function::IEVMLAFunction;

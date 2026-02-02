@@ -26,7 +26,7 @@ impl Data {
     ///
     pub fn get_assembly(&self) -> Option<&Assembly> {
         match self {
-            Self::Assembly(ref assembly) => Some(assembly),
+            Self::Assembly(assembly) => Some(assembly),
             Self::Hash(_) => None,
             Self::Path(_) => None,
         }
@@ -36,7 +36,7 @@ impl Data {
     ///
     pub fn get_assembly_mut(&mut self) -> Option<&mut Assembly> {
         match self {
-            Self::Assembly(ref mut assembly) => Some(assembly),
+            Self::Assembly(assembly) => Some(assembly),
             Self::Hash(_) => None,
             Self::Path(_) => None,
         }

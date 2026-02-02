@@ -19,11 +19,11 @@ use self::integer::error::Error as IntegerParserError;
 use self::string::error::Error as StringParserError;
 use self::symbol::error::Error as SymbolParserError;
 use crate::test::function_call::parser::lexical::error::Error;
+use crate::test::function_call::parser::lexical::token::Token;
+use crate::test::function_call::parser::lexical::token::lexeme::Lexeme;
 use crate::test::function_call::parser::lexical::token::lexeme::identifier::Identifier;
 use crate::test::function_call::parser::lexical::token::lexeme::literal::Literal;
-use crate::test::function_call::parser::lexical::token::lexeme::Lexeme;
 use crate::test::function_call::parser::lexical::token::location::Location;
-use crate::test::function_call::parser::lexical::token::Token;
 
 ///
 /// A token stream is initialized for each input file.
@@ -199,32 +199,32 @@ impl<'a> TokenStream<'a> {
 
             if Identifier::can_start_with(character) {
                 let output = self::word::parse(&self.input[self.offset_bytes..]);
-                if let Lexeme::Identifier(Identifier { inner }) = output.word.clone() {
-                    if inner == "hex" {
-                        match self::hex::parse(&self.input[self.offset_bytes..]) {
-                            Ok(output) => {
-                                let location = self.location;
-                                self.location.column += output.size;
-                                self.offset_bytes += output.size;
-                                self.offset_chars += output.size;
-                                return Ok(Token::new(
-                                    Lexeme::Literal(Literal::Hex(output.hex)),
-                                    location,
-                                ));
-                            }
-                            Err(HexParserError::NotAHex) => {}
-                            Err(HexParserError::UnterminatedDoubleQuote { offset }) => {
-                                return Err(Error::unterminated_double_quote_hex(
-                                    self.location,
-                                    self.location.shifted_right(offset),
-                                ));
-                            }
-                            Err(HexParserError::ExpectedOneOfHexadecimal { found, offset }) => {
-                                return Err(Error::expected_one_of_hexadecimal_hex(
-                                    self.location.shifted_right(offset),
-                                    found,
-                                ));
-                            }
+                if let Lexeme::Identifier(Identifier { inner }) = output.word.clone()
+                    && inner == "hex"
+                {
+                    match self::hex::parse(&self.input[self.offset_bytes..]) {
+                        Ok(output) => {
+                            let location = self.location;
+                            self.location.column += output.size;
+                            self.offset_bytes += output.size;
+                            self.offset_chars += output.size;
+                            return Ok(Token::new(
+                                Lexeme::Literal(Literal::Hex(output.hex)),
+                                location,
+                            ));
+                        }
+                        Err(HexParserError::NotAHex) => {}
+                        Err(HexParserError::UnterminatedDoubleQuote { offset }) => {
+                            return Err(Error::unterminated_double_quote_hex(
+                                self.location,
+                                self.location.shifted_right(offset),
+                            ));
+                        }
+                        Err(HexParserError::ExpectedOneOfHexadecimal { found, offset }) => {
+                            return Err(Error::expected_one_of_hexadecimal_hex(
+                                self.location.shifted_right(offset),
+                                found,
+                            ));
                         }
                     }
                 }

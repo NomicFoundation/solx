@@ -30,9 +30,7 @@ impl LLVMIR {
                 dependencies
             }
             solx_utils::CodeSegment::Runtime => {
-                let dependencies =
-                    solx_codegen_evm::Dependencies::new(runtime_code_identifier.as_str());
-                dependencies
+                solx_codegen_evm::Dependencies::new(runtime_code_identifier.as_str())
             }
         };
 

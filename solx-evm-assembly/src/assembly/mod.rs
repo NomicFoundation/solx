@@ -18,8 +18,8 @@ use crate::ethereal_ir::EtherealIR;
 use crate::extra_metadata::ExtraMetadata;
 
 use self::data::Data;
-use self::instruction::name::Name as InstructionName;
 use self::instruction::Instruction;
+use self::instruction::name::Name as InstructionName;
 
 ///
 /// The JSON assembly.
