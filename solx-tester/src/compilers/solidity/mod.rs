@@ -257,13 +257,13 @@ impl SolidityCompiler {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("{:?} subprocess stdin getting error", path))?;
         let stdin_input = serde_json::to_vec(&input).expect("Always valid");
-        stdin.write_all(stdin_input.as_slice()).map_err(|error| {
-            anyhow::anyhow!("{:?} subprocess stdin writing: {error:?}", path)
-        })?;
+        stdin
+            .write_all(stdin_input.as_slice())
+            .map_err(|error| anyhow::anyhow!("{:?} subprocess stdin writing: {error:?}", path))?;
 
-        let result = process.wait_with_output().map_err(|error| {
-            anyhow::anyhow!("{:?} subprocess output reading: {error:?}", path)
-        })?;
+        let result = process
+            .wait_with_output()
+            .map_err(|error| anyhow::anyhow!("{:?} subprocess output reading: {error:?}", path))?;
         if !result.status.success() {
             anyhow::bail!(
                 "{:?} subprocess failed with exit code {:?}:\n{}\n{}",
@@ -419,8 +419,7 @@ impl SolidityCompiler {
             mode => panic!("Unsupported mode for solc input: {mode}"),
         };
 
-        let output_selection =
-            solx_standard_json::InputSelection::new_required_for_testing(via_ir);
+        let output_selection = solx_standard_json::InputSelection::new_required_for_testing(via_ir);
 
         let evm_version = match mode {
             Mode::Solidity(_) => test_params.map(|params| params.evm_version.newest_matching()),

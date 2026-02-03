@@ -99,13 +99,13 @@ impl LLVMIRCompiler {
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("{:?} subprocess stdin getting error", path))?;
         let stdin_input = serde_json::to_vec(&input).expect("Always valid");
-        stdin.write_all(stdin_input.as_slice()).map_err(|error| {
-            anyhow::anyhow!("{:?} subprocess stdin writing: {error:?}", path)
-        })?;
+        stdin
+            .write_all(stdin_input.as_slice())
+            .map_err(|error| anyhow::anyhow!("{:?} subprocess stdin writing: {error:?}", path))?;
 
-        let result = process.wait_with_output().map_err(|error| {
-            anyhow::anyhow!("{:?} subprocess output reading: {error:?}", path)
-        })?;
+        let result = process
+            .wait_with_output()
+            .map_err(|error| anyhow::anyhow!("{:?} subprocess output reading: {error:?}", path))?;
         if !result.status.success() {
             anyhow::bail!(
                 "{:?} subprocess failed with exit code {:?}:\n{}\n{}",

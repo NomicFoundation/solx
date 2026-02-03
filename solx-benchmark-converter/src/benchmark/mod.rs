@@ -108,11 +108,7 @@ impl Benchmark {
                 } else {
                     format!("{toolchain}-{mode}")
                 };
-                existing_test
-                    .runs
-                    .entry(mode_key)
-                    .or_default()
-                    .extend(&run);
+                existing_test.runs.entry(mode_key).or_default().extend(&run);
             }
         }
     }

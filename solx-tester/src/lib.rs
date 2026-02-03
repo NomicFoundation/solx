@@ -154,10 +154,12 @@ impl<'a> SolxTester<'a> {
                 (solidity_compiler, yul_compiler, llvm_ir_compiler)
             }
             Toolchain::Solc => {
-                let solidity_compiler =
-                    Arc::new(SolidityCompiler::new_solc(solx_standard_json::InputLanguage::Solidity));
-                let yul_compiler =
-                    Arc::new(SolidityCompiler::new_solc(solx_standard_json::InputLanguage::Yul));
+                let solidity_compiler = Arc::new(SolidityCompiler::new_solc(
+                    solx_standard_json::InputLanguage::Solidity,
+                ));
+                let yul_compiler = Arc::new(SolidityCompiler::new_solc(
+                    solx_standard_json::InputLanguage::Yul,
+                ));
                 let llvm_ir_compiler = Arc::new(LLVMIRCompiler::new_solc());
                 (solidity_compiler, yul_compiler, llvm_ir_compiler)
             }

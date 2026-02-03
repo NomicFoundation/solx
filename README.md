@@ -89,4 +89,4 @@ Visit the project directories to discover the terms of each license in detail. T
 
 ## Contact Us
 
-Email us at [solx@matterlabs.dev](mailto:solx@matterlabs.dev) or join our [Telegram group](https://t.me/solx_devs).
+Email us at [alex@nomic.foundation](mailto:alex@nomic.foundation) or join our [Telegram group](https://t.me/solx_devs).
