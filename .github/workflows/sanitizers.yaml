@@ -52,7 +52,7 @@ jobs:
           ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           sanitizer: ${{ inputs.llvm-sanitizer || 'Address' }}
           enable-assertions: 'true'
-          # TODO: enable MLIR once submodules are switched
+          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
           llvm-projects: ''
 

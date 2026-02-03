@@ -102,7 +102,7 @@ jobs:
           build-type: RelWithDebInfo
           ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           enable-assertions: 'true'
-          # TODO: enable MLIR once submodules are switched
+          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
           llvm-projects: ''
 

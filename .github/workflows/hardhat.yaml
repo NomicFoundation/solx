@@ -48,7 +48,7 @@ jobs:
           ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           working-dir: 'temp-solx-main'
           enable-assertions: 'false'
-          # TODO: enable MLIR once submodules are switched
+          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
           llvm-projects: ''
   
@@ -73,7 +73,7 @@ jobs:
           build-type: Release
           ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           enable-assertions: 'false'
-          # TODO: enable MLIR once submodules are switched
+          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
           llvm-projects: ''
       

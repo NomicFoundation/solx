@@ -37,9 +37,9 @@ inputs:
     required: false
     default: ''
   enable-rtti:
-    description: 'Enable RTTI for LLVM.'
+    description: 'Enable RTTI for LLVM. Required when building with MLIR.'
     required: false
-    default: 'true'
+    default: 'false'
   default-target-triple:
     description: 'Default target to triple build LLVM for. Set to `evm` or leave empty for the default target.'
     required: false
