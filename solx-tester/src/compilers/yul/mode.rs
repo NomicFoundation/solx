@@ -71,12 +71,9 @@ impl Mode {
 
 impl IMode for Mode {
     fn optimizations(&self) -> Option<String> {
-        if let Some(ref llvm_settings) = self.llvm_optimizer_settings {
-            Some(format!("{}", llvm_settings))
-        } else {
-            // No optimization suffix for solc - just Y
-            None
-        }
+        self.llvm_optimizer_settings
+            .as_ref()
+            .map(|settings| format!("{settings}"))
     }
 
     fn codegen(&self) -> Option<String> {
