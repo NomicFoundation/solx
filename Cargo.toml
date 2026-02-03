@@ -17,7 +17,8 @@ resolver = "2"
 
 [workspace.package]
 authors = [
-    "Matter Labs <hello@matterlabs.dev>",
+    "Matter Labs <alex@nomic.foundation>",
+    "Nomic Foundation <alex@nomic.foundation>",
 ]
 edition = "2024"
 version = "0.1.4"
