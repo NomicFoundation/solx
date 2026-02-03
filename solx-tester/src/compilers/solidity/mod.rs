@@ -73,33 +73,6 @@ lazy_static::lazy_static! {
         modes
     };
 
-    ///
-    /// The Solidity modes for MLIR codegen.
-    ///
-    static ref SOLIDITY_MLIR_MODES: Vec<Mode> = {
-        solx_codegen_evm::OptimizerSettings::combinations()
-            .into_iter()
-            .map(|llvm_optimizer_settings| {
-                SolidityMode::new_solx(
-                    SolidityCompiler::MLIR_VERSION,
-                    true,  // via_ir always true for MLIR
-                    llvm_optimizer_settings,
-                ).into()
-            })
-            .collect::<Vec<Mode>>()
-    };
-
-    ///
-    /// The Yul modes for MLIR codegen.
-    ///
-    static ref YUL_MLIR_MODES: Vec<Mode> = {
-        solx_codegen_evm::OptimizerSettings::combinations()
-            .into_iter()
-            .map(|llvm_optimizer_settings| {
-                YulMode::new_solx(llvm_optimizer_settings).into()
-            })
-            .collect::<Vec<Mode>>()
-    };
 }
 
 impl SolidityCompiler {
@@ -745,7 +718,14 @@ impl Compiler for SolidityCompiler {
                     .collect::<Vec<Mode>>()
             }
             (solx_standard_json::InputLanguage::Solidity, Toolchain::SolxMlir) => {
-                SOLIDITY_MLIR_MODES.clone()
+                // SolxMlir uses LLVM optimizer settings with fixed version
+                solx_codegen_evm::OptimizerSettings::combinations()
+                    .into_iter()
+                    .map(|llvm_optimizer_settings| {
+                        SolidityMode::new_solx(Self::MLIR_VERSION, true, llvm_optimizer_settings)
+                            .into()
+                    })
+                    .collect()
             }
             (solx_standard_json::InputLanguage::Solidity, Toolchain::Solc) => {
                 SOLIDITY_SOLC_MODES.clone()
@@ -759,7 +739,13 @@ impl Compiler for SolidityCompiler {
                     .collect::<Vec<Mode>>()
             }
             (solx_standard_json::InputLanguage::Yul, Toolchain::SolxMlir) => {
-                YUL_MLIR_MODES.clone()
+                // SolxMlir uses LLVM optimizer settings
+                solx_codegen_evm::OptimizerSettings::combinations()
+                    .into_iter()
+                    .map(|llvm_optimizer_settings| {
+                        YulMode::new_solx(llvm_optimizer_settings).into()
+                    })
+                    .collect()
             }
             (solx_standard_json::InputLanguage::Yul, Toolchain::Solc) => YUL_SOLC_MODES.clone(),
             (solx_standard_json::InputLanguage::LLVMIR, _) => Vec::new(),
