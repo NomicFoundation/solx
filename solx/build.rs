@@ -46,8 +46,14 @@ fn main() {
             env!("SOLC_PREFIX"),
         );
     }
-    let mlir_lib_path = PathBuf::from(env!("LLVM_SYS_211_PREFIX")).join("lib");
-    println!("cargo:rustc-link-search=native={}", mlir_lib_path.display());
+    let llvm_lib_path = PathBuf::from(env!("LLVM_SYS_211_PREFIX")).join("lib");
+
+    // Check if MLIR is available by looking for a key MLIR library.
+    let mlir_available = llvm_lib_path.join("libMLIRIR.a").exists();
+
+    if mlir_available {
+        println!("cargo:rustc-link-search=native={}", llvm_lib_path.display());
+    }
 
     // Link with Boost libraries.
     for library in ["boost_filesystem", "boost_system", "boost_program_options"] {
@@ -59,67 +65,70 @@ fn main() {
     ] {
         println!("cargo:rustc-link-lib=static={library}");
     }
-    // Link with MLIR libraries.
-    for library in [
-        // Custom solx dialects
-        "MLIRSolDialect",
-        "MLIRYulDialect",
-        // Core dialects
-        "MLIRFuncDialect",
-        "MLIRSCFDialect",
-        "MLIRArithDialect",
-        "MLIRLLVMDialect",
-        "MLIRControlFlowDialect",
-        "MLIRPDLDialect",
-        "MLIRPDLInterpDialect",
-        "MLIRUBDialect",
-        "MLIRTensorDialect",
-        "MLIRDLTIDialect",
-        // Conversions
-        "MLIRFuncToLLVM",
-        "MLIRSCFToControlFlow",
-        "MLIRControlFlowToLLVM",
-        "MLIRArithAttrToLLVMConversion",
-        "MLIRArithToLLVM",
-        "MLIRLLVMCommonConversion",
-        "MLIRPDLToPDLInterp",
-        // Translations
-        "MLIRBuiltinToLLVMIRTranslation",
-        "MLIRLLVMToLLVMIRTranslation",
-        "MLIRTargetLLVMIRExport",
-        // Interfaces
-        "MLIRCallInterfaces",
-        "MLIRControlFlowInterfaces",
-        "MLIRInferIntRangeInterface",
-        "MLIRInferIntRangeCommon",
-        "MLIRMemorySlotInterfaces",
-        "MLIRDataLayoutInterfaces",
-        "MLIRSideEffectInterfaces",
-        "MLIRCastInterfaces",
-        "MLIRLoopLikeInterface",
-        "MLIRFunctionInterfaces",
-        "MLIRDestinationStyleOpInterface",
-        "MLIRViewLikeInterface",
-        "MLIRInferTypeOpInterface",
-        "MLIRParallelCombiningOpInterface",
-        // Utils and transforms
-        "MLIRSCFUtils",
-        "MLIRSCFTransforms",
-        "MLIRDialectUtils",
-        "MLIRArithUtils",
-        "MLIRLLVMIRTransforms",
-        // Core
-        "MLIRSupport",
-        "MLIRPass",
-        "MLIRTransforms",
-        "MLIRTransformUtils",
-        "MLIRRewrite",
-        "MLIRRewritePDL",
-        "MLIRAnalysis",
-        "MLIRParser",
-        "MLIRIR",
-        "MLIRDialect",
-    ] {
-        println!("cargo:rustc-link-lib=static={library}");
+
+    // Link with MLIR libraries only if MLIR is available.
+    if mlir_available {
+        for library in [
+            // Custom solx dialects
+            "MLIRSolDialect",
+            "MLIRYulDialect",
+            // Core dialects
+            "MLIRFuncDialect",
+            "MLIRSCFDialect",
+            "MLIRArithDialect",
+            "MLIRLLVMDialect",
+            "MLIRControlFlowDialect",
+            "MLIRPDLDialect",
+            "MLIRPDLInterpDialect",
+            "MLIRUBDialect",
+            "MLIRTensorDialect",
+            "MLIRDLTIDialect",
+            // Conversions
+            "MLIRFuncToLLVM",
+            "MLIRSCFToControlFlow",
+            "MLIRControlFlowToLLVM",
+            "MLIRArithAttrToLLVMConversion",
+            "MLIRArithToLLVM",
+            "MLIRLLVMCommonConversion",
+            "MLIRPDLToPDLInterp",
+            // Translations
+            "MLIRBuiltinToLLVMIRTranslation",
+            "MLIRLLVMToLLVMIRTranslation",
+            "MLIRTargetLLVMIRExport",
+            // Interfaces
+            "MLIRCallInterfaces",
+            "MLIRControlFlowInterfaces",
+            "MLIRInferIntRangeInterface",
+            "MLIRInferIntRangeCommon",
+            "MLIRMemorySlotInterfaces",
+            "MLIRDataLayoutInterfaces",
+            "MLIRSideEffectInterfaces",
+            "MLIRCastInterfaces",
+            "MLIRLoopLikeInterface",
+            "MLIRFunctionInterfaces",
+            "MLIRDestinationStyleOpInterface",
+            "MLIRViewLikeInterface",
+            "MLIRInferTypeOpInterface",
+            "MLIRParallelCombiningOpInterface",
+            // Utils and transforms
+            "MLIRSCFUtils",
+            "MLIRSCFTransforms",
+            "MLIRDialectUtils",
+            "MLIRArithUtils",
+            "MLIRLLVMIRTransforms",
+            // Core
+            "MLIRSupport",
+            "MLIRPass",
+            "MLIRTransforms",
+            "MLIRTransformUtils",
+            "MLIRRewrite",
+            "MLIRRewritePDL",
+            "MLIRAnalysis",
+            "MLIRParser",
+            "MLIRIR",
+            "MLIRDialect",
+        ] {
+            println!("cargo:rustc-link-lib=static={library}");
+        }
     }
 }
