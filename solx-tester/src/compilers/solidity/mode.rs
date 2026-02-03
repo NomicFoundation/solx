@@ -121,7 +121,7 @@ impl IMode for Mode {
     }
 
     fn codegen(&self) -> Option<String> {
-        Some((if self.via_ir { "Y" } else { "E" }).to_string())
+        None
     }
 
     fn version(&self) -> Option<String> {

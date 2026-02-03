@@ -80,8 +80,7 @@ impl IMode for Mode {
     }
 
     fn codegen(&self) -> Option<String> {
-        // Yul is always via Yul IR
-        Some("Y".to_string())
+        None
     }
 
     fn version(&self) -> Option<String> {
