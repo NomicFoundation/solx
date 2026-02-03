@@ -115,18 +115,13 @@ impl IMode for Mode {
         if let Some(ref llvm_settings) = self.llvm_optimizer_settings {
             Some(format!("{}", llvm_settings))
         } else {
-            self.solc_optimize.map(|optimize| {
-                if optimize {
-                    "optimized".to_string()
-                } else {
-                    "unoptimized".to_string()
-                }
-            })
+            // No optimization suffix for solc - just Y or E
+            None
         }
     }
 
     fn codegen(&self) -> Option<String> {
-        None
+        Some((if self.via_ir { "Y" } else { "E" }).to_string())
     }
 
     fn version(&self) -> Option<String> {

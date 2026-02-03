@@ -119,7 +119,7 @@ impl Summary {
 
             let tags: Vec<String> = group.iter().cloned().collect();
 
-            // Build mode key: "toolchain-codegen-version-optimizations"
+            // Build mode key: "toolchain-codegen-optimizations-version"
             let ModeInfo {
                 codegen,
                 optimizations,
@@ -128,7 +128,7 @@ impl Summary {
                 .clone()
                 .expect("The compiler mode is missing from description.")
                 .into();
-            let mode_key = format!("{toolchain}-{codegen}-{version}-{optimizations}");
+            let mode_key = format!("{toolchain}-{codegen}-{optimizations}-{version}");
 
             let run = benchmark
                 .tests

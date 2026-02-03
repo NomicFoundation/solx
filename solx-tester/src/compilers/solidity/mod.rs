@@ -44,17 +44,13 @@ pub struct SolidityCompiler {
 lazy_static::lazy_static! {
     ///
     /// The Solidity compiler supported modes for solc toolchain.
+    /// Only optimized modes (E and Y) are generated.
     ///
     static ref SOLIDITY_SOLC_MODES: Vec<Mode> = {
         let mut modes = Vec::new();
-        for (via_ir, optimize) in [
-            (false, false),
-            (false, true),
-            (true, false),
-            (true, true),
-        ] {
+        for via_ir in [false, true] {
             for version in SolidityCompiler::all_solc_versions(via_ir).unwrap_or_default() {
-                modes.push(SolidityMode::new_solc(version, via_ir, optimize).into());
+                modes.push(SolidityMode::new_solc(version, via_ir, true).into());
             }
         }
         modes
@@ -62,13 +58,12 @@ lazy_static::lazy_static! {
 
     ///
     /// The Yul compiler supported modes for solc toolchain.
+    /// Only optimized mode (Y) is generated.
     ///
     static ref YUL_SOLC_MODES: Vec<Mode> = {
         let mut modes = Vec::new();
-        for optimize in [false, true] {
-            for version in SolidityCompiler::all_solc_versions(true).unwrap_or_default() {
-                modes.push(YulMode::new_solc(version, optimize).into());
-            }
+        for version in SolidityCompiler::all_solc_versions(true).unwrap_or_default() {
+            modes.push(YulMode::new_solc(version, true).into());
         }
         modes
     };
