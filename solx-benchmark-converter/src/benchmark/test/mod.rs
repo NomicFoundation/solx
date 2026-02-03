@@ -25,7 +25,7 @@ pub struct Test {
     /// Metadata for this test.
     #[serde(default)]
     pub metadata: Metadata,
-    /// Runs keyed by mode string (e.g., "solx-Y+M3B3-0.8.28" or "solc").
+    /// Runs keyed by mode string (e.g., "solx-M3B3-0.8.33" or "solc").
     #[serde(default)]
     pub runs: BTreeMap<String, Run>,
 

@@ -74,8 +74,13 @@ impl IMode for Mode {
         if let Some(ref llvm_settings) = self.llvm_optimizer_settings {
             Some(format!("{}", llvm_settings))
         } else {
-            self.solc_optimize
-                .map(|optimize| (if optimize { "+" } else { "-" }).to_string())
+            self.solc_optimize.map(|optimize| {
+                if optimize {
+                    "optimized".to_string()
+                } else {
+                    "unoptimized".to_string()
+                }
+            })
         }
     }
 
