@@ -25,182 +25,203 @@ pub struct Arguments {
     /// If an argument contains a '=', it is considered a remapping.
     pub inputs: Vec<String>,
 
+    //
+    // Input Options
+    //
     /// Set the given path as the root of the source tree instead of the root of the filesystem.
     /// Passed to `solc` without changes.
-    #[arg(long)]
+    #[arg(long, help_heading = "Input Options")]
     pub base_path: Option<String>,
 
     /// Make an additional source directory available to the default import callback.
     /// Can be used multiple times. Can only be used if the base path has a non-empty value.
     /// Passed to `solc` without changes.
-    #[arg(long, num_args = 1..)]
+    #[arg(long, num_args = 1.., help_heading = "Input Options")]
     pub include_path: Vec<String>,
 
     /// Allow a given path for imports. A list of paths can be supplied by separating them with a comma.
     /// Passed to `solc` without changes.
-    #[arg(long)]
+    #[arg(long, help_heading = "Input Options")]
     pub allow_paths: Option<String>,
-
-    /// Create one file per component and contract/file at the specified directory, if given.
-    #[arg(short, long)]
-    pub output_dir: Option<PathBuf>,
-
-    /// Overwrite existing files (used together with -o).
-    #[arg(long)]
-    pub overwrite: bool,
-
-    /// Set the optimization parameter -O[0 | 1 | 2 | 3 | s | z].
-    /// Use `3` for best performance and `z` for minimal size.
-    #[arg(short = 'O', long)]
-    pub optimization: Option<char>,
-
-    /// Try to recompile with -Oz if the bytecode is too large.
-    #[arg(long = "optimization-size-fallback")]
-    pub size_fallback: bool,
-
-    /// Pass arbitrary space-separated options to LLVM.
-    /// The argument must be a single-quoted string following a `=` separator.
-    /// Example: `--llvm-options='arg1 arg2 arg3 ... argN'`.
-    #[arg(long)]
-    pub llvm_options: Option<String>,
-
-    /// EVM version `solc` will produce Yul or EVM assembly for.
-    /// The default is chosen by `solc`.
-    #[arg(long)]
-    pub evm_version: Option<solx_utils::EVMVersion>,
-
-    /// Specify addresses of deployable libraries. Syntax: `<libraryFullPath1>=<address1> ... <libraryFullPathN>=<addressN>`.
-    /// Addresses are interpreted as hexadecimal strings prefixed with `0x`.
-    #[arg(short, long, num_args = 1..)]
-    pub libraries: Vec<String>,
-
-    /// Switch to standard JSON input/output mode. Read from stdin or specified file, write the result to stdout.
-    /// This is the default used by the Hardhat plugin.
-    #[arg(long)]
-    pub standard_json: Option<Option<String>>,
-
-    /// Sets the number of threads, where each thread compiles its own translation unit in a child process.
-    #[arg(short, long)]
-    pub threads: Option<usize>,
 
     /// Switch to Yul mode.
     /// Only one input Yul file is allowed.
     /// Cannot be used with standard JSON mode.
-    #[arg(long, alias = "strict-assembly")]
+    #[arg(long, alias = "strict-assembly", help_heading = "Input Options")]
     pub yul: bool,
 
     /// Switch to LLVM IR mode.
     /// Only one input LLVM IR file is allowed.
     /// Cannot be used with standard JSON mode.
     /// Use this mode at your own risk, as LLVM IR input validation is not implemented.
-    #[arg(long)]
+    #[arg(long, help_heading = "Input Options")]
     pub llvm_ir: bool,
 
+    /// Switch to standard JSON input/output mode. Read from stdin or specified file, write the result to stdout.
+    /// This is the default used by the Hardhat plugin.
+    #[arg(long, help_heading = "Input Options")]
+    pub standard_json: Option<Option<String>>,
+
+    /// Specify addresses of deployable libraries. Syntax: `<libraryFullPath1>=<address1> ... <libraryFullPathN>=<addressN>`.
+    /// Addresses are interpreted as hexadecimal strings prefixed with `0x`.
+    #[arg(short, long, num_args = 1.., help_heading = "Input Options")]
+    pub libraries: Vec<String>,
+
+    //
+    // Output Options
+    //
+    /// Create one file per component and contract/file at the specified directory, if given.
+    #[arg(short, long, help_heading = "Output Options")]
+    pub output_dir: Option<PathBuf>,
+
+    /// Overwrite existing files (used together with -o).
+    #[arg(long, help_heading = "Output Options")]
+    pub overwrite: bool,
+
+    //
+    // Output Selection
+    //
+    /// Emit bytecode of the compiled contracts.
+    #[arg(long = "bin", help_heading = "Output Selection")]
+    pub output_bytecode: bool,
+
+    /// Emit deployed bytecode of the compiled contracts.
+    #[arg(long = "bin-runtime", help_heading = "Output Selection")]
+    pub output_bytecode_runtime: bool,
+
+    /// Emit assembly of the compiled contracts.
+    #[arg(long = "asm", help_heading = "Output Selection")]
+    pub output_assembly: bool,
+
+    /// Emit debug info of the compiled contracts.
+    #[arg(long = "debug-info", help_heading = "Output Selection")]
+    pub output_debug_info: bool,
+
+    /// Emit runtime bytecode debug info of the compiled contracts.
+    #[arg(long = "debug-info-runtime", help_heading = "Output Selection")]
+    pub output_debug_info_runtime: bool,
+
+    /// Emit metadata of the compiled project.
+    #[arg(long = "metadata", help_heading = "Output Selection")]
+    pub output_metadata: bool,
+
+    /// Emit ABI specification of the compiled project.
+    #[arg(long = "abi", help_heading = "Output Selection")]
+    pub output_abi: bool,
+
+    /// Emit function signature hashes of the compiled project.
+    #[arg(long = "hashes", help_heading = "Output Selection")]
+    pub output_hashes: bool,
+
+    /// Emit user documentation of the compiled project.
+    #[arg(long = "userdoc", help_heading = "Output Selection")]
+    pub output_userdoc: bool,
+
+    /// Emit developer documentation of the compiled project.
+    #[arg(long = "devdoc", help_heading = "Output Selection")]
+    pub output_devdoc: bool,
+
+    /// Emit storage layout of the compiled project.
+    #[arg(long = "storage-layout", help_heading = "Output Selection")]
+    pub output_storage_layout: bool,
+
+    /// Emit storage layout of the compiled project.
+    #[arg(long = "transient-storage-layout", help_heading = "Output Selection")]
+    pub output_transient_storage_layout: bool,
+
+    /// Emit AST of the compiled project.
+    #[arg(long = "ast-json", help_heading = "Output Selection")]
+    pub output_ast_json: bool,
+
+    /// Emit solc's EVM assembly of the compiled project.
+    #[arg(long = "asm-solc-json", help_heading = "Output Selection")]
+    pub output_asm_solc_json: bool,
+
+    /// Emit solc's Yul IR of the compiled project.
+    #[arg(long = "ir", alias = "ir-optimized", help_heading = "Output Selection")]
+    pub output_ir: bool,
+
+    /// Emit solx's compilation pipeline benchmarks.
+    #[arg(long = "benchmarks", help_heading = "Output Selection")]
+    pub output_benchmarks: bool,
+
+    //
+    // Compilation Settings
+    //
+    /// EVM version `solc` will produce Yul or EVM assembly for.
+    /// The default is chosen by `solc`.
+    #[arg(long, help_heading = "Compilation Settings")]
+    pub evm_version: Option<solx_utils::EVMVersion>,
+
     /// Enable the `solc` IR codegen.
-    #[arg(long)]
+    #[arg(long, help_heading = "Compilation Settings")]
     pub via_ir: bool,
 
+    /// Sets the number of threads, where each thread compiles its own translation unit in a child process.
+    #[arg(short, long, help_heading = "Compilation Settings")]
+    pub threads: Option<usize>,
+
+    //
+    // Optimization
+    //
+    /// Set the optimization parameter -O[0 | 1 | 2 | 3 | s | z].
+    /// Use `3` for best performance and `z` for minimal size.
+    #[arg(short = 'O', long, help_heading = "Optimization")]
+    pub optimization: Option<char>,
+
+    /// Try to recompile with -Oz if the bytecode is too large.
+    #[arg(long = "optimization-size-fallback", help_heading = "Optimization")]
+    pub size_fallback: bool,
+
+    /// Pass arbitrary space-separated options to LLVM.
+    /// The argument must be a single-quoted string following a `=` separator.
+    /// Example: `--llvm-options='arg1 arg2 arg3 ... argN'`.
+    #[arg(long, help_heading = "Optimization")]
+    pub llvm_options: Option<String>,
+
+    //
+    // Metadata
+    //
     /// Set the metadata hash type.
     /// Available types: `none`, `ipfs`.
     /// The default is `ipfs`.
-    #[arg(long)]
+    #[arg(long, help_heading = "Metadata")]
     pub metadata_hash: Option<solx_utils::MetadataHashType>,
 
     /// Sets the literal content flag for contract metadata.
     /// If enabled, the metadata will contain the literal content of the source files.
-    #[arg(long)]
+    #[arg(long, help_heading = "Metadata")]
     pub metadata_literal: bool,
 
     /// Turn off CBOR metadata at the end of bytecode.
-    #[arg(long)]
+    #[arg(long, help_heading = "Metadata")]
     pub no_cbor_metadata: bool,
 
     /// Turn off the default `solc` import resolution callback.
-    #[arg(long)]
+    #[arg(long, help_heading = "Metadata")]
     pub no_import_callback: bool,
 
-    /// Emit bytecode of the compiled contracts.
-    #[arg(long = "bin")]
-    pub output_bytecode: bool,
-
-    /// Emit deployed bytecode of the compiled contracts.
-    #[arg(long = "bin-runtime")]
-    pub output_bytecode_runtime: bool,
-
-    /// Emit assembly of the compiled contracts.
-    #[arg(long = "asm")]
-    pub output_assembly: bool,
-
-    /// Emit debug info of the compiled contracts.
-    #[arg(long = "debug-info")]
-    pub output_debug_info: bool,
-
-    /// Emit runtime bytecode debug info of the compiled contracts.
-    #[arg(long = "debug-info-runtime")]
-    pub output_debug_info_runtime: bool,
-
-    /// Emit metadata of the compiled project.
-    #[arg(long = "metadata")]
-    pub output_metadata: bool,
-
-    /// Emit ABI specification of the compiled project.
-    #[arg(long = "abi")]
-    pub output_abi: bool,
-
-    /// Emit function signature hashes of the compiled project.
-    #[arg(long = "hashes")]
-    pub output_hashes: bool,
-
-    /// Emit user documentation of the compiled project.
-    #[arg(long = "userdoc")]
-    pub output_userdoc: bool,
-
-    /// Emit developer documentation of the compiled project.
-    #[arg(long = "devdoc")]
-    pub output_devdoc: bool,
-
-    /// Emit storage layout of the compiled project.
-    #[arg(long = "storage-layout")]
-    pub output_storage_layout: bool,
-
-    /// Emit storage layout of the compiled project.
-    #[arg(long = "transient-storage-layout")]
-    pub output_transient_storage_layout: bool,
-
-    /// Emit AST of the compiled project.
-    #[arg(long = "ast-json")]
-    pub output_ast_json: bool,
-
-    /// Emit solc's EVM assembly of the compiled project.
-    #[arg(long = "asm-solc-json")]
-    pub output_asm_solc_json: bool,
-
-    /// Emit solc's Yul IR of the compiled project.
-    #[arg(long = "ir", alias = "ir-optimized")]
-    pub output_ir: bool,
-
-    /// Emit solx's compilation pipeline benchmarks.
-    #[arg(long = "benchmarks")]
-    pub output_benchmarks: bool,
-
+    //
+    // Debug Options
+    //
     /// Dump all IRs to files in the specified directory.
     /// Only for testing and debugging.
-    #[arg(long)]
+    #[arg(long, help_heading = "Debug Options")]
     pub debug_output_dir: Option<PathBuf>,
 
     /// Set the verify-each option in LLVM.
     /// Only for testing and debugging.
-    #[arg(long)]
+    #[arg(long, help_heading = "Debug Options")]
     pub llvm_verify_each: bool,
 
     /// Set the debug-logging option in LLVM.
     /// Only for testing and debugging.
-    #[arg(long)]
+    #[arg(long, help_heading = "Debug Options")]
     pub llvm_debug_logging: bool,
 
     /// Run this process recursively and provide JSON input to compile a single contract.
     /// Only for usage from within the compiler.
-    #[arg(long)]
+    #[arg(long, hide = true)]
     pub recursive_process: bool,
 }
 
