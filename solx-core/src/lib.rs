@@ -17,7 +17,6 @@ pub mod error;
 pub mod process;
 pub mod project;
 pub mod solc;
-pub mod yul;
 
 pub use self::arguments::Arguments;
 pub use self::build::Build as EVMBuild;
