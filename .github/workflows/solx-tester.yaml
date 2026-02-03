@@ -128,7 +128,7 @@ jobs:
         run: |
           ./target/release/solx-tester \
             --solidity-compiler ./target/release/solx \
-            --mode 'Y M^B3 0.8.33' \
+            --mode 'Y M^B3' \
             --benchmark=${{ matrix.type }}-benchmark.json || true
 
       - name: Upload results

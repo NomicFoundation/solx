@@ -29,13 +29,13 @@ The **solx-tester** tool runs integration tests by compiling contracts and execu
 cargo build --release
 
 # Run all integration tests
-./target/release/solx-tester --solx ./target/release/solx
+./target/release/solx-tester --solidity-compiler ./target/release/solx
 
 # Run tests for a specific file
-./target/release/solx-tester --solx ./target/release/solx --path tests/solidity/simple/default.sol
+./target/release/solx-tester --solidity-compiler ./target/release/solx --path tests/solidity/simple/default.sol
 
-# Run tests matching a mode (format: "<codegen> <optimizer> <version>")
-./target/release/solx-tester --solx ./target/release/solx --mode "Y M3B3 0.8.33"
+# Run tests matching a mode (format: "<codegen> <optimizer>")
+./target/release/solx-tester --solidity-compiler ./target/release/solx --mode "Y M3B3"
 ```
 
 ## Foundry and Hardhat Projects
