@@ -75,7 +75,7 @@ impl SolidityCompiler {
     const DIRECTORY_SOLC: &'static str = "solc-bin-upstream/";
 
     /// The LLVM-fork solc executables directory.
-    const DIRECTORY_SOLC_LLVM: &'static str = "solc-bin-llvm/";
+    const DIRECTORY_SOLX_MLIR: &'static str = "solx-mlir-bin/";
 
     /// The solc allow paths argument value.
     const ALLOW_PATHS: &'static str = "tests";
@@ -84,7 +84,7 @@ impl SolidityCompiler {
     const MIN_VERSION: semver::Version = semver::Version::new(0, 8, 24);
 
     /// The current MLIR solc version.
-    const MLIR_VERSION: semver::Version = semver::Version::new(0, 8, 30);
+    const MLIR_VERSION: semver::Version = semver::Version::new(0, 8, 33);
 
     ///
     /// Creates a new compiler for the solx toolchain.
@@ -295,7 +295,7 @@ impl SolidityCompiler {
     ) -> anyhow::Result<solx_standard_json::Output> {
         let directory = match toolchain {
             Toolchain::Solc => Self::DIRECTORY_SOLC,
-            Toolchain::SolxMlir => Self::DIRECTORY_SOLC_LLVM,
+            Toolchain::SolxMlir => Self::DIRECTORY_SOLX_MLIR,
             toolchain => panic!("Unsupported toolchain for run_solc: {toolchain}"),
         };
         let mut subprocess = Subprocess::new(format!("{directory}/solc-{version}"))?;
