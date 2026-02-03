@@ -42,7 +42,7 @@ pub const SHARED_BUILD_OPTS: [&str; 23] = [
 /// TODO: enable at least for non-Windows platforms
 ///
 pub fn shared_build_opts_werror() -> Vec<String> {
-    vec![format!("-DLLVM_ENABLE_WERROR='{}'", "Off",)]
+    vec!["-DLLVM_ENABLE_WERROR='Off'".to_owned()]
 }
 
 ///
