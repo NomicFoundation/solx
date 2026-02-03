@@ -29,9 +29,7 @@ pub use crate::compilers::Compiler;
 pub use crate::compilers::llvm_ir::LLVMIRCompiler;
 pub use crate::compilers::mode::Mode;
 pub use crate::compilers::mode::llvm_options::LLVMOptions;
-pub use crate::compilers::solidity::solc::SolidityCompiler as SolcCompiler;
-pub use crate::compilers::solidity::solx::SolidityCompiler as SolxCompiler;
-pub use crate::compilers::yul::YulCompiler;
+pub use crate::compilers::solidity::SolidityCompiler;
 pub use crate::directories::Buildable;
 pub use crate::directories::Collection;
 pub use crate::directories::ethereum::EthereumDirectory;
@@ -137,28 +135,40 @@ impl<'a> SolxTester<'a> {
     /// Returns all tests from all directories.
     ///
     fn all_tests(&self, toolchain: Toolchain, solx: Option<PathBuf>) -> anyhow::Result<Vec<Test>> {
-        let solx_path = solx.unwrap_or_else(|| PathBuf::from("solx"));
-        let solidity_compiler = Arc::new(SolxCompiler::try_from_path(solx_path)?);
-        let llvm_ir_compiler = Arc::new(LLVMIRCompiler::Solx(solidity_compiler.clone()));
-
         let (solidity_compiler, yul_compiler, llvm_ir_compiler): (
             Arc<dyn Compiler>,
             Arc<dyn Compiler>,
             Arc<dyn Compiler>,
         ) = match toolchain {
             Toolchain::Solx => {
-                let yul_compiler = Arc::new(YulCompiler::Solx(solidity_compiler.clone()));
+                let solx_path = solx.unwrap_or_else(|| PathBuf::from("solx"));
+                let solidity_compiler = Arc::new(SolidityCompiler::new_solx(
+                    solx_path.clone(),
+                    solx_standard_json::InputLanguage::Solidity,
+                )?);
+                let yul_compiler = Arc::new(SolidityCompiler::new_solx(
+                    solx_path,
+                    solx_standard_json::InputLanguage::Yul,
+                )?);
+                let llvm_ir_compiler = Arc::new(LLVMIRCompiler::new_solx());
                 (solidity_compiler, yul_compiler, llvm_ir_compiler)
             }
-            Toolchain::Solc | Toolchain::SolxMlir => {
-                let solidity_compiler = Arc::new(SolcCompiler::new(
+            Toolchain::Solc => {
+                let solidity_compiler =
+                    Arc::new(SolidityCompiler::new_solc(solx_standard_json::InputLanguage::Solidity));
+                let yul_compiler =
+                    Arc::new(SolidityCompiler::new_solc(solx_standard_json::InputLanguage::Yul));
+                let llvm_ir_compiler = Arc::new(LLVMIRCompiler::new_solc());
+                (solidity_compiler, yul_compiler, llvm_ir_compiler)
+            }
+            Toolchain::SolxMlir => {
+                let solidity_compiler = Arc::new(SolidityCompiler::new_solx_mlir(
                     solx_standard_json::InputLanguage::Solidity,
-                    toolchain,
                 ));
-                let yul_compiler = Arc::new(SolcCompiler::new(
+                let yul_compiler = Arc::new(SolidityCompiler::new_solx_mlir(
                     solx_standard_json::InputLanguage::Yul,
-                    toolchain,
                 ));
+                let llvm_ir_compiler = Arc::new(LLVMIRCompiler::new_solx_mlir());
                 (solidity_compiler, yul_compiler, llvm_ir_compiler)
             }
         };

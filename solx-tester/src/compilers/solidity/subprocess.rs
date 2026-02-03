@@ -1,29 +1,20 @@
 //!
-//! The Solidity compiler.
+//! The solc subprocess wrapper.
 //!
 
 use std::io::Write;
 
 ///
-/// The Solidity compiler.
+/// The solc subprocess wrapper.
 ///
-pub struct Compiler {
+pub struct Subprocess {
     /// The executable name.
     pub executable: String,
 }
 
-impl Compiler {
-    /// The first version of `solc`, where Yul codegen is considered robust enough.
-    pub const FIRST_YUL_VERSION: semver::Version = semver::Version::new(0, 8, 0);
-
-    /// The first version of `solc`, where `--via-ir` codegen mode is supported.
-    pub const FIRST_VIA_IR_VERSION: semver::Version = semver::Version::new(0, 8, 13);
-
+impl Subprocess {
     ///
     /// A shortcut constructor.
-    ///
-    /// Different tools may use different `executable` names. For example, the integration tester
-    /// uses `solc-<version>` format.
     ///
     pub fn new(executable: String) -> anyhow::Result<Self> {
         if let Err(error) = which::which(executable.as_str()) {
@@ -33,7 +24,7 @@ impl Compiler {
     }
 
     ///
-    /// Compiles the Solidity `--standard-json` input into Yul IR.
+    /// Runs the solc `--standard-json` command.
     ///
     pub fn standard_json(
         &mut self,
