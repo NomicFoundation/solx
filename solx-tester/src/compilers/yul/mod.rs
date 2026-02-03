@@ -15,10 +15,10 @@ use solx_standard_json::CollectableError as SolxCollectableError;
 use crate::compilers::Compiler;
 use crate::compilers::mode::Mode;
 use crate::compilers::solidity::solc::SolidityCompiler as SolcCompiler;
-use crate::compilers::solidity::solc::compiler::standard_json::input::language::Language as SolcStandardJsonInputLanguage;
 use crate::compilers::solidity::solx::SolidityCompiler as SolxCompiler;
 use crate::revm::input::Input as EVMInput;
 use crate::toolchain::Toolchain;
+use solx_standard_json::InputLanguage as SolcStandardJsonInputLanguage;
 
 use self::mode::Mode as YulMode;
 
@@ -154,7 +154,7 @@ impl Compiler for YulCompiler {
                     test_params,
                 )?;
 
-                if let Some(errors) = solc_output.errors.as_deref() {
+                if let Some(errors) = solc_output.errors_opt() {
                     let mut has_errors = false;
                     let mut error_messages = Vec::with_capacity(errors.len());
 
@@ -177,12 +177,12 @@ impl Compiler for YulCompiler {
                     .clone();
 
                 let contracts = solc_output
-                    .contracts
+                    .contracts_opt()
                     .ok_or_else(|| anyhow::anyhow!("Solidity contracts not found in the output"))?;
 
                 let mut builds = HashMap::with_capacity(contracts.len());
-                for (file, contracts) in contracts.into_iter() {
-                    for (name, contract) in contracts.into_iter() {
+                for (file, contracts) in contracts.iter() {
+                    for (name, contract) in contracts.iter() {
                         let path = format!("{file}:{name}");
                         let evm = contract.evm.as_ref().ok_or_else(|| {
                             anyhow::anyhow!("EVM object of the contract `{path}` not found")
@@ -194,6 +194,12 @@ impl Compiler for YulCompiler {
                                 anyhow::anyhow!("EVM bytecode of the contract `{path}` not found")
                             })?
                             .object
+                            .as_ref()
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "EVM bytecode object of the contract `{path}` not found"
+                                )
+                            })?
                             .as_str();
                         let deploy_code = hex::decode(deploy_code_string).expect("Always valid");
                         let runtime_code_size = evm
@@ -203,6 +209,10 @@ impl Compiler for YulCompiler {
                                 anyhow::anyhow!("EVM bytecode of the contract `{path}` not found")
                             })?
                             .object
+                            .as_ref()
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("EVM deployed bytecode object of the contract `{path}` not found")
+                            })?
                             .len()
                             / 2;
                         builds.insert(path, (deploy_code, runtime_code_size));

@@ -30,7 +30,6 @@ pub use crate::compilers::llvm_ir::LLVMIRCompiler;
 pub use crate::compilers::mode::Mode;
 pub use crate::compilers::mode::llvm_options::LLVMOptions;
 pub use crate::compilers::solidity::solc::SolidityCompiler as SolcCompiler;
-pub use crate::compilers::solidity::solc::compiler::standard_json::input::language::Language as SolcStandardJsonInputLanguage;
 pub use crate::compilers::solidity::solx::SolidityCompiler as SolxCompiler;
 pub use crate::compilers::yul::YulCompiler;
 pub use crate::directories::Buildable;
@@ -43,6 +42,7 @@ pub use crate::revm::REVM;
 pub use crate::summary::Summary;
 pub use crate::toolchain::Toolchain;
 pub use crate::workflow::Workflow;
+pub use solx_standard_json::InputLanguage as SolcStandardJsonInputLanguage;
 
 /// The debug directory path.
 pub const DEBUG_DIRECTORY: &str = "./debug/";

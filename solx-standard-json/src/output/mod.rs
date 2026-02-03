@@ -23,7 +23,7 @@ use self::source::Source;
 ///
 /// The `solc --standard-json` output.
 ///
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Output {
     /// File-contract mapping.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -145,6 +145,45 @@ impl Output {
     pub fn push_error(&mut self, path: &str, error: anyhow::Error) {
         self.errors
             .push(JsonOutputError::new_error_contract(Some(path), error));
+    }
+
+    ///
+    /// Returns the contracts as Option, returning None if empty.
+    ///
+    /// This is a convenience method for code that checks for the presence of contracts.
+    ///
+    pub fn contracts_opt(&self) -> Option<&BTreeMap<String, BTreeMap<String, Contract>>> {
+        if self.contracts.is_empty() {
+            None
+        } else {
+            Some(&self.contracts)
+        }
+    }
+
+    ///
+    /// Returns the sources as Option, returning None if empty.
+    ///
+    /// This is a convenience method for code that checks for the presence of sources.
+    ///
+    pub fn sources_opt(&self) -> Option<&BTreeMap<String, Source>> {
+        if self.sources.is_empty() {
+            None
+        } else {
+            Some(&self.sources)
+        }
+    }
+
+    ///
+    /// Returns the errors as Option slice, returning None if empty.
+    ///
+    /// This is a convenience method for code that checks for the presence of errors.
+    ///
+    pub fn errors_opt(&self) -> Option<&[JsonOutputError]> {
+        if self.errors.is_empty() {
+            None
+        } else {
+            Some(&self.errors)
+        }
     }
 
     ///

@@ -2,12 +2,10 @@
 //! The Solidity compiler.
 //!
 
-pub mod standard_json;
-
 use std::io::Write;
 
-use self::standard_json::input::Input as StandardJsonInput;
-use self::standard_json::output::Output as StandardJsonOutput;
+use solx_standard_json::Input as StandardJsonInput;
+use solx_standard_json::Output as StandardJsonOutput;
 
 ///
 /// The Solidity compiler.

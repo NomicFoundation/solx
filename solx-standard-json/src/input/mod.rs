@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 
+use crate::input::settings::debug::Debug as InputSettingsDebug;
 use crate::input::settings::metadata::Metadata as InputSettingsMetadata;
 use crate::input::settings::optimizer::Optimizer as InputSettingsOptimizer;
 use crate::input::settings::selection::Selection as InputSettingsSelection;
@@ -133,6 +134,7 @@ impl Input {
                 via_ir,
                 output_selection.to_owned(),
                 metadata,
+                None,
                 llvm_options,
             ),
         })
@@ -191,6 +193,7 @@ impl Input {
                 false,
                 output_selection.to_owned(),
                 metadata,
+                None,
                 llvm_options,
             ),
         }
@@ -249,7 +252,44 @@ impl Input {
                 false,
                 output_selection.to_owned(),
                 metadata,
+                None,
                 llvm_options,
+            ),
+        }
+    }
+
+    ///
+    /// A shortcut constructor for solc from source code strings.
+    ///
+    /// Takes solc-specific parameters: optimizer enabled flag, debug settings.
+    ///
+    pub fn new_for_solc(
+        language: Language,
+        sources: BTreeMap<String, String>,
+        libraries: solx_utils::Libraries,
+        remappings: Option<BTreeSet<String>>,
+        evm_version: Option<solx_utils::EVMVersion>,
+        via_ir: bool,
+        output_selection: InputSettingsSelection,
+        optimizer_enabled: bool,
+        debug: Option<InputSettingsDebug>,
+    ) -> Self {
+        let sources = sources
+            .into_iter()
+            .map(|(path, content)| (path, Source::from(content)))
+            .collect();
+
+        Self {
+            language,
+            sources,
+            settings: Settings::new_for_solc(
+                optimizer_enabled,
+                libraries,
+                remappings.unwrap_or_default(),
+                evm_version,
+                via_ir,
+                output_selection,
+                debug,
             ),
         }
     }
