@@ -54,16 +54,11 @@ pub struct Arguments {
     #[structopt(short, long)]
     pub threads: Option<usize>,
 
-    /// Path to the `solx` executable.
-    /// Is set to `solx` by default.
+    /// Path to the Solidity compiler executable (`solx` or `solc`).
+    /// The compiler type is auto-detected from version output.
+    /// Defaults to `solx`.
     #[structopt(long)]
-    pub solx: Option<PathBuf>,
-
-    /// Specify the compiler toolchain.
-    /// Available arguments: `solx`, `solc`, `solx-mlir`.
-    /// Is set to `solx` by default.
-    #[structopt(long)]
-    pub toolchain: Option<solx_tester::Toolchain>,
+    pub solidity_compiler: Option<PathBuf>,
 
     /// Choose between `build` to compile tests only without running, and `run` to compile and run.
     #[structopt(long, default_value_t = solx_tester::Workflow::BuildAndRun)]

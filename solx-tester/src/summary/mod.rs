@@ -13,7 +13,6 @@ use colored::Colorize;
 
 use crate::test::case::input::output::Output;
 use crate::test::description::TestDescription;
-use crate::toolchain::Toolchain;
 
 use self::element::Element;
 use self::element::outcome::Outcome;
@@ -78,14 +77,7 @@ impl Summary {
     ///
     /// Returns the benchmark structure.
     ///
-    pub fn benchmark(
-        &self,
-        toolchain: Toolchain,
-    ) -> anyhow::Result<solx_benchmark_converter::Benchmark> {
-        if let Toolchain::SolxMlir = toolchain {
-            anyhow::bail!("The benchmarking is not supported for the SolxMlir toolchain.")
-        }
-
+    pub fn benchmark(&self) -> anyhow::Result<solx_benchmark_converter::Benchmark> {
         let mut benchmark = solx_benchmark_converter::Benchmark::default();
 
         for Element {
@@ -120,14 +112,15 @@ impl Summary {
             let tags: Vec<String> = group.iter().cloned().collect();
 
             // Build mode key: "toolchain-codegen-optimizations-version"
+            let mode_inner = mode
+                .clone()
+                .expect("The compiler mode is missing from description.");
+            let toolchain = mode_inner.toolchain();
             let ModeInfo {
                 codegen,
                 optimizations,
                 version,
-            } = mode
-                .clone()
-                .expect("The compiler mode is missing from description.")
-                .into();
+            } = mode_inner.into();
             let mode_key = format!("{toolchain}-{codegen}-{optimizations}-{version}");
 
             let run = benchmark

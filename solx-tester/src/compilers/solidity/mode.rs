@@ -74,6 +74,15 @@ impl Mode {
     /// Checks if the mode is compatible with the source code pragmas.
     ///
     pub fn check_pragmas(&self, sources: &[(String, String)]) -> bool {
+        // Strip pre-release for pragma matching since semver pre-release versions
+        // have special matching rules that don't work well with Solidity pragmas.
+        // E.g., ">=0.8.0" should match "0.8.33-develop" but semver doesn't agree.
+        let version_for_pragma = semver::Version::new(
+            self.solc_version.major,
+            self.solc_version.minor,
+            self.solc_version.patch,
+        );
+
         sources.iter().all(|(_, source_code)| {
             match source_code.lines().find_map(|line| {
                 let mut split = line.split_whitespace();
@@ -84,7 +93,7 @@ impl Mode {
                     None
                 }
             }) {
-                Some(pragma_version_req) => pragma_version_req.matches(&self.solc_version),
+                Some(pragma_version_req) => pragma_version_req.matches(&version_for_pragma),
                 None => true,
             }
         })

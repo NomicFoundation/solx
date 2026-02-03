@@ -32,12 +32,13 @@ pub struct LLVMIRCompiler {
 
 impl LLVMIRCompiler {
     ///
-    /// Creates a new LLVM IR compiler for solx toolchain.
+    /// Creates a new LLVM IR compiler.
+    /// Only solx toolchain supports LLVM IR compilation.
     ///
-    pub fn new_solx() -> Self {
+    pub fn new(executable_path: PathBuf) -> Self {
         Self {
             toolchain: Toolchain::Solx,
-            executable_path: Some(PathBuf::from("solx")),
+            executable_path: Some(executable_path),
         }
     }
 
@@ -48,17 +49,6 @@ impl LLVMIRCompiler {
     pub fn new_solc() -> Self {
         Self {
             toolchain: Toolchain::Solc,
-            executable_path: None,
-        }
-    }
-
-    ///
-    /// Creates a placeholder LLVM IR compiler for solx-mlir toolchain.
-    /// LLVM IR is not supported by solx-mlir, so this returns empty modes.
-    ///
-    pub fn new_solx_mlir() -> Self {
-        Self {
-            toolchain: Toolchain::SolxMlir,
             executable_path: None,
         }
     }

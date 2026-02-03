@@ -29,7 +29,7 @@ use self::subprocess::Subprocess;
 /// Unified Solidity/Yul compiler for all toolchains.
 ///
 pub struct SolidityCompiler {
-    /// The toolchain (Solx, Solc, or SolxMlir).
+    /// The toolchain (Solx or Solc).
     toolchain: Toolchain,
     /// The language (Solidity or Yul).
     language: solx_standard_json::InputLanguage,
@@ -41,61 +41,21 @@ pub struct SolidityCompiler {
     cache: Cache<CacheKey, solx_standard_json::Output>,
 }
 
-lazy_static::lazy_static! {
-    ///
-    /// The Solidity compiler supported modes for solc toolchain.
-    /// Only optimized modes (E and Y) are generated.
-    ///
-    static ref SOLIDITY_SOLC_MODES: Vec<Mode> = {
-        let mut modes = Vec::new();
-        for via_ir in [false, true] {
-            for version in SolidityCompiler::all_solc_versions().unwrap_or_default() {
-                modes.push(SolidityMode::new_solc(version, via_ir, true).into());
-            }
-        }
-        modes
-    };
-
-    ///
-    /// The Yul compiler supported modes for solc toolchain.
-    /// Only optimized mode (Y) is generated.
-    ///
-    static ref YUL_SOLC_MODES: Vec<Mode> = {
-        let mut modes = Vec::new();
-        for version in SolidityCompiler::all_solc_versions().unwrap_or_default() {
-            modes.push(YulMode::new_solc(version, true).into());
-        }
-        modes
-    };
-
-}
-
 impl SolidityCompiler {
-    /// The upstream solc executables directory.
-    const DIRECTORY_SOLC: &'static str = "solc-bin-upstream/";
-
-    /// The LLVM-fork solc executables directory.
-    const DIRECTORY_SOLX_MLIR: &'static str = "solx-mlir-bin/";
-
     /// The solc allow paths argument value.
     const ALLOW_PATHS: &'static str = "tests";
 
-    /// The minimum supported solc version.
-    const MIN_VERSION: semver::Version = semver::Version::new(0, 8, 24);
-
-    /// The current MLIR solc version.
-    const MLIR_VERSION: semver::Version = semver::Version::new(0, 8, 33);
-
     ///
-    /// Creates a new compiler for the solx toolchain.
+    /// Creates a new Solidity compiler with auto-detected toolchain.
     ///
-    pub fn new_solx(
+    pub fn new(
         executable_path: PathBuf,
         language: solx_standard_json::InputLanguage,
     ) -> anyhow::Result<Self> {
-        let version = Self::get_solx_version(executable_path.as_path())?;
+        let toolchain = Toolchain::detect(&executable_path)?;
+        let version = Self::get_compiler_version(executable_path.as_path())?;
         Ok(Self {
-            toolchain: Toolchain::Solx,
+            toolchain,
             language,
             executable_path: Some(executable_path),
             version,
@@ -104,82 +64,24 @@ impl SolidityCompiler {
     }
 
     ///
-    /// Creates a new compiler for the solc toolchain.
+    /// Returns the toolchain type.
     ///
-    pub fn new_solc(language: solx_standard_json::InputLanguage) -> Self {
-        Self {
-            toolchain: Toolchain::Solc,
-            language,
-            executable_path: None,
-            version: semver::Version::new(0, 0, 0), // Determined per-mode
-            cache: Cache::new(),
-        }
+    pub fn toolchain(&self) -> Toolchain {
+        self.toolchain
     }
 
     ///
-    /// Creates a new compiler for the solx-mlir toolchain.
-    ///
-    pub fn new_solx_mlir(language: solx_standard_json::InputLanguage) -> Self {
-        Self {
-            toolchain: Toolchain::SolxMlir,
-            language,
-            executable_path: None,
-            version: Self::MLIR_VERSION,
-            cache: Cache::new(),
-        }
-    }
-
-    ///
-    /// Returns the solx compiler version.
+    /// Returns the compiler version.
     ///
     pub fn version(&self) -> &semver::Version {
         &self.version
     }
 
     ///
-    /// Returns all supported solc versions (>= 0.8.24).
+    /// Gets the compiler version from its executable.
+    /// Works for both solx and solc as they have the same version output format.
     ///
-    pub fn all_solc_versions() -> anyhow::Result<Vec<semver::Version>> {
-        let mut versions = Vec::new();
-        for entry in std::fs::read_dir(Self::DIRECTORY_SOLC)? {
-            let entry = entry?;
-            let path = entry.path();
-            let entry_type = entry.file_type().map_err(|error| {
-                anyhow::anyhow!(
-                    "File `{}` type getting error: {}",
-                    path.to_string_lossy(),
-                    error
-                )
-            })?;
-            if !entry_type.is_file() {
-                anyhow::bail!(
-                    "Invalid `solc` executable file type: {}",
-                    path.to_string_lossy()
-                );
-            }
-
-            let file_name = entry.file_name().to_string_lossy().to_string();
-            let version_str = match file_name.strip_prefix("solc-") {
-                Some(version_str) => version_str,
-                None => continue,
-            };
-            let version: semver::Version = match version_str.parse() {
-                Ok(version) => version,
-                Err(_) => continue,
-            };
-            if version < Self::MIN_VERSION {
-                continue;
-            }
-
-            versions.push(version);
-        }
-        Ok(versions)
-    }
-
-    ///
-    /// Gets the solx version from its executable.
-    ///
-    fn get_solx_version(path: &Path) -> anyhow::Result<semver::Version> {
+    fn get_compiler_version(path: &Path) -> anyhow::Result<semver::Version> {
         let mut command = std::process::Command::new(path);
         command.stdout(std::process::Stdio::piped());
         command.stderr(std::process::Stdio::piped());
@@ -288,17 +190,15 @@ impl SolidityCompiler {
     /// Runs the solc subprocess and returns the output.
     ///
     fn run_solc(
-        toolchain: Toolchain,
-        version: &semver::Version,
+        &self,
         input: solx_standard_json::Input,
         allow_paths: Option<String>,
     ) -> anyhow::Result<solx_standard_json::Output> {
-        let directory = match toolchain {
-            Toolchain::Solc => Self::DIRECTORY_SOLC,
-            Toolchain::SolxMlir => Self::DIRECTORY_SOLX_MLIR,
-            toolchain => panic!("Unsupported toolchain for run_solc: {toolchain}"),
-        };
-        let mut subprocess = Subprocess::new(format!("{directory}/solc-{version}"))?;
+        let path = self
+            .executable_path
+            .as_ref()
+            .expect("solc toolchain must have executable path");
+        let mut subprocess = Subprocess::new(path.to_string_lossy().to_string())?;
         subprocess.standard_json(input, None, vec![], allow_paths)
     }
 
@@ -479,12 +379,6 @@ impl SolidityCompiler {
         };
 
         if !self.cache.contains(&cache_key) {
-            let solc_version = match mode {
-                Mode::Solidity(mode) => &mode.solc_version,
-                Mode::Yul(mode) => mode.solc_version.as_ref().unwrap(),
-                _ => unreachable!(),
-            };
-
             let input =
                 Self::create_solc_input(self.language, sources, libraries, mode, test_params);
 
@@ -495,7 +389,7 @@ impl SolidityCompiler {
                 .to_string();
 
             self.cache.evaluate(cache_key.clone(), || {
-                Self::run_solc(self.toolchain, solc_version, input, Some(allow_paths))
+                self.run_solc(input, Some(allow_paths))
             });
         }
 
@@ -675,7 +569,7 @@ impl Compiler for SolidityCompiler {
                 llvm_options,
                 debug_config,
             ),
-            Toolchain::Solc | Toolchain::SolxMlir => {
+            Toolchain::Solc => {
                 self.compile_solc_for_evm(test_path, sources, libraries, mode, test_params)
             }
         }
@@ -697,18 +591,13 @@ impl Compiler for SolidityCompiler {
                     })
                     .collect::<Vec<Mode>>()
             }
-            (solx_standard_json::InputLanguage::Solidity, Toolchain::SolxMlir) => {
-                // SolxMlir uses LLVM optimizer settings with fixed version
-                solx_codegen_evm::OptimizerSettings::combinations()
-                    .into_iter()
-                    .map(|llvm_optimizer_settings| {
-                        SolidityMode::new_solx(Self::MLIR_VERSION, true, llvm_optimizer_settings)
-                            .into()
-                    })
-                    .collect()
-            }
             (solx_standard_json::InputLanguage::Solidity, Toolchain::Solc) => {
-                SOLIDITY_SOLC_MODES.clone()
+                // Generate modes for both via_ir settings with the single solc version
+                let mut modes = Vec::new();
+                for via_ir in [false, true] {
+                    modes.push(SolidityMode::new_solc(self.version.clone(), via_ir, true).into());
+                }
+                modes
             }
             (solx_standard_json::InputLanguage::Yul, Toolchain::Solx) => {
                 solx_codegen_evm::OptimizerSettings::combinations()
@@ -718,16 +607,10 @@ impl Compiler for SolidityCompiler {
                     })
                     .collect::<Vec<Mode>>()
             }
-            (solx_standard_json::InputLanguage::Yul, Toolchain::SolxMlir) => {
-                // SolxMlir uses LLVM optimizer settings
-                solx_codegen_evm::OptimizerSettings::combinations()
-                    .into_iter()
-                    .map(|llvm_optimizer_settings| {
-                        YulMode::new_solx(llvm_optimizer_settings).into()
-                    })
-                    .collect()
+            (solx_standard_json::InputLanguage::Yul, Toolchain::Solc) => {
+                // Single mode for the single solc version
+                vec![YulMode::new_solc(self.version.clone(), true).into()]
             }
-            (solx_standard_json::InputLanguage::Yul, Toolchain::Solc) => YUL_SOLC_MODES.clone(),
             (solx_standard_json::InputLanguage::LLVMIR, _) => Vec::new(),
         }
     }

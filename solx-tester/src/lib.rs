@@ -101,11 +101,10 @@ impl<'a> SolxTester<'a> {
     ///
     pub fn run_revm(
         self,
-        toolchain: Toolchain,
-        solx: Option<PathBuf>,
+        solidity_compiler: PathBuf,
         enable_trace: bool,
     ) -> anyhow::Result<()> {
-        let tests = self.all_tests(toolchain, solx)?;
+        let tests = self.all_tests(solidity_compiler)?;
 
         let _: Vec<()> = tests
             .into_par_iter()
@@ -134,45 +133,21 @@ impl<'a> SolxTester<'a> {
     ///
     /// Returns all tests from all directories.
     ///
-    fn all_tests(&self, toolchain: Toolchain, solx: Option<PathBuf>) -> anyhow::Result<Vec<Test>> {
-        let (solidity_compiler, yul_compiler, llvm_ir_compiler): (
-            Arc<dyn Compiler>,
-            Arc<dyn Compiler>,
-            Arc<dyn Compiler>,
-        ) = match toolchain {
-            Toolchain::Solx => {
-                let solx_path = solx.unwrap_or_else(|| PathBuf::from("solx"));
-                let solidity_compiler = Arc::new(SolidityCompiler::new_solx(
-                    solx_path.clone(),
-                    solx_standard_json::InputLanguage::Solidity,
-                )?);
-                let yul_compiler = Arc::new(SolidityCompiler::new_solx(
-                    solx_path,
-                    solx_standard_json::InputLanguage::Yul,
-                )?);
-                let llvm_ir_compiler = Arc::new(LLVMIRCompiler::new_solx());
-                (solidity_compiler, yul_compiler, llvm_ir_compiler)
-            }
-            Toolchain::Solc => {
-                let solidity_compiler = Arc::new(SolidityCompiler::new_solc(
-                    solx_standard_json::InputLanguage::Solidity,
-                ));
-                let yul_compiler = Arc::new(SolidityCompiler::new_solc(
-                    solx_standard_json::InputLanguage::Yul,
-                ));
-                let llvm_ir_compiler = Arc::new(LLVMIRCompiler::new_solc());
-                (solidity_compiler, yul_compiler, llvm_ir_compiler)
-            }
-            Toolchain::SolxMlir => {
-                let solidity_compiler = Arc::new(SolidityCompiler::new_solx_mlir(
-                    solx_standard_json::InputLanguage::Solidity,
-                ));
-                let yul_compiler = Arc::new(SolidityCompiler::new_solx_mlir(
-                    solx_standard_json::InputLanguage::Yul,
-                ));
-                let llvm_ir_compiler = Arc::new(LLVMIRCompiler::new_solx_mlir());
-                (solidity_compiler, yul_compiler, llvm_ir_compiler)
-            }
+    fn all_tests(&self, solidity_compiler_path: PathBuf) -> anyhow::Result<Vec<Test>> {
+        let solidity_compiler = Arc::new(SolidityCompiler::new(
+            solidity_compiler_path.clone(),
+            solx_standard_json::InputLanguage::Solidity,
+        )?);
+        let toolchain = solidity_compiler.toolchain();
+
+        let yul_compiler = Arc::new(SolidityCompiler::new(
+            solidity_compiler_path.clone(),
+            solx_standard_json::InputLanguage::Yul,
+        )?);
+
+        let llvm_ir_compiler: Arc<dyn Compiler> = match toolchain {
+            Toolchain::Solx => Arc::new(LLVMIRCompiler::new(solidity_compiler_path)),
+            Toolchain::Solc => Arc::new(LLVMIRCompiler::new_solc()),
         };
 
         let mut tests = Vec::with_capacity(16384);
