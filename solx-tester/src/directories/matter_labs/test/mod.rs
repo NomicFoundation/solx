@@ -202,6 +202,11 @@ impl MatterLabsTest {
         {
             return None;
         }
+        if let Some(toolchains) = self.metadata.toolchains.as_ref()
+            && !toolchains.iter().any(|t| t == mode.toolchain())
+        {
+            return None;
+        }
         if !mode.check_pragmas(&self.sources) {
             return None;
         }

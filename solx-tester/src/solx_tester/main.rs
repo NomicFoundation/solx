@@ -67,13 +67,13 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
 
     let toolchain = arguments
         .toolchain
-        .unwrap_or(solx_tester::Toolchain::IrLLVM);
+        .unwrap_or(solx_tester::Toolchain::Solx);
 
     let mut executable_download_config_paths = Vec::with_capacity(1);
     if let Some(path) = match toolchain {
-        solx_tester::Toolchain::IrLLVM => None,
+        solx_tester::Toolchain::Solx => None,
         solx_tester::Toolchain::Solc => Some("./solx-compiler-downloader/solc-upstream.json"),
-        solx_tester::Toolchain::SolcLLVM => Some("./solx-compiler-downloader/solc-llvm.json"),
+        solx_tester::Toolchain::SolxMlir => Some("./solx-compiler-downloader/solx-mlir.json"),
     }
     .map(PathBuf::from)
     {
@@ -152,7 +152,7 @@ mod tests {
             benchmark_format: solx_benchmark_converter::OutputFormat::Xlsx,
             threads: Some(1),
             solx: Some(assert_cmd::cargo::cargo_bin!("SOLX").to_path_buf()),
-            toolchain: Some(solx_tester::Toolchain::IrLLVM),
+            toolchain: Some(solx_tester::Toolchain::Solx),
             workflow: solx_tester::Workflow::BuildAndRun,
             solc_bin_config_path: Some(PathBuf::from(
                 "solx-compiler-downloader/solc-bin-default.json",

@@ -8,7 +8,8 @@ pub mod llvm_options;
 use std::collections::HashSet;
 use std::fmt::Display;
 
-use imode::{IMode, mode_to_string_aux};
+use self::imode::IMode;
+use self::imode::mode_to_string_aux;
 
 use crate::compilers::llvm_ir::mode::Mode as LLVMMode;
 use crate::compilers::solidity::solc::mode::Mode as SolcMode;
@@ -136,6 +137,19 @@ impl Mode {
             Mode::Yul(mode) => Some(&mode.llvm_optimizer_settings),
             Mode::YulUpstream(_mode) => None,
             Mode::LLVM(mode) => Some(&mode.llvm_optimizer_settings),
+        }
+    }
+
+    ///
+    /// Returns the toolchain name for filtering.
+    ///
+    pub fn toolchain(&self) -> &'static str {
+        match self {
+            Mode::Solc(_mode) => "solc",
+            Mode::Solx(_mode) => "solx",
+            Mode::Yul(_mode) => "solx",
+            Mode::YulUpstream(_mode) => "solc",
+            Mode::LLVM(_mode) => "solx",
         }
     }
 

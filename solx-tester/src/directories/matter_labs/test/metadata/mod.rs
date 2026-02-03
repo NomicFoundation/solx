@@ -18,6 +18,8 @@ pub struct Metadata {
     pub cases: Vec<Case>,
     /// The mode filter.
     pub modes: Option<Vec<String>>,
+    /// The toolchain filter.
+    pub toolchains: Option<Vec<String>>,
     /// The test group.
     pub group: Option<String>,
     /// The test contracts as `instance -> path`.

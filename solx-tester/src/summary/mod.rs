@@ -82,8 +82,8 @@ impl Summary {
         &self,
         toolchain: Toolchain,
     ) -> anyhow::Result<solx_benchmark_converter::Benchmark> {
-        if let Toolchain::SolcLLVM = toolchain {
-            anyhow::bail!("The benchmarking is not supported for the SolcLLVM toolchain.")
+        if let Toolchain::SolxMlir = toolchain {
+            anyhow::bail!("The benchmarking is not supported for the SolxMlir toolchain.")
         }
 
         let mut benchmark = solx_benchmark_converter::Benchmark::default();

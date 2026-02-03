@@ -5,8 +5,6 @@
 pub mod compiler;
 pub mod mode;
 
-use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::path::Path;
 
 use crate::compilers::Compiler;
@@ -22,23 +20,17 @@ use crate::toolchain::Toolchain;
 use self::compiler::Compiler as SolcUpstreamCompiler;
 use self::mode::Mode as SolcMode;
 
-use solx_standard_json::Input as SolcStandardJsonInput;
-use solx_standard_json::InputDebug as SolcStandardJsonInputDebug;
-use solx_standard_json::InputLanguage as SolcStandardJsonInputLanguage;
-use solx_standard_json::InputSelection as SolcStandardJsonInputSelection;
-use solx_standard_json::Output as SolcStandardJsonOutput;
-
 ///
 /// The `solc` Solidity compiler.
 ///
 pub struct SolidityCompiler {
     /// The language the compiler will compile.
-    language: SolcStandardJsonInputLanguage,
+    language: solx_standard_json::InputLanguage,
     /// The toolchain identifier.
-    /// Only `solc` and `solc-llvm` are supported.
+    /// Only `solc` and `solx-mlir` are supported.
     toolchain: Toolchain,
     /// The `solc` process output cache.
-    cache: Cache<CacheKey, SolcStandardJsonOutput>,
+    cache: Cache<CacheKey, solx_standard_json::Output>,
 }
 
 lazy_static::lazy_static! {
@@ -131,7 +123,7 @@ impl SolidityCompiler {
     ///
     /// A shortcut constructor.
     ///
-    pub fn new(language: SolcStandardJsonInputLanguage, toolchain: Toolchain) -> Self {
+    pub fn new(language: solx_standard_json::InputLanguage, toolchain: Toolchain) -> Self {
         Self {
             language,
             toolchain,
@@ -148,7 +140,7 @@ impl SolidityCompiler {
     ) -> anyhow::Result<SolcUpstreamCompiler> {
         let directory = match toolchain {
             Toolchain::Solc => Self::DIRECTORY_UPSTREAM,
-            Toolchain::SolcLLVM => Self::DIRECTORY_LLVM,
+            Toolchain::SolxMlir => Self::DIRECTORY_LLVM,
             toolchain => panic!("Unsupported toolchain: {toolchain}"),
         };
         SolcUpstreamCompiler::new(format!("{directory}/solc-{version}"))
@@ -204,13 +196,13 @@ impl SolidityCompiler {
     /// Runs the solc subprocess and returns the output.
     ///
     pub fn standard_json_output(
-        language: SolcStandardJsonInputLanguage,
+        language: solx_standard_json::InputLanguage,
         toolchain: Toolchain,
         sources: &[(String, String)],
         libraries: &solx_utils::Libraries,
         mode: &Mode,
         test_params: Option<&solx_solc_test_adapter::Params>,
-    ) -> anyhow::Result<SolcStandardJsonOutput> {
+    ) -> anyhow::Result<solx_standard_json::Output> {
         let solc_version = match mode {
             Mode::Solc(mode) => &mode.solc_version,
             Mode::Solx(mode) => &mode.solc_version,
@@ -221,13 +213,13 @@ impl SolidityCompiler {
 
         let output_selection = match mode {
             Mode::Solc(mode) => {
-                SolcStandardJsonInputSelection::new_required_for_testing(mode.via_ir)
+                solx_standard_json::InputSelection::new_required_for_testing(mode.via_ir)
             }
             Mode::Solx(mode) => {
-                SolcStandardJsonInputSelection::new_required_for_testing(mode.via_ir)
+                solx_standard_json::InputSelection::new_required_for_testing(mode.via_ir)
             }
             Mode::YulUpstream(_mode) => {
-                SolcStandardJsonInputSelection::new_required_for_testing(true)
+                solx_standard_json::InputSelection::new_required_for_testing(true)
             }
             mode => anyhow::bail!("Unsupported mode: {mode}"),
         };
@@ -255,13 +247,13 @@ impl SolidityCompiler {
 
         let debug = if solc_version >= &semver::Version::new(0, 6, 3) {
             test_params.map(|test_params| {
-                SolcStandardJsonInputDebug::new(Some(test_params.revert_strings.to_string()))
+                solx_standard_json::InputDebug::new(Some(test_params.revert_strings.to_string()))
             })
         } else {
             None
         };
 
-        let solc_input = SolcStandardJsonInput::new_for_solc(
+        let solc_input = solx_standard_json::Input::new_for_solc(
             language,
             sources.iter().cloned().collect(),
             libraries.clone(),
@@ -288,12 +280,12 @@ impl SolidityCompiler {
     pub fn standard_json_output_cached(
         &self,
         test_path: String,
-        language: SolcStandardJsonInputLanguage,
+        language: solx_standard_json::InputLanguage,
         sources: &[(String, String)],
         libraries: &solx_utils::Libraries,
         mode: &Mode,
         test_params: Option<&solx_solc_test_adapter::Params>,
-    ) -> anyhow::Result<SolcStandardJsonOutput> {
+    ) -> anyhow::Result<solx_standard_json::Output> {
         let cache_key = match mode {
             Mode::Solc(mode) => CacheKey::new(
                 test_path,
@@ -337,102 +329,6 @@ impl SolidityCompiler {
 
         self.cache.get_cloned(&cache_key)
     }
-
-    ///
-    /// Get the method identifiers from the solc output.
-    ///
-    pub fn get_method_identifiers(
-        solc_output: &SolcStandardJsonOutput,
-    ) -> anyhow::Result<BTreeMap<String, BTreeMap<String, u32>>> {
-        let files = solc_output
-            .contracts_opt()
-            .ok_or_else(|| anyhow::anyhow!("Contracts not found in the output"))?;
-
-        let mut method_identifiers = BTreeMap::new();
-        for (path, contracts) in files.iter() {
-            for (name, contract) in contracts.iter() {
-                let mut contract_identifiers = BTreeMap::new();
-                for (entry, selector) in contract
-                    .evm
-                    .as_ref()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("EVM object of the contract `{path}:{name}` not found")
-                    })?
-                    .method_identifiers
-                    .as_ref()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "Method identifiers of the contract `{path}:{name}` not found"
-                        )
-                    })?
-                    .iter()
-                {
-                    let selector =
-                        u32::from_str_radix(selector, solx_utils::BASE_HEXADECIMAL)
-                            .map_err(|error| {
-                                anyhow::anyhow!(
-                                    "Invalid selector `{selector}` received from the Solidity compiler: {error}"
-                                )
-                            })?;
-                    contract_identifiers.insert(entry.clone(), selector);
-                }
-                method_identifiers.insert(format!("{path}:{name}"), contract_identifiers);
-            }
-        }
-        Ok(method_identifiers)
-    }
-
-    ///
-    /// Get the last contract from the solc output.
-    ///
-    pub fn get_last_contract(
-        language: SolcStandardJsonInputLanguage,
-        solc_output: &SolcStandardJsonOutput,
-        sources: &[(String, String)],
-    ) -> anyhow::Result<String> {
-        match language {
-            SolcStandardJsonInputLanguage::Solidity => solc_output
-                .sources_opt()
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "The sources are empty. Found errors: {:?}",
-                        solc_output.errors
-                    )
-                })
-                .and_then(|output_sources| {
-                    for (path, _source) in sources.iter().rev() {
-                        match output_sources
-                            .get(path)
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("The last source not found in the output")
-                            })?
-                            .last_contract_name()
-                        {
-                            Ok(name) => return Ok(format!("{path}:{name}")),
-                            Err(_error) => continue,
-                        }
-                    }
-                    anyhow::bail!("The last source not found in the output")
-                }),
-            SolcStandardJsonInputLanguage::Yul => solc_output
-                .contracts_opt()
-                .and_then(|contracts| contracts.first_key_value())
-                .and_then(|(path, contracts)| {
-                    contracts
-                        .first_key_value()
-                        .map(|(name, _contract)| format!("{path}:{name}"))
-                })
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "The sources are empty. Found errors: {:?}",
-                        solc_output.errors
-                    )
-                }),
-            SolcStandardJsonInputLanguage::LLVMIR => {
-                anyhow::bail!("LLVM IR language is not supported by solc")
-            }
-        }
-    }
 }
 
 impl Compiler for SolidityCompiler {
@@ -472,74 +368,30 @@ impl Compiler for SolidityCompiler {
         }
 
         let method_identifiers = match self.language {
-            SolcStandardJsonInputLanguage::Solidity => {
-                Some(Self::get_method_identifiers(&solc_output)?)
+            solx_standard_json::InputLanguage::Solidity => {
+                Some(solc_output.get_method_identifiers()?)
             }
-            SolcStandardJsonInputLanguage::Yul => None,
-            SolcStandardJsonInputLanguage::LLVMIR => {
+            solx_standard_json::InputLanguage::Yul => None,
+            solx_standard_json::InputLanguage::LLVMIR => {
                 anyhow::bail!("LLVM IR language is not supported by solc")
             }
         };
 
-        let last_contract = Self::get_last_contract(self.language, &solc_output, &sources)?;
-
-        let contracts = solc_output
-            .contracts_opt()
-            .ok_or_else(|| anyhow::anyhow!("Solidity contracts not found in the output"))?;
-
-        let mut builds = HashMap::with_capacity(contracts.len());
-        for (file, contracts) in contracts.iter() {
-            for (name, contract) in contracts.iter() {
-                let path = format!("{file}:{name}");
-                let evm = contract.evm.as_ref().ok_or_else(|| {
-                    anyhow::anyhow!("EVM object of the contract `{path}` not found")
-                })?;
-                let deploy_code_string = evm
-                    .bytecode
-                    .as_ref()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("EVM bytecode of the contract `{path}` not found")
-                    })?
-                    .object
-                    .as_ref()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("EVM bytecode object of the contract `{path}` not found")
-                    })?
-                    .as_str();
-                let deploy_code = hex::decode(deploy_code_string).map_err(|error| {
-                    anyhow::anyhow!("EVM bytecode of the contract `{path}` is invalid: {error}")
-                })?;
-                let runtime_code_size = evm
-                    .deployed_bytecode
-                    .as_ref()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("EVM deployed bytecode of the contract `{path}` not found")
-                    })?
-                    .object
-                    .as_ref()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "EVM deployed bytecode object of the contract `{path}` not found"
-                        )
-                    })?
-                    .len()
-                    / 2;
-                builds.insert(path, (deploy_code, runtime_code_size));
-            }
-        }
+        let last_contract = solc_output.get_last_contract(self.language, &sources)?;
+        let builds = solc_output.extract_bytecode_builds()?;
 
         Ok(EVMInput::new(builds, method_identifiers, last_contract))
     }
 
     fn all_modes(&self) -> Vec<Mode> {
         match (self.language, self.toolchain) {
-            (SolcStandardJsonInputLanguage::Solidity, Toolchain::SolcLLVM) => {
+            (solx_standard_json::InputLanguage::Solidity, Toolchain::SolxMlir) => {
                 SOLIDITY_MLIR_MODES.clone()
             }
-            (SolcStandardJsonInputLanguage::Solidity, _) => SOLIDITY_MODES.clone(),
-            (SolcStandardJsonInputLanguage::Yul, Toolchain::SolcLLVM) => YUL_MLIR_MODES.clone(),
-            (SolcStandardJsonInputLanguage::Yul, _) => YUL_MODES.clone(),
-            (SolcStandardJsonInputLanguage::LLVMIR, _) => Vec::new(),
+            (solx_standard_json::InputLanguage::Solidity, _) => SOLIDITY_MODES.clone(),
+            (solx_standard_json::InputLanguage::Yul, Toolchain::SolxMlir) => YUL_MLIR_MODES.clone(),
+            (solx_standard_json::InputLanguage::Yul, _) => YUL_MODES.clone(),
+            (solx_standard_json::InputLanguage::LLVMIR, _) => Vec::new(),
         }
     }
 

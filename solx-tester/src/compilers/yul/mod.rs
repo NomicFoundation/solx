@@ -7,10 +7,7 @@ pub mod mode_upstream;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
 use std::sync::Arc;
-
-use solx_standard_json::CollectableError as SolxCollectableError;
 
 use crate::compilers::Compiler;
 use crate::compilers::mode::Mode;
@@ -18,7 +15,6 @@ use crate::compilers::solidity::solc::SolidityCompiler as SolcCompiler;
 use crate::compilers::solidity::solx::SolidityCompiler as SolxCompiler;
 use crate::revm::input::Input as EVMInput;
 use crate::toolchain::Toolchain;
-use solx_standard_json::InputLanguage as SolcStandardJsonInputLanguage;
 
 use self::mode::Mode as YulMode;
 
@@ -30,8 +26,8 @@ pub enum YulCompiler {
     Solx(Arc<SolxCompiler>),
     /// `solc` toolchain.
     Solc,
-    /// `solc-llvm` toolchain.
-    SolcLLVM,
+    /// `solx-mlir` toolchain.
+    SolxMlir,
 }
 
 impl Compiler for YulCompiler {
@@ -48,12 +44,6 @@ impl Compiler for YulCompiler {
         match self {
             Self::Solx(solx) => {
                 let yul_mode = YulMode::unwrap(mode);
-
-                let last_contract = sources
-                    .last()
-                    .ok_or_else(|| anyhow::anyhow!("Yul sources are empty"))?
-                    .0
-                    .clone();
 
                 let sources: BTreeMap<String, solx_standard_json::InputSource> = sources
                     .iter()
@@ -96,52 +86,30 @@ impl Compiler for YulCompiler {
                         .as_ref()
                         .map(|debug_config| debug_config.output_directory.as_path()),
                 )?;
-                solx_output.check_errors()?;
+                solx_standard_json::CollectableError::check_errors(&solx_output)?;
 
-                let mut builds = HashMap::with_capacity(solx_output.contracts.len());
-                for (file, contracts) in solx_output.contracts.into_iter() {
-                    for (_name, contract) in contracts.into_iter() {
-                        let evm = contract.evm.as_ref().ok_or_else(|| {
-                            anyhow::anyhow!("EVM object of the contract `{file}` not found")
-                        })?;
-                        let deploy_code_string = evm
-                            .bytecode
-                            .as_ref()
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("EVM bytecode of the contract `{file}` not found")
-                            })?
-                            .object
-                            .as_ref()
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "EVM bytecode object of the contract `{file}` not found"
-                                )
-                            })?
-                            .as_str();
-                        let deploy_code = hex::decode(deploy_code_string).expect("Always valid");
-                        let runtime_code_size = evm
-                            .deployed_bytecode
-                            .as_ref()
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("EVM bytecode of the contract `{file}` not found")
-                            })?
-                            .object
-                            .as_ref()
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "EVM bytecode object of the contract `{file}` not found"
-                                )
-                            })?
-                            .len()
-                            / 2;
-                        builds.insert(file.clone(), (deploy_code, runtime_code_size));
-                    }
-                }
+                let last_contract = solx_output
+                    .get_last_contract(solx_standard_json::InputLanguage::Yul, &[])?;
+                let last_contract = last_contract
+                    .rsplit_once(':')
+                    .map(|(path, _name)| path.to_owned())
+                    .unwrap_or(last_contract);
+                let builds = solx_output
+                    .extract_bytecode_builds()?
+                    .into_iter()
+                    .map(|(key, value)| {
+                        let key = key
+                            .rsplit_once(':')
+                            .map(|(path, _name)| path.to_owned())
+                            .unwrap_or(key);
+                        (key, value)
+                    })
+                    .collect();
 
                 Ok(EVMInput::new(builds, None, last_contract))
             }
-            Self::Solc | Self::SolcLLVM => {
-                let language = SolcStandardJsonInputLanguage::Yul;
+            Self::Solc | Self::SolxMlir => {
+                let language = solx_standard_json::InputLanguage::Yul;
 
                 let solc_compiler = SolcCompiler::new(language, Toolchain::from(self));
 
@@ -170,54 +138,22 @@ impl Compiler for YulCompiler {
                     }
                 }
 
-                let last_contract = sources
-                    .last()
-                    .ok_or_else(|| anyhow::anyhow!("Yul sources are empty"))?
-                    .0
-                    .clone();
-
-                let contracts = solc_output
-                    .contracts_opt()
-                    .ok_or_else(|| anyhow::anyhow!("Solidity contracts not found in the output"))?;
-
-                let mut builds = HashMap::with_capacity(contracts.len());
-                for (file, contracts) in contracts.iter() {
-                    for (name, contract) in contracts.iter() {
-                        let path = format!("{file}:{name}");
-                        let evm = contract.evm.as_ref().ok_or_else(|| {
-                            anyhow::anyhow!("EVM object of the contract `{path}` not found")
-                        })?;
-                        let deploy_code_string = evm
-                            .bytecode
-                            .as_ref()
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("EVM bytecode of the contract `{path}` not found")
-                            })?
-                            .object
-                            .as_ref()
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "EVM bytecode object of the contract `{path}` not found"
-                                )
-                            })?
-                            .as_str();
-                        let deploy_code = hex::decode(deploy_code_string).expect("Always valid");
-                        let runtime_code_size = evm
-                            .deployed_bytecode
-                            .as_ref()
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("EVM bytecode of the contract `{path}` not found")
-                            })?
-                            .object
-                            .as_ref()
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("EVM deployed bytecode object of the contract `{path}` not found")
-                            })?
-                            .len()
-                            / 2;
-                        builds.insert(path, (deploy_code, runtime_code_size));
-                    }
-                }
+                let last_contract = solc_output.get_last_contract(language, &sources)?;
+                let last_contract = last_contract
+                    .rsplit_once(':')
+                    .map(|(path, _name)| path.to_owned())
+                    .unwrap_or(last_contract);
+                let builds = solc_output
+                    .extract_bytecode_builds()?
+                    .into_iter()
+                    .map(|(key, value)| {
+                        let key = key
+                            .rsplit_once(':')
+                            .map(|(path, _name)| path.to_owned())
+                            .unwrap_or(key);
+                        (key, value)
+                    })
+                    .collect();
 
                 Ok(EVMInput::new(builds, None, last_contract))
             }
@@ -240,8 +176,8 @@ impl From<&YulCompiler> for Toolchain {
     fn from(value: &YulCompiler) -> Self {
         match value {
             YulCompiler::Solc => Self::Solc,
-            YulCompiler::Solx { .. } => Self::IrLLVM,
-            YulCompiler::SolcLLVM => Self::SolcLLVM,
+            YulCompiler::Solx { .. } => Self::Solx,
+            YulCompiler::SolxMlir => Self::SolxMlir,
         }
     }
 }

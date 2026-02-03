@@ -13,7 +13,7 @@
 //!         ],
 //!         "exception": true
 //!     }
-//! } ] }
+//! } ], "toolchains": ["solx"] }
 
 // SPDX-License-Identifier: MIT
 

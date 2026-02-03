@@ -42,7 +42,6 @@ pub use crate::revm::REVM;
 pub use crate::summary::Summary;
 pub use crate::toolchain::Toolchain;
 pub use crate::workflow::Workflow;
-pub use solx_standard_json::InputLanguage as SolcStandardJsonInputLanguage;
 
 /// The debug directory path.
 pub const DEBUG_DIRECTORY: &str = "./debug/";
@@ -147,17 +146,17 @@ impl<'a> SolxTester<'a> {
             Arc<dyn Compiler>,
             Arc<dyn Compiler>,
         ) = match toolchain {
-            Toolchain::IrLLVM => {
+            Toolchain::Solx => {
                 let yul_compiler = Arc::new(YulCompiler::Solx(solidity_compiler.clone()));
                 (solidity_compiler, yul_compiler, llvm_ir_compiler)
             }
-            Toolchain::Solc | Toolchain::SolcLLVM => {
+            Toolchain::Solc | Toolchain::SolxMlir => {
                 let solidity_compiler = Arc::new(SolcCompiler::new(
-                    SolcStandardJsonInputLanguage::Solidity,
+                    solx_standard_json::InputLanguage::Solidity,
                     toolchain,
                 ));
                 let yul_compiler = Arc::new(SolcCompiler::new(
-                    SolcStandardJsonInputLanguage::Yul,
+                    solx_standard_json::InputLanguage::Yul,
                     toolchain,
                 ));
                 (solidity_compiler, yul_compiler, llvm_ir_compiler)
