@@ -2,8 +2,8 @@
 //! The contract Yul source code.
 //!
 
-use solx_yul::yul::lexer::Lexer;
-use solx_yul::yul::parser::statement::object::Object;
+use solx_yul::lexer::Lexer;
+use solx_yul::parser::statement::object::Object;
 
 ///
 /// The contract Yul source code.
