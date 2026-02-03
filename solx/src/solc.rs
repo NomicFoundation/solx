@@ -44,7 +44,7 @@ unsafe extern "C" {
     ///
     /// Get the Solidity compiler version.
     ///
-    fn solidity_version_extended() -> *const std::os::raw::c_char;
+    fn solidity_version() -> *const std::os::raw::c_char;
 }
 
 impl Default for Solc {
@@ -229,40 +229,20 @@ impl Solc {
     /// The `solc` version parser.
     ///
     fn parse_version() -> solx_standard_json::Version {
-        let output = unsafe {
-            let output_pointer = solidity_version_extended();
+        let long = unsafe {
+            let output_pointer = solidity_version();
             CStr::from_ptr(output_pointer)
                 .to_string_lossy()
                 .into_owned()
         };
 
-        let lines = output.lines().collect::<Vec<&str>>();
-
-        let long = lines
-            .get(1)
-            .unwrap_or_else(|| panic!("solc version parsing: missing line 1."))
-            .split(' ')
-            .nth(1)
-            .expect("solc version parsing: missing version.")
-            .to_owned();
         let default: semver::Version = long
             .split('+')
             .next()
             .expect("solc version parsing: missing semver.")
             .parse::<semver::Version>()
             .unwrap_or_else(|error| panic!("solc version parsing: {error}."));
-        let llvm_revision: semver::Version = lines
-            .get(2)
-            .expect("LLVM revision parsing: missing line 2.")
-            .split(' ')
-            .nth(1)
-            .expect("LLVM revision parsing: missing version.")
-            .split('-')
-            .nth(1)
-            .expect("LLVM revision parsing: missing `solx` revision.")
-            .parse::<semver::Version>()
-            .unwrap_or_else(|error| panic!("LLVM revision parsing: {error}."));
 
-        solx_standard_json::Version::new(long, default, llvm_revision)
+        solx_standard_json::Version::new(long, default)
     }
 }

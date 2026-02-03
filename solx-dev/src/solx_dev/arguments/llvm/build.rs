@@ -20,6 +20,10 @@ pub struct Build {
     #[arg(long, default_value_t = solx_dev::LLVMBuildType::Release, help_heading = "Build Configuration")]
     pub build_type: solx_dev::LLVMBuildType,
 
+    /// Clean the build directory before building.
+    #[arg(long)]
+    pub clean: bool,
+
     /// LLVM projects to build LLVM with.
     #[arg(long, num_args = 1.., help_heading = "Build Configuration")]
     pub llvm_projects: Vec<solx_dev::LLVMProject>,

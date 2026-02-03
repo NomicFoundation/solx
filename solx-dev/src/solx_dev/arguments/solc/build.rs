@@ -13,10 +13,6 @@ pub struct Build {
     #[arg(long, default_value = "Release")]
     pub build_type: String,
 
-    /// The solc revision string (e.g., "0.8.33-1.0.2").
-    #[arg(long, default_value = "0.8.33-1.0.2")]
-    pub revision: String,
-
     /// Clean the build directory before building.
     #[arg(long)]
     pub clean: bool,

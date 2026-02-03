@@ -35,7 +35,16 @@ pub fn build(
     sanitizer: Option<Sanitizer>,
     enable_valgrind: bool,
     valgrind_options: Vec<String>,
+    clean: bool,
 ) -> anyhow::Result<()> {
+    if clean {
+        let target_dir = std::path::PathBuf::from(Path::DIRECTORY_LLVM_TARGET);
+        if target_dir.exists() {
+            println!("Cleaning LLVM build directory: {}", target_dir.display());
+            std::fs::remove_dir_all(&target_dir)?;
+        }
+    }
+
     std::fs::create_dir_all(Path::DIRECTORY_LLVM_TARGET)?;
 
     if cfg!(target_arch = "x86_64") {

@@ -12,12 +12,14 @@ pub const SOLIDITY_DIR: &str = "solx-solidity";
 /// The build directory name.
 pub const BUILD_DIR: &str = "build";
 
+/// The LLVM build directory (where cmake configs are located).
+pub const LLVM_BUILD_DIR: &str = "target-llvm/build-final";
+
 ///
 /// Builds the solc libraries using cmake.
 ///
 pub fn build(
     build_type: String,
-    revision: String,
     pedantic: bool,
     tests: bool,
     extra_args: Vec<String>,
@@ -44,7 +46,6 @@ pub fn build(
         &build_dir,
         &solidity_dir,
         &build_type,
-        &revision,
         pedantic,
         tests,
         extra_args,
@@ -67,7 +68,6 @@ fn configure(
     build_dir: &Path,
     source_dir: &Path,
     build_type: &str,
-    revision: &str,
     pedantic: bool,
     tests: bool,
     extra_args: Vec<String>,
@@ -85,7 +85,20 @@ fn configure(
     ));
     command.arg(format!("-DTESTS={}", if tests { "ON" } else { "OFF" }));
     command.arg(format!("-DCMAKE_BUILD_TYPE={}", build_type));
-    command.arg(format!("-DSOL_REVISION_SOLX={}", revision));
+
+    // MLIR/LLD paths (if LLVM was built with these projects)
+    let llvm_build_dir = PathBuf::from(LLVM_BUILD_DIR);
+    if llvm_build_dir.exists() {
+        let mlir_dir = llvm_build_dir.join("lib/cmake/mlir");
+        if mlir_dir.exists() {
+            command.arg(format!("-DMLIR_DIR={}", mlir_dir.canonicalize()?.display()));
+        }
+
+        let lld_dir = llvm_build_dir.join("lib/cmake/lld");
+        if lld_dir.exists() {
+            command.arg(format!("-DLLD_DIR={}", lld_dir.canonicalize()?.display()));
+        }
+    }
 
     // Extra arguments
     for arg in extra_args {

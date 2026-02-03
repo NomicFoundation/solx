@@ -11,9 +11,6 @@ pub static DEFAULT_PACKAGE_DESCRIPTION: &str = "LLVM-based Solidity compiler for
 /// The `solc` CBOR metadata tag.
 pub static SOLC_METADATA_TAG: &str = "solc";
 
-/// The `solc` LLVM revision CBOR metadata tag.
-pub static SOLC_LLVM_REVISION_METADATA_TAG: &str = "llvm";
-
 /// The worker thread stack size.
 pub const WORKER_THREAD_STACK_SIZE: usize = 64 * 1024 * 1024;
 

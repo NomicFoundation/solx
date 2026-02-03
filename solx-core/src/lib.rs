@@ -55,9 +55,8 @@ pub fn main(
         let version = solc.version();
         writeln!(
             std::io::stdout(),
-            "{DEFAULT_EXECUTABLE_NAME}, {DEFAULT_PACKAGE_DESCRIPTION} v{}, solc revision: v{}, LLVM build: {}",
+            "{DEFAULT_EXECUTABLE_NAME}, {DEFAULT_PACKAGE_DESCRIPTION} v{}, LLVM build: {}",
             env!("CARGO_PKG_VERSION"),
-            version.llvm_revision,
             inkwell::support::get_commit_id().to_string(),
         )?;
         writeln!(std::io::stdout(), "Version: {}", version.long)?;

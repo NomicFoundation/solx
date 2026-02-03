@@ -11,8 +11,6 @@
 pub struct Metadata<'a> {
     /// The `solc` version.
     pub solc_version: Option<semver::Version>,
-    /// The LLVM `solc` revision.
-    pub solc_llvm_revision: Option<semver::Version>,
     /// `solx` compiler version.
     pub solx_version: semver::Version,
     /// The LLVM compiler optimizer settings.
@@ -32,7 +30,6 @@ impl<'a> Metadata<'a> {
     ) -> Self {
         Self {
             solc_version: solc_version.map(|version| version.default.to_owned()),
-            solc_llvm_revision: solc_version.map(|version| version.llvm_revision.to_owned()),
             solx_version: crate::version().parse().expect("Always valid"),
             optimizer_settings,
             llvm_options,

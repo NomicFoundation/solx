@@ -38,19 +38,10 @@ The table below outlines the supported platforms and architectures:
 
 ## Versioning
 
-The **solx** version consists of three parts:
+The **solx** version consists of two parts:
 
 1. **solx** version itself.
 2. Version of **solc** libraries **solx** is statically linked with.
-3. Revision of the LLVM-friendly fork of **solc** maintained by the **solx** team.
-
-For instance, the latest revision of the latest version of **solc** is `0.8.33-1.0.2`. Here are the **solc** revisions released by now:
-
-| Revision |                         Fixes                        |
-|:---------|:-----------------------------------------------------|
-| *v1.0.0* | Compatibility between EVM assembly and LLVM IR       |
-| *v1.0.1* | A compiler crash with nested try-catch patterns      |
-| *v1.0.2* | Metadata of recursive calls across inheritance       |
 
 > We recommend always using the latest version of **solx** to benefit from the latest features and bug fixes.
 
@@ -125,76 +116,31 @@ This repository maintains intuitive and stable naming for the executables and pr
    git submodule update --recursive --checkout
    ```
     
-4. Install the LLVM framework builder. This tool clones the [solx LLVM framework repository](https://github.com/matter-labs/solx-llvm) and runs a sequence of build commands tuned for the needs of **solx**.
+4. Build the development tools.
 
     ```shell
-    cargo install compiler-llvm-builder
+    cargo build --release --bin solx-dev
     ```
 
-    To fine-tune your build of the LLVM framework, refer to the section on [tuning the LLVM build](#tuning-the-llvm-build).
-
-> Always use the latest version of the builder to benefit from the latest features and bug fixes.
-> To check for new versions and update the builder, simply run `cargo install compiler-llvm-builder` again, even if you have already installed the builder.
-> The builder is not the LLVM framework itself, but only a tool to build it.
-> By default, it is installed in `~/.cargo/bin/`, which is usually added to your `PATH` during the Rust installation process.
-
-5. Build the LLVM framework using the `solx-llvm` tool.
-  
-   ```shell
-   # Navigate to the root of your local copy of this repository.
-   cd solx
-   # Build the LLVM framework.
-   solx-llvm build
-   ```
-  
-   For more information and available build options, run `solx-llvm build --help`.
-
-6. Build the **solc** libraries.
+5. Build the LLVM framework using **solx-dev**.
 
    ```shell
-   cd solx-solidity
-   mkdir -pv build
-   cd build
-   cmake .. \
-      -DPEDANTIC='OFF' \
-      -DTESTS='OFF' \
-      -DCMAKE_BUILD_TYPE='Release' \
-      -DSOL_REVISION_SOLX='0.8.33-1.0.2'
-   cmake --build . --config Release --parallel ${YOUR_CPU_COUNT}
-   cd ../..
+   ./target/release/solx-dev llvm build --llvm-projects mlir lld --enable-rtti
    ```
 
-   The sequence above may fail with clang >19.x and/or Boost >1.85.
-   We are currently looking for a solution and will document it when we find one.
-   If you encounter compilation errors, try specifying the aforementioned versions to replace your system default:
+   This builds LLVM with the EVM target, MLIR, and LLD projects enabled. The build artifacts will be placed in `target-llvm/`.
+
+   For more information and available build options, run `./target/release/solx-dev llvm build --help`.
+
+6. Build the **solc** libraries using **solx-dev**.
 
    ```shell
-   # MacOS example
-
-   # Install Boost v1.85
-   brew install boost@1.85
-
-   # Make Boost v1.85 default
-   brew unlink boost
-   brew link boost@1.85
-   
-   # Install LLVM with clang v19
-   brew install llvm@19
-
-   # Re-run the build command
-   cmake .. \
-      -DCMAKE_C_COMPILER=/opt/homebrew/opt/llvm@19/bin/clang \
-      -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm@19/bin/clang++ \
-      -DPEDANTIC=OFF \
-      -DTESTS=OFF \
-      -DCMAKE_BUILD_TYPE="Release" \
-      -DSOL_REVISION_SOLX="0.8.33-1.0.2"
-   cmake --build . --config Release --parallel ${YOUR_CPU_COUNT}
+   ./target/release/solx-dev solc build
    ```
 
-   The `-DSOL_REVISION_SOLX` flag is used to specify the version-revision of the **solc** that is reported by **solx**.
-   By default, we recommend keeping the revision at `1.0.2` to follow our [versioning](#versioning).
-   Otherwise, feel free to change it according to your needs.
+   This will configure and build the solc libraries in `solx-solidity/build/`. The command automatically detects MLIR and LLD paths if LLVM was built with those projects.
+
+   For more options, run `./target/release/solx-dev solc build --help`.
 
 7. Build the **solx** executable.
 
@@ -210,28 +156,25 @@ This repository maintains intuitive and stable naming for the executables and pr
 
 ## Tuning the LLVM build
 
-* For more information and available build options, run `solx-llvm build --help`.
-* Use the `--use-ccache` option to speed up the build process if you have [ccache](https://ccache.dev) installed.
-* To build the LLVM framework using specific C and C++ compilers, pass additional arguments to [CMake](https://cmake.org/) using the `--extra-args` option:
-
-  ```shell
-  # Pay special attention to character escaping.
-
-  solx-llvm build --use-ccache
-  ```
+* For more information and available build options, run `./target/release/solx-dev llvm build --help`.
+* The `--llvm-projects` option specifies which LLVM subprojects to build. Common options:
+  - `mlir` — Required for MLIR-based optimizations
+  - `lld` — The LLVM linker
+* Use the `--ccache-variant ccache` option to speed up the build process if you have [ccache](https://ccache.dev) installed.
+* Use `--enable-rtti` to enable run-time type information (required for some configurations).
 
 ### Building LLVM manually
 
-* If you prefer building [your LLVM framework](https://github.com/matter-labs/solx-llvm) manually, include the following flags in your CMake command:
+If you prefer building [the LLVM framework](https://github.com/matter-labs/solx-llvm) manually, include the following flags in your CMake command:
 
-  ```shell
-  # We recommend using the latest version of CMake.
+```shell
+# We recommend using the latest version of CMake.
 
-  -DLLVM_TARGETS_TO_BUILD='EVM'
-  -DLLVM_ENABLE_PROJECTS='lld'
-  -DBUILD_SHARED_LIBS='Off'
-  ```
+-DLLVM_TARGETS_TO_BUILD='EVM'
+-DLLVM_ENABLE_PROJECTS='lld;mlir'
+-DLLVM_ENABLE_RTTI='On'
+-DBUILD_SHARED_LIBS='Off'
+```
 
-> For most users, the [LLVM builder](#building-from-source) is the recommended way to build the framework.
+> For most users, **solx-dev** is the recommended way to build the framework.
 > This section was added for compiler toolchain developers and researchers with specific requirements and experience with the LLVM framework.
-> We are going to present a more detailed guide for LLVM contributors in the future.

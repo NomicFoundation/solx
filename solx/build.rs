@@ -61,24 +61,62 @@ fn main() {
     }
     // Link with MLIR libraries.
     for library in [
+        // Custom solx dialects
         "MLIRSolDialect",
         "MLIRYulDialect",
+        // Core dialects
         "MLIRFuncDialect",
         "MLIRSCFDialect",
         "MLIRArithDialect",
         "MLIRLLVMDialect",
+        "MLIRControlFlowDialect",
+        "MLIRPDLDialect",
+        "MLIRPDLInterpDialect",
+        "MLIRUBDialect",
+        "MLIRTensorDialect",
+        "MLIRDLTIDialect",
+        // Conversions
         "MLIRFuncToLLVM",
         "MLIRSCFToControlFlow",
         "MLIRControlFlowToLLVM",
         "MLIRArithAttrToLLVMConversion",
         "MLIRArithToLLVM",
+        "MLIRLLVMCommonConversion",
+        "MLIRPDLToPDLInterp",
+        // Translations
         "MLIRBuiltinToLLVMIRTranslation",
         "MLIRLLVMToLLVMIRTranslation",
+        "MLIRTargetLLVMIRExport",
+        // Interfaces
+        "MLIRCallInterfaces",
+        "MLIRControlFlowInterfaces",
+        "MLIRInferIntRangeInterface",
+        "MLIRInferIntRangeCommon",
+        "MLIRMemorySlotInterfaces",
+        "MLIRDataLayoutInterfaces",
+        "MLIRSideEffectInterfaces",
+        "MLIRCastInterfaces",
+        "MLIRLoopLikeInterface",
+        "MLIRFunctionInterfaces",
+        "MLIRDestinationStyleOpInterface",
+        "MLIRViewLikeInterface",
+        "MLIRInferTypeOpInterface",
+        "MLIRParallelCombiningOpInterface",
+        // Utils and transforms
+        "MLIRSCFUtils",
+        "MLIRSCFTransforms",
+        "MLIRDialectUtils",
+        "MLIRArithUtils",
+        "MLIRLLVMIRTransforms",
+        // Core
         "MLIRSupport",
         "MLIRPass",
         "MLIRTransforms",
         "MLIRTransformUtils",
         "MLIRRewrite",
+        "MLIRRewritePDL",
+        "MLIRAnalysis",
+        "MLIRParser",
         "MLIRIR",
         "MLIRDialect",
     ] {
