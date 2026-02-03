@@ -4,13 +4,16 @@
 
 use std::collections::BTreeSet;
 
+use solx_codegen_evm::IContext;
+use solx_codegen_evm::ISolidityData;
+use solx_codegen_evm::WriteLLVM;
+
 use crate::yul::error::Error;
 use crate::yul::lexer::Lexer;
 use crate::yul::lexer::token::Token;
 use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::lexeme::keyword::Keyword;
 use crate::yul::lexer::token::location::Location;
-use crate::yul::parser::dialect::Dialect;
 use crate::yul::parser::error::Error as ParserError;
 use crate::yul::parser::statement::block::Block;
 use crate::yul::parser::statement::expression::Expression;
@@ -19,29 +22,22 @@ use crate::yul::parser::statement::expression::Expression;
 /// The Yul for-loop statement.
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(bound = "P: serde::de::DeserializeOwned")]
-pub struct ForLoop<P>
-where
-    P: Dialect,
-{
+pub struct ForLoop {
     /// The location.
     pub location: Location,
     /// The index variables initialization block.
-    pub initializer: Block<P>,
+    pub initializer: Block,
     /// The continue condition block.
     pub condition: Expression,
     /// The index variables mutating block.
-    pub finalizer: Block<P>,
+    pub finalizer: Block,
     /// The loop body.
-    pub body: Block<P>,
+    pub body: Block,
     /// The solc source code location.
     pub solc_location: Option<solx_utils::DebugInfoSolcLocation>,
 }
 
-impl<P> ForLoop<P>
-where
-    P: Dialect,
-{
+impl ForLoop {
     ///
     /// The element parser.
     ///
@@ -109,5 +105,59 @@ where
         self.condition.accumulate_evm_dependencies(dependencies);
         self.finalizer.accumulate_evm_dependencies(dependencies);
         self.body.accumulate_evm_dependencies(dependencies);
+    }
+
+    ///
+    /// Compiles the for-loop into LLVM IR.
+    ///
+    pub fn into_llvm(self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
+        if let Some((solidity_data, solc_location)) = context.solidity_mut().zip(self.solc_location)
+        {
+            solidity_data.set_debug_info_solc_location(solc_location);
+        }
+
+        self.initializer.into_llvm(context)?;
+
+        let condition_block = context.append_basic_block("for_condition");
+        let body_block = context.append_basic_block("for_body");
+        let increment_block = context.append_basic_block("for_increment");
+        let join_block = context.append_basic_block("for_join");
+
+        context.build_unconditional_branch(condition_block)?;
+        context.set_basic_block(condition_block);
+        let condition = self
+            .condition
+            .into_llvm(context)?
+            .expect("Always exists")
+            .to_llvm()
+            .into_int_value();
+        let condition = context.build_bit_cast_instruction(
+            inkwell::builder::Builder::build_int_z_extend_or_bit_cast,
+            condition,
+            context.field_type(),
+            "for_condition_extended",
+        )?;
+        let condition = context.build_int_compare(
+            inkwell::IntPredicate::NE,
+            condition,
+            context.field_const(0),
+            "for_condition_compared",
+        )?;
+        context.build_conditional_branch(condition, body_block, join_block)?;
+
+        context.push_loop(body_block, increment_block, join_block);
+
+        context.set_basic_block(body_block);
+        self.body.into_llvm(context)?;
+        context.build_unconditional_branch(increment_block)?;
+
+        context.set_basic_block(increment_block);
+        self.finalizer.into_llvm(context)?;
+        context.build_unconditional_branch(condition_block)?;
+
+        context.pop_loop();
+        context.set_basic_block(join_block);
+
+        Ok(())
     }
 }

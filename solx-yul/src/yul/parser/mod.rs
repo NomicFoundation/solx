@@ -2,8 +2,8 @@
 //! The Yul code block.
 //!
 
+pub mod attributes;
 pub mod debug_info;
-pub mod dialect;
 pub mod error;
 pub mod identifier;
 pub mod statement;

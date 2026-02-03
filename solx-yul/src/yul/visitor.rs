@@ -28,10 +28,7 @@ pub const IMPLICIT_CODE_FUNCTION_NAME: &str = "BODY";
 ///
 /// Visitor for Yul syntax tree.
 ///
-pub trait Visitor<P>
-where
-    P: Dialect,
-{
+pub trait Visitor {
     ///
     /// By convention, methods not implemented for a specific visitor should
     /// panic with this message.
@@ -41,21 +38,21 @@ where
     ///
     /// Visit `switch` statement in Yul syntax tree.
     ///
-    fn visit_switch(&mut self, switch: &Switch<P>) {
+    fn visit_switch(&mut self, switch: &Switch) {
         unreachable!("{}", Self::MSG_METHOD_NOT_IMPLEMENTED)
     }
 
     ///
     /// Visit Yul object in Yul syntax tree.
     ///
-    fn visit_object(&mut self, object: &Object<P>) {
+    fn visit_object(&mut self, object: &Object) {
         unreachable!("{}", Self::MSG_METHOD_NOT_IMPLEMENTED)
     }
 
     ///
     /// Visit `for` statement in Yul syntax tree.
     ///
-    fn visit_for_loop(&mut self, for_loop: &ForLoop<P>) {
+    fn visit_for_loop(&mut self, for_loop: &ForLoop) {
         unreachable!("{}", Self::MSG_METHOD_NOT_IMPLEMENTED)
     }
 
@@ -69,7 +66,7 @@ where
     ///
     /// Visit a function definition in Yul syntax tree.
     ///
-    fn visit_function_definition(&mut self, function_definition: &FunctionDefinition<P>) {
+    fn visit_function_definition(&mut self, function_definition: &FunctionDefinition) {
         unreachable!("{}", Self::MSG_METHOD_NOT_IMPLEMENTED)
     }
 
@@ -90,7 +87,7 @@ where
     ///
     /// Visit an `if` statement in Yul syntax tree.
     ///
-    fn visit_if_conditional(&mut self, if_conditional: &IfConditional<P>) {
+    fn visit_if_conditional(&mut self, if_conditional: &IfConditional) {
         unreachable!("{}", Self::MSG_METHOD_NOT_IMPLEMENTED)
     }
 
@@ -118,21 +115,21 @@ where
     ///
     /// Visit an arbitrary statement in Yul syntax tree.
     ///
-    fn visit_statement(&mut self, stmt: &Statement<P>) {
+    fn visit_statement(&mut self, stmt: &Statement) {
         unreachable!("{}", Self::MSG_METHOD_NOT_IMPLEMENTED)
     }
 
     ///
     /// Visit a block of statements in Yul syntax tree.
     ///
-    fn visit_block(&mut self, block: &Block<P>) {
+    fn visit_block(&mut self, block: &Block) {
         unreachable!("{}", Self::MSG_METHOD_NOT_IMPLEMENTED)
     }
 
     ///
     /// Visit a `code` block of an object in Yul syntax tree.
     ///
-    fn visit_code(&mut self, code: &Code<P>) {
+    fn visit_code(&mut self, code: &Code) {
         unreachable!("{}", Self::MSG_METHOD_NOT_IMPLEMENTED)
     }
 }

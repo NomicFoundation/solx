@@ -13,7 +13,6 @@ use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::lexeme::literal::Literal;
 use crate::yul::lexer::token::lexeme::symbol::Symbol;
 use crate::yul::lexer::token::location::Location;
-use crate::yul::parser::dialect::Dialect;
 use crate::yul::parser::error::Error as ParserError;
 use crate::yul::parser::statement::code::Code;
 
@@ -21,17 +20,13 @@ use crate::yul::parser::statement::code::Code;
 /// The upper-level Yul object, representing the deploy code.
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(bound = "P: serde::de::DeserializeOwned")]
-pub struct Object<P>
-where
-    P: Dialect,
-{
+pub struct Object {
     /// The location.
     pub location: Location,
     /// The identifier.
     pub identifier: String,
     /// The code.
-    pub code: Code<P>,
+    pub code: Code,
     /// The optional inner object, representing the runtime code.
     pub inner_object: Option<Box<Self>>,
     /// The factory dependency objects, which are represented by nested Yul object. The nested
@@ -42,10 +37,7 @@ where
     pub sources: BTreeMap<usize, String>,
 }
 
-impl<P> Object<P>
-where
-    P: Dialect,
-{
+impl Object {
     ///
     /// The element parser.
     ///
@@ -216,11 +208,23 @@ where
     }
 }
 
+impl solx_codegen_evm::WriteLLVM for Object {
+    fn declare(&mut self, _context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn into_llvm(self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
+        let mut entry = solx_codegen_evm::EntryFunction::new(self.code);
+        entry.declare(context)?;
+        entry.into_llvm(context)?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::yul::lexer::Lexer;
     use crate::yul::lexer::token::location::Location;
-    use crate::yul::parser::dialect::DefaultDialect;
     use crate::yul::parser::error::Error;
     use crate::yul::parser::statement::object::Object;
 
@@ -244,8 +248,7 @@ object "Init" {
     "#;
 
         let mut lexer = Lexer::new(input);
-        let result =
-            Object::<DefaultDialect>::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
+        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
         assert!(result.is_ok());
     }
 
@@ -269,8 +272,7 @@ class "Test" {
     "#;
 
         let mut lexer = Lexer::new(input);
-        let result =
-            Object::<DefaultDialect>::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
+        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
         assert_eq!(
             result,
             Err(Error::InvalidToken {
@@ -302,8 +304,7 @@ object 256 {
     "#;
 
         let mut lexer = Lexer::new(input);
-        let result =
-            Object::<DefaultDialect>::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
+        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
         assert_eq!(
             result,
             Err(Error::InvalidToken {
@@ -335,8 +336,7 @@ object "Test" (
     "#;
 
         let mut lexer = Lexer::new(input);
-        let result =
-            Object::<DefaultDialect>::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
+        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
         assert_eq!(
             result,
             Err(Error::InvalidToken {
@@ -368,8 +368,7 @@ object "Test" {
     "#;
 
         let mut lexer = Lexer::new(input);
-        let result =
-            Object::<DefaultDialect>::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
+        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
         assert_eq!(
             result,
             Err(Error::InvalidToken {

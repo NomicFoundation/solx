@@ -7,6 +7,8 @@ pub mod literal;
 
 use std::collections::BTreeSet;
 
+use solx_codegen_evm::IContext;
+
 use crate::yul::error::Error;
 use crate::yul::lexer::Lexer;
 use crate::yul::lexer::token::Token;
@@ -108,6 +110,47 @@ impl Expression {
             Self::FunctionCall(inner) => inner.location,
             Self::Identifier(inner) => inner.location,
             Self::Literal(inner) => inner.location,
+        }
+    }
+
+    ///
+    /// Converts the expression into an LLVM value.
+    ///
+    pub fn into_llvm<'ctx>(
+        self,
+        context: &mut solx_codegen_evm::Context<'ctx>,
+    ) -> anyhow::Result<Option<solx_codegen_evm::Value<'ctx>>> {
+        match self {
+            Expression::Literal(literal) => literal
+                .clone()
+                .into_llvm(context)
+                .map_err(|error| {
+                    anyhow::anyhow!(
+                        "{} Invalid literal `{}`: {error}",
+                        literal.location,
+                        literal.inner,
+                    )
+                })
+                .map(Some),
+            Expression::Identifier(identifier) => {
+                let pointer = context
+                    .current_function()
+                    .borrow()
+                    .get_stack_pointer(identifier.inner.as_str())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "{} Undeclared variable `{}`",
+                            identifier.location,
+                            identifier.inner,
+                        )
+                    })?;
+
+                let value = context.build_load(pointer, identifier.inner.as_str())?;
+                Ok(Some(value.into()))
+            }
+            Expression::FunctionCall(call) => {
+                Ok(call.into_llvm(context)?.map(solx_codegen_evm::Value::new))
+            }
         }
     }
 }

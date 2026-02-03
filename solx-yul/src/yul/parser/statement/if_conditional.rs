@@ -4,13 +4,16 @@
 
 use std::collections::BTreeSet;
 
+use solx_codegen_evm::IContext;
+use solx_codegen_evm::ISolidityData;
+use solx_codegen_evm::WriteLLVM;
+
 use crate::yul::error::Error;
 use crate::yul::lexer::Lexer;
 use crate::yul::lexer::token::Token;
 use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::lexeme::keyword::Keyword;
 use crate::yul::lexer::token::location::Location;
-use crate::yul::parser::dialect::Dialect;
 use crate::yul::parser::error::Error as ParserError;
 use crate::yul::parser::statement::block::Block;
 use crate::yul::parser::statement::expression::Expression;
@@ -19,25 +22,18 @@ use crate::yul::parser::statement::expression::Expression;
 /// The Yul if-conditional statement.
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(bound = "P: serde::de::DeserializeOwned")]
-pub struct IfConditional<P>
-where
-    P: Dialect,
-{
+pub struct IfConditional {
     /// The location.
     pub location: Location,
     /// The condition expression.
     pub condition: Expression,
     /// The conditional block.
-    pub block: Block<P>,
+    pub block: Block,
     /// The solc source code location.
     pub solc_location: Option<solx_utils::DebugInfoSolcLocation>,
 }
 
-impl<P> IfConditional<P>
-where
-    P: Dialect,
-{
+impl IfConditional {
     ///
     /// The element parser.
     ///
@@ -95,5 +91,43 @@ where
     pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
         self.condition.accumulate_evm_dependencies(dependencies);
         self.block.accumulate_evm_dependencies(dependencies);
+    }
+
+    ///
+    /// Compiles the if-conditional into LLVM IR.
+    ///
+    pub fn into_llvm(self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
+        if let Some((solidity_data, solc_location)) = context.solidity_mut().zip(self.solc_location)
+        {
+            solidity_data.set_debug_info_solc_location(solc_location);
+        }
+
+        let condition = self
+            .condition
+            .into_llvm(context)?
+            .expect("Always exists")
+            .to_llvm()
+            .into_int_value();
+        let condition = context.build_bit_cast_instruction(
+            inkwell::builder::Builder::build_int_z_extend_or_bit_cast,
+            condition,
+            context.field_type(),
+            "if_condition_extended",
+        )?;
+        let condition = context.build_int_compare(
+            inkwell::IntPredicate::NE,
+            condition,
+            context.field_const(0),
+            "if_condition_compared",
+        )?;
+        let main_block = context.append_basic_block("if_main");
+        let join_block = context.append_basic_block("if_join");
+        context.build_conditional_branch(condition, main_block, join_block)?;
+        context.set_basic_block(main_block);
+        self.block.into_llvm(context)?;
+        context.build_unconditional_branch(join_block)?;
+        context.set_basic_block(join_block);
+
+        Ok(())
     }
 }

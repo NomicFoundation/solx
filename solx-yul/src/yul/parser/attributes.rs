@@ -4,6 +4,10 @@
 
 use std::collections::BTreeSet;
 
+use crate::yul::error::Error as YulError;
+use crate::yul::parser::error::Error as ParserError;
+use crate::yul::parser::identifier::Identifier;
+
 /// The LLVM attribute section prefix.
 pub const LLVM_ATTRIBUTE_PREFIX: &str = "$llvm_";
 
@@ -13,9 +17,9 @@ pub const LLVM_ATTRIBUTE_SUFFIX: &str = "_llvm$";
 ///
 /// Get the list of LLVM attributes provided in the function name.
 ///
-pub(crate) fn get_llvm_attributes(
-    identifier: &solx_yul::YulIdentifier,
-) -> Result<BTreeSet<solx_codegen_evm::Attribute>, solx_yul::YulError> {
+pub fn get_llvm_attributes(
+    identifier: &Identifier,
+) -> Result<BTreeSet<solx_codegen_evm::Attribute>, YulError> {
     let mut valid_attributes = BTreeSet::new();
 
     let llvm_begin = identifier.inner.find(LLVM_ATTRIBUTE_PREFIX);
@@ -39,7 +43,7 @@ pub(crate) fn get_llvm_attributes(
     }
 
     if !invalid_attributes.is_empty() {
-        return Err(solx_yul::YulParserError::InvalidAttributes {
+        return Err(ParserError::InvalidAttributes {
             location: identifier.location,
             values: invalid_attributes,
         }
@@ -53,11 +57,16 @@ pub(crate) fn get_llvm_attributes(
 mod tests {
     use std::collections::BTreeSet;
 
+    use crate::yul::error::Error as YulError;
+    use crate::yul::lexer::token::location::Location;
+    use crate::yul::parser::error::Error as ParserError;
+    use crate::yul::parser::identifier::Identifier;
+
     use super::get_llvm_attributes;
 
-    fn identifier_of(name: &str) -> solx_yul::YulIdentifier {
-        solx_yul::YulIdentifier {
-            location: solx_yul::YulLocation { line: 0, column: 0 },
+    fn identifier_of(name: &str) -> Identifier {
+        Identifier {
+            location: Location { line: 0, column: 0 },
             inner: name.to_string(),
             r#type: None,
         }
@@ -121,11 +130,8 @@ $llvm_Hot_Cold_MinSize_BogusAttr_llvm$
 "#;
 
         let values = BTreeSet::from(["BogusAttr".into()]);
-        let location = solx_yul::YulLocation { line: 0, column: 0 };
-        let expected = solx_yul::YulError::Parser(solx_yul::YulParserError::InvalidAttributes {
-            location,
-            values,
-        });
+        let location = Location { line: 0, column: 0 };
+        let expected = YulError::Parser(ParserError::InvalidAttributes { location, values });
         let result = get_llvm_attributes(&identifier_of(input))
             .expect_err("LLVM attributes parser should not mask unknown attributes");
 

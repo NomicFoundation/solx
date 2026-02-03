@@ -45,31 +45,27 @@ use self::variable_declaration::VariableDeclaration;
 /// The Yul block statement.
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(bound = "P: serde::de::DeserializeOwned")]
-pub enum Statement<P>
-where
-    P: Dialect,
-{
+pub enum Statement {
     /// The object element.
-    Object(Object<P>),
+    Object(Object),
     /// The code element.
-    Code(Code<P>),
+    Code(Code),
     /// The code block.
-    Block(Block<P>),
+    Block(Block),
     /// The expression.
     Expression(Expression),
     /// The `function` statement.
-    FunctionDefinition(FunctionDefinition<P>),
+    FunctionDefinition(FunctionDefinition),
     /// The `let` statement.
     VariableDeclaration(VariableDeclaration),
     /// The `:=` existing variables reassignment statement.
     Assignment(Assignment),
     /// The `if` statement.
-    IfConditional(IfConditional<P>),
+    IfConditional(IfConditional),
     /// The `switch` statement.
-    Switch(Switch<P>),
+    Switch(Switch),
     /// The `for` statement.
-    ForLoop(ForLoop<P>),
+    ForLoop(ForLoop),
     /// The `continue` statement.
     Continue(Continue),
     /// The `break` statement.
@@ -78,10 +74,7 @@ where
     Leave(Leave),
 }
 
-impl<P> Statement<P>
-where
-    P: Dialect,
-{
+impl Statement {
     ///
     /// The element parser.
     ///

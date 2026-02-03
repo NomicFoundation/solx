@@ -4,7 +4,6 @@
 
 use crate::util::printer::IPrinter;
 use crate::util::printer::print_list_comma_separated;
-use crate::yul::parser::dialect::Dialect;
 use crate::yul::parser::statement::Statement;
 use crate::yul::parser::statement::assignment::Assignment;
 use crate::yul::parser::statement::block::Block;
@@ -21,12 +20,11 @@ use crate::yul::parser::statement::switch::Switch;
 use crate::yul::parser::statement::variable_declaration::VariableDeclaration;
 use crate::yul::visitor::Visitor;
 
-impl<T, P> Visitor<P> for T
+impl<T> Visitor for T
 where
     T: IPrinter,
-    P: Dialect,
 {
-    fn visit_object(&mut self, obj: &Object<P>) {
+    fn visit_object(&mut self, obj: &Object) {
         let identifier = obj.identifier.as_str();
         self.println(format!("object \"{identifier}\" {{").as_str())
             .unwrap();
@@ -40,18 +38,18 @@ where
         self.decrease_indent().unwrap();
     }
 
-    fn visit_code(&mut self, code: &Code<P>) {
+    fn visit_code(&mut self, code: &Code) {
         self.print("code ").unwrap();
         self.visit_block(&code.block);
     }
 
-    fn visit_switch(&mut self, s: &Switch<P>) {
+    fn visit_switch(&mut self, s: &Switch) {
         self.print("switch ").unwrap();
-        <T as Visitor<P>>::visit_expression(self, &s.expression);
+        <T as Visitor>::visit_expression(self, &s.expression);
         self.println("").unwrap();
         for clause in s.cases.iter() {
             self.print("case ").unwrap();
-            <T as Visitor<P>>::visit_literal(self, &clause.literal);
+            <T as Visitor>::visit_literal(self, &clause.literal);
             self.print("   ").unwrap();
             self.visit_block(&clause.block);
             self.println("").unwrap();
@@ -63,10 +61,10 @@ where
         }
     }
 
-    fn visit_for_loop(&mut self, def: &ForLoop<P>) {
+    fn visit_for_loop(&mut self, def: &ForLoop) {
         self.print("for ").unwrap();
         self.visit_block(&def.initializer);
-        <T as Visitor<P>>::visit_expression(self, &def.condition);
+        <T as Visitor>::visit_expression(self, &def.condition);
         self.visit_block(&def.finalizer);
         self.println("").unwrap();
         self.visit_block(&def.body);
@@ -78,11 +76,11 @@ where
         print_list_comma_separated(def.bindings.iter().map(|b| b.inner.as_str()), self).unwrap();
         if let Some(expr) = &def.expression {
             self.print(" := ").unwrap();
-            <T as Visitor<P>>::visit_expression(self, expr);
+            <T as Visitor>::visit_expression(self, expr);
         }
     }
 
-    fn visit_function_definition(&mut self, def: &FunctionDefinition<P>) {
+    fn visit_function_definition(&mut self, def: &FunctionDefinition) {
         let identifier: &str = def.identifier.as_str();
         self.print(format!("function {identifier}(").as_str())
             .unwrap();
@@ -101,20 +99,20 @@ where
     }
 
     fn visit_function_call(&mut self, call: &FunctionCall) {
-        <T as Visitor<P>>::visit_name(self, &call.name);
+        <T as Visitor>::visit_name(self, &call.name);
         self.print("(").unwrap();
         for (idx, a) in call.arguments.iter().enumerate() {
             if idx > 0 {
                 self.print(", ").unwrap();
             }
-            <T as Visitor<P>>::visit_expression(self, a);
+            <T as Visitor>::visit_expression(self, a);
         }
         self.print(")").unwrap();
     }
 
-    fn visit_if_conditional(&mut self, if_conditional: &IfConditional<P>) {
+    fn visit_if_conditional(&mut self, if_conditional: &IfConditional) {
         self.print("if ").unwrap();
-        <T as Visitor<P>>::visit_expression(self, &if_conditional.condition);
+        <T as Visitor>::visit_expression(self, &if_conditional.condition);
         self.print(" ").unwrap();
         self.visit_block(&if_conditional.block);
         self.println("").unwrap();
@@ -131,9 +129,9 @@ where
 
     fn visit_expression(&mut self, expr: &Expression) {
         match expr {
-            Expression::FunctionCall(fc) => <T as Visitor<P>>::visit_function_call(self, fc),
+            Expression::FunctionCall(fc) => <T as Visitor>::visit_function_call(self, fc),
             Expression::Identifier(i) => self.print(i.inner.as_str()).unwrap(),
-            Expression::Literal(l) => <T as Visitor<P>>::visit_literal(self, l),
+            Expression::Literal(l) => <T as Visitor>::visit_literal(self, l),
         }
     }
     fn visit_assignment(&mut self, assignment: &Assignment) {
@@ -144,30 +142,30 @@ where
             self.print(a.inner.as_str()).unwrap();
         }
         self.print(" := ").unwrap();
-        <T as Visitor<P>>::visit_expression(self, &assignment.initializer);
+        <T as Visitor>::visit_expression(self, &assignment.initializer);
     }
 
-    fn visit_statement(&mut self, stmt: &Statement<P>) {
+    fn visit_statement(&mut self, stmt: &Statement) {
         match stmt {
             Statement::Object(o) => self.visit_object(o),
             Statement::Code(c) => self.visit_code(c),
             Statement::Block(b) => self.visit_block(b),
-            Statement::Expression(e) => <T as Visitor<P>>::visit_expression(self, e),
+            Statement::Expression(e) => <T as Visitor>::visit_expression(self, e),
             Statement::FunctionDefinition(fd) => self.visit_function_definition(fd),
             Statement::VariableDeclaration(vd) => {
-                <T as Visitor<P>>::visit_variable_declaration(self, vd)
+                <T as Visitor>::visit_variable_declaration(self, vd)
             }
-            Statement::Assignment(a) => <T as Visitor<P>>::visit_assignment(self, a),
-            Statement::IfConditional(i) => <T as Visitor<P>>::visit_if_conditional(self, i),
-            Statement::Switch(s) => <T as Visitor<P>>::visit_switch(self, s),
-            Statement::ForLoop(f) => <T as Visitor<P>>::visit_for_loop(self, f),
+            Statement::Assignment(a) => <T as Visitor>::visit_assignment(self, a),
+            Statement::IfConditional(i) => <T as Visitor>::visit_if_conditional(self, i),
+            Statement::Switch(s) => <T as Visitor>::visit_switch(self, s),
+            Statement::ForLoop(f) => <T as Visitor>::visit_for_loop(self, f),
             Statement::Continue(_) => self.print("continue").unwrap(),
             Statement::Break(_) => self.print("break").unwrap(),
             Statement::Leave(_) => self.print("leave").unwrap(),
         }
     }
 
-    fn visit_block(&mut self, block: &Block<P>) {
+    fn visit_block(&mut self, block: &Block) {
         if block.statements.is_empty() {
             self.print(" { }").unwrap();
             return;

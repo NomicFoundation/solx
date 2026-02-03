@@ -84,7 +84,7 @@ impl Contract {
     ///
     pub fn identifier(&self) -> &str {
         match self.ir.as_ref() {
-            Some(IR::Yul(yul)) => yul.object.0.identifier.as_str(),
+            Some(IR::Yul(yul)) => yul.object.identifier.as_str(),
             Some(IR::EVMLegacyAssembly(evm)) => evm.assembly.full_path(),
             Some(IR::LLVMIR(llvm_ir)) => llvm_ir.path.as_str(),
             None => self.name.full_path.as_str(),
@@ -130,14 +130,14 @@ impl Contract {
                 let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
                     Some(solx_codegen_evm::ContextSolidityData::new(
                         immutables,
-                        yul.object.0.sources.clone(),
+                        yul.object.sources.clone(),
                         debug_info,
                     ))
                 } else {
                     None
                 };
 
-                let deploy_code_identifier = yul.object.0.identifier.clone();
+                let deploy_code_identifier = yul.object.identifier.clone();
 
                 let deploy_llvm = inkwell::context::Context::create();
                 let deploy_module = deploy_llvm.create_module(contract_name.full_path.as_str());
@@ -206,14 +206,14 @@ impl Contract {
                 let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
                     Some(solx_codegen_evm::ContextSolidityData::new(
                         immutables,
-                        yul.object.0.sources.clone(),
+                        yul.object.sources.clone(),
                         debug_info,
                     ))
                 } else {
                     None
                 };
 
-                let runtime_code_identifier = yul.object.0.identifier.clone();
+                let runtime_code_identifier = yul.object.identifier.clone();
 
                 let runtime_llvm = inkwell::context::Context::create();
                 let runtime_module = runtime_llvm

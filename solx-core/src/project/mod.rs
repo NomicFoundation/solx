@@ -297,7 +297,7 @@ impl Project {
                     Ok(ir) => ir,
                     Err(error) => return (name, Err(error)),
                 };
-                name.name = ir.as_ref().map(|ir| ir.object.0.identifier.to_owned());
+                name.name = ir.as_ref().map(|ir| ir.object.identifier.to_owned());
 
                 let contract = Contract::new(
                     name.clone(),
@@ -486,13 +486,13 @@ impl Project {
                             *deploy_code.runtime_code.take().expect("Always exists");
 
                         if let Some(ref mut debug_info) = deploy_debug_info {
-                            debug_info.retain_source_ids(&deploy_code.object.0.sources);
+                            debug_info.retain_source_ids(&deploy_code.object.sources);
                             if let Some(contract_name) = contract_name.name.as_deref() {
                                 debug_info.retain_current_contract(contract_name);
                             }
                         }
                         if let Some(ref mut debug_info) = runtime_debug_info {
-                            debug_info.retain_source_ids(&runtime_code.object.0.sources);
+                            debug_info.retain_source_ids(&runtime_code.object.sources);
                             if let Some(contract_name) = contract_name.name.as_deref() {
                                 debug_info.retain_current_contract(contract_name);
                             }

@@ -4131,6 +4131,8 @@ name = "solx-yul"
 version = "0.1.4"
 dependencies = [
  "anyhow",
+ "inkwell",
+ "num",
  "serde",
  "solx-codegen-evm",
  "solx-utils",

@@ -2,6 +2,8 @@
 //! The Yul source code type.
 //!
 
+use solx_codegen_evm::IContext;
+
 use crate::yul::error::Error;
 use crate::yul::lexer::Lexer;
 use crate::yul::lexer::token::Token;
@@ -68,6 +70,21 @@ impl Type {
                 found: token.lexeme.to_string(),
             }
             .into()),
+        }
+    }
+
+    ///
+    /// Converts the type into its LLVM representation.
+    ///
+    pub fn into_llvm<'ctx, C>(self, context: &C) -> inkwell::types::IntType<'ctx>
+    where
+        C: IContext<'ctx>,
+    {
+        match self {
+            Self::Bool => context.integer_type(solx_utils::BIT_LENGTH_BOOLEAN),
+            Self::Int(bitlength) => context.integer_type(bitlength),
+            Self::UInt(bitlength) => context.integer_type(bitlength),
+            Self::Custom(_) => context.field_type(),
         }
     }
 }

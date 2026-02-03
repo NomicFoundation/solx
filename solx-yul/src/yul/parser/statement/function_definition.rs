@@ -4,6 +4,10 @@
 
 use std::collections::BTreeSet;
 
+use inkwell::types::BasicType;
+use solx_codegen_evm::IContext;
+use solx_codegen_evm::WriteLLVM;
+
 use crate::yul::error::Error;
 use crate::yul::lexer::Lexer;
 use crate::yul::lexer::token::Token;
@@ -11,7 +15,7 @@ use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::lexeme::keyword::Keyword;
 use crate::yul::lexer::token::lexeme::symbol::Symbol;
 use crate::yul::lexer::token::location::Location;
-use crate::yul::parser::dialect::Dialect;
+use crate::yul::parser::attributes::get_llvm_attributes;
 use crate::yul::parser::error::Error as ParserError;
 use crate::yul::parser::identifier::Identifier;
 use crate::yul::parser::statement::block::Block;
@@ -25,11 +29,7 @@ use crate::yul::parser::statement::expression::function_call::name::Name as Func
 /// 2. The definition, which now has the access to all function signatures
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(bound = "P: serde::de::DeserializeOwned")]
-pub struct FunctionDefinition<P>
-where
-    P: Dialect,
-{
+pub struct FunctionDefinition {
     /// The location.
     pub location: Location,
     /// The function identifier.
@@ -39,17 +39,14 @@ where
     /// The function return variables.
     pub result: Vec<Identifier>,
     /// The function body block.
-    pub body: Block<P>,
+    pub body: Block,
     /// The function LLVM attributes encoded in the identifier.
-    pub attributes: BTreeSet<P::FunctionAttribute>,
+    pub attributes: BTreeSet<solx_codegen_evm::Attribute>,
     /// The Solidity AST node ID, if any.
     pub ast_id: Option<usize>,
 }
 
-impl<P> FunctionDefinition<P>
-where
-    P: Dialect,
-{
+impl FunctionDefinition {
     ///
     /// The element parser.
     ///
@@ -162,7 +159,7 @@ where
 
         let body = Block::parse(lexer, next)?;
 
-        let attributes = P::extract_attributes(&identifier, lexer)?;
+        let attributes = get_llvm_attributes(&identifier)?;
 
         Ok(Self {
             location,
@@ -188,16 +185,129 @@ where
     pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
         self.body.accumulate_evm_dependencies(dependencies);
     }
+
+    ///
+    /// Declares the function in the LLVM IR.
+    ///
+    pub fn declare(&mut self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
+        let argument_types: Vec<_> = self
+            .arguments
+            .iter()
+            .map(|argument| {
+                let yul_type = argument.r#type.to_owned().unwrap_or_default();
+                yul_type.into_llvm(context).as_basic_type_enum()
+            })
+            .collect();
+
+        let function_type = context.function_type(argument_types, self.result.len());
+
+        context.add_function(
+            self.identifier.as_str(),
+            self.ast_id,
+            function_type,
+            self.result.len(),
+            Some(inkwell::module::Linkage::Private),
+        )?;
+
+        Ok(())
+    }
+
+    ///
+    /// Compiles the function into LLVM IR.
+    ///
+    pub fn into_llvm(mut self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
+        context.set_current_function(self.identifier.as_str())?;
+        let r#return = context.current_function().borrow().r#return();
+
+        context.set_basic_block(context.current_function().borrow().entry_block());
+        match r#return {
+            solx_codegen_evm::FunctionReturn::None => {}
+            solx_codegen_evm::FunctionReturn::Primitive { pointer } => {
+                let identifier = self.result.pop().expect("Always exists");
+                let r#type = identifier.r#type.unwrap_or_default();
+                context.build_store(pointer, r#type.into_llvm(context).const_zero())?;
+                context
+                    .current_function()
+                    .borrow_mut()
+                    .insert_stack_pointer(identifier.inner, pointer);
+            }
+            solx_codegen_evm::FunctionReturn::Compound { pointer, .. } => {
+                for (index, identifier) in self.result.into_iter().enumerate() {
+                    let r#type = identifier.r#type.unwrap_or_default().into_llvm(context);
+                    let pointer = context.build_gep(
+                        pointer,
+                        &[
+                            context.field_const(0),
+                            context
+                                .integer_type(solx_utils::BIT_LENGTH_X32)
+                                .const_int(index as u64, false),
+                        ],
+                        context.field_type(),
+                        format!("return_{index}_gep_pointer").as_str(),
+                    )?;
+                    context.build_store(pointer, r#type.const_zero())?;
+                    context
+                        .current_function()
+                        .borrow_mut()
+                        .insert_stack_pointer(identifier.inner.clone(), pointer);
+                }
+            }
+        };
+
+        let argument_types: Vec<_> = self
+            .arguments
+            .iter()
+            .map(|argument| {
+                let yul_type = argument.r#type.to_owned().unwrap_or_default();
+                yul_type.into_llvm(context)
+            })
+            .collect();
+        for (index, argument) in self.arguments.iter().enumerate() {
+            let pointer = context.build_alloca(argument_types[index], argument.inner.as_str())?;
+            context
+                .current_function()
+                .borrow_mut()
+                .insert_stack_pointer(argument.inner.clone(), pointer);
+            context.build_store(
+                pointer,
+                context.current_function().borrow().get_nth_param(index),
+            )?;
+        }
+
+        self.body.into_llvm(context)?;
+        if !context.is_basic_block_terminated() {
+            context
+                .build_unconditional_branch(context.current_function().borrow().return_block())?;
+        }
+
+        context.set_basic_block(context.current_function().borrow().return_block());
+        match context.current_function().borrow().r#return() {
+            solx_codegen_evm::FunctionReturn::None => {
+                context.build_return(None)?;
+            }
+            solx_codegen_evm::FunctionReturn::Primitive { pointer } => {
+                let return_value = context.build_load(pointer, "return_value")?;
+                context.build_return(Some(&return_value))?;
+            }
+            solx_codegen_evm::FunctionReturn::Compound { pointer, .. } => {
+                let return_value = context.build_load(pointer, "return_value")?;
+                context.build_return(Some(&return_value))?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 ///
-/// This module contains only dialect-agnostic tests.
+/// This module contains both dialect-agnostic and dialect-specific tests.
 ///
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use crate::yul::lexer::Lexer;
     use crate::yul::lexer::token::location::Location;
-    use crate::yul::parser::dialect::DefaultDialect;
     use crate::yul::parser::error::Error;
     use crate::yul::parser::statement::object::Object;
 
@@ -225,8 +335,7 @@ object "Test" {
     "#;
 
         let mut lexer = Lexer::new(input);
-        let result =
-            Object::<DefaultDialect>::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
+        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
         assert_eq!(
             result,
             Err(Error::InvalidToken {
@@ -262,8 +371,7 @@ object "Test" {
     "#;
 
         let mut lexer = Lexer::new(input);
-        let result =
-            Object::<DefaultDialect>::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
+        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
         assert_eq!(
             result,
             Err(Error::InvalidToken {
@@ -299,8 +407,7 @@ object "Test" {
     "#;
 
         let mut lexer = Lexer::new(input);
-        let result =
-            Object::<DefaultDialect>::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
+        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
         assert_eq!(
             result,
             Err(Error::InvalidToken {
@@ -336,8 +443,7 @@ object "Test" {
     "#;
 
         let mut lexer = Lexer::new(input);
-        let result =
-            Object::<DefaultDialect>::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
+        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
         assert_eq!(
             result,
             Err(Error::InvalidToken {
@@ -373,13 +479,87 @@ object "Test" {
     "#;
 
         let mut lexer = Lexer::new(input);
-        let result =
-            Object::<DefaultDialect>::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
+        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
         assert_eq!(
             result,
             Err(Error::ReservedIdentifier {
                 location: Location::new(14, 22),
                 identifier: "basefee".to_owned()
+            }
+            .into())
+        );
+    }
+
+    #[test]
+    fn error_invalid_attributes_single() {
+        let input = r#"
+object "Test" {
+    code {
+        {
+            return(0, 0)
+        }
+    }
+    object "Test_deployed" {
+        code {
+            {
+                return(0, 0)
+            }
+
+            function test_$llvm_UnknownAttribute_llvm$_test() -> result {
+                result := 42
+            }
+        }
+    }
+}
+    "#;
+        let mut invalid_attributes = BTreeSet::new();
+        invalid_attributes.insert("UnknownAttribute".to_owned());
+
+        let mut lexer = Lexer::new(input);
+        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
+        assert_eq!(
+            result,
+            Err(Error::InvalidAttributes {
+                location: Location::new(14, 22),
+                values: invalid_attributes,
+            }
+            .into())
+        );
+    }
+
+    #[test]
+    fn error_invalid_attributes_multiple_repeated() {
+        let input = r#"
+object "Test" {
+    code {
+        {
+            return(0, 0)
+        }
+    }
+    object "Test_deployed" {
+        code {
+            {
+                return(0, 0)
+            }
+
+            function test_$llvm_UnknownAttribute1_UnknownAttribute1_UnknownAttribute2_llvm$_test() -> result {
+                result := 42
+            }
+        }
+    }
+}
+    "#;
+        let mut invalid_attributes = BTreeSet::new();
+        invalid_attributes.insert("UnknownAttribute1".to_owned());
+        invalid_attributes.insert("UnknownAttribute2".to_owned());
+
+        let mut lexer = Lexer::new(input);
+        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
+        assert_eq!(
+            result,
+            Err(Error::InvalidAttributes {
+                location: Location::new(14, 22),
+                values: invalid_attributes,
             }
             .into())
         );
