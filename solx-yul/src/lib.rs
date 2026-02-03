@@ -11,3 +11,12 @@
 
 pub mod util;
 pub mod yul;
+
+pub use yul::error::Error as YulError;
+pub use yul::lexer::token::lexeme::literal::Literal as YulLiteral;
+pub use yul::lexer::token::lexeme::literal::boolean::Boolean as YulBooleanLiteral;
+pub use yul::lexer::token::lexeme::literal::integer::Integer as YulIntegerLiteral;
+pub use yul::lexer::token::location::Location as YulLocation;
+pub use yul::parser::error::Error as YulParserError;
+pub use yul::parser::identifier::Identifier as YulIdentifier;
+pub use yul::parser::r#type::Type as YulType;

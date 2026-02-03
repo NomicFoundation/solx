@@ -7,9 +7,8 @@ use solx_codegen_evm::ISolidityData;
 
 use crate::declare_wrapper;
 use crate::yul::parser::dialect::era::EraDialect;
+use crate::yul::parser::statement::expression::Expression;
 use crate::yul::parser::wrapper::Wrap;
-
-use super::expression::Expression;
 
 declare_wrapper!(
     solx_yul::yul::parser::statement::for_loop::ForLoop<EraDialect>,

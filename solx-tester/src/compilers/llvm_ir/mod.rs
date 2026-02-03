@@ -9,8 +9,6 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use solx_standard_json::CollectableError as SolxCollectableError;
-
 use crate::compilers::Compiler;
 use crate::compilers::mode::Mode;
 use crate::compilers::solidity::solx::SolidityCompiler as SolxCompiler;
@@ -87,7 +85,7 @@ impl Compiler for LLVMIRCompiler {
                         .as_ref()
                         .map(|debug_config| debug_config.output_directory.as_path()),
                 )?;
-                solx_output.check_errors()?;
+                solx_standard_json::CollectableError::check_errors(&solx_output)?;
 
                 let mut builds = HashMap::with_capacity(solx_output.contracts.len());
                 for (_file, contracts) in solx_output.contracts.into_iter() {

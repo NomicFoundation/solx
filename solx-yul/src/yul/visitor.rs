@@ -2,6 +2,7 @@
 //! Implementation of a visitor pattern for Yul syntax tree.
 //!
 
+use crate::yul::parser::dialect::Dialect;
 use crate::yul::parser::statement::Statement;
 use crate::yul::parser::statement::assignment::Assignment;
 use crate::yul::parser::statement::block::Block;
@@ -16,8 +17,6 @@ use crate::yul::parser::statement::if_conditional::IfConditional;
 use crate::yul::parser::statement::object::Object;
 use crate::yul::parser::statement::switch::Switch;
 use crate::yul::parser::statement::variable_declaration::VariableDeclaration;
-
-use super::parser::dialect::Dialect;
 
 ///
 /// Utility conventional name of a function corresponding to the `code` block of

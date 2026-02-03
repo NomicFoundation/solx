@@ -6,14 +6,11 @@ pub mod mode;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
 use itertools::Itertools;
-
-use solx_standard_json::CollectableError;
 
 use crate::compilers::Compiler;
 use crate::compilers::mode::Mode;
@@ -145,87 +142,6 @@ impl SolidityCompiler {
             .map_err(|error| anyhow::anyhow!("{path:?} subprocess version parsing: {error}"))?;
         Ok(version)
     }
-
-    ///
-    /// Get the method identifiers from the solc output.
-    ///
-    fn get_method_identifiers(
-        solc_output: &solx_standard_json::Output,
-    ) -> anyhow::Result<BTreeMap<String, BTreeMap<String, u32>>> {
-        let mut selectors = BTreeMap::new();
-        for (path, file) in solc_output.contracts.iter() {
-            for (name, contract) in file.iter() {
-                let mut contract_selectors = BTreeMap::new();
-                let contract_method_identifiers = match contract
-                    .evm
-                    .as_ref()
-                    .and_then(|evm| evm.method_identifiers.as_ref())
-                {
-                    Some(method_identifiers) => method_identifiers,
-                    None => {
-                        continue;
-                    }
-                };
-                for (entry, selector) in contract_method_identifiers.iter() {
-                    let selector =
-                        u32::from_str_radix(selector, solx_utils::BASE_HEXADECIMAL)
-                            .map_err(|error| {
-                                anyhow::anyhow!(
-                                    "Invalid selector `{selector}` received from the Solidity compiler: {error}"
-                                )
-                            })?;
-                    contract_selectors.insert(entry.clone(), selector);
-                }
-                selectors.insert(format!("{path}:{name}"), contract_selectors);
-            }
-        }
-        Ok(selectors)
-    }
-
-    ///
-    /// Get the last contract from the solc output.
-    ///
-    fn get_last_contract(
-        solc_output: &solx_standard_json::Output,
-        sources: &[(String, String)],
-    ) -> anyhow::Result<String> {
-        for (path, _source) in sources.iter().rev() {
-            match Self::last_contract_name(
-                solc_output
-                    .sources
-                    .get(path)
-                    .ok_or_else(|| anyhow::anyhow!("The last source not found in the output"))?,
-            ) {
-                Ok(name) => return Ok(format!("{path}:{name}")),
-                Err(_error) => continue,
-            }
-        }
-        anyhow::bail!("The last source not found in the output")
-    }
-
-    ///
-    /// Returns the last contract name from the sources.
-    ///
-    fn last_contract_name(source: &solx_standard_json::OutputSource) -> anyhow::Result<String> {
-        source
-            .ast
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("The AST is empty"))?
-            .get("nodes")
-            .and_then(|value| value.as_array())
-            .ok_or_else(|| {
-                anyhow::anyhow!("The last contract cannot be found in an empty list of nodes")
-            })?
-            .iter()
-            .filter_map(
-                |node| match node.get("nodeType").and_then(|node| node.as_str()) {
-                    Some("ContractDefinition") => Some(node.get("name")?.as_str()?.to_owned()),
-                    _ => None,
-                },
-            )
-            .next_back()
-            .ok_or_else(|| anyhow::anyhow!("The last contract not found in the AST"))
-    }
 }
 
 impl Compiler for SolidityCompiler {
@@ -300,36 +216,12 @@ impl Compiler for SolidityCompiler {
                 .as_ref()
                 .map(|debug_config| debug_config.output_directory.as_path()),
         )?;
-        solx_output.check_errors()?;
+        solx_standard_json::CollectableError::check_errors(&solx_output)?;
 
-        let method_identifiers = Self::get_method_identifiers(&solx_output)?;
-
-        let last_contract = Self::get_last_contract(&solx_output, &sources)?;
-
-        let mut builds = HashMap::with_capacity(solx_output.contracts.len());
-        for (file, source) in solx_output.contracts.iter() {
-            for (name, contract) in source.iter() {
-                let deploy_code = match contract
-                    .evm
-                    .as_ref()
-                    .and_then(|evm| evm.bytecode.as_ref())
-                    .and_then(|bytecode| bytecode.object.as_ref())
-                {
-                    Some(bytecode) => hex::decode(bytecode.as_str())?,
-                    None => continue,
-                };
-                let runtime_code_size = match contract
-                    .evm
-                    .as_ref()
-                    .and_then(|evm| evm.deployed_bytecode.as_ref())
-                    .and_then(|deployed_bytecode| deployed_bytecode.object.as_ref())
-                {
-                    Some(deployed_bytecode) => deployed_bytecode.len() / 2,
-                    None => 0,
-                };
-                builds.insert(format!("{file}:{name}"), (deploy_code, runtime_code_size));
-            }
-        }
+        let method_identifiers = solx_output.get_method_identifiers()?;
+        let last_contract =
+            solx_output.get_last_contract(solx_standard_json::InputLanguage::Solidity, &sources)?;
+        let builds = solx_output.extract_bytecode_builds()?;
 
         Ok(EVMInput::new(
             builds,

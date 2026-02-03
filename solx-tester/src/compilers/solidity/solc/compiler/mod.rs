@@ -4,9 +4,6 @@
 
 use std::io::Write;
 
-use solx_standard_json::Input as StandardJsonInput;
-use solx_standard_json::Output as StandardJsonOutput;
-
 ///
 /// The Solidity compiler.
 ///
@@ -40,11 +37,11 @@ impl Compiler {
     ///
     pub fn standard_json(
         &mut self,
-        input: StandardJsonInput,
+        input: solx_standard_json::Input,
         base_path: Option<String>,
         include_paths: Vec<String>,
         allow_paths: Option<String>,
-    ) -> anyhow::Result<StandardJsonOutput> {
+    ) -> anyhow::Result<solx_standard_json::Output> {
         let mut command = std::process::Command::new(self.executable.as_str());
         command.stdin(std::process::Stdio::piped());
         command.stdout(std::process::Stdio::piped());
@@ -88,7 +85,7 @@ impl Compiler {
             );
         }
 
-        let output: StandardJsonOutput =
+        let output: solx_standard_json::Output =
             solx_utils::deserialize_from_slice(output.stdout.as_slice()).map_err(|error| {
                 anyhow::anyhow!(
                     "{} subprocess output parsing error: {}\n{}",

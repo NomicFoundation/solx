@@ -6,7 +6,7 @@ pub mod executable;
 
 use std::collections::BTreeMap;
 
-use executable::Executable;
+use self::executable::Executable;
 use serde::Deserialize;
 use serde::Serialize;
 

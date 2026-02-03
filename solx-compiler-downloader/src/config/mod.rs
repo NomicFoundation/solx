@@ -12,6 +12,6 @@ use self::executable::Executable;
 ///
 #[derive(Debug, serde::Deserialize)]
 pub struct Config {
-    /// Compiler executables to download.executables
+    /// Compiler executables to download.executables.
     pub executables: Vec<Executable>,
 }

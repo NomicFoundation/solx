@@ -2,11 +2,9 @@
 //! The Yul source code type.
 //!
 
-use solx_yul::yul::parser::r#type::Type as YulType;
-
 use crate::declare_wrapper;
 
-declare_wrapper!(solx_yul::yul::parser::r#type::Type, Type);
+declare_wrapper!(solx_yul::YulType, Type);
 
 ///
 /// The Yul source code type.
@@ -20,10 +18,10 @@ impl Type {
         C: solx_codegen_evm::IContext<'ctx>,
     {
         match self.0 {
-            YulType::Bool => context.integer_type(solx_utils::BIT_LENGTH_BOOLEAN),
-            YulType::Int(bitlength) => context.integer_type(bitlength),
-            YulType::UInt(bitlength) => context.integer_type(bitlength),
-            YulType::Custom(_) => context.field_type(),
+            solx_yul::YulType::Bool => context.integer_type(solx_utils::BIT_LENGTH_BOOLEAN),
+            solx_yul::YulType::Int(bitlength) => context.integer_type(bitlength),
+            solx_yul::YulType::UInt(bitlength) => context.integer_type(bitlength),
+            solx_yul::YulType::Custom(_) => context.field_type(),
         }
     }
 }

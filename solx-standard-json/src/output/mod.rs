@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use crate::input::language::Language as InputLanguage;
 use crate::input::settings::selection::Selection as InputSettingsSelection;
 use crate::input::settings::selection::selector::Selector as InputSettingsSelector;
 use crate::input::source::Source as InputSource;
@@ -222,6 +223,123 @@ impl Output {
         }
 
         solx_utils::DebugInfo::new(contract_definitions, function_definitions, ast_nodes)
+    }
+
+    ///
+    /// Extracts method identifiers from all contracts.
+    ///
+    /// Returns a map of `path:name` to a map of method signatures to selectors.
+    ///
+    pub fn get_method_identifiers(
+        &self,
+    ) -> anyhow::Result<BTreeMap<String, BTreeMap<String, u32>>> {
+        let mut method_identifiers = BTreeMap::new();
+        for (path, contracts) in self.contracts.iter() {
+            for (name, contract) in contracts.iter() {
+                let contract_method_identifiers = match contract
+                    .evm
+                    .as_ref()
+                    .and_then(|evm| evm.method_identifiers.as_ref())
+                {
+                    Some(method_identifiers) => method_identifiers,
+                    None => continue,
+                };
+                let mut contract_identifiers = BTreeMap::new();
+                for (entry, selector) in contract_method_identifiers.iter() {
+                    let selector = u32::from_str_radix(selector, solx_utils::BASE_HEXADECIMAL)
+                        .map_err(|error| {
+                            anyhow::anyhow!(
+                                "Invalid selector `{selector}` from the Solidity compiler: {error}"
+                            )
+                        })?;
+                    contract_identifiers.insert(entry.clone(), selector);
+                }
+                method_identifiers.insert(format!("{path}:{name}"), contract_identifiers);
+            }
+        }
+        Ok(method_identifiers)
+    }
+
+    ///
+    /// Gets the last contract from the output for the given language.
+    ///
+    /// For Solidity, finds the last contract definition in the AST of the last source file.
+    /// For Yul, returns the first contract in the output.
+    ///
+    pub fn get_last_contract(
+        &self,
+        language: InputLanguage,
+        sources: &[(String, String)],
+    ) -> anyhow::Result<String> {
+        match language {
+            InputLanguage::Solidity => {
+                let output_sources = self.sources_opt().ok_or_else(|| {
+                    anyhow::anyhow!("The sources are empty. Found errors: {:?}", self.errors)
+                })?;
+                for (path, _source) in sources.iter().rev() {
+                    let Some(source) = output_sources.get(path) else {
+                        continue;
+                    };
+                    match source.last_contract_name() {
+                        Ok(name) => return Ok(format!("{path}:{name}")),
+                        Err(_error) => continue,
+                    }
+                }
+                anyhow::bail!("The last contract not found in the output")
+            }
+            InputLanguage::Yul => self
+                .contracts_opt()
+                .and_then(|contracts| contracts.first_key_value())
+                .and_then(|(path, contracts)| {
+                    contracts
+                        .first_key_value()
+                        .map(|(name, _contract)| format!("{path}:{name}"))
+                })
+                .ok_or_else(|| {
+                    anyhow::anyhow!("The sources are empty. Found errors: {:?}", self.errors)
+                }),
+            InputLanguage::LLVMIR => {
+                anyhow::bail!("LLVM IR language is not supported")
+            }
+        }
+    }
+
+    ///
+    /// Extracts bytecode builds from all contracts.
+    ///
+    /// Returns a HashMap mapping `path:name` to `(deploy_code, runtime_code_size)`.
+    ///
+    pub fn extract_bytecode_builds(&self) -> anyhow::Result<HashMap<String, (Vec<u8>, usize)>> {
+        let contracts = self
+            .contracts_opt()
+            .ok_or_else(|| anyhow::anyhow!("Contracts not found in the output"))?;
+
+        let mut builds = HashMap::with_capacity(contracts.len());
+        for (file, source) in contracts.iter() {
+            for (name, contract) in source.iter() {
+                let path = format!("{file}:{name}");
+                let deploy_code = match contract
+                    .evm
+                    .as_ref()
+                    .and_then(|evm| evm.bytecode.as_ref())
+                    .and_then(|bytecode| bytecode.object.as_ref())
+                {
+                    Some(bytecode) => hex::decode(bytecode.as_str()).map_err(|error| {
+                        anyhow::anyhow!("EVM bytecode of the contract `{path}` is invalid: {error}")
+                    })?,
+                    None => continue,
+                };
+                let runtime_code_size = contract
+                    .evm
+                    .as_ref()
+                    .and_then(|evm| evm.deployed_bytecode.as_ref())
+                    .and_then(|deployed_bytecode| deployed_bytecode.object.as_ref())
+                    .map(|object| object.len() / 2)
+                    .unwrap_or(0);
+                builds.insert(path, (deploy_code, runtime_code_size));
+            }
+        }
+        Ok(builds)
     }
 }
 

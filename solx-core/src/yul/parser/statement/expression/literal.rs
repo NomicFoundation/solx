@@ -10,9 +10,6 @@ use num::Num;
 use num::One;
 use num::Zero;
 use solx_codegen_evm::ISolidityData;
-use solx_yul::yul::lexer::token::lexeme::literal::Literal as LexicalLiteral;
-use solx_yul::yul::lexer::token::lexeme::literal::boolean::Boolean as BooleanLiteral;
-use solx_yul::yul::lexer::token::lexeme::literal::integer::Integer as IntegerLiteral;
 
 declare_wrapper!(
     solx_yul::yul::parser::statement::expression::literal::Literal,
@@ -37,7 +34,7 @@ impl Literal {
         }
 
         match self.0.inner {
-            LexicalLiteral::Boolean(inner) => {
+            solx_yul::YulLiteral::Boolean(inner) => {
                 let value = self
                     .0
                     .yul_type
@@ -46,21 +43,21 @@ impl Literal {
                     .into_llvm(context)
                     .const_int(
                         match inner {
-                            BooleanLiteral::False => 0,
-                            BooleanLiteral::True => 1,
+                            solx_yul::YulBooleanLiteral::False => 0,
+                            solx_yul::YulBooleanLiteral::True => 1,
                         },
                         false,
                     )
                     .as_basic_value_enum();
 
                 let constant = match inner {
-                    BooleanLiteral::False => num::BigUint::zero(),
-                    BooleanLiteral::True => num::BigUint::one(),
+                    solx_yul::YulBooleanLiteral::False => num::BigUint::zero(),
+                    solx_yul::YulBooleanLiteral::True => num::BigUint::one(),
                 };
 
                 Ok(solx_codegen_evm::Value::new_with_constant(value, constant))
             }
-            LexicalLiteral::Integer(inner) => {
+            solx_yul::YulLiteral::Integer(inner) => {
                 let r#type = self
                     .0
                     .yul_type
@@ -68,32 +65,36 @@ impl Literal {
                     .wrap()
                     .into_llvm(context);
                 let value = match inner {
-                    IntegerLiteral::Decimal { ref inner } => r#type.const_int_from_string(
-                        inner.as_str(),
-                        inkwell::types::StringRadix::Decimal,
-                    ),
-                    IntegerLiteral::Hexadecimal { ref inner } => r#type.const_int_from_string(
-                        &inner["0x".len()..],
-                        inkwell::types::StringRadix::Hexadecimal,
-                    ),
+                    solx_yul::YulIntegerLiteral::Decimal { ref inner } => r#type
+                        .const_int_from_string(
+                            inner.as_str(),
+                            inkwell::types::StringRadix::Decimal,
+                        ),
+                    solx_yul::YulIntegerLiteral::Hexadecimal { ref inner } => r#type
+                        .const_int_from_string(
+                            &inner["0x".len()..],
+                            inkwell::types::StringRadix::Hexadecimal,
+                        ),
                 }
                 .expect("The value is valid")
                 .as_basic_value_enum();
 
                 let constant = match inner {
-                    IntegerLiteral::Decimal { ref inner } => {
+                    solx_yul::YulIntegerLiteral::Decimal { ref inner } => {
                         num::BigUint::from_str_radix(inner.as_str(), solx_utils::BASE_DECIMAL)
                     }
-                    IntegerLiteral::Hexadecimal { ref inner } => num::BigUint::from_str_radix(
-                        &inner["0x".len()..],
-                        solx_utils::BASE_HEXADECIMAL,
-                    ),
+                    solx_yul::YulIntegerLiteral::Hexadecimal { ref inner } => {
+                        num::BigUint::from_str_radix(
+                            &inner["0x".len()..],
+                            solx_utils::BASE_HEXADECIMAL,
+                        )
+                    }
                 }
                 .expect("Always valid");
 
                 Ok(solx_codegen_evm::Value::new_with_constant(value, constant))
             }
-            LexicalLiteral::String(inner) => {
+            solx_yul::YulLiteral::String(inner) => {
                 let string = inner.inner;
                 let r#type = self
                     .0

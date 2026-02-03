@@ -2,9 +2,9 @@
 //! The boolean literal.
 //!
 
-use super::alignment::Alignment;
 use crate::test::function_call::parser::lexical::BooleanLiteral as LexicalBooleanLiteral;
 use crate::test::function_call::parser::lexical::Location;
+use crate::test::function_call::parser::syntax::tree::literal::alignment::Alignment;
 
 ///
 /// The boolean literal.

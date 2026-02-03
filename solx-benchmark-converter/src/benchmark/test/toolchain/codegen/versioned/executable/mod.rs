@@ -6,8 +6,8 @@
 pub mod metadata;
 pub mod run;
 
-use metadata::Metadata;
-use run::Run;
+use self::metadata::Metadata;
+use self::run::Run;
 use serde::Deserialize;
 use serde::Serialize;
 
