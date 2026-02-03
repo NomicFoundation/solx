@@ -38,10 +38,6 @@ pub struct Arguments {
     #[arg(short = 'O', long)]
     pub optimizer: Option<String>,
 
-    /// Runs tests only in modes that contain any string from the specified ones (legacy).
-    #[arg(short, long, hide = true)]
-    pub mode: Vec<String>,
-
     /// Runs only tests whose name contains any string from the specified ones.
     #[arg(short, long)]
     pub path: Vec<String>,

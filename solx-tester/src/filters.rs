@@ -18,8 +18,6 @@ pub struct Filters<'a> {
     via_ir: bool,
     /// Filter for optimizer settings pattern.
     optimizer: Option<String>,
-    /// The legacy mode filters.
-    mode_filters: HashSet<String>,
     /// The group filters.
     group_filters: HashSet<String>,
 }
@@ -32,19 +30,12 @@ impl<'a> Filters<'a> {
         path_filters: HashSet<&'a str>,
         via_ir: bool,
         optimizer: Option<String>,
-        mode_filters: Vec<String>,
         group_filters: Vec<String>,
     ) -> Self {
         Self {
             path_filters,
             via_ir,
             optimizer,
-            // Mode filters are stripped of spaces so filters like "Y+M3B3
-            // 0.2.1 " and "Y +M3B3 0.2.1" become equivalent
-            mode_filters: mode_filters
-                .into_iter()
-                .map(|f| f.replace(' ', ""))
-                .collect(),
             group_filters: group_filters.into_iter().collect(),
         }
     }
@@ -88,8 +79,7 @@ impl<'a> Filters<'a> {
             return false;
         }
 
-        // Check legacy mode filters
-        mode.check_filters(&self.mode_filters)
+        true
     }
 
     ///

@@ -80,7 +80,6 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
         path_filters,
         arguments.via_ir,
         arguments.optimizer,
-        arguments.mode,
         arguments.group,
     );
 
@@ -141,7 +140,6 @@ mod tests {
             trace: false,
             via_ir: true,
             optimizer: Some("M3B3".to_owned()),
-            mode: vec![],
             path: vec!["tests/solidity/simple/default.sol".to_owned()],
             group: vec![],
             benchmark: None,
