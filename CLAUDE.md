@@ -48,7 +48,7 @@ cargo run --release --bin solx-tester -- [args]
 
 If LLVM build artifacts are not found, set:
 ```bash
-export LLVM_SYS_211_PREFIX="${HOME}/src/solx/target-llvm/build-final"
+export LLVM_SYS_211_PREFIX="${HOME}/src/solx/target-llvm/target-final"
 ```
 
 ### Building MLIR vs Non-MLIR solx
