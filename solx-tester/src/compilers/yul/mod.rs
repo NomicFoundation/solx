@@ -3,7 +3,6 @@
 //!
 
 pub mod mode;
-pub mod mode_upstream;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -44,6 +43,10 @@ impl Compiler for YulCompiler {
         match self {
             Self::Solx(solx) => {
                 let yul_mode = YulMode::unwrap(mode);
+                let llvm_settings = yul_mode
+                    .llvm_optimizer_settings
+                    .as_ref()
+                    .expect("solx Yul mode must have LLVM settings");
 
                 let sources: BTreeMap<String, solx_standard_json::InputSource> = sources
                     .iter()
@@ -70,8 +73,8 @@ impl Compiler for YulCompiler {
                     sources,
                     libraries.to_owned(),
                     solx_standard_json::InputOptimizer::new(
-                        yul_mode.llvm_optimizer_settings.middle_end_as_char(),
-                        yul_mode.llvm_optimizer_settings.is_fallback_to_size_enabled,
+                        llvm_settings.middle_end_as_char(),
+                        llvm_settings.is_fallback_to_size_enabled,
                     ),
                     &solx_standard_json::InputSelection::new(selectors),
                     solx_standard_json::InputMetadata::default(),
@@ -88,8 +91,8 @@ impl Compiler for YulCompiler {
                 )?;
                 solx_standard_json::CollectableError::check_errors(&solx_output)?;
 
-                let last_contract = solx_output
-                    .get_last_contract(solx_standard_json::InputLanguage::Yul, &[])?;
+                let last_contract =
+                    solx_output.get_last_contract(solx_standard_json::InputLanguage::Yul, &[])?;
                 let last_contract = last_contract
                     .rsplit_once(':')
                     .map(|(path, _name)| path.to_owned())
@@ -161,10 +164,18 @@ impl Compiler for YulCompiler {
     }
 
     fn all_modes(&self) -> Vec<Mode> {
-        solx_codegen_evm::OptimizerSettings::combinations()
-            .into_iter()
-            .map(|llvm_optimizer_settings| YulMode::new(llvm_optimizer_settings).into())
-            .collect::<Vec<Mode>>()
+        match self {
+            Self::Solx(_) => solx_codegen_evm::OptimizerSettings::combinations()
+                .into_iter()
+                .map(|llvm_optimizer_settings| YulMode::new_solx(llvm_optimizer_settings).into())
+                .collect::<Vec<Mode>>(),
+            Self::Solc | Self::SolxMlir => {
+                // For solc toolchain, delegate to SolcCompiler which generates proper modes
+                let language = solx_standard_json::InputLanguage::Yul;
+                let solc_compiler = SolcCompiler::new(language, Toolchain::from(self));
+                solc_compiler.all_modes()
+            }
+        }
     }
 
     fn allows_multi_contract_files(&self) -> bool {
@@ -176,7 +187,7 @@ impl From<&YulCompiler> for Toolchain {
     fn from(value: &YulCompiler) -> Self {
         match value {
             YulCompiler::Solc => Self::Solc,
-            YulCompiler::Solx { .. } => Self::Solx,
+            YulCompiler::Solx(_) => Self::Solx,
             YulCompiler::SolxMlir => Self::SolxMlir,
         }
     }

@@ -12,10 +12,8 @@ use self::imode::IMode;
 use self::imode::mode_to_string_aux;
 
 use crate::compilers::llvm_ir::mode::Mode as LLVMMode;
-use crate::compilers::solidity::solc::mode::Mode as SolcMode;
-use crate::compilers::solidity::solx::mode::Mode as SolxMode;
+use crate::compilers::solidity::mode::Mode as SolidityMode;
 use crate::compilers::yul::mode::Mode as YulMode;
-use crate::compilers::yul::mode_upstream::Mode as YulUpstreamMode;
 
 ///
 /// The compiler mode.
@@ -23,15 +21,11 @@ use crate::compilers::yul::mode_upstream::Mode as YulUpstreamMode;
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum Mode {
-    /// The `solc` upstream mode.
-    Solc(SolcMode),
-    /// `solx` upstream mode.
-    Solx(SolxMode),
-    /// The `Yul` mode.
+    /// Solidity compilation mode (works with both solx and solc toolchains).
+    Solidity(SolidityMode),
+    /// Yul compilation mode (works with both solx and solc toolchains).
     Yul(YulMode),
-    /// The `Yul` upstream mode.
-    YulUpstream(YulUpstreamMode),
-    /// The `LLVM` mode.
+    /// LLVM IR compilation mode (solx only).
     LLVM(LLVMMode),
 }
 
@@ -97,12 +91,15 @@ impl Mode {
     /// Checks if the self is compatible with version filter.
     ///
     pub fn check_version(&self, versions: &semver::VersionReq) -> bool {
-        let version = match self {
-            Mode::Solc(mode) => &mode.solc_version,
-            Mode::Solx(mode) => &mode.solc_version,
-            _ => return false,
-        };
-        versions.matches(version)
+        match self {
+            Mode::Solidity(mode) => versions.matches(&mode.solc_version),
+            Mode::Yul(mode) => mode
+                .solc_version
+                .as_ref()
+                .map(|v| versions.matches(v))
+                .unwrap_or(false),
+            Mode::LLVM(_) => false,
+        }
     }
 
     ///
@@ -110,8 +107,7 @@ impl Mode {
     ///
     pub fn check_pragmas(&self, sources: &[(String, String)]) -> bool {
         match self {
-            Mode::Solc(mode) => mode.check_pragmas(sources),
-            Mode::Solx(mode) => mode.check_pragmas(sources),
+            Mode::Solidity(mode) => mode.check_pragmas(sources),
             _ => true,
         }
     }
@@ -121,8 +117,7 @@ impl Mode {
     ///
     pub fn check_ethereum_tests_params(&self, params: &solx_solc_test_adapter::Params) -> bool {
         match self {
-            Mode::Solc(mode) => mode.check_ethereum_tests_params(params),
-            Mode::Solx(mode) => mode.check_ethereum_tests_params(params),
+            Mode::Solidity(mode) => mode.check_ethereum_tests_params(params),
             _ => true,
         }
     }
@@ -132,10 +127,8 @@ impl Mode {
     ///
     pub fn llvm_optimizer_settings(&self) -> Option<&solx_codegen_evm::OptimizerSettings> {
         match self {
-            Mode::Solc(_mode) => None,
-            Mode::Solx(mode) => Some(&mode.llvm_optimizer_settings),
-            Mode::Yul(mode) => Some(&mode.llvm_optimizer_settings),
-            Mode::YulUpstream(_mode) => None,
+            Mode::Solidity(mode) => mode.llvm_optimizer_settings.as_ref(),
+            Mode::Yul(mode) => mode.llvm_optimizer_settings.as_ref(),
             Mode::LLVM(mode) => Some(&mode.llvm_optimizer_settings),
         }
     }
@@ -145,11 +138,21 @@ impl Mode {
     ///
     pub fn toolchain(&self) -> &'static str {
         match self {
-            Mode::Solc(_mode) => "solc",
-            Mode::Solx(_mode) => "solx",
-            Mode::Yul(_mode) => "solx",
-            Mode::YulUpstream(_mode) => "solc",
-            Mode::LLVM(_mode) => "solx",
+            Mode::Solidity(mode) => {
+                if mode.is_solx() {
+                    "solx"
+                } else {
+                    "solc"
+                }
+            }
+            Mode::Yul(mode) => {
+                if mode.is_solx() {
+                    "solx"
+                } else {
+                    "solc"
+                }
+            }
+            Mode::LLVM(_) => "solx",
         }
     }
 
@@ -203,7 +206,13 @@ impl Mode {
 
         if filter.starts_with('^') {
             match self {
-                Self::Solc(_) | Self::Solx(_) | Self::YulUpstream(_) => {
+                Self::Solidity(_) => {
+                    current = regex::Regex::new("[+]")
+                        .expect("Always valid")
+                        .replace_all(current.as_str(), "^")
+                        .to_string();
+                }
+                Self::Yul(mode) if !mode.is_solx() => {
                     current = regex::Regex::new("[+]")
                         .expect("Always valid")
                         .replace_all(current.as_str(), "^")
@@ -223,27 +232,15 @@ impl Mode {
     }
 }
 
-impl From<SolcMode> for Mode {
-    fn from(inner: SolcMode) -> Self {
-        Self::Solc(inner)
-    }
-}
-
-impl From<SolxMode> for Mode {
-    fn from(inner: SolxMode) -> Self {
-        Self::Solx(inner)
+impl From<SolidityMode> for Mode {
+    fn from(inner: SolidityMode) -> Self {
+        Self::Solidity(inner)
     }
 }
 
 impl From<YulMode> for Mode {
     fn from(inner: YulMode) -> Self {
         Self::Yul(inner)
-    }
-}
-
-impl From<YulUpstreamMode> for Mode {
-    fn from(inner: YulUpstreamMode) -> Self {
-        Self::YulUpstream(inner)
     }
 }
 
@@ -256,30 +253,24 @@ impl From<LLVMMode> for Mode {
 impl IMode for Mode {
     fn optimizations(&self) -> Option<String> {
         match self {
-            Mode::Solc(mode) => mode.optimizations(),
-            Mode::Solx(mode) => mode.optimizations(),
+            Mode::Solidity(mode) => mode.optimizations(),
             Mode::Yul(mode) => mode.optimizations(),
-            Mode::YulUpstream(mode) => mode.optimizations(),
             Mode::LLVM(mode) => mode.optimizations(),
         }
     }
 
     fn codegen(&self) -> Option<String> {
         match self {
-            Mode::Solc(mode) => mode.codegen(),
-            Mode::Solx(mode) => mode.codegen(),
+            Mode::Solidity(mode) => mode.codegen(),
             Mode::Yul(mode) => mode.codegen(),
-            Mode::YulUpstream(mode) => mode.codegen(),
             Mode::LLVM(mode) => mode.codegen(),
         }
     }
 
     fn version(&self) -> Option<String> {
         match self {
-            Mode::Solc(mode) => mode.version(),
-            Mode::Solx(mode) => mode.version(),
+            Mode::Solidity(mode) => mode.version(),
             Mode::Yul(mode) => mode.version(),
-            Mode::YulUpstream(mode) => mode.version(),
             Mode::LLVM(mode) => mode.version(),
         }
     }

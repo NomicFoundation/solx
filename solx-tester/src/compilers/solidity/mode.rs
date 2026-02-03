@@ -1,37 +1,35 @@
 //!
-//! `solx` tester Solidity mode.
+//! Unified Solidity mode for all toolchains.
 //!
 
 use itertools::Itertools;
 
-use crate::compilers::mode::llvm_options::LLVMOptions;
-
 use crate::compilers::mode::Mode as ModeWrapper;
 use crate::compilers::mode::imode::IMode;
+use crate::compilers::mode::llvm_options::LLVMOptions;
 
 ///
-/// `solx` tester Solidity mode.
+/// Unified Solidity mode for all toolchains.
 ///
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Mode {
     /// The Solidity compiler version.
     pub solc_version: semver::Version,
-    /// Whether to enable the EVMLA codegen via Yul IR.
+    /// Whether to enable the Yul IR path (true) or EVMLA path (false).
     pub via_ir: bool,
-    /// Whether to enable the MLIR codegen.
-    pub via_mlir: bool,
-    /// The optimizer settings.
-    pub llvm_optimizer_settings: solx_codegen_evm::OptimizerSettings,
+    /// The LLVM optimizer settings (used by solx toolchain).
+    pub llvm_optimizer_settings: Option<solx_codegen_evm::OptimizerSettings>,
+    /// Whether to run the solc optimizer (used by solc toolchain).
+    pub solc_optimize: Option<bool>,
 }
 
 impl Mode {
     ///
-    /// A shortcut constructor.
+    /// Creates a new mode for the solx toolchain.
     ///
-    pub fn new(
+    pub fn new_solx(
         solc_version: semver::Version,
         via_ir: bool,
-        via_mlir: bool,
         mut llvm_optimizer_settings: solx_codegen_evm::OptimizerSettings,
     ) -> Self {
         let llvm_options = LLVMOptions::get();
@@ -41,8 +39,20 @@ impl Mode {
         Self {
             solc_version,
             via_ir,
-            via_mlir,
-            llvm_optimizer_settings,
+            llvm_optimizer_settings: Some(llvm_optimizer_settings),
+            solc_optimize: None,
+        }
+    }
+
+    ///
+    /// Creates a new mode for the solc toolchain.
+    ///
+    pub fn new_solc(solc_version: semver::Version, via_ir: bool, solc_optimize: bool) -> Self {
+        Self {
+            solc_version,
+            via_ir,
+            llvm_optimizer_settings: None,
+            solc_optimize: Some(solc_optimize),
         }
     }
 
@@ -55,7 +65,7 @@ impl Mode {
     ///
     pub fn unwrap(mode: &ModeWrapper) -> &Self {
         match mode {
-            ModeWrapper::Solx(mode) => mode,
+            ModeWrapper::Solidity(mode) => mode,
             _ => panic!("Non-Solidity mode"),
         }
     }
@@ -91,24 +101,27 @@ impl Mode {
             params.compile_via_yul != solx_solc_test_adapter::CompileViaYul::True
         }
     }
+
+    ///
+    /// Returns whether this is a solx toolchain mode.
+    ///
+    pub fn is_solx(&self) -> bool {
+        self.llvm_optimizer_settings.is_some()
+    }
 }
 
 impl IMode for Mode {
     fn optimizations(&self) -> Option<String> {
-        Some(format!("+{}", self.llvm_optimizer_settings))
+        if let Some(ref llvm_settings) = self.llvm_optimizer_settings {
+            Some(format!("+{}", llvm_settings))
+        } else {
+            self.solc_optimize
+                .map(|optimize| (if optimize { "+" } else { "-" }).to_string())
+        }
     }
 
     fn codegen(&self) -> Option<String> {
-        Some(
-            if self.via_mlir {
-                "L"
-            } else if self.via_ir {
-                "Y"
-            } else {
-                "E"
-            }
-            .to_string(),
-        )
+        Some((if self.via_ir { "Y" } else { "E" }).to_string())
     }
 
     fn version(&self) -> Option<String> {

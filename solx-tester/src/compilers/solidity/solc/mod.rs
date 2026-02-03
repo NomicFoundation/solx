@@ -3,7 +3,6 @@
 //!
 
 pub mod compiler;
-pub mod mode;
 
 use std::path::Path;
 
@@ -11,14 +10,12 @@ use crate::compilers::Compiler;
 use crate::compilers::cache::Cache;
 use crate::compilers::mode::Mode;
 use crate::compilers::solidity::cache_key::CacheKey;
-use crate::compilers::solidity::codegen::Codegen;
-use crate::compilers::solidity::solx::mode::Mode as SolxMode;
-use crate::compilers::yul::mode_upstream::Mode as YulUpstreamMode;
+use crate::compilers::solidity::mode::Mode as SolidityMode;
+use crate::compilers::yul::mode::Mode as YulMode;
 use crate::revm::input::Input as EVMInput;
 use crate::toolchain::Toolchain;
 
 use self::compiler::Compiler as SolcUpstreamCompiler;
-use self::mode::Mode as SolcMode;
 
 ///
 /// The `solc` Solidity compiler.
@@ -41,16 +38,14 @@ lazy_static::lazy_static! {
     ///
     static ref SOLIDITY_MODES: Vec<Mode> = {
         let mut modes = Vec::new();
-        for (codegen, optimize, via_ir) in [
-            (Codegen::EVMLA, false, false),
-            (Codegen::EVMLA, false, true),
-            (Codegen::EVMLA, true, false),
-            (Codegen::EVMLA, true, true),
-            (Codegen::Yul, false, true),
-            (Codegen::Yul, true, true),
+        for (via_ir, optimize) in [
+            (false, false),
+            (false, true),
+            (true, false),
+            (true, true),
         ] {
-            for version in SolidityCompiler::all_versions(codegen, via_ir).expect("`solc` versions analysis error") {
-                modes.push(SolcMode::new(version, codegen, via_ir, false, optimize).into());
+            for version in SolidityCompiler::all_versions(via_ir).expect("`solc` versions analysis error") {
+                modes.push(SolidityMode::new_solc(version, via_ir, optimize).into());
             }
         }
         modes
@@ -63,11 +58,9 @@ lazy_static::lazy_static! {
     ///
     static ref YUL_MODES: Vec<Mode> = {
         let mut modes = Vec::new();
-        for optimize in [
-            false, true
-        ] {
-            for version in SolidityCompiler::all_versions(Codegen::Yul, true).expect("`solc` versions analysis error") {
-                modes.push(YulUpstreamMode::new(version, false, optimize).into());
+        for optimize in [false, true] {
+            for version in SolidityCompiler::all_versions(true).expect("`solc` versions analysis error") {
+                modes.push(YulMode::new_solc(version, optimize).into());
             }
         }
         modes
@@ -82,17 +75,11 @@ lazy_static::lazy_static! {
         solx_codegen_evm::OptimizerSettings::combinations()
             .into_iter()
             .map(|llvm_optimizer_settings| {
-                let llvm_optimizer_settings = solx_codegen_evm::OptimizerSettings::new(
-                    llvm_optimizer_settings.level_middle_end,
-                    match llvm_optimizer_settings.level_middle_end_size as u32 {
-                        0 => solx_codegen_evm::SizeLevel::Zero,
-                        1 => solx_codegen_evm::SizeLevel::S,
-                        2 => solx_codegen_evm::SizeLevel::Z,
-                        _ => panic!("Invalid size level"),
-                    },
-                    llvm_optimizer_settings.level_back_end,
-                );
-                SolxMode::new(SolidityCompiler::CURRENT_MLIR_VERSION, false, true, llvm_optimizer_settings).into()
+                SolidityMode::new_solx(
+                    SolidityCompiler::CURRENT_MLIR_VERSION,
+                    true,  // via_ir always true for MLIR
+                    llvm_optimizer_settings,
+                ).into()
             })
             .collect::<Vec<Mode>>()
     };
@@ -103,7 +90,12 @@ lazy_static::lazy_static! {
     /// All compilers must be downloaded before initialization.
     ///
     static ref YUL_MLIR_MODES: Vec<Mode> = {
-        vec![YulUpstreamMode::new(SolidityCompiler::CURRENT_MLIR_VERSION, true, false).into()]
+        solx_codegen_evm::OptimizerSettings::combinations()
+            .into_iter()
+            .map(|llvm_optimizer_settings| {
+                YulMode::new_solx(llvm_optimizer_settings).into()
+            })
+            .collect::<Vec<Mode>>()
     };
 }
 
@@ -147,9 +139,9 @@ impl SolidityCompiler {
     }
 
     ///
-    /// Returns the compiler versions downloaded for the specified compilation codegen.
+    /// Returns the compiler versions downloaded for the specified compilation mode.
     ///
-    pub fn all_versions(codegen: Codegen, via_ir: bool) -> anyhow::Result<Vec<semver::Version>> {
+    pub fn all_versions(via_ir: bool) -> anyhow::Result<Vec<semver::Version>> {
         let mut versions = Vec::new();
         for entry in std::fs::read_dir(Self::DIRECTORY_UPSTREAM)? {
             let entry = entry?;
@@ -177,13 +169,7 @@ impl SolidityCompiler {
                 Ok(version) => version,
                 Err(_) => continue,
             };
-            if Codegen::Yul == codegen && version < SolcUpstreamCompiler::FIRST_YUL_VERSION {
-                continue;
-            }
-            if Codegen::EVMLA == codegen
-                && via_ir
-                && version < SolcUpstreamCompiler::FIRST_VIA_IR_VERSION
-            {
+            if via_ir && version < SolcUpstreamCompiler::FIRST_VIA_IR_VERSION {
                 continue;
             }
 
@@ -203,46 +189,29 @@ impl SolidityCompiler {
         mode: &Mode,
         test_params: Option<&solx_solc_test_adapter::Params>,
     ) -> anyhow::Result<solx_standard_json::Output> {
-        let solc_version = match mode {
-            Mode::Solc(mode) => &mode.solc_version,
-            Mode::Solx(mode) => &mode.solc_version,
-            Mode::YulUpstream(mode) => &mode.solc_version,
+        let (solc_version, via_ir, optimizer_enabled) = match mode {
+            Mode::Solidity(mode) => (
+                &mode.solc_version,
+                mode.via_ir,
+                mode.solc_optimize.unwrap_or(false),
+            ),
+            Mode::Yul(mode) => {
+                let version = mode.solc_version.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("Yul mode requires solc_version for solc toolchain")
+                })?;
+                (version, true, mode.solc_optimize.unwrap_or(false))
+            }
             mode => anyhow::bail!("Unsupported mode: {mode}"),
         };
+
         let mut solc = Self::executable(toolchain, solc_version)?;
 
-        let output_selection = match mode {
-            Mode::Solc(mode) => {
-                solx_standard_json::InputSelection::new_required_for_testing(mode.via_ir)
-            }
-            Mode::Solx(mode) => {
-                solx_standard_json::InputSelection::new_required_for_testing(mode.via_ir)
-            }
-            Mode::YulUpstream(_mode) => {
-                solx_standard_json::InputSelection::new_required_for_testing(true)
-            }
-            mode => anyhow::bail!("Unsupported mode: {mode}"),
-        };
+        let output_selection = solx_standard_json::InputSelection::new_required_for_testing(via_ir);
 
         let evm_version = match mode {
-            Mode::Solc(_mode) => test_params.map(|params| params.evm_version.newest_matching()),
-            Mode::Solx(_mode) => None,
-            Mode::YulUpstream(_mode) => Some(solx_utils::EVMVersion::Cancun),
-            mode => anyhow::bail!("Unsupported mode: {mode}"),
-        };
-
-        let via_ir = match mode {
-            Mode::Solc(mode) => mode.via_ir,
-            Mode::Solx(mode) => mode.via_ir,
-            Mode::YulUpstream(_mode) => true,
-            mode => anyhow::bail!("Unsupported mode: {mode}"),
-        };
-
-        let optimizer_enabled = match mode {
-            Mode::Solc(mode) => mode.solc_optimize,
-            Mode::Solx(_mode) => false,
-            Mode::YulUpstream(mode) => mode.solc_optimize,
-            mode => anyhow::bail!("Unsupported mode: {mode}"),
+            Mode::Solidity(_) => test_params.map(|params| params.evm_version.newest_matching()),
+            Mode::Yul(_) => Some(solx_utils::EVMVersion::Cancun),
+            _ => None,
         };
 
         let debug = if solc_version >= &semver::Version::new(0, 6, 3) {
@@ -287,30 +256,25 @@ impl SolidityCompiler {
         test_params: Option<&solx_solc_test_adapter::Params>,
     ) -> anyhow::Result<solx_standard_json::Output> {
         let cache_key = match mode {
-            Mode::Solc(mode) => CacheKey::new(
+            Mode::Solidity(mode) => CacheKey::new(
                 test_path,
                 mode.solc_version.to_owned(),
-                Some(mode.solc_codegen),
                 mode.via_ir,
-                false,
-                mode.solc_optimize,
+                mode.solc_optimize.unwrap_or(false),
             ),
-            Mode::Solx(mode) => CacheKey::new(
-                test_path,
-                mode.solc_version.to_owned(),
-                None,
-                mode.via_ir,
-                mode.via_mlir,
-                false,
-            ),
-            Mode::YulUpstream(mode) => CacheKey::new(
-                test_path,
-                mode.solc_version.to_owned(),
-                Some(Codegen::Yul),
-                true,
-                false,
-                mode.solc_optimize,
-            ),
+            Mode::Yul(mode) => {
+                let version = mode
+                    .solc_version
+                    .as_ref()
+                    .ok_or_else(|| anyhow::anyhow!("Yul mode requires solc_version for caching"))?
+                    .to_owned();
+                CacheKey::new(
+                    test_path,
+                    version,
+                    true, // Yul is always via_ir
+                    mode.solc_optimize.unwrap_or(false),
+                )
+            }
             mode => anyhow::bail!("Unsupported mode: {mode}"),
         };
 

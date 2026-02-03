@@ -65,9 +65,7 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
         .build_global()
         .expect("Thread pool configuration failure");
 
-    let toolchain = arguments
-        .toolchain
-        .unwrap_or(solx_tester::Toolchain::Solx);
+    let toolchain = arguments.toolchain.unwrap_or(solx_tester::Toolchain::Solx);
 
     let mut executable_download_config_paths = Vec::with_capacity(1);
     if let Some(path) = match toolchain {

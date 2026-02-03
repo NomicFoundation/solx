@@ -2,8 +2,6 @@
 //! `solx` compiler.
 //!
 
-pub mod mode;
-
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::io::Write;
@@ -14,9 +12,8 @@ use itertools::Itertools;
 
 use crate::compilers::Compiler;
 use crate::compilers::mode::Mode;
+use crate::compilers::solidity::mode::Mode as SolidityMode;
 use crate::revm::input::Input as EVMInput;
-
-use self::mode::Mode as SolxMode;
 
 ///
 /// `solx` compiler.
@@ -155,7 +152,11 @@ impl Compiler for SolidityCompiler {
         llvm_options: Vec<String>,
         debug_config: Option<solx_codegen_evm::DebugConfig>,
     ) -> anyhow::Result<EVMInput> {
-        let solx_mode = SolxMode::unwrap(mode);
+        let solidity_mode = SolidityMode::unwrap(mode);
+        let llvm_settings = solidity_mode
+            .llvm_optimizer_settings
+            .as_ref()
+            .expect("solx Solidity mode must have LLVM settings");
 
         let sources_json: BTreeMap<String, solx_standard_json::InputSource> = sources
             .iter()
@@ -179,7 +180,7 @@ impl Compiler for SolidityCompiler {
         selectors.insert(solx_standard_json::InputSelector::AST);
         selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
         selectors.insert(solx_standard_json::InputSelector::Metadata);
-        selectors.insert(if solx_mode.via_ir {
+        selectors.insert(if solidity_mode.via_ir {
             solx_standard_json::InputSelector::Yul
         } else {
             solx_standard_json::InputSelector::EVMLegacyAssembly
@@ -189,13 +190,11 @@ impl Compiler for SolidityCompiler {
             libraries,
             BTreeSet::new(),
             solx_standard_json::InputOptimizer::new(
-                solx_mode.llvm_optimizer_settings.middle_end_as_char(),
-                solx_mode
-                    .llvm_optimizer_settings
-                    .is_fallback_to_size_enabled,
+                llvm_settings.middle_end_as_char(),
+                llvm_settings.is_fallback_to_size_enabled,
             ),
             evm_version,
-            solx_mode.via_ir,
+            solidity_mode.via_ir,
             &solx_standard_json::InputSelection::new(selectors),
             solx_standard_json::InputMetadata::default(),
             llvm_options,
@@ -240,7 +239,7 @@ impl Compiler for SolidityCompiler {
             .into_iter()
             .cartesian_product(solc_codegen_versions)
             .map(|(llvm_optimizer_settings, (via_ir, version))| {
-                SolxMode::new(version, via_ir, false, llvm_optimizer_settings).into()
+                SolidityMode::new_solx(version, via_ir, llvm_optimizer_settings).into()
             })
             .collect::<Vec<Mode>>()
     }
