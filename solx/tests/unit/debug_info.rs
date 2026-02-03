@@ -88,6 +88,81 @@ fn debug_info_simple_contract() {
 }
 
 #[test]
+fn debug_info_simple_contract_evmla() {
+    let sources =
+        crate::common::read_sources(&["tests/data/contracts/solidity/SimpleContract.sol"]);
+    let output = crate::common::build_solidity_standard_json_debug_info_evmla(sources)
+        .expect("Build failed");
+
+    let contracts = output
+        .contracts
+        .get("tests/data/contracts/solidity/SimpleContract.sol")
+        .expect("Contract file not found");
+
+    let contract = contracts.get("SimpleContract").expect("Contract not found");
+
+    let evm = contract.evm.as_ref().expect("EVM output not found");
+
+    // Check deploy bytecode debug info
+    let bytecode = evm.bytecode.as_ref().expect("Bytecode not found");
+    let debug_info_hex = bytecode
+        .debug_info
+        .as_ref()
+        .expect("Debug info not found in bytecode");
+    let bytecode_hex = bytecode.object.as_ref().expect("Bytecode object not found");
+    let bytecode_length = get_bytecode_length(bytecode_hex);
+
+    let functions = parse_debug_info_functions(debug_info_hex).expect("Failed to parse debug info");
+
+    assert!(!functions.is_empty(), "No functions found in debug info");
+
+    // Verify all function addresses are within bytecode bounds
+    for (function_name, address) in functions.iter() {
+        assert!(
+            (*address as usize) < bytecode_length,
+            "Function '{}' has address {} which is outside bytecode length {}",
+            function_name,
+            address,
+            bytecode_length
+        );
+    }
+
+    // Check runtime bytecode debug info
+    let deployed_bytecode = evm
+        .deployed_bytecode
+        .as_ref()
+        .expect("Deployed bytecode not found");
+    let runtime_debug_info_hex = deployed_bytecode
+        .debug_info
+        .as_ref()
+        .expect("Debug info not found in deployed bytecode");
+    let runtime_bytecode_hex = deployed_bytecode
+        .object
+        .as_ref()
+        .expect("Deployed bytecode object not found");
+    let runtime_bytecode_length = get_bytecode_length(runtime_bytecode_hex);
+
+    let runtime_functions = parse_debug_info_functions(runtime_debug_info_hex)
+        .expect("Failed to parse runtime debug info");
+
+    assert!(
+        !runtime_functions.is_empty(),
+        "No functions found in runtime debug info"
+    );
+
+    // Verify all runtime function addresses are within runtime bytecode bounds
+    for (function_name, address) in runtime_functions.iter() {
+        assert!(
+            (*address as usize) < runtime_bytecode_length,
+            "Runtime function '{}' has address {} which is outside runtime bytecode length {}",
+            function_name,
+            address,
+            runtime_bytecode_length
+        );
+    }
+}
+
+#[test]
 fn debug_info_complex_contract() {
     let sources = crate::common::read_sources(&["tests/data/contracts/solidity/Test.sol"]);
     let output =

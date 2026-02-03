@@ -503,6 +503,19 @@ impl Project {
                     Some(ContractIR::EVMLegacyAssembly(mut deploy_code)) => {
                         let runtime_code: ContractEVMLegacyAssembly =
                             *deploy_code.runtime_code.take().expect("Always exists");
+
+                        // Filter debug info to current contract
+                        if let Some(ref mut debug_info) = deploy_debug_info {
+                            if let Some(contract_name) = contract_name.name.as_deref() {
+                                debug_info.retain_current_contract(contract_name);
+                            }
+                        }
+                        if let Some(ref mut debug_info) = runtime_debug_info {
+                            if let Some(contract_name) = contract_name.name.as_deref() {
+                                debug_info.retain_current_contract(contract_name);
+                            }
+                        }
+
                         (deploy_code.into(), runtime_code.into())
                     }
                     Some(ContractIR::LLVMIR(runtime_code)) => {
