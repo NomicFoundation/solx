@@ -24,6 +24,7 @@ use crate::yul::lexer::token::Token;
 use crate::yul::lexer::token::lexeme::Lexeme;
 use crate::yul::lexer::token::lexeme::keyword::Keyword;
 use crate::yul::lexer::token::location::Location;
+use crate::yul::parser::dialect::Dialect;
 use crate::yul::parser::error::Error as ParserError;
 
 use self::assignment::Assignment;
@@ -39,8 +40,6 @@ use self::leave::Leave;
 use self::object::Object;
 use self::switch::Switch;
 use self::variable_declaration::VariableDeclaration;
-
-use super::dialect::Dialect;
 
 ///
 /// The Yul block statement.

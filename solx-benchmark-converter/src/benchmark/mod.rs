@@ -100,30 +100,15 @@ impl Benchmark {
                 .tests
                 .entry(name)
                 .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
-            let existing_toolchain_group = existing_test
-                .toolchain_groups
-                .entry(toolchain.clone())
-                .or_default();
-            for toolchain_group in test.toolchain_groups.into_values() {
-                for (codegen, codegen_groups) in toolchain_group.codegen_groups.into_iter() {
-                    for (version, versioned_group) in codegen_groups.versioned_groups.into_iter() {
-                        for (executable, executable_group) in
-                            versioned_group.executables.into_iter()
-                        {
-                            let existing_executable = existing_toolchain_group
-                                .codegen_groups
-                                .entry(codegen.clone())
-                                .or_default()
-                                .versioned_groups
-                                .entry(version.clone())
-                                .or_default()
-                                .executables
-                                .entry(executable.clone())
-                                .or_default();
-                            existing_executable.run.extend(&executable_group.run);
-                        }
-                    }
-                }
+
+            for (mode, run) in test.runs.into_iter() {
+                // Prefix with toolchain if not already present
+                let mode_key = if mode.starts_with(&toolchain) {
+                    mode
+                } else {
+                    format!("{toolchain}-{mode}")
+                };
+                existing_test.runs.entry(mode_key).or_default().extend(&run);
             }
         }
     }
@@ -151,20 +136,8 @@ impl Benchmark {
                 .tests
                 .entry(name)
                 .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
-            let run = test
-                .toolchain_groups
-                .entry(toolchain.clone())
-                .or_default()
-                .codegen_groups
-                .entry(None)
-                .or_default()
-                .versioned_groups
-                .entry(None)
-                .or_default()
-                .executables
-                .entry(None)
-                .or_default();
-            run.run.gas.push(contract_report.deployment.gas);
+            let run = test.runs.entry(toolchain.clone()).or_default();
+            run.gas.push(contract_report.deployment.gas);
 
             for (index, (function, function_report)) in
                 contract_report.functions.into_iter().enumerate()
@@ -183,20 +156,8 @@ impl Benchmark {
                     .tests
                     .entry(name)
                     .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
-                let run = test
-                    .toolchain_groups
-                    .entry(toolchain.clone())
-                    .or_default()
-                    .codegen_groups
-                    .entry(None)
-                    .or_default()
-                    .versioned_groups
-                    .entry(None)
-                    .or_default()
-                    .executables
-                    .entry(None)
-                    .or_default();
-                run.run.gas.push(function_report.mean);
+                let run = test.runs.entry(toolchain.clone()).or_default();
+                run.gas.push(function_report.mean);
             }
         }
 
@@ -226,21 +187,9 @@ impl Benchmark {
                 .tests
                 .entry(name)
                 .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
-            let run = test
-                .toolchain_groups
-                .entry(toolchain.clone())
-                .or_default()
-                .codegen_groups
-                .entry(None)
-                .or_default()
-                .versioned_groups
-                .entry(None)
-                .or_default()
-                .executables
-                .entry(None)
-                .or_default();
-            run.run.size.push(contract_report.init_size);
-            run.run.runtime_size.push(contract_report.runtime_size);
+            let run = test.runs.entry(toolchain.clone()).or_default();
+            run.size.push(contract_report.init_size);
+            run.runtime_size.push(contract_report.runtime_size);
         }
 
         Ok(())
@@ -266,20 +215,8 @@ impl Benchmark {
             .tests
             .entry(name)
             .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
-        let run = test
-            .toolchain_groups
-            .entry(toolchain.clone())
-            .or_default()
-            .codegen_groups
-            .entry(None)
-            .or_default()
-            .versioned_groups
-            .entry(None)
-            .or_default()
-            .executables
-            .entry(None)
-            .or_default();
-        run.run.compilation_time.push(compilation_time.0);
+        let run = test.runs.entry(toolchain.clone()).or_default();
+        run.compilation_time.push(compilation_time.0);
 
         Ok(())
     }
@@ -304,20 +241,8 @@ impl Benchmark {
             .tests
             .entry(name)
             .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
-        let run = test
-            .toolchain_groups
-            .entry(toolchain.clone())
-            .or_default()
-            .codegen_groups
-            .entry(None)
-            .or_default()
-            .versioned_groups
-            .entry(None)
-            .or_default()
-            .executables
-            .entry(None)
-            .or_default();
-        run.run.testing_time.push(testing_time.0);
+        let run = test.runs.entry(toolchain.clone()).or_default();
+        run.testing_time.push(testing_time.0);
 
         Ok(())
     }
@@ -342,20 +267,8 @@ impl Benchmark {
             .tests
             .entry(name)
             .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
-        let run = test
-            .toolchain_groups
-            .entry(toolchain.clone())
-            .or_default()
-            .codegen_groups
-            .entry(None)
-            .or_default()
-            .versioned_groups
-            .entry(None)
-            .or_default()
-            .executables
-            .entry(None)
-            .or_default();
-        run.run.build_failures = build_failures.0;
+        let run = test.runs.entry(toolchain.clone()).or_default();
+        run.build_failures = build_failures.0;
 
         Ok(())
     }
@@ -380,20 +293,8 @@ impl Benchmark {
             .tests
             .entry(name)
             .or_insert_with(|| Test::new(TestMetadata::new(selector, vec![])));
-        let run = test
-            .toolchain_groups
-            .entry(toolchain.clone())
-            .or_default()
-            .codegen_groups
-            .entry(None)
-            .or_default()
-            .versioned_groups
-            .entry(None)
-            .or_default()
-            .executables
-            .entry(None)
-            .or_default();
-        run.run.test_failures = test_failures.0;
+        let run = test.runs.entry(toolchain.clone()).or_default();
+        run.test_failures = test_failures.0;
 
         Ok(())
     }
@@ -403,42 +304,19 @@ impl Benchmark {
     ///
     pub fn remove_zero_deploy_gas(&mut self) {
         self.tests.retain(|_, test| {
-            if test.toolchain_groups.is_empty() {
+            if test.runs.is_empty() {
                 return false;
             }
             if !test.is_deploy() {
                 return true;
             }
             test.non_zero_gas_values = test
-                .toolchain_groups
+                .runs
                 .values()
-                .filter(|group| {
-                    group.codegen_groups.values().any(|codegen_group| {
-                        codegen_group
-                            .versioned_groups
-                            .values()
-                            .any(|versioned_group| {
-                                versioned_group
-                                    .executables
-                                    .values()
-                                    .any(|executable| executable.run.average_gas() != 0)
-                            })
-                    })
-                })
+                .filter(|run| run.average_gas() != 0)
                 .count();
-            test.toolchain_groups.values().any(|group| {
-                group.codegen_groups.values().any(|codegen_group| {
-                    codegen_group
-                        .versioned_groups
-                        .values()
-                        .any(|versioned_group| {
-                            versioned_group.executables.values().any(|executable| {
-                                executable.run.average_size() != 0
-                                    || executable.run.average_runtime_size() != 0
-                                    || executable.run.average_gas() != 0
-                            })
-                        })
-                })
+            test.runs.values().any(|run| {
+                run.average_size() != 0 || run.average_runtime_size() != 0 || run.average_gas() != 0
             })
         });
     }

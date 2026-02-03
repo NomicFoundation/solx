@@ -3,8 +3,7 @@
 //!
 
 use crate::declare_wrapper;
-
-use super::dialect::era::EraDialect;
+use crate::yul::parser::dialect::era::EraDialect;
 
 pub mod assignment;
 pub mod block;

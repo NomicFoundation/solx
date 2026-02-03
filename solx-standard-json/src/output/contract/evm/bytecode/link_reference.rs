@@ -5,7 +5,7 @@
 ///
 /// The `solc --standard-json` output contract EVM bytecode link reference.
 ///
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkReference {
     /// Start offset in the bytecode.

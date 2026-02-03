@@ -60,8 +60,8 @@ pub struct Arguments {
     pub solx: Option<PathBuf>,
 
     /// Specify the compiler toolchain.
-    /// Available arguments: `ir-llvm`, `solc`, `solc-llvm`.
-    /// Is set to `ir-llvm` by default.
+    /// Available arguments: `solx`, `solc`, `solx-mlir`.
+    /// Is set to `solx` by default.
     #[structopt(long)]
     pub toolchain: Option<solx_tester::Toolchain>,
 

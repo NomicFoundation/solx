@@ -2,7 +2,7 @@
 //! Context used to process test inputs, organized in test cases.
 //!
 
-use super::case::CaseContext;
+use crate::test::context::case::CaseContext;
 
 ///
 /// Context used to process test inputs, organized in test cases.

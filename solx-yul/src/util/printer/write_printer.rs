@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 
-use super::IPrinter;
+use crate::util::printer::IPrinter;
 
 ///
 /// State of the printer

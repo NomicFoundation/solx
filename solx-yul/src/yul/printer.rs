@@ -4,6 +4,7 @@
 
 use crate::util::printer::IPrinter;
 use crate::util::printer::print_list_comma_separated;
+use crate::yul::parser::dialect::Dialect;
 use crate::yul::parser::statement::Statement;
 use crate::yul::parser::statement::assignment::Assignment;
 use crate::yul::parser::statement::block::Block;
@@ -19,8 +20,6 @@ use crate::yul::parser::statement::object::Object;
 use crate::yul::parser::statement::switch::Switch;
 use crate::yul::parser::statement::variable_declaration::VariableDeclaration;
 use crate::yul::visitor::Visitor;
-
-use super::parser::dialect::Dialect;
 
 impl<T, P> Visitor<P> for T
 where
@@ -123,7 +122,7 @@ where
 
     fn visit_literal(&mut self, lit: &Literal) {
         let inner = &lit.inner;
-        if let super::lexer::token::lexeme::literal::Literal::String(_) = inner {
+        if let crate::yul::lexer::token::lexeme::literal::Literal::String(_) = inner {
             self.print(format!("\"{inner}\"").as_str()).unwrap();
         } else {
             self.print(format!("{inner}").as_str()).unwrap();

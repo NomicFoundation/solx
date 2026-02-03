@@ -10,8 +10,7 @@ use serde::Serialize;
 
 use crate::yul::error::Error;
 use crate::yul::lexer::Lexer;
-
-use super::identifier::Identifier;
+use crate::yul::parser::identifier::Identifier;
 
 ///
 /// Describes a pragmatic, target-specific part of the parser.

@@ -6,9 +6,9 @@ use std::ops::Add;
 use std::ops::BitXor;
 use std::str::FromStr;
 
-use super::alignment::Alignment;
 use crate::test::function_call::parser::lexical::IntegerLiteral as LexicalIntegerLiteral;
 use crate::test::function_call::parser::lexical::Location;
+use crate::test::function_call::parser::syntax::tree::literal::alignment::Alignment;
 
 ///
 /// The integer literal.

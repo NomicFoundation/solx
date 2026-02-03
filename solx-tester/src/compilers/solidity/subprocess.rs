@@ -1,34 +1,20 @@
 //!
-//! The Solidity compiler.
+//! The solc subprocess wrapper.
 //!
-
-pub mod standard_json;
 
 use std::io::Write;
 
-use self::standard_json::input::Input as StandardJsonInput;
-use self::standard_json::output::Output as StandardJsonOutput;
-
 ///
-/// The Solidity compiler.
+/// The solc subprocess wrapper.
 ///
-pub struct Compiler {
+pub struct Subprocess {
     /// The executable name.
     pub executable: String,
 }
 
-impl Compiler {
-    /// The first version of `solc`, where Yul codegen is considered robust enough.
-    pub const FIRST_YUL_VERSION: semver::Version = semver::Version::new(0, 8, 0);
-
-    /// The first version of `solc`, where `--via-ir` codegen mode is supported.
-    pub const FIRST_VIA_IR_VERSION: semver::Version = semver::Version::new(0, 8, 13);
-
+impl Subprocess {
     ///
     /// A shortcut constructor.
-    ///
-    /// Different tools may use different `executable` names. For example, the integration tester
-    /// uses `solc-<version>` format.
     ///
     pub fn new(executable: String) -> anyhow::Result<Self> {
         if let Err(error) = which::which(executable.as_str()) {
@@ -38,15 +24,15 @@ impl Compiler {
     }
 
     ///
-    /// Compiles the Solidity `--standard-json` input into Yul IR.
+    /// Runs the solc `--standard-json` command.
     ///
     pub fn standard_json(
         &mut self,
-        input: StandardJsonInput,
+        input: solx_standard_json::Input,
         base_path: Option<String>,
         include_paths: Vec<String>,
         allow_paths: Option<String>,
-    ) -> anyhow::Result<StandardJsonOutput> {
+    ) -> anyhow::Result<solx_standard_json::Output> {
         let mut command = std::process::Command::new(self.executable.as_str());
         command.stdin(std::process::Stdio::piped());
         command.stdout(std::process::Stdio::piped());
@@ -90,7 +76,7 @@ impl Compiler {
             );
         }
 
-        let output: StandardJsonOutput =
+        let output: solx_standard_json::Output =
             solx_utils::deserialize_from_slice(output.stdout.as_slice()).map_err(|error| {
                 anyhow::anyhow!(
                     "{} subprocess output parsing error: {}\n{}",

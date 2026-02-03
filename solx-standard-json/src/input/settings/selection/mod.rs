@@ -207,4 +207,32 @@ impl Selection {
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
+
+    ///
+    /// Creates the selection required for testing.
+    ///
+    /// Selects AST, bytecode, deployedBytecode, methodIdentifiers, and either Yul or EVMLegacyAssembly.
+    ///
+    pub fn new_required_for_testing(via_ir: bool) -> Self {
+        let mut per_file_selectors = BTreeSet::new();
+        per_file_selectors.insert(Selector::AST);
+
+        let mut per_contract_selectors = BTreeSet::new();
+        per_contract_selectors.insert(Selector::Bytecode);
+        per_contract_selectors.insert(Selector::RuntimeBytecode);
+        per_contract_selectors.insert(Selector::MethodIdentifiers);
+        per_contract_selectors.insert(if via_ir {
+            Selector::Yul
+        } else {
+            Selector::EVMLegacyAssembly
+        });
+
+        let mut file_level = BTreeMap::new();
+        let mut contract_level = BTreeMap::new();
+        contract_level.insert(Self::ANY_CONTRACT.to_owned(), per_file_selectors);
+        contract_level.insert(Self::WILDCARD.to_owned(), per_contract_selectors);
+        file_level.insert(Self::WILDCARD.to_owned(), contract_level);
+
+        Self { inner: file_level }
+    }
 }

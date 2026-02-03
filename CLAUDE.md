@@ -88,7 +88,7 @@ cargo test --test cli
 
 ## Code Style
 
-- **Imports**: One item per line (no grouped imports like `use foo::{A, B}`), for easy `dd` deletion in vim
+- **Imports**: One item per line (no grouped imports like `use foo::{A, B}`), for easy `dd` deletion in vim. Order: `std`, external crates, workspace crates, `crate`, `self` (separated by an empty line)
 - **Variable names**: No contractions — use `error` not `e`, `address` not `addr`, `transaction` not `tx`
 - **References**: Prefer `.as_ref()` over `&` for Option/Result types
 - **Control flow**: Reduce nesting with `let ... else { continue }` pattern in loops instead of nested `if let`

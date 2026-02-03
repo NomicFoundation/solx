@@ -16,7 +16,7 @@ use self::source_location::SourceLocation;
 ///
 /// `solc --standard-json` output error.
 ///
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Error {
     /// The component type.

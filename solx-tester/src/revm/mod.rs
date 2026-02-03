@@ -413,7 +413,7 @@ impl REVM {
             .with_bundle_update()
             .build();
 
-        Context::new(state, revm::primitives::hardfork::PRAGUE)
+        Context::new(state, revm::primitives::hardfork::OSAKA)
     }
 
     ///
@@ -439,5 +439,6 @@ impl REVM {
         evm.block.timestamp = revm::primitives::U256::from(Self::BLOCK_TIMESTAMP);
         evm.tx.chain_id = Some(Self::CHAIND_ID);
         evm.cfg.disable_nonce_check = true;
+        evm.cfg.tx_gas_limit_cap = Some(u64::MAX);
     }
 }

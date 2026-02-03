@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::FSEntity;
+use crate::index::FSEntity;
 
 ///
 /// The Solidity tests directory file system entity.

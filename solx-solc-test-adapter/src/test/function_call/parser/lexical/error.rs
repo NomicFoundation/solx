@@ -2,9 +2,9 @@
 //! The lexical parser error.
 //!
 
-use super::token::lexeme::literal::hex::Hex;
-use super::token::lexeme::literal::integer::Integer;
-use super::token::location::Location;
+use crate::test::function_call::parser::lexical::token::lexeme::literal::hex::Hex;
+use crate::test::function_call::parser::lexical::token::lexeme::literal::integer::Integer;
+use crate::test::function_call::parser::lexical::token::location::Location;
 
 ///
 /// The lexical parser error.

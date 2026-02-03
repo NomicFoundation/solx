@@ -34,8 +34,8 @@ cargo build --release
 # Run tests for a specific file
 ./target/release/solx-tester --solx ./target/release/solx --path tests/solidity/simple/default.sol
 
-# Run tests matching a mode
-./target/release/solx-tester --solx ./target/release/solx --mode "Y+M3B3 0.8.33"
+# Run tests matching a mode (format: "<codegen> <optimizer> <version>")
+./target/release/solx-tester --solx ./target/release/solx --mode "Y M3B3 0.8.33"
 ```
 
 ## Foundry and Hardhat Projects
@@ -101,9 +101,9 @@ Metadata is a JSON object that contains the following fields:
 - `modes` — An optional field that specifies mode filters. `Y` stands for Yul pipeline, `E` for EVM assembly pipeline. Compiler versions can be specified as SemVer ranges:
 ```json
 "modes": [
-    "Y+",
-    "E+",
-    "E+ >=0.8.30"
+    "Y",
+    "E",
+    "E >=0.8.30"
 ]
 ```
 - `group` — An optional string field that specifies a test group for benchmarking.

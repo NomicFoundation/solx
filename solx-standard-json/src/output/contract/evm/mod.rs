@@ -11,7 +11,7 @@ use self::bytecode::Bytecode;
 ///
 /// The `solc --standard-json` output contract EVM data.
 ///
-#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EVM {
     /// The contract deploy bytecode.

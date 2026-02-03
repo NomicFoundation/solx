@@ -12,12 +12,11 @@ use crate::compilers::mode::Mode;
 use crate::directories::matter_labs::test::metadata::case::Case as MatterLabsTestCase;
 use crate::revm::REVM;
 use crate::summary::Summary;
+use crate::test::context::case::CaseContext;
+use crate::test::context::input::InputContext;
 use crate::test::instance::Instance;
 
 use self::input::Input;
-
-use super::CaseContext;
-use super::InputContext;
 
 ///
 /// The test case.

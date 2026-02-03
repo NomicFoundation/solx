@@ -7,12 +7,12 @@
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize)]
 pub enum Toolchain {
-    /// The default LLVM-based compiler: `solx` for EVM.
-    IrLLVM,
     /// The upstream `solc` compiler.
     Solc,
+    /// The default LLVM-based compiler: `solx` for EVM.
+    Solx,
     /// The forked `solc` compiler with MLIR.
-    SolcLLVM,
+    SolxMlir,
 }
 
 impl std::str::FromStr for Toolchain {
@@ -20,13 +20,13 @@ impl std::str::FromStr for Toolchain {
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         match string {
-            "ir-llvm" => Ok(Self::IrLLVM),
             "solc" => Ok(Self::Solc),
-            "solc-llvm" => Ok(Self::SolcLLVM),
+            "solx" => Ok(Self::Solx),
+            "solx-mlir" => Ok(Self::SolxMlir),
             string => anyhow::bail!(
-                "Unknown target `{}`. Supported targets: {}",
+                "Unknown toolchain `{}`. Supported toolchains: {}",
                 string,
-                vec![Self::IrLLVM, Self::Solc, Self::SolcLLVM]
+                vec![Self::Solx, Self::Solc, Self::SolxMlir]
                     .into_iter()
                     .map(|element| element.to_string())
                     .collect::<Vec<String>>()
@@ -39,9 +39,9 @@ impl std::str::FromStr for Toolchain {
 impl std::fmt::Display for Toolchain {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::IrLLVM => write!(f, "ir-llvm"),
             Self::Solc => write!(f, "solc"),
-            Self::SolcLLVM => write!(f, "solc-llvm"),
+            Self::Solx => write!(f, "solx"),
+            Self::SolxMlir => write!(f, "solx-mlir"),
         }
     }
 }

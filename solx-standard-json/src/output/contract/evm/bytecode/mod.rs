@@ -11,7 +11,7 @@ use self::link_reference::LinkReference;
 ///
 /// The `solc --standard-json` output contract EVM bytecode.
 ///
-#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Bytecode {
     /// Bytecode object.

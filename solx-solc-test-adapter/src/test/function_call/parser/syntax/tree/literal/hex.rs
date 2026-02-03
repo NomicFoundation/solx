@@ -4,9 +4,9 @@
 
 use std::str::FromStr;
 
-use super::alignment::Alignment;
 use crate::test::function_call::parser::lexical::HexLiteral as LexicalHexLiteral;
 use crate::test::function_call::parser::lexical::Location;
+use crate::test::function_call::parser::syntax::tree::literal::alignment::Alignment;
 
 ///
 /// The hex literal.

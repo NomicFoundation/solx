@@ -13,6 +13,7 @@ pub use crate::benchmark::Benchmark;
 pub use crate::benchmark::test::Test as BenchmarkTest;
 pub use crate::benchmark::test::input::Input as BenchmarkTestInput;
 pub use crate::benchmark::test::metadata::Metadata as BenchmarkTestMetadata;
+pub use crate::benchmark::test::run::Run as BenchmarkTestRun;
 pub use crate::benchmark::test::selector::Selector as BenchmarkTestSelector;
 pub use crate::input::Input;
 pub use crate::input::Report as InputReport;

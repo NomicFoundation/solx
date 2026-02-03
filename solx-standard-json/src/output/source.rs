@@ -11,7 +11,7 @@ use crate::input::source::Source as StandardJsonInputSource;
 ///
 /// The `solc --standard-json` output source.
 ///
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Source {
     /// Source code ID.
@@ -29,6 +29,29 @@ impl Source {
     ///
     pub fn new(id: usize) -> Self {
         Self { id, ast: None }
+    }
+
+    ///
+    /// Returns the name of the last contract in the AST.
+    ///
+    pub fn last_contract_name(&self) -> anyhow::Result<String> {
+        self.ast
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("The AST is empty"))?
+            .get("nodes")
+            .and_then(|value| value.as_array())
+            .ok_or_else(|| {
+                anyhow::anyhow!("The last contract cannot be found in an empty list of nodes")
+            })?
+            .iter()
+            .filter_map(
+                |node| match node.get("nodeType").and_then(|node| node.as_str()) {
+                    Some("ContractDefinition") => Some(node.get("name")?.as_str()?.to_owned()),
+                    _ => None,
+                },
+            )
+            .next_back()
+            .ok_or_else(|| anyhow::anyhow!("The last contract not found in the AST"))
     }
 
     ///

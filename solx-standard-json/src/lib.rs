@@ -16,6 +16,7 @@ pub mod version;
 pub use self::input::Input;
 pub use self::input::language::Language as InputLanguage;
 pub use self::input::settings::Settings as InputSettings;
+pub use self::input::settings::debug::Debug as InputDebug;
 pub use self::input::settings::metadata::Metadata as InputMetadata;
 pub use self::input::settings::optimizer::Optimizer as InputOptimizer;
 pub use self::input::settings::selection::Selection as InputSelection;
