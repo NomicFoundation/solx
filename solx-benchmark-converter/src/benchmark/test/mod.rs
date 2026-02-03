@@ -1,11 +1,11 @@
 //!
-//! The benchmark group representation.
+//! The benchmark test representation.
 //!
 
 pub mod input;
 pub mod metadata;
+pub mod run;
 pub mod selector;
-pub mod toolchain;
 
 use std::collections::BTreeMap;
 
@@ -13,25 +13,23 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use self::metadata::Metadata;
-use self::toolchain::ToolchainGroup;
+use self::run::Run;
 
 ///
-/// The codegen associated with a test definition.
+/// The benchmark test representation.
 ///
-pub type Toolchain = String;
-
-///
-/// The benchmark group representation.
+/// Each test can have multiple runs with different compiler modes.
 ///
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct Test {
     /// Metadata for this test.
     #[serde(default)]
     pub metadata: Metadata,
-    /// Toolchain groups.
-    pub toolchain_groups: BTreeMap<Toolchain, ToolchainGroup>,
+    /// Runs keyed by mode string (e.g., "solx-Y+M3B3-0.8.28" or "solc").
+    #[serde(default)]
+    pub runs: BTreeMap<String, Run>,
 
-    /// The number of non-zero gas values across all toolchains.
+    /// The number of non-zero gas values across all runs.
     #[serde(skip)]
     pub non_zero_gas_values: usize,
 }
@@ -42,9 +40,8 @@ impl Test {
     ///
     pub fn new(metadata: Metadata) -> Self {
         Self {
-            toolchain_groups: Default::default(),
             metadata,
-
+            runs: Default::default(),
             non_zero_gas_values: 0,
         }
     }

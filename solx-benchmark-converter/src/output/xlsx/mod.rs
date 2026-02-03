@@ -160,118 +160,97 @@ impl TryFrom<(Benchmark, Vec<Comparison>)> for Xlsx {
                 }
             }
 
-            for (toolchain_name, toolchain_group) in test.toolchain_groups.into_iter() {
-                for (codegen_name, codegen_group) in toolchain_group.codegen_groups.into_iter() {
-                    for (version_name, version_group) in codegen_group.versioned_groups.into_iter()
-                    {
-                        for (optimization_name, optimization_group) in
-                            version_group.executables.into_iter()
-                        {
-                            let mut toolchain_name = toolchain_name.clone();
-                            if let Some(codegen_name) = codegen_name.as_ref() {
-                                toolchain_name = format!("{toolchain_name}-{codegen_name}");
-                            }
-                            if let Some(version_name) = version_name.as_ref() {
-                                toolchain_name = format!("{toolchain_name}-{version_name}");
-                            }
-                            if let Some(optimization_name) = optimization_name.as_ref() {
-                                toolchain_name = format!("{toolchain_name}-{optimization_name}");
-                            }
-                            let toolchain_id = xlsx.get_toolchain_id(toolchain_name.as_str());
+            for (mode_name, run) in test.runs.into_iter() {
+                let toolchain_id = xlsx.get_toolchain_id(mode_name.as_str());
 
-                            if !optimization_group.run.compilation_time.is_empty() {
-                                xlsx.compilation_time_worksheet
-                                    .add_toolchain_column(toolchain_name.as_str(), toolchain_id)?;
-                                xlsx.compilation_time_worksheet.write_test_value(
-                                    project.as_str(),
-                                    None,
-                                    None,
-                                    toolchain_id,
-                                    optimization_group.run.average_compilation_time(),
-                                )?;
-                            }
-                            if !optimization_group.run.testing_time.is_empty() {
-                                xlsx.testing_time_worksheet
-                                    .add_toolchain_column(toolchain_name.as_str(), toolchain_id)?;
-                                xlsx.testing_time_worksheet.write_test_value(
-                                    project.as_str(),
-                                    None,
-                                    None,
-                                    toolchain_id,
-                                    optimization_group.run.average_testing_time(),
-                                )?;
-                            }
-                            xlsx.build_failures_worksheet
-                                .add_toolchain_column(toolchain_name.as_str(), toolchain_id)?;
-                            xlsx.build_failures_worksheet.write_test_value(
-                                project.as_str(),
-                                None,
-                                None,
-                                toolchain_id,
-                                optimization_group.run.build_failures_count() as u64,
-                            )?;
-                            xlsx.test_failures_worksheet
-                                .add_toolchain_column(toolchain_name.as_str(), toolchain_id)?;
-                            xlsx.test_failures_worksheet.write_test_value(
-                                project.as_str(),
-                                None,
-                                None,
-                                toolchain_id,
-                                optimization_group.run.test_failures_count() as u64,
-                            )?;
+                if !run.compilation_time.is_empty() {
+                    xlsx.compilation_time_worksheet
+                        .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
+                    xlsx.compilation_time_worksheet.write_test_value(
+                        project.as_str(),
+                        None,
+                        None,
+                        toolchain_id,
+                        run.average_compilation_time(),
+                    )?;
+                }
+                if !run.testing_time.is_empty() {
+                    xlsx.testing_time_worksheet
+                        .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
+                    xlsx.testing_time_worksheet.write_test_value(
+                        project.as_str(),
+                        None,
+                        None,
+                        toolchain_id,
+                        run.average_testing_time(),
+                    )?;
+                }
+                xlsx.build_failures_worksheet
+                    .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
+                xlsx.build_failures_worksheet.write_test_value(
+                    project.as_str(),
+                    None,
+                    None,
+                    toolchain_id,
+                    run.build_failures_count() as u64,
+                )?;
+                xlsx.test_failures_worksheet
+                    .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
+                xlsx.test_failures_worksheet.write_test_value(
+                    project.as_str(),
+                    None,
+                    None,
+                    toolchain_id,
+                    run.test_failures_count() as u64,
+                )?;
 
-                            if contract.is_none() && function.is_none() {
-                                continue;
-                            }
-                            if is_deployer {
-                                if test.non_zero_gas_values > 0 {
-                                    xlsx.deploy_fee_worksheet.add_toolchain_column(
-                                        toolchain_name.as_str(),
-                                        toolchain_id,
-                                    )?;
-                                    xlsx.deploy_fee_worksheet.write_test_value(
-                                        project.as_str(),
-                                        contract,
-                                        None,
-                                        toolchain_id,
-                                        optimization_group.run.average_gas(),
-                                    )?;
-                                }
-                            } else {
-                                xlsx.runtime_fee_worksheet
-                                    .add_toolchain_column(toolchain_name.as_str(), toolchain_id)?;
-                                xlsx.runtime_fee_worksheet.write_test_value(
-                                    project.as_str(),
-                                    contract,
-                                    function,
-                                    toolchain_id,
-                                    optimization_group.run.average_gas(),
-                                )?;
-                            }
-                            if !optimization_group.run.size.is_empty() {
-                                xlsx.deploy_size_worksheet
-                                    .add_toolchain_column(toolchain_name.as_str(), toolchain_id)?;
-                                xlsx.deploy_size_worksheet.write_test_value(
-                                    project.as_str(),
-                                    contract,
-                                    None,
-                                    toolchain_id,
-                                    optimization_group.run.average_size(),
-                                )?;
-                            }
-                            if !optimization_group.run.runtime_size.is_empty() {
-                                xlsx.runtime_size_worksheet
-                                    .add_toolchain_column(toolchain_name.as_str(), toolchain_id)?;
-                                xlsx.runtime_size_worksheet.write_test_value(
-                                    project.as_str(),
-                                    contract,
-                                    None,
-                                    toolchain_id,
-                                    optimization_group.run.average_runtime_size(),
-                                )?;
-                            }
-                        }
+                if contract.is_none() && function.is_none() {
+                    continue;
+                }
+                if is_deployer {
+                    if test.non_zero_gas_values > 0 {
+                        xlsx.deploy_fee_worksheet
+                            .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
+                        xlsx.deploy_fee_worksheet.write_test_value(
+                            project.as_str(),
+                            contract,
+                            None,
+                            toolchain_id,
+                            run.average_gas(),
+                        )?;
                     }
+                } else {
+                    xlsx.runtime_fee_worksheet
+                        .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
+                    xlsx.runtime_fee_worksheet.write_test_value(
+                        project.as_str(),
+                        contract,
+                        function,
+                        toolchain_id,
+                        run.average_gas(),
+                    )?;
+                }
+                if !run.size.is_empty() {
+                    xlsx.deploy_size_worksheet
+                        .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
+                    xlsx.deploy_size_worksheet.write_test_value(
+                        project.as_str(),
+                        contract,
+                        None,
+                        toolchain_id,
+                        run.average_size(),
+                    )?;
+                }
+                if !run.runtime_size.is_empty() {
+                    xlsx.runtime_size_worksheet
+                        .add_toolchain_column(mode_name.as_str(), toolchain_id)?;
+                    xlsx.runtime_size_worksheet.write_test_value(
+                        project.as_str(),
+                        contract,
+                        None,
+                        toolchain_id,
+                        run.average_runtime_size(),
+                    )?;
                 }
             }
         }

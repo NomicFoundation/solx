@@ -119,6 +119,7 @@ impl Summary {
 
             let tags: Vec<String> = group.iter().cloned().collect();
 
+            // Build mode key: "toolchain-codegen-version-optimizations"
             let ModeInfo {
                 codegen,
                 optimizations,
@@ -127,6 +128,7 @@ impl Summary {
                 .clone()
                 .expect("The compiler mode is missing from description.")
                 .into();
+            let mode_key = format!("{toolchain}-{codegen}-{version}-{optimizations}");
 
             let run = benchmark
                 .tests
@@ -137,25 +139,16 @@ impl Summary {
                         tags,
                     ),
                 ))
-                .toolchain_groups
-                .entry(toolchain.to_string())
-                .or_insert(Default::default())
-                .codegen_groups
-                .entry(Some(codegen))
-                .or_insert(Default::default())
-                .versioned_groups
-                .entry(Some(version))
-                .or_insert(Default::default())
-                .executables
-                .entry(Some(optimizations))
+                .runs
+                .entry(mode_key)
                 .or_default();
             if let Some(deploy_size) = deploy_size {
-                run.run.size.push(deploy_size);
+                run.size.push(deploy_size);
             }
             if let Some(runtime_size) = runtime_size {
-                run.run.runtime_size.push(runtime_size);
+                run.runtime_size.push(runtime_size);
             }
-            run.run.gas.push(gas);
+            run.gas.push(gas);
         }
         Ok(benchmark)
     }
