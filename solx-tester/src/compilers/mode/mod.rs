@@ -41,6 +41,17 @@ impl Mode {
     }
 
     ///
+    /// Checks if the mode's optimizer settings match the filter pattern.
+    ///
+    pub fn check_optimizer_filter(&self, filter: &str) -> bool {
+        if self.optimizations().is_none() {
+            return false;
+        }
+        let normalized = self.normalize(filter);
+        normalized.contains(filter)
+    }
+
+    ///
     /// Checks if the mode is compatible with the extended filters.
     /// The extended filter consists of 2 parts: mode substring and version range.
     ///

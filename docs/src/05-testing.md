@@ -34,9 +34,24 @@ cargo build --release
 # Run tests for a specific file
 ./target/release/solx-tester --solidity-compiler ./target/release/solx --path tests/solidity/simple/default.sol
 
-# Run tests matching a mode (format: "<codegen> <optimizer>")
-./target/release/solx-tester --solidity-compiler ./target/release/solx --mode "Y M3B3"
+# Run only Yul IR pipeline tests (excludes EVMLA pipeline)
+./target/release/solx-tester --solidity-compiler ./target/release/solx --via-ir
+
+# Run tests with specific optimizer settings
+./target/release/solx-tester --solidity-compiler ./target/release/solx --optimizer M3B3
+
+# Combine filters: Yul IR pipeline with M3B3 optimizer
+./target/release/solx-tester --solidity-compiler ./target/release/solx --via-ir --optimizer M3B3
 ```
+
+### Filtering Options
+
+- `--via-ir` — Run only tests using the Yul IR pipeline (codegen `Y`). Without this flag, both Yul IR and EVMLA pipelines are tested.
+- `--optimizer <PATTERN>` — Filter by optimizer settings. Examples:
+  - `M3B3` — Match exact optimizer level
+  - `M^B3` — Match M3 or Mz with B3
+  - `M*B*` — Match any M and B levels
+- `--path <PATTERN>` — Run only tests whose path contains the pattern.
 
 ## Foundry and Hardhat Projects
 

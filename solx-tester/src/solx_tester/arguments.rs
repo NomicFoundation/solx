@@ -28,8 +28,18 @@ pub struct Arguments {
     #[arg(long)]
     pub trace: bool,
 
-    /// Runs tests only in modes that contain any string from the specified ones.
-    #[arg(short, long)]
+    /// Filter by codegen: only run tests using the Yul IR pipeline.
+    /// If not specified, runs both Yul IR and EVMLA pipelines.
+    #[arg(long)]
+    pub via_ir: bool,
+
+    /// Filter by optimizer settings pattern (e.g., "M3B3", "M^B3").
+    /// Supports wildcards: M^ matches M3 or Mz, M* matches any M level, B* matches any B level.
+    #[arg(short = 'O', long)]
+    pub optimizer: Option<String>,
+
+    /// Runs tests only in modes that contain any string from the specified ones (legacy).
+    #[arg(short, long, hide = true)]
     pub mode: Vec<String>,
 
     /// Runs only tests whose name contains any string from the specified ones.

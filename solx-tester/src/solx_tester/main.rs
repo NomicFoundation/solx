@@ -76,7 +76,13 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
         .iter()
         .map(|path| path.strip_prefix("./").unwrap_or(path.as_str()))
         .collect();
-    let filters = solx_tester::Filters::new(path_filters, arguments.mode, arguments.group);
+    let filters = solx_tester::Filters::new(
+        path_filters,
+        arguments.via_ir,
+        arguments.optimizer,
+        arguments.mode,
+        arguments.group,
+    );
 
     let compiler_tester = solx_tester::SolxTester::new(
         summary.clone(),
@@ -133,7 +139,9 @@ mod tests {
             quiet: false,
             debug: false,
             trace: false,
-            mode: vec!["Y M3B3 0.8.33".to_owned()],
+            via_ir: true,
+            optimizer: Some("M3B3".to_owned()),
+            mode: vec![],
             path: vec!["tests/solidity/simple/default.sol".to_owned()],
             group: vec![],
             benchmark: None,

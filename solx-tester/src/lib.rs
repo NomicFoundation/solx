@@ -99,11 +99,7 @@ impl<'a> SolxTester<'a> {
     ///
     /// Runs all tests on REVM.
     ///
-    pub fn run_revm(
-        self,
-        solidity_compiler: PathBuf,
-        enable_trace: bool,
-    ) -> anyhow::Result<()> {
+    pub fn run_revm(self, solidity_compiler: PathBuf, enable_trace: bool) -> anyhow::Result<()> {
         let tests = self.all_tests(solidity_compiler)?;
 
         let _: Vec<()> = tests
