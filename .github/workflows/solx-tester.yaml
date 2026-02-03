@@ -18,6 +18,7 @@ permissions:
 jobs:
 
   tests:
+    name: tests (${{ matrix.mlir && 'MLIR' || 'non-MLIR' }})
     runs-on: solx-linux-amd64
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner:latest
