@@ -48,7 +48,9 @@ jobs:
           ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           working-dir: 'temp-solx-main'
           enable-assertions: 'false'
-          enable-mlir: 'true'
+          # TODO: enable MLIR once submodules are switched
+          # llvm-projects: 'mlir lld'
+          llvm-projects: ''
   
       # Build the main branch
       - name: Building solc (main)
@@ -71,7 +73,9 @@ jobs:
           build-type: Release
           ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           enable-assertions: 'false'
-          enable-mlir: 'true'
+          # TODO: enable MLIR once submodules are switched
+          # llvm-projects: 'mlir lld'
+          llvm-projects: ''
       
       # Build the PR branch  
       - name: Building solc

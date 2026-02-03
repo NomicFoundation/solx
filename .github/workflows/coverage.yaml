@@ -46,7 +46,9 @@ jobs:
           ccache-key: 'llvm-Linux-X64-gnu'
           enable-assertions: false
           enable-coverage: 'true'
-          enable-mlir: 'true'
+          # TODO: enable MLIR once submodules are switched
+          # llvm-projects: 'mlir lld'
+          llvm-projects: ''
 
       - name: Building solc
         uses: ./.github/actions/build-solc

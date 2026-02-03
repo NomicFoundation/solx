@@ -52,7 +52,9 @@ jobs:
           ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           sanitizer: ${{ inputs.llvm-sanitizer || 'Address' }}
           enable-assertions: 'true'
-          enable-mlir: 'true'
+          # TODO: enable MLIR once submodules are switched
+          # llvm-projects: 'mlir lld'
+          llvm-projects: ''
 
       - name: Building solc
         uses: ./.github/actions/build-solc
