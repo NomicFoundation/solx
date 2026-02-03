@@ -49,7 +49,7 @@ lazy_static::lazy_static! {
     static ref SOLIDITY_SOLC_MODES: Vec<Mode> = {
         let mut modes = Vec::new();
         for via_ir in [false, true] {
-            for version in SolidityCompiler::all_solc_versions(via_ir).unwrap_or_default() {
+            for version in SolidityCompiler::all_solc_versions().unwrap_or_default() {
                 modes.push(SolidityMode::new_solc(version, via_ir, true).into());
             }
         }
@@ -62,7 +62,7 @@ lazy_static::lazy_static! {
     ///
     static ref YUL_SOLC_MODES: Vec<Mode> = {
         let mut modes = Vec::new();
-        for version in SolidityCompiler::all_solc_versions(true).unwrap_or_default() {
+        for version in SolidityCompiler::all_solc_versions().unwrap_or_default() {
             modes.push(YulMode::new_solc(version, true).into());
         }
         modes
@@ -80,8 +80,8 @@ impl SolidityCompiler {
     /// The solc allow paths argument value.
     const ALLOW_PATHS: &'static str = "tests";
 
-    /// The first version of `solc` where `--via-ir` is supported.
-    const FIRST_VIA_IR_VERSION: semver::Version = semver::Version::new(0, 8, 13);
+    /// The minimum supported solc version.
+    const MIN_VERSION: semver::Version = semver::Version::new(0, 8, 24);
 
     /// The current MLIR solc version.
     const MLIR_VERSION: semver::Version = semver::Version::new(0, 8, 30);
@@ -137,9 +137,9 @@ impl SolidityCompiler {
     }
 
     ///
-    /// Returns the solc versions available for the specified mode.
+    /// Returns all supported solc versions (>= 0.8.24).
     ///
-    pub fn all_solc_versions(via_ir: bool) -> anyhow::Result<Vec<semver::Version>> {
+    pub fn all_solc_versions() -> anyhow::Result<Vec<semver::Version>> {
         let mut versions = Vec::new();
         for entry in std::fs::read_dir(Self::DIRECTORY_SOLC)? {
             let entry = entry?;
@@ -167,7 +167,7 @@ impl SolidityCompiler {
                 Ok(version) => version,
                 Err(_) => continue,
             };
-            if via_ir && version < Self::FIRST_VIA_IR_VERSION {
+            if version < Self::MIN_VERSION {
                 continue;
             }
 
@@ -413,19 +413,9 @@ impl SolidityCompiler {
         mode: &Mode,
         test_params: Option<&solx_solc_test_adapter::Params>,
     ) -> solx_standard_json::Input {
-        let (solc_version, via_ir, optimizer_enabled) = match mode {
-            Mode::Solidity(mode) => (
-                &mode.solc_version,
-                mode.via_ir,
-                mode.solc_optimize.unwrap_or(false),
-            ),
-            Mode::Yul(mode) => {
-                let version = mode
-                    .solc_version
-                    .as_ref()
-                    .expect("Yul mode requires solc_version for solc toolchain");
-                (version, true, mode.solc_optimize.unwrap_or(false))
-            }
+        let (via_ir, optimizer_enabled) = match mode {
+            Mode::Solidity(mode) => (mode.via_ir, mode.solc_optimize.unwrap_or(false)),
+            Mode::Yul(mode) => (true, mode.solc_optimize.unwrap_or(false)),
             mode => panic!("Unsupported mode for solc input: {mode}"),
         };
 
@@ -434,17 +424,13 @@ impl SolidityCompiler {
 
         let evm_version = match mode {
             Mode::Solidity(_) => test_params.map(|params| params.evm_version.newest_matching()),
-            Mode::Yul(_) => Some(solx_utils::EVMVersion::Cancun),
+            Mode::Yul(_) => Some(solx_utils::EVMVersion::default()),
             _ => None,
         };
 
-        let debug = if solc_version >= &semver::Version::new(0, 6, 3) {
-            test_params.map(|test_params| {
-                solx_standard_json::InputDebug::new(Some(test_params.revert_strings.to_string()))
-            })
-        } else {
-            None
-        };
+        let debug = test_params.map(|test_params| {
+            solx_standard_json::InputDebug::new(Some(test_params.revert_strings.to_string()))
+        });
 
         solx_standard_json::Input::new_for_solc(
             language,

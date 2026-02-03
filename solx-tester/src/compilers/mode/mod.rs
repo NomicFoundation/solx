@@ -173,18 +173,6 @@ impl Mode {
                 .replace_all(current.as_str(), "E*")
                 .to_string();
         }
-        if filter.contains("I*") {
-            current = regex::Regex::new("I[-+]")
-                .expect("Always valid")
-                .replace_all(current.as_str(), "I*")
-                .to_string();
-        }
-        if filter.contains("V*") {
-            current = regex::Regex::new("V[-+]")
-                .expect("Always valid")
-                .replace_all(current.as_str(), "V*")
-                .to_string();
-        }
         if filter.contains("M^") {
             current = regex::Regex::new("M[3z]")
                 .expect("Always valid")

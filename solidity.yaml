@@ -57,7 +57,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.5'
       abi_encode_with_signaturev2.sol:
         hash: '0xcc57e98c78163b6562221a59c89121a8'
@@ -65,7 +64,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.5'
       contract_array.sol:
         hash: '0x990a671dd5a4e62f2f21ba2a69aa9303'
@@ -219,7 +217,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.24'
   abiEncoderV2:
     enabled: true
@@ -250,7 +247,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.5'
       abi_encoder_v2_head_overflow_with_static_array_cleanup_bug.sol:
         hash: '0x148ce14ad3d17a698f542abc7adb637e'
@@ -534,7 +530,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       divisiod_by_zero.sol:
         hash: '0x795c09e97a5aefcb278aa20a0559d435'
@@ -680,7 +675,6 @@ entries:
         modes:
         - Y >=0.8.5
         - E
-        - I
         version: '>=0.4.12'
       bytes_to_fixed_bytes_simple.sol:
         hash: '0x561fca74d5d015874db511d567eaacb0'
@@ -790,7 +784,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           array_copy_including_array.sol:
             hash: '0xa698abf01d34c86c7f8787c41e6f84c2'
@@ -814,7 +807,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           array_copy_storage_storage_different_base_nested.sol:
             hash: '0x58c1b16a10e6b27ad09bd56517ee427e'
@@ -822,7 +814,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           array_copy_storage_storage_dyn_dyn.sol:
             hash: '0xefd59860c298391e72d12d19d09a4b37'
@@ -842,7 +833,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           array_copy_storage_storage_static_static.sol:
             hash: '0x74694796fc7783784fc245d9346ce13e'
@@ -866,7 +856,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           array_copy_target_leftover2.sol:
             hash: '0xdee918978d1d0ff66695f77ce21a11c8'
@@ -874,7 +863,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           array_copy_target_simple.sol:
             hash: '0x15f030c1c92c7156b99f6dc7146e375f'
@@ -882,7 +870,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           array_copy_target_simple_2.sol:
             hash: '0x53c26b8e3105223757dc1e60ba2159b6'
@@ -890,7 +877,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           array_elements_to_mapping.sol:
             hash: '0x4f60645950988bd7dfc5d341f695e9fe'
@@ -914,7 +900,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.7.5'
           array_of_function_external_storage_to_storage_dynamic.sol:
             hash: '0xba0740df538d325a57c4f63bfd62aea4'
@@ -974,7 +959,6 @@ entries:
             modes:
             - Y >=0.8.2
             - E
-            - I
             version: '>=0.6.9'
           bytes_inside_mappings.sol:
             hash: '0xa15eeee5d7af494c7310241526992d76'
@@ -1050,7 +1034,6 @@ entries:
             modes:
             - Y >=0.8.16
             - E
-            - I >=0.8.16
             version: '>=0.7.0'
           copy_byte_array_in_struct_to_storage.sol:
             hash: '0x4485376b27b1fb10886646caabb6795c'
@@ -1078,7 +1061,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.7.0'
           dirty_memory_bytes_to_storage_copy.sol:
             hash: '0x1cb32d3c640ab8400252ec0dc47f1bd1'
@@ -1094,7 +1076,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           elements_of_nested_array_of_structs_memory_to_storage.sol:
             hash: '0xb6d6e28ccce70cc4d1f112486620fde6'
@@ -1102,7 +1083,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           empty_bytes_copy.sol:
             hash: '0xca41ac6f297320f952aeeb40772c86ff'
@@ -1114,7 +1094,6 @@ entries:
             modes:
             - Y >=0.8.16
             - E
-            - I >=0.8.16
             version: '>=0.8.12'
           memory_dyn_2d_bytes_to_storage.sol:
             hash: '0xe4521ed20bd37a29ef29bde9ac94f6c4'
@@ -1131,7 +1110,6 @@ entries:
             - Y <=0.8.4
             - Y >=0.8.12
             - E
-            - I
             version: '>=0.7.6'
           nested_array_element_calldata_to_storage.sol:
             hash: '0xcda577ec9ec0207c08a34db867f90ebd'
@@ -1152,7 +1130,6 @@ entries:
             - Y <=0.8.4
             - Y >=0.8.12
             - E
-            - I
             version: '>=0.7.5'
           nested_array_element_storage_to_storage.sol:
             hash: '0x3c490fc7a36d993a8495a4eeb301b49f'
@@ -1168,7 +1145,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           nested_array_of_structs_memory_to_memory.sol:
             hash: '0xcafdb73aa2b4a14cc9fd5cb231163bf9'
@@ -1180,7 +1156,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           nested_array_of_structs_storage_to_storage.sol:
             hash: '0x2899a68c4b27868c27189d93efa684c7'
@@ -1188,7 +1163,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           nested_array_of_structs_with_nested_array_from_storage_to_memory.sol:
             hash: '0x3dd27b80eec7734fa9b1f6f146bc3c07'
@@ -1196,7 +1170,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           nested_dynamic_array_element_calldata_to_storage.sol:
             hash: '0xeba54ddcb4cc9c777dd104d308621b6a'
@@ -1212,7 +1185,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.7.5'
           storage_memory_nested_from_pointer.sol:
             hash: '0x777fcb83eb0cdaba04ce001f62d64206'
@@ -1224,7 +1196,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.6.0'
           storage_memory_packed.sol:
             hash: '0x4c85223fd4c8bde87bdaa1b24112e0c5'
@@ -1240,7 +1211,6 @@ entries:
             modes:
             - Y >=0.8.2
             - E
-            - I
             version: '>=0.6.9'
       create_dynamic_array_with_zero_length.sol:
         hash: '0xc24e1e01c05c3ea6c86d8c2cff8d9426'
@@ -1390,7 +1360,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.12'
           memory_arrays_dynamic_index_access_write.sol:
             hash: '0x33fcc152609d56bbf3618ca668dddf2d'
@@ -1426,7 +1395,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       long_byte_array_cleanup_after_delete.sol:
         hash: '0xadb2b518eda74a34eb8de2f1064e049a'
@@ -1536,7 +1504,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.6.9'
           array_push_nested_from_memory.sol:
             hash: '0x90c080e2a652159a8f0294bb72ad9b4a'
@@ -1544,7 +1511,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.22'
           array_push_packed_array.sol:
             hash: '0xc297ac3678097f66e01be7b0b411b68b'
@@ -1556,7 +1522,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.4.22'
           array_push_struct_from_calldata.sol:
             hash: '0xe920f53cad64632b97b86ba3c7aa80d7'
@@ -1564,7 +1529,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.7.5'
           byte_array_push.sol:
             hash: '0xed530410e5db91101e2ca269d75dfc87'
@@ -1580,7 +1544,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.7.5'
           push_no_args_1d.sol:
             hash: '0xead6d81bcd65068e46ed49571a746641'
@@ -1615,7 +1578,6 @@ entries:
             modes:
             - Y >=0.8.2
             - E
-            - I
             version: '>=0.6.11'
           array_slice_calldata_as_argument_of_external_calls.sol:
             hash: '0x5f01e514b242a0c3a0a0239fe9ff4950'
@@ -1647,7 +1609,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       string_bytes_conversion.sol:
         hash: '0xf5de9e61f8c9ca5b5fc068a1b1620acd'
@@ -1659,7 +1620,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       strings_in_struct.sol:
         hash: '0x6004782c5c917bda3033da2791b99a15'
@@ -1667,7 +1627,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
   builtinFunctions:
     enabled: true
@@ -1797,7 +1756,6 @@ entries:
         modes:
         - E >=0.8.7
         - Y
-        - I
         version: '>=0.8.5'
       calldata_attached_to_static_array.sol:
         hash: '0x29c9e6e33b7fef1492792b7655e16d13'
@@ -1805,7 +1763,6 @@ entries:
         modes:
         - E >=0.8.7
         - Y
-        - I
         version: '>=0.8.0'
       calldata_attached_to_struct.sol:
         hash: '0xfb5e47ecbe45e3ed4e83046e9fd04e8c'
@@ -1813,7 +1770,6 @@ entries:
         modes:
         - E >=0.8.7
         - Y
-        - I
         version: '>=0.8.0'
       calldata_bytes_array_bounds.sol:
         hash: '0x8ae1e9bf8544ea46cba50f7c4af62101'
@@ -1916,7 +1872,6 @@ entries:
         modes:
         - Y >=0.8.12
         - E
-        - I
         version: '>=0.4.12'
       cleanup_bytes_types_v1.sol:
         hash: '0x15195d30040396447d31c5654298c3ca'
@@ -1944,7 +1899,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       exp_cleanup_direct.sol:
         hash: '0xc1a7109b68fd43d4be468fd6dc70be39'
@@ -1952,7 +1906,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       exp_cleanup_nonzero_base.sol:
         hash: '0xf5d96db75ea07be4d510b0cdf8ec2daf'
@@ -1960,7 +1913,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       exp_cleanup_smaller_base.sol:
         hash: '0x5a9986c1b738a5e09a04872316735e24'
@@ -1968,7 +1920,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       indexed_log_topic_during_explicit_downcast.sol:
         hash: '0xb0537ad968c4aa4f9fd7be6fb22621ea'
@@ -1976,7 +1927,6 @@ entries:
         modes:
         - Y >=0.8.12
         - E
-        - I
         version: '>=0.7.0'
       indexed_log_topic_during_explicit_downcast_during_emissions.sol:
         hash: '0x6ec701e264a33c00931875a9c6fd40f5'
@@ -1984,7 +1934,6 @@ entries:
         modes:
         - Y >=0.8.12
         - E
-        - I
         version: '>=0.7.0'
   constantEvaluator:
     enabled: true
@@ -2010,7 +1959,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.4'
       assign_type_info.sol:
         hash: '0xddae317bad9f9b7897a30f1b5dc56865'
@@ -2042,7 +1990,6 @@ entries:
         modes:
         - Y >=0.8.2
         - E
-        - I
         version: '>=0.6.3'
       same_constants_different_files.sol:
         hash: '0xf684ee93bc26325cca345715bccbc2db'
@@ -2073,7 +2020,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       callvalue_check.sol:
         hash: '0x5ca0243f01f120c4d34f3d76009b1919'
@@ -2093,7 +2039,6 @@ entries:
         modes:
         - Y >=0.8.2
         - E
-        - I
         version: '>=0.7.0'
       constructor_function_complex.sol:
         hash: '0xcf7b546931576765770d3e4b044e0883'
@@ -2101,7 +2046,6 @@ entries:
         modes:
         - Y >=0.8.2
         - E
-        - I
         version: '>=0.7.0'
       constructor_static_array_argument.sol:
         hash: '0x9144166337d047decfd3323e064aa7ec'
@@ -2189,7 +2133,6 @@ entries:
         modes:
         - Y+
         - E+
-        - I+
         version: '>=0.8.19'
       library_function_deployed.sol:
         hash: '0xa3287c1634eb0d86176a5583cfc6bd96'
@@ -2197,7 +2140,6 @@ entries:
         modes:
         - Y+
         - E+
-        - I+
         version: '>=0.7.0'
       module_function.sol:
         hash: '0x61f4e99cbbf7bbed376a3a9c488d18e3'
@@ -2315,7 +2257,6 @@ entries:
         modes:
         - Y+
         - E
-        - I
         version: '>=0.8.4'
       error_selector.sol:
         hash: '0x668864d46dd29ddaf0a0fac5e0fbf716'
@@ -2323,7 +2264,6 @@ entries:
         modes:
         - Y+
         - E
-        - I
         version: '>=0.8.4'
       error_static_calldata_uint_array_and_dynamic_array.sol:
         hash: '0x04a3dbb040f363af03362623688c7b72'
@@ -2357,7 +2297,6 @@ entries:
         modes:
         - Y
         - E >=0.8.27
-        - I
         version: '>=0.8.26'
       require_error_condition_evaluated_only_once.sol:
         hash: '0x4051eaf42e39e94295b8ccb341db2d74'
@@ -2365,7 +2304,6 @@ entries:
         modes:
         - Y
         - E >=0.8.27
-        - I
         version: '>=0.8.26'
       require_error_evaluation_order_1.sol:
         hash: '0x3e05e011dffa6a687b4a7d23341d994c'
@@ -2373,7 +2311,6 @@ entries:
         modes:
         - Y
         - E >=0.8.27
-        - I
         version: '>=0.8.26'
       require_error_evaluation_order_2.sol:
         hash: '0xdd7fb8aad3de7913a24e87eb5c2cee8f'
@@ -2381,7 +2318,6 @@ entries:
         modes:
         - Y
         - E >=0.8.27
-        - I
         version: '>=0.8.26'
       require_error_evaluation_order_3.sol:
         hash: '0x11844763e982e5c1f37e2d4020ac0d34'
@@ -2393,7 +2329,6 @@ entries:
         modes:
         - Y
         - E >=0.8.27
-        - I
         version: '>=0.8.26'
       require_error_function_pointer_parameter.sol:
         hash: '0xf72ad1ee0e1bfe10b03afc954ed003da'
@@ -2401,7 +2336,6 @@ entries:
         modes:
         - Y
         - E >=0.8.27
-        - I
         version: '>=0.8.26'
       require_error_multiple_arguments.sol:
         hash: '0x4403d41af1c63477fe55536a44e53849'
@@ -2409,7 +2343,6 @@ entries:
         modes:
         - Y
         - E >=0.8.27
-        - I
         version: '>=0.8.26'
       require_error_stack_check.sol:
         hash: '0x15b037200bd9f68689281ce45fdc91b4'
@@ -2417,7 +2350,6 @@ entries:
         modes:
         - Y
         - E >=0.8.27
-        - I
         version: '>=0.8.26'
       require_error_string_literal.sol:
         hash: '0x2a0b66b5fd373951172d736e0126a849'
@@ -2425,7 +2357,6 @@ entries:
         modes:
         - Y
         - E >=0.8.27
-        - I
         version: '>=0.8.26'
       require_error_string_memory.sol:
         hash: '0xc83e1f1bc989d6bd2483d98dbb2df9d0'
@@ -2433,7 +2364,6 @@ entries:
         modes:
         - Y
         - E >=0.8.27
-        - I
         version: '>=0.8.26'
       require_error_uint256.sol:
         hash: '0x696b57a34dff35ebbdcf51c9d4d591c6'
@@ -2441,7 +2371,6 @@ entries:
         modes:
         - Y
         - E >=0.8.27
-        - I
         version: '>=0.8.26'
       require_inherited_error.sol:
         hash: '0xdaf4d0488d62abed098d076f49d4cde7'
@@ -2449,7 +2378,6 @@ entries:
         modes:
         - Y
         - E >=0.8.27
-        - I
         version: '>=0.8.26'
       revert_conversion.sol:
         hash: '0x902639f8c247113d96104e98ca073907'
@@ -2546,7 +2474,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.5'
       event_emit.sol:
         hash: '0x5f401903b94dcf5475f7ef1eb786af11'
@@ -2622,7 +2549,6 @@ entries:
         modes:
         - Y+
         - E
-        - I
         version: '>=0.8.21'
       event_selector_file_level.sol:
         hash: '0x062f24a60ea3d256f996d532240a61e2'
@@ -2638,7 +2564,6 @@ entries:
         modes:
         - Y+
         - E
-        - I
         version: '>=0.7.5'
       event_static_calldata_uint_array_and_dynamic_array.sol:
         hash: '0x0c9dde0fa64d48d43a2bff22b80dc38b'
@@ -2694,7 +2619,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       signed_base.sol:
         hash: '0xaefbeaa741c36d60e48037836feb253d'
@@ -2706,7 +2630,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
   expressions:
     enabled: true
@@ -2785,7 +2708,6 @@ entries:
         modes:
         - Y >=0.8.7
         - E
-        - I
         version: '>=0.4.12'
       uncalled_address_transfer_send.sol:
         hash: '0xd589d90b8c55eb4494bbec716f2d220b'
@@ -2801,7 +2723,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.6.0'
       _base64:
         enabled: true
@@ -2880,7 +2801,6 @@ entries:
         modes:
         - Y+ >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       snark.sol:
         hash: '0x03bb0000d44dd4cc1d7bfa00c5503d6b'
@@ -3072,7 +2992,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.6'
       fallback_or_receive.sol:
         hash: '0xd75db9abdb13270e7d40069b39fca40b'
@@ -3383,7 +3302,6 @@ entries:
         modes:
         - Y >=0.8.13
         - E
-        - I
         version: '>=0.4.12'
       return_size_shorter_than_expected.sol:
         hash: '0x03e534455c50daa7718065c72e6dcbc9'
@@ -3492,7 +3410,6 @@ entries:
         modes:
         - Y >=0.8.2
         - E
-        - I
         version: '>=0.4.12'
       selector_2.sol:
         hash: '0x6cf763d7d3a56ccf819a47996fbd0794'
@@ -3563,7 +3480,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       mapping.sol:
         hash: '0xae06e417d43fde53f12c12e32a8ee68c'
@@ -3591,7 +3507,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       struct_with_bytes.sol:
         hash: '0xc51c440f19cd5baee4e1fbf90f2cb942'
@@ -3599,7 +3514,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       struct_with_bytes_simple.sol:
         hash: '0x3192bf389c89573431114020e2d06117'
@@ -3607,7 +3521,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       transient_value_types.sol:
         hash: '0xb1e434bbc71f843cd4d678eaf26be538'
@@ -3658,7 +3571,6 @@ entries:
         modes:
         - Y >=0.8.27
         - E
-        - I >=0.8.27
         version: '>=0.8.21'
       increment_decrement.sol:
         hash: '0x55119edb85c106990d395a15dc809aa7'
@@ -3982,7 +3894,6 @@ entries:
         modes:
         - Y >=0.8.8
         - E
-        - I
         version: '>=0.4.12'
       for_loop_break.sol:
         hash: '0x2c3d9fb9c2ffed281b2990fbdb377fcf'
@@ -4034,7 +3945,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       inline_assembly_memory_access.sol:
         hash: '0x7a4696ba45b0b543e93bc22f5eb0a6b0'
@@ -4130,7 +4040,6 @@ entries:
         modes:
         - Y <=0.8.23
         - E <=0.8.23
-        - I <=0.8.23
         version: '>=0.4.16'
       mcopy_empty.sol:
         hash: '0x51612a8c512cb835c37e67939a89594c'
@@ -4170,7 +4079,6 @@ entries:
         modes:
         - Y >=0.8.17
         - E
-        - I >=0.8.17
         version: '>=0.7.0'
       tload_tstore_not_reserved_before_cancun.sol:
         hash: '0x0efaf55c8394dc2f7e7cb6881df0ec82'
@@ -4178,7 +4086,6 @@ entries:
         modes:
         - Y <=0.8.23
         - E <=0.8.23
-        - I <=0.8.23
         version: '>=0.4.16'
       transient_storage_creation.sol:
         hash: '0xd402aa69c5df98c5094a1bfe9f066b11'
@@ -4365,7 +4272,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.5.1'
       internal_call_attached_with_parentheses.sol:
         hash: '0x6886ac11cc8dc40cadd2599e175065d6'
@@ -4377,7 +4283,6 @@ entries:
         modes:
         - Y+
         - E
-        - I
         version: '>=0.4.12'
       internal_library_function.sol:
         hash: '0xa1584bf9ba71edaf246b831112e33edc'
@@ -4415,7 +4320,6 @@ entries:
         modes:
         - Y+
         - E
-        - I
         version: '>=0.4.16'
       internal_library_function_attached_to_external_function_type.sol:
         hash: '0xd01846970e53dd11b1988f76953c22d3'
@@ -4451,7 +4355,6 @@ entries:
         modes:
         - Y >=0.8.5
         - E
-        - I
         version: '>=0.8.4'
       internal_library_function_attached_to_mapping.sol:
         hash: '0x361ff6a27000667d99516d65bcb1b146'
@@ -4491,7 +4394,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.6.8'
       library_address.sol:
         hash: '0x6dd0844d69d32d9ecf7a16495431f111'
@@ -4499,7 +4401,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       library_address_homestead.sol:
         hash: '0x945203ee8e819a57b2eca0c6f05d77a5'
@@ -4511,7 +4412,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       library_call_in_homestead.sol:
         hash: '0xb50b6dbac941b0d8f18c1f85fb04eb71'
@@ -4523,7 +4423,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       library_delegatecall_guard_view_needed.sol:
         hash: '0xd2d85de915a0810ed8e733973494c7b8'
@@ -4531,7 +4430,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       library_delegatecall_guard_view_not_needed.sol:
         hash: '0xaf0639159702489e7c96d02131fbf1d1'
@@ -4539,7 +4437,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       library_delegatecall_guard_view_staticcall.sol:
         hash: '0x91709b0e84fd535c31cb0faf8d8689ba'
@@ -4547,7 +4444,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       library_enum_as_an_expression.sol:
         hash: '0x07aa9a9bde502827873f2eb6baf5d347'
@@ -4561,7 +4457,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       library_function_selectors_struct.sol:
         hash: '0xd1c06bbbbde6ed31e40cc3f63a522513'
@@ -4569,7 +4464,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.5'
       library_references_preserve.sol:
         hash: '0xead44fc1465d64e9bb7f72ff705310c1'
@@ -4581,7 +4475,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.5'
       library_staticcall_delegatecall.sol:
         hash: '0x180865514156940cf1a467d8dd849854'
@@ -4645,7 +4538,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.5.1'
       using_library_mappings_return.sol:
         hash: '0xdbb152ac787f1375e3ebe3a491bc94c3'
@@ -4653,7 +4545,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.5.1'
       using_library_structs.sol:
         hash: '0x6d1dabdf446d54a09b87218d2cc99f29'
@@ -4661,7 +4552,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.6.0'
   literals:
     enabled: true
@@ -4696,7 +4586,6 @@ entries:
         modes:
         - Y >=0.8.7
         - E
-        - I
         version: '>=0.8.4'
       hex_string_with_underscore.sol:
         hash: '0x91904e322d343b984cb1dd9834f3d342'
@@ -4746,7 +4635,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.1'
   modifiers:
     enabled: true
@@ -4757,7 +4645,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       access_through_module_name.sol:
         hash: '0x8da019a4e8446167236367df0d12b362'
@@ -4765,7 +4652,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       break_in_modifier.sol:
         hash: '0xf72d1fb1e2fddeb09a4842f72c6cad59'
@@ -4773,7 +4659,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       continue_in_modifier.sol:
         hash: '0x523e5611add3ef89bbcf32485821b0d0'
@@ -4781,7 +4666,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       evaluation_order.sol:
         hash: '0xa641b592d5cb91a54ab4d5c70c10e7b6'
@@ -4789,7 +4673,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       function_modifier.sol:
         hash: '0xd53b1205e929cb8c67eaa8cf86a8de8f'
@@ -4797,7 +4680,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       function_modifier_calling_functions_in_creation_context.sol:
         hash: '0x5501a0f47a869cb1c81ad04f186afdf2'
@@ -4805,7 +4687,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       function_modifier_empty.sol:
         hash: '0xfd1ff4f36388ce65f4b237f2a26ccdd0'
@@ -4813,7 +4694,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.6.7'
       function_modifier_for_constructor.sol:
         hash: '0x98d80665ad487623c55e29fa6ba6dad8'
@@ -4821,7 +4701,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       function_modifier_library.sol:
         hash: '0xad3127663621cff90133cc4a4e57a8ea'
@@ -4829,7 +4708,6 @@ entries:
         modes:
         - Y+ >=0.8.1
         - E
-        - I
         version: '>=0.4.22'
       function_modifier_library_inheritance.sol:
         hash: '0xf93e9daddcd31e647abcb03ca65efc06'
@@ -4837,7 +4715,6 @@ entries:
         modes:
         - Y+ >=0.8.1
         - E
-        - I
         version: '>=0.4.22'
       function_modifier_local_variables.sol:
         hash: '0xd1d780ff1e0db6bf74cbbff5f861170a'
@@ -4845,7 +4722,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       function_modifier_loop.sol:
         hash: '0xb8bf76f6f3f72d3047646e70ec73ced9'
@@ -4857,7 +4733,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       function_modifier_multi_invocation.sol:
         hash: '0x44f70024310ba1def5265a282e03d510'
@@ -4869,7 +4744,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       function_modifier_multi_with_return.sol:
         hash: '0xed1ce7ef247c224e6d9e8a5422d674ff'
@@ -4881,7 +4755,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.14'
       function_modifier_multiple_times_local_vars.sol:
         hash: '0x48443f295bc061310bbc36fc3e1fe630'
@@ -4889,7 +4762,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.14'
       function_modifier_overriding.sol:
         hash: '0xf6cd69e0079e0c28a80ebc7d03157da4'
@@ -4897,7 +4769,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.6.0'
       function_modifier_return_reference.sol:
         hash: '0xb36a00512c098590233eade7b161344d'
@@ -4905,7 +4776,6 @@ entries:
         modes:
         - Y >=0.8.10
         - E
-        - I
         version: '>=0.4.12'
       function_return_parameter.sol:
         hash: '0xda2ce40f672ebce69a25b296a5e58117'
@@ -4913,7 +4783,6 @@ entries:
         modes:
         - Y >=0.8.2
         - E
-        - I
         version: '>=0.4.16'
       function_return_parameter_complex.sol:
         hash: '0xa3bc453664cf5099e596a5f5134c8731'
@@ -4921,7 +4790,6 @@ entries:
         modes:
         - Y >=0.8.2
         - E
-        - I
         version: '>=0.4.22'
       modifer_recursive.sol:
         hash: '0x5011cb2032ee75567df6339e45fb8ac0'
@@ -4936,7 +4804,6 @@ entries:
         modes:
         - Y >=0.8.2
         - E
-        - I
         version: '>=0.7.0'
       modifier_init_return.sol:
         hash: '0xce646848a71d2fa2057051d8d122c30b'
@@ -4944,7 +4811,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       modifiers_in_construction_context.sol:
         hash: '0x6c0f9374a8384bde7ff01b58f4c7f50e'
@@ -4952,7 +4818,6 @@ entries:
         modes:
         - Y >=0.8.2
         - E
-        - I
         version: '>=0.7.0'
       return_does_not_skip_modifier.sol:
         hash: '0x7574d6c083584b8f31635ae2a59f99b5'
@@ -4960,7 +4825,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       return_in_modifier.sol:
         hash: '0xb6cf14678e9a05cfbd8ba98ea60637ef'
@@ -4968,7 +4832,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       stacked_return_with_modifiers.sol:
         hash: '0xfdb1cc4b08c395831c21294f89dad98c'
@@ -4976,7 +4839,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.14'
       transient_state_variable_value_type.sol:
         hash: '0x5c021cca1a4512a8730f227c6b36d1e2'
@@ -5081,7 +4943,6 @@ entries:
             modes:
             - Y >=0.8.7
             - E
-            - I
             version: '>=0.4.12'
           shift_cleanup.sol:
             hash: '0x6d2cb2b12266f59826f964b435e5688a'
@@ -5248,7 +5109,6 @@ entries:
             modes:
             - Y+
             - E+
-            - I+
             version: '>=0.8.19'
           attaching_and_defining_operator_with_same_function.sol:
             hash: '0x838df4135469500fcb972c77531cc99b'
@@ -5333,8 +5193,6 @@ entries:
         - Y+ <=0.8.12
         - Y-
         - E
-        - I+ >=0.8.17
-        - I+ <=0.8.12
         version: '>=0.4.12'
   payable:
     enabled: true
@@ -5345,7 +5203,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
   receive:
     enabled: true
@@ -5438,7 +5295,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.6.3'
       function_entry_checks_v1.sol:
         hash: '0x7e2c5396d0334bf1d5deb4144090fc54'
@@ -5467,7 +5323,6 @@ entries:
         modes:
         - Y+ >=0.8.1
         - E+
-        - I+
         version: '>=0.6.3'
       short_input_array.sol:
         hash: '0x780633eac999147705e0ae87a15e38f5'
@@ -5611,7 +5466,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.6.0'
       multiline.sol:
         hash: '0xe104826b075c70a130ee808d0734fa89'
@@ -5634,7 +5488,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.22'
       abi_functions_member_access.sol:
         hash: '0x7f519a90122f9d108ef9d4dac7f0e4af'
@@ -5796,7 +5649,6 @@ entries:
         modes:
         - Y >=0.8.2
         - E
-        - I
         version: '>=0.5.0'
       mappings_array2d_pop_delete.sol:
         hash: '0x504110d29cfb801b6dc864070d80e71a'
@@ -5804,7 +5656,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.6.0'
       mappings_array_pop_delete.sol:
         hash: '0xe99e5d6adae65c477b24009529d4b03f'
@@ -5812,7 +5663,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.6.0'
       packed_functions.sol:
         hash: '0x21759e6f09e50c71f6bb4f9b4a137297'
@@ -5824,7 +5674,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       packed_storage_signed.sol:
         hash: '0x3f6198e1011a6453ac64f1cde1fcc643'
@@ -6097,7 +5946,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.5.0'
       string_escapes.sol:
         hash: '0xb6026ba4b9173ef342d9edcf1c0f1e59'
@@ -6220,7 +6068,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.5'
       copy_from_storage.sol:
         hash: '0x6ac4e807ced1195f02a8d09c16c48379'
@@ -6229,7 +6076,6 @@ entries:
         - Y <=0.8.4
         - Y >=0.8.12
         - E
-        - I
         version: '>=0.7.5'
       copy_struct_array_from_storage.sol:
         hash: '0x0997aba0fb3cc0e1afe98a218a03948f'
@@ -6238,7 +6084,6 @@ entries:
         - Y >=0.8.1,<=0.8.4
         - Y >=0.8.12
         - E
-        - I
         version: '>=0.7.5'
       copy_struct_with_nested_array_from_calldata_to_memory.sol:
         hash: '0x431e24bca5dca8c9c22da5d8b07c8eb2'
@@ -6263,7 +6108,6 @@ entries:
         - Y >=0.8.1,<=0.8.4
         - Y >=0.8.12
         - E
-        - I
         version: '>=0.7.5'
       copy_substructures_to_mapping.sol:
         hash: '0x0ff8004c7cff6f447f9aeb921691fbe9'
@@ -6271,7 +6115,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.5'
       copy_to_mapping.sol:
         hash: '0x321f198392158d7e563e2d8ecea8a069'
@@ -6279,7 +6122,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.5'
       delete_struct.sol:
         hash: '0xe1f956d19c7e22b428697a23a9656979'
@@ -6287,7 +6129,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       event.sol:
         hash: '0x96a8bfa6db37f1a24929d6f2d2c22023'
@@ -6295,7 +6136,6 @@ entries:
         modes:
         - Y >=0.8.2
         - E
-        - I
         version: '>=0.7.5'
       function_type_copy.sol:
         hash: '0x0a294d14a43b5ebb43e53d2809395513'
@@ -6327,7 +6167,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       memory_structs_read_write.sol:
         hash: '0x8c4445f66d3c2cc062bf6fb2f4aafa8a'
@@ -6335,7 +6174,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.12'
       msg_data_to_struct_member_copy.sol:
         hash: '0x243d8ec46f08dbd1b1353531530bd360'
@@ -6344,7 +6182,6 @@ entries:
         - Y <=0.8.4
         - Y >=0.8.12
         - E
-        - I
         version: '>=0.7.5'
       multislot_struct_allocation.sol:
         hash: '0x1eeff2670c2bcab3ecd88c9ce3054a89'
@@ -6623,7 +6460,6 @@ entries:
             modes:
             - Y >=0.8.1
             - E
-            - I
             version: '>=0.7.5'
           copy_struct_to_array_stored_in_mapping.sol:
             hash: '0xda0fe0bf05839a82d4f7e8886ea40df1'
@@ -6651,7 +6487,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.6.3'
       mapping_enum_key_getter_v1.sol:
         hash: '0xe615c5b15a2e004627dce33a87daf3f1'
@@ -6671,7 +6506,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.5'
       mapping_enum_key_v1.sol:
         hash: '0x56bd37cea69e35ae0eed8e3dbeb75ba5'
@@ -6772,7 +6606,6 @@ entries:
         modes:
         - Y >=0.8.9
         - E
-        - I
         version: '>=0.8.8'
       cleanup.sol:
         hash: '0x2effd409724a75bc3830ce997883f1da'
@@ -6812,7 +6645,6 @@ entries:
         modes:
         - Y+
         - E
-        - I
         version: '>=0.8.8'
       immutable_signed.sol:
         hash: '0xaace9c38ec829bef8a98feea808f5d51'
@@ -6832,7 +6664,6 @@ entries:
         modes:
         - Y >=0.8.9
         - E
-        - I
         version: '>=0.8.8'
       multisource.sol:
         hash: '0x35680657564ca708cadd0954b25aab67'
@@ -6986,7 +6817,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.5'
       public_state_overridding_mapping_to_dynamic_struct.sol:
         hash: '0x629bd047133068052c1096f4ee758ba9'
@@ -6994,7 +6824,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.5'
       storing_invalid_boolean.sol:
         hash: '0xae0630569bf5603ed696749ab21c00bc'
@@ -7126,7 +6955,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.7.0'
       create_random.sol:
         hash: '0xdc945157d88f7fc90eef27fcd6fe56ef'
@@ -7173,7 +7001,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.8.0'
       gasleft_decrease.sol:
         hash: '0x54dda6987fa66faba0330a48b1a6c287'
@@ -7217,7 +7044,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.13'
       multi_variable_declaration.sol:
         hash: '0x6d62c6e0068dcfdfcde17be3f7ca48e0'
@@ -7285,7 +7111,6 @@ entries:
         modes:
         - Y >=0.8.1
         - E
-        - I
         version: '>=0.4.24'
       state_variable_local_variable_mixture.sol:
         hash: '0xd995132d94035efe348537b3c56ed5fa'
@@ -7454,7 +7279,6 @@ entries:
         modes:
         - Y >=0.8.12
         - E
-        - I
         version: '>=0.4.12'
       define_tuple_from_function_call.sol:
         hash: '0x31d9e686521628f43466ec30e401d25b'
@@ -7647,7 +7471,6 @@ entries:
         modes:
         - Y >=0.8.7
         - E
-        - I
         version: '>=0.8.0'
       require.sol:
         hash: '0xd4fd96d1f6d8dff8cb291d549fbadf55'

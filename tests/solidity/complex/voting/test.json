@@ -1,7 +1,7 @@
 {
     "modes": [
         "Y >=0.8.1",
-        "E", "I"
+        "E"
     ],
     "cases": [ {
     "name": "first",
