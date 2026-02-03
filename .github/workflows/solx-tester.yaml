@@ -22,6 +22,10 @@ jobs:
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner:latest
       options: -m 110g
+    strategy:
+      fail-fast: false
+      matrix:
+        mlir: [true, false]
     env:
       BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
       SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
@@ -41,9 +45,9 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: 'RelWithDebInfo'
-          ccache-key: 'llvm-Linux-X64-gnu'
+          ccache-key: 'llvm-Linux-X64-gnu-${{ matrix.mlir && 'mlir' || 'no-mlir' }}'
           enable-assertions: false
-          enable-mlir: 'true'
+          llvm-projects: ${{ matrix.mlir && 'mlir lld' || 'lld' }}
 
       - name: Building solc
         uses: ./.github/actions/build-solc
@@ -63,7 +67,7 @@ jobs:
           target: 'x86_64-unknown-linux-gnu'
 
       - name: Run tests
-        run: ./target/release/solx-tester --solx $(which solx)
+        run: ./target/release/solx-tester --solidity-compiler $(which solx)
 
 
   benchmarks:
@@ -115,7 +119,7 @@ jobs:
       - name: Run benchmarks
         run: |
           ./target/release/solx-tester \
-            --solx ./target/release/solx \
+            --solidity-compiler ./target/release/solx \
             --mode 'Y M^B3 0.8.33' \
             --benchmark=${{ matrix.type }}-benchmark.json || true
 

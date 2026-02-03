@@ -73,7 +73,7 @@ jobs:
           for TEST_PATH in tests/solidity/complex/* tests/solidity/simple/*; do
           WORKDIR=$(basename ${TEST_PATH})
           mkdir -p "${GITHUB_WORKSPACE}/${WORKDIR}"
-          ./target/release/solx-tester --solx $(which solx) --path ${TEST_PATH} --workflow build
+          ./target/release/solx-tester --solidity-compiler $(which solx) --path ${TEST_PATH} --workflow build
           mv *.profraw "${GITHUB_WORKSPACE}/${WORKDIR}/" || true
           du -hs "${GITHUB_WORKSPACE}/${WORKDIR}"
           find ${GITHUB_WORKSPACE}/${WORKDIR} -type f -name '*.profraw' -print > profiles.lst
