@@ -10,6 +10,9 @@
 pub struct DefinedFunction {
     /// The function name.
     pub name: String,
+    /// The function AST node ID.
+    #[serde(default)]
+    pub ast_id: Option<usize>,
     /// The creation code function block tag.
     pub creation_tag: Option<usize>,
     /// The runtime code function block tag.
