@@ -31,12 +31,19 @@ pub fn shared_cxx_flags() -> String {
 ///
 /// Boost cmake arguments.
 ///
+/// Note: Paths are canonicalized to absolute paths as required by CMake.
+///
 pub fn boost_cmake_args(
     boost_root: &Path,
     boost_lib_dir: &Path,
     boost_include_dir: &Path,
-) -> Vec<String> {
-    vec![
+) -> anyhow::Result<Vec<String>> {
+    // CMake requires absolute paths for Boost directories
+    let boost_root = boost_root.canonicalize()?;
+    let boost_lib_dir = boost_lib_dir.canonicalize()?;
+    let boost_include_dir = boost_include_dir.canonicalize()?;
+
+    Ok(vec![
         "-DBoost_NO_BOOST_CMAKE=1".to_owned(),
         "-DBoost_NO_SYSTEM_PATHS=1".to_owned(),
         format!("-DBOOST_ROOT={}", boost_root.display()),
@@ -46,7 +53,7 @@ pub fn boost_cmake_args(
         "-DBOOST_USE_STATIC_LIBS=1".to_owned(),
         format!("-DBOOST_INCLUDEDIR={}", boost_include_dir.display()),
         "-DBoost_DEBUG=1".to_owned(),
-    ]
+    ])
 }
 
 ///

@@ -57,7 +57,7 @@ pub fn build(
         let boost_root = boost_config.cmake_root();
         let boost_lib_dir = boost_config.lib_dir();
         let boost_include_dir = boost_config.include_dir();
-        for arg in shared::boost_cmake_args(&boost_root, &boost_lib_dir, &boost_include_dir) {
+        for arg in shared::boost_cmake_args(&boost_root, &boost_lib_dir, &boost_include_dir)? {
             cmake.arg(arg);
         }
     }
