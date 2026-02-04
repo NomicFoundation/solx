@@ -1,0 +1,31 @@
+{
+  "language": "Solidity",
+  "sources":
+  {
+    "A":
+    {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; contract C { function f() public pure returns (uint256) { return 42; } }"
+    }
+  },
+  "settings": {
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.bytecode.object",
+          "evm.bytecode.evmla",
+          "evm.bytecode.ethir",
+          "evm.bytecode.llvmIrUnoptimized",
+          "evm.bytecode.llvmIrOptimized",
+          "evm.deployedBytecode.object",
+          "evm.deployedBytecode.evmla",
+          "evm.deployedBytecode.ethir",
+          "evm.deployedBytecode.llvmIrUnoptimized",
+          "evm.deployedBytecode.llvmIrOptimized"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}

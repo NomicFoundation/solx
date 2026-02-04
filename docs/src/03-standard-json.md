@@ -147,6 +147,14 @@ On the other hand, parameters that are not mentioned here but are parts of **sol
           "evm.bytecode.object",
           // Deploy code assembly produced by solx/LLVM.
           "evm.bytecode.llvmAssembly",
+          // solx-only: EVM legacy assembly IR (internal representation). Only available for non-viaIR mode.
+          "evm.bytecode.evmla",
+          // solx-only: Ethereal IR (internal representation). Only available for non-viaIR mode.
+          "evm.bytecode.ethir",
+          // solx-only: Unoptimized LLVM IR (internal representation).
+          "evm.bytecode.llvmIrUnoptimized",
+          // solx-only: Optimized LLVM IR (internal representation).
+          "evm.bytecode.llvmIrOptimized",
           // ELF-wrapped DWARF debug info produced by solx/LLVM. Only available for Solidity source code input.
           "evm.bytecode.debugInfo",
           // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
@@ -164,6 +172,14 @@ On the other hand, parameters that are not mentioned here but are parts of **sol
           "evm.deployedBytecode.object",
           // Runtime code assembly produced by solx/LLVM.
           "evm.deployedBytecode.llvmAssembly",
+          // solx-only: EVM legacy assembly IR (internal representation). Only available for non-viaIR mode.
+          "evm.deployedBytecode.evmla",
+          // solx-only: Ethereal IR (internal representation). Only available for non-viaIR mode.
+          "evm.deployedBytecode.ethir",
+          // solx-only: Unoptimized LLVM IR (internal representation).
+          "evm.deployedBytecode.llvmIrUnoptimized",
+          // solx-only: Optimized LLVM IR (internal representation).
+          "evm.deployedBytecode.llvmIrOptimized",
           // Link references for linkers that are to resolve library addresses at deploy time.
           "evm.deployedBytecode.linkReferences",
           // Resolved automatically by solx/LLVM, but emitted as an empty object to preserve compatibility with some toolkits.
@@ -277,6 +293,18 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
             // Optional: LLVM text assembly (string).
             // Corresponds to "evm.bytecode.llvmAssembly" in the outputSelection settings.
             "llvmAssembly": "/* ... */",
+            // Optional, solx-only: EVM legacy assembly IR (string). Only available for non-viaIR mode.
+            // Corresponds to "evm.bytecode.evmla" in the outputSelection settings.
+            "evmla": "/* ... */",
+            // Optional, solx-only: Ethereal IR (string). Only available for non-viaIR mode.
+            // Corresponds to "evm.bytecode.ethir" in the outputSelection settings.
+            "ethir": "/* ... */",
+            // Optional, solx-only: Unoptimized LLVM IR (string).
+            // Corresponds to "evm.bytecode.llvmIrUnoptimized" in the outputSelection settings.
+            "llvmIrUnoptimized": "/* ... */",
+            // Optional, solx-only: Optimized LLVM IR (string).
+            // Corresponds to "evm.bytecode.llvmIrOptimized" in the outputSelection settings.
+            "llvmIrOptimized": "/* ... */",
             // Optional: ELF-wrapped DWARF debug info (string).
             // Corresponds to "evm.bytecode.debugInfo" in the outputSelection settings.
             "debugInfo": "/* ... */",
@@ -308,6 +336,18 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
             // Optional: LLVM text assembly (string).
             // Corresponds to "evm.deployedBytecode.llvmAssembly" in the outputSelection settings.
             "llvmAssembly": "/* ... */",
+            // Optional, solx-only: EVM legacy assembly IR (string). Only available for non-viaIR mode.
+            // Corresponds to "evm.deployedBytecode.evmla" in the outputSelection settings.
+            "evmla": "/* ... */",
+            // Optional, solx-only: Ethereal IR (string). Only available for non-viaIR mode.
+            // Corresponds to "evm.deployedBytecode.ethir" in the outputSelection settings.
+            "ethir": "/* ... */",
+            // Optional, solx-only: Unoptimized LLVM IR (string).
+            // Corresponds to "evm.deployedBytecode.llvmIrUnoptimized" in the outputSelection settings.
+            "llvmIrUnoptimized": "/* ... */",
+            // Optional, solx-only: Optimized LLVM IR (string).
+            // Corresponds to "evm.deployedBytecode.llvmIrOptimized" in the outputSelection settings.
+            "llvmIrOptimized": "/* ... */",
             // Optional: ELF-wrapped DWARF debug info (string).
             // Corresponds to "evm.deployedBytecode.debugInfo" in the outputSelection settings.
             "debugInfo": "/* ... */",

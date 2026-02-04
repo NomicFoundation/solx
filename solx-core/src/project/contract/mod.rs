@@ -169,6 +169,18 @@ impl Contract {
                     anyhow::anyhow!("{code_segment} code LLVM IR generator: {error}")
                 })?;
                 run_yul_lowering.borrow_mut().finish();
+                // Enable LLVM IR capture for standard JSON output
+                if output_selection.check_selection(
+                    contract_name.path.as_str(),
+                    contract_name.name.as_deref(),
+                    solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
+                ) || output_selection.check_selection(
+                    contract_name.path.as_str(),
+                    contract_name.name.as_deref(),
+                    solx_standard_json::InputSelector::BytecodeLLVMIROptimized,
+                ) {
+                    deploy_context.set_capture_llvm_ir(true);
+                }
                 let deploy_build = deploy_context.build(
                     output_selection.check_selection(
                         contract_name.path.as_str(),
@@ -253,6 +265,18 @@ impl Contract {
                         anyhow::anyhow!("{code_segment} code LLVM IR generator: {error}")
                     })?;
                 run_yul_lowering.borrow_mut().finish();
+                // Enable LLVM IR capture for standard JSON output
+                if output_selection.check_selection(
+                    contract_name.path.as_str(),
+                    contract_name.name.as_deref(),
+                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
+                ) || output_selection.check_selection(
+                    contract_name.path.as_str(),
+                    contract_name.name.as_deref(),
+                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIROptimized,
+                ) {
+                    runtime_context.set_capture_llvm_ir(true);
+                }
                 let runtime_build = runtime_context.build(
                     output_selection.check_selection(
                         contract_name.path.as_str(),
@@ -346,6 +370,18 @@ impl Contract {
                         anyhow::anyhow!("{code_segment} code LLVM IR generator: {error}")
                     })?;
                 run_evm_assembly_lowering.borrow_mut().finish();
+                // Enable LLVM IR capture for standard JSON output
+                if output_selection.check_selection(
+                    contract_name.path.as_str(),
+                    contract_name.name.as_deref(),
+                    solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
+                ) || output_selection.check_selection(
+                    contract_name.path.as_str(),
+                    contract_name.name.as_deref(),
+                    solx_standard_json::InputSelector::BytecodeLLVMIROptimized,
+                ) {
+                    deploy_context.set_capture_llvm_ir(true);
+                }
                 let deploy_build = deploy_context.build(
                     output_selection.check_selection(
                         contract_name.path.as_str(),
@@ -433,6 +469,18 @@ impl Contract {
                         anyhow::anyhow!("{code_segment} code LLVM IR generator: {error}")
                     })?;
                 run_evm_assembly_lowering.borrow_mut().finish();
+                // Enable LLVM IR capture for standard JSON output
+                if output_selection.check_selection(
+                    contract_name.path.as_str(),
+                    contract_name.name.as_deref(),
+                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
+                ) || output_selection.check_selection(
+                    contract_name.path.as_str(),
+                    contract_name.name.as_deref(),
+                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIROptimized,
+                ) {
+                    runtime_context.set_capture_llvm_ir(true);
+                }
                 let runtime_build = runtime_context.build(
                     output_selection.check_selection(
                         contract_name.path.as_str(),
@@ -493,6 +541,18 @@ impl Contract {
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
+                // Enable LLVM IR capture for standard JSON output
+                if output_selection.check_selection(
+                    contract_name.path.as_str(),
+                    contract_name.name.as_deref(),
+                    solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
+                ) || output_selection.check_selection(
+                    contract_name.path.as_str(),
+                    contract_name.name.as_deref(),
+                    solx_standard_json::InputSelector::BytecodeLLVMIROptimized,
+                ) {
+                    deploy_context.set_capture_llvm_ir(true);
+                }
                 let deploy_build = deploy_context.build(
                     output_selection.check_selection(
                         contract_name.path.as_str(),
@@ -552,6 +612,18 @@ impl Contract {
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
                 );
+                // Enable LLVM IR capture for standard JSON output
+                if output_selection.check_selection(
+                    contract_name.path.as_str(),
+                    contract_name.name.as_deref(),
+                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
+                ) || output_selection.check_selection(
+                    contract_name.path.as_str(),
+                    contract_name.name.as_deref(),
+                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIROptimized,
+                ) {
+                    runtime_context.set_capture_llvm_ir(true);
+                }
                 let runtime_build = runtime_context.build(
                     output_selection.check_selection(
                         contract_name.path.as_str(),

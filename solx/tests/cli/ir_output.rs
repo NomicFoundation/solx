@@ -274,3 +274,47 @@ fn ir_output_overwrite_allowed() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn standard_json_llvm_ir_via_ir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::TEST_SOLIDITY_STANDARD_JSON_SELECT_LLVM_IR_PATH,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("llvmIrUnoptimized"))
+        .stdout(predicate::str::contains("llvmIrOptimized"))
+        .stdout(predicate::str::contains("define"))
+        .stdout(predicate::str::contains("target datalayout"));
+
+    Ok(())
+}
+
+#[test]
+fn standard_json_evmla_ethir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::TEST_SOLIDITY_STANDARD_JSON_SELECT_EVMLA_ETHIR_PATH,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("evmla"))
+        .stdout(predicate::str::contains("ethir"))
+        .stdout(predicate::str::contains("llvmIrUnoptimized"))
+        .stdout(predicate::str::contains("llvmIrOptimized"))
+        // EVMLA contains instruction names
+        .stdout(predicate::str::contains("PUSH"))
+        // EthIR contains block labels
+        .stdout(predicate::str::contains("block_"));
+
+    Ok(())
+}
