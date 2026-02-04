@@ -55,19 +55,19 @@ pub fn build(
     // Boost configuration - only set if explicitly building or if local boost exists
     let boost_version = boost_version.unwrap_or_else(|| boost::DEFAULT_BOOST_VERSION.to_owned());
     let boost_base_dir = solidity_dir.join("boost");
-    let boost_config = BoostConfig::new(boost_version, boost_base_dir);
+    let boost_config = BoostConfig::new(boost_version.clone(), boost_base_dir);
 
     // Build Boost if requested
     let boost_config = if build_boost {
         boost::download_and_build(&solidity_dir, &boost_config)?;
-        Some(boost_config)
+        // Canonicalize the base_dir after build to ensure absolute paths
+        let canonical_base_dir = boost_config.base_dir.canonicalize()?;
+        Some(BoostConfig::new(boost_version, canonical_base_dir))
     } else if boost_config.lib_dir().exists() {
-        // Use existing local boost
-        eprintln!(
-            "Using existing Boost at {}",
-            boost_config.base_dir.display()
-        );
-        Some(boost_config)
+        // Use existing local boost - canonicalize for absolute paths
+        let canonical_base_dir = boost_config.base_dir.canonicalize()?;
+        eprintln!("Using existing Boost at {}", canonical_base_dir.display());
+        Some(BoostConfig::new(boost_version, canonical_base_dir))
     } else {
         // No local boost - will use system boost (if available)
         eprintln!(
