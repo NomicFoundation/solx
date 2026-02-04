@@ -106,20 +106,25 @@ impl BoostConfig {
 ///
 /// Downloads and builds Boost.
 ///
-pub fn download_and_build(working_dir: &Path, boost_config: &BoostConfig) -> anyhow::Result<()> {
+/// Returns the absolute path where Boost was installed.
+///
+pub fn download_and_build(
+    working_dir: &Path,
+    boost_config: &BoostConfig,
+) -> anyhow::Result<PathBuf> {
+    // Canonicalize working directory to get absolute paths
+    let working_dir = working_dir.canonicalize()?;
+    let install_prefix = normalize_path_buf(&working_dir.join("boost"));
+
     // Skip if already built
-    if boost_config.lib_dir().exists() {
+    if install_prefix.join("lib").exists() {
         eprintln!(
             "Boost {} already exists at {}",
             boost_config.version,
-            boost_config.base_dir.display()
+            install_prefix.display()
         );
-        return Ok(());
+        return Ok(install_prefix);
     }
-
-    // Canonicalize paths early - bootstrap/b2 need absolute paths since they run from source_dir
-    let working_dir = working_dir.canonicalize()?;
-    let install_prefix = working_dir.join("boost");
 
     eprintln!("Downloading Boost {}...", boost_config.version);
 
@@ -147,7 +152,7 @@ pub fn download_and_build(working_dir: &Path, boost_config: &BoostConfig) -> any
         install_prefix.display()
     );
 
-    Ok(())
+    Ok(install_prefix)
 }
 
 ///
@@ -225,17 +230,25 @@ fn bootstrap(source_dir: &Path, install_prefix: &Path) -> anyhow::Result<()> {
 /// On Windows, removes the extended-length path prefix (\\?\) that canonicalize() adds.
 ///
 fn normalize_path(path: &Path) -> String {
-    let path_str = path.display().to_string();
+    normalize_path_buf(path).display().to_string()
+}
 
+///
+/// Normalizes a path, returning a PathBuf.
+///
+/// On Windows, removes the extended-length path prefix (\\?\) that canonicalize() adds.
+///
+fn normalize_path_buf(path: &Path) -> PathBuf {
     #[cfg(target_os = "windows")]
     {
+        let path_str = path.display().to_string();
         // Strip the \\?\ prefix that Windows canonicalize() adds
         if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
-            return stripped.to_string();
+            return PathBuf::from(stripped);
         }
     }
 
-    path_str
+    path.to_path_buf()
 }
 
 ///

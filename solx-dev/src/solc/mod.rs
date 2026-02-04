@@ -59,10 +59,9 @@ pub fn build(
 
     // Build Boost if requested
     let boost_config = if build_boost {
-        boost::download_and_build(&solidity_dir, &boost_config)?;
-        // Canonicalize the base_dir after build to ensure absolute paths
-        let canonical_base_dir = boost_config.base_dir.canonicalize()?;
-        Some(BoostConfig::new(boost_version, canonical_base_dir))
+        // download_and_build returns the absolute path where boost was installed
+        let install_path = boost::download_and_build(&solidity_dir, &boost_config)?;
+        Some(BoostConfig::new(boost_version, install_path))
     } else if boost_config.lib_dir().exists() {
         // Use existing local boost - canonicalize for absolute paths
         let canonical_base_dir = boost_config.base_dir.canonicalize()?;
