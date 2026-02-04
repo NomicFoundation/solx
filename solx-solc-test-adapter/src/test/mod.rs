@@ -135,14 +135,9 @@ fn process_sources(data: &str, path: &Path) -> anyhow::Result<Vec<(String, Strin
 
                 if let Some(source_name) = source_name {
                     sources.push((source_name, source));
-                    source = String::new();
                 }
-
-                // For sources without names
-                if !source.is_empty() {
-                    sources.push((String::new(), source));
-                    source = String::new();
-                }
+                // Discard preamble content (comments before any named source)
+                source = String::new();
 
                 source_name = Some(name);
             }
