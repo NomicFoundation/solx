@@ -216,6 +216,128 @@ impl Contract {
             writeln!(std::io::stdout(), "IR:\n{yul}")?;
         }
 
+        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
+            && output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::BytecodeEVMLA,
+            )
+            && let Some(evmla) = deploy_object_result
+                .as_mut()
+                .expect("Always exists")
+                .evmla
+                .take()
+        {
+            writeln!(std::io::stdout(), "Deploy EVM legacy assembly:\n{evmla}")?;
+        }
+        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
+            && output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::RuntimeBytecodeEVMLA,
+            )
+            && let Some(evmla) = runtime_object_result
+                .as_mut()
+                .expect("Always exists")
+                .evmla
+                .take()
+        {
+            writeln!(std::io::stdout(), "Runtime EVM legacy assembly:\n{evmla}")?;
+        }
+
+        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
+            && output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::BytecodeEthIR,
+            )
+            && let Some(ethir) = deploy_object_result
+                .as_mut()
+                .expect("Always exists")
+                .ethir
+                .take()
+        {
+            writeln!(std::io::stdout(), "Deploy Ethereal IR:\n{ethir}")?;
+        }
+        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
+            && output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::RuntimeBytecodeEthIR,
+            )
+            && let Some(ethir) = runtime_object_result
+                .as_mut()
+                .expect("Always exists")
+                .ethir
+                .take()
+        {
+            writeln!(std::io::stdout(), "Runtime Ethereal IR:\n{ethir}")?;
+        }
+
+        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
+            && output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
+            )
+            && let Some(llvm_ir) = deploy_object_result
+                .as_mut()
+                .expect("Always exists")
+                .llvm_ir_unoptimized
+                .take()
+        {
+            writeln!(
+                std::io::stdout(),
+                "Deploy LLVM IR (unoptimized):\n{llvm_ir}"
+            )?;
+        }
+        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
+            && output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
+            )
+            && let Some(llvm_ir) = runtime_object_result
+                .as_mut()
+                .expect("Always exists")
+                .llvm_ir_unoptimized
+                .take()
+        {
+            writeln!(
+                std::io::stdout(),
+                "Runtime LLVM IR (unoptimized):\n{llvm_ir}"
+            )?;
+        }
+
+        if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
+            && output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::BytecodeLLVMIR,
+            )
+            && let Some(llvm_ir) = deploy_object_result
+                .as_mut()
+                .expect("Always exists")
+                .llvm_ir
+                .take()
+        {
+            writeln!(std::io::stdout(), "Deploy LLVM IR:\n{llvm_ir}")?;
+        }
+        if let Some(runtime_object_result) = self.runtime_object_result.as_mut()
+            && output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
+            )
+            && let Some(llvm_ir) = runtime_object_result
+                .as_mut()
+                .expect("Always exists")
+                .llvm_ir
+                .take()
+        {
+            writeln!(std::io::stdout(), "Runtime LLVM IR:\n{llvm_ir}")?;
+        }
+
         if output_selection.check_selection(
             self.name.path.as_str(),
             self.name.name.as_deref(),

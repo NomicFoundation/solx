@@ -409,14 +409,6 @@ impl Arguments {
             }
         }
 
-        if (self.output_evmla || self.output_ethir || self.output_llvm_ir)
-            && self.output_dir.is_none()
-        {
-            messages.push(solx_standard_json::OutputError::new_error(
-                "IR output flags (--evmla, --ethir, --emit-llvm) require --output-dir to be specified.",
-            ));
-        }
-
         Arc::new(Mutex::new(messages))
     }
 

@@ -6,46 +6,63 @@ use predicates::prelude::*;
 use tempfile::TempDir;
 
 #[test]
-fn emit_llvm_requires_output_dir() -> anyhow::Result<()> {
+fn emit_llvm_to_stdout() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT_PATH, "--emit-llvm"];
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        "--emit-llvm",
+        "--bin",
+        "--via-ir",
+    ];
 
     let result = crate::cli::execute_solx(args)?;
 
-    result.failure().stderr(predicate::str::contains(
-        "IR output flags (--evmla, --ethir, --emit-llvm) require --output-dir to be specified.",
-    ));
+    result
+        .success()
+        .stdout(predicate::str::contains("Deploy LLVM IR (unoptimized):"))
+        .stdout(predicate::str::contains("Deploy LLVM IR:"))
+        .stdout(predicate::str::contains("target datalayout"));
 
     Ok(())
 }
 
 #[test]
-fn evmla_requires_output_dir() -> anyhow::Result<()> {
+fn evmla_to_stdout() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT_PATH, "--evmla"];
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        "--evmla",
+        "--bin",
+    ];
 
     let result = crate::cli::execute_solx(args)?;
 
-    result.failure().stderr(predicate::str::contains(
-        "IR output flags (--evmla, --ethir, --emit-llvm) require --output-dir to be specified.",
-    ));
+    result
+        .success()
+        .stdout(predicate::str::contains("Deploy EVM legacy assembly:"))
+        .stdout(predicate::str::contains("PUSH"));
 
     Ok(())
 }
 
 #[test]
-fn ethir_requires_output_dir() -> anyhow::Result<()> {
+fn ethir_to_stdout() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT_PATH, "--ethir"];
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        "--ethir",
+        "--bin",
+    ];
 
     let result = crate::cli::execute_solx(args)?;
 
-    result.failure().stderr(predicate::str::contains(
-        "IR output flags (--evmla, --ethir, --emit-llvm) require --output-dir to be specified.",
-    ));
+    result
+        .success()
+        .stdout(predicate::str::contains("Deploy Ethereal IR:"))
+        .stdout(predicate::str::contains("block_"));
 
     Ok(())
 }
