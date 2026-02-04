@@ -173,11 +173,11 @@ impl Contract {
                 if output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
-                    solx_standard_json::InputSelector::BytecodeLLVMIR,
+                    solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
                 ) || output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
-                    solx_standard_json::InputSelector::BytecodeLLVMIROptimized,
+                    solx_standard_json::InputSelector::BytecodeLLVMIR,
                 ) {
                     deploy_context.set_capture_llvm_ir(true);
                 }
@@ -199,8 +199,8 @@ impl Contract {
                     deploy_build.debug_info,
                     deploy_build.evmla,
                     deploy_build.ethir,
+                    deploy_build.llvm_ir_unoptimized,
                     deploy_build.llvm_ir,
-                    deploy_build.llvm_ir_optimized,
                     true,
                     code_segment,
                     None,
@@ -269,11 +269,11 @@ impl Contract {
                 if output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
-                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
+                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
                 ) || output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
-                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIROptimized,
+                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
                 ) {
                     runtime_context.set_capture_llvm_ir(true);
                 }
@@ -296,8 +296,8 @@ impl Contract {
                     runtime_build.debug_info,
                     runtime_build.evmla,
                     runtime_build.ethir,
+                    runtime_build.llvm_ir_unoptimized,
                     runtime_build.llvm_ir,
-                    runtime_build.llvm_ir_optimized,
                     true,
                     code_segment,
                     Some(immutables),
@@ -374,11 +374,11 @@ impl Contract {
                 if output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
-                    solx_standard_json::InputSelector::BytecodeLLVMIR,
+                    solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
                 ) || output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
-                    solx_standard_json::InputSelector::BytecodeLLVMIROptimized,
+                    solx_standard_json::InputSelector::BytecodeLLVMIR,
                 ) {
                     deploy_context.set_capture_llvm_ir(true);
                 }
@@ -400,8 +400,8 @@ impl Contract {
                     deploy_build.debug_info,
                     deploy_build.evmla,
                     deploy_build.ethir,
+                    deploy_build.llvm_ir_unoptimized,
                     deploy_build.llvm_ir,
-                    deploy_build.llvm_ir_optimized,
                     false,
                     code_segment,
                     None,
@@ -473,11 +473,11 @@ impl Contract {
                 if output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
-                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
+                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
                 ) || output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
-                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIROptimized,
+                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
                 ) {
                     runtime_context.set_capture_llvm_ir(true);
                 }
@@ -500,8 +500,8 @@ impl Contract {
                     runtime_build.debug_info,
                     runtime_build.evmla,
                     runtime_build.ethir,
+                    runtime_build.llvm_ir_unoptimized,
                     runtime_build.llvm_ir,
-                    runtime_build.llvm_ir_optimized,
                     false,
                     code_segment,
                     Some(immutables),
@@ -545,11 +545,11 @@ impl Contract {
                 if output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
-                    solx_standard_json::InputSelector::BytecodeLLVMIR,
+                    solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
                 ) || output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
-                    solx_standard_json::InputSelector::BytecodeLLVMIROptimized,
+                    solx_standard_json::InputSelector::BytecodeLLVMIR,
                 ) {
                     deploy_context.set_capture_llvm_ir(true);
                 }
@@ -571,8 +571,8 @@ impl Contract {
                     deploy_build.debug_info,
                     deploy_build.evmla,
                     deploy_build.ethir,
+                    deploy_build.llvm_ir_unoptimized,
                     deploy_build.llvm_ir,
-                    deploy_build.llvm_ir_optimized,
                     false,
                     code_segment,
                     None,
@@ -616,11 +616,11 @@ impl Contract {
                 if output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
-                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
+                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
                 ) || output_selection.check_selection(
                     contract_name.path.as_str(),
                     contract_name.name.as_deref(),
-                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIROptimized,
+                    solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
                 ) {
                     runtime_context.set_capture_llvm_ir(true);
                 }
@@ -642,8 +642,8 @@ impl Contract {
                     runtime_build.debug_info,
                     runtime_build.evmla,
                     runtime_build.ethir,
+                    runtime_build.llvm_ir_unoptimized,
                     runtime_build.llvm_ir,
-                    runtime_build.llvm_ir_optimized,
                     false,
                     code_segment,
                     Some(BTreeMap::new()),

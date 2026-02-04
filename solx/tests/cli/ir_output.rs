@@ -287,8 +287,8 @@ fn standard_json_llvm_ir_via_ir() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
+        .stdout(predicate::str::contains("\"llvmIrUnoptimized\""))
         .stdout(predicate::str::contains("\"llvmIr\""))
-        .stdout(predicate::str::contains("\"llvmIrOptimized\""))
         .stdout(predicate::str::contains("define"))
         .stdout(predicate::str::contains("target datalayout"));
 
@@ -309,8 +309,8 @@ fn standard_json_evmla_ethir() -> anyhow::Result<()> {
         .success()
         .stdout(predicate::str::contains("\"evmla\""))
         .stdout(predicate::str::contains("\"ethir\""))
+        .stdout(predicate::str::contains("\"llvmIrUnoptimized\""))
         .stdout(predicate::str::contains("\"llvmIr\""))
-        .stdout(predicate::str::contains("\"llvmIrOptimized\""))
         // EVMLA contains instruction names
         .stdout(predicate::str::contains("PUSH"))
         // EthIR contains block labels

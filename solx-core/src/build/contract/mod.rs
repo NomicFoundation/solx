@@ -836,7 +836,22 @@ impl Contract {
                         )
                     })
             }),
-            // llvm_ir (unoptimized)
+            // llvm_ir_unoptimized
+            self.deploy_object_result.as_mut().and_then(|result| {
+                result
+                    .as_mut()
+                    .expect("Always exists")
+                    .llvm_ir_unoptimized
+                    .take()
+                    .filter(|_| {
+                        output_selection.check_selection(
+                            self.name.path.as_str(),
+                            self.name.name.as_deref(),
+                            solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
+                        )
+                    })
+            }),
+            // llvm_ir (optimized)
             self.deploy_object_result.as_mut().and_then(|result| {
                 result
                     .as_mut()
@@ -848,21 +863,6 @@ impl Contract {
                             self.name.path.as_str(),
                             self.name.name.as_deref(),
                             solx_standard_json::InputSelector::BytecodeLLVMIR,
-                        )
-                    })
-            }),
-            // llvm_ir_optimized
-            self.deploy_object_result.as_mut().and_then(|result| {
-                result
-                    .as_mut()
-                    .expect("Always exists")
-                    .llvm_ir_optimized
-                    .take()
-                    .filter(|_| {
-                        output_selection.check_selection(
-                            self.name.path.as_str(),
-                            self.name.name.as_deref(),
-                            solx_standard_json::InputSelector::BytecodeLLVMIROptimized,
                         )
                     })
             }),
@@ -1040,7 +1040,22 @@ impl Contract {
                         )
                     })
             }),
-            // llvm_ir (unoptimized)
+            // llvm_ir_unoptimized
+            self.runtime_object_result.as_mut().and_then(|result| {
+                result
+                    .as_mut()
+                    .expect("Always exists")
+                    .llvm_ir_unoptimized
+                    .take()
+                    .filter(|_| {
+                        output_selection.check_selection(
+                            self.name.path.as_str(),
+                            self.name.name.as_deref(),
+                            solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
+                        )
+                    })
+            }),
+            // llvm_ir (optimized)
             self.runtime_object_result.as_mut().and_then(|result| {
                 result
                     .as_mut()
@@ -1052,21 +1067,6 @@ impl Contract {
                             self.name.path.as_str(),
                             self.name.name.as_deref(),
                             solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
-                        )
-                    })
-            }),
-            // llvm_ir_optimized
-            self.runtime_object_result.as_mut().and_then(|result| {
-                result
-                    .as_mut()
-                    .expect("Always exists")
-                    .llvm_ir_optimized
-                    .take()
-                    .filter(|_| {
-                        output_selection.check_selection(
-                            self.name.path.as_str(),
-                            self.name.name.as_deref(),
-                            solx_standard_json::InputSelector::RuntimeBytecodeLLVMIROptimized,
                         )
                     })
             }),

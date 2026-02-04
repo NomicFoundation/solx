@@ -14,13 +14,13 @@
           "evm.bytecode.object",
           "evm.bytecode.evmla",
           "evm.bytecode.ethir",
+          "evm.bytecode.llvmIrUnoptimized",
           "evm.bytecode.llvmIr",
-          "evm.bytecode.llvmIrOptimized",
           "evm.deployedBytecode.object",
           "evm.deployedBytecode.evmla",
           "evm.deployedBytecode.ethir",
-          "evm.deployedBytecode.llvmIr",
-          "evm.deployedBytecode.llvmIrOptimized"
+          "evm.deployedBytecode.llvmIrUnoptimized",
+          "evm.deployedBytecode.llvmIr"
         ]
       }
     },

@@ -118,10 +118,10 @@ pub fn main(
         selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEthIR);
     }
     if arguments.output_llvm_ir {
+        selectors.insert(solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized);
         selectors.insert(solx_standard_json::InputSelector::BytecodeLLVMIR);
-        selectors.insert(solx_standard_json::InputSelector::BytecodeLLVMIROptimized);
+        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized);
         selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR);
-        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeLLVMIROptimized);
     }
     if arguments.output_bytecode {
         selectors.insert(solx_standard_json::InputSelector::BytecodeObject);

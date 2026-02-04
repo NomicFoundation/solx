@@ -58,12 +58,12 @@ pub enum Selector {
     /// The deploy Ethereal IR (solx internal representation).
     #[serde(rename = "evm.bytecode.ethir")]
     BytecodeEthIR,
+    /// The deploy unoptimized LLVM IR (solx internal representation).
+    #[serde(rename = "evm.bytecode.llvmIrUnoptimized")]
+    BytecodeLLVMIRUnoptimized,
     /// The deploy LLVM IR (solx internal representation).
     #[serde(rename = "evm.bytecode.llvmIr")]
     BytecodeLLVMIR,
-    /// The deploy optimized LLVM IR (solx internal representation).
-    #[serde(rename = "evm.bytecode.llvmIrOptimized")]
-    BytecodeLLVMIROptimized,
     /// The deploy LLVM assembly.
     #[serde(rename = "evm.bytecode.llvmAssembly")]
     BytecodeLLVMAssembly,
@@ -97,12 +97,12 @@ pub enum Selector {
     /// The runtime Ethereal IR (solx internal representation).
     #[serde(rename = "evm.deployedBytecode.ethir")]
     RuntimeBytecodeEthIR,
+    /// The runtime unoptimized LLVM IR (solx internal representation).
+    #[serde(rename = "evm.deployedBytecode.llvmIrUnoptimized")]
+    RuntimeBytecodeLLVMIRUnoptimized,
     /// The runtime LLVM IR (solx internal representation).
     #[serde(rename = "evm.deployedBytecode.llvmIr")]
     RuntimeBytecodeLLVMIR,
-    /// The runtime optimized LLVM IR (solx internal representation).
-    #[serde(rename = "evm.deployedBytecode.llvmIrOptimized")]
-    RuntimeBytecodeLLVMIROptimized,
     /// The runtime LLVM assembly.
     #[serde(rename = "evm.deployedBytecode.llvmAssembly")]
     RuntimeBytecodeLLVMAssembly,
@@ -149,8 +149,8 @@ impl Selector {
                 | Self::BytecodeObject
                 | Self::BytecodeEVMLA
                 | Self::BytecodeEthIR
+                | Self::BytecodeLLVMIRUnoptimized
                 | Self::BytecodeLLVMIR
-                | Self::BytecodeLLVMIROptimized
                 | Self::BytecodeLLVMAssembly
                 | Self::BytecodeLinkReferences
                 | Self::BytecodeSourceMap
@@ -161,8 +161,8 @@ impl Selector {
                 | Self::RuntimeBytecodeObject
                 | Self::RuntimeBytecodeEVMLA
                 | Self::RuntimeBytecodeEthIR
+                | Self::RuntimeBytecodeLLVMIRUnoptimized
                 | Self::RuntimeBytecodeLLVMIR
-                | Self::RuntimeBytecodeLLVMIROptimized
                 | Self::RuntimeBytecodeLLVMAssembly
                 | Self::RuntimeBytecodeSourceMap
                 | Self::RuntimeBytecodeDebugInfo
@@ -184,8 +184,8 @@ impl Selector {
                 Self::BytecodeObject,
                 Self::BytecodeEVMLA,
                 Self::BytecodeEthIR,
+                Self::BytecodeLLVMIRUnoptimized,
                 Self::BytecodeLLVMIR,
-                Self::BytecodeLLVMIROptimized,
                 Self::BytecodeLLVMAssembly,
                 Self::BytecodeOpcodes,
                 Self::BytecodeLinkReferences,
@@ -197,8 +197,8 @@ impl Selector {
                 Self::RuntimeBytecodeObject,
                 Self::RuntimeBytecodeEVMLA,
                 Self::RuntimeBytecodeEthIR,
+                Self::RuntimeBytecodeLLVMIRUnoptimized,
                 Self::RuntimeBytecodeLLVMIR,
-                Self::RuntimeBytecodeLLVMIROptimized,
                 Self::RuntimeBytecodeLLVMAssembly,
                 Self::RuntimeBytecodeOpcodes,
                 Self::RuntimeBytecodeLinkReferences,
@@ -213,8 +213,8 @@ impl Selector {
                 Self::BytecodeObject,
                 Self::BytecodeEVMLA,
                 Self::BytecodeEthIR,
+                Self::BytecodeLLVMIRUnoptimized,
                 Self::BytecodeLLVMIR,
-                Self::BytecodeLLVMIROptimized,
                 Self::BytecodeLLVMAssembly,
                 Self::BytecodeOpcodes,
                 Self::BytecodeLinkReferences,
@@ -227,8 +227,8 @@ impl Selector {
                 Self::RuntimeBytecodeObject,
                 Self::RuntimeBytecodeEVMLA,
                 Self::RuntimeBytecodeEthIR,
+                Self::RuntimeBytecodeLLVMIRUnoptimized,
                 Self::RuntimeBytecodeLLVMIR,
-                Self::RuntimeBytecodeLLVMIROptimized,
                 Self::RuntimeBytecodeLLVMAssembly,
                 Self::RuntimeBytecodeOpcodes,
                 Self::RuntimeBytecodeLinkReferences,
@@ -255,8 +255,8 @@ impl Selector {
                 Self::BytecodeObject,
                 Self::BytecodeEVMLA,
                 Self::BytecodeEthIR,
+                Self::BytecodeLLVMIRUnoptimized,
                 Self::BytecodeLLVMIR,
-                Self::BytecodeLLVMIROptimized,
                 Self::BytecodeLLVMAssembly,
                 Self::BytecodeOpcodes,
                 Self::BytecodeLinkReferences,
@@ -268,8 +268,8 @@ impl Selector {
                 Self::RuntimeBytecodeObject,
                 Self::RuntimeBytecodeEVMLA,
                 Self::RuntimeBytecodeEthIR,
+                Self::RuntimeBytecodeLLVMIRUnoptimized,
                 Self::RuntimeBytecodeLLVMIR,
-                Self::RuntimeBytecodeLLVMIROptimized,
                 Self::RuntimeBytecodeLLVMAssembly,
                 Self::RuntimeBytecodeOpcodes,
                 Self::RuntimeBytecodeLinkReferences,
