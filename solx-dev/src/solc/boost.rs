@@ -174,9 +174,14 @@ fn download(url: &str, output_path: &Path) -> anyhow::Result<()> {
 /// Extracts a tar.gz archive.
 ///
 fn extract(archive_path: &Path, output_dir: &Path) -> anyhow::Result<()> {
+    // Use the filename only since we're setting current_dir to output_dir
+    let archive_filename = archive_path
+        .file_name()
+        .ok_or_else(|| anyhow::anyhow!("Invalid archive path: {}", archive_path.display()))?;
+
     let mut tar = Command::new("tar");
     tar.arg("xzf");
-    tar.arg(archive_path);
+    tar.arg(archive_filename);
     tar.current_dir(output_dir);
 
     crate::utils::command(&mut tar, "Extracting Boost")?;
