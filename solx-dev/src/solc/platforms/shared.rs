@@ -31,17 +31,24 @@ pub fn shared_cxx_flags() -> String {
 ///
 /// Boost cmake arguments.
 ///
-/// Note: Paths are canonicalized to absolute paths as required by CMake.
+/// Note: Only lib_dir and include_dir are canonicalized as they must exist.
+/// The boost_root is constructed from the canonicalized lib_dir since the
+/// cmake config directory (lib/cmake/Boost-X.Y.Z) may not exist.
 ///
 pub fn boost_cmake_args(
-    boost_root: &Path,
+    boost_version: &str,
     boost_lib_dir: &Path,
     boost_include_dir: &Path,
 ) -> anyhow::Result<Vec<String>> {
     // CMake requires absolute paths for Boost directories
-    let boost_root = boost_root.canonicalize()?;
     let boost_lib_dir = boost_lib_dir.canonicalize()?;
     let boost_include_dir = boost_include_dir.canonicalize()?;
+
+    // Construct boost_root from the canonicalized lib_dir
+    // The cmake config dir may not exist, but CMake will still use the other paths
+    let boost_root = boost_lib_dir
+        .join("cmake")
+        .join(format!("Boost-{boost_version}"));
 
     Ok(vec![
         "-DBoost_NO_BOOST_CMAKE=1".to_owned(),

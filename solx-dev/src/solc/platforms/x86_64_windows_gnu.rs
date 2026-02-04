@@ -70,10 +70,10 @@ pub fn build(
     cmake.arg(format!("-DCMAKE_CXX_FLAGS={}", shared::shared_cxx_flags()));
 
     // Boost configuration with Windows-specific adjustments
-    let boost_root = boost_config.cmake_root();
     let boost_lib_dir = boost_config.lib_dir();
     let boost_include_dir = boost_config.windows_include_dir();
-    for arg in shared::boost_cmake_args(&boost_root, &boost_lib_dir, &boost_include_dir)? {
+    for arg in shared::boost_cmake_args(&boost_config.version, &boost_lib_dir, &boost_include_dir)?
+    {
         cmake.arg(arg);
     }
     // Windows-specific Boost flags

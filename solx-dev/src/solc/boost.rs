@@ -46,16 +46,6 @@ impl BoostConfig {
     }
 
     ///
-    /// Returns the Boost CMake root directory.
-    ///
-    pub fn cmake_root(&self) -> PathBuf {
-        self.base_dir
-            .join("lib")
-            .join("cmake")
-            .join(format!("Boost-{}", self.version))
-    }
-
-    ///
     /// Returns the Boost library directory.
     ///
     pub fn lib_dir(&self) -> PathBuf {
