@@ -48,8 +48,9 @@ fn main() {
     }
     let llvm_lib_path = PathBuf::from(env!("LLVM_SYS_211_PREFIX")).join("lib");
 
-    // Check if MLIR is available by looking for a key MLIR library.
-    let mlir_available = llvm_lib_path.join("libMLIRIR.a").exists();
+    // Check if MLIR is available by looking for the custom Sol dialect library.
+    // This ensures we only enable MLIR when the custom dialects have been built.
+    let mlir_available = llvm_lib_path.join("libMLIRSolDialect.a").exists();
 
     if mlir_available {
         println!("cargo:rustc-link-search=native={}", llvm_lib_path.display());
