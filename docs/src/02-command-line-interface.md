@@ -360,11 +360,11 @@ Debug info of the runtime part:
 
 ### `--evmla`
 
-Emits EVM legacy assembly (intermediate representation from solc) to files in the output directory.
+Emits EVM legacy assembly (intermediate representation from solc).
 
-This flag requires the `--output-dir` option to be specified. The output files have the `.evmla` extension.
+When used with `--output-dir`, writes `.evmla` files to the output directory. Without `--output-dir`, outputs to stdout.
 
-Usage:
+Usage with `--output-dir`:
 
 ```bash
 solx 'Simple.sol' --evmla --output-dir './build/'
@@ -379,15 +379,32 @@ tests_solidity_simple_default_sol_Test.evmla
 tests_solidity_simple_default_sol_Test.runtime.evmla
 ```
 
+Usage with stdout:
+
+```bash
+solx 'Simple.sol' --evmla --bin
+```
+
+Output:
+
+```text
+======= Simple.sol:Test =======
+Binary:
+...
+Deploy EVM legacy assembly:
+000     PUSH                80
+...
+```
+
 
 
 ### `--ethir`
 
-Emits Ethereal IR (intermediate representation between EVM assembly and LLVM IR) to files in the output directory.
+Emits Ethereal IR (intermediate representation between EVM assembly and LLVM IR).
 
-This flag requires the `--output-dir` option to be specified. The output files have the `.ethir` extension.
+When used with `--output-dir`, writes `.ethir` files to the output directory. Without `--output-dir`, outputs to stdout.
 
-Usage:
+Usage with `--output-dir`:
 
 ```bash
 solx 'Simple.sol' --ethir --output-dir './build/'
@@ -402,15 +419,32 @@ tests_solidity_simple_default_sol_Test.ethir
 tests_solidity_simple_default_sol_Test.runtime.ethir
 ```
 
+Usage with stdout:
+
+```bash
+solx 'Simple.sol' --ethir --bin
+```
+
+Output:
+
+```text
+======= Simple.sol:Test =======
+Binary:
+...
+Deploy Ethereal IR:
+function main(0, 0, 0, 0, 0) -> 0, 0, 0, 0 {
+...
+```
+
 
 
 ### `--emit-llvm`
 
-Emits LLVM IR (both unoptimized and optimized) to files in the output directory.
+Emits LLVM IR (both unoptimized and optimized).
 
-This flag requires the `--output-dir` option to be specified. The output files have the `.ll` extension.
+When used with `--output-dir`, writes `.ll` files to the output directory. Without `--output-dir`, outputs to stdout.
 
-Usage:
+Usage with `--output-dir`:
 
 ```bash
 solx 'Simple.sol' --emit-llvm --output-dir './build/'
@@ -425,6 +459,26 @@ tests_solidity_simple_default_sol_Test.optimized.ll
 tests_solidity_simple_default_sol_Test.runtime.optimized.ll
 tests_solidity_simple_default_sol_Test.runtime.unoptimized.ll
 tests_solidity_simple_default_sol_Test.unoptimized.ll
+```
+
+Usage with stdout:
+
+```bash
+solx 'Simple.sol' --emit-llvm --bin --via-ir
+```
+
+Output:
+
+```text
+======= Simple.sol:Test =======
+Binary:
+...
+Deploy LLVM IR (unoptimized):
+; ModuleID = 'Simple.sol:Test'
+...
+Deploy LLVM IR:
+; ModuleID = 'Simple.sol:Test'
+...
 ```
 
 
