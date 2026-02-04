@@ -284,11 +284,13 @@ impl Contract {
                         contract_name.name.as_deref(),
                         solx_standard_json::InputSelector::BytecodeDebugInfo,
                     );
+                let source_ids = debug_info
+                    .as_ref()
+                    .map(|info| info.source_ids.clone())
+                    .unwrap_or_default();
                 let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
                     Some(solx_codegen_evm::ContextSolidityData::new(
-                        immutables,
-                        BTreeMap::new(),
-                        None, // TODO
+                        immutables, source_ids, debug_info,
                     ))
                 } else {
                     None
@@ -370,11 +372,13 @@ impl Contract {
                         contract_name.name.as_deref(),
                         solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
                     );
+                let source_ids = debug_info
+                    .as_ref()
+                    .map(|info| info.source_ids.clone())
+                    .unwrap_or_default();
                 let solidity_data = if language == solx_standard_json::InputLanguage::Solidity {
                     Some(solx_codegen_evm::ContextSolidityData::new(
-                        immutables,
-                        BTreeMap::new(),
-                        None, // TODO
+                        immutables, source_ids, debug_info,
                     ))
                 } else {
                     None

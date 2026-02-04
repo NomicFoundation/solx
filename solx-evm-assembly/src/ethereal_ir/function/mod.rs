@@ -1058,6 +1058,7 @@ impl Function {
                 Some(block_key.code_segment),
                 Type::new_defined(
                     function.name.to_owned(),
+                    function.ast_id,
                     block_key.clone(),
                     function.input_size,
                     function.output_size,
@@ -1157,6 +1158,7 @@ impl solx_codegen_evm::WriteLLVM for Function {
                 .get_function(self.name.as_str())
                 .expect("Declared in EntryFunction"),
             Type::Defined {
+                ast_id,
                 input_size,
                 output_size,
                 ..
@@ -1172,7 +1174,7 @@ impl solx_codegen_evm::WriteLLVM for Function {
                 );
                 context.add_function(
                     self.name.as_str(),
-                    None, // TODO: EVM assembly support
+                    ast_id,
                     r#type,
                     output_size,
                     Some(inkwell::module::Linkage::Private),

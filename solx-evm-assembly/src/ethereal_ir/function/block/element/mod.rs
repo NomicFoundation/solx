@@ -9,6 +9,7 @@ use num::ToPrimitive;
 
 use solx_codegen_evm::IContext;
 use solx_codegen_evm::IEVMLAFunction;
+use solx_codegen_evm::ISolidityData;
 
 use crate::assembly::instruction::Instruction;
 use crate::assembly::instruction::name::Name as InstructionName;
@@ -76,6 +77,21 @@ impl Element {
 
 impl solx_codegen_evm::WriteLLVM for Element {
     fn into_llvm(mut self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
+        let solc_location = self
+            .instruction
+            .source
+            .filter(|&source_id| source_id >= 0)
+            .map(|source_id| {
+                solx_utils::DebugInfoSolcLocation::new_with_offsets(
+                    source_id as usize,
+                    self.instruction.begin,
+                    self.instruction.end,
+                )
+            });
+        if let Some((solidity_data, solc_location)) = context.solidity_mut().zip(solc_location) {
+            solidity_data.set_debug_info_solc_location(solc_location);
+        }
+
         let mut original = self.instruction.value.clone();
 
         let result = match self.instruction.name.clone() {

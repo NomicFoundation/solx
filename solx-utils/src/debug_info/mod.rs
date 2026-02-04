@@ -31,6 +31,9 @@ pub struct DebugInfo {
     /// Generic Solidity AST nodes.
     /// The key is the start byte offset.
     pub ast_nodes: HashMap<usize, AstNode>,
+    /// Source ID to source file path mapping.
+    #[serde(default)]
+    pub source_ids: BTreeMap<usize, String>,
 }
 
 impl DebugInfo {
@@ -41,11 +44,13 @@ impl DebugInfo {
         contract_definitions: HashMap<String, ContractDefinition>,
         function_definitions: HashMap<usize, FunctionDefinition>,
         ast_nodes: HashMap<usize, AstNode>,
+        source_ids: BTreeMap<usize, String>,
     ) -> Self {
         Self {
             contract_definitions,
             function_definitions,
             ast_nodes,
+            source_ids,
         }
     }
 

@@ -28,6 +28,6 @@
 /temp*
 
 # Debug and benchmark artifacts
-/debug/
+/debug*
 /*.json
 /*.txt

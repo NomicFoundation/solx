@@ -197,6 +197,13 @@ impl Output {
             HashMap::new();
         let mut ast_nodes: HashMap<usize, solx_utils::DebugInfoAstNode> = HashMap::new();
 
+        // Build source_id -> path mapping
+        let source_ids: BTreeMap<usize, String> = self
+            .sources
+            .iter()
+            .map(|(path, source)| (source.id, path.clone()))
+            .collect();
+
         for (path, source) in self.sources.iter() {
             if let Some(ref ast_json) = source.ast {
                 contract_definitions.extend(Source::get_ast_nodes(
@@ -222,7 +229,12 @@ impl Output {
             }
         }
 
-        solx_utils::DebugInfo::new(contract_definitions, function_definitions, ast_nodes)
+        solx_utils::DebugInfo::new(
+            contract_definitions,
+            function_definitions,
+            ast_nodes,
+            source_ids,
+        )
     }
 
     ///
