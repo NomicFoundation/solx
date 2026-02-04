@@ -191,8 +191,10 @@ fn bootstrap(source_dir: &Path, install_prefix: &Path) -> anyhow::Result<()> {
 
     #[cfg(target_os = "windows")]
     {
-        // On Windows/MSYS2, run bootstrap.sh through bash
-        let mut bootstrap = Command::new("bash");
+        // On Windows/MSYS2, run bootstrap.sh through sh
+        // Use "sh" instead of "bash" because "bash" on Windows PATH often
+        // resolves to WSL's bash, while "sh" resolves to MSYS2's shell
+        let mut bootstrap = Command::new("sh");
         bootstrap.current_dir(source_dir);
         bootstrap.arg("-c");
         bootstrap.arg(format!("./bootstrap.sh --prefix={}", install_prefix_str));
@@ -251,13 +253,15 @@ fn build(source_dir: &Path) -> anyhow::Result<()> {
 
     #[cfg(target_os = "windows")]
     let b2_cmd = {
-        // Build b2 command string for bash
+        // Build b2 command string for sh
+        // Use "sh" instead of "bash" because "bash" on Windows PATH often
+        // resolves to WSL's bash, while "sh" resolves to MSYS2's shell
         let b2_args = format!(
             "./b2 -d0 link=static runtime-link=static variant=release threading=multi address-model=64 {} -j{} install",
             with_libraries.join(" "),
             job_count
         );
-        let mut cmd = Command::new("bash");
+        let mut cmd = Command::new("sh");
         cmd.current_dir(source_dir);
         cmd.arg("-c");
         cmd.arg(b2_args);
