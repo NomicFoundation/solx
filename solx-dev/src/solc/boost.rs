@@ -117,6 +117,10 @@ pub fn download_and_build(working_dir: &Path, boost_config: &BoostConfig) -> any
         return Ok(());
     }
 
+    // Canonicalize paths early - bootstrap/b2 need absolute paths since they run from source_dir
+    let working_dir = working_dir.canonicalize()?;
+    let install_prefix = working_dir.join("boost");
+
     eprintln!("Downloading Boost {}...", boost_config.version);
 
     // Download
@@ -126,13 +130,13 @@ pub fn download_and_build(working_dir: &Path, boost_config: &BoostConfig) -> any
     }
 
     // Extract
-    let source_dir = boost_config.source_dir(working_dir);
+    let source_dir = boost_config.source_dir(&working_dir);
     if !source_dir.exists() {
-        extract(&archive_path, working_dir)?;
+        extract(&archive_path, &working_dir)?;
     }
 
-    // Bootstrap
-    bootstrap(&source_dir, &boost_config.base_dir)?;
+    // Bootstrap with absolute install path
+    bootstrap(&source_dir, &install_prefix)?;
 
     // Build
     build(&source_dir)?;
@@ -140,7 +144,7 @@ pub fn download_and_build(working_dir: &Path, boost_config: &BoostConfig) -> any
     eprintln!(
         "Boost {} built successfully at {}",
         boost_config.version,
-        boost_config.base_dir.display()
+        install_prefix.display()
     );
 
     Ok(())
