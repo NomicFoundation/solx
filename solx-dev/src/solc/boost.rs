@@ -186,24 +186,54 @@ fn extract(archive_path: &Path, output_dir: &Path) -> anyhow::Result<()> {
 /// Runs Boost bootstrap script.
 ///
 fn bootstrap(source_dir: &Path, install_prefix: &Path) -> anyhow::Result<()> {
-    let bootstrap_script = if cfg!(target_os = "windows") {
-        "bootstrap.sh" // MSYS2 uses bash
-    } else {
-        "./bootstrap.sh"
-    };
+    // Convert path to string for passing to shell
+    let install_prefix_str = normalize_path(install_prefix);
 
-    let mut bootstrap = Command::new(bootstrap_script);
-    bootstrap.current_dir(source_dir);
-    bootstrap.arg(format!("--prefix={}", install_prefix.display()));
-
-    // On macOS x86_64, specify Python version for compatibility
-    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    #[cfg(target_os = "windows")]
     {
-        bootstrap.arg("--with-python-version=2.7");
+        // On Windows/MSYS2, run bootstrap.sh through bash
+        let mut bootstrap = Command::new("bash");
+        bootstrap.current_dir(source_dir);
+        bootstrap.arg("-c");
+        bootstrap.arg(format!("./bootstrap.sh --prefix={}", install_prefix_str));
+        crate::utils::command(&mut bootstrap, "Boost bootstrap")?;
     }
 
-    crate::utils::command(&mut bootstrap, "Boost bootstrap")?;
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut bootstrap = Command::new("./bootstrap.sh");
+        bootstrap.current_dir(source_dir);
+        bootstrap.arg(format!("--prefix={}", install_prefix_str));
+
+        // On macOS x86_64, specify Python version for compatibility
+        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+        {
+            bootstrap.arg("--with-python-version=2.7");
+        }
+
+        crate::utils::command(&mut bootstrap, "Boost bootstrap")?;
+    }
+
     Ok(())
+}
+
+///
+/// Normalizes a path for use with shell commands.
+///
+/// On Windows, removes the extended-length path prefix (\\?\) that canonicalize() adds.
+///
+fn normalize_path(path: &Path) -> String {
+    let path_str = path.display().to_string();
+
+    #[cfg(target_os = "windows")]
+    {
+        // Strip the \\?\ prefix that Windows canonicalize() adds
+        if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+            return stripped.to_string();
+        }
+    }
+
+    path_str
 }
 
 ///
@@ -219,18 +249,37 @@ fn build(source_dir: &Path) -> anyhow::Result<()> {
         .map(|lib| format!("--with-{lib}"))
         .collect();
 
-    let mut b2 = Command::new("./b2");
-    b2.current_dir(source_dir);
-    b2.arg("-d0"); // Suppress output
-    b2.arg("link=static");
-    b2.arg("runtime-link=static");
-    b2.arg("variant=release");
-    b2.arg("threading=multi");
-    b2.arg("address-model=64");
-    b2.args(&with_libraries);
-    b2.arg(format!("-j{job_count}"));
-    b2.arg("install");
+    #[cfg(target_os = "windows")]
+    let b2_cmd = {
+        // Build b2 command string for bash
+        let b2_args = format!(
+            "./b2 -d0 link=static runtime-link=static variant=release threading=multi address-model=64 {} -j{} install",
+            with_libraries.join(" "),
+            job_count
+        );
+        let mut cmd = Command::new("bash");
+        cmd.current_dir(source_dir);
+        cmd.arg("-c");
+        cmd.arg(b2_args);
+        cmd
+    };
 
-    crate::utils::command(&mut b2, "Boost b2 build")?;
+    #[cfg(not(target_os = "windows"))]
+    let b2_cmd = {
+        let mut cmd = Command::new("./b2");
+        cmd.current_dir(source_dir);
+        cmd.arg("-d0"); // Suppress output
+        cmd.arg("link=static");
+        cmd.arg("runtime-link=static");
+        cmd.arg("variant=release");
+        cmd.arg("threading=multi");
+        cmd.arg("address-model=64");
+        cmd.args(&with_libraries);
+        cmd.arg(format!("-j{job_count}"));
+        cmd.arg("install");
+        cmd
+    };
+
+    crate::utils::command(&mut { b2_cmd }, "Boost b2 build")?;
     Ok(())
 }
