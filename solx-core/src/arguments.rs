@@ -157,7 +157,7 @@ pub struct Arguments {
 
     /// Emit LLVM IR (both unoptimized and optimized).
     /// Can be used with --output-dir to write .ll files.
-    #[arg(long = "emit-llvm", help_heading = "Output Selection")]
+    #[arg(long = "emit-llvm-ir", help_heading = "Output Selection")]
     pub output_llvm_ir: bool,
 
     //
@@ -407,14 +407,6 @@ impl Arguments {
                     "Metadata literal content flag must be specified in standard JSON input settings.",
                 ));
             }
-        }
-
-        if (self.output_evmla || self.output_ethir || self.output_llvm_ir)
-            && self.output_dir.is_none()
-        {
-            messages.push(solx_standard_json::OutputError::new_error(
-                "IR output flags (--evmla, --ethir, --emit-llvm) require --output-dir to be specified.",
-            ));
         }
 
         Arc::new(Mutex::new(messages))

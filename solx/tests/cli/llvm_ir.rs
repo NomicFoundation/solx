@@ -199,6 +199,24 @@ fn excess_mode_standard_json() -> anyhow::Result<()> {
 }
 
 #[test]
+fn standard_json() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::TEST_LLVM_IR_STANDARD_JSON_PATH,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"bytecode\""))
+        .stdout(predicate::str::contains("\"object\""));
+
+    Ok(())
+}
+
+#[test]
 fn standard_json_invalid() -> anyhow::Result<()> {
     crate::common::setup()?;
 

@@ -124,12 +124,19 @@ impl OutputConfig {
     ///
     /// Dumps the EVM legacy assembly IR.
     ///
-    pub fn dump_evmla(&self, contract_path: &str, code: &str) -> anyhow::Result<()> {
+    pub fn dump_evmla(
+        &self,
+        contract_path: &str,
+        code: &str,
+        is_size_fallback: bool,
+        spill_area: Option<(u64, u64)>,
+    ) -> anyhow::Result<()> {
         if !self.output_evmla {
             return Ok(());
         }
+        let suffix = Self::build_suffix(is_size_fallback, spill_area);
         let mut file_path = self.output_directory.to_owned();
-        let full_file_name = Self::full_file_name(contract_path, None, IRType::EVMLA);
+        let full_file_name = Self::full_file_name(contract_path, suffix.as_deref(), IRType::EVMLA);
         file_path.push(full_file_name);
         self.write_file(file_path.as_path(), code)?;
 
@@ -139,16 +146,44 @@ impl OutputConfig {
     ///
     /// Dumps the Ethereal IR.
     ///
-    pub fn dump_ethir(&self, contract_path: &str, code: &str) -> anyhow::Result<()> {
+    pub fn dump_ethir(
+        &self,
+        contract_path: &str,
+        code: &str,
+        is_size_fallback: bool,
+        spill_area: Option<(u64, u64)>,
+    ) -> anyhow::Result<()> {
         if !self.output_ethir {
             return Ok(());
         }
+        let suffix = Self::build_suffix(is_size_fallback, spill_area);
         let mut file_path = self.output_directory.to_owned();
-        let full_file_name = Self::full_file_name(contract_path, None, IRType::EthIR);
+        let full_file_name = Self::full_file_name(contract_path, suffix.as_deref(), IRType::EthIR);
         file_path.push(full_file_name);
         self.write_file(file_path.as_path(), code)?;
 
         Ok(())
+    }
+
+    ///
+    /// Builds a suffix string from size fallback and spill area parameters.
+    ///
+    fn build_suffix(is_size_fallback: bool, spill_area: Option<(u64, u64)>) -> Option<String> {
+        let mut suffix = String::new();
+        if is_size_fallback {
+            suffix.push_str("size_fallback");
+        }
+        if let Some((offset, size)) = spill_area {
+            if !suffix.is_empty() {
+                suffix.push('.');
+            }
+            suffix.push_str(format!("o{offset}s{size}").as_str());
+        }
+        if suffix.is_empty() {
+            None
+        } else {
+            Some(suffix)
+        }
     }
 
     ///

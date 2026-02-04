@@ -109,6 +109,20 @@ pub fn main(
     optimizer_settings.is_debug_logging_enabled = arguments.llvm_debug_logging;
 
     let mut selectors = BTreeSet::new();
+    if arguments.output_evmla {
+        selectors.insert(solx_standard_json::InputSelector::BytecodeEVMLA);
+        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEVMLA);
+    }
+    if arguments.output_ethir {
+        selectors.insert(solx_standard_json::InputSelector::BytecodeEthIR);
+        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEthIR);
+    }
+    if arguments.output_llvm_ir {
+        selectors.insert(solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized);
+        selectors.insert(solx_standard_json::InputSelector::BytecodeLLVMIR);
+        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized);
+        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR);
+    }
     if arguments.output_bytecode {
         selectors.insert(solx_standard_json::InputSelector::BytecodeObject);
     }

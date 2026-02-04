@@ -188,6 +188,14 @@ pub const TEST_JSON_NO_CBOR_METADATA: &str = "tests/data/standard_json_input/no_
 pub const TEST_JSON_EVM_VERSION_TOO_OLD: &str =
     "tests/data/standard_json_input/evm_version_too_old.json";
 
+/// A test input file for LLVM IR output selection (via IR mode).
+pub const TEST_SOLIDITY_STANDARD_JSON_SELECT_LLVM_IR_PATH: &str =
+    "tests/data/standard_json_input/select_llvm_ir.json";
+
+/// A test input file for EVMLA and EthIR output selection (non-via IR mode).
+pub const TEST_SOLIDITY_STANDARD_JSON_SELECT_EVMLA_ETHIR_PATH: &str =
+    "tests/data/standard_json_input/select_evmla_ethir.json";
+
 /// The broken input file path.
 pub const TEST_BROKEN_INPUT_PATH: &str = "tests/data/broken.bad";
 

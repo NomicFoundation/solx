@@ -1,51 +1,68 @@
 //!
-//! CLI tests for IR output flags (--evmla, --ethir, --emit-llvm).
+//! CLI tests for IR output flags (--evmla, --ethir, --emit-llvm-ir).
 //!
 
 use predicates::prelude::*;
 use tempfile::TempDir;
 
 #[test]
-fn emit_llvm_requires_output_dir() -> anyhow::Result<()> {
+fn emit_llvm_to_stdout() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT_PATH, "--emit-llvm"];
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        "--emit-llvm-ir",
+        "--bin",
+        "--via-ir",
+    ];
 
     let result = crate::cli::execute_solx(args)?;
 
-    result.failure().stderr(predicate::str::contains(
-        "IR output flags (--evmla, --ethir, --emit-llvm) require --output-dir to be specified.",
-    ));
+    result
+        .success()
+        .stdout(predicate::str::contains("Deploy LLVM IR (unoptimized):"))
+        .stdout(predicate::str::contains("Deploy LLVM IR:"))
+        .stdout(predicate::str::contains("target datalayout"));
 
     Ok(())
 }
 
 #[test]
-fn evmla_requires_output_dir() -> anyhow::Result<()> {
+fn evmla_to_stdout() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT_PATH, "--evmla"];
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        "--evmla",
+        "--bin",
+    ];
 
     let result = crate::cli::execute_solx(args)?;
 
-    result.failure().stderr(predicate::str::contains(
-        "IR output flags (--evmla, --ethir, --emit-llvm) require --output-dir to be specified.",
-    ));
+    result
+        .success()
+        .stdout(predicate::str::contains("Deploy EVM legacy assembly:"))
+        .stdout(predicate::str::contains("PUSH"));
 
     Ok(())
 }
 
 #[test]
-fn ethir_requires_output_dir() -> anyhow::Result<()> {
+fn ethir_to_stdout() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT_PATH, "--ethir"];
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        "--ethir",
+        "--bin",
+    ];
 
     let result = crate::cli::execute_solx(args)?;
 
-    result.failure().stderr(predicate::str::contains(
-        "IR output flags (--evmla, --ethir, --emit-llvm) require --output-dir to be specified.",
-    ));
+    result
+        .success()
+        .stdout(predicate::str::contains("Deploy Ethereal IR:"))
+        .stdout(predicate::str::contains("block_"));
 
     Ok(())
 }
@@ -58,7 +75,7 @@ fn emit_llvm_with_output_dir() -> anyhow::Result<()> {
 
     let args = &[
         crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
     ];
@@ -145,7 +162,7 @@ fn multiple_ir_flags_with_output_dir() -> anyhow::Result<()> {
 
     let args = &[
         crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
         "--evmla",
         "--ethir",
         "--asm",
@@ -200,7 +217,7 @@ fn ir_output_standard_json_error() -> anyhow::Result<()> {
     let args = &[
         "--standard-json",
         crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -220,7 +237,7 @@ fn ir_output_overwrite_protection() -> anyhow::Result<()> {
     // First run to create files
     let args = &[
         crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
     ];
@@ -248,7 +265,7 @@ fn ir_output_overwrite_allowed() -> anyhow::Result<()> {
     // First run to create files
     let args = &[
         crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
     ];
@@ -261,7 +278,7 @@ fn ir_output_overwrite_allowed() -> anyhow::Result<()> {
     // Second run with --overwrite should succeed
     let args_with_overwrite = &[
         crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
         "--overwrite",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
@@ -271,6 +288,50 @@ fn ir_output_overwrite_allowed() -> anyhow::Result<()> {
     result
         .success()
         .stderr(predicate::str::contains("Compiler run successful"));
+
+    Ok(())
+}
+
+#[test]
+fn standard_json_llvm_ir_via_ir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::TEST_SOLIDITY_STANDARD_JSON_SELECT_LLVM_IR_PATH,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"llvmIrUnoptimized\""))
+        .stdout(predicate::str::contains("\"llvmIr\""))
+        .stdout(predicate::str::contains("define"))
+        .stdout(predicate::str::contains("target datalayout"));
+
+    Ok(())
+}
+
+#[test]
+fn standard_json_evmla_ethir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::TEST_SOLIDITY_STANDARD_JSON_SELECT_EVMLA_ETHIR_PATH,
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("\"evmla\""))
+        .stdout(predicate::str::contains("\"ethir\""))
+        .stdout(predicate::str::contains("\"llvmIrUnoptimized\""))
+        .stdout(predicate::str::contains("\"llvmIr\""))
+        // EVMLA contains instruction names
+        .stdout(predicate::str::contains("PUSH"))
+        // EthIR contains block labels
+        .stdout(predicate::str::contains("block_"));
 
     Ok(())
 }
