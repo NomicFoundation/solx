@@ -52,14 +52,11 @@ impl ISolidityData for SolidityData {
     }
 
     fn debug_info_contract_definition(&self) -> Option<&solx_utils::DebugInfoContractDefinition> {
-        let contract_definitions = &self.debug_info.as_ref()?.contract_definitions;
-        assert!(
-            contract_definitions.len() == 1,
-            "Expected exactly one contract definition, found {}",
-            contract_definitions.len()
-        );
-
-        contract_definitions.values().next()
+        self.debug_info
+            .as_ref()?
+            .contract_definitions
+            .values()
+            .next()
     }
 
     fn debug_info_function_definition(
