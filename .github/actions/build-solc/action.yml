@@ -1,193 +1,78 @@
+# The general action to build solc.
+# It is universal for all platforms: Linux, macOS and Windows.
+# Build logic is implemented in solx-dev Rust tool.
+
 name: 'Build solc'
 description: 'Builds solc executable.'
 inputs:
   working-dir:
-    description: 'Working directory.'
+    description: 'Working directory containing solx-solidity submodule.'
     required: false
-    default: '.'
-  release-suffix:
-    description: 'Release suffix.'
-    required: false
-    default: ''
-  solx-revision:
-    description: 'Release version.'
-    required: false
-    default: '1.0.2'
-  solc-version:
-    description: 'Solidity version.'
-    required: false
-    default: '0.8.33'
-  build-type:
-    description: 'Build type: candidate or reference'
-    required: false
-    default: 'candidate'
+    default: 'solx-solidity'
   cmake-build-type:
-    description: 'CMake build type.'
+    description: 'CMake build type (Release, Debug, or RelWithDebInfo).'
     required: false
     default: 'Release'
   boost-version:
     description: 'Boost version.'
     required: false
     default: '1.83.0'
-  upload-testing-binary:
-    description: 'Upload testing binary.'
-    required: false
-    default: 'true'
-  use-gcc:
-    description: 'Use GCC compiler instead of clang (required for old versions <=0.4.16).'
-    required: false
-    default: 'false'
-  use-windows-clang:
-    description: 'Use clang compiler instead of GCC on Windows.'
-    required: false
-    default: 'false'
   enable-mlir:
     description: 'Enable MLIR support.'
     required: false
     default: 'false'
+  use-gcc:
+    description: 'Use GCC compiler instead of clang (required for old versions <=0.4.16).'
+    required: false
+    default: 'false'
+  upload-testing-binary:
+    description: 'Upload build artifacts for testing.'
+    required: false
+    default: 'true'
+  extra-args:
+    description: 'Extra CMake arguments.'
+    required: false
+    default: ''
+  # Legacy inputs for backwards compatibility (ignored)
+  build-type:
+    description: 'Deprecated: use cmake-build-type instead.'
+    required: false
+    default: ''
 
 runs:
   using: "composite"
   steps:
 
-    - name: Install Boost (MacOS and Linux)
-      working-directory: ${{ inputs.working-dir }}
+    - name: Build solx-dev
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      env:
-        BOOST_VERSION: ${{ inputs.boost-version }}
-        BOOST_DOWNLOAD_URL: "https://archives.boost.io/release/${{ inputs.boost-version }}/source"
-      run: |
-        [ ${RUNNER_OS} = macOS ] && PARALLEL=$(sysctl -n hw.ncpu) || PARALLEL=$(nproc)
-        BOOST_FILENAME=boost_${BOOST_VERSION//./_}
-        curl -L -o ${BOOST_FILENAME}.tar.gz "${BOOST_DOWNLOAD_URL}/${BOOST_FILENAME}.tar.gz"
-        tar xzf "${BOOST_FILENAME}.tar.gz" && cd ${BOOST_FILENAME}
-
-        if [ ${RUNNER_OS} = macOS ]; then
-          if [ ${RUNNER_ARCH} = X64 ]; then
-            ./bootstrap.sh --prefix=${PWD}/../boost --with-python-version=2.7
-          else
-            ./bootstrap.sh --prefix=${PWD}/../boost
-          fi
-        elif [ ${RUNNER_OS} = Linux ]; then
-          ./bootstrap.sh --prefix="../boost"
-        else
-          # Only relative boost prefix is working on Windows MSYS2
-          ./bootstrap.sh --prefix="../boost"
-        fi
-        ./b2 -d0 ${TOOLSET} link=static runtime-link=static variant=release threading=multi \
-          address-model=64 --with-filesystem --with-system --with-program_options --with-test \
-          --with-thread --with-date_time --with-regex --with-chrono --with-random -j${PARALLEL} install
-
-    - name: Update Windows boost
-      if: ${{ runner.os == 'Windows' }}
-      shell: 'msys2 {0}'
-      working-directory: ${{ inputs.working-dir }}
-      run: |
-        for LIB in libboost_system libboost_program_options libboost_filesystem libboost_thread \
-          libboost_date_time libboost_regex libboost_chrono libboost_random libboost_unit_test_framework; do
-            cp ./boost/lib/${LIB}-*.a ./boost/lib/${LIB}.a
-        done
+      run: cargo build --release --bin solx-dev
 
     - name: Build solc
-      working-directory: ${{ inputs.working-dir }}
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash -ex {0}' }}
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
         CXXFLAGS: "-Wno-narrowing"
-        BOOST_VERSION: ${{ inputs.boost-version }}
       run: |
         set -x
-        BOOST_ROOT="${PWD}/boost/lib/cmake/Boost-${BOOST_VERSION}"
-        BOOST_LIBDIR="${PWD}/boost/lib"
-        BOOST_INCLUDEDIR="${PWD}/boost/include"
-        BOOST_CMAKE_FLAGS="-DBoost_NO_BOOST_CMAKE=1 -DBoost_NO_SYSTEM_PATHS=1 -DBOOST_ROOT=${BOOST_ROOT} -DBoost_DIR=${BOOST_ROOT} -DBOOST_LIBRARYDIR="${BOOST_LIBDIR}" -DBoost_USE_STATIC_RUNTIME=1 -DBOOST_USE_STATIC_LIBS=1 -DBOOST_INCLUDEDIR="${BOOST_INCLUDEDIR}" -DBoost_DEBUG=1"
+        [ "${{ inputs.enable-mlir }}" = "true" ] && ENABLE_MLIR="--enable-mlir"
+        [ "${{ inputs.use-gcc }}" = "true" ] && USE_GCC="--use-gcc"
+        [ "${{ inputs.extra-args }}" != "" ] && EXTRA_ARGS="--extra-args ${{ inputs.extra-args }}"
 
-        if [ ${RUNNER_OS} = macOS ]; then
-          PARALLEL=$(sysctl -n hw.ncpu)
-        elif [ ${RUNNER_OS} = Linux ]; then
-          PARALLEL=$(nproc)
-          COMPILER_FLAGS="-DUSE_LD_GOLD=OFF"
-          if [ ${{ inputs.use-gcc }} = 'false' ]; then
-            export LDFLAGS='-fuse-ld=lld'
-            COMPILER_FLAGS="-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DUSE_LD_GOLD=OFF"
-          fi
-        else
-          PARALLEL=$(nproc)
-          COMPILER_FLAGS="-DUSE_LD_GOLD=OFF"
-          # If it would be required to build Windows using clang, then uncomment
-          # Try new condition here without use-windows-clang
-          # if [ ${{ inputs.use-windows-clang }} = 'true' ]; then
-          if [ ${{ inputs.use-gcc }} = 'false' ]; then
-            COMPILER_FLAGS="-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DUSE_LD_GOLD=OFF"
-          fi
-        fi
+        ./target/release/solx-dev solc build \
+          --build-type ${{ inputs.cmake-build-type }} \
+          --boost-version ${{ inputs.boost-version }} \
+          --build-boost \
+          ${ENABLE_MLIR} ${USE_GCC} ${EXTRA_ARGS}
 
-        if [ ${RUNNER_OS} = Windows ]; then
-          # Set 64MB stack size for Windows
-          export LDFLAGS='-fuse-ld=lld -lbcrypt -lwsock32 -static -Wl,--stack,67108864'
-          BOOST_SHORT_VERSION=${BOOST_VERSION%??}
-          BOOST_INCLUDEDIR="${PWD}/boost/include/boost-${BOOST_SHORT_VERSION}"
-          BOOST_CMAKE_FLAGS="${BOOST_CMAKE_FLAGS} -DBoost_COMPILER=-mgw15 -DBoost_ARCHITECTURE=-x64"
-        fi
-
-        if [ ${{ inputs.enable-mlir }} = 'true' ]; then
-          MLIR_FLAGS="-DMLIR_DIR=${PWD}/../target-llvm/build-final/lib/cmake/mlir -DLLD_DIR=${PWD}/../target-llvm/build-final/lib/cmake/lld"
-        fi
-
-        mkdir -p ./build
-        cd ./build
-        cmake .. \
-          -DCMAKE_BUILD_TYPE="${{ inputs.cmake-build-type }}" ${COMPILER_FLAGS} ${BOOST_CMAKE_FLAGS} ${MLIR_FLAGS} \
-          -DCMAKE_CXX_FLAGS="-DJSON_USE_INT64_DOUBLE_CONVERSION -DBOOST_NO_CXX98_FUNCTION_BASE -D_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION" \
-          -DUSE_Z3=OFF \
-          -DUSE_CVC4=OFF \
-          -DTESTS=0 \
-          -DSOLC_LINK_STATIC=1 \
-          -DSTATIC_LINKING=1 \
-          -DPEDANTIC=OFF
-        if [[ ${{ inputs.solc-version }} == "0.4"* ]]; then
-          cmake --build . --config ${{ inputs.cmake-build-type }} --parallel ${PARALLEL} --target jsoncpp-project
-          cmake --build . --config ${{ inputs.cmake-build-type }} --parallel ${PARALLEL} --target range-v3-project
-        fi
-        cmake --build . --config ${{ inputs.cmake-build-type }} --parallel ${PARALLEL} --verbose
-        [ "$RUNNER_OS" = "Windows" ] && WIN_SUFFIX=".exe"
-        cp ./solc/solc${WIN_SUFFIX} ./solc/solc-${{ inputs.solc-version }}-${{ inputs.build-type }}${WIN_SUFFIX}
-
-    - name: Upload binary for testing
+    - name: Upload boost artifacts
       if: ${{ inputs.upload-testing-binary == 'true' }}
       uses: actions/upload-artifact@v4
       with:
-        name: solc-${{ inputs.solc-version }}-${{ inputs.build-type }}-${{ runner.os }}-${{ runner.arch }}
-        path: ${{ inputs.working-dir }}/build/solc/solc-${{ inputs.solc-version }}-${{ inputs.build-type }}${{ runner.os == 'Windows' && '.exe' || '' }}
-
-    - name: Upload build directory for testing
-      if: ${{ inputs.upload-testing-binary == 'true' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-solc-${{ inputs.solc-version }}-${{ inputs.build-type }}-${{ runner.os }}-${{ runner.arch }}
-        path: ${{ inputs.working-dir }}/build
-
-    - name: Upload boost for testing
-      if: ${{ inputs.upload-testing-binary == 'true' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: boost-${{ inputs.solc-version }}-${{ inputs.build-type }}-${{ runner.os }}-${{ runner.arch }}
+        name: boost-${{ runner.os }}-${{ runner.arch }}
         path: ${{ inputs.working-dir }}/boost
 
-    - name: Prepare binary
-      working-directory: ${{ inputs.working-dir }}
-      if: inputs.release-suffix != ''
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: |
-        [ "$RUNNER_OS" = "Windows" ] && WIN_SUFFIX=".exe"
-        SOLC_BIN="./build/solc/solc${WIN_SUFFIX}"
-        mkdir -p ./releases/${{ inputs.release-suffix }}
-        strip "${SOLC_BIN}"
-        ${SOLC_BIN} --version
-        mv ${SOLC_BIN} ./releases/${{ inputs.release-suffix }}/solc-${{ inputs.release-suffix }}-${{ inputs.solc-version }}-${{ inputs.solx-revision }}${WIN_SUFFIX}
-
-    - name: Upload binary for release
-      if: inputs.release-suffix != ''
+    - name: Upload build artifacts
+      if: ${{ inputs.upload-testing-binary == 'true' }}
       uses: actions/upload-artifact@v4
       with:
-        name: release-${{ inputs.release-suffix }}
-        path: ${{ inputs.working-dir }}/releases
+        name: build-solc-${{ runner.os }}-${{ runner.arch }}
+        path: ${{ inputs.working-dir }}/build

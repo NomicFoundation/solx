@@ -2,9 +2,12 @@
 //! `solx` solc build tools.
 //!
 
-use std::path::Path;
+pub mod boost;
+pub mod platforms;
+
 use std::path::PathBuf;
-use std::process::Command;
+
+use crate::solc::boost::BoostConfig;
 
 /// The solc-solidity submodule directory.
 pub const SOLIDITY_DIR: &str = "solx-solidity";
@@ -18,12 +21,19 @@ pub const LLVM_BUILD_DIR: &str = "target-llvm/build-final";
 ///
 /// Builds the solc libraries using cmake.
 ///
+/// This function dispatches to platform-specific build implementations based on
+/// the target architecture and OS (determined at compile time via cfg macros).
+///
 pub fn build(
     build_type: String,
     pedantic: bool,
     tests: bool,
     extra_args: Vec<String>,
     clean: bool,
+    boost_version: Option<String>,
+    enable_mlir: bool,
+    use_gcc: bool,
+    build_boost: bool,
 ) -> anyhow::Result<()> {
     let solidity_dir = PathBuf::from(SOLIDITY_DIR);
     if !solidity_dir.exists() {
@@ -41,118 +51,108 @@ pub fn build(
 
     std::fs::create_dir_all(&build_dir)?;
 
-    // Run cmake configure
-    configure(
-        &build_dir,
-        &solidity_dir,
-        &build_type,
-        pedantic,
-        tests,
-        extra_args,
-    )?;
+    // Boost configuration - only set if explicitly building or if local boost exists
+    let boost_version = boost_version.unwrap_or_else(|| boost::DEFAULT_BOOST_VERSION.to_owned());
+    let boost_base_dir = solidity_dir.join("boost");
+    let boost_config = BoostConfig::new(boost_version, boost_base_dir);
 
-    // Run cmake build
-    build_cmake(&build_dir, &build_type)?;
+    // Build Boost if requested
+    let boost_config = if build_boost {
+        boost::download_and_build(&solidity_dir, &boost_config)?;
+        Some(boost_config)
+    } else if boost_config.lib_dir().exists() {
+        // Use existing local boost
+        eprintln!(
+            "Using existing Boost at {}",
+            boost_config.base_dir.display()
+        );
+        Some(boost_config)
+    } else {
+        // No local boost - will use system boost (if available)
+        eprintln!(
+            "No local Boost found. Will try system Boost. Use --build-boost to build a local static Boost."
+        );
+        None
+    };
+
+    // Canonicalize paths for cmake
+    let source_dir = solidity_dir.canonicalize()?;
+    let build_dir_canonical = build_dir.canonicalize().unwrap_or(build_dir.clone());
+
+    // Dispatch to platform-specific builder
+    if cfg!(target_arch = "x86_64") {
+        if cfg!(target_os = "linux") {
+            platforms::x86_64_linux_gnu::build(
+                &source_dir,
+                &build_dir_canonical,
+                &build_type,
+                pedantic,
+                tests,
+                extra_args,
+                boost_config.as_ref(),
+                enable_mlir,
+                use_gcc,
+            )?;
+        } else if cfg!(target_os = "macos") {
+            platforms::x86_64_macos::build(
+                &source_dir,
+                &build_dir_canonical,
+                &build_type,
+                pedantic,
+                tests,
+                extra_args,
+                boost_config.as_ref(),
+                enable_mlir,
+            )?;
+        } else if cfg!(target_os = "windows") {
+            platforms::x86_64_windows_gnu::build(
+                &source_dir,
+                &build_dir_canonical,
+                &build_type,
+                pedantic,
+                tests,
+                extra_args,
+                boost_config.as_ref(),
+                enable_mlir,
+                use_gcc,
+            )?;
+        } else {
+            anyhow::bail!("Unsupported target OS for x86_64");
+        }
+    } else if cfg!(target_arch = "aarch64") {
+        if cfg!(target_os = "linux") {
+            platforms::aarch64_linux_gnu::build(
+                &source_dir,
+                &build_dir_canonical,
+                &build_type,
+                pedantic,
+                tests,
+                extra_args,
+                boost_config.as_ref(),
+                enable_mlir,
+                use_gcc,
+            )?;
+        } else if cfg!(target_os = "macos") {
+            platforms::aarch64_macos::build(
+                &source_dir,
+                &build_dir_canonical,
+                &build_type,
+                pedantic,
+                tests,
+                extra_args,
+                boost_config.as_ref(),
+                enable_mlir,
+            )?;
+        } else {
+            anyhow::bail!("Unsupported target OS for aarch64");
+        }
+    } else {
+        anyhow::bail!("Unsupported target architecture");
+    }
 
     println!(
         "solc libraries built successfully in: {}",
         build_dir.display()
     );
-    Ok(())
-}
-
-///
-/// Runs cmake configure step.
-///
-fn configure(
-    build_dir: &Path,
-    source_dir: &Path,
-    build_type: &str,
-    pedantic: bool,
-    tests: bool,
-    extra_args: Vec<String>,
-) -> anyhow::Result<()> {
-    println!("Configuring solc build...");
-
-    let mut command = Command::new("cmake");
-    command.current_dir(build_dir);
-    command.arg(source_dir.canonicalize()?);
-
-    // Standard options
-    command.arg(format!(
-        "-DPEDANTIC={}",
-        if pedantic { "ON" } else { "OFF" }
-    ));
-    command.arg(format!("-DTESTS={}", if tests { "ON" } else { "OFF" }));
-    command.arg(format!("-DCMAKE_BUILD_TYPE={}", build_type));
-
-    // MLIR/LLD paths (if LLVM was built with these projects)
-    let llvm_build_dir = PathBuf::from(LLVM_BUILD_DIR);
-    if llvm_build_dir.exists() {
-        let mlir_dir = llvm_build_dir.join("lib/cmake/mlir");
-        if mlir_dir.exists() {
-            command.arg(format!("-DMLIR_DIR={}", mlir_dir.canonicalize()?.display()));
-        }
-
-        let lld_dir = llvm_build_dir.join("lib/cmake/lld");
-        if lld_dir.exists() {
-            command.arg(format!("-DLLD_DIR={}", lld_dir.canonicalize()?.display()));
-        }
-    }
-
-    // Extra arguments
-    for arg in extra_args {
-        command.arg(arg);
-    }
-
-    println!(
-        "Running: cmake {}",
-        command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().to_string())
-            .collect::<Vec<_>>()
-            .join(" ")
-    );
-
-    let status = command.status()?;
-    if !status.success() {
-        anyhow::bail!("cmake configure failed with status: {status}");
-    }
-
-    Ok(())
-}
-
-///
-/// Runs cmake build step.
-///
-fn build_cmake(build_dir: &Path, build_type: &str) -> anyhow::Result<()> {
-    println!("Building solc libraries...");
-
-    let mut command = Command::new("cmake");
-    command.arg("--build");
-    command.arg(build_dir);
-    command.arg("--config");
-    command.arg(build_type);
-
-    let job_count = std::thread::available_parallelism()
-        .map(|parallelism| parallelism.get())
-        .unwrap_or(1);
-    command.arg("--parallel");
-    command.arg(job_count.to_string());
-
-    println!(
-        "Running: cmake {}",
-        command
-            .get_args()
-            .map(|arg| arg.to_string_lossy().to_string())
-            .collect::<Vec<_>>()
-            .join(" ")
-    );
-
-    let status = command.status()?;
-    if !status.success() {
-        anyhow::bail!("cmake build failed with status: {status}");
-    }
-
     Ok(())
 }

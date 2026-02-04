@@ -87,6 +87,10 @@ fn main_inner() -> anyhow::Result<()> {
                 arguments.tests,
                 arguments.extra_args,
                 arguments.clean,
+                arguments.boost_version,
+                arguments.enable_mlir,
+                arguments.use_gcc,
+                arguments.build_boost,
             )?;
         }
         Arguments::Test(TestArguments::Hardhat(arguments)) => {
