@@ -341,11 +341,30 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
     }
 
     fn into_llvm(self, context: &mut solx_codegen_evm::Context) -> anyhow::Result<()> {
-        let full_path = self.full_path().to_owned();
+        // Use module name which already includes the code segment (e.g., "contract.runtime")
+        let contract_path = context
+            .module()
+            .get_name()
+            .to_str()
+            .expect("Always valid")
+            .to_owned();
+
+        // Get optimizer settings for file naming (same as LLVM IR dumps)
+        let is_size_fallback = context.optimizer().settings().is_fallback_to_size_enabled();
+        let spill_area = context
+            .optimizer()
+            .settings()
+            .spill_area_size()
+            .map(|size| (solx_codegen_evm::SOLC_USER_MEMORY_OFFSET, size));
 
         let (code_segment, blocks) = if let Ok(runtime_code) = self.runtime_code() {
             if let Some(output_config) = context.output_config() {
-                output_config.dump_evmla(full_path.as_str(), self.to_string().as_str())?;
+                output_config.dump_evmla(
+                    contract_path.as_str(),
+                    self.to_string().as_str(),
+                    is_size_fallback,
+                    spill_area,
+                )?;
             }
 
             let deploy_code_blocks = EtherealIR::get_blocks(
@@ -372,8 +391,10 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
         } else {
             if let Some(output_config) = context.output_config() {
                 output_config.dump_evmla(
-                    format!("{full_path}.{}", solx_utils::CodeSegment::Runtime).as_str(),
+                    contract_path.as_str(),
                     self.to_string().as_str(),
+                    is_size_fallback,
+                    spill_area,
                 )?;
             }
 
@@ -394,11 +415,12 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
             blocks,
         )?;
         if let Some(output_config) = context.output_config() {
-            let mut path = full_path.to_owned();
-            if let solx_utils::CodeSegment::Runtime = code_segment {
-                path.push_str(format!(".{code_segment}").as_str());
-            }
-            output_config.dump_ethir(path.as_str(), ethereal_ir.to_string().as_str())?;
+            output_config.dump_ethir(
+                contract_path.as_str(),
+                ethereal_ir.to_string().as_str(),
+                is_size_fallback,
+                spill_area,
+            )?;
         }
 
         let mut entry = solx_codegen_evm::EntryFunction::new(ethereal_ir);

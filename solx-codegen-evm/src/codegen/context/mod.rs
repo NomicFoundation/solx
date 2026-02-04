@@ -80,6 +80,13 @@ pub struct Context<'ctx> {
     yul_data: Option<YulData>,
     /// The EVM legacy assembly data.
     evmla_data: Option<EVMLAData<'ctx>>,
+
+    /// Captured EVM legacy assembly IR for output.
+    captured_evmla: Option<String>,
+    /// Captured Ethereal IR for output.
+    captured_ethir: Option<String>,
+    /// Whether to capture LLVM IR for output.
+    capture_llvm_ir: bool,
 }
 
 impl<'ctx> Context<'ctx> {
@@ -136,6 +143,10 @@ impl<'ctx> Context<'ctx> {
             solidity_data,
             yul_data: None,
             evmla_data: None,
+
+            captured_evmla: None,
+            captured_ethir: None,
+            capture_llvm_ir: false,
         }
     }
 
@@ -181,6 +192,15 @@ impl<'ctx> Context<'ctx> {
                 spill_area,
             )?;
         }
+
+        // Capture unoptimized LLVM IR for output if requested and not writing to files
+        let captured_llvm_ir_unoptimized =
+            if self.capture_llvm_ir && self.output_config.is_none() {
+                Some(self.module().print_to_string().to_string())
+            } else {
+                None
+            };
+
         self.verify().map_err(|error| {
             anyhow::anyhow!(
                 "{} code unoptimized LLVM IR verification: {error}",
@@ -207,6 +227,15 @@ impl<'ctx> Context<'ctx> {
                 spill_area,
             )?;
         }
+
+        // Capture optimized LLVM IR for output if requested and not writing to files
+        let captured_llvm_ir_optimized =
+            if self.capture_llvm_ir && self.output_config.is_none() {
+                Some(self.module().print_to_string().to_string())
+            } else {
+                None
+            };
+
         self.verify().map_err(|error| {
             anyhow::anyhow!(
                 "{} code optimized LLVM IR verification: {error}",
@@ -319,19 +348,49 @@ impl<'ctx> Context<'ctx> {
                     })
                 };
             }
+            // Only capture EVMLA/EthIR if not writing to files
+            let captured_evmla = if self.output_config.is_none() {
+                self.captured_evmla.take()
+            } else {
+                None
+            };
+            let captured_ethir = if self.output_config.is_none() {
+                self.captured_ethir.take()
+            } else {
+                None
+            };
             Ok(EVMBuild::new(
                 Some(bytecode_buffer.as_slice().to_vec()),
                 debug_info_buffer.map(|buffer| buffer.as_slice().to_vec()),
                 assembly,
+                captured_evmla,
+                captured_ethir,
+                captured_llvm_ir_unoptimized,
+                captured_llvm_ir_optimized,
                 immutables,
                 is_size_fallback,
                 warnings,
             ))
         } else {
+            // Only capture EVMLA/EthIR if not writing to files
+            let captured_evmla = if self.output_config.is_none() {
+                self.captured_evmla.take()
+            } else {
+                None
+            };
+            let captured_ethir = if self.output_config.is_none() {
+                self.captured_ethir.take()
+            } else {
+                None
+            };
             Ok(EVMBuild::new(
                 None,
                 None,
                 assembly,
+                captured_evmla,
+                captured_ethir,
+                captured_llvm_ir_unoptimized,
+                captured_llvm_ir_optimized,
                 None,
                 is_size_fallback,
                 vec![],
@@ -346,6 +405,41 @@ impl<'ctx> Context<'ctx> {
         self.module()
             .verify()
             .map_err(|error| anyhow::anyhow!(error.to_string()))
+    }
+
+    ///
+    /// Sets the captured EVM legacy assembly IR.
+    ///
+    pub fn set_captured_evmla(&mut self, evmla: String) {
+        self.captured_evmla = Some(evmla);
+    }
+
+    ///
+    /// Sets the captured Ethereal IR.
+    ///
+    pub fn set_captured_ethir(&mut self, ethir: String) {
+        self.captured_ethir = Some(ethir);
+    }
+
+    ///
+    /// Enables LLVM IR capture for output.
+    ///
+    pub fn set_capture_llvm_ir(&mut self, capture: bool) {
+        self.capture_llvm_ir = capture;
+    }
+
+    ///
+    /// Takes the captured EVM legacy assembly IR.
+    ///
+    pub fn take_captured_evmla(&mut self) -> Option<String> {
+        self.captured_evmla.take()
+    }
+
+    ///
+    /// Takes the captured Ethereal IR.
+    ///
+    pub fn take_captured_ethir(&mut self) -> Option<String> {
+        self.captured_ethir.take()
     }
 
     ///

@@ -24,6 +24,14 @@ pub struct Object {
     pub bytecode_hex: Option<String>,
     /// Debug info.
     pub debug_info: Option<Vec<u8>>,
+    /// EVM legacy assembly IR (solx internal representation).
+    pub evmla: Option<String>,
+    /// Ethereal IR (solx internal representation).
+    pub ethir: Option<String>,
+    /// Unoptimized LLVM IR (solx internal representation).
+    pub llvm_ir_unoptimized: Option<String>,
+    /// Optimized LLVM IR (solx internal representation).
+    pub llvm_ir_optimized: Option<String>,
     /// Whether IR codegen is used.
     pub via_ir: bool,
     /// Code segment.
@@ -60,6 +68,10 @@ impl Object {
         assembly: Option<String>,
         bytecode: Option<Vec<u8>>,
         debug_info: Option<Vec<u8>>,
+        evmla: Option<String>,
+        ethir: Option<String>,
+        llvm_ir_unoptimized: Option<String>,
+        llvm_ir_optimized: Option<String>,
         via_ir: bool,
         code_segment: solx_utils::CodeSegment,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
@@ -77,6 +89,10 @@ impl Object {
             bytecode,
             bytecode_hex,
             debug_info,
+            evmla,
+            ethir,
+            llvm_ir_unoptimized,
+            llvm_ir_optimized,
             via_ir,
             code_segment,
             immutables,
