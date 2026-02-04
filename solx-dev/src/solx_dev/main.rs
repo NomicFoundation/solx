@@ -77,12 +77,12 @@ fn main_inner() -> anyhow::Result<()> {
                 arguments.sanitizer,
                 arguments.enable_valgrind,
                 arguments.valgrind_options,
+                arguments.clean,
             )?;
         }
         Arguments::Solc(SolcArguments::Build(arguments)) => {
             solx_dev::solc_build(
                 arguments.build_type,
-                arguments.revision,
                 arguments.pedantic,
                 arguments.tests,
                 arguments.extra_args,

@@ -7,7 +7,7 @@ use crate::llvm::platforms::Platform;
 use crate::llvm::sanitizer::Sanitizer;
 
 /// The build options shared by all platforms.
-pub const SHARED_BUILD_OPTS: [&str; 22] = [
+pub const SHARED_BUILD_OPTS: [&str; 23] = [
     "-DPACKAGE_VENDOR='Matter Labs'",
     "-DCMAKE_BUILD_WITH_INSTALL_RPATH=1",
     "-DLLVM_BUILD_DOCS='Off'",
@@ -17,6 +17,7 @@ pub const SHARED_BUILD_OPTS: [&str; 22] = [
     "-DLLVM_INCLUDE_BENCHMARKS='Off'",
     "-DLLVM_INCLUDE_EXAMPLES='Off'",
     "-DLLVM_INCLUDE_RUNTIMES='Off'",
+    "-DLLVM_ENABLE_RTTI='On'",
     "-DLLVM_ENABLE_DOXYGEN='Off'",
     "-DLLVM_ENABLE_SPHINX='Off'",
     "-DLLVM_ENABLE_OCAMLDOC='Off'",
@@ -38,15 +39,10 @@ pub const SHARED_BUILD_OPTS: [&str; 22] = [
 /// Disabled on Windows due to the following upstream issue with MSYS2 with mingw-w64:
 /// ProgramTest.cpp:23:15: error: '__p__environ' redeclared without 'dllimport' attribute
 ///
+/// TODO: enable at least for non-Windows platforms
+///
 pub fn shared_build_opts_werror() -> Vec<String> {
-    vec![format!(
-        "-DLLVM_ENABLE_WERROR='{}'",
-        if cfg!(target_os = "windows") {
-            "Off"
-        } else {
-            "On"
-        },
-    )]
+    vec!["-DLLVM_ENABLE_WERROR='Off'".to_owned()]
 }
 
 ///

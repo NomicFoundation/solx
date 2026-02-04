@@ -56,11 +56,11 @@ For details on running unit tests, integration tests, and project tests, see [th
 ## Troubleshooting
 
 If you are building **solx** from source and you have multiple LLVM builds in your system, ensure that you choose the correct one to build the compiler.
-The environment variable `LLVM_SYS_211_PREFIX` sets the path to the directory with LLVM build artifacts, which typically ends with `target-llvm/build-final`.
+The environment variable `LLVM_SYS_211_PREFIX` sets the path to the directory with LLVM build artifacts, which typically ends with `target-llvm/target-final`.
 For example:
 
 ```shell
-export LLVM_SYS_211_PREFIX="${HOME}/src/solx/target-llvm/build-final"
+export LLVM_SYS_211_PREFIX="${HOME}/src/solx/target-llvm/target-final"
 ```
 
 If you suspect that the compiler is not using the correct LLVM build, check by running `set | grep LLVM`, and reset all LLVM-related environment variables.

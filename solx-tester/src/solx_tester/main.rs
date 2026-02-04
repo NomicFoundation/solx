@@ -65,18 +65,9 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
         .build_global()
         .expect("Thread pool configuration failure");
 
-    let toolchain = arguments.toolchain.unwrap_or(solx_tester::Toolchain::Solx);
-
-    let mut executable_download_config_paths = Vec::with_capacity(1);
-    if let Some(path) = match toolchain {
-        solx_tester::Toolchain::Solx => None,
-        solx_tester::Toolchain::Solc => Some("./solx-compiler-downloader/solc-upstream.json"),
-        solx_tester::Toolchain::SolxMlir => Some("./solx-compiler-downloader/solx-mlir.json"),
-    }
-    .map(PathBuf::from)
-    {
-        executable_download_config_paths.push(path);
-    }
+    let solidity_compiler = arguments
+        .solidity_compiler
+        .unwrap_or_else(|| PathBuf::from("solx"));
 
     let summary = solx_tester::Summary::new(arguments.verbose, arguments.quiet).wrap();
 
@@ -85,7 +76,12 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
         .iter()
         .map(|path| path.strip_prefix("./").unwrap_or(path.as_str()))
         .collect();
-    let filters = solx_tester::Filters::new(path_filters, arguments.mode, arguments.group);
+    let filters = solx_tester::Filters::new(
+        path_filters,
+        arguments.via_ir,
+        arguments.optimizer,
+        arguments.group,
+    );
 
     let compiler_tester = solx_tester::SolxTester::new(
         summary.clone(),
@@ -101,8 +97,7 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
         rayon::current_num_threads(),
     );
 
-    solx_tester::REVM::download(executable_download_config_paths)?;
-    compiler_tester.run_revm(toolchain, arguments.solx, arguments.trace)?;
+    compiler_tester.run_revm(solidity_compiler, arguments.trace)?;
 
     let summary = solx_tester::Summary::unwrap_arc(summary);
     print!("{summary}");
@@ -114,7 +109,7 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
     );
 
     if let Some(path) = arguments.benchmark {
-        let benchmark = summary.benchmark(toolchain)?;
+        let benchmark = summary.benchmark()?;
         let comparisons = Vec::new();
         let output: solx_benchmark_converter::Output =
             (benchmark, comparisons, arguments.benchmark_format).try_into()?;
@@ -143,14 +138,14 @@ mod tests {
             quiet: false,
             debug: false,
             trace: false,
-            mode: vec!["Y M3B3 0.8.33".to_owned()],
+            via_ir: true,
+            optimizer: Some("M3B3".to_owned()),
             path: vec!["tests/solidity/simple/default.sol".to_owned()],
             group: vec![],
             benchmark: None,
             benchmark_format: solx_benchmark_converter::OutputFormat::Xlsx,
             threads: Some(1),
-            solx: Some(assert_cmd::cargo::cargo_bin!("SOLX").to_path_buf()),
-            toolchain: Some(solx_tester::Toolchain::Solx),
+            solidity_compiler: Some(assert_cmd::cargo::cargo_bin!("SOLX").to_path_buf()),
             workflow: solx_tester::Workflow::BuildAndRun,
             solc_bin_config_path: Some(PathBuf::from(
                 "solx-compiler-downloader/solc-bin-default.json",

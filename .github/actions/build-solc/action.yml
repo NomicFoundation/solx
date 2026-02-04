@@ -88,14 +88,6 @@ runs:
             cp ./boost/lib/${LIB}-*.a ./boost/lib/${LIB}.a
         done
 
-    - name: Build LLVM
-      if: ${{ inputs.enable-mlir == 'true' }}
-      uses: ./.github/actions/build-llvm
-      with:
-        enable-assertions: true
-        llvm-projects: "mlir"
-        enable-rtti: true
-
     - name: Build solc
       working-directory: ${{ inputs.working-dir }}
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash -ex {0}' }}
@@ -138,7 +130,7 @@ runs:
         fi
 
         if [ ${{ inputs.enable-mlir }} = 'true' ]; then
-          MLIR_FLAGS="-DMLIR_DIR=${PWD}/target-llvm/build-final/lib/cmake/mlir -DLLD_DIR=${PWD}/target-llvm/build-final/lib/cmake/lld"
+          MLIR_FLAGS="-DMLIR_DIR=${PWD}/../target-llvm/build-final/lib/cmake/mlir -DLLD_DIR=${PWD}/../target-llvm/build-final/lib/cmake/lld"
         fi
 
         mkdir -p ./build
@@ -146,7 +138,6 @@ runs:
         cmake .. \
           -DCMAKE_BUILD_TYPE="${{ inputs.cmake-build-type }}" ${COMPILER_FLAGS} ${BOOST_CMAKE_FLAGS} ${MLIR_FLAGS} \
           -DCMAKE_CXX_FLAGS="-DJSON_USE_INT64_DOUBLE_CONVERSION -DBOOST_NO_CXX98_FUNCTION_BASE -D_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION" \
-          -DSOL_REVISION_SOLX="${{ inputs.solc-version }}-${{ inputs.solx-revision }}" \
           -DUSE_Z3=OFF \
           -DUSE_CVC4=OFF \
           -DTESTS=0 \

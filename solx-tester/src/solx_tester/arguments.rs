@@ -28,9 +28,15 @@ pub struct Arguments {
     #[arg(long)]
     pub trace: bool,
 
-    /// Runs tests only in modes that contain any string from the specified ones.
-    #[arg(short, long)]
-    pub mode: Vec<String>,
+    /// Filter by codegen: only run tests using the Yul IR pipeline.
+    /// If not specified, runs both Yul IR and EVMLA pipelines.
+    #[arg(long)]
+    pub via_ir: bool,
+
+    /// Filter by optimizer settings pattern (e.g., "M3B3", "M^B3").
+    /// Supports wildcards: M^ matches M3 or Mz, M* matches any M level, B* matches any B level.
+    #[arg(short = 'O', long)]
+    pub optimizer: Option<String>,
 
     /// Runs only tests whose name contains any string from the specified ones.
     #[arg(short, long)]
@@ -54,16 +60,11 @@ pub struct Arguments {
     #[structopt(short, long)]
     pub threads: Option<usize>,
 
-    /// Path to the `solx` executable.
-    /// Is set to `solx` by default.
+    /// Path to the Solidity compiler executable (`solx` or `solc`).
+    /// The compiler type is auto-detected from version output.
+    /// Defaults to `solx`.
     #[structopt(long)]
-    pub solx: Option<PathBuf>,
-
-    /// Specify the compiler toolchain.
-    /// Available arguments: `solx`, `solc`, `solx-mlir`.
-    /// Is set to `solx` by default.
-    #[structopt(long)]
-    pub toolchain: Option<solx_tester::Toolchain>,
+    pub solidity_compiler: Option<PathBuf>,
 
     /// Choose between `build` to compile tests only without running, and `run` to compile and run.
     #[structopt(long, default_value_t = solx_tester::Workflow::BuildAndRun)]

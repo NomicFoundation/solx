@@ -648,7 +648,7 @@ impl Project {
                 }
             });
 
-        let mut cbor_version_parts = Vec::with_capacity(3);
+        let mut cbor_version_parts = Vec::with_capacity(2);
         cbor_version_parts.push((
             crate::r#const::DEFAULT_EXECUTABLE_NAME.to_owned(),
             crate::r#const::version().parse().expect("Always valid"),
@@ -657,10 +657,6 @@ impl Project {
             cbor_version_parts.push((
                 crate::r#const::SOLC_METADATA_TAG.to_owned(),
                 solc_version.default.to_owned(),
-            ));
-            cbor_version_parts.push((
-                crate::r#const::SOLC_LLVM_REVISION_METADATA_TAG.to_owned(),
-                solc_version.llvm_revision.to_owned(),
             ));
         }
         let cbor_data = (

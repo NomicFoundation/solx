@@ -5,7 +5,6 @@
 pub mod imode;
 pub mod llvm_options;
 
-use std::collections::HashSet;
 use std::fmt::Display;
 
 use self::imode::IMode;
@@ -31,13 +30,14 @@ pub enum Mode {
 
 impl Mode {
     ///
-    /// Checks if the mode is compatible with the filters.
+    /// Checks if the mode's optimizer settings match the filter pattern.
     ///
-    pub fn check_filters(&self, filters: &HashSet<String>) -> bool {
-        filters.is_empty()
-            || filters
-                .iter()
-                .any(|filter| self.normalize(filter).contains(filter))
+    pub fn check_optimizer_filter(&self, filter: &str) -> bool {
+        if self.optimizations().is_none() {
+            return false;
+        }
+        let normalized = self.normalize(filter);
+        normalized.contains(filter)
     }
 
     ///

@@ -39,6 +39,17 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --init --force --depth=1 --recursive --checkout
 
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: 'RelWithDebInfo'
+          ccache-key: 'llvm-Linux-X64-gnu'
+          enable-assertions: false
+          enable-coverage: 'true'
+          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
+          # llvm-projects: 'mlir lld'
+          llvm-projects: ''
+
       - name: Building solc
         uses: ./.github/actions/build-solc
         with:
@@ -46,14 +57,6 @@ jobs:
           working-dir: 'solx-solidity'
           upload-testing-binary: false
           build-type: ${{ matrix.type }}
-
-      - name: Build LLVM
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: 'RelWithDebInfo'
-          enable-assertions: false
-          ccache-key: 'llvm-Linux-X64-gnu'
-          enable-coverage: 'true'
 
       - name: Build tester
         run: cargo build --release --bin solx-tester
@@ -72,7 +75,7 @@ jobs:
           for TEST_PATH in tests/solidity/complex/* tests/solidity/simple/*; do
           WORKDIR=$(basename ${TEST_PATH})
           mkdir -p "${GITHUB_WORKSPACE}/${WORKDIR}"
-          ./target/release/solx-tester --solx $(which solx) --path ${TEST_PATH} --workflow build
+          ./target/release/solx-tester --solidity-compiler $(which solx) --path ${TEST_PATH} --workflow build
           mv *.profraw "${GITHUB_WORKSPACE}/${WORKDIR}/" || true
           du -hs "${GITHUB_WORKSPACE}/${WORKDIR}"
           find ${GITHUB_WORKSPACE}/${WORKDIR} -type f -name '*.profraw' -print > profiles.lst
