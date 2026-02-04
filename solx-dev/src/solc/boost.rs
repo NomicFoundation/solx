@@ -192,7 +192,7 @@ fn extract(archive_path: &Path, output_dir: &Path) -> anyhow::Result<()> {
 ///
 fn bootstrap(source_dir: &Path, install_prefix: &Path) -> anyhow::Result<()> {
     // Convert path to string for passing to shell
-    let install_prefix_str = normalize_path(install_prefix);
+    let install_prefix_str = normalize_path_for_shell(install_prefix);
 
     #[cfg(target_os = "windows")]
     {
@@ -225,12 +225,30 @@ fn bootstrap(source_dir: &Path, install_prefix: &Path) -> anyhow::Result<()> {
 }
 
 ///
-/// Normalizes a path for use with shell commands.
+/// Normalizes a path for use with MSYS2 shell commands.
 ///
-/// On Windows, removes the extended-length path prefix (\\?\) that canonicalize() adds.
+/// On Windows, converts paths like C:\foo\bar to /c/foo/bar for MSYS2 compatibility.
 ///
-fn normalize_path(path: &Path) -> String {
-    normalize_path_buf(path).display().to_string()
+fn normalize_path_for_shell(path: &Path) -> String {
+    let path = normalize_path_buf(path);
+
+    #[cfg(target_os = "windows")]
+    {
+        let path_str = path.display().to_string();
+        // Convert Windows paths (C:\foo\bar) to MSYS2 paths (/c/foo/bar)
+        if let Some(rest) = path_str
+            .strip_prefix(|c: char| c.is_ascii_alphabetic())
+            .and_then(|s| s.strip_prefix(':'))
+        {
+            let drive = path_str.chars().next().unwrap().to_ascii_lowercase();
+            let unix_path = rest.replace('\\', "/");
+            return format!("/{drive}{unix_path}");
+        }
+        return path_str.replace('\\', "/");
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    path.display().to_string()
 }
 
 ///
