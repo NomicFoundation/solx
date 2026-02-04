@@ -58,7 +58,7 @@ pub struct SolxTester<'a> {
     /// The filters.
     pub filters: Filters<'a>,
     /// The debug config.
-    pub debug_config: Option<solx_codegen_evm::DebugConfig>,
+    pub debug_config: Option<solx_codegen_evm::OutputConfig>,
     /// Actions to perform.
     pub workflow: Workflow,
 }
@@ -85,7 +85,7 @@ impl<'a> SolxTester<'a> {
     pub fn new(
         summary: Arc<Mutex<Summary>>,
         filters: Filters<'a>,
-        debug_config: Option<solx_codegen_evm::DebugConfig>,
+        debug_config: Option<solx_codegen_evm::OutputConfig>,
         workflow: Workflow,
     ) -> anyhow::Result<Self> {
         Ok(Self {

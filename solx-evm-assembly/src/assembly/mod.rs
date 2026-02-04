@@ -344,8 +344,8 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
         let full_path = self.full_path().to_owned();
 
         let (code_segment, blocks) = if let Ok(runtime_code) = self.runtime_code() {
-            if let Some(debug_config) = context.debug_config() {
-                debug_config.dump_evmla(full_path.as_str(), self.to_string().as_str())?;
+            if let Some(output_config) = context.output_config() {
+                output_config.dump_evmla(full_path.as_str(), self.to_string().as_str())?;
             }
 
             let deploy_code_blocks = EtherealIR::get_blocks(
@@ -370,8 +370,8 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
             blocks.extend(runtime_code_blocks);
             (solx_utils::CodeSegment::Deploy, blocks)
         } else {
-            if let Some(debug_config) = context.debug_config() {
-                debug_config.dump_evmla(
+            if let Some(output_config) = context.output_config() {
+                output_config.dump_evmla(
                     format!("{full_path}.{}", solx_utils::CodeSegment::Runtime).as_str(),
                     self.to_string().as_str(),
                 )?;
@@ -393,12 +393,12 @@ impl solx_codegen_evm::WriteLLVM for Assembly {
             Some(code_segment),
             blocks,
         )?;
-        if let Some(debug_config) = context.debug_config() {
+        if let Some(output_config) = context.output_config() {
             let mut path = full_path.to_owned();
             if let solx_utils::CodeSegment::Runtime = code_segment {
                 path.push_str(format!(".{code_segment}").as_str());
             }
-            debug_config.dump_ethir(path.as_str(), ethereal_ir.to_string().as_str())?;
+            output_config.dump_ethir(path.as_str(), ethereal_ir.to_string().as_str())?;
         }
 
         let mut entry = solx_codegen_evm::EntryFunction::new(ethereal_ir);

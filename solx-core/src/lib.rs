@@ -171,19 +171,39 @@ pub fn main(
         })
         .unwrap_or_default();
 
-    let debug_config = match arguments
-        .debug_output_dir
-        .or(std::env::var("SOLX_DEBUG_OUTPUT_DIR")
-            .ok()
-            .map(PathBuf::from))
+    // Determine the output configuration for IR artifacts.
+    // Priority: SOLX_OUTPUT_DIR env var (debug mode) > --output-dir with IR flags
+    let output_config = if let Some(debug_output_directory) =
+        std::env::var("SOLX_OUTPUT_DIR").ok().map(PathBuf::from)
     {
-        Some(debug_output_directory) => {
-            std::fs::create_dir_all(debug_output_directory.as_path())?;
-            Some(solx_codegen_evm::DebugConfig::new(
-                debug_output_directory.to_owned(),
+        // Debug mode via environment variable: output all IRs, always overwrite
+        std::fs::create_dir_all(debug_output_directory.as_path())?;
+        Some(solx_codegen_evm::OutputConfig::new_debug(
+            debug_output_directory,
+        ))
+    } else if let Some(ref output_directory) = arguments.output_dir {
+        // New mode: output selected IRs based on CLI flags
+        let has_ir_flags = arguments.output_ir
+            || arguments.output_evmla
+            || arguments.output_ethir
+            || arguments.output_llvm_ir
+            || arguments.output_assembly;
+        if has_ir_flags {
+            std::fs::create_dir_all(output_directory.as_path())?;
+            Some(solx_codegen_evm::OutputConfig::new(
+                output_directory.to_owned(),
+                arguments.overwrite,
+                arguments.output_ir,
+                arguments.output_evmla,
+                arguments.output_ethir,
+                arguments.output_llvm_ir,
+                arguments.output_assembly,
             ))
+        } else {
+            None
         }
-        None => None,
+    } else {
+        None
     };
 
     let metadata_hash_type = arguments
@@ -204,7 +224,7 @@ pub fn main(
             append_cbor,
             optimizer_settings,
             llvm_options,
-            debug_config,
+            output_config,
         )
     } else if arguments.llvm_ir {
         self::llvm_ir_to_evm(
@@ -217,7 +237,7 @@ pub fn main(
             append_cbor,
             optimizer_settings,
             llvm_options,
-            debug_config,
+            output_config,
         )
     } else if let Some(standard_json) = arguments.standard_json {
         return self::standard_json_evm(
@@ -228,7 +248,7 @@ pub fn main(
             arguments.include_path,
             arguments.allow_paths,
             use_import_callback,
-            debug_config,
+            output_config,
         );
     } else {
         self::standard_output_evm(
@@ -249,7 +269,7 @@ pub fn main(
             remappings,
             optimizer_settings,
             llvm_options,
-            debug_config,
+            output_config,
         )
     }?;
 
@@ -284,7 +304,7 @@ pub fn yul_to_evm(
     append_cbor: bool,
     optimizer_settings: solx_codegen_evm::OptimizerSettings,
     llvm_options: Vec<String>,
-    debug_config: Option<solx_codegen_evm::DebugConfig>,
+    output_config: Option<solx_codegen_evm::OutputConfig>,
 ) -> anyhow::Result<EVMBuild> {
     if output_selection.is_debug_info_set_for_any() {
         anyhow::bail!(solx_standard_json::OutputError::new_error(
@@ -303,7 +323,7 @@ pub fn yul_to_evm(
         libraries,
         output_selection,
         None,
-        debug_config.as_ref(),
+        output_config.as_ref(),
     )?;
 
     let mut build = project.compile_to_evm(
@@ -314,7 +334,7 @@ pub fn yul_to_evm(
         append_cbor,
         optimizer_settings,
         llvm_options,
-        debug_config,
+        output_config,
     )?;
     build.take_and_write_warnings();
     build.check_errors()?;
@@ -342,7 +362,7 @@ pub fn llvm_ir_to_evm(
     append_cbor: bool,
     optimizer_settings: solx_codegen_evm::OptimizerSettings,
     llvm_options: Vec<String>,
-    debug_config: Option<solx_codegen_evm::DebugConfig>,
+    output_config: Option<solx_codegen_evm::OutputConfig>,
 ) -> anyhow::Result<EVMBuild> {
     if output_selection.is_debug_info_set_for_any() {
         anyhow::bail!(solx_standard_json::OutputError::new_error(
@@ -363,7 +383,7 @@ pub fn llvm_ir_to_evm(
         append_cbor,
         optimizer_settings,
         llvm_options,
-        debug_config,
+        output_config,
     )?;
     build.take_and_write_warnings();
     build.check_errors()?;
@@ -399,7 +419,7 @@ pub fn standard_output_evm(
     remappings: BTreeSet<String>,
     optimizer_settings: solx_codegen_evm::OptimizerSettings,
     llvm_options: Vec<String>,
-    debug_config: Option<solx_codegen_evm::DebugConfig>,
+    output_config: Option<solx_codegen_evm::OutputConfig>,
 ) -> anyhow::Result<EVMBuild> {
     let mut profiler = solx_codegen_evm::Profiler::default();
 
@@ -438,7 +458,7 @@ pub fn standard_output_evm(
         via_ir,
         &mut solc_output,
         Some(debug_info),
-        debug_config.as_ref(),
+        output_config.as_ref(),
     )?;
     run_solx_project.borrow_mut().finish();
     solc_output.take_and_write_warnings();
@@ -453,7 +473,7 @@ pub fn standard_output_evm(
         append_cbor,
         optimizer_settings.clone(),
         llvm_options,
-        debug_config.clone(),
+        output_config.clone(),
     )?;
     run_solx_compile.borrow_mut().finish();
     build.take_and_write_warnings();
@@ -488,7 +508,7 @@ pub fn standard_json_evm(
     include_paths: Vec<String>,
     allow_paths: Option<String>,
     use_import_callback: bool,
-    debug_config: Option<solx_codegen_evm::DebugConfig>,
+    output_config: Option<solx_codegen_evm::OutputConfig>,
 ) -> anyhow::Result<()> {
     let mut solc_input = solx_standard_json::Input::try_from(json_path.as_deref())?;
     let language = solc_input.language;
@@ -559,7 +579,7 @@ pub fn standard_json_evm(
                 via_ir,
                 &mut solc_output,
                 Some(function_definitions),
-                debug_config.as_ref(),
+                output_config.as_ref(),
             )?;
             run_solx_project.borrow_mut().finish();
             if solc_output.has_errors() {
@@ -593,7 +613,7 @@ pub fn standard_json_evm(
                 solc_input.settings.libraries.clone(),
                 &solc_input.settings.output_selection,
                 Some(&mut solc_output),
-                debug_config.as_ref(),
+                output_config.as_ref(),
             )?;
             run_solx_yul_project.borrow_mut().finish();
             if solc_output.has_errors() {
@@ -640,7 +660,7 @@ pub fn standard_json_evm(
         append_cbor,
         optimizer_settings.clone(),
         llvm_options,
-        debug_config.clone(),
+        output_config.clone(),
     )?;
     run_solx_compile.borrow_mut().finish();
     let output_selection = solc_input.settings.output_selection.clone();

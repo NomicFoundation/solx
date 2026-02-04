@@ -406,7 +406,7 @@ impl SolidityCompiler {
         mode: &Mode,
         test_params: Option<&solx_solc_test_adapter::Params>,
         llvm_options: Vec<String>,
-        debug_config: Option<solx_codegen_evm::DebugConfig>,
+        debug_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<EVMInput> {
         let allow_path = Path::new(Self::ALLOW_PATHS)
             .canonicalize()
@@ -558,7 +558,7 @@ impl Compiler for SolidityCompiler {
         mode: &Mode,
         test_params: Option<&solx_solc_test_adapter::Params>,
         llvm_options: Vec<String>,
-        debug_config: Option<solx_codegen_evm::DebugConfig>,
+        debug_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<EVMInput> {
         match self.toolchain {
             Toolchain::Solx => self.compile_solx_for_evm(

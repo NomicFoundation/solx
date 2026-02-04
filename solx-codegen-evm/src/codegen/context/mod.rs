@@ -25,7 +25,7 @@ use crate::context::debug_info::DebugInfo;
 use crate::context::function::declaration::Declaration as FunctionDeclaration;
 use crate::context::function::r#return::Return as FunctionReturn;
 use crate::context::r#loop::Loop;
-use crate::debug_config::DebugConfig;
+use crate::debug_config::OutputConfig;
 use crate::optimizer::Optimizer;
 use crate::optimizer::settings::Settings as OptimizerSettings;
 use crate::target_machine::TargetMachine;
@@ -71,8 +71,8 @@ pub struct Context<'ctx> {
 
     /// The debug info of the current module.
     debug_info: Option<DebugInfo<'ctx>>,
-    /// The debug configuration telling whether to dump the needed IRs.
-    debug_config: Option<DebugConfig>,
+    /// The output configuration telling whether to dump the needed IRs.
+    output_config: Option<OutputConfig>,
 
     /// The Solidity data.
     solidity_data: Option<SolidityData>,
@@ -102,7 +102,7 @@ impl<'ctx> Context<'ctx> {
         optimizer: Optimizer,
         output_debug_info: bool,
         solidity_data: Option<SolidityData>,
-        debug_config: Option<DebugConfig>,
+        output_config: Option<OutputConfig>,
     ) -> Self {
         let builder = llvm.create_builder();
         let intrinsics = Intrinsics::new(llvm, &module);
@@ -131,7 +131,7 @@ impl<'ctx> Context<'ctx> {
             loop_stack: Vec::with_capacity(Self::LOOP_STACK_INITIAL_CAPACITY),
 
             debug_info,
-            debug_config,
+            output_config,
 
             solidity_data,
             yul_data: None,
@@ -173,8 +173,8 @@ impl<'ctx> Context<'ctx> {
             .spill_area_size()
             .map(|spill_area_size| (crate::r#const::SOLC_USER_MEMORY_OFFSET, spill_area_size));
 
-        if let Some(debug_config) = self.debug_config.as_ref() {
-            debug_config.dump_llvm_ir_unoptimized(
+        if let Some(output_config) = self.output_config.as_ref() {
+            output_config.dump_llvm_ir_unoptimized(
                 contract_path,
                 self.module(),
                 is_size_fallback,
@@ -199,8 +199,8 @@ impl<'ctx> Context<'ctx> {
         self.optimizer
             .run(&target_machine, self.module())
             .map_err(|error| anyhow::anyhow!("{} code optimizing: {error}", self.code_segment))?;
-        if let Some(debug_config) = self.debug_config.as_ref() {
-            debug_config.dump_llvm_ir_optimized(
+        if let Some(output_config) = self.output_config.as_ref() {
+            output_config.dump_llvm_ir_optimized(
                 contract_path,
                 self.module(),
                 is_size_fallback,
@@ -215,7 +215,7 @@ impl<'ctx> Context<'ctx> {
         })?;
         run_optimize_verify.borrow_mut().finish();
 
-        let assembly_buffer = if output_assembly || self.debug_config.is_some() {
+        let assembly_buffer = if output_assembly || self.output_config.is_some() {
             let run_emit_llvm_assembly = profiler.start_evm_translation_unit(
                 contract_path,
                 self.code_segment,
@@ -230,9 +230,9 @@ impl<'ctx> Context<'ctx> {
                 )
                 .map_err(|error| anyhow::anyhow!("assembly emitting: {error}"))?;
 
-            if let Some(debug_config) = self.debug_config.as_ref() {
+            if let Some(output_config) = self.output_config.as_ref() {
                 let assembly_text = String::from_utf8_lossy(assembly_buffer.as_slice());
-                debug_config.dump_assembly(
+                output_config.dump_assembly(
                     contract_path,
                     assembly_text.as_ref(),
                     is_size_fallback,
@@ -552,8 +552,8 @@ impl<'ctx> IContext<'ctx> for Context<'ctx> {
         )
     }
 
-    fn debug_config(&self) -> Option<&DebugConfig> {
-        self.debug_config.as_ref()
+    fn output_config(&self) -> Option<&OutputConfig> {
+        self.output_config.as_ref()
     }
 
     fn contract_name(&self) -> &solx_utils::ContractName {

@@ -93,7 +93,7 @@ impl Project {
         via_ir: bool,
         solc_output: &mut solx_standard_json::Output,
         debug_info: Option<solx_utils::DebugInfo>,
-        debug_config: Option<&solx_codegen_evm::DebugConfig>,
+        output_config: Option<&solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<Self> {
         if !via_ir {
             let legacy_assemblies: BTreeMap<
@@ -163,7 +163,7 @@ impl Project {
 
                 let result = if via_ir {
                     contract.ir.as_deref().map(|ir| {
-                        ContractYul::try_from_source(name.full_path.as_str(), ir, debug_config)
+                        ContractYul::try_from_source(name.full_path.as_str(), ir, output_config)
                             .map(|yul| yul.map(ContractIR::from))
                     })
                 } else {
@@ -226,7 +226,7 @@ impl Project {
         libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
         solc_output: Option<&mut solx_standard_json::Output>,
-        debug_config: Option<&solx_codegen_evm::DebugConfig>,
+        output_config: Option<&solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<Self> {
         let sources = paths
             .iter()
@@ -249,7 +249,7 @@ impl Project {
             libraries,
             output_selection,
             solc_output,
-            debug_config,
+            output_config,
         )
     }
 
@@ -262,7 +262,7 @@ impl Project {
         libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
         mut solc_output: Option<&mut solx_standard_json::Output>,
-        debug_config: Option<&solx_codegen_evm::DebugConfig>,
+        output_config: Option<&solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<Self> {
         let results = sources
             .into_par_iter()
@@ -292,7 +292,7 @@ impl Project {
                 let ir = match ContractYul::try_from_source(
                     path.as_str(),
                     source_code.as_str(),
-                    debug_config,
+                    output_config,
                 ) {
                     Ok(ir) => ir,
                     Err(error) => return (name, Err(error)),
@@ -458,7 +458,7 @@ impl Project {
         append_cbor: bool,
         optimizer_settings: solx_codegen_evm::OptimizerSettings,
         llvm_options: Vec<String>,
-        debug_config: Option<solx_codegen_evm::DebugConfig>,
+        output_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<EVMBuild> {
         let results = self
             .contracts
@@ -565,7 +565,7 @@ impl Project {
                         metadata_bytes,
                         optimizer_settings.clone(),
                         llvm_options.clone(),
-                        debug_config.clone(),
+                        output_config.clone(),
                     );
 
                     let result = Self::run_multi_pass_pipeline(&contract_name, &mut input);
@@ -591,7 +591,7 @@ impl Project {
                         None,
                         optimizer_settings.clone(),
                         llvm_options.clone(),
-                        debug_config.clone(),
+                        output_config.clone(),
                     );
 
                     Self::run_multi_pass_pipeline(&contract_name, &mut input)

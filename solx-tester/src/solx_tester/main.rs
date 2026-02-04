@@ -49,9 +49,9 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
 
     let debug_config = if arguments.debug {
         std::fs::create_dir_all(solx_tester::DEBUG_DIRECTORY)?;
-        Some(solx_codegen_evm::DebugConfig::new(PathBuf::from_str(
-            solx_tester::DEBUG_DIRECTORY,
-        )?))
+        Some(solx_codegen_evm::OutputConfig::new_debug(
+            PathBuf::from_str(solx_tester::DEBUG_DIRECTORY)?,
+        ))
     } else {
         None
     };

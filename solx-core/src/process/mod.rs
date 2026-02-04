@@ -57,7 +57,7 @@ pub fn run() -> anyhow::Result<()> {
                 input.metadata_bytes,
                 input.optimizer_settings,
                 input.llvm_options,
-                input.debug_config,
+                input.output_config,
             )
             .map(EVMOutput::new)
             .map_err(|error| match error {
