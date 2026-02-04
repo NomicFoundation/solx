@@ -47,12 +47,18 @@ fn main() {
         );
     }
     let llvm_lib_path = PathBuf::from(env!("LLVM_SYS_211_PREFIX")).join("lib");
+    let solc_lib_path = PathBuf::from(env!("SOLC_PREFIX")).join("libsolidity");
 
-    // Check if MLIR is available by looking for a key MLIR library.
-    let mlir_available = llvm_lib_path.join("libMLIRIR.a").exists();
+    // Check if MLIR is available by looking for both:
+    // 1. Core MLIR library in LLVM
+    // 2. Custom solx dialects in solx-solidity build
+    let mlir_available = llvm_lib_path.join("libMLIRIR.a").exists()
+        && solc_lib_path.join("libMLIRSolDialect.a").exists()
+        && solc_lib_path.join("libMLIRYulDialect.a").exists();
 
     if mlir_available {
         println!("cargo:rustc-link-search=native={}", llvm_lib_path.display());
+        println!("cargo:rustc-link-search=native={}", solc_lib_path.display());
     }
 
     // Link with Boost libraries.
