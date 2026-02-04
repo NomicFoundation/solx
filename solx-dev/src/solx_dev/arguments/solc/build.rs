@@ -9,9 +9,9 @@ use clap::Args;
 ///
 #[derive(Args)]
 pub struct Build {
-    /// Build type (Release, Debug, or RelWithDebInfo).
-    #[arg(long, default_value = "Release")]
-    pub build_type: String,
+    /// Build type (`Debug`, `Release`, `RelWithDebInfo`, or `MinSizeRel`).
+    #[arg(long, default_value_t = solx_dev::BuildType::Release)]
+    pub build_type: solx_dev::BuildType,
 
     /// Clean the build directory before building.
     #[arg(long)]

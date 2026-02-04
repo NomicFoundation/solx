@@ -4,10 +4,12 @@
 
 use std::path::Path;
 
+use crate::build_type::BuildType;
+
 ///
 /// Common cmake options for building solc.
 ///
-pub fn shared_cmake_args(build_type: &str, pedantic: bool, tests: bool) -> Vec<String> {
+pub fn shared_cmake_args(build_type: BuildType, pedantic: bool, tests: bool) -> Vec<String> {
     vec![
         format!("-DCMAKE_BUILD_TYPE={build_type}"),
         format!("-DPEDANTIC={}", if pedantic { "ON" } else { "OFF" }),

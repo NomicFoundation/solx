@@ -7,6 +7,7 @@ pub mod platforms;
 
 use std::path::PathBuf;
 
+use crate::build_type::BuildType;
 use crate::solc::boost::BoostConfig;
 
 /// The solc-solidity submodule directory.
@@ -25,7 +26,7 @@ pub const LLVM_BUILD_DIR: &str = "target-llvm/build-final";
 /// the target architecture and OS (determined at compile time via cfg macros).
 ///
 pub fn build(
-    build_type: String,
+    build_type: BuildType,
     pedantic: bool,
     tests: bool,
     extra_args: Vec<String>,
@@ -85,7 +86,7 @@ pub fn build(
             platforms::x86_64_linux_gnu::build(
                 &source_dir,
                 &build_dir_canonical,
-                &build_type,
+                build_type,
                 pedantic,
                 tests,
                 extra_args,
@@ -97,7 +98,7 @@ pub fn build(
             platforms::x86_64_macos::build(
                 &source_dir,
                 &build_dir_canonical,
-                &build_type,
+                build_type,
                 pedantic,
                 tests,
                 extra_args,
@@ -108,7 +109,7 @@ pub fn build(
             platforms::x86_64_windows_gnu::build(
                 &source_dir,
                 &build_dir_canonical,
-                &build_type,
+                build_type,
                 pedantic,
                 tests,
                 extra_args,
@@ -124,7 +125,7 @@ pub fn build(
             platforms::aarch64_linux_gnu::build(
                 &source_dir,
                 &build_dir_canonical,
-                &build_type,
+                build_type,
                 pedantic,
                 tests,
                 extra_args,
@@ -136,7 +137,7 @@ pub fn build(
             platforms::aarch64_macos::build(
                 &source_dir,
                 &build_dir_canonical,
-                &build_type,
+                build_type,
                 pedantic,
                 tests,
                 extra_args,

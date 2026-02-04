@@ -6,6 +6,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+use crate::build_type::BuildType;
 use crate::solc::boost::BoostConfig;
 use crate::solc::platforms::shared;
 
@@ -20,7 +21,7 @@ const WINDOWS_STACK_SIZE: u64 = 67108864;
 pub fn build(
     source_dir: &Path,
     build_dir: &Path,
-    build_type: &str,
+    build_type: BuildType,
     pedantic: bool,
     tests: bool,
     extra_args: Vec<String>,
@@ -103,7 +104,7 @@ pub fn build(
     build_cmd.arg("--build");
     build_cmd.arg(build_dir);
     build_cmd.arg("--config");
-    build_cmd.arg(build_type);
+    build_cmd.arg(build_type.to_string());
     build_cmd.arg("--parallel");
     build_cmd.arg(job_count.to_string());
     build_cmd.arg("--verbose");
