@@ -438,7 +438,7 @@ function main(0, 0, 0, 0, 0) -> 0, 0, 0, 0 {
 
 
 
-### `--emit-llvm`
+### `--emit-llvm-ir`
 
 Emits LLVM IR (both unoptimized and optimized).
 
@@ -447,7 +447,7 @@ When used with `--output-dir`, writes `.ll` files to the output directory. Witho
 Usage with `--output-dir`:
 
 ```bash
-solx 'Simple.sol' --emit-llvm --output-dir './build/'
+solx 'Simple.sol' --emit-llvm-ir --output-dir './build/'
 ls './build/'
 ```
 
@@ -464,7 +464,7 @@ tests_solidity_simple_default_sol_Test.unoptimized.ll
 Usage with stdout:
 
 ```bash
-solx 'Simple.sol' --emit-llvm --bin --via-ir
+solx 'Simple.sol' --emit-llvm-ir --bin --via-ir
 ```
 
 Output:
@@ -894,7 +894,7 @@ For selective IR output, use the following flags with `--output-dir`:
 
 - [`--evmla`](#--evmla) - EVM legacy assembly
 - [`--ethir`](#--ethir) - Ethereal IR
-- [`--emit-llvm`](#--emit-llvm) - LLVM IR (unoptimized and optimized)
+- [`--emit-llvm-ir`](#--emit-llvm-ir) - LLVM IR (unoptimized and optimized)
 - [`--asm`](#--asm) - LLVM EVM assembly
 
 These flags respect the `--overwrite` option. Without `--overwrite`, the compiler will refuse to overwrite existing files.

@@ -1,5 +1,5 @@
 //!
-//! CLI tests for IR output flags (--evmla, --ethir, --emit-llvm).
+//! CLI tests for IR output flags (--evmla, --ethir, --emit-llvm-ir).
 //!
 
 use predicates::prelude::*;
@@ -11,7 +11,7 @@ fn emit_llvm_to_stdout() -> anyhow::Result<()> {
 
     let args = &[
         crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
         "--bin",
         "--via-ir",
     ];
@@ -75,7 +75,7 @@ fn emit_llvm_with_output_dir() -> anyhow::Result<()> {
 
     let args = &[
         crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
     ];
@@ -162,7 +162,7 @@ fn multiple_ir_flags_with_output_dir() -> anyhow::Result<()> {
 
     let args = &[
         crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
         "--evmla",
         "--ethir",
         "--asm",
@@ -217,7 +217,7 @@ fn ir_output_standard_json_error() -> anyhow::Result<()> {
     let args = &[
         "--standard-json",
         crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -237,7 +237,7 @@ fn ir_output_overwrite_protection() -> anyhow::Result<()> {
     // First run to create files
     let args = &[
         crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
     ];
@@ -265,7 +265,7 @@ fn ir_output_overwrite_allowed() -> anyhow::Result<()> {
     // First run to create files
     let args = &[
         crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
     ];
@@ -278,7 +278,7 @@ fn ir_output_overwrite_allowed() -> anyhow::Result<()> {
     // Second run with --overwrite should succeed
     let args_with_overwrite = &[
         crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--emit-llvm",
+        "--emit-llvm-ir",
         "--overwrite",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),

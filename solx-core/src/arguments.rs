@@ -157,7 +157,7 @@ pub struct Arguments {
 
     /// Emit LLVM IR (both unoptimized and optimized).
     /// Can be used with --output-dir to write .ll files.
-    #[arg(long = "emit-llvm", help_heading = "Output Selection")]
+    #[arg(long = "emit-llvm-ir", help_heading = "Output Selection")]
     pub output_llvm_ir: bool,
 
     //
