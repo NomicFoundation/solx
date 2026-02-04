@@ -266,12 +266,6 @@ impl Arguments {
             ));
         }
 
-        if !self.via_ir && (self.output_debug_info || self.output_debug_info_runtime) {
-            messages.push(solx_standard_json::OutputError::new_error(
-                "`debug-info` and `debug-info-runtime` require `via-ir` to be enabled.",
-            ));
-        }
-
         if self.yul || self.llvm_ir {
             if self.base_path.is_some() {
                 messages.push(solx_standard_json::OutputError::new_error(

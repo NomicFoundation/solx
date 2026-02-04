@@ -3,43 +3,26 @@
 //!
 
 use predicates::prelude::*;
+use test_case::test_case;
 
-#[test]
-fn default() -> anyhow::Result<()> {
+#[test_case(true ; "yul")]
+#[test_case(false ; "evmla")]
+fn default(via_ir: bool) -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
+    let mut args = vec![
         crate::common::TEST_SOLIDITY_CONTRACT_PATH,
         "--debug-info-runtime",
-        "--via-ir",
     ];
+    if via_ir {
+        args.push("--via-ir");
+    }
 
-    let result = crate::cli::execute_solx(args)?;
+    let result = crate::cli::execute_solx(&args)?;
 
     result
         .success()
         .stdout(predicate::str::contains("Debug info of the runtime part").count(1));
-
-    Ok(())
-}
-
-#[test]
-fn no_via_ir() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--debug-info-runtime",
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-
-    result.failure().stderr(
-        predicate::str::contains(
-            "`debug-info` and `debug-info-runtime` require `via-ir` to be enabled.",
-        )
-        .count(1),
-    );
 
     Ok(())
 }

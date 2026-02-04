@@ -223,7 +223,7 @@ pub fn build_yul_standard_json(
 /// Builds the Solidity project with debug info enabled and returns the standard JSON output.
 /// The `via_ir` parameter controls whether to use Yul (true) or EVM assembly (false) pipeline.
 ///
-pub fn build_solidity_standard_json_debug_info_with_via_ir(
+pub fn build_solidity_standard_json_debug_info(
     sources: BTreeMap<String, String>,
     via_ir: bool,
 ) -> anyhow::Result<solx_standard_json::Output> {

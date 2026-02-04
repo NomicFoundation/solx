@@ -18,9 +18,8 @@ use test_case::test_case;
 fn debug_info_simple_contract(via_ir: bool) {
     let sources =
         crate::common::read_sources(&["tests/data/contracts/solidity/SimpleContract.sol"]);
-    let output =
-        crate::common::build_solidity_standard_json_debug_info_with_via_ir(sources, via_ir)
-            .expect("Build failed");
+    let output = crate::common::build_solidity_standard_json_debug_info(sources, via_ir)
+        .expect("Build failed");
 
     let contracts = output
         .contracts
@@ -94,9 +93,8 @@ fn debug_info_simple_contract(via_ir: bool) {
 #[test_case(false ; "evmla")]
 fn debug_info_complex_contract(via_ir: bool) {
     let sources = crate::common::read_sources(&["tests/data/contracts/solidity/Test.sol"]);
-    let output =
-        crate::common::build_solidity_standard_json_debug_info_with_via_ir(sources, via_ir)
-            .expect("Build failed");
+    let output = crate::common::build_solidity_standard_json_debug_info(sources, via_ir)
+        .expect("Build failed");
 
     let contracts = output
         .contracts
@@ -150,9 +148,8 @@ fn debug_info_multiple_contracts(via_ir: bool) {
         "tests/data/contracts/solidity/caller/Main.sol",
         "tests/data/contracts/solidity/caller/Callable.sol",
     ]);
-    let output =
-        crate::common::build_solidity_standard_json_debug_info_with_via_ir(sources, via_ir)
-            .expect("Build failed");
+    let output = crate::common::build_solidity_standard_json_debug_info(sources, via_ir)
+        .expect("Build failed");
 
     // Check that both contracts have debug info
     for (file_path, contracts) in output.contracts.iter() {
