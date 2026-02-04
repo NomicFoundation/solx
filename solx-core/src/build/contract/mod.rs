@@ -807,90 +807,80 @@ impl Contract {
                 None
             },
             // evmla
-            self.deploy_object_result
-                .as_mut()
-                .and_then(|result| {
-                    result
-                        .as_mut()
-                        .expect("Always exists")
-                        .evmla
-                        .take()
-                        .filter(|_| {
-                            output_selection.check_selection(
-                                self.name.path.as_str(),
-                                self.name.name.as_deref(),
-                                solx_standard_json::InputSelector::BytecodeEVMLA,
-                            )
-                        })
-                }),
+            self.deploy_object_result.as_mut().and_then(|result| {
+                result
+                    .as_mut()
+                    .expect("Always exists")
+                    .evmla
+                    .take()
+                    .filter(|_| {
+                        output_selection.check_selection(
+                            self.name.path.as_str(),
+                            self.name.name.as_deref(),
+                            solx_standard_json::InputSelector::BytecodeEVMLA,
+                        )
+                    })
+            }),
             // ethir
-            self.deploy_object_result
-                .as_mut()
-                .and_then(|result| {
-                    result
-                        .as_mut()
-                        .expect("Always exists")
-                        .ethir
-                        .take()
-                        .filter(|_| {
-                            output_selection.check_selection(
-                                self.name.path.as_str(),
-                                self.name.name.as_deref(),
-                                solx_standard_json::InputSelector::BytecodeEthIR,
-                            )
-                        })
-                }),
-            // llvm_ir_unoptimized
-            self.deploy_object_result
-                .as_mut()
-                .and_then(|result| {
-                    result
-                        .as_mut()
-                        .expect("Always exists")
-                        .llvm_ir_unoptimized
-                        .take()
-                        .filter(|_| {
-                            output_selection.check_selection(
-                                self.name.path.as_str(),
-                                self.name.name.as_deref(),
-                                solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
-                            )
-                        })
-                }),
+            self.deploy_object_result.as_mut().and_then(|result| {
+                result
+                    .as_mut()
+                    .expect("Always exists")
+                    .ethir
+                    .take()
+                    .filter(|_| {
+                        output_selection.check_selection(
+                            self.name.path.as_str(),
+                            self.name.name.as_deref(),
+                            solx_standard_json::InputSelector::BytecodeEthIR,
+                        )
+                    })
+            }),
+            // llvm_ir (unoptimized)
+            self.deploy_object_result.as_mut().and_then(|result| {
+                result
+                    .as_mut()
+                    .expect("Always exists")
+                    .llvm_ir
+                    .take()
+                    .filter(|_| {
+                        output_selection.check_selection(
+                            self.name.path.as_str(),
+                            self.name.name.as_deref(),
+                            solx_standard_json::InputSelector::BytecodeLLVMIR,
+                        )
+                    })
+            }),
             // llvm_ir_optimized
-            self.deploy_object_result
-                .as_mut()
-                .and_then(|result| {
-                    result
-                        .as_mut()
-                        .expect("Always exists")
-                        .llvm_ir_optimized
-                        .take()
-                        .filter(|_| {
-                            output_selection.check_selection(
-                                self.name.path.as_str(),
-                                self.name.name.as_deref(),
-                                solx_standard_json::InputSelector::BytecodeLLVMIROptimized,
-                            )
-                        })
-                }),
+            self.deploy_object_result.as_mut().and_then(|result| {
+                result
+                    .as_mut()
+                    .expect("Always exists")
+                    .llvm_ir_optimized
+                    .take()
+                    .filter(|_| {
+                        output_selection.check_selection(
+                            self.name.path.as_str(),
+                            self.name.name.as_deref(),
+                            solx_standard_json::InputSelector::BytecodeLLVMIROptimized,
+                        )
+                    })
+            }),
             // llvm_assembly
-            self.deploy_object_result
-                .as_mut()
-                .and_then(|result| {
-                    result
-                        .as_mut()
-                        .expect("Always exists")
-                        .assembly
-                        .take()
-                        .filter(|_| {
-                            output_selection.check_selection(
-                                self.name.path.as_str(),
-                                self.name.name.as_deref(),
-                                solx_standard_json::InputSelector::BytecodeLLVMAssembly,
-                            )
-                        })
-                }),
+            self.deploy_object_result.as_mut().and_then(|result| {
+                result
+                    .as_mut()
+                    .expect("Always exists")
+                    .assembly
+                    .take()
+                    .filter(|_| {
+                        output_selection.check_selection(
+                            self.name.path.as_str(),
+                            self.name.name.as_deref(),
+                            solx_standard_json::InputSelector::BytecodeLLVMAssembly,
+                        )
+                    })
+            }),
             // debug_info
             self.deploy_object_result
                 .as_mut()
@@ -1021,90 +1011,80 @@ impl Contract {
                 None
             },
             // evmla
-            self.runtime_object_result
-                .as_mut()
-                .and_then(|result| {
-                    result
-                        .as_mut()
-                        .expect("Always exists")
-                        .evmla
-                        .take()
-                        .filter(|_| {
-                            output_selection.check_selection(
-                                self.name.path.as_str(),
-                                self.name.name.as_deref(),
-                                solx_standard_json::InputSelector::RuntimeBytecodeEVMLA,
-                            )
-                        })
-                }),
+            self.runtime_object_result.as_mut().and_then(|result| {
+                result
+                    .as_mut()
+                    .expect("Always exists")
+                    .evmla
+                    .take()
+                    .filter(|_| {
+                        output_selection.check_selection(
+                            self.name.path.as_str(),
+                            self.name.name.as_deref(),
+                            solx_standard_json::InputSelector::RuntimeBytecodeEVMLA,
+                        )
+                    })
+            }),
             // ethir
-            self.runtime_object_result
-                .as_mut()
-                .and_then(|result| {
-                    result
-                        .as_mut()
-                        .expect("Always exists")
-                        .ethir
-                        .take()
-                        .filter(|_| {
-                            output_selection.check_selection(
-                                self.name.path.as_str(),
-                                self.name.name.as_deref(),
-                                solx_standard_json::InputSelector::RuntimeBytecodeEthIR,
-                            )
-                        })
-                }),
-            // llvm_ir_unoptimized
-            self.runtime_object_result
-                .as_mut()
-                .and_then(|result| {
-                    result
-                        .as_mut()
-                        .expect("Always exists")
-                        .llvm_ir_unoptimized
-                        .take()
-                        .filter(|_| {
-                            output_selection.check_selection(
-                                self.name.path.as_str(),
-                                self.name.name.as_deref(),
-                                solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
-                            )
-                        })
-                }),
+            self.runtime_object_result.as_mut().and_then(|result| {
+                result
+                    .as_mut()
+                    .expect("Always exists")
+                    .ethir
+                    .take()
+                    .filter(|_| {
+                        output_selection.check_selection(
+                            self.name.path.as_str(),
+                            self.name.name.as_deref(),
+                            solx_standard_json::InputSelector::RuntimeBytecodeEthIR,
+                        )
+                    })
+            }),
+            // llvm_ir (unoptimized)
+            self.runtime_object_result.as_mut().and_then(|result| {
+                result
+                    .as_mut()
+                    .expect("Always exists")
+                    .llvm_ir
+                    .take()
+                    .filter(|_| {
+                        output_selection.check_selection(
+                            self.name.path.as_str(),
+                            self.name.name.as_deref(),
+                            solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
+                        )
+                    })
+            }),
             // llvm_ir_optimized
-            self.runtime_object_result
-                .as_mut()
-                .and_then(|result| {
-                    result
-                        .as_mut()
-                        .expect("Always exists")
-                        .llvm_ir_optimized
-                        .take()
-                        .filter(|_| {
-                            output_selection.check_selection(
-                                self.name.path.as_str(),
-                                self.name.name.as_deref(),
-                                solx_standard_json::InputSelector::RuntimeBytecodeLLVMIROptimized,
-                            )
-                        })
-                }),
+            self.runtime_object_result.as_mut().and_then(|result| {
+                result
+                    .as_mut()
+                    .expect("Always exists")
+                    .llvm_ir_optimized
+                    .take()
+                    .filter(|_| {
+                        output_selection.check_selection(
+                            self.name.path.as_str(),
+                            self.name.name.as_deref(),
+                            solx_standard_json::InputSelector::RuntimeBytecodeLLVMIROptimized,
+                        )
+                    })
+            }),
             // llvm_assembly
-            self.runtime_object_result
-                .as_mut()
-                .and_then(|result| {
-                    result
-                        .as_mut()
-                        .expect("Always exists")
-                        .assembly
-                        .take()
-                        .filter(|_| {
-                            output_selection.check_selection(
-                                self.name.path.as_str(),
-                                self.name.name.as_deref(),
-                                solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
-                            )
-                        })
-                }),
+            self.runtime_object_result.as_mut().and_then(|result| {
+                result
+                    .as_mut()
+                    .expect("Always exists")
+                    .assembly
+                    .take()
+                    .filter(|_| {
+                        output_selection.check_selection(
+                            self.name.path.as_str(),
+                            self.name.name.as_deref(),
+                            solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
+                        )
+                    })
+            }),
             // debug_info
             self.runtime_object_result
                 .as_mut()

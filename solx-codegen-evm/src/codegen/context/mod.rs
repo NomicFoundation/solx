@@ -194,12 +194,11 @@ impl<'ctx> Context<'ctx> {
         }
 
         // Capture unoptimized LLVM IR for output if requested and not writing to files
-        let captured_llvm_ir_unoptimized =
-            if self.capture_llvm_ir && self.output_config.is_none() {
-                Some(self.module().print_to_string().to_string())
-            } else {
-                None
-            };
+        let captured_llvm_ir = if self.capture_llvm_ir && self.output_config.is_none() {
+            Some(self.module().print_to_string().to_string())
+        } else {
+            None
+        };
 
         self.verify().map_err(|error| {
             anyhow::anyhow!(
@@ -229,12 +228,11 @@ impl<'ctx> Context<'ctx> {
         }
 
         // Capture optimized LLVM IR for output if requested and not writing to files
-        let captured_llvm_ir_optimized =
-            if self.capture_llvm_ir && self.output_config.is_none() {
-                Some(self.module().print_to_string().to_string())
-            } else {
-                None
-            };
+        let captured_llvm_ir_optimized = if self.capture_llvm_ir && self.output_config.is_none() {
+            Some(self.module().print_to_string().to_string())
+        } else {
+            None
+        };
 
         self.verify().map_err(|error| {
             anyhow::anyhow!(
@@ -365,7 +363,7 @@ impl<'ctx> Context<'ctx> {
                 assembly,
                 captured_evmla,
                 captured_ethir,
-                captured_llvm_ir_unoptimized,
+                captured_llvm_ir,
                 captured_llvm_ir_optimized,
                 immutables,
                 is_size_fallback,
@@ -389,7 +387,7 @@ impl<'ctx> Context<'ctx> {
                 assembly,
                 captured_evmla,
                 captured_ethir,
-                captured_llvm_ir_unoptimized,
+                captured_llvm_ir,
                 captured_llvm_ir_optimized,
                 None,
                 is_size_fallback,

@@ -23,7 +23,7 @@ pub struct Build {
     /// Ethereal IR (solx internal representation).
     pub ethir: Option<String>,
     /// Unoptimized LLVM IR (solx internal representation).
-    pub llvm_ir_unoptimized: Option<String>,
+    pub llvm_ir: Option<String>,
     /// Optimized LLVM IR (solx internal representation).
     pub llvm_ir_optimized: Option<String>,
     /// Mapping with immutables.
@@ -44,7 +44,7 @@ impl Build {
         assembly: Option<String>,
         evmla: Option<String>,
         ethir: Option<String>,
-        llvm_ir_unoptimized: Option<String>,
+        llvm_ir: Option<String>,
         llvm_ir_optimized: Option<String>,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         is_size_fallback: bool,
@@ -56,7 +56,7 @@ impl Build {
             assembly,
             evmla,
             ethir,
-            llvm_ir_unoptimized,
+            llvm_ir,
             llvm_ir_optimized,
             immutables,
             is_size_fallback,

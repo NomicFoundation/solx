@@ -25,7 +25,7 @@ pub struct Bytecode {
     pub ethir: Option<String>,
     /// Unoptimized LLVM IR (solx internal representation).
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub llvm_ir_unoptimized: Option<String>,
+    pub llvm_ir: Option<String>,
     /// Optimized LLVM IR (solx internal representation).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub llvm_ir_optimized: Option<String>,
@@ -67,7 +67,7 @@ impl Bytecode {
         object: Option<String>,
         evmla: Option<String>,
         ethir: Option<String>,
-        llvm_ir_unoptimized: Option<String>,
+        llvm_ir: Option<String>,
         llvm_ir_optimized: Option<String>,
         llvm_assembly: Option<String>,
         debug_info: Option<String>,
@@ -105,7 +105,7 @@ impl Bytecode {
             object,
             evmla,
             ethir,
-            llvm_ir_unoptimized,
+            llvm_ir,
             llvm_ir_optimized,
             llvm_assembly,
             debug_info,
@@ -129,7 +129,7 @@ impl Bytecode {
             None => true,
         }) && self.evmla.is_none()
             && self.ethir.is_none()
-            && self.llvm_ir_unoptimized.is_none()
+            && self.llvm_ir.is_none()
             && self.llvm_ir_optimized.is_none()
             && self.llvm_assembly.is_none()
             && (match self.debug_info.as_ref() {

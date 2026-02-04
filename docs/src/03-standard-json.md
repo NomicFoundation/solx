@@ -152,7 +152,7 @@ On the other hand, parameters that are not mentioned here but are parts of **sol
           // solx-only: Ethereal IR (internal representation). Only available for non-viaIR mode.
           "evm.bytecode.ethir",
           // solx-only: Unoptimized LLVM IR (internal representation).
-          "evm.bytecode.llvmIrUnoptimized",
+          "evm.bytecode.llvmIr",
           // solx-only: Optimized LLVM IR (internal representation).
           "evm.bytecode.llvmIrOptimized",
           // ELF-wrapped DWARF debug info produced by solx/LLVM. Only available for Solidity source code input.
@@ -177,7 +177,7 @@ On the other hand, parameters that are not mentioned here but are parts of **sol
           // solx-only: Ethereal IR (internal representation). Only available for non-viaIR mode.
           "evm.deployedBytecode.ethir",
           // solx-only: Unoptimized LLVM IR (internal representation).
-          "evm.deployedBytecode.llvmIrUnoptimized",
+          "evm.deployedBytecode.llvmIr",
           // solx-only: Optimized LLVM IR (internal representation).
           "evm.deployedBytecode.llvmIrOptimized",
           // Link references for linkers that are to resolve library addresses at deploy time.
@@ -300,8 +300,8 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
             // Corresponds to "evm.bytecode.ethir" in the outputSelection settings.
             "ethir": "/* ... */",
             // Optional, solx-only: Unoptimized LLVM IR (string).
-            // Corresponds to "evm.bytecode.llvmIrUnoptimized" in the outputSelection settings.
-            "llvmIrUnoptimized": "/* ... */",
+            // Corresponds to "evm.bytecode.llvmIr" in the outputSelection settings.
+            "llvmIr": "/* ... */",
             // Optional, solx-only: Optimized LLVM IR (string).
             // Corresponds to "evm.bytecode.llvmIrOptimized" in the outputSelection settings.
             "llvmIrOptimized": "/* ... */",
@@ -343,8 +343,8 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
             // Corresponds to "evm.deployedBytecode.ethir" in the outputSelection settings.
             "ethir": "/* ... */",
             // Optional, solx-only: Unoptimized LLVM IR (string).
-            // Corresponds to "evm.deployedBytecode.llvmIrUnoptimized" in the outputSelection settings.
-            "llvmIrUnoptimized": "/* ... */",
+            // Corresponds to "evm.deployedBytecode.llvmIr" in the outputSelection settings.
+            "llvmIr": "/* ... */",
             // Optional, solx-only: Optimized LLVM IR (string).
             // Corresponds to "evm.deployedBytecode.llvmIrOptimized" in the outputSelection settings.
             "llvmIrOptimized": "/* ... */",

@@ -29,7 +29,7 @@ pub struct Object {
     /// Ethereal IR (solx internal representation).
     pub ethir: Option<String>,
     /// Unoptimized LLVM IR (solx internal representation).
-    pub llvm_ir_unoptimized: Option<String>,
+    pub llvm_ir: Option<String>,
     /// Optimized LLVM IR (solx internal representation).
     pub llvm_ir_optimized: Option<String>,
     /// Whether IR codegen is used.
@@ -70,7 +70,7 @@ impl Object {
         debug_info: Option<Vec<u8>>,
         evmla: Option<String>,
         ethir: Option<String>,
-        llvm_ir_unoptimized: Option<String>,
+        llvm_ir: Option<String>,
         llvm_ir_optimized: Option<String>,
         via_ir: bool,
         code_segment: solx_utils::CodeSegment,
@@ -91,7 +91,7 @@ impl Object {
             debug_info,
             evmla,
             ethir,
-            llvm_ir_unoptimized,
+            llvm_ir,
             llvm_ir_optimized,
             via_ir,
             code_segment,

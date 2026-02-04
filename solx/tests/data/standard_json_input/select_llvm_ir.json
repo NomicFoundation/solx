@@ -13,10 +13,10 @@
       "*": {
         "*": [
           "evm.bytecode.object",
-          "evm.bytecode.llvmIrUnoptimized",
+          "evm.bytecode.llvmIr",
           "evm.bytecode.llvmIrOptimized",
           "evm.deployedBytecode.object",
-          "evm.deployedBytecode.llvmIrUnoptimized",
+          "evm.deployedBytecode.llvmIr",
           "evm.deployedBytecode.llvmIrOptimized"
         ]
       }
