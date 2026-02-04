@@ -277,7 +277,7 @@ impl Buildable for MatterLabsTest {
         compiler: Arc<dyn Compiler>,
         summary: Arc<Mutex<Summary>>,
         filters: &Filters,
-        debug_config: Option<solx_codegen_evm::DebugConfig>,
+        debug_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> Option<Test> {
         self.check_filters(filters, &mode)?;
 

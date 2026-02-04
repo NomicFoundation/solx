@@ -145,6 +145,21 @@ pub struct Arguments {
     #[arg(long = "benchmarks", help_heading = "Output Selection")]
     pub output_benchmarks: bool,
 
+    /// Emit EVM legacy assembly (intermediate representation from solc).
+    /// Can be used with --output-dir to write .evmla files.
+    #[arg(long = "evmla", help_heading = "Output Selection")]
+    pub output_evmla: bool,
+
+    /// Emit Ethereal IR (intermediate representation between EVM assembly and LLVM IR).
+    /// Can be used with --output-dir to write .ethir files.
+    #[arg(long = "ethir", help_heading = "Output Selection")]
+    pub output_ethir: bool,
+
+    /// Emit LLVM IR (both unoptimized and optimized).
+    /// Can be used with --output-dir to write .ll files.
+    #[arg(long = "emit-llvm", help_heading = "Output Selection")]
+    pub output_llvm_ir: bool,
+
     //
     // Compilation Settings
     //
@@ -204,11 +219,6 @@ pub struct Arguments {
     //
     // Debug Options
     //
-    /// Dump all IRs to files in the specified directory.
-    /// Only for testing and debugging.
-    #[arg(long, help_heading = "Debug Options")]
-    pub debug_output_dir: Option<PathBuf>,
-
     /// Set the verify-each option in LLVM.
     /// Only for testing and debugging.
     #[arg(long, help_heading = "Debug Options")]
@@ -331,6 +341,9 @@ impl Arguments {
                 || self.output_asm_solc_json
                 || self.output_ir
                 || self.output_benchmarks
+                || self.output_evmla
+                || self.output_ethir
+                || self.output_llvm_ir
             {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "Cannot output data outside of JSON in standard JSON mode.",
@@ -394,6 +407,14 @@ impl Arguments {
                     "Metadata literal content flag must be specified in standard JSON input settings.",
                 ));
             }
+        }
+
+        if (self.output_evmla || self.output_ethir || self.output_llvm_ir)
+            && self.output_dir.is_none()
+        {
+            messages.push(solx_standard_json::OutputError::new_error(
+                "IR output flags (--evmla, --ethir, --emit-llvm) require --output-dir to be specified.",
+            ));
         }
 
         Arc::new(Mutex::new(messages))

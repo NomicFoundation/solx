@@ -358,6 +358,77 @@ Debug info of the runtime part:
 
 
 
+### `--evmla`
+
+Emits EVM legacy assembly (intermediate representation from solc) to files in the output directory.
+
+This flag requires the `--output-dir` option to be specified. The output files have the `.evmla` extension.
+
+Usage:
+
+```bash
+solx 'Simple.sol' --evmla --output-dir './build/'
+ls './build/'
+```
+
+Output:
+
+```text
+Compiler run successful.
+tests_solidity_simple_default_sol_Test.evmla
+tests_solidity_simple_default_sol_Test.runtime.evmla
+```
+
+
+
+### `--ethir`
+
+Emits Ethereal IR (intermediate representation between EVM assembly and LLVM IR) to files in the output directory.
+
+This flag requires the `--output-dir` option to be specified. The output files have the `.ethir` extension.
+
+Usage:
+
+```bash
+solx 'Simple.sol' --ethir --output-dir './build/'
+ls './build/'
+```
+
+Output:
+
+```text
+Compiler run successful.
+tests_solidity_simple_default_sol_Test.ethir
+tests_solidity_simple_default_sol_Test.runtime.ethir
+```
+
+
+
+### `--emit-llvm`
+
+Emits LLVM IR (both unoptimized and optimized) to files in the output directory.
+
+This flag requires the `--output-dir` option to be specified. The output files have the `.ll` extension.
+
+Usage:
+
+```bash
+solx 'Simple.sol' --emit-llvm --output-dir './build/'
+ls './build/'
+```
+
+Output:
+
+```text
+Compiler run successful.
+tests_solidity_simple_default_sol_Test.optimized.ll
+tests_solidity_simple_default_sol_Test.runtime.optimized.ll
+tests_solidity_simple_default_sol_Test.runtime.unoptimized.ll
+tests_solidity_simple_default_sol_Test.unoptimized.ll
+```
+
+
+
 ### `--benchmarks`
 
 Emits benchmarks of the **solx** LLVM-based pipeline and its underlying call to **solc**.
@@ -763,42 +834,39 @@ Binary:
 ## Debugging
 
 
+### IR Output Flags
 
-### `--debug-output-dir`
+For selective IR output, use the following flags with `--output-dir`:
 
-Specifies the directory to store intermediate build artifacts. The artifacts can be useful for debugging and research.
+- [`--evmla`](#--evmla) - EVM legacy assembly
+- [`--ethir`](#--ethir) - Ethereal IR
+- [`--emit-llvm`](#--emit-llvm) - LLVM IR (unoptimized and optimized)
+- [`--asm`](#--asm) - LLVM EVM assembly
 
-The directory is created if it does not exist. If artifacts are already present in the directory, they are overwritten.
+These flags respect the `--overwrite` option. Without `--overwrite`, the compiler will refuse to overwrite existing files.
 
-The intermediate build artifacts can be:
+
+### `SOLX_OUTPUT_DIR` Environment Variable
+
+For debugging purposes, all intermediate build artifacts can be dumped to a directory using the `SOLX_OUTPUT_DIR` environment variable. This is useful for toolkits where arbitrary solx-specific options are not supported.
+
+When this environment variable is set, **solx** will output all intermediate representations to the specified directory, always overwriting existing files.
+
+The intermediate build artifacts include:
 
 | Name          | Extension   |
 |:--------------|:------------|
 | EVM Assembly  | *evmla*     |
-| EthIR         | *ethir*     |  
+| EthIR         | *ethir*     |
 | Yul           | *yul*       |
 | LLVM IR       | *ll*        |
+| LLVM Assembly | *asm*       |
 
 Usage:
 
 ```bash
-solx 'Simple.sol' --bin --debug-output-dir './debug/'
+SOLX_OUTPUT_DIR='./debug/' solx 'Simple.sol' --bin
 ls './debug/'
-```
-
-This option can also be set with an environment variable `SOLX_DEBUG_OUTPUT_DIR`, which is useful for toolkits
-where arbitrary solx-specific options are not supported:
-
-```bash
-SOLX_DEBUG_OUTPUT_DIR='./debug/' solx 'Simple.sol' --bin
-ls './debug/'
-```
-
-Additionally, it is possible to dump the standard JSON input file with the `SOLX_STANDARD_JSON_DEBUG` environment variable:
-
-```bash
-SOLX_STANDARD_JSON_DEBUG='./debug/input.json' solx 'Simple.sol' --bin
-cat './debug/input.json' | jq .
 ```
 
 Output:
@@ -819,6 +887,13 @@ Simple.sol_Test.runtime.asm
 ```
 
 The output file name is constructed as follows: `<ContractPath>_<ContractName>.<Modifiers>.<Extension>`.
+
+Additionally, it is possible to dump the standard JSON input file with the `SOLX_STANDARD_JSON_DEBUG` environment variable:
+
+```bash
+SOLX_STANDARD_JSON_DEBUG='./debug/input.json' solx 'Simple.sol' --bin
+cat './debug/input.json' | jq .
+```
 
 
 

@@ -40,8 +40,8 @@ pub struct Input {
     pub optimizer_settings: solx_codegen_evm::OptimizerSettings,
     /// The extra LLVM arguments.
     pub llvm_options: Vec<String>,
-    /// The debug output config.
-    pub debug_config: Option<solx_codegen_evm::DebugConfig>,
+    /// The output config for IR artifacts.
+    pub output_config: Option<solx_codegen_evm::OutputConfig>,
 }
 
 impl Input {
@@ -62,7 +62,7 @@ impl Input {
         metadata_bytes: Option<Vec<u8>>,
         optimizer_settings: solx_codegen_evm::OptimizerSettings,
         llvm_options: Vec<String>,
-        debug_config: Option<solx_codegen_evm::DebugConfig>,
+        output_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> Self {
         Self {
             language,
@@ -78,7 +78,7 @@ impl Input {
             metadata_bytes,
             optimizer_settings,
             llvm_options,
-            debug_config,
+            output_config,
         }
     }
 }

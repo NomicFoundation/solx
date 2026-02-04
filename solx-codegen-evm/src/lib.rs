@@ -69,6 +69,7 @@ pub use self::context::traits::solidity_data::ISolidityData;
 pub use self::context::traits::yul_data::IYulData;
 pub use self::context::value::Value;
 pub use self::debug_config::DebugConfig;
+pub use self::debug_config::OutputConfig;
 pub use self::debug_config::ir_type::IRType;
 pub use self::dependencies::Dependencies;
 pub use self::optimizer::Optimizer;

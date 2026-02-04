@@ -108,7 +108,7 @@ impl Contract {
         metadata_bytes: Option<Vec<u8>>,
         mut optimizer_settings: solx_codegen_evm::OptimizerSettings,
         llvm_options: Vec<String>,
-        debug_config: Option<solx_codegen_evm::DebugConfig>,
+        output_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> Result<EVMContractObject, Error> {
         use solx_codegen_evm::WriteLLVM;
         let mut profiler = solx_codegen_evm::Profiler::default();
@@ -151,7 +151,7 @@ impl Contract {
                     optimizer,
                     output_debug_info,
                     solidity_data,
-                    debug_config.clone(),
+                    output_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
@@ -228,7 +228,7 @@ impl Contract {
                     optimizer.clone(),
                     output_debug_info,
                     solidity_data,
-                    debug_config.clone(),
+                    output_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
@@ -318,7 +318,7 @@ impl Contract {
                     optimizer,
                     output_debug_info,
                     solidity_data,
-                    debug_config.clone(),
+                    output_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
@@ -401,7 +401,7 @@ impl Contract {
                     optimizer.clone(),
                     output_debug_info,
                     solidity_data,
-                    debug_config.clone(),
+                    output_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
@@ -472,7 +472,7 @@ impl Contract {
                     optimizer,
                     false,
                     None,
-                    debug_config,
+                    output_config,
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,
@@ -527,7 +527,7 @@ impl Contract {
                     optimizer,
                     false,
                     None,
-                    debug_config.clone(),
+                    output_config.clone(),
                 );
                 inkwell::support::error_handling::install_stack_error_handler(
                     crate::process::evm_stack_error_handler,

@@ -25,14 +25,14 @@ impl Yul {
     pub fn try_from_source(
         path: &str,
         source_code: &str,
-        debug_config: Option<&solx_codegen_evm::DebugConfig>,
+        output_config: Option<&solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<Option<Self>> {
         if source_code.is_empty() {
             return Ok(None);
         }
 
-        if let Some(debug_config) = debug_config {
-            debug_config.dump_yul(path, source_code)?;
+        if let Some(output_config) = output_config {
+            output_config.dump_yul(path, source_code)?;
         }
 
         let mut lexer = Lexer::new(source_code);

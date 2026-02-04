@@ -126,7 +126,7 @@ impl Compiler for LLVMIRCompiler {
         mode: &Mode,
         _test_params: Option<&solx_solc_test_adapter::Params>,
         llvm_options: Vec<String>,
-        debug_config: Option<solx_codegen_evm::DebugConfig>,
+        debug_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<EVMInput> {
         if self.toolchain != Toolchain::Solx {
             anyhow::bail!("LLVM IR compilation is only supported by solx toolchain");

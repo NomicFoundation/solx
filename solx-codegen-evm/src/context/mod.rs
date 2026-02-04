@@ -16,7 +16,7 @@ use std::rc::Rc;
 use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 
-use crate::debug_config::DebugConfig;
+use crate::debug_config::OutputConfig;
 use crate::optimizer::Optimizer;
 
 use self::debug_info::DebugInfo;
@@ -95,9 +95,9 @@ pub trait IContext<'ctx> {
     fn create_debug_info_location(&self) -> Option<inkwell::debug_info::DILocation<'ctx>>;
 
     ///
-    /// Returns the debug config reference.
+    /// Returns the output config reference.
     ///
-    fn debug_config(&self) -> Option<&DebugConfig>;
+    fn output_config(&self) -> Option<&OutputConfig>;
 
     ///
     /// Returns the full contract name.
