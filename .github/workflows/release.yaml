@@ -53,7 +53,7 @@ jobs:
       matrix: ${{ steps.prepare-matrix.outputs.matrix }}
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: 'recursive'
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
@@ -90,7 +90,7 @@ jobs:
     name: ${{ matrix.name }}
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: 'recursive'
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
@@ -139,7 +139,7 @@ jobs:
     steps:
 
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
@@ -171,7 +171,7 @@ jobs:
     steps:
 
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
