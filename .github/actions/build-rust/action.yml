@@ -24,6 +24,10 @@ inputs:
     description: 'Enable code coverage.'
     required: false
     default: 'false'
+  enable-cache:
+    description: 'Enable Rust dependency caching.'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -45,6 +49,7 @@ runs:
         echo "target-path=${TARGET_PATH}" >> $GITHUB_OUTPUT
 
     - name: Rust cache
+      if: inputs.enable-cache == 'true'
       uses: Swatinem/rust-cache@v2
       with:
         shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"

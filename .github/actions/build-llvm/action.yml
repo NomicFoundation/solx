@@ -52,7 +52,10 @@ inputs:
     description: 'Github Actions cache key for CCache.'
     required: false
     default: ''
-
+  enable-cache:
+    description: 'Enable compiler caching (ccache).'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -73,25 +76,40 @@ runs:
         working-dir: ${{ inputs.working-dir }}
 
     - name: Define ccache key
-      if: inputs.ccache-key == ''
+      if: inputs.enable-cache == 'true' && inputs.ccache-key == ''
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       id: ccache-key
       run: |
         LLVM_BRANCH="$(git -C ./llvm rev-parse --abbrev-ref HEAD)"
+        # Build type suffix (skip for default Release)
+        if [ '${{ inputs.build-type }}' != 'Release' ]; then
+          BUILD_TYPE_SUFFIX="-${{ inputs.build-type }}"
+        fi
+        # LLVM projects suffix (e.g., mlir, lld)
+        if [ -n '${{ inputs.llvm-projects }}' ]; then
+          # Replace spaces with dashes for cleaner key
+          PROJECTS_SUFFIX="-$(echo '${{ inputs.llvm-projects }}' | tr ' ' '-')"
+        fi
+        # Coverage suffix
         if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
           COVERAGE_SUFFIX="-coverage"
         fi
-        echo "key=llvm-${LLVM_BRANCH}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target-env }}${COVERAGE_SUFFIX}" | tee -a "${GITHUB_OUTPUT}"
+        # Sanitizer suffix
+        if [ -n '${{ inputs.sanitizer }}' ]; then
+          SANITIZER_SUFFIX="-san-${{ inputs.sanitizer }}"
+        fi
+        echo "key=llvm-${LLVM_BRANCH}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target-env }}${BUILD_TYPE_SUFFIX}${PROJECTS_SUFFIX}${COVERAGE_SUFFIX}${SANITIZER_SUFFIX}" | tee -a "${GITHUB_OUTPUT}"
 
     # CCache action requires `apt update`
     # to be executed before it for Linux Docker jobs. See:
     # https://github.com/hendrikmuhs/ccache-action?tab=readme-ov-file#usage
     - name: Prepare ccache installation
-      if: runner.os == 'Linux'
+      if: inputs.enable-cache == 'true' && runner.os == 'Linux'
       shell: 'bash'
       run: apt update
 
     - name: Set up compiler cache
+      if: inputs.enable-cache == 'true'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
       env:
         CCACHE_BASEDIR: ${{ github.workspace }}

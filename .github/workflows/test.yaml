@@ -60,7 +60,7 @@ jobs:
           target-env: 'gnu'
           build-type: 'Release'
           enable-assertions: 'false'
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
+          enable-cache: 'true'
 
       - name: Cargo checks
         uses: ./.github/actions/cargo-check
@@ -120,7 +120,7 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: RelWithDebInfo
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
+          enable-cache: 'true'
           enable-assertions: 'true'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
@@ -131,6 +131,7 @@ jobs:
         with:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
+          enable-cache: 'true'
 
       - name: Run tests
         uses: ./.github/actions/rust-unit-tests

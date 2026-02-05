@@ -33,6 +33,10 @@ inputs:
     description: 'Github Actions cache key for CCache.'
     required: false
     default: ''
+  enable-cache:
+    description: 'Enable Boost and compiler caching.'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -46,12 +50,14 @@ runs:
         working-dir: ${{ inputs.working-dir }}/..
 
     - name: Cache Boost
+      if: inputs.enable-cache == 'true'
       uses: actions/cache@v4
       with:
         path: ${{ inputs.working-dir }}/boost
         key: boost-${{ runner.os }}-${{ runner.arch }}-${{ inputs.boost-version }}
 
     - name: Check ccache availability
+      if: inputs.enable-cache == 'true'
       id: ccache
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
@@ -63,22 +69,30 @@ runs:
         fi
 
     - name: Define solc ccache key
-      if: inputs.ccache-key == '' && steps.ccache.outputs.available == 'true'
+      if: inputs.enable-cache == 'true' && inputs.ccache-key == '' && steps.ccache.outputs.available == 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       id: ccache-key
       working-directory: ${{ inputs.working-dir }}
       run: |
         SOLC_SHORT_SHA="$(git rev-parse --short HEAD)"
-        echo "key=solc-${SOLC_SHORT_SHA}-${{ runner.os }}-${{ runner.arch }}" | tee -a "${GITHUB_OUTPUT}"
+        # Build type suffix (skip for default Release)
+        if [ '${{ inputs.cmake-build-type }}' != 'Release' ]; then
+          BUILD_TYPE_SUFFIX="-${{ inputs.cmake-build-type }}"
+        fi
+        # MLIR suffix
+        if [ '${{ inputs.enable-mlir }}' = 'true' ]; then
+          MLIR_SUFFIX="-mlir"
+        fi
+        echo "key=solc-${SOLC_SHORT_SHA}-${{ runner.os }}-${{ runner.arch }}${BUILD_TYPE_SUFFIX}${MLIR_SUFFIX}" | tee -a "${GITHUB_OUTPUT}"
 
     # CCache action requires `apt update` on Linux Docker jobs
     - name: Prepare ccache installation
-      if: runner.os == 'Linux' && steps.ccache.outputs.available == 'true'
+      if: inputs.enable-cache == 'true' && runner.os == 'Linux' && steps.ccache.outputs.available == 'true'
       shell: 'bash'
       run: apt update || true
 
     - name: Set up solc compiler cache
-      if: steps.ccache.outputs.available == 'true'
+      if: inputs.enable-cache == 'true' && steps.ccache.outputs.available == 'true'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
       env:
         CCACHE_BASEDIR: ${{ github.workspace }}

@@ -98,12 +98,6 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
       - name: Prepare Windows env
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
@@ -112,7 +106,6 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: Release
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           enable-assertions: 'false'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'

@@ -55,7 +55,7 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: RelWithDebInfo
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
+          enable-cache: 'true'
           sanitizer: ${{ inputs.llvm-sanitizer || 'Address' }}
           enable-assertions: 'true'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
@@ -67,6 +67,7 @@ jobs:
         with:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
+          enable-cache: 'true'
 
       - name: Run tests
         uses: ./.github/actions/rust-unit-tests
