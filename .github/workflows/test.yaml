@@ -62,7 +62,6 @@ jobs:
           build-type: 'Release'
           enable-assertions: 'false'
           ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
-          save-ccache: 'false'
 
       - name: Cargo checks
         uses: ./.github/actions/cargo-check

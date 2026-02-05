@@ -29,21 +29,8 @@ inputs:
     description: 'Upload build artifacts for testing.'
     required: false
     default: 'true'
-  extra-args:
-    description: 'Extra CMake arguments.'
-    required: false
-    default: ''
   ccache-key:
     description: 'Github Actions cache key for CCache.'
-    required: false
-    default: ''
-  save-ccache:
-    description: 'Whether to save ccache after the build.'
-    required: false
-    default: 'false'
-  # Legacy inputs for backwards compatibility (ignored)
-  build-type:
-    description: 'Deprecated: use cmake-build-type instead.'
     required: false
     default: ''
 
@@ -90,17 +77,6 @@ runs:
       shell: 'bash'
       run: apt update || true
 
-    - name: Define ccache save key
-      id: ccache-save
-      if: steps.ccache.outputs.available == 'true'
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: |
-        if [ '${{ inputs.save-ccache }}' = 'true' ]; then
-          echo "save=true" | tee -a "${GITHUB_OUTPUT}"
-        else
-          echo "save=${{ github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}" | tee -a "${GITHUB_OUTPUT}"
-        fi
-
     - name: Set up solc compiler cache
       if: steps.ccache.outputs.available == 'true'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
@@ -114,7 +90,7 @@ runs:
         append-timestamp: false
         max-size: "5G"
         verbose: 2
-        save: ${{ steps.ccache-save.outputs.save }}
+        save: ${{ github.event_name != 'pull_request' }}
 
     - name: Build solc
       # Run from the checkout root that owns solx-solidity
@@ -131,12 +107,11 @@ runs:
         [ "${{ inputs.enable-mlir }}" = "true" ] && ENABLE_MLIR="--enable-mlir"
         [ "${{ inputs.use-gcc }}" = "true" ] && USE_GCC="--use-gcc"
         [ "${{ steps.ccache.outputs.available }}" = "true" ] && USE_CCACHE="--ccache"
-        [ -n "${{ inputs.extra-args }}" ] && EXTRA_ARGS="--extra-args ${{ inputs.extra-args }}"
 
         "${TARGET_DIR}/release/solx-dev" solc build \
           --build-type ${{ inputs.cmake-build-type }} \
           --build-boost ${{ inputs.boost-version }} \
-          ${ENABLE_MLIR} ${USE_GCC} ${USE_CCACHE} ${EXTRA_ARGS}
+          ${ENABLE_MLIR} ${USE_GCC} ${USE_CCACHE}
 
     - name: Upload boost artifacts
       if: ${{ inputs.upload-testing-binary == 'true' }}

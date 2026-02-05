@@ -40,18 +40,6 @@ inputs:
     description: 'Enable RTTI for LLVM. Required when building with MLIR.'
     required: false
     default: 'false'
-  default-target-triple:
-    description: 'Default target to triple build LLVM for. Set to `evm` or leave empty for the default target.'
-    required: false
-    default: ''
-  extra-args:
-    description: 'Extra CMake arguments to compile LLVM.'
-    required: false
-    default: ''
-  builder-extra-args:
-    description: 'Extra LLVM builder arguments to compile LLVM.'
-    required: false
-    default: ''
   build-type:
     description: 'LLVM build type. Possible values are `Debug`, `Release`, `RelWithDebInfo`, or `MinSizeRel`. [default: Release]'
     required: false
@@ -64,14 +52,6 @@ inputs:
     description: 'Github Actions cache key for CCache.'
     required: false
     default: ''
-  ccache-key-type:
-    description: 'Type of ccache key: `static` - rotate each month, or `dynamic` - rotate with each update of `LLVM.lock`.'
-    required: false
-    default: 'dynamic'
-  save-ccache:
-    description: 'Whether to save ccache after the build.'
-    required: false
-    default: 'false'
 
 
 runs:
@@ -97,16 +77,11 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       id: ccache-key
       run: |
-        if [ ${{ inputs.ccache-key-type}} = static ]; then
-          echo "key=llvm-$(date +'%Y-%m')" | tee -a "${GITHUB_OUTPUT}"
-        else
-          LLVM_BRANCH="$(git -C ./llvm rev-parse --abbrev-ref HEAD)"
-          LLVM_SHORT_SHA="$(git -C ./llvm rev-parse --short HEAD)"
-          if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
-            COVERAGE_SUFFIX="-coverage"
-          fi
-          echo "key=llvm-${LLVM_BRANCH}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target-env }}${COVERAGE_SUFFIX}" | tee -a "${GITHUB_OUTPUT}"
+        LLVM_BRANCH="$(git -C ./llvm rev-parse --abbrev-ref HEAD)"
+        if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
+          COVERAGE_SUFFIX="-coverage"
         fi
+        echo "key=llvm-${LLVM_BRANCH}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target-env }}${COVERAGE_SUFFIX}" | tee -a "${GITHUB_OUTPUT}"
 
     # CCache action requires `apt update`
     # to be executed before it for Linux Docker jobs. See:
@@ -115,16 +90,6 @@ runs:
       if: runner.os == 'Linux'
       shell: 'bash'
       run: apt update
-
-    - name: Define ccache save key
-      id: ccache-save
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: |
-        if [ '${{ inputs.save-ccache }}' = 'true' ]; then
-          echo "save=true" | tee -a "${GITHUB_OUTPUT}"
-        else
-          echo "save=${{ github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}" | tee -a "${GITHUB_OUTPUT}"
-        fi
 
     - name: Set up compiler cache
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
@@ -138,7 +103,7 @@ runs:
         append-timestamp: false
         max-size: "2G"
         verbose: 2
-        save: ${{ steps.ccache-save.outputs.save }}
+        save: ${{ github.event_name != 'pull_request' }}
 
     # CCACHE_BASEDIR, CCACHE_NOHASHDIR, and CCACHE_COMPILERCHECK
     # are allowing to cache compiler output across different
@@ -161,7 +126,6 @@ runs:
         [ "${{ inputs.enable-coverage }}" = "true" ] && ENABLE_COVERAGE="--enable-coverage"
         [ "${{ inputs.llvm-projects }}" != "" ] && LLVM_PROJECTS="--llvm-projects ${{ inputs.llvm-projects }}"
         [ "${{ inputs.enable-rtti }}" = "true" ] && ENABLE_RTTI="--enable-rtti"
-        [ "${{ inputs.extra-args }}" != "" ] && EXTRA_ARGS="--extra-args ${{ inputs.extra-args }}"
         [ "${{ inputs.sanitizer }}" != "" ] && SANITIZER="--sanitizer ${{ inputs.sanitizer }}"
         if [ "${{ inputs.enable-valgrind }}" = "true" ]; then
           ENABLE_VALGRIND="--enable-valgrind"
@@ -171,4 +135,4 @@ runs:
         fi
 
         "${TARGET_DIR}/release/solx-dev" llvm build --build-type ${{ inputs.build-type }} \
-          --ccache-variant=ccache ${{ inputs.builder-extra-args }} ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${LLVM_PROJECTS} ${ENABLE_RTTI} ${SANITIZER} ${EXTRA_ARGS}
+          --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${LLVM_PROJECTS} ${ENABLE_RTTI} ${SANITIZER}

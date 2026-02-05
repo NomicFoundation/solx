@@ -91,4 +91,3 @@ jobs:
           enable-assertions: 'false'
           build-type: Release
           ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
-          save-ccache: 'true'
