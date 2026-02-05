@@ -49,6 +49,12 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --init --force --recursive --depth 1 --checkout
 
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
@@ -102,6 +108,12 @@ jobs:
         run: |
           git config --global --add safe.directory '*'
           git submodule update --init --force --recursive --depth 1 --checkout
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -161,6 +173,12 @@ jobs:
         with:
           pattern: '*-benchmark'
           merge-multiple: true
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build converter
         run: cargo build --release --bin solx-benchmark-converter

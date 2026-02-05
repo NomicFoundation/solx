@@ -43,11 +43,8 @@ runs:
   using: "composite"
   steps:
 
-    - name: Rust cache
-      uses: Swatinem/rust-cache@v2
-      with:
-        shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+    # Note: Rust cache is provided by build-rust action.
+    # Workflows should call build-rust before this action.
 
     - name: Build solx-dev
       # Run from the checkout root that owns solx-solidity

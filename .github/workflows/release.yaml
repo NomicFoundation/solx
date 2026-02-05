@@ -98,6 +98,12 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Prepare Windows env
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys

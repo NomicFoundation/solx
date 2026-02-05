@@ -85,11 +85,8 @@ runs:
       shell: 'bash'
       run: HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
 
-    - name: Rust cache
-      uses: Swatinem/rust-cache@v2
-      with:
-        shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+    # Note: Rust cache is provided by build-rust action.
+    # Workflows should call build-rust before this action.
 
     - name: Install LLVM builder
       working-directory: ${{ inputs.working-dir }}
