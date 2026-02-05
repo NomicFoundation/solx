@@ -38,7 +38,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
           submodules: recursive
-      
+
       - name: Checkout source (main)
         uses: actions/checkout@v5
         with:
@@ -47,28 +47,6 @@ jobs:
           fetch-depth: 1
           submodules: recursive
           path: 'temp-solx-main'
-
-      - name: Compare LLVM submodule SHAs
-        id: llvm-sha
-        run: |
-          PR_SHA=$(git -C . submodule status solx-llvm | awk '{print $1}' | tr -d ' +-')
-          MAIN_SHA=$(git -C temp-solx-main submodule status solx-llvm | awk '{print $1}' | tr -d ' +-')
-          echo "pr=${PR_SHA}" >> "${GITHUB_OUTPUT}"
-          echo "main=${MAIN_SHA}" >> "${GITHUB_OUTPUT}"
-          if [ "${PR_SHA}" = "${MAIN_SHA}" ]; then
-            echo "same=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "same=false" >> "${GITHUB_OUTPUT}"
-          fi
-
-      - name: Check main LLVM build output
-        id: main-llvm-ready
-        run: |
-          if [ -d "${GITHUB_WORKSPACE}/temp-solx-main/target-llvm" ]; then
-            echo "ready=true" >> "${GITHUB_OUTPUT}"
-          else
-            echo "ready=false" >> "${GITHUB_OUTPUT}"
-          fi
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -86,7 +64,7 @@ jobs:
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
           llvm-projects: ''
-  
+
       # Build the main branch
       - name: Building solc (main)
         uses: ./.github/actions/build-solc
@@ -104,7 +82,6 @@ jobs:
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
-        if: steps.llvm-sha.outputs.same != 'true' || steps.main-llvm-ready.outputs.ready != 'true'
         with:
           build-type: Release
           ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
@@ -112,14 +89,8 @@ jobs:
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
           llvm-projects: ''
-      
-      - name: Reuse LLVM build from main
-        if: steps.llvm-sha.outputs.same == 'true' && steps.main-llvm-ready.outputs.ready == 'true'
-        run: |
-          rm -rf "${GITHUB_WORKSPACE}/target-llvm"
-          ln -s "${GITHUB_WORKSPACE}/temp-solx-main/target-llvm" "${GITHUB_WORKSPACE}/target-llvm"
-      
-      # Build the PR branch  
+
+      # Build the PR branch
       - name: Building solc
         uses: ./.github/actions/build-solc
         with:
