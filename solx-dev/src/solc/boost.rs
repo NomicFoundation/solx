@@ -227,24 +227,17 @@ fn bootstrap(source_dir: &Path, install_prefix: &Path) -> anyhow::Result<()> {
 ///
 /// Normalizes a path for use with MSYS2 shell commands.
 ///
-/// On Windows, converts paths like C:\foo\bar to /c/foo/bar for MSYS2 compatibility.
+/// On Windows, converts backslashes to forward slashes (e.g., C:\foo\bar -> C:/foo/bar).
+/// This format works with both native Windows tools and MSYS2 shell commands.
 ///
 fn normalize_path_for_shell(path: &Path) -> String {
     let path = normalize_path_buf(path);
 
     #[cfg(target_os = "windows")]
     {
-        let path_str = path.display().to_string();
-        // Convert Windows paths (C:\foo\bar) to MSYS2 paths (/c/foo/bar)
-        if let Some(rest) = path_str
-            .strip_prefix(|c: char| c.is_ascii_alphabetic())
-            .and_then(|s| s.strip_prefix(':'))
-        {
-            let drive = path_str.chars().next().unwrap().to_ascii_lowercase();
-            let unix_path = rest.replace('\\', "/");
-            return format!("/{drive}{unix_path}");
-        }
-        return path_str.replace('\\', "/");
+        // Convert backslashes to forward slashes for shell compatibility
+        // Keep the Windows drive letter format (C:/...) which works in MSYS2
+        return path.display().to_string().replace('\\', "/");
     }
 
     #[cfg(not(target_os = "windows"))]
