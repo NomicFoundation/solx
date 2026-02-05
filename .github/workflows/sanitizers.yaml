@@ -49,7 +49,6 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: RelWithDebInfo
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           sanitizer: ${{ inputs.llvm-sanitizer || 'Address' }}
           enable-assertions: 'true'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)

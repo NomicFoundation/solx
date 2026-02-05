@@ -51,11 +51,8 @@ jobs:
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
-          target-env: 'gnu'
           build-type: 'Release'
           enable-assertions: 'false'
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
-          save-ccache: 'false'
 
       - name: Cargo checks
         uses: ./.github/actions/cargo-check
@@ -109,7 +106,6 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: RelWithDebInfo
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           enable-assertions: 'true'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'

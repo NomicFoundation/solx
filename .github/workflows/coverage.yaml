@@ -48,7 +48,6 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: 'RelWithDebInfo'
-          ccache-key: 'llvm-Linux-X64-gnu'
           enable-assertions: false
           enable-coverage: 'true'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
