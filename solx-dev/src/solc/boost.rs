@@ -6,6 +6,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+/// Default Boost version.
+pub const DEFAULT_BOOST_VERSION: &str = "1.83.0";
+
 /// Boost download URL template.
 const BOOST_DOWNLOAD_URL: &str = "https://archives.boost.io/release";
 

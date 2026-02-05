@@ -66,5 +66,5 @@ ensure_solx_binary() {
     return 1
   fi
   mkdir -p "${dest_dir}"
-  ln -sf "${source_binary}" "${dest_dir}/solx"
+  cp -f "${source_binary}" "${dest_dir}/solx"
 }

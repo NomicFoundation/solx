@@ -58,16 +58,9 @@ pub fn build(
         let boost_base_dir = solidity_dir.join("boost");
         let boost_config = BoostConfig::new(version.clone(), boost_base_dir);
 
-        // Check if already built
-        if boost_config.lib_dir().exists() {
-            let canonical_base_dir = boost_config.base_dir.canonicalize()?;
-            eprintln!("Using existing Boost at {}", canonical_base_dir.display());
-            Some(BoostConfig::new(version, canonical_base_dir))
-        } else {
-            // Download and build boost
-            let install_path = boost::download_and_build(&solidity_dir, &boost_config)?;
-            Some(BoostConfig::new(version, install_path))
-        }
+        // download_and_build handles existing versions and rebuilds on mismatch.
+        let install_path = boost::download_and_build(&solidity_dir, &boost_config)?;
+        Some(BoostConfig::new(version, install_path))
     } else {
         // No --build-boost provided, use system boost
         eprintln!("No --build-boost specified. Using system Boost.");
