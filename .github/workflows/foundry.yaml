@@ -39,7 +39,25 @@ jobs:
           fetch-depth: 1
           submodules: recursive
 
+      - name: Detect main baseline requirement
+        id: main-required
+        run: |
+          CONFIG="solx-dev/foundry-tests.toml"
+          needs_main=false
+          if [ -f "${CONFIG}" ] && grep -qE "^\[compilers\.solx-main\]" "${CONFIG}"; then
+            disabled=$(awk '
+              /^\[compilers\.solx-main\]/{in=1; next}
+              /^\[/{if(in){exit}}
+              in && $1=="disabled" {print $3; exit}
+            ' "${CONFIG}")
+            if [ -z "${disabled}" ] || [ "${disabled}" = "false" ]; then
+              needs_main=true
+            fi
+          fi
+          echo "needs_main=${needs_main}" >> "${GITHUB_OUTPUT}"
+
       - name: Checkout source (main)
+        if: steps.main-required.outputs.needs_main == 'true'
         uses: actions/checkout@v5
         with:
           repository: 'NomicFoundation/solx'
@@ -54,7 +72,20 @@ jobs:
           shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
+      - name: Compare LLVM submodule SHAs
+        if: steps.main-required.outputs.needs_main == 'true'
+        id: llvm-sha
+        run: |
+          PR_SHA=$(git -C . submodule status solx-llvm | awk '{print $1}' | tr -d ' +-')
+          MAIN_SHA=$(git -C temp-solx-main submodule status solx-llvm | awk '{print $1}' | tr -d ' +-')
+          echo "pr=${PR_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "main=${MAIN_SHA}" >> "${GITHUB_OUTPUT}"
+          if [ "${PR_SHA}" != "${MAIN_SHA}" ]; then
+            echo "::warning::LLVM submodule mismatch (PR=${PR_SHA}, main=${MAIN_SHA})."
+          fi
+
       - name: Build LLVM (main)
+        if: steps.main-required.outputs.needs_main == 'true'
         uses: ./.github/actions/build-llvm
         with:
           build-type: Release
@@ -67,6 +98,7 @@ jobs:
 
       # Build the main branch
       - name: Building solc (main)
+        if: steps.main-required.outputs.needs_main == 'true'
         uses: ./.github/actions/build-solc
         with:
           cmake-build-type: 'Release'
@@ -74,13 +106,14 @@ jobs:
           upload-testing-binary: 'false'
 
       - name: Build solx (main)
+        if: steps.main-required.outputs.needs_main == 'true'
         working-directory: 'temp-solx-main'
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
         run: cargo build --release --bin solx
 
-      - name: Build LLVM
+      - name: Build LLVM (PR)
         uses: ./.github/actions/build-llvm
         with:
           build-type: Release

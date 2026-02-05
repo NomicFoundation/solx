@@ -51,8 +51,7 @@ runs:
   using: "composite"
   steps:
 
-    # Note: Rust cache is provided by build-rust action.
-    # Workflows should call build-rust before this action.
+    # Note: If you want Rust caching, add a rust-cache step in the calling workflow.
 
     - name: Build solx-dev
       # Run from the checkout root that owns solx-solidity
@@ -80,8 +79,19 @@ runs:
         path: ${{ inputs.working-dir }}/boost
         key: boost-${{ runner.os }}-${{ runner.arch }}-${{ inputs.boost-version }}
 
+    - name: Check ccache availability
+      id: ccache
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      run: |
+        if command -v ccache >/dev/null 2>&1; then
+          echo "available=true" >> "${GITHUB_OUTPUT}"
+        else
+          echo "available=false" >> "${GITHUB_OUTPUT}"
+          echo "ccache not found; skipping ccache integration."
+        fi
+
     - name: Define solc ccache key
-      if: inputs.ccache-key == ''
+      if: inputs.ccache-key == '' && steps.ccache.outputs.available == 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       id: ccache-key
       working-directory: ${{ inputs.working-dir }}
@@ -91,12 +101,13 @@ runs:
 
     # CCache action requires `apt update` on Linux Docker jobs
     - name: Prepare ccache installation
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && steps.ccache.outputs.available == 'true'
       shell: 'bash'
       run: apt update || true
 
     - name: Define ccache save key
       id: ccache-save
+      if: steps.ccache.outputs.available == 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
         if [ '${{ inputs.save-ccache }}' = 'true' ]; then
@@ -106,6 +117,7 @@ runs:
         fi
 
     - name: Set up solc compiler cache
+      if: steps.ccache.outputs.available == 'true'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
       env:
         CCACHE_BASEDIR: ${{ github.workspace }}
@@ -135,10 +147,13 @@ runs:
         [ "${{ inputs.use-gcc }}" = "true" ] && USE_GCC="--use-gcc"
 
         # Build extra args with ccache compiler launcher flags
-        CCACHE_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+        CCACHE_ARGS=""
+        if [ "${{ steps.ccache.outputs.available }}" = "true" ]; then
+          CCACHE_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
+        fi
         if [ -n "${{ inputs.extra-args }}" ]; then
           EXTRA_ARGS="--extra-args ${CCACHE_ARGS} ${{ inputs.extra-args }}"
-        else
+        elif [ -n "${CCACHE_ARGS}" ]; then
           EXTRA_ARGS="--extra-args ${CCACHE_ARGS}"
         fi
 
