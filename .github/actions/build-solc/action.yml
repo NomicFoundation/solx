@@ -135,8 +135,7 @@ runs:
 
         "${TARGET_DIR}/release/solx-dev" solc build \
           --build-type ${{ inputs.cmake-build-type }} \
-          --boost-version ${{ inputs.boost-version }} \
-          --build-boost \
+          --build-boost ${{ inputs.boost-version }} \
           ${ENABLE_MLIR} ${USE_GCC} ${USE_CCACHE} ${EXTRA_ARGS}
 
     - name: Upload boost artifacts

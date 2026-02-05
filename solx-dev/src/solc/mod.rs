@@ -31,10 +31,9 @@ pub fn build(
     tests: bool,
     extra_args: Vec<String>,
     clean: bool,
-    boost_version: Option<String>,
+    build_boost: Option<String>,
     enable_mlir: bool,
     use_gcc: bool,
-    build_boost: bool,
     use_ccache: bool,
 ) -> anyhow::Result<()> {
     let solidity_dir = PathBuf::from(SOLIDITY_DIR);
@@ -53,26 +52,25 @@ pub fn build(
 
     std::fs::create_dir_all(&build_dir)?;
 
-    // Boost configuration - only set if explicitly building or if local boost exists
-    let boost_version = boost_version.unwrap_or_else(|| boost::DEFAULT_BOOST_VERSION.to_owned());
-    let boost_base_dir = solidity_dir.join("boost");
-    let boost_config = BoostConfig::new(boost_version.clone(), boost_base_dir);
+    // Boost configuration: if --build-boost is provided, build local boost;
+    // otherwise use system boost
+    let boost_config = if let Some(version) = build_boost {
+        let boost_base_dir = solidity_dir.join("boost");
+        let boost_config = BoostConfig::new(version.clone(), boost_base_dir);
 
-    // Build Boost if requested
-    let boost_config = if build_boost {
-        // download_and_build returns the absolute path where boost was installed
-        let install_path = boost::download_and_build(&solidity_dir, &boost_config)?;
-        Some(BoostConfig::new(boost_version, install_path))
-    } else if boost_config.lib_dir().exists() {
-        // Use existing local boost - canonicalize for absolute paths
-        let canonical_base_dir = boost_config.base_dir.canonicalize()?;
-        eprintln!("Using existing Boost at {}", canonical_base_dir.display());
-        Some(BoostConfig::new(boost_version, canonical_base_dir))
+        // Check if already built
+        if boost_config.lib_dir().exists() {
+            let canonical_base_dir = boost_config.base_dir.canonicalize()?;
+            eprintln!("Using existing Boost at {}", canonical_base_dir.display());
+            Some(BoostConfig::new(version, canonical_base_dir))
+        } else {
+            // Download and build boost
+            let install_path = boost::download_and_build(&solidity_dir, &boost_config)?;
+            Some(BoostConfig::new(version, install_path))
+        }
     } else {
-        // No local boost - will use system boost (if available)
-        eprintln!(
-            "No local Boost found. Will try system Boost. Use --build-boost to build a local static Boost."
-        );
+        // No --build-boost provided, use system boost
+        eprintln!("No --build-boost specified. Using system Boost.");
         None
     };
 

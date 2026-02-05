@@ -25,13 +25,9 @@ pub struct Build {
     #[arg(long)]
     pub tests: bool,
 
-    /// Boost version to use.
+    /// Build local Boost with the specified version (e.g., "1.83.0").
     #[arg(long)]
-    pub boost_version: Option<String>,
-
-    /// Download and build Boost before building solc.
-    #[arg(long)]
-    pub build_boost: bool,
+    pub build_boost: Option<String>,
 
     /// Enable MLIR support (requires LLVM built with MLIR).
     #[arg(long)]
