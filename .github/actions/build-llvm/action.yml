@@ -73,7 +73,8 @@ runs:
       id: ccache-key
       working-directory: ${{ inputs.working-dir }}
       run: |
-        LLVM_BRANCH="$(git -C ./llvm rev-parse --abbrev-ref HEAD)"
+        # Get LLVM submodule SHA (works even if submodule content not checked out)
+        LLVM_SHA="$(git ls-tree HEAD llvm | awk '{print substr($3,1,8)}')"
         # Build type suffix (skip for default Release)
         if [ '${{ inputs.build-type }}' != 'Release' ]; then
           BUILD_TYPE_SUFFIX="-${{ inputs.build-type }}"
@@ -91,7 +92,7 @@ runs:
         if [ -n '${{ inputs.sanitizer }}' ]; then
           SANITIZER_SUFFIX="-san-${{ inputs.sanitizer }}"
         fi
-        echo "key=llvm-${LLVM_BRANCH}-${{ runner.os }}-${{ runner.arch }}${BUILD_TYPE_SUFFIX}${PROJECTS_SUFFIX}${COVERAGE_SUFFIX}${SANITIZER_SUFFIX}" | tee -a "${GITHUB_OUTPUT}"
+        echo "key=llvm-${LLVM_SHA}-${{ runner.os }}-${{ runner.arch }}${BUILD_TYPE_SUFFIX}${PROJECTS_SUFFIX}${COVERAGE_SUFFIX}${SANITIZER_SUFFIX}" | tee -a "${GITHUB_OUTPUT}"
 
     # CCache action requires `apt update`
     # to be executed before it for Linux Docker jobs. See:
