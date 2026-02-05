@@ -57,7 +57,6 @@ jobs:
         with:
           cmake-build-type: 'Release'
           working-dir: 'temp-solx-main/solx-solidity'
-          upload-testing-binary: 'false'
 
       - name: Build solx (main)
         working-directory: 'temp-solx-main'
@@ -81,7 +80,6 @@ jobs:
         with:
           cmake-build-type: 'Release'
           working-dir: 'solx-solidity'
-          upload-testing-binary: 'false'
 
       - name: Build solx
         env:

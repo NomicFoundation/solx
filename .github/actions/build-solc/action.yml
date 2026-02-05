@@ -25,19 +25,6 @@ inputs:
     description: 'Use GCC compiler instead of clang (required for old versions <=0.4.16).'
     required: false
     default: 'false'
-  upload-testing-binary:
-    description: 'Upload build artifacts for testing.'
-    required: false
-    default: 'true'
-  extra-args:
-    description: 'Extra CMake arguments.'
-    required: false
-    default: ''
-  # Legacy inputs for backwards compatibility (ignored)
-  build-type:
-    description: 'Deprecated: use cmake-build-type instead.'
-    required: false
-    default: ''
 
 runs:
   using: "composite"
@@ -59,24 +46,9 @@ runs:
         set -x
         [ "${{ inputs.enable-mlir }}" = "true" ] && ENABLE_MLIR="--enable-mlir"
         [ "${{ inputs.use-gcc }}" = "true" ] && USE_GCC="--use-gcc"
-        [ "${{ inputs.extra-args }}" != "" ] && EXTRA_ARGS="--extra-args ${{ inputs.extra-args }}"
 
         ./target/release/solx-dev solc build \
           --build-type ${{ inputs.cmake-build-type }} \
           --boost-version ${{ inputs.boost-version }} \
           --build-boost \
-          ${ENABLE_MLIR} ${USE_GCC} ${EXTRA_ARGS}
-
-    - name: Upload boost artifacts
-      if: ${{ inputs.upload-testing-binary == 'true' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: boost-${{ runner.os }}-${{ runner.arch }}
-        path: ${{ inputs.working-dir }}/boost
-
-    - name: Upload build artifacts
-      if: ${{ inputs.upload-testing-binary == 'true' }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-solc-${{ runner.os }}-${{ runner.arch }}
-        path: ${{ inputs.working-dir }}/build
+          ${ENABLE_MLIR} ${USE_GCC}
