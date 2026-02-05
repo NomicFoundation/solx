@@ -44,10 +44,14 @@ runs:
   steps:
 
     - name: Build solx-dev
+      # Run from the checkout root that owns solx-solidity
+      working-directory: ${{ inputs.working-dir }}/..
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: cargo build --release --bin solx-dev
 
     - name: Build solc
+      # Run from the checkout root that owns solx-solidity
+      working-directory: ${{ inputs.working-dir }}/..
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
         CXXFLAGS: "-Wno-narrowing"

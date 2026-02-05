@@ -23,12 +23,14 @@ pub fn build(
     enable_mlir: bool,
 ) -> anyhow::Result<()> {
     crate::utils::exists("cmake")?;
-    crate::utils::exists("ninja")?;
+    let ninja_available = crate::utils::exists("ninja").is_ok();
 
     let mut cmake = Command::new("cmake");
     cmake.current_dir(build_dir);
     cmake.arg(source_dir);
-    cmake.arg("-G").arg("Ninja");
+    if ninja_available {
+        cmake.arg("-G").arg("Ninja");
+    }
 
     // Shared options
     for arg in shared::shared_cmake_args(build_type, pedantic, tests) {

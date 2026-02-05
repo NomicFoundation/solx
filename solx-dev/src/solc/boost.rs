@@ -12,6 +12,9 @@ pub const DEFAULT_BOOST_VERSION: &str = "1.83.0";
 /// Boost download URL template.
 const BOOST_DOWNLOAD_URL: &str = "https://archives.boost.io/release";
 
+/// Marker file to track the installed Boost version.
+const BOOST_VERSION_MARKER: &str = ".solx-boost-version";
+
 /// Boost libraries required for solc.
 const BOOST_LIBRARIES: [&str; 10] = [
     "filesystem",
@@ -113,17 +116,33 @@ pub fn download_and_build(
     boost_config: &BoostConfig,
 ) -> anyhow::Result<PathBuf> {
     // Canonicalize working directory to get absolute paths
-    let working_dir = working_dir.canonicalize()?;
+    let working_dir = normalize_path_buf(&working_dir.canonicalize()?);
     let install_prefix = normalize_path_buf(&working_dir.join("boost"));
 
     // Skip if already built
     if install_prefix.join("lib").exists() {
-        eprintln!(
-            "Boost {} already exists at {}",
-            boost_config.version,
-            install_prefix.display()
-        );
-        return Ok(install_prefix);
+        if let Some(existing_version) = read_boost_version_marker(&install_prefix) {
+            if existing_version == boost_config.version {
+                eprintln!(
+                    "Boost {} already exists at {}",
+                    boost_config.version,
+                    install_prefix.display()
+                );
+                return Ok(install_prefix);
+            }
+            eprintln!(
+                "Boost version mismatch at {}: found {}, requested {}. Rebuilding.",
+                install_prefix.display(),
+                existing_version,
+                boost_config.version
+            );
+        } else {
+            eprintln!(
+                "Boost exists at {} but version marker is missing. Rebuilding.",
+                install_prefix.display()
+            );
+        }
+        std::fs::remove_dir_all(&install_prefix)?;
     }
 
     eprintln!("Downloading Boost {}...", boost_config.version);
@@ -146,6 +165,8 @@ pub fn download_and_build(
     // Build
     build(&source_dir)?;
 
+    write_boost_version_marker(&install_prefix, &boost_config.version)?;
+
     eprintln!(
         "Boost {} built successfully at {}",
         boost_config.version,
@@ -162,7 +183,7 @@ fn download(url: &str, output_path: &Path) -> anyhow::Result<()> {
     let mut curl = Command::new("curl");
     curl.arg("-L");
     curl.arg("-o");
-    curl.arg(output_path);
+    curl.arg(normalize_path_for_shell(output_path));
     curl.arg(url);
 
     crate::utils::command(&mut curl, "Downloading Boost")?;
@@ -178,10 +199,11 @@ fn extract(archive_path: &Path, output_dir: &Path) -> anyhow::Result<()> {
         .file_name()
         .ok_or_else(|| anyhow::anyhow!("Invalid archive path: {}", archive_path.display()))?;
 
+    let output_dir = normalize_path_buf(output_dir);
     let mut tar = Command::new("tar");
     tar.arg("xzf");
     tar.arg(archive_filename);
-    tar.current_dir(output_dir);
+    tar.current_dir(&output_dir);
 
     crate::utils::command(&mut tar, "Extracting Boost")?;
     Ok(())
@@ -260,6 +282,26 @@ fn normalize_path_buf(path: &Path) -> PathBuf {
     }
 
     path.to_path_buf()
+}
+
+///
+/// Reads the Boost version marker if present.
+///
+fn read_boost_version_marker(install_prefix: &Path) -> Option<String> {
+    let marker_path = install_prefix.join(BOOST_VERSION_MARKER);
+    std::fs::read_to_string(marker_path)
+        .ok()
+        .map(|contents| contents.trim().to_owned())
+        .filter(|contents| !contents.is_empty())
+}
+
+///
+/// Writes the Boost version marker.
+///
+fn write_boost_version_marker(install_prefix: &Path, version: &str) -> anyhow::Result<()> {
+    let marker_path = install_prefix.join(BOOST_VERSION_MARKER);
+    std::fs::write(marker_path, format!("{version}\n"))?;
+    Ok(())
 }
 
 ///

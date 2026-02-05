@@ -37,7 +37,7 @@ pub fn build(
     })?;
 
     crate::utils::exists("cmake")?;
-    crate::utils::exists("ninja")?;
+    let ninja_available = crate::utils::exists("ninja").is_ok();
 
     // Fix Boost library names for Windows (remove version suffix)
     fix_boost_library_names(boost_config)?;
@@ -45,7 +45,9 @@ pub fn build(
     let mut cmake = Command::new("cmake");
     cmake.current_dir(build_dir);
     cmake.arg(source_dir);
-    cmake.arg("-G").arg("Ninja");
+    if ninja_available {
+        cmake.arg("-G").arg("Ninja");
+    }
 
     // Compiler selection
     if !use_gcc {
@@ -148,16 +150,20 @@ fn fix_boost_library_names(boost_config: &BoostConfig) -> anyhow::Result<()> {
             })
             .collect();
 
-        if let Some(versioned_lib) = entries.first() {
+        let versioned_lib = entries.into_iter().max_by_key(|path| {
+            std::fs::metadata(path)
+                .and_then(|metadata| metadata.modified())
+                .unwrap_or(std::time::UNIX_EPOCH)
+        });
+
+        if let Some(versioned_lib) = versioned_lib {
             let target_lib = lib_dir.join(format!("{lib_base}.a"));
-            if !target_lib.exists() {
-                std::fs::copy(versioned_lib, &target_lib)?;
-                eprintln!(
-                    "Created Boost library symlink: {} -> {}",
-                    versioned_lib.display(),
-                    target_lib.display()
-                );
-            }
+            std::fs::copy(&versioned_lib, &target_lib)?;
+            eprintln!(
+                "Updated Boost library alias: {} -> {}",
+                versioned_lib.display(),
+                target_lib.display()
+            );
         }
     }
 
