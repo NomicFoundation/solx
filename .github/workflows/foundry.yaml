@@ -42,18 +42,8 @@ jobs:
       - name: Detect main baseline requirement
         id: main-required
         run: |
-          CONFIG="solx-dev/foundry-tests.toml"
-          needs_main=false
-          if [ -f "${CONFIG}" ] && grep -qE "^\[compilers\.solx-main\]" "${CONFIG}"; then
-            disabled=$(awk '
-              /^\[compilers\.solx-main\]/{in=1; next}
-              /^\[/{if(in){exit}}
-              in && $1=="disabled" {print $3; exit}
-            ' "${CONFIG}")
-            if [ -z "${disabled}" ] || [ "${disabled}" = "false" ]; then
-              needs_main=true
-            fi
-          fi
+          source .github/scripts/ci-helpers.sh
+          needs_main=$(check_main_required "solx-dev/foundry-tests.toml")
           echo "needs_main=${needs_main}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout source (main)
@@ -76,13 +66,8 @@ jobs:
         if: steps.main-required.outputs.needs_main == 'true'
         id: llvm-sha
         run: |
-          PR_SHA=$(git -C . submodule status solx-llvm | awk '{print $1}' | tr -d ' +-')
-          MAIN_SHA=$(git -C temp-solx-main submodule status solx-llvm | awk '{print $1}' | tr -d ' +-')
-          echo "pr=${PR_SHA}" >> "${GITHUB_OUTPUT}"
-          echo "main=${MAIN_SHA}" >> "${GITHUB_OUTPUT}"
-          if [ "${PR_SHA}" != "${MAIN_SHA}" ]; then
-            echo "::warning::LLVM submodule mismatch (PR=${PR_SHA}, main=${MAIN_SHA})."
-          fi
+          source .github/scripts/ci-helpers.sh
+          compare_llvm_shas "." "temp-solx-main" >> "${GITHUB_OUTPUT}"
 
       - name: Build LLVM (main)
         if: steps.main-required.outputs.needs_main == 'true'

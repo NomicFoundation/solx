@@ -88,23 +88,9 @@ runs:
     # Note: If you want Rust caching, add a rust-cache step in the calling workflow.
 
     - name: Install LLVM builder
-      working-directory: ${{ inputs.working-dir }}
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: |
-        set -e
-        TARGET_DIR="${CARGO_TARGET_DIR:-./target}"
-        REV_FILE="${TARGET_DIR}/.solx-dev-revision"
-        CURRENT_REV="$(git rev-parse HEAD 2>/dev/null || true)"
-        if [ -x "${TARGET_DIR}/release/solx-dev" ] || [ -x "${TARGET_DIR}/release/solx-dev.exe" ]; then
-          if [ -n "${CURRENT_REV}" ] && [ -f "${REV_FILE}" ] && [ "$(cat "${REV_FILE}")" = "${CURRENT_REV}" ]; then
-            echo "solx-dev already built for ${CURRENT_REV}; skipping."
-            exit 0
-          fi
-        fi
-        cargo build --release --bin solx-dev
-        if [ -n "${CURRENT_REV}" ]; then
-          echo "${CURRENT_REV}" > "${REV_FILE}"
-        fi
+      uses: ./.github/actions/build-solx-dev
+      with:
+        working-dir: ${{ inputs.working-dir }}
 
     - name: Define ccache key
       if: inputs.ccache-key == ''
