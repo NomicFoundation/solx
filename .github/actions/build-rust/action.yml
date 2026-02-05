@@ -36,6 +36,12 @@ runs:
         rustup target add ${{ inputs.target }}
         echo "target=--target ${{ inputs.target }}" >> $GITHUB_OUTPUT
 
+    - name: Rust cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+
     - name: Build
       env:
         RUSTC_BOOTSTRAP: 1
@@ -55,7 +61,13 @@ runs:
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
         cargo ${BUILD_STD_LIB} build ${RELEASE} ${{ steps.build-target.outputs.target }}
-        echo "${PWD}/target/${{ inputs.target }}/${{ inputs.build-type }}" >> "${GITHUB_PATH}"
+        TARGET_DIR="${CARGO_TARGET_DIR:-${PWD}/target}"
+        if [ -n "${{ inputs.target }}" ]; then
+          TARGET_PATH="${TARGET_DIR}/${{ inputs.target }}"
+        else
+          TARGET_PATH="${TARGET_DIR}"
+        fi
+        echo "${TARGET_PATH}/${{ inputs.build-type }}" >> "${GITHUB_PATH}"
 
     - name: Prepare binary
       if: inputs.release-suffix != ''
@@ -63,8 +75,14 @@ runs:
       run: |
         mkdir -p ./releases/${{ inputs.release-suffix }}
         [ "$RUNNER_OS" = "Windows" ] && WIN_SUFFIX=".exe"
-        strip "./target/${{ inputs.target }}/${{ inputs.build-type }}/${{ inputs.exec_name }}${WIN_SUFFIX}"
-        mv "./target/${{ inputs.target }}/${{ inputs.build-type }}/${{ inputs.exec_name }}${WIN_SUFFIX}" \
+        TARGET_DIR="${CARGO_TARGET_DIR:-${PWD}/target}"
+        if [ -n "${{ inputs.target }}" ]; then
+          TARGET_PATH="${TARGET_DIR}/${{ inputs.target }}"
+        else
+          TARGET_PATH="${TARGET_DIR}"
+        fi
+        strip "${TARGET_PATH}/${{ inputs.build-type }}/${{ inputs.exec_name }}${WIN_SUFFIX}"
+        mv "${TARGET_PATH}/${{ inputs.build-type }}/${{ inputs.exec_name }}${WIN_SUFFIX}" \
           "./releases/${{ inputs.release-suffix }}/${{ inputs.exec_name }}-${{ inputs.release-suffix }}${WIN_SUFFIX}"
 
     - name: Upload binary

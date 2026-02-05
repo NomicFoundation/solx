@@ -2,6 +2,11 @@ name: Hardhat Projects
 
 on:
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "**/*.mdx"
+      - "LICENSE"
 
 permissions:
   contents: read
@@ -23,6 +28,8 @@ jobs:
       image: ghcr.io/matter-labs/zksync-llvm-runner:latest
     strategy:
       fail-fast: false
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.cargo-target
     steps:
       - name: Checkout source
         uses: actions/checkout@v5
@@ -40,6 +47,28 @@ jobs:
           fetch-depth: 1
           submodules: recursive
           path: 'temp-solx-main'
+
+      - name: Compare LLVM submodule SHAs
+        id: llvm-sha
+        run: |
+          PR_SHA=$(git -C . submodule status solx-llvm | awk '{print $1}' | tr -d ' +-')
+          MAIN_SHA=$(git -C temp-solx-main submodule status solx-llvm | awk '{print $1}' | tr -d ' +-')
+          echo "pr=${PR_SHA}" >> "${GITHUB_OUTPUT}"
+          echo "main=${MAIN_SHA}" >> "${GITHUB_OUTPUT}"
+          if [ "${PR_SHA}" = "${MAIN_SHA}" ]; then
+            echo "same=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "same=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Check main LLVM build output
+        id: main-llvm-ready
+        run: |
+          if [ -d "${GITHUB_WORKSPACE}/temp-solx-main/target-llvm" ]; then
+            echo "ready=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "ready=false" >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: Build LLVM (main)
         uses: ./.github/actions/build-llvm
@@ -69,6 +98,7 @@ jobs:
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
+        if: steps.llvm-sha.outputs.same != 'true' || steps.main-llvm-ready.outputs.ready != 'true'
         with:
           build-type: Release
           ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
@@ -76,6 +106,12 @@ jobs:
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
           llvm-projects: ''
+      
+      - name: Reuse LLVM build from main
+        if: steps.llvm-sha.outputs.same == 'true' && steps.main-llvm-ready.outputs.ready == 'true'
+        run: |
+          rm -rf "${GITHUB_WORKSPACE}/target-llvm"
+          ln -s "${GITHUB_WORKSPACE}/temp-solx-main/target-llvm" "${GITHUB_WORKSPACE}/target-llvm"
       
       # Build the PR branch  
       - name: Building solc
@@ -115,7 +151,8 @@ jobs:
       - name: Run tests
         id: tests
         run: |
-          ./target/release/solx-dev test hardhat
+          TARGET_DIR="${CARGO_TARGET_DIR:-./target}"
+          "${TARGET_DIR}/release/solx-dev" test hardhat
 
       - name: Upload Excel report
         id: excel-report

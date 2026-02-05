@@ -2,6 +2,11 @@ name: solx Tester
 
 on:
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "**/*.mdx"
+      - "LICENSE"
 
 concurrency:
   group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
