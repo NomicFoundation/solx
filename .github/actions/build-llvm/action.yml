@@ -44,14 +44,6 @@ inputs:
     description: 'LLVM build type. Possible values are `Debug`, `Release`, `RelWithDebInfo`, or `MinSizeRel`. [default: Release]'
     required: false
     default: 'Release'
-  target-env:
-    description: 'Target environment (gnu or musl).'
-    required: false
-    default: 'gnu'
-  ccache-key:
-    description: 'Github Actions cache key for CCache.'
-    required: false
-    default: ''
   enable-cache:
     description: 'Enable compiler caching (ccache).'
     required: false
@@ -76,9 +68,10 @@ runs:
         working-dir: ${{ inputs.working-dir }}
 
     - name: Define ccache key
-      if: inputs.enable-cache == 'true' && inputs.ccache-key == ''
+      if: inputs.enable-cache == 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       id: ccache-key
+      working-directory: ${{ inputs.working-dir }}
       run: |
         LLVM_BRANCH="$(git -C ./llvm rev-parse --abbrev-ref HEAD)"
         # Build type suffix (skip for default Release)
@@ -98,7 +91,7 @@ runs:
         if [ -n '${{ inputs.sanitizer }}' ]; then
           SANITIZER_SUFFIX="-san-${{ inputs.sanitizer }}"
         fi
-        echo "key=llvm-${LLVM_BRANCH}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target-env }}${BUILD_TYPE_SUFFIX}${PROJECTS_SUFFIX}${COVERAGE_SUFFIX}${SANITIZER_SUFFIX}" | tee -a "${GITHUB_OUTPUT}"
+        echo "key=llvm-${LLVM_BRANCH}-${{ runner.os }}-${{ runner.arch }}${BUILD_TYPE_SUFFIX}${PROJECTS_SUFFIX}${COVERAGE_SUFFIX}${SANITIZER_SUFFIX}" | tee -a "${GITHUB_OUTPUT}"
 
     # CCache action requires `apt update`
     # to be executed before it for Linux Docker jobs. See:
@@ -116,8 +109,8 @@ runs:
         CCACHE_NOHASHDIR: "true"
         CCACHE_COMPILERCHECK: "content"
       with:
-        key: ${{ inputs.ccache-key == '' && steps.ccache-key.outputs.key || inputs.ccache-key }}
-        restore-keys: ${{ inputs.ccache-key == '' && steps.ccache-key.outputs.key || inputs.ccache-key }}
+        key: ${{ steps.ccache-key.outputs.key }}
+        restore-keys: ${{ steps.ccache-key.outputs.key }}
         append-timestamp: false
         max-size: "2G"
         verbose: 2

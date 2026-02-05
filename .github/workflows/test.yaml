@@ -87,7 +87,6 @@ JSON
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
-          target-env: 'gnu'
           build-type: 'Release'
           enable-assertions: 'false'
           enable-cache: 'true'

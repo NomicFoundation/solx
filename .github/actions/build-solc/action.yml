@@ -29,10 +29,6 @@ inputs:
     description: 'Upload build artifacts for testing.'
     required: false
     default: 'true'
-  ccache-key:
-    description: 'Github Actions cache key for CCache.'
-    required: false
-    default: ''
   enable-cache:
     description: 'Enable Boost and compiler caching.'
     required: false
@@ -84,7 +80,7 @@ runs:
         fi
 
     - name: Define solc ccache key
-      if: inputs.enable-cache == 'true' && inputs.ccache-key == '' && steps.ccache.outputs.available == 'true'
+      if: inputs.enable-cache == 'true' && steps.ccache.outputs.available == 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       id: ccache-key
       working-directory: ${{ inputs.working-dir }}
@@ -114,8 +110,8 @@ runs:
         CCACHE_NOHASHDIR: "true"
         CCACHE_COMPILERCHECK: "content"
       with:
-        key: ${{ inputs.ccache-key == '' && steps.ccache-key.outputs.key || inputs.ccache-key }}
-        restore-keys: ${{ inputs.ccache-key == '' && steps.ccache-key.outputs.key || inputs.ccache-key }}
+        key: ${{ steps.ccache-key.outputs.key }}
+        restore-keys: ${{ steps.ccache-key.outputs.key }}
         append-timestamp: false
         max-size: "5G"
         verbose: 2
