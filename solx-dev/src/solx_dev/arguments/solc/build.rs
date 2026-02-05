@@ -41,6 +41,10 @@ pub struct Build {
     #[arg(long)]
     pub use_gcc: bool,
 
+    /// Use ccache for faster compilation.
+    #[arg(long)]
+    pub ccache: bool,
+
     /// Extra arguments to pass to cmake configure step.
     #[arg(long, num_args = 1..)]
     pub extra_args: Vec<String>,

@@ -35,6 +35,7 @@ pub fn build(
     enable_mlir: bool,
     use_gcc: bool,
     build_boost: bool,
+    use_ccache: bool,
 ) -> anyhow::Result<()> {
     let solidity_dir = PathBuf::from(SOLIDITY_DIR);
     if !solidity_dir.exists() {
@@ -93,6 +94,7 @@ pub fn build(
                 boost_config.as_ref(),
                 enable_mlir,
                 use_gcc,
+                use_ccache,
             )?;
         } else if cfg!(target_os = "macos") {
             platforms::x86_64_macos::build(
@@ -104,6 +106,7 @@ pub fn build(
                 extra_args,
                 boost_config.as_ref(),
                 enable_mlir,
+                use_ccache,
             )?;
         } else if cfg!(target_os = "windows") {
             platforms::x86_64_windows_gnu::build(
@@ -116,6 +119,7 @@ pub fn build(
                 boost_config.as_ref(),
                 enable_mlir,
                 use_gcc,
+                use_ccache,
             )?;
         } else {
             anyhow::bail!("Unsupported target OS for x86_64");
@@ -132,6 +136,7 @@ pub fn build(
                 boost_config.as_ref(),
                 enable_mlir,
                 use_gcc,
+                use_ccache,
             )?;
         } else if cfg!(target_os = "macos") {
             platforms::aarch64_macos::build(
@@ -143,6 +148,7 @@ pub fn build(
                 extra_args,
                 boost_config.as_ref(),
                 enable_mlir,
+                use_ccache,
             )?;
         } else {
             anyhow::bail!("Unsupported target OS for aarch64");

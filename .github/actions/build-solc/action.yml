@@ -130,23 +130,14 @@ runs:
         TARGET_DIR="${CARGO_TARGET_DIR:-./target}"
         [ "${{ inputs.enable-mlir }}" = "true" ] && ENABLE_MLIR="--enable-mlir"
         [ "${{ inputs.use-gcc }}" = "true" ] && USE_GCC="--use-gcc"
-
-        # Build extra args with ccache compiler launcher flags
-        CCACHE_ARGS=""
-        if [ "${{ steps.ccache.outputs.available }}" = "true" ]; then
-          CCACHE_ARGS="-DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
-        fi
-        if [ -n "${{ inputs.extra-args }}" ]; then
-          EXTRA_ARGS="--extra-args ${CCACHE_ARGS} ${{ inputs.extra-args }}"
-        elif [ -n "${CCACHE_ARGS}" ]; then
-          EXTRA_ARGS="--extra-args ${CCACHE_ARGS}"
-        fi
+        [ "${{ steps.ccache.outputs.available }}" = "true" ] && USE_CCACHE="--ccache"
+        [ -n "${{ inputs.extra-args }}" ] && EXTRA_ARGS="--extra-args ${{ inputs.extra-args }}"
 
         "${TARGET_DIR}/release/solx-dev" solc build \
           --build-type ${{ inputs.cmake-build-type }} \
           --boost-version ${{ inputs.boost-version }} \
           --build-boost \
-          ${ENABLE_MLIR} ${USE_GCC} ${EXTRA_ARGS}
+          ${ENABLE_MLIR} ${USE_GCC} ${USE_CCACHE} ${EXTRA_ARGS}
 
     - name: Upload boost artifacts
       if: ${{ inputs.upload-testing-binary == 'true' }}

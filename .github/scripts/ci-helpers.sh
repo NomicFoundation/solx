@@ -52,6 +52,19 @@ compare_llvm_shas() {
   echo "main=${MAIN_LLVM_SHA}"
 
   if [ "${PR_LLVM_SHA}" != "${MAIN_LLVM_SHA}" ]; then
-    echo "::warning::LLVM submodule mismatch (PR=${PR_LLVM_SHA}, main=${MAIN_LLVM_SHA})."
+    echo "::warning::LLVM submodule mismatch (PR=${PR_LLVM_SHA}, main=${MAIN_LLVM_SHA})." >&2
   fi
+}
+
+# Ensure a solx binary is available at the expected path.
+# Usage: ensure_solx_binary <source_binary> <dest_dir>
+ensure_solx_binary() {
+  local source_binary="$1"
+  local dest_dir="$2"
+  if [ ! -f "${source_binary}" ]; then
+    echo "::error::solx binary not found at ${source_binary}" >&2
+    return 1
+  fi
+  mkdir -p "${dest_dir}"
+  ln -sf "${source_binary}" "${dest_dir}/solx"
 }

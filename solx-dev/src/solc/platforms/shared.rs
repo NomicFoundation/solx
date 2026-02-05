@@ -75,3 +75,13 @@ pub fn mlir_cmake_args(llvm_build_dir: &Path) -> Vec<String> {
     }
     args
 }
+
+///
+/// Ccache cmake arguments (when ccache is enabled).
+///
+pub fn ccache_cmake_args() -> Vec<String> {
+    vec![
+        "-DCMAKE_C_COMPILER_LAUNCHER=ccache".to_owned(),
+        "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache".to_owned(),
+    ]
+}

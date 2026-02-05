@@ -91,6 +91,7 @@ fn main_inner() -> anyhow::Result<()> {
                 arguments.enable_mlir,
                 arguments.use_gcc,
                 arguments.build_boost,
+                arguments.ccache,
             )?;
         }
         Arguments::Test(TestArguments::Hardhat(arguments)) => {

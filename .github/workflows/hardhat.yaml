@@ -98,6 +98,13 @@ jobs:
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
         run: cargo build --release --bin solx
 
+      - name: Expose solx (main) at expected path
+        if: steps.main-required.outputs.needs_main == 'true'
+        run: |
+          source .github/scripts/ci-helpers.sh
+          ensure_solx_binary "${CARGO_TARGET_DIR:-${GITHUB_WORKSPACE}/target}/release/solx" \
+            "${GITHUB_WORKSPACE}/temp-solx-main/target/release"
+
       - name: Build LLVM (PR)
         uses: ./.github/actions/build-llvm
         with:
@@ -121,6 +128,12 @@ jobs:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
         run: cargo build --release --bin solx
+
+      - name: Expose solx (PR) at expected path
+        run: |
+          source .github/scripts/ci-helpers.sh
+          ensure_solx_binary "${CARGO_TARGET_DIR:-${GITHUB_WORKSPACE}/target}/release/solx" \
+            "${GITHUB_WORKSPACE}/target/release"
 
       - name: Install Python
         uses: actions/setup-python@v5

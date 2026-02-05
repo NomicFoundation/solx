@@ -28,6 +28,7 @@ pub fn build(
     boost_config: Option<&BoostConfig>,
     enable_mlir: bool,
     use_gcc: bool,
+    use_ccache: bool,
 ) -> anyhow::Result<()> {
     // Windows requires local boost for static linking
     let boost_config = boost_config.ok_or_else(|| {
@@ -87,6 +88,11 @@ pub fn build(
         for arg in shared::mlir_cmake_args(&llvm_build_dir) {
             cmake.arg(arg);
         }
+    }
+
+    // Ccache configuration
+    if use_ccache {
+        cmake.args(shared::ccache_cmake_args());
     }
 
     // Extra arguments
