@@ -76,8 +76,9 @@ pub fn build(
     };
 
     // Canonicalize paths for cmake
-    let source_dir = solidity_dir.canonicalize()?;
-    let build_dir_canonical = build_dir.canonicalize().unwrap_or(build_dir.clone());
+    let source_dir = normalize_path(&solidity_dir.canonicalize()?);
+    let build_dir_canonical =
+        normalize_path(&build_dir.canonicalize().unwrap_or(build_dir.clone()));
 
     // Dispatch to platform-specific builder
     if cfg!(target_arch = "x86_64") {
@@ -155,4 +156,22 @@ pub fn build(
         build_dir.display()
     );
     Ok(())
+}
+
+///
+/// Normalizes a path by removing Windows extended-length prefix.
+///
+/// On Windows, `canonicalize()` returns paths with `\\?\` prefix which
+/// can cause issues with some tools (e.g., git submodule operations).
+///
+fn normalize_path(path: &std::path::Path) -> PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        let path_str = path.display().to_string();
+        if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
+            return PathBuf::from(stripped);
+        }
+    }
+
+    path.to_path_buf()
 }
