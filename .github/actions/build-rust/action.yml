@@ -24,36 +24,17 @@ inputs:
     description: 'Enable code coverage.'
     required: false
     default: 'false'
-  enable-cache:
-    description: 'Enable Rust dependency caching.'
-    required: false
-    default: 'false'
 
 runs:
   using: "composite"
   steps:
-    - name: Define build environment
-      id: build-env
+    - name: Define build target
+      id: build-target
+      if: inputs.target != ''
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
-        if [ -n "${{ inputs.target }}" ]; then
-          rustup target add ${{ inputs.target }}
-          echo "cargo-target=--target ${{ inputs.target }}" >> $GITHUB_OUTPUT
-        fi
-        TARGET_DIR="${CARGO_TARGET_DIR:-${PWD}/target}"
-        if [ -n "${{ inputs.target }}" ]; then
-          TARGET_PATH="${TARGET_DIR}/${{ inputs.target }}"
-        else
-          TARGET_PATH="${TARGET_DIR}"
-        fi
-        echo "target-path=${TARGET_PATH}" >> $GITHUB_OUTPUT
-
-    - name: Rust cache
-      if: inputs.enable-cache == 'true'
-      uses: Swatinem/rust-cache@v2
-      with:
-        shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        rustup target add ${{ inputs.target }}
+        echo "target=--target ${{ inputs.target }}" >> $GITHUB_OUTPUT
 
     - name: Build
       env:
@@ -73,20 +54,18 @@ runs:
         if [[ "${RUNNER_OS}" == "Windows" ]] || [[ "${RUNNER_OS}" == "Linux" ]]; then
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
-        cargo ${BUILD_STD_LIB} build ${RELEASE} ${{ steps.build-env.outputs.cargo-target }}
-        echo "${{ steps.build-env.outputs.target-path }}/${{ inputs.build-type }}" >> "${GITHUB_PATH}"
+        cargo ${BUILD_STD_LIB} build ${RELEASE} ${{ steps.build-target.outputs.target }}
+        echo "${PWD}/target/${{ inputs.target }}/${{ inputs.build-type }}" >> "${GITHUB_PATH}"
 
     - name: Prepare binary
       if: inputs.release-suffix != ''
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      env:
-        TARGET_PATH: ${{ steps.build-env.outputs.target-path }}
       run: |
         mkdir -p ./releases/${{ inputs.release-suffix }}
         [ "$RUNNER_OS" = "Windows" ] && WIN_SUFFIX=".exe"
-        BINARY="${TARGET_PATH}/${{ inputs.build-type }}/${{ inputs.exec_name }}${WIN_SUFFIX}"
-        strip "${BINARY}"
-        mv "${BINARY}" "./releases/${{ inputs.release-suffix }}/${{ inputs.exec_name }}-${{ inputs.release-suffix }}${WIN_SUFFIX}"
+        strip "./target/${{ inputs.target }}/${{ inputs.build-type }}/${{ inputs.exec_name }}${WIN_SUFFIX}"
+        mv "./target/${{ inputs.target }}/${{ inputs.build-type }}/${{ inputs.exec_name }}${WIN_SUFFIX}" \
+          "./releases/${{ inputs.release-suffix }}/${{ inputs.exec_name }}-${{ inputs.release-suffix }}${WIN_SUFFIX}"
 
     - name: Upload binary
       if: inputs.release-suffix != ''

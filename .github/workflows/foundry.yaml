@@ -2,11 +2,6 @@ name: Foundry Projects
 
 on:
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - "**/*.mdx"
-      - "LICENSE"
 
 permissions:
   contents: read
@@ -22,18 +17,12 @@ defaults:
     shell: bash -ex {0}
 
 jobs:
-  constants:
-    uses: ./.github/workflows/ci-constants.yaml
-
   test:
-    needs: constants
     runs-on: solx-linux-amd64
     container:
-      image: ${{ needs.constants.outputs.llvm_runner_image }}
+      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
     strategy:
       fail-fast: false
-    env:
-      CARGO_TARGET_DIR: ${{ github.workspace }}/.cargo-target
     steps:
       - name: Checkout source
         uses: actions/checkout@v5
@@ -42,16 +31,8 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
           submodules: recursive
-
-      - name: Detect main baseline requirement
-        id: main-required
-        run: |
-          source .github/scripts/ci-helpers.sh
-          needs_main=$(check_main_required "solx-dev/foundry-tests.toml")
-          echo "needs_main=${needs_main}" >> "${GITHUB_OUTPUT}"
-
+      
       - name: Checkout source (main)
-        if: steps.main-required.outputs.needs_main == 'true'
         uses: actions/checkout@v5
         with:
           repository: 'NomicFoundation/solx'
@@ -60,74 +41,49 @@ jobs:
           submodules: recursive
           path: 'temp-solx-main'
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Compare LLVM submodule SHAs
-        if: steps.main-required.outputs.needs_main == 'true'
-        id: llvm-sha
-        run: |
-          source .github/scripts/ci-helpers.sh
-          compare_llvm_shas "." "temp-solx-main" >> "${GITHUB_OUTPUT}"
-
       - name: Build LLVM (main)
-        if: steps.main-required.outputs.needs_main == 'true'
         uses: ./.github/actions/build-llvm
         with:
           build-type: Release
-          enable-cache: 'true'
+          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           working-dir: 'temp-solx-main'
           enable-assertions: 'false'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
           llvm-projects: ''
-
+  
       # Build the main branch
       - name: Building solc (main)
-        if: steps.main-required.outputs.needs_main == 'true'
         uses: ./.github/actions/build-solc
         with:
           cmake-build-type: 'Release'
           working-dir: 'temp-solx-main/solx-solidity'
           upload-testing-binary: 'false'
-          enable-cache: 'true'
 
       - name: Build solx (main)
-        if: steps.main-required.outputs.needs_main == 'true'
         working-directory: 'temp-solx-main'
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
         run: cargo build --release --bin solx
 
-      - name: Expose solx (main) at expected path
-        if: steps.main-required.outputs.needs_main == 'true'
-        run: |
-          source .github/scripts/ci-helpers.sh
-          ensure_solx_binary "${CARGO_TARGET_DIR:-${GITHUB_WORKSPACE}/target}/release/solx" \
-            "${GITHUB_WORKSPACE}/temp-solx-main/target/release"
-
-      - name: Build LLVM (PR)
+      - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
           build-type: Release
-          enable-cache: 'true'
+          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           enable-assertions: 'false'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
           llvm-projects: ''
-
-      # Build the PR branch
+      
+      # Build the PR branch  
       - name: Building solc
         uses: ./.github/actions/build-solc
         with:
           cmake-build-type: 'Release'
           working-dir: 'solx-solidity'
           upload-testing-binary: 'false'
-          enable-cache: 'true'
 
       - name: Build solx
         env:
@@ -135,18 +91,12 @@ jobs:
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
         run: cargo build --release --bin solx
 
-      - name: Expose solx (PR) at expected path
-        run: |
-          source .github/scripts/ci-helpers.sh
-          ensure_solx_binary "${CARGO_TARGET_DIR:-${GITHUB_WORKSPACE}/target}/release/solx" \
-            "${GITHUB_WORKSPACE}/target/release"
-
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ needs.constants.outputs.node_version }}
+          node-version: 25
 
       - name: Install Yarn
         run: npm install -g yarn
@@ -163,8 +113,7 @@ jobs:
       - name: Run tests
         id: tests
         run: |
-          TARGET_DIR="${CARGO_TARGET_DIR:-./target}"
-          "${TARGET_DIR}/release/solx-dev" test foundry
+          ./target/release/solx-dev test foundry
 
       - name: Upload Excel report
         id: excel-report

@@ -29,41 +29,11 @@ concurrency:
 
 jobs:
 
-  constants:
-    uses: ./.github/workflows/ci-constants.yaml
-
-  prepare-matrix:
-    needs: constants
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set.outputs.matrix }}
-    steps:
-      - name: Build matrix
-        id: set
-        env:
-          LLVM_IMAGE: ${{ needs.constants.outputs.llvm_runner_image }}
-        run: |
-          set -euo pipefail
-          {
-            echo "matrix<<JSON"
-            cat <<JSON
-{"include":[
-{"name":"MacOS x86","runner":"macos-latest-large"},
-{"name":"MacOS arm64","runner":"macos-latest-xlarge"},
-{"name":"Linux x86 gnu","runner":"solx-linux-amd64","image":"${LLVM_IMAGE}","target":"x86_64-unknown-linux-gnu"},
-{"name":"Linux ARM64 gnu","runner":"solx-linux-arm64","image":"${LLVM_IMAGE}","target":"aarch64-unknown-linux-gnu"},
-{"name":"Windows","runner":"solx-windows-amd64","target":"x86_64-pc-windows-gnu"}
-]}
-JSON
-            echo "JSON"
-          } >> "${GITHUB_OUTPUT}"
-
   # Check for cargo issues
   cargo-checks:
-    needs: constants
     runs-on: solx-linux-amd64
     container:
-      image: ${{ needs.constants.outputs.llvm_runner_image }}
+      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
     steps:
 
       - name: Checkout source
@@ -78,18 +48,14 @@ JSON
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
+          target-env: 'gnu'
           build-type: 'Release'
           enable-assertions: 'false'
-          enable-cache: 'true'
+          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
+          save-ccache: 'false'
 
       - name: Cargo checks
         uses: ./.github/actions/cargo-check
@@ -98,10 +64,25 @@ JSON
 
   # Build and run regression tests
   build-and-test:
-    needs: prepare-matrix
     strategy:
       fail-fast: false # finalize testing of all targets even if one failed
-      matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
+      matrix:
+        include:
+          - name: "MacOS x86"
+            runner: macos-latest-large
+          - name: "MacOS arm64"
+            runner: macos-latest-xlarge
+          - name: "Linux x86 gnu"
+            runner: solx-linux-amd64
+            image: ghcr.io/matter-labs/zksync-llvm-runner:latest
+            target: "x86_64-unknown-linux-gnu"
+          - name: "Linux ARM64 gnu"
+            runner: solx-linux-arm64
+            image: ghcr.io/matter-labs/zksync-llvm-runner:latest
+            target: "aarch64-unknown-linux-gnu"
+          - name: "Windows"
+            runner: solx-windows-amd64
+            target: "x86_64-pc-windows-gnu"
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image || '' }} # Special workaround to allow matrix builds with optional container
@@ -120,12 +101,6 @@ JSON
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
       - name: Prepare Windows env
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
@@ -134,7 +109,7 @@ JSON
         uses: ./.github/actions/build-llvm
         with:
           build-type: RelWithDebInfo
-          enable-cache: 'true'
+          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           enable-assertions: 'true'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
@@ -145,7 +120,6 @@ JSON
         with:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
-          enable-cache: 'true'
 
       - name: Run tests
         uses: ./.github/actions/rust-unit-tests

@@ -21,14 +21,10 @@ on:
     - cron: '0 0 * * 0'
 
 jobs:
-  constants:
-    uses: ./.github/workflows/ci-constants.yaml
-
   run-with-sanitizers:
-    needs: constants
     runs-on: solx-linux-amd64
     container:
-      image: ${{ needs.constants.outputs.llvm_runner_image }}
+      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
       options: -m 110g
     env:
       TARGET: x86_64-unknown-linux-gnu
@@ -45,12 +41,6 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
       - name: Prepare Windows env
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
@@ -59,7 +49,7 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: RelWithDebInfo
-          enable-cache: 'true'
+          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           sanitizer: ${{ inputs.llvm-sanitizer || 'Address' }}
           enable-assertions: 'true'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
@@ -71,7 +61,6 @@ jobs:
         with:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
-          enable-cache: 'true'
 
       - name: Run tests
         uses: ./.github/actions/rust-unit-tests

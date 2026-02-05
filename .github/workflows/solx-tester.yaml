@@ -21,15 +21,12 @@ permissions:
   pull-requests: write
 
 jobs:
-  constants:
-    uses: ./.github/workflows/ci-constants.yaml
 
   tests:
     name: tests (${{ matrix.mlir && 'MLIR' || 'non-MLIR' }})
-    needs: constants
     runs-on: solx-linux-amd64
     container:
-      image: ${{ needs.constants.outputs.llvm_runner_image }}
+      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
       options: -m 110g
     strategy:
       fail-fast: false
@@ -52,17 +49,11 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --init --force --recursive --depth 1 --checkout
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
           build-type: 'RelWithDebInfo'
-          enable-cache: 'true'
+          ccache-key: "llvm-Linux-X64-gnu-${{ matrix.mlir && 'mlir' || 'no-mlir' }}"
           enable-assertions: false
           llvm-projects: ${{ matrix.mlir && 'mlir lld' || '' }}
 
@@ -73,7 +64,6 @@ jobs:
           working-dir: 'solx-solidity'
           upload-testing-binary: false
           enable-mlir: ${{ matrix.mlir }}
-          enable-cache: 'true'
 
       - name: Build tester
         run: cargo build --release --bin solx-tester
@@ -83,7 +73,6 @@ jobs:
         with:
           exec_name: 'solx'
           build-type: 'release'
-          enable-cache: 'true'
           target: 'x86_64-unknown-linux-gnu'
 
       - name: Run tests
@@ -91,10 +80,9 @@ jobs:
 
 
   benchmarks:
-    needs: constants
     runs-on: solx-linux-amd64
     container:
-      image: ${{ needs.constants.outputs.llvm_runner_image }}
+      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
     strategy:
       fail-fast: false
       matrix:
@@ -115,17 +103,11 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --init --force --recursive --depth 1 --checkout
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
           build-type: 'Release'
-          enable-cache: 'true'
+          ccache-key: 'llvm-Linux-X64-gnu'
           enable-assertions: false
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
@@ -138,7 +120,6 @@ jobs:
           working-dir: 'solx-solidity'
           upload-testing-binary: false
           build-type: ${{ matrix.type }}
-          enable-cache: 'true'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # enable-mlir: true
 
@@ -166,8 +147,8 @@ jobs:
   comparison:
     runs-on: solx-linux-amd64
     container:
-      image: ${{ needs.constants.outputs.llvm_runner_image }}
-    needs: [benchmarks, constants]
+      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
+    needs: benchmarks
     if: ${{ (failure() || success()) }}
     steps:
 
@@ -180,12 +161,6 @@ jobs:
         with:
           pattern: '*-benchmark'
           merge-multiple: true
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build converter
         run: cargo build --release --bin solx-benchmark-converter

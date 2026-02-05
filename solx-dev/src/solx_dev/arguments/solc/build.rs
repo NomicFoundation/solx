@@ -25,13 +25,13 @@ pub struct Build {
     #[arg(long)]
     pub tests: bool,
 
-    /// Build local Boost (uses default version unless --boost-version is set).
+    /// Boost version to use.
+    #[arg(long)]
+    pub boost_version: Option<String>,
+
+    /// Download and build Boost before building solc.
     #[arg(long)]
     pub build_boost: bool,
-
-    /// Boost version to build when --build-boost is enabled.
-    #[arg(long, value_name = "VERSION")]
-    pub boost_version: Option<String>,
 
     /// Enable MLIR support (requires LLVM built with MLIR).
     #[arg(long)]
@@ -40,10 +40,6 @@ pub struct Build {
     /// Use GCC compiler instead of clang.
     #[arg(long)]
     pub use_gcc: bool,
-
-    /// Use ccache for faster compilation.
-    #[arg(long)]
-    pub ccache: bool,
 
     /// Extra arguments to pass to cmake configure step.
     #[arg(long, num_args = 1..)]

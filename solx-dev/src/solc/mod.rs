@@ -8,7 +8,6 @@ pub mod platforms;
 use std::path::PathBuf;
 
 use crate::build_type::BuildType;
-use crate::constants;
 use crate::solc::boost::BoostConfig;
 
 /// The solc-solidity submodule directory.
@@ -33,10 +32,9 @@ pub fn build(
     extra_args: Vec<String>,
     clean: bool,
     boost_version: Option<String>,
-    build_boost: bool,
     enable_mlir: bool,
     use_gcc: bool,
-    use_ccache: bool,
+    build_boost: bool,
 ) -> anyhow::Result<()> {
     let solidity_dir = PathBuf::from(SOLIDITY_DIR);
     if !solidity_dir.exists() {
@@ -54,19 +52,26 @@ pub fn build(
 
     std::fs::create_dir_all(&build_dir)?;
 
-    // Boost configuration: build local Boost when requested, otherwise use system Boost.
-    let build_boost = build_boost || boost_version.is_some();
-    let boost_config = if build_boost {
-        let version = boost_version.unwrap_or_else(|| constants::boost_version().to_string());
-        let boost_base_dir = solidity_dir.join("boost");
-        let boost_config = BoostConfig::new(version.clone(), boost_base_dir);
+    // Boost configuration - only set if explicitly building or if local boost exists
+    let boost_version = boost_version.unwrap_or_else(|| boost::DEFAULT_BOOST_VERSION.to_owned());
+    let boost_base_dir = solidity_dir.join("boost");
+    let boost_config = BoostConfig::new(boost_version.clone(), boost_base_dir);
 
-        // download_and_build handles existing versions and rebuilds on mismatch.
+    // Build Boost if requested
+    let boost_config = if build_boost {
+        // download_and_build returns the absolute path where boost was installed
         let install_path = boost::download_and_build(&solidity_dir, &boost_config)?;
-        Some(BoostConfig::new(version, install_path))
+        Some(BoostConfig::new(boost_version, install_path))
+    } else if boost_config.lib_dir().exists() {
+        // Use existing local boost - canonicalize for absolute paths
+        let canonical_base_dir = boost_config.base_dir.canonicalize()?;
+        eprintln!("Using existing Boost at {}", canonical_base_dir.display());
+        Some(BoostConfig::new(boost_version, canonical_base_dir))
     } else {
-        // No --build-boost provided, use system boost
-        eprintln!("No --build-boost specified. Using system Boost.");
+        // No local boost - will use system boost (if available)
+        eprintln!(
+            "No local Boost found. Will try system Boost. Use --build-boost to build a local static Boost."
+        );
         None
     };
 
@@ -88,7 +93,6 @@ pub fn build(
                 boost_config.as_ref(),
                 enable_mlir,
                 use_gcc,
-                use_ccache,
             )?;
         } else if cfg!(target_os = "macos") {
             platforms::x86_64_macos::build(
@@ -100,7 +104,6 @@ pub fn build(
                 extra_args,
                 boost_config.as_ref(),
                 enable_mlir,
-                use_ccache,
             )?;
         } else if cfg!(target_os = "windows") {
             platforms::x86_64_windows_gnu::build(
@@ -113,7 +116,6 @@ pub fn build(
                 boost_config.as_ref(),
                 enable_mlir,
                 use_gcc,
-                use_ccache,
             )?;
         } else {
             anyhow::bail!("Unsupported target OS for x86_64");
@@ -130,7 +132,6 @@ pub fn build(
                 boost_config.as_ref(),
                 enable_mlir,
                 use_gcc,
-                use_ccache,
             )?;
         } else if cfg!(target_os = "macos") {
             platforms::aarch64_macos::build(
@@ -142,7 +143,6 @@ pub fn build(
                 extra_args,
                 boost_config.as_ref(),
                 enable_mlir,
-                use_ccache,
             )?;
         } else {
             anyhow::bail!("Unsupported target OS for aarch64");

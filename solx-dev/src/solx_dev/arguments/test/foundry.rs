@@ -65,8 +65,8 @@ pub struct Foundry {
     // Test Filtering
     //
     /// Solidity version to use for pragmas and other anchors.
-    #[arg(long, help_heading = "Test Filtering")]
-    pub solidity_version: Option<String>,
+    #[arg(long, default_value = "0.8.33", help_heading = "Test Filtering")]
+    pub solidity_version: String,
 
     /// Filter to run only projects matching the specified substring.
     #[arg(long, num_args = 1.., help_heading = "Test Filtering")]

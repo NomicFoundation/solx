@@ -88,10 +88,9 @@ fn main_inner() -> anyhow::Result<()> {
                 arguments.extra_args,
                 arguments.clean,
                 arguments.boost_version,
-                arguments.build_boost,
                 arguments.enable_mlir,
                 arguments.use_gcc,
-                arguments.ccache,
+                arguments.build_boost,
             )?;
         }
         Arguments::Test(TestArguments::Hardhat(arguments)) => {
@@ -102,14 +101,11 @@ fn main_inner() -> anyhow::Result<()> {
             let downloader = solx_compiler_downloader::Downloader::default();
             downloader.download(downloader_config_path.as_path())?;
 
-            let solidity_version = arguments
-                .solidity_version
-                .unwrap_or_else(|| solx_dev::solidity_version().to_string());
             solx_dev::test_hardhat(
                 test_config,
                 arguments.projects_dir,
                 arguments.output_dir,
-                solidity_version,
+                arguments.solidity_version,
                 arguments.project_filter,
             )?;
         }
@@ -121,14 +117,11 @@ fn main_inner() -> anyhow::Result<()> {
             let downloader = solx_compiler_downloader::Downloader::default();
             downloader.download(downloader_config_path.as_path())?;
 
-            let solidity_version = arguments
-                .solidity_version
-                .unwrap_or_else(|| solx_dev::solidity_version().to_string());
             solx_dev::test_foundry(
                 test_config,
                 arguments.projects_dir,
                 arguments.output_dir,
-                solidity_version,
+                arguments.solidity_version,
                 arguments.project_filter,
             )?;
         }

@@ -6,6 +6,17 @@ on:
       - 'docs/**'
       - 'deploy-docs.yaml'
   workflow_call:
+  workflow_dispatch:
+    inputs:
+      version:
+        type: string
+        description: "Version of the documentation to deploy"
+        required: true
+      docs-dir:
+        type: string
+        description: "Directory with the documentation"
+        required: false
+        default: "docs"
 
 # Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
 # However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
@@ -21,13 +32,13 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Deploy
         uses: ./.github/actions/deploy-mdbook
         with:
-          version: ${{ format('v{0}', github.ref_name) }}
-          docs-dir: 'docs'
+          version: ${{ inputs.version || format('v{0}', github.ref_name) }}
+          docs-dir: ${{ inputs.docs-dir || 'docs' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           enable-tests: true
           deploy: ${{ github.event_name != 'pull_request' }}

@@ -14,9 +14,9 @@ inputs:
     required: false
     default: 'Release'
   boost-version:
-    description: 'Boost version (optional override).'
+    description: 'Boost version.'
     required: false
-    default: ''
+    default: '1.83.0'
   enable-mlir:
     description: 'Enable MLIR support.'
     required: false
@@ -29,93 +29,25 @@ inputs:
     description: 'Upload build artifacts for testing.'
     required: false
     default: 'true'
-  enable-cache:
-    description: 'Enable Boost and compiler caching.'
+  extra-args:
+    description: 'Extra CMake arguments.'
     required: false
-    default: 'false'
+    default: ''
+  # Legacy inputs for backwards compatibility (ignored)
+  build-type:
+    description: 'Deprecated: use cmake-build-type instead.'
+    required: false
+    default: ''
 
 runs:
   using: "composite"
   steps:
 
-    # Note: If you want Rust caching, add a rust-cache step in the calling workflow.
-
     - name: Build solx-dev
-      uses: ./.github/actions/build-solx-dev
-      with:
-        working-dir: ${{ inputs.working-dir }}/..
-
-    - name: Resolve Boost version
-      id: boost-version
+      # Run from the checkout root that owns solx-solidity
+      working-directory: ${{ inputs.working-dir }}/..
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: |
-        if [ -n "${{ inputs.boost-version }}" ]; then
-          echo "version=${{ inputs.boost-version }}" >> "${GITHUB_OUTPUT}"
-          exit 0
-        fi
-        boost_version=$(awk -F'"' '/^boost_version/ {print $2; exit}' ci/constants.toml)
-        if [ -z "${boost_version}" ]; then
-          echo "::error::boost_version not found in ci/constants.toml" >&2
-          exit 1
-        fi
-        echo "version=${boost_version}" >> "${GITHUB_OUTPUT}"
-
-    - name: Cache Boost
-      if: inputs.enable-cache == 'true'
-      uses: actions/cache@v4
-      with:
-        path: ${{ inputs.working-dir }}/boost
-        key: boost-${{ runner.os }}-${{ runner.arch }}-${{ steps.boost-version.outputs.version }}
-
-    - name: Check ccache availability
-      if: inputs.enable-cache == 'true'
-      id: ccache
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: |
-        if command -v ccache >/dev/null 2>&1; then
-          echo "available=true" >> "${GITHUB_OUTPUT}"
-        else
-          echo "available=false" >> "${GITHUB_OUTPUT}"
-          echo "ccache not found; skipping ccache integration."
-        fi
-
-    - name: Define solc ccache key
-      if: inputs.enable-cache == 'true' && steps.ccache.outputs.available == 'true'
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      id: ccache-key
-      working-directory: ${{ inputs.working-dir }}
-      run: |
-        SOLC_SHORT_SHA="$(git rev-parse --short HEAD)"
-        # Build type suffix (skip for default Release)
-        if [ '${{ inputs.cmake-build-type }}' != 'Release' ]; then
-          BUILD_TYPE_SUFFIX="-${{ inputs.cmake-build-type }}"
-        fi
-        # MLIR suffix
-        if [ '${{ inputs.enable-mlir }}' = 'true' ]; then
-          MLIR_SUFFIX="-mlir"
-        fi
-        echo "key=solc-${SOLC_SHORT_SHA}-${{ runner.os }}-${{ runner.arch }}${BUILD_TYPE_SUFFIX}${MLIR_SUFFIX}" | tee -a "${GITHUB_OUTPUT}"
-
-    # CCache action requires `apt update` on Linux Docker jobs
-    - name: Prepare ccache installation
-      if: inputs.enable-cache == 'true' && runner.os == 'Linux' && steps.ccache.outputs.available == 'true'
-      shell: 'bash'
-      run: apt update || true
-
-    - name: Set up solc compiler cache
-      if: inputs.enable-cache == 'true' && steps.ccache.outputs.available == 'true'
-      uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
-      env:
-        CCACHE_BASEDIR: ${{ github.workspace }}
-        CCACHE_NOHASHDIR: "true"
-        CCACHE_COMPILERCHECK: "content"
-      with:
-        key: ${{ steps.ccache-key.outputs.key }}
-        restore-keys: ${{ steps.ccache-key.outputs.key }}
-        append-timestamp: false
-        max-size: "5G"
-        verbose: 2
-        save: ${{ github.event_name != 'pull_request' }}
+      run: cargo build --release --bin solx-dev
 
     - name: Build solc
       # Run from the checkout root that owns solx-solidity
@@ -123,21 +55,17 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
         CXXFLAGS: "-Wno-narrowing"
-        CCACHE_BASEDIR: ${{ github.workspace }}
-        CCACHE_NOHASHDIR: "true"
-        CCACHE_COMPILERCHECK: "content"
       run: |
         set -x
-        TARGET_DIR="${CARGO_TARGET_DIR:-./target}"
         [ "${{ inputs.enable-mlir }}" = "true" ] && ENABLE_MLIR="--enable-mlir"
         [ "${{ inputs.use-gcc }}" = "true" ] && USE_GCC="--use-gcc"
-        [ "${{ steps.ccache.outputs.available }}" = "true" ] && USE_CCACHE="--ccache"
-        BOOST_VERSION="--boost-version ${{ steps.boost-version.outputs.version }}"
+        [ "${{ inputs.extra-args }}" != "" ] && EXTRA_ARGS="--extra-args ${{ inputs.extra-args }}"
 
-        "${TARGET_DIR}/release/solx-dev" solc build \
+        ./target/release/solx-dev solc build \
           --build-type ${{ inputs.cmake-build-type }} \
-          --build-boost ${BOOST_VERSION} \
-          ${ENABLE_MLIR} ${USE_GCC} ${USE_CCACHE}
+          --boost-version ${{ inputs.boost-version }} \
+          --build-boost \
+          ${ENABLE_MLIR} ${USE_GCC} ${EXTRA_ARGS}
 
     - name: Upload boost artifacts
       if: ${{ inputs.upload-testing-binary == 'true' }}

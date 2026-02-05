@@ -1,4 +1,0 @@
-boost_version = "1.83.0"
-solidity_version = "0.8.33"
-llvm_runner_image = "ghcr.io/matter-labs/zksync-llvm-runner:latest"
-node_version = "25"

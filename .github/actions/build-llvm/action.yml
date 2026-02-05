@@ -40,14 +40,39 @@ inputs:
     description: 'Enable RTTI for LLVM. Required when building with MLIR.'
     required: false
     default: 'false'
+  default-target-triple:
+    description: 'Default target to triple build LLVM for. Set to `evm` or leave empty for the default target.'
+    required: false
+    default: ''
+  extra-args:
+    description: 'Extra CMake arguments to compile LLVM.'
+    required: false
+    default: ''
+  builder-extra-args:
+    description: 'Extra LLVM builder arguments to compile LLVM.'
+    required: false
+    default: ''
   build-type:
     description: 'LLVM build type. Possible values are `Debug`, `Release`, `RelWithDebInfo`, or `MinSizeRel`. [default: Release]'
     required: false
     default: 'Release'
-  enable-cache:
-    description: 'Enable compiler caching (ccache).'
+  target-env:
+    description: 'Target environment (gnu or musl).'
+    required: false
+    default: 'gnu'
+  ccache-key:
+    description: 'Github Actions cache key for CCache.'
+    required: false
+    default: ''
+  ccache-key-type:
+    description: 'Type of ccache key: `static` - rotate each month, or `dynamic` - rotate with each update of `LLVM.lock`.'
+    required: false
+    default: 'dynamic'
+  save-ccache:
+    description: 'Whether to save ccache after the build.'
     required: false
     default: 'false'
+
 
 runs:
   using: "composite"
@@ -60,62 +85,58 @@ runs:
       shell: 'bash'
       run: HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
 
-    # Note: If you want Rust caching, add a rust-cache step in the calling workflow.
-
     - name: Install LLVM builder
-      uses: ./.github/actions/build-solx-dev
-      with:
-        working-dir: ${{ inputs.working-dir }}
+      working-directory: ${{ inputs.working-dir }}
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      run: cargo build --release --bin solx-dev
 
     - name: Define ccache key
-      if: inputs.enable-cache == 'true'
+      if: inputs.ccache-key == ''
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       id: ccache-key
-      working-directory: ${{ inputs.working-dir }}
       run: |
-        # Get LLVM submodule SHA (works even if submodule content not checked out)
-        LLVM_SHA="$(git ls-tree HEAD llvm | awk '{print substr($3,1,8)}')"
-        # Build type suffix (skip for default Release)
-        if [ '${{ inputs.build-type }}' != 'Release' ]; then
-          BUILD_TYPE_SUFFIX="-${{ inputs.build-type }}"
+        if [ ${{ inputs.ccache-key-type}} = static ]; then
+          echo "key=llvm-$(date +'%Y-%m')" | tee -a "${GITHUB_OUTPUT}"
+        else
+          LLVM_BRANCH="$(git -C ./llvm rev-parse --abbrev-ref HEAD)"
+          LLVM_SHORT_SHA="$(git -C ./llvm rev-parse --short HEAD)"
+          if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
+            COVERAGE_SUFFIX="-coverage"
+          fi
+          echo "key=llvm-${LLVM_BRANCH}-${{ runner.os }}-${{ runner.arch }}-${{ inputs.target-env }}${COVERAGE_SUFFIX}" | tee -a "${GITHUB_OUTPUT}"
         fi
-        # LLVM projects suffix (e.g., mlir, lld)
-        if [ -n '${{ inputs.llvm-projects }}' ]; then
-          # Replace spaces with dashes for cleaner key
-          PROJECTS_SUFFIX="-$(echo '${{ inputs.llvm-projects }}' | tr ' ' '-')"
-        fi
-        # Coverage suffix
-        if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
-          COVERAGE_SUFFIX="-coverage"
-        fi
-        # Sanitizer suffix
-        if [ -n '${{ inputs.sanitizer }}' ]; then
-          SANITIZER_SUFFIX="-san-${{ inputs.sanitizer }}"
-        fi
-        echo "key=llvm-${LLVM_SHA}-${{ runner.os }}-${{ runner.arch }}${BUILD_TYPE_SUFFIX}${PROJECTS_SUFFIX}${COVERAGE_SUFFIX}${SANITIZER_SUFFIX}" | tee -a "${GITHUB_OUTPUT}"
 
     # CCache action requires `apt update`
     # to be executed before it for Linux Docker jobs. See:
     # https://github.com/hendrikmuhs/ccache-action?tab=readme-ov-file#usage
     - name: Prepare ccache installation
-      if: inputs.enable-cache == 'true' && runner.os == 'Linux'
+      if: runner.os == 'Linux'
       shell: 'bash'
       run: apt update
 
+    - name: Define ccache save key
+      id: ccache-save
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      run: |
+        if [ '${{ inputs.save-ccache }}' = 'true' ]; then
+          echo "save=true" | tee -a "${GITHUB_OUTPUT}"
+        else
+          echo "save=${{ github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}" | tee -a "${GITHUB_OUTPUT}"
+        fi
+
     - name: Set up compiler cache
-      if: inputs.enable-cache == 'true'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
       env:
         CCACHE_BASEDIR: ${{ github.workspace }}
         CCACHE_NOHASHDIR: "true"
         CCACHE_COMPILERCHECK: "content"
       with:
-        key: ${{ steps.ccache-key.outputs.key }}
-        restore-keys: ${{ steps.ccache-key.outputs.key }}
+        key: ${{ inputs.ccache-key == '' && steps.ccache-key.outputs.key || inputs.ccache-key }}
+        restore-keys: ${{ inputs.ccache-key == '' && steps.ccache-key.outputs.key || inputs.ccache-key }}
         append-timestamp: false
         max-size: "2G"
         verbose: 2
-        save: ${{ github.event_name != 'pull_request' }}
+        save: ${{ steps.ccache-save.outputs.save }}
 
     # CCACHE_BASEDIR, CCACHE_NOHASHDIR, and CCACHE_COMPILERCHECK
     # are allowing to cache compiler output across different
@@ -132,12 +153,12 @@ runs:
         LIBSTDCPP_SOURCE_PATH: "C:/a/_temp/msys64/mingw64/lib/libstdc++.a"
       run: |
         set -x
-        TARGET_DIR="${CARGO_TARGET_DIR:-./target}"
         [ "${{ inputs.enable-tests }}" = "true" ] && ENABLE_TESTS="--enable-tests"
         [ "${{ inputs.enable-assertions }}" = "true" ] && ENABLE_ASSERTIONS="--enable-assertions"
         [ "${{ inputs.enable-coverage }}" = "true" ] && ENABLE_COVERAGE="--enable-coverage"
         [ "${{ inputs.llvm-projects }}" != "" ] && LLVM_PROJECTS="--llvm-projects ${{ inputs.llvm-projects }}"
         [ "${{ inputs.enable-rtti }}" = "true" ] && ENABLE_RTTI="--enable-rtti"
+        [ "${{ inputs.extra-args }}" != "" ] && EXTRA_ARGS="--extra-args ${{ inputs.extra-args }}"
         [ "${{ inputs.sanitizer }}" != "" ] && SANITIZER="--sanitizer ${{ inputs.sanitizer }}"
         if [ "${{ inputs.enable-valgrind }}" = "true" ]; then
           ENABLE_VALGRIND="--enable-valgrind"
@@ -146,5 +167,5 @@ runs:
           fi
         fi
 
-        "${TARGET_DIR}/release/solx-dev" llvm build --build-type ${{ inputs.build-type }} \
-          --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${LLVM_PROJECTS} ${ENABLE_RTTI} ${SANITIZER}
+        ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} \
+          --ccache-variant=ccache ${{ inputs.builder-extra-args }} ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${LLVM_PROJECTS} ${ENABLE_RTTI} ${SANITIZER} ${EXTRA_ARGS}

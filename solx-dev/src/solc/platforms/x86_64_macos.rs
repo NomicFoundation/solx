@@ -21,7 +21,6 @@ pub fn build(
     extra_args: Vec<String>,
     boost_config: Option<&BoostConfig>,
     enable_mlir: bool,
-    use_ccache: bool,
 ) -> anyhow::Result<()> {
     crate::utils::exists("cmake")?;
     let ninja_available = crate::utils::exists("ninja").is_ok();
@@ -66,11 +65,6 @@ pub fn build(
         for arg in shared::mlir_cmake_args(&llvm_build_dir) {
             cmake.arg(arg);
         }
-    }
-
-    // Ccache configuration
-    if use_ccache {
-        cmake.args(shared::ccache_cmake_args());
     }
 
     // Extra arguments
