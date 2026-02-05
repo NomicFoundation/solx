@@ -1,9 +1,11 @@
 //!
-//! `solx` LLVM build type.
+//! CMake build type.
 //!
 
 ///
-/// `solx` LLVM build type.
+/// CMake build type.
+///
+/// Used for both LLVM and solc builds.
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BuildType {

@@ -6,7 +6,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::Command;
 
-use crate::llvm::build_type::BuildType;
+use crate::build_type::BuildType;
 use crate::llvm::ccache_variant::CcacheVariant;
 use crate::llvm::path::Path;
 use crate::llvm::project::Project;

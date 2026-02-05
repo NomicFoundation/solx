@@ -17,8 +17,8 @@ pub struct Build {
     // Build Configuration
     //
     /// LLVM build type (`Debug`, `Release`, `RelWithDebInfo`, or `MinSizeRel`).
-    #[arg(long, default_value_t = solx_dev::LLVMBuildType::Release, help_heading = "Build Configuration")]
-    pub build_type: solx_dev::LLVMBuildType,
+    #[arg(long, default_value_t = solx_dev::BuildType::Release, help_heading = "Build Configuration")]
+    pub build_type: solx_dev::BuildType,
 
     /// Clean the build directory before building.
     #[arg(long)]
