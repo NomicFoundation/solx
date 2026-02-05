@@ -63,8 +63,6 @@ runs:
             echo "solx-dev already built for ${CURRENT_REV}; skipping."
             exit 0
           fi
-        else
-          :
         fi
         cargo build --release --bin solx-dev
         if [ -n "${CURRENT_REV}" ]; then
