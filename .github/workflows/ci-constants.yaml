@@ -1,0 +1,55 @@
+name: CI Constants
+
+on:
+  workflow_call:
+    outputs:
+      boost_version:
+        description: 'Default Boost version.'
+        value: ${{ jobs.constants.outputs.boost_version }}
+      solidity_version:
+        description: 'Default Solidity version.'
+        value: ${{ jobs.constants.outputs.solidity_version }}
+      llvm_runner_image:
+        description: 'LLVM runner image.'
+        value: ${{ jobs.constants.outputs.llvm_runner_image }}
+      node_version:
+        description: 'Node.js version.'
+        value: ${{ jobs.constants.outputs.node_version }}
+
+jobs:
+  constants:
+    runs-on: ubuntu-latest
+    outputs:
+      boost_version: ${{ steps.read.outputs.boost_version }}
+      solidity_version: ${{ steps.read.outputs.solidity_version }}
+      llvm_runner_image: ${{ steps.read.outputs.llvm_runner_image }}
+      node_version: ${{ steps.read.outputs.node_version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Read constants
+        id: read
+        run: |
+          set -euo pipefail
+          read_value() {
+            local key="$1"
+            awk -F'"' -v key="$key" '$0 ~ "^[[:space:]]*"key"[[:space:]]*=" {print $2; exit}' ci/constants.toml
+          }
+
+          boost_version="$(read_value boost_version)"
+          solidity_version="$(read_value solidity_version)"
+          llvm_runner_image="$(read_value llvm_runner_image)"
+          node_version="$(read_value node_version)"
+
+          [ -n "${boost_version}" ] || { echo "::error::boost_version missing"; exit 1; }
+          [ -n "${solidity_version}" ] || { echo "::error::solidity_version missing"; exit 1; }
+          [ -n "${llvm_runner_image}" ] || { echo "::error::llvm_runner_image missing"; exit 1; }
+          [ -n "${node_version}" ] || { echo "::error::node_version missing"; exit 1; }
+
+          {
+            echo "boost_version=${boost_version}"
+            echo "solidity_version=${solidity_version}"
+            echo "llvm_runner_image=${llvm_runner_image}"
+            echo "node_version=${node_version}"
+          } >> "${GITHUB_OUTPUT}"

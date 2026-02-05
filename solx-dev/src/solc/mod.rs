@@ -8,6 +8,7 @@ pub mod platforms;
 use std::path::PathBuf;
 
 use crate::build_type::BuildType;
+use crate::constants;
 use crate::solc::boost::BoostConfig;
 
 /// The solc-solidity submodule directory.
@@ -31,7 +32,8 @@ pub fn build(
     tests: bool,
     extra_args: Vec<String>,
     clean: bool,
-    build_boost: Option<String>,
+    boost_version: Option<String>,
+    build_boost: bool,
     enable_mlir: bool,
     use_gcc: bool,
     use_ccache: bool,
@@ -52,9 +54,10 @@ pub fn build(
 
     std::fs::create_dir_all(&build_dir)?;
 
-    // Boost configuration: if --build-boost is provided, build local boost;
-    // otherwise use system boost
-    let boost_config = if let Some(version) = build_boost {
+    // Boost configuration: build local Boost when requested, otherwise use system Boost.
+    let build_boost = build_boost || boost_version.is_some();
+    let boost_config = if build_boost {
+        let version = boost_version.unwrap_or_else(|| constants::boost_version().to_string());
         let boost_base_dir = solidity_dir.join("boost");
         let boost_config = BoostConfig::new(version.clone(), boost_base_dir);
 

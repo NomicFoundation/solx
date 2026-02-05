@@ -25,16 +25,13 @@ pub struct Build {
     #[arg(long)]
     pub tests: bool,
 
-    /// Build local Boost with the specified version (e.g., "1.83.0").
-    /// Passing --build-boost with no value uses the default version.
-    #[arg(
-        long,
-        alias = "boost-version",
-        num_args = 0..=1,
-        default_missing_value = solx_dev::solc::boost::DEFAULT_BOOST_VERSION,
-        value_name = "VERSION"
-    )]
-    pub build_boost: Option<String>,
+    /// Build local Boost (uses default version unless --boost-version is set).
+    #[arg(long)]
+    pub build_boost: bool,
+
+    /// Boost version to build when --build-boost is enabled.
+    #[arg(long, value_name = "VERSION")]
+    pub boost_version: Option<String>,
 
     /// Enable MLIR support (requires LLVM built with MLIR).
     #[arg(long)]

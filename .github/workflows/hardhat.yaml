@@ -22,10 +22,14 @@ defaults:
     shell: bash -ex {0}
 
 jobs:
+  constants:
+    uses: ./.github/workflows/ci-constants.yaml
+
   test:
+    needs: constants
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
+      image: ${{ needs.constants.outputs.llvm_runner_image }}
     strategy:
       fail-fast: false
     env:
@@ -144,7 +148,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 25
+          node-version: ${{ needs.constants.outputs.node_version }}
 
       - name: Install Yarn
         run: npm install -g yarn bun pnpm

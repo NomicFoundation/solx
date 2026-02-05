@@ -21,12 +21,15 @@ permissions:
   pull-requests: write
 
 jobs:
+  constants:
+    uses: ./.github/workflows/ci-constants.yaml
 
   tests:
     name: tests (${{ matrix.mlir && 'MLIR' || 'non-MLIR' }})
+    needs: constants
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
+      image: ${{ needs.constants.outputs.llvm_runner_image }}
       options: -m 110g
     strategy:
       fail-fast: false
@@ -88,9 +91,10 @@ jobs:
 
 
   benchmarks:
+    needs: constants
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
+      image: ${{ needs.constants.outputs.llvm_runner_image }}
     strategy:
       fail-fast: false
       matrix:
@@ -162,8 +166,8 @@ jobs:
   comparison:
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
-    needs: benchmarks
+      image: ${{ needs.constants.outputs.llvm_runner_image }}
+    needs: [benchmarks, constants]
     if: ${{ (failure() || success()) }}
     steps:
 

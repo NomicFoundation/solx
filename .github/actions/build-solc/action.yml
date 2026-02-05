@@ -14,9 +14,9 @@ inputs:
     required: false
     default: 'Release'
   boost-version:
-    description: 'Boost version.'
+    description: 'Boost version (optional override).'
     required: false
-    default: '1.83.0'
+    default: ''
   enable-mlir:
     description: 'Enable MLIR support.'
     required: false
@@ -49,12 +49,27 @@ runs:
       with:
         working-dir: ${{ inputs.working-dir }}/..
 
+    - name: Resolve Boost version
+      id: boost-version
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      run: |
+        if [ -n "${{ inputs.boost-version }}" ]; then
+          echo "version=${{ inputs.boost-version }}" >> "${GITHUB_OUTPUT}"
+          exit 0
+        fi
+        boost_version=$(awk -F'"' '/^boost_version/ {print $2; exit}' ci/constants.toml)
+        if [ -z "${boost_version}" ]; then
+          echo "::error::boost_version not found in ci/constants.toml" >&2
+          exit 1
+        fi
+        echo "version=${boost_version}" >> "${GITHUB_OUTPUT}"
+
     - name: Cache Boost
       if: inputs.enable-cache == 'true'
       uses: actions/cache@v4
       with:
         path: ${{ inputs.working-dir }}/boost
-        key: boost-${{ runner.os }}-${{ runner.arch }}-${{ inputs.boost-version }}
+        key: boost-${{ runner.os }}-${{ runner.arch }}-${{ steps.boost-version.outputs.version }}
 
     - name: Check ccache availability
       if: inputs.enable-cache == 'true'
@@ -121,10 +136,11 @@ runs:
         [ "${{ inputs.enable-mlir }}" = "true" ] && ENABLE_MLIR="--enable-mlir"
         [ "${{ inputs.use-gcc }}" = "true" ] && USE_GCC="--use-gcc"
         [ "${{ steps.ccache.outputs.available }}" = "true" ] && USE_CCACHE="--ccache"
+        BOOST_VERSION="--boost-version ${{ steps.boost-version.outputs.version }}"
 
         "${TARGET_DIR}/release/solx-dev" solc build \
           --build-type ${{ inputs.cmake-build-type }} \
-          --build-boost ${{ inputs.boost-version }} \
+          --build-boost ${BOOST_VERSION} \
           ${ENABLE_MLIR} ${USE_GCC} ${USE_CCACHE}
 
     - name: Upload boost artifacts

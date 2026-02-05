@@ -43,8 +43,11 @@ on:
 
 
 jobs:
+  constants:
+    uses: ./.github/workflows/ci-constants.yaml
 
   prepare-matrix:
+    needs: constants
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare-matrix.outputs.matrix }}
@@ -62,8 +65,9 @@ jobs:
           WINDOWS='{"name":"Windows","runner":"solx-windows-amd64","release-suffix":"windows-amd64-gnu"}'
           MACOS_AMD64='{"name":"MacOS-x86","runner":"macos-latest-large","release-suffix":"macosx-amd64"}'
           MACOS_ARM64='{"name":"MacOS-arm64","runner":"macos-latest-xlarge","release-suffix":"macosx-arm64"}'
-          LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"solx-linux-amd64","image":"ghcr.io/matter-labs/zksync-llvm-runner:latest","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
-          LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"solx-linux-arm64","image":"ghcr.io/matter-labs/zksync-llvm-runner:latest","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
+          LLVM_RUNNER_IMAGE='${{ needs.constants.outputs.llvm_runner_image }}'
+          LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"solx-linux-amd64","image":"'"${LLVM_RUNNER_IMAGE}"'","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
+          LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"solx-linux-arm64","image":"'"${LLVM_RUNNER_IMAGE}"'","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
           # Disable platforms for non-tag builds if user requested
           if [ ${GITHUB_REF_TYPE} != tag ]; then
             [ ${{ github.event.inputs.release_windows_amd64 }} != true ] && WINDOWS=
@@ -158,8 +162,8 @@ jobs:
     name: Prepare release
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
-    needs: [build, get-previous-release]
+      image: ${{ needs.constants.outputs.llvm_runner_image }}
+    needs: [build, get-previous-release, constants]
     if: |
       always() &&
       (needs.get-previous-release.result == 'skipped' || needs.get-previous-release.result == 'success') &&

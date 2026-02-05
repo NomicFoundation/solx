@@ -22,11 +22,14 @@ permissions:
   contents: read
 
 jobs:
+  constants:
+    uses: ./.github/workflows/ci-constants.yaml
 
   coverage:
+    needs: constants
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
+      image: ${{ needs.constants.outputs.llvm_runner_image }}
     env:
       BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
       SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build

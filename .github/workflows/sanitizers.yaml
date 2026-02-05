@@ -21,10 +21,14 @@ on:
     - cron: '0 0 * * 0'
 
 jobs:
+  constants:
+    uses: ./.github/workflows/ci-constants.yaml
+
   run-with-sanitizers:
+    needs: constants
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
+      image: ${{ needs.constants.outputs.llvm_runner_image }}
       options: -m 110g
     env:
       TARGET: x86_64-unknown-linux-gnu
