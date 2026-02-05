@@ -36,11 +36,10 @@ runs:
         rustup target add ${{ inputs.target }}
         echo "target=--target ${{ inputs.target }}" >> $GITHUB_OUTPUT
 
-    - name: Rust cache
-      uses: Swatinem/rust-cache@v2
-      with:
-        shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+    # Note: Rust cache is intentionally NOT included here.
+    # The build-solc action already provides Rust caching and runs before
+    # this action in most workflows. Having multiple Rust cache actions
+    # with the same key in one job can cause interference issues.
 
     - name: Build
       env:
