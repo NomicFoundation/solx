@@ -21,10 +21,6 @@ inputs:
     description: 'Enable MLIR support.'
     required: false
     default: 'false'
-  use-gcc:
-    description: 'Use GCC compiler instead of clang (required for old versions <=0.4.16).'
-    required: false
-    default: 'false'
 
 runs:
   using: "composite"
@@ -45,10 +41,9 @@ runs:
       run: |
         set -x
         [ "${{ inputs.enable-mlir }}" = "true" ] && ENABLE_MLIR="--enable-mlir"
-        [ "${{ inputs.use-gcc }}" = "true" ] && USE_GCC="--use-gcc"
 
         ./target/release/solx-dev solc build \
           --build-type ${{ inputs.cmake-build-type }} \
           --boost-version ${{ inputs.boost-version }} \
           --build-boost \
-          ${ENABLE_MLIR} ${USE_GCC}
+          ${ENABLE_MLIR}
