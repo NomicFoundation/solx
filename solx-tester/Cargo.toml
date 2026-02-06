@@ -41,6 +41,7 @@ solx-utils = { path = "../solx-utils" }
 solx-benchmark-converter = { path = "../solx-benchmark-converter" }
 solx-solc-test-adapter = { path = "../solx-solc-test-adapter" }
 solx-compiler-downloader = { path = "../solx-compiler-downloader" }
+solx-dev = { path = "../solx-dev" }
 
 [dependencies.web3]
 git = "https://github.com/jacques-kigo/rust-web3"

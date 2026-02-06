@@ -63,9 +63,6 @@ jobs:
           working-dir: 'solx-solidity'
           enable-mlir: ${{ matrix.mlir }}
 
-      - name: Build tester
-        run: cargo build --release --bin solx-tester
-
       - name: Build solx
         uses: ./.github/actions/build-rust
         with:
@@ -73,8 +70,11 @@ jobs:
           build-type: 'release'
           target: 'x86_64-unknown-linux-gnu'
 
+      - name: Build solx-dev and solx-tester
+        run: cargo build --release --bin solx-dev --bin solx-tester
+
       - name: Run tests
-        run: ./target/release/solx-tester --solidity-compiler $(which solx)
+        run: ./target/release/solx-dev test solx-tester --solidity-compiler $(which solx)
 
 
   benchmarks:
@@ -118,17 +118,14 @@ jobs:
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # enable-mlir: true
 
-      - name: Build tester
-        run: cargo build --release --bin solx-tester
-
-      - name: Build solx
-        run: cargo build --release --bin solx
+      - name: Build solx, solx-dev, and solx-tester
+        run: cargo build --release --bin solx --bin solx-dev --bin solx-tester
 
       - name: Run benchmarks
         run: |
-          ./target/release/solx-tester \
+          ./target/release/solx-dev test solx-tester \
             --solidity-compiler ./target/release/solx \
-            --mode 'Y M^B3' \
+            --via-ir --optimizer 'M^B3' \
             --benchmark=${{ matrix.type }}-benchmark.json || true
 
       - name: Upload results

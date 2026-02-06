@@ -4,14 +4,16 @@
 
 use clap::Args;
 
+use crate::BuildType;
+
 ///
 /// Solc build arguments.
 ///
 #[derive(Args)]
 pub struct Build {
     /// Build type (`Debug`, `Release`, `RelWithDebInfo`, or `MinSizeRel`).
-    #[arg(long, default_value_t = solx_dev::BuildType::Release)]
-    pub build_type: solx_dev::BuildType,
+    #[arg(long, default_value_t = BuildType::Release)]
+    pub build_type: BuildType,
 
     /// Clean the build directory before building.
     #[arg(long)]

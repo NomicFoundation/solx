@@ -4,11 +4,13 @@
 
 pub mod foundry;
 pub mod hardhat;
+pub mod solx_tester;
 
 use clap::Subcommand;
 
-use self::foundry::Foundry;
-use self::hardhat::Hardhat;
+pub use self::foundry::Foundry;
+pub use self::hardhat::Hardhat;
+pub use self::solx_tester::SolxTester;
 
 ///
 /// `solx` test arguments.
@@ -19,4 +21,6 @@ pub enum Test {
     Hardhat(Hardhat),
     /// Run Foundry test projects.
     Foundry(Foundry),
+    /// Run integration tests with solx-tester.
+    SolxTester(SolxTester),
 }

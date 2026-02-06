@@ -6,7 +6,7 @@ pub mod build;
 
 use clap::Subcommand;
 
-use self::build::Build;
+pub use self::build::Build;
 
 ///
 /// Solc subcommand.
