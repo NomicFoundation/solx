@@ -987,15 +987,11 @@ impl Contract {
             if is_bytecode_linked {
                 object_result
                     .as_mut()
-                    .map(|result| {
-                        result
-                            .as_mut()
-                            .expect("Always exists")
-                            .bytecode_hex
-                            .take()
-                            .filter(|_| {
-                                output_selection.check_selection(path, name, selector_object)
-                            })
+                    .and_then(|result| result.as_mut().ok())
+                    .map(|object| {
+                        object.bytecode_hex.take().filter(|_| {
+                            output_selection.check_selection(path, name, selector_object)
+                        })
                     })
                     .unwrap_or(Some(String::new()))
             } else {
@@ -1005,7 +1001,7 @@ impl Contract {
             object_result.as_mut().and_then(|result| {
                 result
                     .as_mut()
-                    .expect("Always exists")
+                    .ok()?
                     .evmla
                     .take()
                     .filter(|_| output_selection.check_selection(path, name, selector_evmla))
@@ -1014,7 +1010,7 @@ impl Contract {
             object_result.as_mut().and_then(|result| {
                 result
                     .as_mut()
-                    .expect("Always exists")
+                    .ok()?
                     .ethir
                     .take()
                     .filter(|_| output_selection.check_selection(path, name, selector_ethir))
@@ -1023,7 +1019,7 @@ impl Contract {
             object_result.as_mut().and_then(|result| {
                 result
                     .as_mut()
-                    .expect("Always exists")
+                    .ok()?
                     .llvm_ir_unoptimized
                     .take()
                     .filter(|_| {
@@ -1034,35 +1030,25 @@ impl Contract {
             object_result.as_mut().and_then(|result| {
                 result
                     .as_mut()
-                    .expect("Always exists")
+                    .ok()?
                     .llvm_ir
                     .take()
                     .filter(|_| output_selection.check_selection(path, name, selector_llvm_ir))
             }),
             // llvm_assembly
             object_result.as_mut().and_then(|result| {
-                result
-                    .as_mut()
-                    .expect("Always exists")
-                    .assembly
-                    .take()
-                    .filter(|_| {
-                        output_selection.check_selection(path, name, selector_llvm_assembly)
-                    })
+                result.as_mut().ok()?.assembly.take().filter(|_| {
+                    output_selection.check_selection(path, name, selector_llvm_assembly)
+                })
             }),
             // debug_info
             object_result
                 .as_mut()
-                .map(|result| {
-                    result
-                        .as_mut()
-                        .expect("Always exists")
-                        .debug_info
-                        .take()
-                        .map(hex::encode)
-                        .filter(|_| {
-                            output_selection.check_selection(path, name, selector_debug_info)
-                        })
+                .and_then(|result| result.as_mut().ok())
+                .map(|object| {
+                    object.debug_info.take().map(hex::encode).filter(|_| {
+                        output_selection.check_selection(path, name, selector_debug_info)
+                    })
                 })
                 .unwrap_or(Some(String::new())),
             // unlinked_symbols (link_references)
@@ -1072,13 +1058,8 @@ impl Contract {
                 Some(
                     object_result
                         .as_ref()
-                        .map(|result| {
-                            result
-                                .as_ref()
-                                .expect("Always exists")
-                                .unlinked_symbols
-                                .to_owned()
-                        })
+                        .and_then(|result| result.as_ref().ok())
+                        .map(|object| object.unlinked_symbols.to_owned())
                         .unwrap_or_default(),
                 )
             } else {
@@ -1092,14 +1073,8 @@ impl Contract {
             ) {
                 object_result
                     .as_mut()
-                    .map(|result| {
-                        result
-                            .as_mut()
-                            .expect("Always exists")
-                            .benchmarks
-                            .drain(..)
-                            .collect()
-                    })
+                    .and_then(|result| result.as_mut().ok())
+                    .map(|object| object.benchmarks.drain(..).collect())
                     .unwrap_or_default()
             } else {
                 vec![]

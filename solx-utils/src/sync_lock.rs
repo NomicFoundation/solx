@@ -9,10 +9,10 @@ use std::sync::RwLockReadGuard;
 use std::sync::RwLockWriteGuard;
 
 ///
-/// Extension trait for `Mutex::lock()` when poisoning cannot occur.
+/// Extension trait for `Mutex::lock()` when poisoning is considered unrecoverable.
 ///
 /// All mutexes in this codebase are held only during short, non-panicking
-/// operations, so poisoning is impossible. This trait documents that invariant
+/// operations, so poisoning is not expected. This trait documents that invariant
 /// in a single place instead of repeating `.lock().expect("Sync")`.
 ///
 pub trait SyncLock<T> {
@@ -29,7 +29,7 @@ impl<T> SyncLock<T> for Mutex<T> {
 }
 
 ///
-/// Extension trait for `RwLock` when poisoning cannot occur.
+/// Extension trait for `RwLock` when poisoning is considered unrecoverable.
 ///
 pub trait SyncRwLock<T> {
     ///

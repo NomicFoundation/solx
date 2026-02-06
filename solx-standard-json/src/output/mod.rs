@@ -136,8 +136,9 @@ impl Output {
             !contracts.is_empty()
         });
 
-        serde_json::to_writer(std::io::stdout(), &self).expect("Stdout writing error");
-        std::io::Write::flush(&mut std::io::stdout()).expect("Stdout flush error");
+        let mut stdout = std::io::stdout().lock();
+        serde_json::to_writer(&mut stdout, &self).expect("Stdout writing error");
+        std::io::Write::flush(&mut stdout).expect("Stdout flush error");
         std::process::exit(solx_utils::EXIT_CODE_SUCCESS);
     }
 
