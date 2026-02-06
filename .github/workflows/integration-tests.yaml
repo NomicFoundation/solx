@@ -133,7 +133,7 @@ jobs:
           ./target/release/solx-dev test solx-tester \
             --solidity-compiler ./target/release/solx \
             --via-ir --optimizer 'M^B3' \
-            --benchmark=${{ github.workspace }}/reference-benchmark.json
+            --benchmark=../reference-benchmark.json
 
       - name: Run solx-tester benchmarks (PR)
         id: solx_tester_bench_pr
@@ -145,7 +145,7 @@ jobs:
           ./target/release/solx-dev test solx-tester \
             --solidity-compiler ./target/release/solx \
             --via-ir --optimizer 'M^B3' \
-            --benchmark=${{ github.workspace }}/candidate-benchmark.json
+            --benchmark=candidate-benchmark.json
 
       - name: Build benchmark converter
         run: cargo build --release --bin solx-benchmark-converter
