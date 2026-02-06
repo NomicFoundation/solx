@@ -31,6 +31,7 @@ jobs:
       - name: Checkout PR
         uses: actions/checkout@v5
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           submodules: true
 
       - name: Checkout main
@@ -66,12 +67,21 @@ jobs:
           cmake-build-type: 'Release'
           working-dir: 'temp-solx-main/solx-solidity'
 
-      - name: Build solx, solx-dev, and solx-tester (main)
+      - name: Build solx (main)
         working-directory: temp-solx-main
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
-        run: cargo build --release --bin solx --bin solx-dev --bin solx-tester
+          RUSTC_BOOTSTRAP: 1
+          RUSTFLAGS: '-C target-feature=+crt-static -C link-arg=-fuse-ld=lld'
+        run: cargo build --release --bin solx
+
+      - name: Build solx-dev and solx-tester (main)
+        working-directory: temp-solx-main
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
+        run: cargo build --release --bin solx-dev --bin solx-tester
 
       - name: Build LLVM (PR)
         uses: ./.github/actions/build-llvm
@@ -88,11 +98,19 @@ jobs:
           cmake-build-type: Release
           working-dir: 'solx-solidity'
 
-      - name: Build solx, solx-dev, and solx-tester (PR)
+      - name: Build solx (PR)
         env:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-        run: cargo build --release --bin solx --bin solx-dev --bin solx-tester
+          RUSTC_BOOTSTRAP: 1
+          RUSTFLAGS: '-C target-feature=+crt-static -C link-arg=-fuse-ld=lld'
+        run: cargo build --release --bin solx
+
+      - name: Build solx-dev and solx-tester (PR)
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        run: cargo build --release --bin solx-dev --bin solx-tester
 
       - name: Run solx-tester tests (PR)
         continue-on-error: true
@@ -135,7 +153,7 @@ jobs:
             --output-path solx-tester-report.xlsx reference.json candidate.json
 
       - name: Upload solx-tester report
-        if: always()
+        if: always() && hashFiles('solx-tester-report.xlsx') != ''
         id: solx-tester-report
         uses: actions/upload-artifact@v4
         with:
@@ -143,7 +161,7 @@ jobs:
           path: solx-tester-report.xlsx
 
       - name: Post solx-tester report comment
-        if: always()
+        if: always() && steps.solx-tester-report.outcome == 'success'
         uses: mshick/add-pr-comment@v2
         with:
           message-id: 'solx-tester-report'
@@ -179,7 +197,7 @@ jobs:
         run: ./target/release/solx-dev test hardhat
 
       - name: Upload Hardhat report
-        if: always()
+        if: always() && hashFiles('temp-hardhat-reports/hardhat-report.xlsx') != ''
         id: hardhat-report
         uses: actions/upload-artifact@v4
         with:
@@ -187,7 +205,7 @@ jobs:
           path: ./temp-hardhat-reports/hardhat-report.xlsx
 
       - name: Post Hardhat report comment
-        if: always()
+        if: always() && steps.hardhat-report.outcome == 'success'
         uses: mshick/add-pr-comment@v2
         with:
           message-id: 'hardhat-report'
@@ -201,7 +219,7 @@ jobs:
         run: ./target/release/solx-dev test foundry
 
       - name: Upload Foundry report
-        if: always()
+        if: always() && hashFiles('temp-foundry-reports/foundry-report.xlsx') != ''
         id: foundry-report
         uses: actions/upload-artifact@v4
         with:
@@ -209,7 +227,7 @@ jobs:
           path: ./temp-foundry-reports/foundry-report.xlsx
 
       - name: Post Foundry report comment
-        if: always()
+        if: always() && steps.foundry-report.outcome == 'success'
         uses: mshick/add-pr-comment@v2
         with:
           message-id: 'foundry-report'
