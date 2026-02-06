@@ -36,6 +36,7 @@ jobs:
 
       - name: Checkout main
         uses: actions/checkout@v5
+        continue-on-error: true
         with:
           ref: main
           submodules: true
@@ -48,11 +49,13 @@ jobs:
 
       - name: Checkout submodules (main)
         working-directory: temp-solx-main
+        continue-on-error: true
         run: |
           git submodule update --init --force --recursive --depth 1 --checkout
 
       - name: Build LLVM (main)
         uses: ./.github/actions/build-llvm
+        continue-on-error: true
         with:
           build-type: Release
           working-dir: 'temp-solx-main'
@@ -63,12 +66,14 @@ jobs:
 
       - name: Build solc (main)
         uses: ./.github/actions/build-solc
+        continue-on-error: true
         with:
           cmake-build-type: 'Release'
           working-dir: 'temp-solx-main/solx-solidity'
 
       - name: Build solx (main)
         working-directory: temp-solx-main
+        continue-on-error: true
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
@@ -78,6 +83,7 @@ jobs:
 
       - name: Build solx-dev and solx-tester (main)
         working-directory: temp-solx-main
+        continue-on-error: true
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
@@ -113,6 +119,7 @@ jobs:
         run: cargo build --release --bin solx-dev --bin solx-tester
 
       - name: Run solx-tester tests (PR)
+        id: solx_tester_tests
         continue-on-error: true
         env:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
@@ -120,6 +127,8 @@ jobs:
         run: ./target/release/solx-dev test solx-tester --solidity-compiler ./target/release/solx
 
       - name: Run solx-tester benchmarks (main)
+        id: solx_tester_bench_main
+        continue-on-error: true
         working-directory: temp-solx-main
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
@@ -128,9 +137,11 @@ jobs:
           ./target/release/solx-dev test solx-tester \
             --solidity-compiler ./target/release/solx \
             --via-ir --optimizer 'M^B3' \
-            --benchmark=${{ github.workspace }}/reference-benchmark.json || true
+            --benchmark=${{ github.workspace }}/reference-benchmark.json
 
       - name: Run solx-tester benchmarks (PR)
+        id: solx_tester_bench_pr
+        continue-on-error: true
         env:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
@@ -138,12 +149,13 @@ jobs:
           ./target/release/solx-dev test solx-tester \
             --solidity-compiler ./target/release/solx \
             --via-ir --optimizer 'M^B3' \
-            --benchmark=${{ github.workspace }}/candidate-benchmark.json || true
+            --benchmark=${{ github.workspace }}/candidate-benchmark.json
 
       - name: Build benchmark converter
         run: cargo build --release --bin solx-benchmark-converter
 
       - name: Run benchmark converter
+        if: hashFiles('reference-benchmark.json') != '' && hashFiles('candidate-benchmark.json') != ''
         run: |
           cat reference-benchmark.json \
             | jq '{data: ., project: "solx-tester", toolchain: "00.solx-main"}' > reference.json
@@ -193,6 +205,7 @@ jobs:
           git config --global url."https://".insteadOf git://
 
       - name: Run Hardhat tests
+        id: hardhat_tests
         continue-on-error: true
         run: ./target/release/solx-dev test hardhat
 
@@ -215,6 +228,7 @@ jobs:
             ➡️ [**Download**](${{ steps.hardhat-report.outputs.artifact-url }})
 
       - name: Run Foundry tests
+        id: foundry_tests
         continue-on-error: true
         run: ./target/release/solx-dev test foundry
 
@@ -235,3 +249,24 @@ jobs:
             📊 **Foundry Projects Report**
 
             ➡️ [**Download**](${{ steps.foundry-report.outputs.artifact-url }})
+
+      - name: Fail workflow if tests or benchmarks failed
+        if: always()
+        run: |
+          failures=()
+          if [ "${{ steps.solx_tester_tests.outcome }}" != "success" ]; then
+            failures+=("solx-tester tests")
+          fi
+          if [ "${{ steps.solx_tester_bench_pr.outcome }}" != "success" ]; then
+            failures+=("solx-tester benchmarks (PR)")
+          fi
+          if [ "${{ steps.hardhat_tests.outcome }}" != "success" ]; then
+            failures+=("hardhat tests")
+          fi
+          if [ "${{ steps.foundry_tests.outcome }}" != "success" ]; then
+            failures+=("foundry tests")
+          fi
+          if [ ${#failures[@]} -ne 0 ]; then
+            echo "Failures: ${failures[*]}"
+            exit 1
+          fi
