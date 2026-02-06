@@ -2,6 +2,11 @@ name: solx Tester
 
 on:
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "**/*.mdx"
+      - "LICENSE"
 
 concurrency:
   group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -48,7 +53,6 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: 'RelWithDebInfo'
-          ccache-key: "llvm-Linux-X64-gnu-${{ matrix.mlir && 'mlir' || 'no-mlir' }}"
           enable-assertions: false
           llvm-projects: ${{ matrix.mlir && 'mlir lld' || '' }}
 
@@ -57,7 +61,6 @@ jobs:
         with:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
-          upload-testing-binary: false
           enable-mlir: ${{ matrix.mlir }}
 
       - name: Build tester
@@ -102,7 +105,6 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: 'Release'
-          ccache-key: 'llvm-Linux-X64-gnu'
           enable-assertions: false
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
@@ -113,8 +115,6 @@ jobs:
         with:
           cmake-build-type: Release
           working-dir: 'solx-solidity'
-          upload-testing-binary: false
-          build-type: ${{ matrix.type }}
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # enable-mlir: true
 

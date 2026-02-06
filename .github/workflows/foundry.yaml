@@ -45,7 +45,6 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: Release
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           working-dir: 'temp-solx-main'
           enable-assertions: 'false'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
@@ -58,7 +57,6 @@ jobs:
         with:
           cmake-build-type: 'Release'
           working-dir: 'temp-solx-main/solx-solidity'
-          upload-testing-binary: 'false'
 
       - name: Build solx (main)
         working-directory: 'temp-solx-main'
@@ -71,7 +69,6 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: Release
-          ccache-key: ${{ format('llvm-{0}-{1}', runner.os, runner.arch) }}
           enable-assertions: 'false'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
           # llvm-projects: 'mlir lld'
@@ -83,7 +80,6 @@ jobs:
         with:
           cmake-build-type: 'Release'
           working-dir: 'solx-solidity'
-          upload-testing-binary: 'false'
 
       - name: Build solx
         env:

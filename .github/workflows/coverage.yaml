@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "**/*.mdx"
+      - "LICENSE"
 
 concurrency:
   group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.ref }}
@@ -43,7 +48,6 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: 'RelWithDebInfo'
-          ccache-key: 'llvm-Linux-X64-gnu'
           enable-assertions: false
           enable-coverage: 'true'
           # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
@@ -55,8 +59,6 @@ jobs:
         with:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
-          upload-testing-binary: false
-          build-type: ${{ matrix.type }}
 
       - name: Build tester
         run: cargo build --release --bin solx-tester
