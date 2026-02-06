@@ -28,6 +28,11 @@
 /temp*
 /CONTROLLER.md
 
+# AI
+/.claude/
+*aider*
+/logs/
+
 # Debug and benchmark artifacts
 /debug*
 /*.json
