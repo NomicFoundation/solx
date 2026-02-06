@@ -10,6 +10,7 @@ pub mod visited_element;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
@@ -52,6 +53,8 @@ pub struct Function {
     pub code_segment: Option<solx_utils::CodeSegment>,
     /// The separately labelled blocks.
     pub blocks: BTreeMap<solx_codegen_evm::BlockKey, Vec<Block>>,
+    /// Index of initial stack hashes per block key for O(1) duplicate detection.
+    block_hash_index: HashMap<solx_codegen_evm::BlockKey, HashSet<u64>>,
     /// The function type.
     pub r#type: Type,
     /// The function stack size.
@@ -81,6 +84,7 @@ impl Function {
             name,
             code_segment,
             blocks: BTreeMap::new(),
+            block_hash_index: HashMap::new(),
             r#type,
             stack_size: 0,
         }
@@ -255,7 +259,9 @@ impl Function {
                 value: Some(tag),
                 ..
             } => {
-                let tag: num::BigUint = tag.parse().expect("Always valid");
+                let tag: num::BigUint = tag
+                    .parse()
+                    .map_err(|error| anyhow::anyhow!("Invalid PUSH_Tag value `{tag}`: {error}"))?;
                 (vec![Element::Tag(tag & num::BigUint::from(u64::MAX))], None)
             }
             instruction @ Instruction {
@@ -363,7 +369,9 @@ impl Function {
                 value: Some(tag),
                 ..
             } => {
-                let tag: num::BigUint = tag.parse().expect("Always valid");
+                let tag: num::BigUint = tag
+                    .parse()
+                    .map_err(|error| anyhow::anyhow!("Invalid Tag value `{tag}`: {error}"))?;
                 let block_key = solx_codegen_evm::BlockKey::new(code_segment, tag);
 
                 queue_element.predecessor = Some((queue_element.block_key.clone(), instance));
@@ -558,6 +566,11 @@ impl Function {
             } => (vec![block_stack.dup(16)?], None),
 
             Instruction {
+                name: InstructionName::PUSH0,
+                ..
+            } => (vec![StackElement::Constant(num::BigUint::zero())], None),
+
+            Instruction {
                 name:
                     InstructionName::PUSH
                     | InstructionName::PUSH1
@@ -633,7 +646,9 @@ impl Function {
                     | (Element::Constant(operand_1), Element::Tag(operand_2))
                     | (Element::Tag(operand_1), Element::Tag(operand_2)) => {
                         match operand_1.checked_add(operand_2) {
-                            Some(result) if Self::is_tag_value_valid(blocks, &result) => {
+                            Some(result)
+                                if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                            {
                                 Element::Tag(result)
                             }
                             Some(_result) => Element::value(instruction.name.to_string()),
@@ -662,7 +677,9 @@ impl Function {
                     | (Element::Constant(operand_1), Element::Tag(operand_2))
                     | (Element::Tag(operand_1), Element::Tag(operand_2)) => {
                         match operand_1.checked_sub(operand_2) {
-                            Some(result) if Self::is_tag_value_valid(blocks, &result) => {
+                            Some(result)
+                                if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                            {
                                 Element::Tag(result)
                             }
                             Some(_result) => Element::value(instruction.name.to_string()),
@@ -691,7 +708,9 @@ impl Function {
                     | (Element::Constant(operand_1), Element::Tag(operand_2))
                     | (Element::Tag(operand_1), Element::Tag(operand_2)) => {
                         match operand_1.checked_mul(operand_2) {
-                            Some(result) if Self::is_tag_value_valid(blocks, &result) => {
+                            Some(result)
+                                if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                            {
                                 Element::Tag(result)
                             }
                             Some(_result) => Element::value(instruction.name.to_string()),
@@ -723,7 +742,9 @@ impl Function {
                             Element::Tag(num::BigUint::zero())
                         } else {
                             match operand_1.checked_div(operand_2) {
-                                Some(result) if Self::is_tag_value_valid(blocks, &result) => {
+                                Some(result)
+                                    if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                                {
                                     Element::Tag(result)
                                 }
                                 Some(_result) => Element::value(instruction.name.to_string()),
@@ -760,7 +781,7 @@ impl Function {
                             Element::Tag(num::BigUint::zero())
                         } else {
                             let result = operand_1 % operand_2;
-                            if Self::is_tag_value_valid(blocks, &result) {
+                            if Self::is_tag_value_valid(blocks, code_segment, &result) {
                                 Element::Tag(result)
                             } else {
                                 Element::value(instruction.name.to_string())
@@ -790,7 +811,7 @@ impl Function {
                         let offset = offset % solx_utils::BIT_LENGTH_FIELD;
                         let offset = offset.to_u64().expect("Always valid");
                         let result = tag << offset;
-                        if Self::is_tag_value_valid(blocks, &result) {
+                        if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
                         } else {
                             Element::value(instruction.name.to_string())
@@ -817,7 +838,7 @@ impl Function {
                         let offset = offset % solx_utils::BIT_LENGTH_FIELD;
                         let offset = offset.to_u64().expect("Always valid");
                         let result = tag >> offset;
-                        if Self::is_tag_value_valid(blocks, &result) {
+                        if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
                         } else {
                             Element::value(instruction.name.to_string())
@@ -844,7 +865,7 @@ impl Function {
                     | (Element::Tag(operand_1), Element::Constant(operand_2))
                     | (Element::Constant(operand_1), Element::Tag(operand_2)) => {
                         let result = operand_1 | operand_2;
-                        if Self::is_tag_value_valid(blocks, &result) {
+                        if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
                         } else {
                             Element::value(instruction.name.to_string())
@@ -869,7 +890,7 @@ impl Function {
                     | (Element::Tag(operand_1), Element::Constant(operand_2))
                     | (Element::Constant(operand_1), Element::Tag(operand_2)) => {
                         let result = operand_1 ^ operand_2;
-                        if Self::is_tag_value_valid(blocks, &result) {
+                        if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
                         } else {
                             Element::value(instruction.name.to_string())
@@ -894,7 +915,7 @@ impl Function {
                     | (Element::Tag(operand_1), Element::Constant(operand_2))
                     | (Element::Constant(operand_1), Element::Tag(operand_2)) => {
                         let result = operand_1 & operand_2;
-                        if Self::is_tag_value_valid(blocks, &result) {
+                        if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
                         } else {
                             Element::value(instruction.name.to_string())
@@ -1015,7 +1036,9 @@ impl Function {
                 .collect(),
         );
         block_element.stack_output = Stack::new_with_elements(output_data);
-        block_stack.append(&mut block_element.stack_output.clone());
+        block_stack
+            .elements
+            .extend(block_element.stack_output.elements.iter().cloned());
         block_element.stack = block_stack.clone();
         Ok(())
     }
@@ -1094,17 +1117,17 @@ impl Function {
     ///
     fn insert_block(&mut self, mut block: Block) -> &mut Block {
         let key = block.key.clone();
+        let stack_hash = block.initial_stack.hash();
 
-        if let Some(entry) = self.blocks.get_mut(&key) {
-            if entry.iter().all(|existing_block| {
-                existing_block.initial_stack.hash() != block.initial_stack.hash()
-            }) {
+        let hash_set = self.block_hash_index.entry(key.clone()).or_default();
+        if hash_set.insert(stack_hash) {
+            if let Some(entry) = self.blocks.get_mut(&key) {
                 block.instance = Some(entry.len());
                 entry.push(block);
+            } else {
+                block.instance = Some(0);
+                self.blocks.insert(key.clone(), vec![block]);
             }
-        } else {
-            block.instance = Some(0);
-            self.blocks.insert(block.key.clone(), vec![block]);
         }
 
         self.blocks
@@ -1115,19 +1138,15 @@ impl Function {
     }
 
     ///
-    /// Checks whether the tag value actually references an existing block.
-    ///
-    /// Checks both deploy and runtime code.
+    /// Checks whether the tag value references an existing block in the given code segment.
     ///
     fn is_tag_value_valid(
         blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
+        code_segment: solx_utils::CodeSegment,
         tag: &num::BigUint,
     ) -> bool {
         blocks.contains_key(&solx_codegen_evm::BlockKey::new(
-            solx_utils::CodeSegment::Deploy,
-            tag & num::BigUint::from(u32::MAX),
-        )) || blocks.contains_key(&solx_codegen_evm::BlockKey::new(
-            solx_utils::CodeSegment::Runtime,
+            code_segment,
             tag & num::BigUint::from(u32::MAX),
         ))
     }

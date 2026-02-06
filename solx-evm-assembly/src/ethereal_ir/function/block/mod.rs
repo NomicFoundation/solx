@@ -54,9 +54,9 @@ impl Block {
                 let tag = slice[cursor]
                     .value
                     .as_deref()
-                    .expect("Always exists")
+                    .ok_or_else(|| anyhow::anyhow!("Tag instruction missing value"))?
                     .parse()
-                    .expect("Always valid");
+                    .map_err(|error| anyhow::anyhow!("Invalid Tag value: {error}"))?;
                 cursor += 1;
                 tag
             }

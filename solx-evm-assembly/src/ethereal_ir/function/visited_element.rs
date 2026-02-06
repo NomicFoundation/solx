@@ -44,11 +44,7 @@ impl Ord for VisitedElement {
             | (solx_utils::CodeSegment::Runtime, solx_utils::CodeSegment::Runtime) => {
                 let tag_comparison = self.block_key.tag.cmp(&other.block_key.tag);
                 if tag_comparison == Ordering::Equal {
-                    if self.stack_hash == other.stack_hash {
-                        Ordering::Equal
-                    } else {
-                        Ordering::Less
-                    }
+                    self.stack_hash.cmp(&other.stack_hash)
                 } else {
                     tag_comparison
                 }

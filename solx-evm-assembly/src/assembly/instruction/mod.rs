@@ -181,6 +181,7 @@ impl Instruction {
             Name::PUSH30 => 1,
             Name::PUSH31 => 1,
             Name::PUSH32 => 1,
+            Name::PUSH0 => 1,
 
             Name::DUP1 => 1,
             Name::DUP2 => 1,

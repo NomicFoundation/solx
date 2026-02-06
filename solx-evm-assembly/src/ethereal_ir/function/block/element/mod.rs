@@ -95,6 +95,7 @@ impl solx_codegen_evm::WriteLLVM for Element {
         let mut original = self.instruction.value.clone();
 
         let result = match self.instruction.name.clone() {
+            InstructionName::PUSH0 => Ok(Some(context.field_const(0).as_basic_value_enum())),
             InstructionName::PUSH
             | InstructionName::PUSH1
             | InstructionName::PUSH2
@@ -312,7 +313,7 @@ impl solx_codegen_evm::WriteLLVM for Element {
                     .stack_input
                     .pop_constant()?
                     .to_usize()
-                    .expect("Always valid");
+                    .ok_or_else(|| anyhow::anyhow!("DUPX offset too large"))?;
                 crate::assembly::instruction::stack::dup(
                     context,
                     offset,
@@ -391,7 +392,7 @@ impl solx_codegen_evm::WriteLLVM for Element {
                     .stack_input
                     .pop_constant()?
                     .to_usize()
-                    .expect("Always valid");
+                    .ok_or_else(|| anyhow::anyhow!("SWAPX offset too large"))?;
                 crate::assembly::instruction::stack::swap(
                     context,
                     offset,

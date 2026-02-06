@@ -35,7 +35,8 @@ pub fn static_data<'ctx>(
     destination: inkwell::values::IntValue<'ctx>,
     source: &str,
 ) -> anyhow::Result<()> {
-    let source = hex::decode(source).expect("Always valid");
+    let source = hex::decode(source)
+        .map_err(|error| anyhow::anyhow!("Invalid CODECOPY hex data: {error}"))?;
     let source_type = context.array_type(context.byte_type(), source.len());
     let source_global = context.module().add_global(
         source_type,

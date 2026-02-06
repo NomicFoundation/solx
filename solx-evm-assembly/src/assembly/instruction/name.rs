@@ -86,6 +86,8 @@ pub enum Name {
     PUSH31,
     /// The eponymous EVM instruction.
     PUSH32,
+    /// The eponymous EVM instruction.
+    PUSH0,
 
     /// The eponymous EVM instruction.
     DUP1,
