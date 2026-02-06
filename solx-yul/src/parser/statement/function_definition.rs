@@ -223,7 +223,10 @@ impl FunctionDefinition {
         match r#return {
             solx_codegen_evm::FunctionReturn::None => {}
             solx_codegen_evm::FunctionReturn::Primitive { pointer } => {
-                let identifier = self.result.pop().expect("Always exists");
+                let identifier = self
+                    .result
+                    .pop()
+                    .ok_or_else(|| anyhow::anyhow!("Function return variable is missing"))?;
                 let r#type = identifier.r#type.unwrap_or_default();
                 context.build_store(pointer, r#type.into_llvm(context).const_zero())?;
                 context

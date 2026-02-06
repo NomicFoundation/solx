@@ -21,10 +21,10 @@ pub struct Arguments {
     pub input_paths: Vec<PathBuf>,
 
     /// Benchmark output format: `json`, `csv`, or `json-lnt`.
-    #[structopt(long = "output-format", alias = "benchmark-format", default_value_t = solx_benchmark_converter::OutputFormat::Xlsx)]
+    #[arg(long = "output-format", alias = "benchmark-format", default_value_t = solx_benchmark_converter::OutputFormat::Xlsx)]
     pub output_format: solx_benchmark_converter::OutputFormat,
 
     /// Output files.
-    #[structopt(long)]
+    #[arg(long)]
     pub output_path: PathBuf,
 }

@@ -28,7 +28,7 @@ pub fn command(command: &mut Command, description: &str) -> anyhow::Result<()> {
 
     let status = command
         .status()
-        .unwrap_or_else(|error| panic!("{command:?} process spawning error: {error:?}"));
+        .map_err(|error| anyhow::anyhow!("{command:?} process spawning error: {error:?}"))?;
 
     if status.code() != Some(solx_utils::EXIT_CODE_SUCCESS) {
         anyhow::bail!(
@@ -58,7 +58,7 @@ pub fn command_with_retries(
 
         let status = command
             .status()
-            .unwrap_or_else(|error| panic!("{command:?} process spawning error: {error:?}"));
+            .map_err(|error| anyhow::anyhow!("{command:?} process spawning error: {error:?}"))?;
 
         if status.code() == Some(solx_utils::EXIT_CODE_SUCCESS) {
             return Ok(());
@@ -92,9 +92,12 @@ pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
     command.stderr(Stdio::piped());
     let mut process = command
         .spawn()
-        .unwrap_or_else(|error| panic!("{command:?} process spawning error: {error:?}"));
+        .map_err(|error| anyhow::anyhow!("{command:?} process spawning error: {error:?}"))?;
 
-    let stderr = process.stderr.take().expect("Failed to take stderr");
+    let stderr = process
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("{command:?} failed to take stderr"))?;
     std::thread::spawn(move || {
         let reader = BufReader::new(stderr);
         for line in reader.lines().map_while(Result::ok) {
@@ -105,9 +108,9 @@ pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
         }
     });
 
-    let result = process
-        .wait_with_output()
-        .unwrap_or_else(|error| panic!("{command:?} subprocess output reading error: {error:?}"));
+    let result = process.wait_with_output().map_err(|error| {
+        anyhow::anyhow!("{command:?} subprocess output reading error: {error:?}")
+    })?;
 
     if !ignore_failure && result.status.code() != Some(solx_utils::EXIT_CODE_SUCCESS) {
         anyhow::bail!(
@@ -189,11 +192,11 @@ pub fn exists(name: &str) -> anyhow::Result<()> {
     command.stdout(Stdio::piped());
     let process = command
         .spawn()
-        .unwrap_or_else(|error| panic!("{command:?} process spawning error: {error:?}"));
+        .map_err(|error| anyhow::anyhow!("{command:?} process spawning error: {error:?}"))?;
 
-    let result = process
-        .wait_with_output()
-        .unwrap_or_else(|error| panic!("{command:?} subprocess output reading error: {error:?}"));
+    let result = process.wait_with_output().map_err(|error| {
+        anyhow::anyhow!("{command:?} subprocess output reading error: {error:?}")
+    })?;
 
     let log_result = if !result.status.success() {
         solx_utils::cargo_status_error("not found")
@@ -241,9 +244,11 @@ pub fn get_xcode_version() -> anyhow::Result<u32> {
         .map_err(|error| anyhow::anyhow!("`pkgutil` process: {error}"))?;
     let grep_version = Command::new("grep")
         .arg("version")
-        .stdin(Stdio::from(pkgutil.stdout.expect(
-            "Failed to identify XCode version - XCode or CLI tools are not installed",
-        )))
+        .stdin(Stdio::from(pkgutil.stdout.ok_or_else(|| {
+            anyhow::anyhow!(
+                "Failed to identify XCode version - XCode or CLI tools are not installed"
+            )
+        })?))
         .output()
         .map_err(|error| anyhow::anyhow!("`grep` process: {error}"))?;
     let version_string = String::from_utf8(grep_version.stdout)?;

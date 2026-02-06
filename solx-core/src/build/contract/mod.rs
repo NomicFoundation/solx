@@ -905,214 +905,87 @@ impl Contract {
             evm.gas_estimates = Some(serde_json::json!({}));
         }
 
-        evm.bytecode = Some(solx_standard_json::OutputContractEVMBytecode::new(
-            // object
-            if is_bytecode_linked {
-                self.deploy_object_result
-                    .as_mut()
-                    .map(|result| {
-                        result
-                            .as_mut()
-                            .expect("Always exists")
-                            .bytecode_hex
-                            .take()
-                            .filter(|_| {
-                                output_selection.check_selection(
-                                    self.name.path.as_str(),
-                                    self.name.name.as_deref(),
-                                    solx_standard_json::InputSelector::BytecodeObject,
-                                )
-                            })
-                    })
-                    .unwrap_or(Some(String::new()))
-            } else {
-                None
-            },
-            // evmla
-            self.deploy_object_result.as_mut().and_then(|result| {
-                result
-                    .as_mut()
-                    .expect("Always exists")
-                    .evmla
-                    .take()
-                    .filter(|_| {
-                        output_selection.check_selection(
-                            self.name.path.as_str(),
-                            self.name.name.as_deref(),
-                            solx_standard_json::InputSelector::BytecodeEVMLA,
-                        )
-                    })
-            }),
-            // ethir
-            self.deploy_object_result.as_mut().and_then(|result| {
-                result
-                    .as_mut()
-                    .expect("Always exists")
-                    .ethir
-                    .take()
-                    .filter(|_| {
-                        output_selection.check_selection(
-                            self.name.path.as_str(),
-                            self.name.name.as_deref(),
-                            solx_standard_json::InputSelector::BytecodeEthIR,
-                        )
-                    })
-            }),
-            // llvm_ir_unoptimized
-            self.deploy_object_result.as_mut().and_then(|result| {
-                result
-                    .as_mut()
-                    .expect("Always exists")
-                    .llvm_ir_unoptimized
-                    .take()
-                    .filter(|_| {
-                        output_selection.check_selection(
-                            self.name.path.as_str(),
-                            self.name.name.as_deref(),
-                            solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
-                        )
-                    })
-            }),
-            // llvm_ir (optimized)
-            self.deploy_object_result.as_mut().and_then(|result| {
-                result
-                    .as_mut()
-                    .expect("Always exists")
-                    .llvm_ir
-                    .take()
-                    .filter(|_| {
-                        output_selection.check_selection(
-                            self.name.path.as_str(),
-                            self.name.name.as_deref(),
-                            solx_standard_json::InputSelector::BytecodeLLVMIR,
-                        )
-                    })
-            }),
-            // llvm_assembly
-            self.deploy_object_result.as_mut().and_then(|result| {
-                result
-                    .as_mut()
-                    .expect("Always exists")
-                    .assembly
-                    .take()
-                    .filter(|_| {
-                        output_selection.check_selection(
-                            self.name.path.as_str(),
-                            self.name.name.as_deref(),
-                            solx_standard_json::InputSelector::BytecodeLLVMAssembly,
-                        )
-                    })
-            }),
-            // debug_info
-            self.deploy_object_result
-                .as_mut()
-                .map(|result| {
-                    result
-                        .as_mut()
-                        .expect("Always exists")
-                        .debug_info
-                        .take()
-                        .map(hex::encode)
-                        .filter(|_| {
-                            output_selection.check_selection(
-                                self.name.path.as_str(),
-                                self.name.name.as_deref(),
-                                solx_standard_json::InputSelector::BytecodeDebugInfo,
-                            )
-                        })
-                })
-                .unwrap_or(Some(String::new())),
-            // unlinked_symbols (link_references)
-            if is_bytecode_linked
-                && output_selection.check_selection(
-                    self.name.path.as_str(),
-                    self.name.name.as_deref(),
-                    solx_standard_json::InputSelector::BytecodeLinkReferences,
-                )
-            {
-                Some(
-                    self.deploy_object_result
-                        .as_ref()
-                        .map(|result| {
-                            result
-                                .as_ref()
-                                .expect("Always exists")
-                                .unlinked_symbols
-                                .to_owned()
-                        })
-                        .unwrap_or_default(),
-                )
-            } else {
-                None
-            },
-            // benchmarks
-            if output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::Benchmarks,
-            ) {
-                self.deploy_object_result
-                    .as_mut()
-                    .map(|result| {
-                        result
-                            .as_mut()
-                            .expect("Always exists")
-                            .benchmarks
-                            .drain(..)
-                            .collect()
-                    })
-                    .unwrap_or_default()
-            } else {
-                vec![]
-            },
-            // opcodes
-            if output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::BytecodeOpcodes,
-            ) {
-                Some(String::new())
-            } else {
-                None
-            },
-            // source_map
-            if output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::BytecodeSourceMap,
-            ) {
-                Some(String::new())
-            } else {
-                None
-            },
-            // function_debug_data
-            if output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::BytecodeFunctionDebugData,
-            ) {
-                Some(BTreeMap::new())
-            } else {
-                None
-            },
-            // generated_sources
-            if output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::BytecodeGeneratedSources,
-            ) {
-                Some(Vec::new())
-            } else {
-                None
-            },
-            // immutable_references
-            None,
+        evm.bytecode = Some(Self::build_bytecode_output(
+            &mut self.deploy_object_result,
+            self.name.path.as_str(),
+            self.name.name.as_deref(),
+            output_selection,
+            is_bytecode_linked,
+            solx_utils::CodeSegment::Deploy,
         ));
 
-        evm.deployed_bytecode = Some(solx_standard_json::OutputContractEVMBytecode::new(
+        evm.deployed_bytecode = Some(Self::build_bytecode_output(
+            &mut self.runtime_object_result,
+            self.name.path.as_str(),
+            self.name.name.as_deref(),
+            output_selection,
+            is_bytecode_linked,
+            solx_utils::CodeSegment::Runtime,
+        ));
+    }
+
+    ///
+    /// Builds the bytecode output for a single code segment.
+    ///
+    fn build_bytecode_output(
+        object_result: &mut Option<crate::Result<Object>>,
+        path: &str,
+        name: Option<&str>,
+        output_selection: &solx_standard_json::InputSelection,
+        is_bytecode_linked: bool,
+        code_segment: solx_utils::CodeSegment,
+    ) -> solx_standard_json::OutputContractEVMBytecode {
+        let (
+            selector_object,
+            selector_evmla,
+            selector_ethir,
+            selector_llvm_ir_unoptimized,
+            selector_llvm_ir,
+            selector_llvm_assembly,
+            selector_debug_info,
+            selector_link_references,
+            selector_opcodes,
+            selector_source_map,
+            selector_function_debug_data,
+            selector_generated_sources,
+            selector_immutable_references,
+        ) = match code_segment {
+            solx_utils::CodeSegment::Deploy => (
+                solx_standard_json::InputSelector::BytecodeObject,
+                solx_standard_json::InputSelector::BytecodeEVMLA,
+                solx_standard_json::InputSelector::BytecodeEthIR,
+                solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized,
+                solx_standard_json::InputSelector::BytecodeLLVMIR,
+                solx_standard_json::InputSelector::BytecodeLLVMAssembly,
+                solx_standard_json::InputSelector::BytecodeDebugInfo,
+                solx_standard_json::InputSelector::BytecodeLinkReferences,
+                solx_standard_json::InputSelector::BytecodeOpcodes,
+                solx_standard_json::InputSelector::BytecodeSourceMap,
+                solx_standard_json::InputSelector::BytecodeFunctionDebugData,
+                solx_standard_json::InputSelector::BytecodeGeneratedSources,
+                None,
+            ),
+            solx_utils::CodeSegment::Runtime => (
+                solx_standard_json::InputSelector::RuntimeBytecodeObject,
+                solx_standard_json::InputSelector::RuntimeBytecodeEVMLA,
+                solx_standard_json::InputSelector::RuntimeBytecodeEthIR,
+                solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
+                solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
+                solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
+                solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
+                solx_standard_json::InputSelector::RuntimeBytecodeLinkReferences,
+                solx_standard_json::InputSelector::RuntimeBytecodeOpcodes,
+                solx_standard_json::InputSelector::RuntimeBytecodeSourceMap,
+                solx_standard_json::InputSelector::RuntimeBytecodeFunctionDebugData,
+                solx_standard_json::InputSelector::RuntimeBytecodeGeneratedSources,
+                Some(solx_standard_json::InputSelector::RuntimeBytecodeImmutableReferences),
+            ),
+        };
+
+        solx_standard_json::OutputContractEVMBytecode::new(
             // object
             if is_bytecode_linked {
-                self.runtime_object_result
+                object_result
                     .as_mut()
                     .map(|result| {
                         result
@@ -1121,11 +994,7 @@ impl Contract {
                             .bytecode_hex
                             .take()
                             .filter(|_| {
-                                output_selection.check_selection(
-                                    self.name.path.as_str(),
-                                    self.name.name.as_deref(),
-                                    solx_standard_json::InputSelector::RuntimeBytecodeObject,
-                                )
+                                output_selection.check_selection(path, name, selector_object)
                             })
                     })
                     .unwrap_or(Some(String::new()))
@@ -1133,82 +1002,56 @@ impl Contract {
                 None
             },
             // evmla
-            self.runtime_object_result.as_mut().and_then(|result| {
+            object_result.as_mut().and_then(|result| {
                 result
                     .as_mut()
                     .expect("Always exists")
                     .evmla
                     .take()
-                    .filter(|_| {
-                        output_selection.check_selection(
-                            self.name.path.as_str(),
-                            self.name.name.as_deref(),
-                            solx_standard_json::InputSelector::RuntimeBytecodeEVMLA,
-                        )
-                    })
+                    .filter(|_| output_selection.check_selection(path, name, selector_evmla))
             }),
             // ethir
-            self.runtime_object_result.as_mut().and_then(|result| {
+            object_result.as_mut().and_then(|result| {
                 result
                     .as_mut()
                     .expect("Always exists")
                     .ethir
                     .take()
-                    .filter(|_| {
-                        output_selection.check_selection(
-                            self.name.path.as_str(),
-                            self.name.name.as_deref(),
-                            solx_standard_json::InputSelector::RuntimeBytecodeEthIR,
-                        )
-                    })
+                    .filter(|_| output_selection.check_selection(path, name, selector_ethir))
             }),
             // llvm_ir_unoptimized
-            self.runtime_object_result.as_mut().and_then(|result| {
+            object_result.as_mut().and_then(|result| {
                 result
                     .as_mut()
                     .expect("Always exists")
                     .llvm_ir_unoptimized
                     .take()
                     .filter(|_| {
-                        output_selection.check_selection(
-                            self.name.path.as_str(),
-                            self.name.name.as_deref(),
-                            solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized,
-                        )
+                        output_selection.check_selection(path, name, selector_llvm_ir_unoptimized)
                     })
             }),
-            // llvm_ir (optimized)
-            self.runtime_object_result.as_mut().and_then(|result| {
+            // llvm_ir
+            object_result.as_mut().and_then(|result| {
                 result
                     .as_mut()
                     .expect("Always exists")
                     .llvm_ir
                     .take()
-                    .filter(|_| {
-                        output_selection.check_selection(
-                            self.name.path.as_str(),
-                            self.name.name.as_deref(),
-                            solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR,
-                        )
-                    })
+                    .filter(|_| output_selection.check_selection(path, name, selector_llvm_ir))
             }),
             // llvm_assembly
-            self.runtime_object_result.as_mut().and_then(|result| {
+            object_result.as_mut().and_then(|result| {
                 result
                     .as_mut()
                     .expect("Always exists")
                     .assembly
                     .take()
                     .filter(|_| {
-                        output_selection.check_selection(
-                            self.name.path.as_str(),
-                            self.name.name.as_deref(),
-                            solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly,
-                        )
+                        output_selection.check_selection(path, name, selector_llvm_assembly)
                     })
             }),
             // debug_info
-            self.runtime_object_result
+            object_result
                 .as_mut()
                 .map(|result| {
                     result
@@ -1218,24 +1061,16 @@ impl Contract {
                         .take()
                         .map(hex::encode)
                         .filter(|_| {
-                            output_selection.check_selection(
-                                self.name.path.as_str(),
-                                self.name.name.as_deref(),
-                                solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo,
-                            )
+                            output_selection.check_selection(path, name, selector_debug_info)
                         })
                 })
                 .unwrap_or(Some(String::new())),
             // unlinked_symbols (link_references)
             if is_bytecode_linked
-                && output_selection.check_selection(
-                    self.name.path.as_str(),
-                    self.name.name.as_deref(),
-                    solx_standard_json::InputSelector::RuntimeBytecodeLinkReferences,
-                )
+                && output_selection.check_selection(path, name, selector_link_references)
             {
                 Some(
-                    self.runtime_object_result
+                    object_result
                         .as_ref()
                         .map(|result| {
                             result
@@ -1251,11 +1086,11 @@ impl Contract {
             },
             // benchmarks
             if output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
+                path,
+                name,
                 solx_standard_json::InputSelector::Benchmarks,
             ) {
-                self.runtime_object_result
+                object_result
                     .as_mut()
                     .map(|result| {
                         result
@@ -1270,56 +1105,38 @@ impl Contract {
                 vec![]
             },
             // opcodes
-            if output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::RuntimeBytecodeOpcodes,
-            ) {
+            if output_selection.check_selection(path, name, selector_opcodes) {
                 Some(String::new())
             } else {
                 None
             },
             // source_map
-            if output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::RuntimeBytecodeSourceMap,
-            ) {
+            if output_selection.check_selection(path, name, selector_source_map) {
                 Some(String::new())
             } else {
                 None
             },
             // function_debug_data
-            if output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::RuntimeBytecodeFunctionDebugData,
-            ) {
+            if output_selection.check_selection(path, name, selector_function_debug_data) {
                 Some(BTreeMap::new())
             } else {
                 None
             },
             // generated_sources
-            if output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::RuntimeBytecodeGeneratedSources,
-            ) {
+            if output_selection.check_selection(path, name, selector_generated_sources) {
                 Some(Vec::new())
             } else {
                 None
             },
             // immutable_references
-            if output_selection.check_selection(
-                self.name.path.as_str(),
-                self.name.name.as_deref(),
-                solx_standard_json::InputSelector::RuntimeBytecodeImmutableReferences,
-            ) {
-                Some(serde_json::json!({}))
-            } else {
-                None
-            },
-        ));
+            selector_immutable_references.and_then(|selector| {
+                if output_selection.check_selection(path, name, selector) {
+                    Some(serde_json::json!({}))
+                } else {
+                    None
+                }
+            }),
+        )
     }
 
     ///

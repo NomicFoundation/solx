@@ -11,6 +11,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use solx_utils::SyncLock;
+
 use crate::input::language::Language as InputLanguage;
 use crate::input::settings::selection::Selection as InputSettingsSelection;
 use crate::input::settings::selection::selector::Selector as InputSettingsSelector;
@@ -70,7 +72,7 @@ impl Output {
         Self {
             contracts: BTreeMap::new(),
             sources: BTreeMap::new(),
-            errors: messages.lock().expect("Sync").drain(..).collect(),
+            errors: messages.lock_sync().drain(..).collect(),
             benchmarks: Vec::new(),
         }
     }
@@ -135,6 +137,7 @@ impl Output {
         });
 
         serde_json::to_writer(std::io::stdout(), &self).expect("Stdout writing error");
+        std::io::Write::flush(&mut std::io::stdout()).expect("Stdout flush error");
         std::process::exit(solx_utils::EXIT_CODE_SUCCESS);
     }
 

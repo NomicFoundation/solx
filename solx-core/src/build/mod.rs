@@ -12,6 +12,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use normpath::PathExt;
+use solx_utils::SyncLock;
 
 use solx_standard_json::CollectableError;
 
@@ -94,7 +95,7 @@ impl Build {
                     let assembled_object = match object.assemble(all_objects.as_slice()) {
                         Ok(assembled_object) => assembled_object,
                         Err(error) => {
-                            self.messages.lock().expect("Sync").push(
+                            self.messages.lock_sync().push(
                                 solx_standard_json::OutputError::new_error_contract(
                                     Some(object.contract_name.path.as_str()),
                                     &error,
@@ -140,7 +141,7 @@ impl Build {
         for contract in self.contracts.values_mut() {
             for object in contract.objects_mut().into_iter() {
                 if let Err(error) = object.link(&linker_symbols) {
-                    self.messages.lock().expect("Sync").push(
+                    self.messages.lock_sync().push(
                         solx_standard_json::OutputError::new_error_contract(
                             Some(object.contract_name.path.as_str()),
                             &error,
@@ -171,11 +172,8 @@ impl Build {
                 solx_standard_json::InputSelector::AST,
             ) {
                 writeln!(std::io::stdout(), "\n======= {path} =======",)?;
-                writeln!(
-                    std::io::stdout(),
-                    "JSON AST:\n{}",
-                    ast.expect("Always exists")
-                )?;
+                let ast = ast.ok_or_else(|| anyhow::anyhow!("AST JSON is missing for `{path}`"))?;
+                writeln!(std::io::stdout(), "JSON AST:\n{}", ast)?;
             }
         }
         if output_selection.check_selection(
@@ -233,7 +231,9 @@ impl Build {
                 let mut output_path = output_directory.to_owned();
                 output_path.push(output_name.as_str());
 
-                let ast_json = ast_json.expect("Always exists").to_string();
+                let ast_json = ast_json
+                    .ok_or_else(|| anyhow::anyhow!("AST JSON is missing for `{path}`"))?
+                    .to_string();
                 Contract::write_to_file(output_path.as_path(), ast_json, overwrite)?;
             }
         }
@@ -353,7 +353,7 @@ impl Build {
         }
         standard_json
             .errors
-            .extend(self.messages.lock().expect("Sync").drain(..));
+            .extend(self.messages.lock_sync().drain(..));
         if standard_json.has_errors() {
             standard_json.contracts.clear();
         }

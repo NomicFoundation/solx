@@ -8,6 +8,9 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::RwLock;
 
+use solx_utils::SyncLock;
+use solx_utils::SyncRwLock;
+
 use self::value::Value;
 
 ///
@@ -46,9 +49,9 @@ where
         F: FnOnce() -> anyhow::Result<V>,
     {
         let waiter = Value::<V>::waiter();
-        let _lock = waiter.lock().expect("Sync");
+        let _lock = waiter.lock_sync();
         {
-            let mut inner = self.inner.write().expect("Sync");
+            let mut inner = self.inner.write_sync();
 
             if inner.contains_key(&key) {
                 return;
@@ -59,7 +62,7 @@ where
 
         let value = f();
 
-        let mut inner = self.inner.write().expect("Sync");
+        let mut inner = self.inner.write_sync();
         let entry_value = inner
             .get_mut(&key)
             .expect("The value is not being evaluated");
@@ -76,7 +79,7 @@ where
     /// Checks if the value for the key is present in the cache.
     ///
     pub fn contains(&self, key: &K) -> bool {
-        self.inner.read().expect("Sync").contains_key(key)
+        self.inner.read_sync().contains_key(key)
     }
 
     ///
@@ -119,6 +122,6 @@ where
         } else {
             return;
         };
-        let _lock = waiter.lock().expect("Sync");
+        let _lock = waiter.lock_sync();
     }
 }

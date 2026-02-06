@@ -92,10 +92,15 @@ impl solx_core::Solc for Solc {
         input_json.settings.optimizer.mode = None;
         input_json.settings.optimizer.size_fallback = None;
 
-        let input_string = serde_json::to_string(input_json).expect("Always valid");
-        let input_c_string = CString::new(input_string).expect("Always valid");
+        let input_string = serde_json::to_string(input_json)
+            .map_err(|error| anyhow::anyhow!("solc standard JSON input serialization: {error}"))?;
+        let input_c_string = CString::new(input_string)
+            .map_err(|error| anyhow::anyhow!("solc standard JSON input CString: {error}"))?;
 
-        let base_path = base_path.map(|base_path| CString::new(base_path).expect("Always valid"));
+        let base_path = base_path
+            .map(CString::new)
+            .transpose()
+            .map_err(|error| anyhow::anyhow!("solc base path CString: {error}"))?;
         let base_path = match base_path.as_ref() {
             Some(base_path) => base_path.as_ptr(),
             None => std::ptr::null(),
@@ -103,8 +108,11 @@ impl solx_core::Solc for Solc {
 
         let include_paths: Vec<CString> = include_paths
             .iter()
-            .map(|path| CString::new(path.as_str()).expect("Always valid"))
-            .collect();
+            .map(|path| {
+                CString::new(path.as_str())
+                    .map_err(|error| anyhow::anyhow!("solc include path CString: {error}"))
+            })
+            .collect::<anyhow::Result<Vec<CString>>>()?;
         let include_paths: Vec<*const ::libc::c_char> =
             include_paths.iter().map(|path| path.as_ptr()).collect();
         let include_paths_ptr = if include_paths.is_empty() {
@@ -119,11 +127,14 @@ impl solx_core::Solc for Solc {
                 path.pop();
             }
             if path.is_dir() {
+                let path_str = path.to_str().ok_or_else(|| {
+                    anyhow::anyhow!("solc allow path is not valid UTF-8: {path:?}")
+                })?;
                 if let Some(allow_paths) = allow_paths.as_mut() {
                     allow_paths.push(',');
-                    allow_paths.push_str(path.to_str().expect("Always valid"));
+                    allow_paths.push_str(path_str);
                 } else {
-                    allow_paths = Some(path.to_str().expect("Always valid").to_owned());
+                    allow_paths = Some(path_str.to_owned());
                 }
             }
         }
@@ -131,9 +142,13 @@ impl solx_core::Solc for Solc {
             .map(|allow_paths| {
                 allow_paths
                     .split(',')
-                    .map(|path| CString::new(path.to_owned()).expect("Always valid"))
-                    .collect::<Vec<CString>>()
+                    .map(|path| {
+                        CString::new(path.to_owned())
+                            .map_err(|error| anyhow::anyhow!("solc allow path CString: {error}"))
+                    })
+                    .collect::<anyhow::Result<Vec<CString>>>()
             })
+            .transpose()?
             .unwrap_or_default();
         let allow_paths: Vec<*const ::libc::c_char> =
             allow_paths.iter().map(|path| path.as_ptr()).collect();
@@ -162,6 +177,9 @@ impl solx_core::Solc for Solc {
             if !error_message.is_null() {
                 let error_message = CStr::from_ptr(error_message).to_string_lossy().into_owned();
                 anyhow::bail!("solc standard JSON I/O: {error_message}");
+            }
+            if output_pointer.is_null() {
+                anyhow::bail!("solc standard JSON I/O returned a null pointer");
             }
             CStr::from_ptr(output_pointer)
                 .to_string_lossy()
@@ -231,6 +249,10 @@ impl Solc {
     fn parse_version() -> solx_standard_json::Version {
         let long = unsafe {
             let output_pointer = solidity_version();
+            assert!(
+                !output_pointer.is_null(),
+                "solidity_version() returned a null pointer"
+            );
             CStr::from_ptr(output_pointer)
                 .to_string_lossy()
                 .into_owned()

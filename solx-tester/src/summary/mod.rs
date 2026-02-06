@@ -10,6 +10,7 @@ use std::sync::Mutex;
 
 use benchmark_adapters::mode::ModeInfo;
 use colored::Colorize;
+use solx_utils::SyncLock;
 
 use crate::test::case::input::output::Output;
 use crate::test::description::TestDescription;
@@ -208,7 +209,7 @@ impl Summary {
         calldata: Vec<u8>,
     ) {
         let element = Element::new(test, Outcome::failed(expected, found, calldata));
-        summary.lock().expect("Sync").push_element(element);
+        summary.lock_sync().push_element(element);
     }
 
     ///
@@ -219,7 +220,7 @@ impl Summary {
         S: ToString,
     {
         let element = Element::new(test, Outcome::invalid(error));
-        summary.lock().expect("Sync").push_element(element);
+        summary.lock_sync().push_element(element);
     }
 
     ///
@@ -227,7 +228,7 @@ impl Summary {
     ///
     pub fn ignored(summary: Arc<Mutex<Self>>, test: TestDescription) {
         let element = Element::new(test.with_erased_mode(), Outcome::ignored());
-        summary.lock().expect("Sync").push_element(element);
+        summary.lock_sync().push_element(element);
     }
 
     ///
@@ -236,7 +237,7 @@ impl Summary {
     fn passed(summary: Arc<Mutex<Self>>, test: TestDescription, passed_variant: PassedVariant) {
         let group = test.group.clone();
         let element = Element::new(test, Outcome::passed(group, passed_variant));
-        summary.lock().expect("Sync").push_element(element);
+        summary.lock_sync().push_element(element);
     }
 
     ///

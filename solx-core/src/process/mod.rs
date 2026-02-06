@@ -101,28 +101,28 @@ where
 
     let mut process = command
         .spawn()
-        .unwrap_or_else(|error| panic!("{executable:?} subprocess spawning error: {error:?}"));
+        .map_err(|error| anyhow::anyhow!("{executable:?} subprocess spawning error: {error:?}"))?;
 
     let stdin = process
         .stdin
         .as_mut()
-        .unwrap_or_else(|| panic!("{executable:?} subprocess stdin getting error"));
+        .ok_or_else(|| anyhow::anyhow!("{executable:?} subprocess stdin getting error"))?;
     let mut buffer = Vec::with_capacity(crate::r#const::DEFAULT_SERDE_BUFFER_SIZE);
-    ciborium::into_writer(input, &mut buffer).unwrap_or_else(|error| {
-        panic!("{executable:?} subprocess input serializing error: {error:?}")
-    });
+    ciborium::into_writer(input, &mut buffer).map_err(|error| {
+        anyhow::anyhow!("{executable:?} subprocess input serializing error: {error:?}")
+    })?;
     stdin
         .write_all(buffer.len().to_le_bytes().as_slice())
-        .unwrap_or_else(|error| {
-            panic!("{executable:?} subprocess length prefix writing error: {error:?}")
-        });
-    stdin
-        .write_all(buffer.as_slice())
-        .unwrap_or_else(|error| panic!("{executable:?} subprocess input writing error: {error:?}"));
+        .map_err(|error| {
+            anyhow::anyhow!("{executable:?} subprocess length prefix writing error: {error:?}")
+        })?;
+    stdin.write_all(buffer.as_slice()).map_err(|error| {
+        anyhow::anyhow!("{executable:?} subprocess input writing error: {error:?}")
+    })?;
 
-    let result = process.wait_with_output().unwrap_or_else(|error| {
-        panic!("{executable:?} subprocess output reading error: {error:?}")
-    });
+    let result = process.wait_with_output().map_err(|error| {
+        anyhow::anyhow!("{executable:?} subprocess output reading error: {error:?}")
+    })?;
 
     if result.status.code() != Some(solx_utils::EXIT_CODE_SUCCESS) {
         let message = format!(
@@ -140,16 +140,15 @@ where
         ))?;
     }
 
-    match ciborium::de::from_reader_with_recursion_limit(result.stdout.as_slice(), usize::MAX) {
-        Ok(output) => output,
-        Err(error) => {
-            panic!(
+    ciborium::de::from_reader_with_recursion_limit(result.stdout.as_slice(), usize::MAX).map_err(
+        |error| {
+            anyhow::anyhow!(
                 "{executable:?} subprocess stdout deserializing error: {error:?}\n{}\n{}",
                 String::from_utf8_lossy(result.stdout.as_slice()),
                 String::from_utf8_lossy(result.stderr.as_slice()),
-            );
-        }
-    }
+            )
+        },
+    )?
 }
 
 ///
@@ -171,6 +170,8 @@ pub unsafe extern "C" fn evm_stack_error_handler(spill_area_size: u64) {
     std::io::stdout()
         .write_all(buffer.as_slice())
         .unwrap_or_else(|error| panic!("Stdout stack-too-deep error writing error: {error}"));
+    std::io::Write::flush(&mut std::io::stdout())
+        .unwrap_or_else(|error| panic!("Stdout flush error: {error}"));
     unsafe { inkwell::support::shutdown_llvm() };
     std::process::exit(solx_utils::EXIT_CODE_SUCCESS);
 }

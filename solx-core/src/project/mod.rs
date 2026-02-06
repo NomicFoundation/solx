@@ -172,7 +172,7 @@ impl Project {
                             ContractEVMLegacyAssembly::from_contract(
                                 legacy_assembly.to_owned(),
                                 extra_metadata,
-                            ),
+                            )?,
                         )))
                     })
                 };
@@ -270,7 +270,15 @@ impl Project {
                 let mut name = solx_utils::ContractName::new(path.clone(), None);
 
                 let source_code = match source.try_resolve() {
-                    Ok(()) => source.take_content().expect("Always exists"),
+                    Ok(()) => match source.take_content() {
+                        Some(content) => content,
+                        None => {
+                            return (
+                                name,
+                                Err(anyhow::anyhow!("Source content is missing for `{path}`")),
+                            );
+                        }
+                    },
                     Err(error) => return (name, Err(error)),
                 };
 
@@ -380,7 +388,15 @@ impl Project {
                 let contract_name = solx_utils::ContractName::new(path.clone(), None);
 
                 let source_code = match source.try_resolve() {
-                    Ok(()) => source.take_content().expect("Always exists"),
+                    Ok(()) => match source.take_content() {
+                        Some(content) => content,
+                        None => {
+                            return (
+                                contract_name,
+                                Err(anyhow::anyhow!("Source content is missing for `{path}`")),
+                            );
+                        }
+                    },
                     Err(error) => return (contract_name, Err(error)),
                 };
 
