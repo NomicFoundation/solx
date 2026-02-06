@@ -31,3 +31,9 @@
 /debug*
 /*.json
 /*.txt
+
+# Local dev tooling
+CLAUDE.md
+.claude/
+.aider*
+logs/
