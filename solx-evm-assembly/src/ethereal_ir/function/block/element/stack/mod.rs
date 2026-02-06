@@ -72,10 +72,17 @@ impl Stack {
     }
 
     ///
-    /// Appends another stack on top of this one.
+    /// Appends another stack on top of this one, consuming its elements.
     ///
     pub fn append(&mut self, other: &mut Self) {
         self.elements.append(&mut other.elements);
+    }
+
+    ///
+    /// Extends this stack by cloning elements from another stack.
+    ///
+    pub fn extend_from(&mut self, other: &Self) {
+        self.elements.extend(other.elements.iter().cloned());
     }
 
     ///

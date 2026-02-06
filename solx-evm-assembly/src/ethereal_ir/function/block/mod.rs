@@ -51,12 +51,13 @@ impl Block {
 
         let tag: num::BigUint = match slice[cursor].name {
             InstructionName::Tag => {
-                let tag = slice[cursor]
+                let tag_value = slice[cursor]
                     .value
                     .as_deref()
-                    .ok_or_else(|| anyhow::anyhow!("Tag instruction missing value"))?
+                    .ok_or_else(|| anyhow::anyhow!("Tag instruction missing value"))?;
+                let tag = tag_value
                     .parse()
-                    .map_err(|error| anyhow::anyhow!("Invalid Tag value: {error}"))?;
+                    .map_err(|error| anyhow::anyhow!("Invalid Tag value `{tag_value}`: {error}"))?;
                 cursor += 1;
                 tag
             }

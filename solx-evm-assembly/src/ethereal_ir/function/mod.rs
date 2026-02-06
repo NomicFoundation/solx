@@ -1036,9 +1036,7 @@ impl Function {
                 .collect(),
         );
         block_element.stack_output = Stack::new_with_elements(output_data);
-        block_stack
-            .elements
-            .extend(block_element.stack_output.elements.iter().cloned());
+        block_stack.extend_from(&block_element.stack_output);
         block_element.stack = block_stack.clone();
         Ok(())
     }
