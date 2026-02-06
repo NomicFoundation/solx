@@ -77,8 +77,6 @@ jobs:
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
-          RUSTC_BOOTSTRAP: 1
-          RUSTFLAGS: '-C target-feature=+crt-static -C link-arg=-fuse-ld=lld'
         run: cargo build --release --bin solx
 
       - name: Build solx-dev and solx-tester (main)
@@ -108,8 +106,6 @@ jobs:
         env:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-          RUSTC_BOOTSTRAP: 1
-          RUSTFLAGS: '-C target-feature=+crt-static -C link-arg=-fuse-ld=lld'
         run: cargo build --release --bin solx
 
       - name: Build solx-dev and solx-tester (PR)
