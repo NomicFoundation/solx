@@ -2,10 +2,12 @@
 //! Output benchmark format.
 //!
 
+use clap::ValueEnum;
+
 ///
 /// Output benchmark format.
 ///
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, ValueEnum)]
 pub enum Format {
     /// Unstable JSON format, corresponds to the inner data model of benchmark converter.
     #[default]

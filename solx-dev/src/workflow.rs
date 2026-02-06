@@ -4,14 +4,18 @@
 
 use std::str::FromStr;
 
+use clap::ValueEnum;
+
 ///
 /// Describes sets of actions that `solx` tester is able to perform.
 ///
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, ValueEnum)]
 pub enum Workflow {
     /// Only build tests but not execute them.
+    #[value(name = "build")]
     BuildOnly,
     /// Build and execute tests.
+    #[value(name = "run")]
     BuildAndRun,
 }
 

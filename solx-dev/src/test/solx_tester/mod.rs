@@ -60,7 +60,9 @@ pub fn run(arguments: Arguments) -> anyhow::Result<()> {
         command.arg("--benchmark").arg(benchmark);
     }
     if let Some(benchmark_format) = &arguments.benchmark_format {
-        command.arg("--benchmark-format").arg(benchmark_format);
+        command
+            .arg("--benchmark-format")
+            .arg(benchmark_format.to_string());
     }
     if let Some(threads) = arguments.threads {
         command.arg("--threads").arg(threads.to_string());
@@ -69,7 +71,7 @@ pub fn run(arguments: Arguments) -> anyhow::Result<()> {
         command.arg("--solidity-compiler").arg(solidity_compiler);
     }
     if let Some(workflow) = &arguments.workflow {
-        command.arg("--workflow").arg(workflow);
+        command.arg("--workflow").arg(workflow.to_string());
     }
     if let Some(solc_bin_config_path) = &arguments.solc_bin_config_path {
         command

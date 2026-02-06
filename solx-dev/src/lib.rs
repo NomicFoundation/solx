@@ -11,6 +11,7 @@ pub(crate) mod llvm;
 pub(crate) mod solc;
 pub(crate) mod test;
 pub(crate) mod utils;
+pub mod workflow;
 
 pub use self::arguments::Arguments;
 pub use self::arguments::test::SolxTester as SolxTesterArguments;
@@ -26,3 +27,4 @@ pub use self::test::hardhat::config::Config as HardhatTestConfig;
 pub use self::test::hardhat::test as test_hardhat;
 pub use self::test::solx_tester::run as solx_tester;
 pub use self::utils::*;
+pub use self::workflow::Workflow;

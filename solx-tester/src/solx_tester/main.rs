@@ -9,9 +9,8 @@ use std::time::Instant;
 use clap::Parser;
 use colored::Colorize;
 
-use solx_benchmark_converter::OutputFormat;
 use solx_dev::SolxTesterArguments as Arguments;
-use solx_tester::Workflow;
+use solx_dev::Workflow;
 
 /// The rayon worker stack size.
 const RAYON_WORKER_STACK_SIZE: usize = 16 * 1024 * 1024;
@@ -83,10 +82,7 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
         arguments.group.clone(),
     );
 
-    let workflow = match arguments.workflow.as_deref() {
-        Some(s) => Workflow::from_str(s)?,
-        None => Workflow::BuildAndRun,
-    };
+    let workflow = arguments.workflow.unwrap_or(Workflow::BuildAndRun);
 
     let compiler_tester =
         solx_tester::SolxTester::new(summary.clone(), filters, debug_config.clone(), workflow)?;
@@ -112,10 +108,9 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
     if let Some(path) = arguments.benchmark {
         let benchmark = summary.benchmark()?;
         let comparisons = Vec::new();
-        let benchmark_format = match arguments.benchmark_format.as_deref() {
-            Some(s) => OutputFormat::from_str(s)?,
-            None => OutputFormat::Json,
-        };
+        let benchmark_format = arguments
+            .benchmark_format
+            .unwrap_or(solx_benchmark_converter::OutputFormat::Json);
         let output: solx_benchmark_converter::Output =
             (benchmark, comparisons, benchmark_format).try_into()?;
         output.write_to_file(path)?;
@@ -132,7 +127,10 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
 mod tests {
     use std::path::PathBuf;
 
+    use solx_benchmark_converter::OutputFormat;
+
     use solx_dev::SolxTesterArguments as Arguments;
+    use solx_dev::Workflow;
 
     #[test]
     fn test_manually() {
@@ -148,10 +146,10 @@ mod tests {
             path: vec!["tests/solidity/simple/default.sol".to_owned()],
             group: vec![],
             benchmark: None,
-            benchmark_format: Some("xlsx".to_owned()),
+            benchmark_format: Some(OutputFormat::Xlsx),
             threads: Some(1),
             solidity_compiler: Some(assert_cmd::cargo::cargo_bin!("SOLX").to_path_buf()),
-            workflow: Some("run".to_owned()),
+            workflow: Some(Workflow::BuildAndRun),
             solc_bin_config_path: Some(PathBuf::from(
                 "solx-compiler-downloader/solc-bin-default.json",
             )),

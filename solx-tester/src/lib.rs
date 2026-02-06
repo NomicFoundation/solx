@@ -15,7 +15,6 @@ pub(crate) mod summary;
 pub(crate) mod test;
 pub(crate) mod toolchain;
 pub(crate) mod utils;
-pub(crate) mod workflow;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -39,7 +38,7 @@ pub use crate::filters::Filters;
 pub use crate::revm::REVM;
 pub use crate::summary::Summary;
 pub use crate::toolchain::Toolchain;
-pub use crate::workflow::Workflow;
+pub use solx_dev::Workflow;
 
 /// The debug directory path.
 pub const DEBUG_DIRECTORY: &str = "./debug/";

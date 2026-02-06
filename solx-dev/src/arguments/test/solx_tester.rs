@@ -6,6 +6,10 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
+use solx_benchmark_converter::OutputFormat;
+
+use crate::workflow::Workflow;
+
 ///
 /// `solx-tester` arguments passed through to the solx-tester binary.
 ///
@@ -49,8 +53,8 @@ pub struct SolxTester {
     pub benchmark: Option<PathBuf>,
 
     /// Benchmark output format: `json` or `xlsx`.
-    #[arg(long = "benchmark-format")]
-    pub benchmark_format: Option<String>,
+    #[arg(long = "benchmark-format", value_enum, ignore_case = true)]
+    pub benchmark_format: Option<OutputFormat>,
 
     /// Number of threads for concurrent test execution.
     #[arg(short, long)]
@@ -61,8 +65,8 @@ pub struct SolxTester {
     pub solidity_compiler: Option<PathBuf>,
 
     /// Workflow: `build` (compile only) or `run` (compile and run).
-    #[arg(long)]
-    pub workflow: Option<String>,
+    #[arg(long, value_enum, ignore_case = true)]
+    pub workflow: Option<Workflow>,
 
     /// Path to the default `solc` executables download configuration file.
     #[arg(long)]
