@@ -1,0 +1,55 @@
+name: Sanitizer
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+
+jobs:
+  run-with-sanitizer:
+    if: contains(github.event.pull_request.labels.*.name, 'ci:sanitizer') && !github.event.pull_request.head.repo.fork
+    runs-on: solx-linux-amd64
+    container:
+      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
+      options: -m 110g
+    env:
+      TARGET: x86_64-unknown-linux-gnu
+      # For more information about the supported sanitizers, see:
+      # Rust: https://rustc-dev-guide.rust-lang.org/sanitizers.html
+      # LLVM: https://www.llvm.org/docs/CMake.html (LLVM_USE_SANITIZER option)
+      RUST_SANITIZER: 'address'
+      LLVM_SANITIZER: 'Address'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Checkout submodules
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --force --depth=1 --recursive --checkout
+
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: RelWithDebInfo
+          sanitizer: ${{ env.LLVM_SANITIZER }}
+          enable-assertions: 'true'
+          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
+          # llvm-projects: 'mlir lld'
+          llvm-projects: ''
+
+      - name: Building solc
+        uses: ./.github/actions/build-solc
+        with:
+          cmake-build-type: RelWithDebInfo
+          working-dir: 'solx-solidity'
+
+      - name: Run tests
+        uses: ./.github/actions/rust-unit-tests
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        with:
+          target: ${{ env.TARGET }}
+          sanitizer: ${{ env.RUST_SANITIZER }}

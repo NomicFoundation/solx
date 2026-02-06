@@ -1,20 +1,8 @@
 name: Code coverage
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - "**/*.mdx"
-      - "LICENSE"
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - "**/*.mdx"
-      - "LICENSE"
+    types: [labeled, synchronize]
 
 concurrency:
   group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.ref }}
@@ -31,6 +19,7 @@ permissions:
 jobs:
 
   coverage:
+    if: contains(github.event.pull_request.labels.*.name, 'ci:coverage') && !github.event.pull_request.head.repo.fork
     runs-on: solx-linux-amd64
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner:latest
@@ -125,7 +114,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Post PR coverage summary
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+        if: github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork
         uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2
         with:
           message-id: 'coverage-summary'
@@ -144,8 +133,9 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
-        if: (success() || failure()) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
+        if: (success() || failure())
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: 'lcov.info,llvm/codecov.lcov'
           slug: ${{ github.repository }}
+          fail_ci_if_error: false
