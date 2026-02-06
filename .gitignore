@@ -26,6 +26,7 @@
 
 # Temporary test projects
 /temp*
+/CONTROLLER.md
 
 # Debug and benchmark artifacts
 /debug*

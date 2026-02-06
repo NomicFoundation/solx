@@ -5,17 +5,15 @@
 #![allow(clippy::upper_case_acronyms)]
 #![allow(clippy::too_many_arguments)]
 
-pub(crate) mod arguments;
-
 use std::collections::HashSet;
 use std::str::FromStr;
 
 use clap::Parser;
 
-use self::arguments::Arguments;
-use self::arguments::llvm::LLVM as LLVMArguments;
-use self::arguments::solc::Solc as SolcArguments;
-use self::arguments::test::Test as TestArguments;
+use solx_dev::Arguments;
+use solx_dev::arguments::llvm::LLVM as LLVMArguments;
+use solx_dev::arguments::solc::Solc as SolcArguments;
+use solx_dev::arguments::test::Test as TestArguments;
 
 ///
 /// The entry.
@@ -124,6 +122,9 @@ fn main_inner() -> anyhow::Result<()> {
                 arguments.solidity_version,
                 arguments.project_filter,
             )?;
+        }
+        Arguments::Test(TestArguments::SolxTester(arguments)) => {
+            solx_dev::solx_tester(arguments)?;
         }
     }
 

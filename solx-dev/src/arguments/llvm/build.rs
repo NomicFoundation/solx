@@ -4,6 +4,11 @@
 
 use clap::Args;
 
+use crate::BuildType;
+use crate::LLVMCcacheVariant;
+use crate::LLVMProject;
+use crate::LLVMSanitizer;
+
 ///
 /// `solx` LLVM tool arguments.
 ///
@@ -17,8 +22,8 @@ pub struct Build {
     // Build Configuration
     //
     /// LLVM build type (`Debug`, `Release`, `RelWithDebInfo`, or `MinSizeRel`).
-    #[arg(long, default_value_t = solx_dev::BuildType::Release, help_heading = "Build Configuration")]
-    pub build_type: solx_dev::BuildType,
+    #[arg(long, default_value_t = BuildType::Release, help_heading = "Build Configuration")]
+    pub build_type: BuildType,
 
     /// Clean the build directory before building.
     #[arg(long)]
@@ -26,7 +31,7 @@ pub struct Build {
 
     /// LLVM projects to build LLVM with.
     #[arg(long, num_args = 1.., help_heading = "Build Configuration")]
-    pub llvm_projects: Vec<solx_dev::LLVMProject>,
+    pub llvm_projects: Vec<LLVMProject>,
 
     /// Extra arguments to pass to CMake.
     /// A leading backslash will be unescaped.
@@ -35,7 +40,7 @@ pub struct Build {
 
     /// Whether to use compiler cache (ccache) to speed-up builds.
     #[arg(long, help_heading = "Build Configuration")]
-    pub ccache_variant: Option<solx_dev::LLVMCcacheVariant>,
+    pub ccache_variant: Option<LLVMCcacheVariant>,
 
     //
     // Build Features
@@ -61,7 +66,7 @@ pub struct Build {
     //
     /// Build LLVM with sanitizer enabled (`Address`, `Memory`, `MemoryWithOrigins`, `Undefined`, `Thread`, `DataFlow`, or `Address;Undefined`).
     #[arg(long, help_heading = "Debugging & Sanitizers")]
-    pub sanitizer: Option<solx_dev::LLVMSanitizer>,
+    pub sanitizer: Option<LLVMSanitizer>,
 
     /// Whether to run LLVM unit tests under valgrind or not.
     #[arg(long, help_heading = "Debugging & Sanitizers")]

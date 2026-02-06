@@ -1,0 +1,268 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "**/*.mdx"
+      - "LICENSE"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# Cancel the workflow if any new changes pushed to a feature branch or the trunk
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash -ex {0}
+
+jobs:
+  integration:
+    runs-on: solx-linux-amd64
+    container:
+      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
+      options: -m 110g
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          submodules: true
+
+      - name: Checkout main
+        uses: actions/checkout@v5
+        continue-on-error: true
+        with:
+          ref: main
+          submodules: true
+          path: temp-solx-main
+
+      - name: Checkout submodules (PR)
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --init --force --recursive --depth 1 --checkout
+
+      - name: Checkout submodules (main)
+        working-directory: temp-solx-main
+        continue-on-error: true
+        run: |
+          git submodule update --init --force --recursive --depth 1 --checkout
+
+      - name: Build LLVM (main)
+        uses: ./.github/actions/build-llvm
+        continue-on-error: true
+        with:
+          build-type: Release
+          working-dir: 'temp-solx-main'
+          enable-assertions: 'false'
+          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
+          # llvm-projects: 'mlir lld'
+          llvm-projects: ''
+
+      - name: Build solc (main)
+        uses: ./.github/actions/build-solc
+        continue-on-error: true
+        with:
+          cmake-build-type: 'Release'
+          working-dir: 'temp-solx-main/solx-solidity'
+
+      - name: Build solx (main)
+        working-directory: temp-solx-main
+        continue-on-error: true
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
+        run: cargo build --release --bin solx
+
+      - name: Build solx-dev and solx-tester (main)
+        working-directory: temp-solx-main
+        continue-on-error: true
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
+        run: cargo build --release --bin solx-dev --bin solx-tester
+
+      - name: Build LLVM (PR)
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: Release
+          enable-assertions: 'false'
+          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
+          # llvm-projects: 'mlir lld'
+          llvm-projects: ''
+
+      - name: Build solc (PR)
+        uses: ./.github/actions/build-solc
+        with:
+          cmake-build-type: Release
+          working-dir: 'solx-solidity'
+
+      - name: Build solx (PR)
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        run: cargo build --release --bin solx
+
+      - name: Build solx-dev and solx-tester (PR)
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        run: cargo build --release --bin solx-dev --bin solx-tester
+
+      - name: Run solx-tester tests (PR)
+        id: solx_tester_tests
+        continue-on-error: true
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        run: ./target/release/solx-dev test solx-tester --solidity-compiler ./target/release/solx
+
+      - name: Run solx-tester benchmarks (main)
+        id: solx_tester_bench_main
+        continue-on-error: true
+        working-directory: temp-solx-main
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
+        run: |
+          ./target/release/solx-dev test solx-tester \
+            --solidity-compiler ./target/release/solx \
+            --via-ir --optimizer 'M^B3' \
+            --benchmark=../reference-benchmark.json
+
+      - name: Run solx-tester benchmarks (PR)
+        id: solx_tester_bench_pr
+        continue-on-error: true
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        run: |
+          ./target/release/solx-dev test solx-tester \
+            --solidity-compiler ./target/release/solx \
+            --via-ir --optimizer 'M^B3' \
+            --benchmark=candidate-benchmark.json
+
+      - name: Build benchmark converter
+        run: cargo build --release --bin solx-benchmark-converter
+
+      - name: Run benchmark converter
+        if: hashFiles('reference-benchmark.json') != '' && hashFiles('candidate-benchmark.json') != ''
+        run: |
+          cat reference-benchmark.json \
+            | jq '{data: ., project: "solx-tester", toolchain: "00.solx-main"}' > reference.json
+          cat candidate-benchmark.json \
+            | jq '{data: ., project: "solx-tester", toolchain: "01.solx"}' > candidate.json
+          ./target/release/solx-benchmark-converter \
+            --output-path solx-tester-report.xlsx reference.json candidate.json
+
+      - name: Upload solx-tester report
+        if: always() && hashFiles('solx-tester-report.xlsx') != ''
+        id: solx-tester-report
+        uses: actions/upload-artifact@v4
+        with:
+          name: solx-tester-report
+          path: solx-tester-report.xlsx
+
+      - name: Post solx-tester report comment
+        if: always() && steps.solx-tester-report.outcome == 'success'
+        uses: mshick/add-pr-comment@v2
+        with:
+          message-id: 'solx-tester-report'
+          message: |
+            📊 **solx Tester Report**
+
+            ➡️ [**Download**](${{ steps.solx-tester-report.outputs.artifact-url }})
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 25
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install Yarn
+        run: npm install -g yarn bun pnpm
+
+      # Some projects might use hardcoded ssh URLs: force git to use https instead.
+      - name: Git https settings
+        run: |
+          git config --global url."https://github.com/".insteadOf git@github.com:
+          git config --global url."https://".insteadOf git://
+
+      - name: Run Hardhat tests
+        id: hardhat_tests
+        continue-on-error: true
+        run: ./target/release/solx-dev test hardhat
+
+      - name: Upload Hardhat report
+        if: always() && hashFiles('temp-hardhat-reports/hardhat-report.xlsx') != ''
+        id: hardhat-report
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardhat-report
+          path: ./temp-hardhat-reports/hardhat-report.xlsx
+
+      - name: Post Hardhat report comment
+        if: always() && steps.hardhat-report.outcome == 'success'
+        uses: mshick/add-pr-comment@v2
+        with:
+          message-id: 'hardhat-report'
+          message: |
+            📊 **Hardhat Projects Report**
+
+            ➡️ [**Download**](${{ steps.hardhat-report.outputs.artifact-url }})
+
+      - name: Run Foundry tests
+        id: foundry_tests
+        continue-on-error: true
+        run: ./target/release/solx-dev test foundry
+
+      - name: Upload Foundry report
+        if: always() && hashFiles('temp-foundry-reports/foundry-report.xlsx') != ''
+        id: foundry-report
+        uses: actions/upload-artifact@v4
+        with:
+          name: foundry-report
+          path: ./temp-foundry-reports/foundry-report.xlsx
+
+      - name: Post Foundry report comment
+        if: always() && steps.foundry-report.outcome == 'success'
+        uses: mshick/add-pr-comment@v2
+        with:
+          message-id: 'foundry-report'
+          message: |
+            📊 **Foundry Projects Report**
+
+            ➡️ [**Download**](${{ steps.foundry-report.outputs.artifact-url }})
+
+      - name: Fail workflow if tests or benchmarks failed
+        if: always()
+        run: |
+          failures=()
+          if [ "${{ steps.solx_tester_tests.outcome }}" != "success" ]; then
+            failures+=("solx-tester tests")
+          fi
+          if [ "${{ steps.solx_tester_bench_pr.outcome }}" != "success" ]; then
+            failures+=("solx-tester benchmarks (PR)")
+          fi
+          if [ "${{ steps.hardhat_tests.outcome }}" != "success" ]; then
+            failures+=("hardhat tests")
+          fi
+          if [ "${{ steps.foundry_tests.outcome }}" != "success" ]; then
+            failures+=("foundry tests")
+          fi
+          if [ ${#failures[@]} -ne 0 ]; then
+            echo "Failures: ${failures[*]}"
+            exit 1
+          fi

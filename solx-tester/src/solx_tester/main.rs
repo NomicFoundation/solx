@@ -2,8 +2,6 @@
 //! `solx` tester executable.
 //!
 
-pub(crate) mod arguments;
-
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Instant;
@@ -11,7 +9,8 @@ use std::time::Instant;
 use clap::Parser;
 use colored::Colorize;
 
-use self::arguments::Arguments;
+use solx_dev::SolxTesterArguments as Arguments;
+use solx_dev::Workflow;
 
 /// The rayon worker stack size.
 const RAYON_WORKER_STACK_SIZE: usize = 16 * 1024 * 1024;
@@ -79,16 +78,14 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
     let filters = solx_tester::Filters::new(
         path_filters,
         arguments.via_ir,
-        arguments.optimizer,
-        arguments.group,
+        arguments.optimizer.clone(),
+        arguments.group.clone(),
     );
 
-    let compiler_tester = solx_tester::SolxTester::new(
-        summary.clone(),
-        filters,
-        debug_config.clone(),
-        arguments.workflow,
-    )?;
+    let workflow = arguments.workflow.unwrap_or(Workflow::BuildAndRun);
+
+    let compiler_tester =
+        solx_tester::SolxTester::new(summary.clone(), filters, debug_config.clone(), workflow)?;
 
     let run_time_start = Instant::now();
     println!(
@@ -111,8 +108,11 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
     if let Some(path) = arguments.benchmark {
         let benchmark = summary.benchmark()?;
         let comparisons = Vec::new();
+        let benchmark_format = arguments
+            .benchmark_format
+            .unwrap_or(solx_benchmark_converter::OutputFormat::Json);
         let output: solx_benchmark_converter::Output =
-            (benchmark, comparisons, arguments.benchmark_format).try_into()?;
+            (benchmark, comparisons, benchmark_format).try_into()?;
         output.write_to_file(path)?;
     }
 
@@ -127,7 +127,10 @@ fn main_inner(arguments: Arguments) -> anyhow::Result<()> {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::arguments::Arguments;
+    use solx_benchmark_converter::OutputFormat;
+
+    use solx_dev::SolxTesterArguments as Arguments;
+    use solx_dev::Workflow;
 
     #[test]
     fn test_manually() {
@@ -143,15 +146,16 @@ mod tests {
             path: vec!["tests/solidity/simple/default.sol".to_owned()],
             group: vec![],
             benchmark: None,
-            benchmark_format: solx_benchmark_converter::OutputFormat::Xlsx,
+            benchmark_format: Some(OutputFormat::Xlsx),
             threads: Some(1),
             solidity_compiler: Some(assert_cmd::cargo::cargo_bin!("SOLX").to_path_buf()),
-            workflow: solx_tester::Workflow::BuildAndRun,
+            workflow: Some(Workflow::BuildAndRun),
             solc_bin_config_path: Some(PathBuf::from(
                 "solx-compiler-downloader/solc-bin-default.json",
             )),
             llvm_verify_each: false,
             llvm_debug_logging: false,
+            binary: None,
         };
 
         crate::main_inner(arguments).expect("Manual testing failed");
