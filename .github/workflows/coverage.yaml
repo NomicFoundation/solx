@@ -9,6 +9,12 @@ on:
       - "**/*.md"
       - "**/*.mdx"
       - "LICENSE"
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "**/*.mdx"
+      - "LICENSE"
 
 concurrency:
   group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.ref }}
@@ -20,6 +26,7 @@ defaults:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
 
@@ -105,6 +112,30 @@ jobs:
           llvm-cov export --format=lcov -instr-profile=${PROFDATA_FILE} \
             $(which solx) > ./llvm/${LCOV_FILE}
 
+      - name: Coverage summary
+        if: github.event_name == 'pull_request'
+        id: coverage-summary
+        run: |
+          llvm-cov report -instr-profile=${PROFDATA_FILE} $(which solx) > coverage-summary.txt
+          cat coverage-summary.txt >> "${GITHUB_STEP_SUMMARY}"
+          {
+            echo "summary<<EOF"
+            cat coverage-summary.txt
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Post PR coverage summary
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false
+        uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2
+        with:
+          message-id: 'coverage-summary'
+          message: |
+            📊 **Coverage summary**
+
+            ```
+            ${{ steps.coverage-summary.outputs.summary }}
+            ```
+
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -113,7 +144,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
-        if: (success() || failure())
+        if: (success() || failure()) && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: 'lcov.info,llvm/codecov.lcov'
