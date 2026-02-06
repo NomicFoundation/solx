@@ -106,11 +106,20 @@ jobs:
         if: github.event_name == 'pull_request'
         id: coverage-summary
         run: |
-          llvm-cov report -instr-profile=${PROFDATA_FILE} $(which solx) > coverage-summary.txt
+          llvm-cov report -instr-profile=${PROFDATA_FILE} $(which solx) \
+            --ignore-filename-regex='/(solx-llvm|target-llvm|solx-solidity|\.cargo)/' \
+            > coverage-summary.txt
           cat coverage-summary.txt >> "${GITHUB_STEP_SUMMARY}"
+          LINES=$(wc -l < coverage-summary.txt)
           {
             echo "summary<<EOF"
-            cat coverage-summary.txt
+            if [ "$LINES" -le 10 ]; then
+              cat coverage-summary.txt
+            else
+              head -n 3 coverage-summary.txt
+              echo "..."
+              tail -n 5 coverage-summary.txt
+            fi
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
