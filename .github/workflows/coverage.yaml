@@ -29,6 +29,7 @@ jobs:
       PROFDATA_FILE: solx.profdata
       LCOV_FILE: codecov.lcov
       OUTPUT_HTML_DIR: COVERAGE
+      COVERAGE_IGNORE_REGEX: '/(solx-llvm|target-llvm|solx-solidity|\.cargo|cargo/registry)/'
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -97,9 +98,12 @@ jobs:
         run: |
           llvm-cov show --show-directory-coverage \
             --format=html --output-dir=${OUTPUT_HTML_DIR} \
+            --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
             -instr-profile=${PROFDATA_FILE} $(which solx)
           mkdir -p llvm
-          llvm-cov export --format=lcov -instr-profile=${PROFDATA_FILE} \
+          llvm-cov export --format=lcov \
+            --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
+            -instr-profile=${PROFDATA_FILE} \
             $(which solx) > ./llvm/${LCOV_FILE}
 
       - name: Coverage summary
@@ -107,20 +111,58 @@ jobs:
         id: coverage-summary
         run: |
           llvm-cov report -instr-profile=${PROFDATA_FILE} $(which solx) \
-            --ignore-filename-regex='/(solx-llvm|target-llvm|solx-solidity|\.cargo)/' \
-            > coverage-summary.txt
-          cat coverage-summary.txt >> "${GITHUB_STEP_SUMMARY}"
-          LINES=$(wc -l < coverage-summary.txt)
+            --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
+            > coverage-report.txt
+
+          # Parse llvm-cov report into per-crate markdown table
+          awk '
+          /^---/ || /^Filename/ || /^$/ { next }
+          /^TOTAL/ {
+            total_lines = $(NF-5); total_missed = $(NF-4)
+            total_funcs = $(NF-8); total_missed_funcs = $(NF-7)
+            next
+          }
+          NF > 3 {
+            file = $1
+            n = split(file, parts, "/")
+            crate = "other"
+            for (i = 1; i <= n-1; i++) {
+              if (parts[i] ~ /^solx/ && parts[i+1] == "src") {
+                crate = parts[i]; break
+              }
+            }
+            lines[crate] += $(NF-5)
+            missed[crate] += $(NF-4)
+            funcs[crate] += $(NF-8)
+            missed_f[crate] += $(NF-7)
+          }
+          END {
+            for (c in lines) {
+              lp = (lines[c] > 0) ? (lines[c] - missed[c]) / lines[c] * 100 : 0
+              fp = (funcs[c] > 0) ? (funcs[c] - missed_f[c]) / funcs[c] * 100 : 0
+              le = (lp >= 80) ? "🟢" : (lp >= 50) ? "🟡" : "🔴"
+              fe = (fp >= 80) ? "🟢" : (fp >= 50) ? "🟡" : "🔴"
+              printf "| %s | %s %.1f%% | %s %.1f%% |\n", c, le, lp, fe, fp
+            }
+            lp = (total_lines > 0) ? (total_lines - total_missed) / total_lines * 100 : 0
+            fp = (total_funcs > 0) ? (total_funcs - total_missed_funcs) / total_funcs * 100 : 0
+            le = (lp >= 80) ? "🟢" : (lp >= 50) ? "🟡" : "🔴"
+            fe = (fp >= 80) ? "🟢" : (fp >= 50) ? "🟡" : "🔴"
+            printf "ZTOTAL| **Total** | **%s %.1f%%** | **%s %.1f%%** |\n", le, lp, fe, fp
+          }' coverage-report.txt > coverage-rows.txt
+
           {
-            echo "summary<<EOF"
-            if [ "$LINES" -le 10 ]; then
-              cat coverage-summary.txt
-            else
-              head -n 3 coverage-summary.txt
-              echo "..."
-              tail -n 5 coverage-summary.txt
-            fi
-            echo "EOF"
+            echo "| Crate | Line Coverage | Function Coverage |"
+            echo "|:------|:------------:|:-----------------:|"
+            grep -v '^ZTOTAL' coverage-rows.txt | sort
+            sed -n 's/^ZTOTAL//p' coverage-rows.txt
+          } > coverage-summary.md
+
+          cat coverage-summary.md >> "${GITHUB_STEP_SUMMARY}"
+          {
+            echo "summary<<COVERAGE_EOF"
+            cat coverage-summary.md
+            echo "COVERAGE_EOF"
           } >> "${GITHUB_OUTPUT}"
 
       - name: Post PR coverage summary
@@ -129,11 +171,9 @@ jobs:
         with:
           message-id: 'coverage-summary'
           message: |
-            📊 **Coverage summary**
+            ### Coverage Summary
 
-            ```
             ${{ steps.coverage-summary.outputs.summary }}
-            ```
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
