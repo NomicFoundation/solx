@@ -125,6 +125,53 @@ jobs:
         with:
           target: ${{ matrix.target || '' }}
 
+  # Run tests with address sanitizer (label-gated)
+  sanitizer:
+    if: contains(github.event.pull_request.labels.*.name, 'ci:sanitizer') && !github.event.pull_request.head.repo.fork
+    runs-on: solx-linux-amd64
+    container:
+      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
+      options: -m 110g
+    env:
+      TARGET: x86_64-unknown-linux-gnu
+      RUST_SANITIZER: 'address'
+      LLVM_SANITIZER: 'Address'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - name: Checkout submodules
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --force --depth=1 --recursive --checkout
+
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: RelWithDebInfo
+          sanitizer: ${{ env.LLVM_SANITIZER }}
+          enable-assertions: 'true'
+          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
+          # llvm-projects: 'mlir lld'
+          llvm-projects: ''
+
+      - name: Building solc
+        uses: ./.github/actions/build-solc
+        with:
+          cmake-build-type: RelWithDebInfo
+          working-dir: 'solx-solidity'
+
+      - name: Run tests
+        uses: ./.github/actions/rust-unit-tests
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        with:
+          target: ${{ env.TARGET }}
+          sanitizer: ${{ env.RUST_SANITIZER }}
+
   # Special job that allows some of the jobs to be skipped or failed
   # requiring others to be successful
   pr-checks:
@@ -133,8 +180,10 @@ jobs:
     needs:
       - cargo-checks
       - build-and-test
+      - sanitizer
     steps:
       - name: Decide on PR checks
         uses: re-actors/alls-green@release/v1
         with:
           jobs: ${{ toJSON(needs) }}
+          allowed-skips: sanitizer

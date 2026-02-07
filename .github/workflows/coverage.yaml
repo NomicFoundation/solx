@@ -107,7 +107,6 @@ jobs:
             $(which solx) > ./llvm/${LCOV_FILE}
 
       - name: Coverage summary
-        if: github.event_name == 'pull_request'
         id: coverage-summary
         run: |
           llvm-cov report -instr-profile=${PROFDATA_FILE} $(which solx) \
@@ -166,7 +165,6 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - name: Post PR coverage summary
-        if: github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork
         uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2
         with:
           message-id: 'coverage-summary'
