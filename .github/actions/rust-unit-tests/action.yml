@@ -77,15 +77,35 @@ runs:
         RUSTC_BOOTSTRAP: 1
       run: |
         if [ '${{ inputs.sanitizer }}' != '' ]; then
-          rustup component add rust-src --toolchain "$(rustc --version | cut -d ' ' -f2)-${TARGET}"
-          export RUSTFLAGS="${RUSTFLAGS} -Z sanitizer=${{ inputs.sanitizer }}"
+          rustup component add rust-src --toolchain "$(rustc --version | cut -d ' ' -f2)-${{ inputs.target }}"
           export ASAN_SYMBOLIZER_PATH=$(which llvm-symbolizer)
         fi
-        # Use LLD on Windows to properly link with libstdc++.
+        # Use LLD on Windows/Linux to properly link with libstdc++.
+        # Skip when using sanitizers — clang needs its native linker for ASan runtime.
         if [[ ${RUNNER_OS} = Windows ]] || [[ ${RUNNER_OS} = Linux ]]; then
-          export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
+          if [ '${{ inputs.sanitizer }}' = '' ]; then
+            export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
+          fi
         fi
-        cargo build && cargo test ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
+        # Set sanitizer flags per-target to avoid breaking proc-macro builds.
+        # -Z sanitizer=address instruments Rust code AND links Rust's bundled
+        # ASan runtime (librustc-stable_rt.asan.a). Do NOT also pass
+        # -C link-arg=-fsanitize=address — that causes clang to inject a second
+        # ASan runtime (libclang_rt.asan), producing duplicate symbol errors.
+        if [ '${{ inputs.sanitizer }}' != '' ]; then
+          if [ '${{ inputs.target }}' = '' ]; then
+            echo "::error::Sanitizer requires an explicit target"
+            exit 1
+          fi
+          TARGET_UPPER=$(echo "${{ inputs.target }}" | tr '[:lower:]-' '[:upper:]_')
+          SAN='${{ inputs.sanitizer }}'
+          export "CARGO_TARGET_${TARGET_UPPER}_RUSTFLAGS=${RUSTFLAGS} -Z sanitizer=${SAN}"
+          export "CARGO_TARGET_${TARGET_UPPER}_LINKER=clang"
+        fi
+        if [ '${{ inputs.target }}' != '' ]; then
+          export CARGO_BIN_EXE_SOLX="./target/${{ inputs.target }}/debug/solx"
+        fi
+        cargo build ${{ steps.build-target.outputs.target }} && cargo test ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a debug-results.json | grep 'failed'
         if [ $? -eq 0 ]; then
           cargo2junit < debug-results.json > "debug-${{ inputs.results-xml }}"
