@@ -78,12 +78,17 @@ runs:
       run: |
         if [ '${{ inputs.sanitizer }}' != '' ]; then
           rustup component add rust-src --toolchain "$(rustc --version | cut -d ' ' -f2)-${TARGET}"
-          export RUSTFLAGS="${RUSTFLAGS} -Z sanitizer=${{ inputs.sanitizer }}"
           export ASAN_SYMBOLIZER_PATH=$(which llvm-symbolizer)
         fi
-        # Use LLD on Windows to properly link with libstdc++.
+        # Use LLD on Windows/Linux to properly link with libstdc++.
         if [[ ${RUNNER_OS} = Windows ]] || [[ ${RUNNER_OS} = Linux ]]; then
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
+        fi
+        # Set sanitizer flags per-target to avoid breaking proc-macro builds.
+        # Global RUSTFLAGS with -Zsanitizer breaks proc-macros (dynamic libraries).
+        if [ '${{ inputs.sanitizer }}' != '' ]; then
+          TARGET_UPPER=$(echo "${{ inputs.target }}" | tr '[:lower:]-' '[:upper:]_')
+          export "CARGO_TARGET_${TARGET_UPPER}_RUSTFLAGS=${RUSTFLAGS} -Z sanitizer=${{ inputs.sanitizer }}"
         fi
         cargo build && cargo test ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a debug-results.json | grep 'failed'
