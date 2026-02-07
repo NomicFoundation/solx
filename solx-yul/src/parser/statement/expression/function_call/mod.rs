@@ -898,7 +898,12 @@ impl FunctionCall {
 
         let mut values = Vec::with_capacity(self.arguments.len());
         for argument in self.arguments.into_iter().rev() {
-            let value = argument.into_llvm(context)?.expect("Always exists").value;
+            let value = argument
+                .into_llvm(context)?
+                .ok_or_else(|| {
+                    anyhow::anyhow!("{location} Function `{name}` argument yielded no value")
+                })?
+                .value;
             values.push(value);
         }
         values.reverse();
@@ -931,9 +936,17 @@ impl FunctionCall {
         &mut self,
         context: &mut solx_codegen_evm::Context<'ctx>,
     ) -> anyhow::Result<[inkwell::values::BasicValueEnum<'ctx>; N]> {
+        let location = self.location;
         let mut arguments = Vec::with_capacity(N);
         for expression in self.arguments.drain(0..N).rev() {
-            arguments.push(expression.into_llvm(context)?.expect("Always exists").value);
+            arguments.push(
+                expression
+                    .into_llvm(context)?
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("{location} Function argument yielded no value")
+                    })?
+                    .value,
+            );
         }
         arguments.reverse();
 
@@ -947,9 +960,14 @@ impl FunctionCall {
         &mut self,
         context: &mut solx_codegen_evm::Context<'ctx>,
     ) -> anyhow::Result<[solx_codegen_evm::Value<'ctx>; N]> {
+        let location = self.location;
         let mut arguments = Vec::with_capacity(N);
         for expression in self.arguments.drain(0..N).rev() {
-            arguments.push(expression.into_llvm(context)?.expect("Always exists"));
+            arguments.push(
+                expression.into_llvm(context)?.ok_or_else(|| {
+                    anyhow::anyhow!("{location} Function argument yielded no value")
+                })?,
+            );
         }
         arguments.reverse();
 

@@ -19,6 +19,7 @@ pub(crate) mod libraries;
 pub(crate) mod llvm_ir;
 pub(crate) mod logging;
 pub(crate) mod metadata_hash_type;
+pub(crate) mod sync_lock;
 pub(crate) mod target;
 
 pub use self::base::*;
@@ -47,4 +48,6 @@ pub use self::libraries::Libraries;
 pub use self::llvm_ir::*;
 pub use self::logging::*;
 pub use self::metadata_hash_type::MetadataHashType;
+pub use self::sync_lock::SyncLock;
+pub use self::sync_lock::SyncRwLock;
 pub use self::target::Target;

@@ -213,7 +213,10 @@ impl Switch {
 
         context.set_basic_block(current_block);
         context.build_switch(
-            scrutinee.expect("Always exists").to_llvm().into_int_value(),
+            scrutinee
+                .ok_or_else(|| anyhow::anyhow!("Switch expression yielded no value"))?
+                .to_llvm()
+                .into_int_value(),
             default_block,
             branches.as_slice(),
         )?;

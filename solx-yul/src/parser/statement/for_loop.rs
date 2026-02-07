@@ -128,7 +128,7 @@ impl ForLoop {
         let condition = self
             .condition
             .into_llvm(context)?
-            .expect("Always exists")
+            .ok_or_else(|| anyhow::anyhow!("For-loop condition expression yielded no value"))?
             .to_llvm()
             .into_int_value();
         let condition = context.build_bit_cast_instruction(

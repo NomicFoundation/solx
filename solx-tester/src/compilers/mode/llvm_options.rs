@@ -4,6 +4,8 @@
 
 use std::sync::Mutex;
 
+use solx_utils::SyncLock;
+
 ///
 /// `solx` tester LLVM options.
 ///
@@ -52,7 +54,7 @@ impl LLVMOptions {
     /// Whether the LLVM `verify each` option is enabled.
     ///
     pub fn is_verify_each_enabled(&self) -> bool {
-        let _guard = LLVM_OPTIONS_LOCK.lock().expect("Sync");
+        let _guard = LLVM_OPTIONS_LOCK.lock_sync();
 
         self.is_verify_each_enabled
     }
@@ -61,7 +63,7 @@ impl LLVMOptions {
     /// Whether the LLVM `debug logging` option is enabled.
     ///
     pub fn is_debug_logging_enabled(&self) -> bool {
-        let _guard = LLVM_OPTIONS_LOCK.lock().expect("Sync");
+        let _guard = LLVM_OPTIONS_LOCK.lock_sync();
 
         self.is_debug_logging_enabled
     }
