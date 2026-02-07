@@ -3,7 +3,6 @@ authors = [
     "Oleksandr Zarudnyi",
 ]
 language = "en"
-multilingual = false
 src = "src"
 title = "solx Compiler Documentation"
 

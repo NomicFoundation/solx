@@ -47,11 +47,11 @@ solx Contract.sol --bin --abi -o ./build
 
 ## Architecture
 
-For details on the compilation pipeline and components, see [the architecture documentation](https://nomicfoundation.github.io/solx/latest/04-architecture.html).
+For details on the compilation pipeline and components, see [the architecture documentation](https://nomicfoundation.github.io/solx/latest/internals/01-architecture.html).
 
 ## Testing
 
-For details on running unit tests, integration tests, and project tests, see [the testing documentation](https://nomicfoundation.github.io/solx/latest/05-testing.html).
+For details on running unit tests, integration tests, and project tests, see [the testing documentation](https://nomicfoundation.github.io/solx/latest/developer-guide/01-testing.html).
 
 ## Troubleshooting
 

@@ -140,6 +140,12 @@ where
         ))?;
     }
 
+    if !result.stderr.is_empty() {
+        let stderr = std::io::stderr();
+        let mut handle = stderr.lock();
+        let _ = handle.write_all(result.stderr.as_slice());
+    }
+
     ciborium::de::from_reader_with_recursion_limit(result.stdout.as_slice(), usize::MAX).map_err(
         |error| {
             anyhow::anyhow!(

@@ -32,7 +32,7 @@ The general steps to have a sanitizer enabled build include:
 1. Build the LLVM framework with the required sanitizer enabled.
 2. Build **solx** with the LLVM build from the previous step.
 
-Please, follow the common [installation instructions](../01-installation.md#building-from-source)
+Please, follow the common [installation instructions](../user-guide/01-installation.md#building-from-source)
 until the `solx-llvm build` step.
 
 This guide assumes the build with `AddressSanitizer` enabled.
