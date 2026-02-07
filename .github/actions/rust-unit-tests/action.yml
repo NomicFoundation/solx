@@ -77,7 +77,7 @@ runs:
         RUSTC_BOOTSTRAP: 1
       run: |
         if [ '${{ inputs.sanitizer }}' != '' ]; then
-          rustup component add rust-src --toolchain "$(rustc --version | cut -d ' ' -f2)-${TARGET}"
+          rustup component add rust-src --toolchain "$(rustc --version | cut -d ' ' -f2)-${{ inputs.target }}"
           export ASAN_SYMBOLIZER_PATH=$(which llvm-symbolizer)
         fi
         # Use LLD on Windows/Linux to properly link with libstdc++.
