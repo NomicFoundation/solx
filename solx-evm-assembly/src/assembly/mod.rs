@@ -7,6 +7,7 @@ pub mod instruction;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::sync::OnceLock;
 
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
@@ -42,6 +43,10 @@ pub struct Assembly {
     /// The EVM legacy assembly extra metadata.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extra_metadata: Option<ExtraMetadata>,
+
+    /// Cached content hash, computed on first access.
+    #[serde(skip)]
+    cached_hash: OnceLock<u64>,
 }
 
 impl Assembly {
@@ -152,12 +157,20 @@ impl Assembly {
     }
 
     ///
-    /// Returns the `blake3` hash of the assembly representation.
+    /// Returns a content hash of the assembly via CBOR serialization.
+    ///
+    /// Only content fields (`auxdata`, `code`, `data`) participate in the hash.
+    /// `full_path` and `extra_metadata` are excluded because they are set by solx
+    /// after dependency resolution, which is the sole consumer of this hash.
     ///
     pub fn hash(&self) -> u64 {
-        let mut preimage: Vec<u8> = Vec::with_capacity(Self::DEFAULT_SERDE_BUFFER_SIZE);
-        ciborium::into_writer(&self, &mut preimage).expect("Always valid");
-        XxHash3_64::oneshot(preimage.as_slice())
+        *self.cached_hash.get_or_init(|| {
+            let hashable = (&self.auxdata, &self.code, &self.data);
+            let mut preimage: Vec<u8> = Vec::with_capacity(Self::DEFAULT_SERDE_BUFFER_SIZE);
+            ciborium::into_writer(&hashable, &mut preimage)
+                .expect("Assembly serialization is infallible");
+            XxHash3_64::oneshot(preimage.as_slice())
+        })
     }
 
     ///

@@ -22,7 +22,7 @@ where
             value.to_ascii_uppercase().as_str(),
             inkwell::types::StringRadix::Hexadecimal,
         )
-        .expect("Always valid")
+        .ok_or_else(|| anyhow::anyhow!("Invalid hexadecimal PUSH value: {value}"))?
         .as_basic_value_enum();
     Ok(result)
 }
@@ -40,7 +40,7 @@ where
     let result = context
         .field_type()
         .const_int_from_string(value.as_str(), inkwell::types::StringRadix::Decimal)
-        .expect("Always valid");
+        .ok_or_else(|| anyhow::anyhow!("Invalid decimal PUSH_Tag value: {value}"))?;
     Ok(result.as_basic_value_enum())
 }
 
