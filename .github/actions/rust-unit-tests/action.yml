@@ -88,8 +88,10 @@ runs:
           fi
         fi
         # Set sanitizer flags per-target to avoid breaking proc-macro builds.
-        # Use clang as linker so it provides the ASan runtime for LLVM's
-        # ASan-instrumented .a files (stable toolchain doesn't ship it).
+        # -Z sanitizer=address instruments Rust code AND links Rust's bundled
+        # ASan runtime (librustc-stable_rt.asan.a). Do NOT also pass
+        # -C link-arg=-fsanitize=address — that causes clang to inject a second
+        # ASan runtime (libclang_rt.asan), producing duplicate symbol errors.
         if [ '${{ inputs.sanitizer }}' != '' ]; then
           if [ '${{ inputs.target }}' = '' ]; then
             echo "::error::Sanitizer requires an explicit target"
@@ -97,7 +99,7 @@ runs:
           fi
           TARGET_UPPER=$(echo "${{ inputs.target }}" | tr '[:lower:]-' '[:upper:]_')
           SAN='${{ inputs.sanitizer }}'
-          export "CARGO_TARGET_${TARGET_UPPER}_RUSTFLAGS=${RUSTFLAGS} -Z sanitizer=${SAN} -C link-arg=-fsanitize=${SAN}"
+          export "CARGO_TARGET_${TARGET_UPPER}_RUSTFLAGS=${RUSTFLAGS} -Z sanitizer=${SAN}"
           export "CARGO_TARGET_${TARGET_UPPER}_LINKER=clang"
         fi
         cargo build ${{ steps.build-target.outputs.target }} && cargo test ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
