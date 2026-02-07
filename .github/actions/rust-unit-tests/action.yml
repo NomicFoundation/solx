@@ -81,8 +81,11 @@ runs:
           export ASAN_SYMBOLIZER_PATH=$(which llvm-symbolizer)
         fi
         # Use LLD on Windows/Linux to properly link with libstdc++.
+        # Skip when using sanitizers — clang needs its native linker for ASan runtime.
         if [[ ${RUNNER_OS} = Windows ]] || [[ ${RUNNER_OS} = Linux ]]; then
-          export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
+          if [ '${{ inputs.sanitizer }}' = '' ]; then
+            export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
+          fi
         fi
         # Set sanitizer flags per-target to avoid breaking proc-macro builds.
         # Use clang as linker so it provides the ASan runtime for LLVM's
