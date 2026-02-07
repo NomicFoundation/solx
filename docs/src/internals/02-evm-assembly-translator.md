@@ -107,7 +107,7 @@ Block "process" reached with stack [T_10, V_z]:  → instance 0 (same hash, reus
 
 ### Stack Hash Algorithm
 
-```rust
+```rust,ignore
 fn hash(&self) -> u64 {
     let mut hasher = XxHash3_64::default();
     for element in self.elements.iter() {
