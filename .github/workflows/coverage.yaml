@@ -124,12 +124,13 @@ jobs:
           NF > 3 {
             file = $1
             n = split(file, parts, "/")
-            crate = "other"
+            crate = ""
             for (i = 1; i <= n-1; i++) {
               if (parts[i] ~ /^solx/ && parts[i+1] == "src") {
                 crate = parts[i]; break
               }
             }
+            if (crate == "") next
             lines[crate] += $(NF-5)
             missed[crate] += $(NF-4)
             funcs[crate] += $(NF-8)
@@ -172,6 +173,8 @@ jobs:
             ### Coverage Summary
 
             ${{ steps.coverage-summary.outputs.summary }}
+
+            [Codecov Report](https://app.codecov.io/gh/${{ github.repository }}/pull/${{ github.event.pull_request.number }}) | [HTML Report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts) | [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
