@@ -259,8 +259,9 @@ impl Function {
                 ..
             } => {
                 let tag: u64 = tag
-                    .parse()
-                    .map_err(|error| anyhow::anyhow!("Invalid PUSH_Tag value `{tag}`: {error}"))?;
+                    .parse::<u128>()
+                    .map_err(|error| anyhow::anyhow!("Invalid PUSH_Tag value `{tag}`: {error}"))?
+                    as u64;
                 (vec![Element::Tag(tag)], None)
             }
             instruction @ Instruction {
