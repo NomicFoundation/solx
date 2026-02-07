@@ -12,14 +12,14 @@ pub struct Key {
     /// The block code type.
     pub code_segment: solx_utils::CodeSegment,
     /// The block tag.
-    pub tag: num::BigUint,
+    pub tag: u64,
 }
 
 impl Key {
     ///
     /// A shortcut constructor.
     ///
-    pub fn new(code_segment: solx_utils::CodeSegment, tag: num::BigUint) -> Self {
+    pub fn new(code_segment: solx_utils::CodeSegment, tag: u64) -> Self {
         Self { code_segment, tag }
     }
 }

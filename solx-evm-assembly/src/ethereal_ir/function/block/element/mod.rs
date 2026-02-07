@@ -404,7 +404,7 @@ impl solx_codegen_evm::WriteLLVM for Element {
             InstructionName::POP => crate::assembly::instruction::stack::pop(context).map(|_| None),
 
             InstructionName::Tag => {
-                let destination: num::BigUint = self
+                let destination: u64 = self
                     .instruction
                     .value
                     .expect("Always exists")
