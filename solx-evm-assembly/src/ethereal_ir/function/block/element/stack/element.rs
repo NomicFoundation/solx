@@ -12,7 +12,7 @@ pub enum Element {
     /// The compile-time value.
     Constant(num::BigUint),
     /// The compile-time destination tag.
-    Tag(num::BigUint),
+    Tag(u64),
     /// The compile-time path.
     Path(String),
     /// The compile-time hexadecimal data chunk.

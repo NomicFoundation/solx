@@ -57,7 +57,7 @@ impl Stack {
         let mut hasher = XxHash3_64::default();
         for element in self.elements.iter() {
             match element {
-                Element::Tag(tag) => hasher.write(tag.to_bytes_le().as_slice()),
+                Element::Tag(tag) => hasher.write(&tag.to_le_bytes()),
                 _ => hasher.write_u8(0),
             }
         }
@@ -97,7 +97,7 @@ impl Stack {
     ///
     /// Pops the tag from the top.
     ///
-    pub fn pop_tag(&mut self) -> anyhow::Result<num::BigUint> {
+    pub fn pop_tag(&mut self) -> anyhow::Result<u64> {
         match self.elements.pop() {
             Some(Element::Tag(tag)) => Ok(tag),
             Some(element) => anyhow::bail!("Expected tag, found {element}"),

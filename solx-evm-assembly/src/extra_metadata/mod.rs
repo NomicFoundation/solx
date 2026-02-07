@@ -23,14 +23,14 @@ impl ExtraMetadata {
     pub fn get(
         &self,
         code_segment: solx_utils::CodeSegment,
-        tag: &num::BigUint,
+        tag: &u64,
     ) -> Option<&DefinedFunction> {
         for function in self.defined_functions.iter() {
             match code_segment {
                 solx_utils::CodeSegment::Deploy => {
                     if function
                         .creation_tag
-                        .map(|creation_tag| &num::BigUint::from(creation_tag) == tag)
+                        .map(|creation_tag| (creation_tag as u64) == *tag)
                         .unwrap_or_default()
                     {
                         return Some(function);
@@ -39,7 +39,7 @@ impl ExtraMetadata {
                 solx_utils::CodeSegment::Runtime => {
                     if function
                         .runtime_tag
-                        .map(|runtime_tag| &num::BigUint::from(runtime_tag) == tag)
+                        .map(|runtime_tag| (runtime_tag as u64) == *tag)
                         .unwrap_or_default()
                     {
                         return Some(function);

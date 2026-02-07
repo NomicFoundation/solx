@@ -10,7 +10,7 @@ use solx_codegen_evm::IEVMLAFunction;
 ///
 pub fn unconditional<'ctx, C>(
     context: &mut C,
-    destination: num::BigUint,
+    destination: u64,
     stack_hash: u64,
 ) -> anyhow::Result<()>
 where
@@ -20,10 +20,10 @@ where
         .code_segment()
         .ok_or_else(|| anyhow::anyhow!("Contract code segment is undefined"))?;
     let block_key = match code_segment {
-        solx_utils::CodeSegment::Deploy if destination > num::BigUint::from(u32::MAX) => {
+        solx_utils::CodeSegment::Deploy if destination > u32::MAX as u64 => {
             solx_codegen_evm::BlockKey::new(
                 solx_utils::CodeSegment::Runtime,
-                destination.to_owned() - num::BigUint::from(1u64 << 32),
+                destination - (1u64 << 32),
             )
         }
         code_segment => solx_codegen_evm::BlockKey::new(code_segment, destination),
@@ -43,7 +43,7 @@ where
 ///
 pub fn conditional<'ctx, C>(
     context: &mut C,
-    destination: num::BigUint,
+    destination: u64,
     stack_hash: u64,
     stack_height: usize,
 ) -> anyhow::Result<()>
@@ -54,10 +54,10 @@ where
         .code_segment()
         .ok_or_else(|| anyhow::anyhow!("Contract code segment is undefined"))?;
     let block_key = match code_segment {
-        solx_utils::CodeSegment::Deploy if destination > num::BigUint::from(u32::MAX) => {
+        solx_utils::CodeSegment::Deploy if destination > u32::MAX as u64 => {
             solx_codegen_evm::BlockKey::new(
                 solx_utils::CodeSegment::Runtime,
-                destination.to_owned() - num::BigUint::from(1u64 << 32),
+                destination - (1u64 << 32),
             )
         }
         code_segment => solx_codegen_evm::BlockKey::new(code_segment, destination),

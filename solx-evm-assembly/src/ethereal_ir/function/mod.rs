@@ -8,7 +8,6 @@ pub mod r#type;
 pub mod visited_element;
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -98,9 +97,9 @@ impl Function {
         blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut BTreeSet<VisitedElement>,
+        visited_functions: &mut HashSet<VisitedElement>,
     ) -> anyhow::Result<()> {
-        let mut visited_blocks = BTreeSet::new();
+        let mut visited_blocks = HashSet::new();
 
         let code_segments = match self.code_segment {
             Some(code_segment) => vec![code_segment],
@@ -120,7 +119,7 @@ impl Function {
                         visited_functions,
                         &mut visited_blocks,
                         QueueElement::new(
-                            solx_codegen_evm::BlockKey::new(code_segment, num::BigUint::zero()),
+                            solx_codegen_evm::BlockKey::new(code_segment, 0u64),
                             None,
                             Stack::new(),
                         ),
@@ -166,8 +165,8 @@ impl Function {
         blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut BTreeSet<VisitedElement>,
-        visited_blocks: &mut BTreeSet<VisitedElement>,
+        visited_functions: &mut HashSet<VisitedElement>,
+        visited_blocks: &mut HashSet<VisitedElement>,
         mut queue_element: QueueElement,
     ) -> anyhow::Result<()> {
         let version = self.solc_version.to_owned();
@@ -244,7 +243,7 @@ impl Function {
         blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut BTreeSet<VisitedElement>,
+        visited_functions: &mut HashSet<VisitedElement>,
         code_segment: solx_utils::CodeSegment,
         instance: usize,
         block_stack: &mut Stack,
@@ -259,10 +258,10 @@ impl Function {
                 value: Some(tag),
                 ..
             } => {
-                let tag: num::BigUint = tag
+                let tag: u64 = tag
                     .parse()
                     .map_err(|error| anyhow::anyhow!("Invalid PUSH_Tag value `{tag}`: {error}"))?;
-                (vec![Element::Tag(tag & num::BigUint::from(u64::MAX))], None)
+                (vec![Element::Tag(tag)], None)
             }
             instruction @ Instruction {
                 name: InstructionName::JUMP,
@@ -275,14 +274,14 @@ impl Function {
                     .last()
                     .ok_or_else(|| anyhow::anyhow!("Destination tag is missing"))?
                 {
-                    Element::Tag(destination) if destination > &num::BigUint::from(u32::MAX) => {
+                    Element::Tag(destination) if *destination > u32::MAX as u64 => {
                         solx_codegen_evm::BlockKey::new(
                             solx_utils::CodeSegment::Runtime,
-                            destination.to_owned() - num::BigUint::from(1u64 << 32),
+                            destination - (1u64 << 32),
                         )
                     }
                     Element::Tag(destination) => {
-                        solx_codegen_evm::BlockKey::new(code_segment, destination.to_owned())
+                        solx_codegen_evm::BlockKey::new(code_segment, *destination)
                     }
                     Element::ReturnAddress(output_size) => {
                         block_element.instruction =
@@ -337,14 +336,14 @@ impl Function {
                     .last()
                     .ok_or_else(|| anyhow::anyhow!("Destination tag is missing"))?
                 {
-                    Element::Tag(destination) if destination > &num::BigUint::from(u32::MAX) => {
+                    Element::Tag(destination) if *destination > u32::MAX as u64 => {
                         solx_codegen_evm::BlockKey::new(
                             solx_utils::CodeSegment::Runtime,
-                            destination.to_owned() - num::BigUint::from(1u64 << 32),
+                            destination - (1u64 << 32),
                         )
                     }
                     Element::Tag(destination) => {
-                        solx_codegen_evm::BlockKey::new(code_segment, destination.to_owned())
+                        solx_codegen_evm::BlockKey::new(code_segment, *destination)
                     }
                     element => {
                         return Err(anyhow::anyhow!(
@@ -369,7 +368,7 @@ impl Function {
                 value: Some(tag),
                 ..
             } => {
-                let tag: num::BigUint = tag
+                let tag: u64 = tag
                     .parse()
                     .map_err(|error| anyhow::anyhow!("Invalid Tag value `{tag}`: {error}"))?;
                 let block_key = solx_codegen_evm::BlockKey::new(code_segment, tag);
@@ -642,16 +641,42 @@ impl Function {
                 let operands = &block_stack.elements[block_stack.elements.len() - 2..];
 
                 let result = match (&operands[1], &operands[0]) {
-                    (Element::Tag(operand_1), Element::Constant(operand_2))
-                    | (Element::Constant(operand_1), Element::Tag(operand_2))
-                    | (Element::Tag(operand_1), Element::Tag(operand_2)) => {
-                        match operand_1.checked_add(operand_2) {
+                    (Element::Tag(operand_1), Element::Tag(operand_2)) => {
+                        match (*operand_1).checked_add(*operand_2) {
                             Some(result)
                                 if Self::is_tag_value_valid(blocks, code_segment, &result) =>
                             {
                                 Element::Tag(result)
                             }
-                            Some(_result) => Element::value(instruction.name.to_string()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
+                        }
+                    }
+                    (Element::Tag(tag), Element::Constant(constant)) => {
+                        match constant
+                            .to_u64()
+                            .and_then(|constant| (*tag).checked_add(constant))
+                        {
+                            Some(result)
+                                if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                            {
+                                Element::Tag(result)
+                            }
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
+                        }
+                    }
+                    (Element::Constant(constant), Element::Tag(tag)) => {
+                        match constant
+                            .to_u64()
+                            .and_then(|constant| constant.checked_add(*tag))
+                        {
+                            Some(result)
+                                if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                            {
+                                Element::Tag(result)
+                            }
+                            Some(_) => Element::value(instruction.name.to_string()),
                             None => Element::value(instruction.name.to_string()),
                         }
                     }
@@ -673,16 +698,42 @@ impl Function {
                 let operands = &block_stack.elements[block_stack.elements.len() - 2..];
 
                 let result = match (&operands[1], &operands[0]) {
-                    (Element::Tag(operand_1), Element::Constant(operand_2))
-                    | (Element::Constant(operand_1), Element::Tag(operand_2))
-                    | (Element::Tag(operand_1), Element::Tag(operand_2)) => {
-                        match operand_1.checked_sub(operand_2) {
+                    (Element::Tag(operand_1), Element::Tag(operand_2)) => {
+                        match (*operand_1).checked_sub(*operand_2) {
                             Some(result)
                                 if Self::is_tag_value_valid(blocks, code_segment, &result) =>
                             {
                                 Element::Tag(result)
                             }
-                            Some(_result) => Element::value(instruction.name.to_string()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
+                        }
+                    }
+                    (Element::Tag(tag), Element::Constant(constant)) => {
+                        match constant
+                            .to_u64()
+                            .and_then(|constant| (*tag).checked_sub(constant))
+                        {
+                            Some(result)
+                                if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                            {
+                                Element::Tag(result)
+                            }
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
+                        }
+                    }
+                    (Element::Constant(constant), Element::Tag(tag)) => {
+                        match constant
+                            .to_u64()
+                            .and_then(|constant| constant.checked_sub(*tag))
+                        {
+                            Some(result)
+                                if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                            {
+                                Element::Tag(result)
+                            }
+                            Some(_) => Element::value(instruction.name.to_string()),
                             None => Element::value(instruction.name.to_string()),
                         }
                     }
@@ -704,16 +755,42 @@ impl Function {
                 let operands = &block_stack.elements[block_stack.elements.len() - 2..];
 
                 let result = match (&operands[1], &operands[0]) {
-                    (Element::Tag(operand_1), Element::Constant(operand_2))
-                    | (Element::Constant(operand_1), Element::Tag(operand_2))
-                    | (Element::Tag(operand_1), Element::Tag(operand_2)) => {
-                        match operand_1.checked_mul(operand_2) {
+                    (Element::Tag(operand_1), Element::Tag(operand_2)) => {
+                        match (*operand_1).checked_mul(*operand_2) {
                             Some(result)
                                 if Self::is_tag_value_valid(blocks, code_segment, &result) =>
                             {
                                 Element::Tag(result)
                             }
-                            Some(_result) => Element::value(instruction.name.to_string()),
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
+                        }
+                    }
+                    (Element::Tag(tag), Element::Constant(constant)) => {
+                        match constant
+                            .to_u64()
+                            .and_then(|constant| (*tag).checked_mul(constant))
+                        {
+                            Some(result)
+                                if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                            {
+                                Element::Tag(result)
+                            }
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
+                        }
+                    }
+                    (Element::Constant(constant), Element::Tag(tag)) => {
+                        match constant
+                            .to_u64()
+                            .and_then(|constant| constant.checked_mul(*tag))
+                        {
+                            Some(result)
+                                if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                            {
+                                Element::Tag(result)
+                            }
+                            Some(_) => Element::value(instruction.name.to_string()),
                             None => Element::value(instruction.name.to_string()),
                         }
                     }
@@ -735,19 +812,54 @@ impl Function {
                 let operands = &block_stack.elements[block_stack.elements.len() - 2..];
 
                 let result = match (&operands[1], &operands[0]) {
-                    (Element::Tag(operand_1), Element::Constant(operand_2))
-                    | (Element::Constant(operand_1), Element::Tag(operand_2))
-                    | (Element::Tag(operand_1), Element::Tag(operand_2)) => {
-                        if operand_2.is_zero() {
-                            Element::Tag(num::BigUint::zero())
+                    (Element::Tag(operand_1), Element::Tag(operand_2)) => {
+                        if *operand_2 == 0 {
+                            Element::Tag(0u64)
                         } else {
-                            match operand_1.checked_div(operand_2) {
+                            match (*operand_1).checked_div(*operand_2) {
                                 Some(result)
                                     if Self::is_tag_value_valid(blocks, code_segment, &result) =>
                                 {
                                     Element::Tag(result)
                                 }
-                                Some(_result) => Element::value(instruction.name.to_string()),
+                                Some(_) => Element::value(instruction.name.to_string()),
+                                None => Element::value(instruction.name.to_string()),
+                            }
+                        }
+                    }
+                    (Element::Tag(tag), Element::Constant(constant)) => {
+                        if constant.is_zero() {
+                            Element::Tag(0u64)
+                        } else {
+                            let result = match constant.to_u64() {
+                                Some(constant) => (*tag).checked_div(constant),
+                                None => Some(0u64),
+                            };
+                            match result {
+                                Some(result)
+                                    if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                                {
+                                    Element::Tag(result)
+                                }
+                                Some(_) => Element::value(instruction.name.to_string()),
+                                None => Element::value(instruction.name.to_string()),
+                            }
+                        }
+                    }
+                    (Element::Constant(constant), Element::Tag(tag)) => {
+                        if *tag == 0 {
+                            Element::Tag(0u64)
+                        } else {
+                            match constant
+                                .to_u64()
+                                .and_then(|constant| constant.checked_div(*tag))
+                            {
+                                Some(result)
+                                    if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                                {
+                                    Element::Tag(result)
+                                }
+                                Some(_) => Element::value(instruction.name.to_string()),
                                 None => Element::value(instruction.name.to_string()),
                             }
                         }
@@ -774,17 +886,47 @@ impl Function {
                 let operands = &block_stack.elements[block_stack.elements.len() - 2..];
 
                 let result = match (&operands[1], &operands[0]) {
-                    (Element::Tag(operand_1), Element::Constant(operand_2))
-                    | (Element::Constant(operand_1), Element::Tag(operand_2))
-                    | (Element::Tag(operand_1), Element::Tag(operand_2)) => {
-                        if operand_2.is_zero() {
-                            Element::Tag(num::BigUint::zero())
+                    (Element::Tag(operand_1), Element::Tag(operand_2)) => {
+                        if *operand_2 == 0 {
+                            Element::Tag(0u64)
                         } else {
                             let result = operand_1 % operand_2;
                             if Self::is_tag_value_valid(blocks, code_segment, &result) {
                                 Element::Tag(result)
                             } else {
                                 Element::value(instruction.name.to_string())
+                            }
+                        }
+                    }
+                    (Element::Tag(tag), Element::Constant(constant)) => {
+                        if constant.is_zero() {
+                            Element::Tag(0u64)
+                        } else {
+                            let result = match constant.to_u64() {
+                                Some(constant) => tag % constant,
+                                None => *tag,
+                            };
+                            if Self::is_tag_value_valid(blocks, code_segment, &result) {
+                                Element::Tag(result)
+                            } else {
+                                Element::value(instruction.name.to_string())
+                            }
+                        }
+                    }
+                    (Element::Constant(constant), Element::Tag(tag)) => {
+                        if *tag == 0 {
+                            Element::Tag(0u64)
+                        } else {
+                            match constant.to_u64() {
+                                Some(constant) => {
+                                    let result = constant % *tag;
+                                    if Self::is_tag_value_valid(blocks, code_segment, &result) {
+                                        Element::Tag(result)
+                                    } else {
+                                        Element::value(instruction.name.to_string())
+                                    }
+                                }
+                                None => Element::value(instruction.name.to_string()),
                             }
                         }
                     }
@@ -809,12 +951,15 @@ impl Function {
                 let result = match (&operands[0], &operands[1]) {
                     (Element::Tag(tag), Element::Constant(offset)) => {
                         let offset = offset % solx_utils::BIT_LENGTH_FIELD;
-                        let offset = offset.to_u64().expect("Always valid");
-                        let result = tag << offset;
-                        if Self::is_tag_value_valid(blocks, code_segment, &result) {
-                            Element::Tag(result)
-                        } else {
-                            Element::value(instruction.name.to_string())
+                        let offset = offset.to_u32().expect("Always valid");
+                        match tag.checked_shl(offset) {
+                            Some(result)
+                                if Self::is_tag_value_valid(blocks, code_segment, &result) =>
+                            {
+                                Element::Tag(result)
+                            }
+                            Some(_) => Element::value(instruction.name.to_string()),
+                            None => Element::value(instruction.name.to_string()),
                         }
                     }
                     (Element::Constant(constant), Element::Constant(offset)) => {
@@ -836,8 +981,8 @@ impl Function {
                 let result = match (&operands[0], &operands[1]) {
                     (Element::Tag(tag), Element::Constant(offset)) => {
                         let offset = offset % solx_utils::BIT_LENGTH_FIELD;
-                        let offset = offset.to_u64().expect("Always valid");
-                        let result = tag >> offset;
+                        let offset = offset.to_u32().expect("Always valid");
+                        let result = tag.checked_shr(offset).unwrap_or(0u64);
                         if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
                         } else {
@@ -861,12 +1006,34 @@ impl Function {
                 let operands = &block_stack.elements[block_stack.elements.len() - 2..];
 
                 let result = match (&operands[1], &operands[0]) {
-                    (Element::Tag(operand_1), Element::Tag(operand_2))
-                    | (Element::Tag(operand_1), Element::Constant(operand_2))
-                    | (Element::Constant(operand_1), Element::Tag(operand_2)) => {
+                    (Element::Tag(operand_1), Element::Tag(operand_2)) => {
                         let result = operand_1 | operand_2;
                         if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
+                        } else {
+                            Element::value(instruction.name.to_string())
+                        }
+                    }
+                    (Element::Tag(tag), Element::Constant(constant)) => {
+                        if let Some(constant) = constant.to_u64() {
+                            let result = *tag | constant;
+                            if Self::is_tag_value_valid(blocks, code_segment, &result) {
+                                Element::Tag(result)
+                            } else {
+                                Element::value(instruction.name.to_string())
+                            }
+                        } else {
+                            Element::value(instruction.name.to_string())
+                        }
+                    }
+                    (Element::Constant(constant), Element::Tag(tag)) => {
+                        if let Some(constant) = constant.to_u64() {
+                            let result = constant | *tag;
+                            if Self::is_tag_value_valid(blocks, code_segment, &result) {
+                                Element::Tag(result)
+                            } else {
+                                Element::value(instruction.name.to_string())
+                            }
                         } else {
                             Element::value(instruction.name.to_string())
                         }
@@ -886,12 +1053,34 @@ impl Function {
                 let operands = &block_stack.elements[block_stack.elements.len() - 2..];
 
                 let result = match (&operands[1], &operands[0]) {
-                    (Element::Tag(operand_1), Element::Tag(operand_2))
-                    | (Element::Tag(operand_1), Element::Constant(operand_2))
-                    | (Element::Constant(operand_1), Element::Tag(operand_2)) => {
+                    (Element::Tag(operand_1), Element::Tag(operand_2)) => {
                         let result = operand_1 ^ operand_2;
                         if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
+                        } else {
+                            Element::value(instruction.name.to_string())
+                        }
+                    }
+                    (Element::Tag(tag), Element::Constant(constant)) => {
+                        if let Some(constant) = constant.to_u64() {
+                            let result = *tag ^ constant;
+                            if Self::is_tag_value_valid(blocks, code_segment, &result) {
+                                Element::Tag(result)
+                            } else {
+                                Element::value(instruction.name.to_string())
+                            }
+                        } else {
+                            Element::value(instruction.name.to_string())
+                        }
+                    }
+                    (Element::Constant(constant), Element::Tag(tag)) => {
+                        if let Some(constant) = constant.to_u64() {
+                            let result = constant ^ *tag;
+                            if Self::is_tag_value_valid(blocks, code_segment, &result) {
+                                Element::Tag(result)
+                            } else {
+                                Element::value(instruction.name.to_string())
+                            }
                         } else {
                             Element::value(instruction.name.to_string())
                         }
@@ -911,12 +1100,34 @@ impl Function {
                 let operands = &block_stack.elements[block_stack.elements.len() - 2..];
 
                 let result = match (&operands[1], &operands[0]) {
-                    (Element::Tag(operand_1), Element::Tag(operand_2))
-                    | (Element::Tag(operand_1), Element::Constant(operand_2))
-                    | (Element::Constant(operand_1), Element::Tag(operand_2)) => {
+                    (Element::Tag(operand_1), Element::Tag(operand_2)) => {
                         let result = operand_1 & operand_2;
                         if Self::is_tag_value_valid(blocks, code_segment, &result) {
                             Element::Tag(result)
+                        } else {
+                            Element::value(instruction.name.to_string())
+                        }
+                    }
+                    (Element::Tag(tag), Element::Constant(constant)) => {
+                        if let Some(constant) = constant.to_u64() {
+                            let result = *tag & constant;
+                            if Self::is_tag_value_valid(blocks, code_segment, &result) {
+                                Element::Tag(result)
+                            } else {
+                                Element::value(instruction.name.to_string())
+                            }
+                        } else {
+                            Element::value(instruction.name.to_string())
+                        }
+                    }
+                    (Element::Constant(constant), Element::Tag(tag)) => {
+                        if let Some(constant) = constant.to_u64() {
+                            let result = constant & *tag;
+                            if Self::is_tag_value_valid(blocks, code_segment, &result) {
+                                Element::Tag(result)
+                            } else {
+                                Element::value(instruction.name.to_string())
+                            }
                         } else {
                             Element::value(instruction.name.to_string())
                         }
@@ -985,7 +1196,7 @@ impl Function {
                     .ok_or_else(|| anyhow::anyhow!("Operand is missing"))?;
 
                 let result = match operand {
-                    Element::Tag(operand) => Element::Constant(if operand.is_zero() {
+                    Element::Tag(operand) => Element::Constant(if *operand == 0 {
                         num::BigUint::one()
                     } else {
                         num::BigUint::zero()
@@ -1049,7 +1260,7 @@ impl Function {
         blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
         functions: &mut BTreeMap<solx_codegen_evm::BlockKey, Self>,
         extra_metadata: &ExtraMetadata,
-        visited_functions: &mut BTreeSet<VisitedElement>,
+        visited_functions: &mut HashSet<VisitedElement>,
         block_key: solx_codegen_evm::BlockKey,
         block_stack: &mut Stack,
         block_element: &mut BlockElement,
@@ -1061,7 +1272,7 @@ impl Function {
 
         let return_address = match block_stack.elements[return_address_offset] {
             Element::Tag(ref return_address) => {
-                solx_codegen_evm::BlockKey::new(block_key.code_segment, return_address.to_owned())
+                solx_codegen_evm::BlockKey::new(block_key.code_segment, *return_address)
             }
             ref element => anyhow::bail!("Expected the function return address, found {element}"),
         };
@@ -1141,11 +1352,11 @@ impl Function {
     fn is_tag_value_valid(
         blocks: &HashMap<solx_codegen_evm::BlockKey, Block>,
         code_segment: solx_utils::CodeSegment,
-        tag: &num::BigUint,
+        tag: &u64,
     ) -> bool {
         blocks.contains_key(&solx_codegen_evm::BlockKey::new(
             code_segment,
-            tag & num::BigUint::from(u32::MAX),
+            tag & (u32::MAX as u64),
         ))
     }
 
@@ -1257,7 +1468,7 @@ impl solx_codegen_evm::WriteLLVM for Function {
                 let initial_block = context.current_function().borrow().find_block(
                     &solx_codegen_evm::BlockKey::new(
                         context.code_segment().expect("Must be set at this point"),
-                        num::BigUint::zero(),
+                        0u64,
                     ),
                     &Stack::default().hash(),
                 )?;

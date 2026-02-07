@@ -6,8 +6,6 @@ pub mod element;
 
 use std::collections::BTreeSet;
 
-use num::Zero;
-
 use crate::assembly::instruction::Instruction;
 use crate::assembly::instruction::name::Name as InstructionName;
 
@@ -49,7 +47,7 @@ impl Block {
     ) -> anyhow::Result<(Self, usize)> {
         let mut cursor = 0;
 
-        let tag: num::BigUint = match slice[cursor].name {
+        let tag: u64 = match slice[cursor].name {
             InstructionName::Tag => {
                 let tag_value = slice[cursor]
                     .value
@@ -61,7 +59,7 @@ impl Block {
                 cursor += 1;
                 tag
             }
-            _ => num::BigUint::zero(),
+            _ => 0u64,
         };
 
         let mut block = Self {

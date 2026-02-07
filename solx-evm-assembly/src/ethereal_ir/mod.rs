@@ -5,8 +5,8 @@
 pub mod function;
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use solx_codegen_evm::IContext;
 
@@ -53,7 +53,7 @@ impl EtherealIR {
         let mut entry_function =
             Function::new(solc_version, code_segment, FunctionType::new_entry());
         let mut defined_functions = BTreeMap::new();
-        let mut visited_functions = BTreeSet::new();
+        let mut visited_functions = HashSet::new();
         entry_function.traverse(
             &blocks,
             &mut defined_functions,
@@ -85,7 +85,7 @@ impl EtherealIR {
                 &instructions[offset..],
             )?;
             blocks.insert(
-                solx_codegen_evm::BlockKey::new(code_segment, block.key.tag.clone()),
+                solx_codegen_evm::BlockKey::new(code_segment, block.key.tag),
                 block,
             );
             offset += size;
