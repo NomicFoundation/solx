@@ -88,6 +88,11 @@ jobs:
           rm -rf "${GITHUB_WORKSPACE}/${WORKDIR}"
           done
 
+      - name: Preserve instrumented binary
+        env:
+          SOLX_BINARY: ${{ steps.build-solx.outputs.binary-path }}
+        run: cp "${SOLX_BINARY}" "${GITHUB_WORKSPACE}/solx-instrumented"
+
       - name: Run unit tests
         uses: ./.github/actions/rust-unit-tests
         with:
@@ -100,17 +105,17 @@ jobs:
           llvm-cov show --show-directory-coverage \
             --format=html --output-dir=${OUTPUT_HTML_DIR} \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
-            -instr-profile=${PROFDATA_FILE} ${{ steps.build-solx.outputs.binary-path }}
+            -instr-profile=${PROFDATA_FILE} "${GITHUB_WORKSPACE}/solx-instrumented"
           mkdir -p llvm
           llvm-cov export --format=lcov \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
             -instr-profile=${PROFDATA_FILE} \
-            ${{ steps.build-solx.outputs.binary-path }} > ./llvm/${LCOV_FILE}
+            "${GITHUB_WORKSPACE}/solx-instrumented" > ./llvm/${LCOV_FILE}
 
       - name: Coverage summary
         id: coverage-summary
         run: |
-          llvm-cov report -instr-profile=${PROFDATA_FILE} ${{ steps.build-solx.outputs.binary-path }} \
+          llvm-cov report -instr-profile=${PROFDATA_FILE} "${GITHUB_WORKSPACE}/solx-instrumented" \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
             > coverage-report.txt
 
