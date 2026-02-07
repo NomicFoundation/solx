@@ -49,6 +49,12 @@ runs:
           cargo install cargo-llvm-cov
         fi
 
+    - name: Set binary path for target builds
+      if: inputs.target != ''
+      shell: bash
+      run: |
+        echo "CARGO_BIN_EXE_SOLX=./target/${{ inputs.target }}/debug/solx" >> "${GITHUB_ENV}"
+
     - name: Run unit tests (release)
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash -ex {0}' }}
       env:

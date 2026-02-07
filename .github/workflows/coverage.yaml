@@ -58,6 +58,7 @@ jobs:
           working-dir: 'solx-solidity'
 
       - name: Build solx
+        id: build-solx
         uses: ./.github/actions/build-rust
         with:
           exec_name: 'solx'
@@ -74,7 +75,7 @@ jobs:
           for TEST_PATH in tests/solidity/complex/* tests/solidity/simple/*; do
           WORKDIR=$(basename ${TEST_PATH})
           mkdir -p "${GITHUB_WORKSPACE}/${WORKDIR}"
-          ./target/release/solx-dev test solx-tester --solidity-compiler $(which solx) --path ${TEST_PATH} --workflow build
+          ./target/release/solx-dev test solx-tester --solidity-compiler ${{ steps.build-solx.outputs.binary-path }} --path ${TEST_PATH} --workflow build
           mv *.profraw "${GITHUB_WORKSPACE}/${WORKDIR}/" || true
           du -hs "${GITHUB_WORKSPACE}/${WORKDIR}"
           find ${GITHUB_WORKSPACE}/${WORKDIR} -type f -name '*.profraw' -print > profiles.lst
@@ -99,17 +100,17 @@ jobs:
           llvm-cov show --show-directory-coverage \
             --format=html --output-dir=${OUTPUT_HTML_DIR} \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
-            -instr-profile=${PROFDATA_FILE} $(which solx)
+            -instr-profile=${PROFDATA_FILE} ${{ steps.build-solx.outputs.binary-path }}
           mkdir -p llvm
           llvm-cov export --format=lcov \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
             -instr-profile=${PROFDATA_FILE} \
-            $(which solx) > ./llvm/${LCOV_FILE}
+            ${{ steps.build-solx.outputs.binary-path }} > ./llvm/${LCOV_FILE}
 
       - name: Coverage summary
         id: coverage-summary
         run: |
-          llvm-cov report -instr-profile=${PROFDATA_FILE} $(which solx) \
+          llvm-cov report -instr-profile=${PROFDATA_FILE} ${{ steps.build-solx.outputs.binary-path }} \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
             > coverage-report.txt
 

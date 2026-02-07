@@ -25,6 +25,11 @@ inputs:
     required: false
     default: 'false'
 
+outputs:
+  binary-path:
+    description: 'Path to the built binary.'
+    value: ${{ steps.build.outputs.binary-path }}
+
 runs:
   using: "composite"
   steps:
@@ -37,6 +42,7 @@ runs:
         echo "target=--target ${{ inputs.target }}" >> $GITHUB_OUTPUT
 
     - name: Build
+      id: build
       env:
         RUSTC_BOOTSTRAP: 1
         RUSTFLAGS: '-C target-feature=+crt-static'
@@ -55,7 +61,13 @@ runs:
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
         cargo ${BUILD_STD_LIB} build ${RELEASE} ${{ steps.build-target.outputs.target }}
-        echo "${PWD}/target/${{ inputs.target }}/${{ inputs.build-type }}" >> "${GITHUB_PATH}"
+        if [ '${{ inputs.target }}' != '' ]; then
+          BINARY_DIR="${PWD}/target/${{ inputs.target }}/${{ inputs.build-type }}"
+        else
+          BINARY_DIR="${PWD}/target/${{ inputs.build-type }}"
+        fi
+        echo "${BINARY_DIR}" >> "${GITHUB_PATH}"
+        echo "binary-path=${BINARY_DIR}/${{ inputs.exec_name }}" >> "${GITHUB_OUTPUT}"
 
     - name: Prepare binary
       if: inputs.release-suffix != ''
