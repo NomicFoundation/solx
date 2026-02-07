@@ -91,6 +91,10 @@ runs:
         # Use clang as linker so it provides the ASan runtime for LLVM's
         # ASan-instrumented .a files (stable toolchain doesn't ship it).
         if [ '${{ inputs.sanitizer }}' != '' ]; then
+          if [ '${{ inputs.target }}' = '' ]; then
+            echo "::error::Sanitizer requires an explicit target"
+            exit 1
+          fi
           TARGET_UPPER=$(echo "${{ inputs.target }}" | tr '[:lower:]-' '[:upper:]_')
           SAN='${{ inputs.sanitizer }}'
           export "CARGO_TARGET_${TARGET_UPPER}_RUSTFLAGS=${RUSTFLAGS} -Z sanitizer=${SAN} -C link-arg=-fsanitize=${SAN}"
