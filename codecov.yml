@@ -7,3 +7,5 @@ coverage:
       default: false  # disable the default status that measures entire project
     patch:
       default: false  # disable the patch status that measures patch changes
+
+comment: false

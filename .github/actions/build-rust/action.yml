@@ -25,6 +25,11 @@ inputs:
     required: false
     default: 'false'
 
+outputs:
+  binary-path:
+    description: 'Path to the built binary.'
+    value: ${{ steps.build.outputs.binary-path }}
+
 runs:
   using: "composite"
   steps:
@@ -37,13 +42,14 @@ runs:
         echo "target=--target ${{ inputs.target }}" >> $GITHUB_OUTPUT
 
     - name: Build
+      id: build
       env:
         RUSTC_BOOTSTRAP: 1
         RUSTFLAGS: '-C target-feature=+crt-static'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash -ex {0}' }}
       run: |
         if [ '${{ inputs.sanitizer }}' != '' ]; then
-          rustup component add rust-src --toolchain "$(rustc --version | cut -d ' ' -f2)-${TARGET}"
+          rustup component add rust-src --toolchain "$(rustc --version | cut -d ' ' -f2)-${{ inputs.target }}"
           export RUSTFLAGS="-Z sanitizer=${{ inputs.sanitizer }}"
           BUILD_STD_LIB='-Zbuild-std'
         fi
@@ -55,7 +61,14 @@ runs:
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
         cargo ${BUILD_STD_LIB} build ${RELEASE} ${{ steps.build-target.outputs.target }}
-        echo "${PWD}/target/${{ inputs.target }}/${{ inputs.build-type }}" >> "${GITHUB_PATH}"
+        if [ '${{ inputs.target }}' != '' ]; then
+          BINARY_DIR="${PWD}/target/${{ inputs.target }}/${{ inputs.build-type }}"
+        else
+          BINARY_DIR="${PWD}/target/${{ inputs.build-type }}"
+        fi
+        [ "$RUNNER_OS" = "Windows" ] && WIN_SUFFIX=".exe"
+        echo "${BINARY_DIR}" >> "${GITHUB_PATH}"
+        echo "binary-path=${BINARY_DIR}/${{ inputs.exec_name }}${WIN_SUFFIX}" >> "${GITHUB_OUTPUT}"
 
     - name: Prepare binary
       if: inputs.release-suffix != ''

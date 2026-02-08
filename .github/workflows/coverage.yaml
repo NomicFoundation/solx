@@ -1,14 +1,8 @@
 name: Code coverage
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - "**/*.mdx"
-      - "LICENSE"
+  pull_request:
+    types: [labeled, synchronize]
 
 concurrency:
   group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.ref }}
@@ -24,7 +18,11 @@ permissions:
 jobs:
 
   coverage:
+    if: contains(github.event.pull_request.labels.*.name, 'ci:coverage') && !github.event.pull_request.head.repo.fork
     runs-on: solx-linux-amd64
+    permissions:
+      contents: read
+      pull-requests: write
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner:latest
     env:
@@ -33,6 +31,7 @@ jobs:
       PROFDATA_FILE: solx.profdata
       LCOV_FILE: codecov.lcov
       OUTPUT_HTML_DIR: COVERAGE
+      COVERAGE_IGNORE_REGEX: '/(solx-llvm|target-llvm|solx-solidity|\.cargo|cargo/registry)/'
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -61,6 +60,7 @@ jobs:
           working-dir: 'solx-solidity'
 
       - name: Build solx
+        id: build-solx
         uses: ./.github/actions/build-rust
         with:
           exec_name: 'solx'
@@ -77,7 +77,7 @@ jobs:
           for TEST_PATH in tests/solidity/complex/* tests/solidity/simple/*; do
           WORKDIR=$(basename ${TEST_PATH})
           mkdir -p "${GITHUB_WORKSPACE}/${WORKDIR}"
-          ./target/release/solx-dev test solx-tester --solidity-compiler $(which solx) --path ${TEST_PATH} --workflow build
+          ./target/release/solx-dev test solx-tester --solidity-compiler ${{ steps.build-solx.outputs.binary-path }} --path ${TEST_PATH} --workflow build
           mv *.profraw "${GITHUB_WORKSPACE}/${WORKDIR}/" || true
           du -hs "${GITHUB_WORKSPACE}/${WORKDIR}"
           find ${GITHUB_WORKSPACE}/${WORKDIR} -type f -name '*.profraw' -print > profiles.lst
@@ -90,6 +90,11 @@ jobs:
           rm -rf "${GITHUB_WORKSPACE}/${WORKDIR}"
           done
 
+      - name: Preserve instrumented binary
+        env:
+          SOLX_BINARY: ${{ steps.build-solx.outputs.binary-path }}
+        run: cp "${SOLX_BINARY}" "${GITHUB_WORKSPACE}/solx-instrumented"
+
       - name: Run unit tests
         uses: ./.github/actions/rust-unit-tests
         with:
@@ -101,9 +106,83 @@ jobs:
         run: |
           llvm-cov show --show-directory-coverage \
             --format=html --output-dir=${OUTPUT_HTML_DIR} \
-            -instr-profile=${PROFDATA_FILE} $(which solx)
-          llvm-cov export --format=lcov -instr-profile=${PROFDATA_FILE} \
-            $(which solx) > ./llvm/${LCOV_FILE}
+            --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
+            -instr-profile=${PROFDATA_FILE} "${GITHUB_WORKSPACE}/solx-instrumented"
+          mkdir -p llvm
+          llvm-cov export --format=lcov \
+            --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
+            -instr-profile=${PROFDATA_FILE} \
+            "${GITHUB_WORKSPACE}/solx-instrumented" > ./llvm/${LCOV_FILE}
+
+      - name: Coverage summary
+        id: coverage-summary
+        run: |
+          llvm-cov report -instr-profile=${PROFDATA_FILE} "${GITHUB_WORKSPACE}/solx-instrumented" \
+            --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
+            > coverage-report.txt
+
+          # Parse llvm-cov report into per-crate markdown table
+          awk '
+          /^---/ || /^Filename/ || /^$/ { next }
+          /^TOTAL/ {
+            total_lines = $(NF-5); total_missed = $(NF-4)
+            total_funcs = $(NF-8); total_missed_funcs = $(NF-7)
+            next
+          }
+          NF > 3 {
+            file = $1
+            n = split(file, parts, "/")
+            crate = ""
+            for (i = 1; i <= n-1; i++) {
+              if (parts[i] ~ /^solx/ && parts[i+1] == "src") {
+                crate = parts[i]; break
+              }
+            }
+            if (crate == "") next
+            lines[crate] += $(NF-5)
+            missed[crate] += $(NF-4)
+            funcs[crate] += $(NF-8)
+            missed_f[crate] += $(NF-7)
+          }
+          END {
+            for (c in lines) {
+              lp = (lines[c] > 0) ? (lines[c] - missed[c]) / lines[c] * 100 : 0
+              fp = (funcs[c] > 0) ? (funcs[c] - missed_f[c]) / funcs[c] * 100 : 0
+              le = (lp >= 80) ? "🟢" : (lp >= 50) ? "🟡" : "🔴"
+              fe = (fp >= 80) ? "🟢" : (fp >= 50) ? "🟡" : "🔴"
+              printf "| %s | %s %.1f%% | %s %.1f%% |\n", c, le, lp, fe, fp
+            }
+            lp = (total_lines > 0) ? (total_lines - total_missed) / total_lines * 100 : 0
+            fp = (total_funcs > 0) ? (total_funcs - total_missed_funcs) / total_funcs * 100 : 0
+            le = (lp >= 80) ? "🟢" : (lp >= 50) ? "🟡" : "🔴"
+            fe = (fp >= 80) ? "🟢" : (fp >= 50) ? "🟡" : "🔴"
+            printf "ZTOTAL| **Total** | **%s %.1f%%** | **%s %.1f%%** |\n", le, lp, fe, fp
+          }' coverage-report.txt > coverage-rows.txt
+
+          {
+            echo "| Crate | Line Coverage | Function Coverage |"
+            echo "|:------|:------------:|:-----------------:|"
+            grep -v '^ZTOTAL' coverage-rows.txt | sort
+            sed -n 's/^ZTOTAL//p' coverage-rows.txt
+          } > coverage-summary.md
+
+          cat coverage-summary.md >> "${GITHUB_STEP_SUMMARY}"
+          {
+            echo "summary<<COVERAGE_EOF"
+            cat coverage-summary.md
+            echo "COVERAGE_EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Post PR coverage summary
+        uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2
+        with:
+          message-id: 'coverage-summary'
+          message: |
+            ### Coverage Summary
+
+            ${{ steps.coverage-summary.outputs.summary }}
+
+            [Codecov Report](https://app.codecov.io/gh/${{ github.repository }}/pull/${{ github.event.pull_request.number }}) | [HTML Report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts) | [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
@@ -118,3 +197,4 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: 'lcov.info,llvm/codecov.lcov'
           slug: ${{ github.repository }}
+          fail_ci_if_error: false
