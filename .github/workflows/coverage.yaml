@@ -14,13 +14,15 @@ defaults:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
 
   coverage:
     if: contains(github.event.pull_request.labels.*.name, 'ci:coverage') && !github.event.pull_request.head.repo.fork
     runs-on: solx-linux-amd64
+    permissions:
+      contents: read
+      pull-requests: write
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner:latest
     env:
