@@ -9,7 +9,7 @@ fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--llvm-options='-evm-metadata-size 10'",
         "--bin",
     ];
@@ -26,7 +26,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::standard_json!("solidity.json"),
         "--llvm-options='-evm-metadata-size 10'",
     ];
 

@@ -145,7 +145,10 @@ impl Compiler for LLVMIRCompiler {
             .map(|(path, source)| {
                 (
                     path.to_owned(),
-                    solx_standard_json::InputSource::from(source.to_owned()),
+                    solx_standard_json::InputSource {
+                        content: Some(source.to_owned()),
+                        urls: None,
+                    },
                 )
             })
             .collect();
@@ -155,15 +158,18 @@ impl Compiler for LLVMIRCompiler {
         selectors.insert(solx_standard_json::InputSelector::RuntimeBytecode);
         selectors.insert(solx_standard_json::InputSelector::Metadata);
 
-        let input = solx_standard_json::Input::from_llvm_ir_sources(
+        let input = crate::compilers::input_ext::new_input_from_llvm_ir_sources(
             sources_json,
             libraries,
-            solx_standard_json::InputOptimizer::new(
-                llvm_ir_mode.llvm_optimizer_settings.middle_end_as_char(),
-                llvm_ir_mode
-                    .llvm_optimizer_settings
-                    .is_fallback_to_size_enabled,
-            ),
+            solx_standard_json::InputOptimizer {
+                enabled: None,
+                mode: Some(llvm_ir_mode.llvm_optimizer_settings.middle_end_as_char()),
+                size_fallback: Some(
+                    llvm_ir_mode
+                        .llvm_optimizer_settings
+                        .is_fallback_to_size_enabled,
+                ),
+            },
             &solx_standard_json::InputSelection::new(selectors),
             solx_standard_json::InputMetadata::default(),
             llvm_options,
@@ -224,7 +230,7 @@ impl Compiler for LLVMIRCompiler {
             return Vec::new();
         }
 
-        solx_codegen_evm::OptimizerSettings::combinations()
+        super::optimizer_combinations()
             .into_iter()
             .map(|llvm_optimizer_settings| LLVMMode::new(llvm_optimizer_settings).into())
             .collect::<Vec<Mode>>()

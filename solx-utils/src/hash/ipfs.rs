@@ -39,27 +39,6 @@ impl IPFS {
     }
 
     ///
-    /// Returns a reference to the 34-byte IPFS hash.
-    ///
-    pub fn as_bytes(&self) -> &[u8] {
-        self.bytes.as_slice()
-    }
-
-    ///
-    /// Returns a reference to the string representation of the IPFS hash.
-    ///
-    pub fn as_base58_str(&self) -> &str {
-        self.string_base58.as_str()
-    }
-
-    ///
-    /// Returns a reference to the hexadecimal string representation of the IPFS hash.
-    ///
-    pub fn as_hex_str(&self) -> &str {
-        self.string_hex.as_str()
-    }
-
-    ///
     /// Extracts the binary representation.
     ///
     pub fn to_vec(&self) -> Vec<u8> {
@@ -69,33 +48,6 @@ impl IPFS {
 
 impl std::fmt::Display for IPFS {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.as_hex_str())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn base58() {
-        assert_eq!(
-            super::IPFS::from_slice("LLVM is the Endgame".as_bytes()).as_base58_str(),
-            "QmUriSv3NW33gtfyALPtD83tr1J88tQ4tGwLEVfH1wb92U"
-        );
-    }
-
-    #[test]
-    fn hexadecimal() {
-        assert_eq!(
-            super::IPFS::from_slice("LLVM is the Endgame".as_bytes()).as_hex_str(),
-            "122060d9c5c201b8c2ed8ac8de1e21afc4ef115ad9f47863e21ffd29f272544b5125"
-        );
-    }
-
-    #[test]
-    fn display() {
-        assert_eq!(
-            super::IPFS::from_slice("LLVM is the Endgame".as_bytes()).to_string(),
-            "122060d9c5c201b8c2ed8ac8de1e21afc4ef115ad9f47863e21ffd29f272544b5125"
-        );
+        write!(f, "{}", self.string_hex)
     }
 }

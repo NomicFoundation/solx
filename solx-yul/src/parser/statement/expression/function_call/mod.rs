@@ -4,8 +4,6 @@
 
 pub mod name;
 
-use std::collections::BTreeSet;
-
 use inkwell::values::BasicValue;
 use solx_codegen_evm::IContext;
 use solx_codegen_evm::ISolidityData;
@@ -106,29 +104,6 @@ impl FunctionCall {
             arguments,
             solc_location,
         })
-    }
-
-    ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        let mut libraries = BTreeSet::new();
-
-        if let Name::LinkerSymbol = self.name {
-            if let Expression::Literal(Literal {
-                inner: LexicalLiteral::String(library_path),
-                ..
-            }) = self.arguments.first().expect("Always exists")
-            {
-                libraries.insert(library_path.to_string());
-            }
-            return libraries;
-        }
-
-        for argument in self.arguments.iter() {
-            libraries.extend(argument.get_unlinked_libraries());
-        }
-        libraries
     }
 
     ///

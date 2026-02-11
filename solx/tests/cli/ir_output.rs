@@ -10,7 +10,7 @@ fn emit_llvm_to_stdout() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--emit-llvm-ir",
         "--bin",
         "--via-ir",
@@ -32,7 +32,7 @@ fn evmla_to_stdout() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--evmla",
         "--bin",
     ];
@@ -52,7 +52,7 @@ fn ethir_to_stdout() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--ethir",
         "--bin",
     ];
@@ -74,7 +74,7 @@ fn emit_llvm_with_output_dir() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_output")?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--emit-llvm-ir",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
@@ -103,7 +103,7 @@ fn evmla_with_output_dir() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_output")?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--evmla",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
@@ -132,7 +132,7 @@ fn ethir_with_output_dir() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_output")?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--ethir",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
@@ -161,7 +161,7 @@ fn multiple_ir_flags_with_output_dir() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_output")?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--emit-llvm-ir",
         "--evmla",
         "--ethir",
@@ -216,7 +216,7 @@ fn ir_output_standard_json_error() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::standard_json!("solidity.json"),
         "--emit-llvm-ir",
     ];
 
@@ -236,7 +236,7 @@ fn ir_output_overwrite_protection() -> anyhow::Result<()> {
 
     // First run to create files
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--emit-llvm-ir",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
@@ -264,7 +264,7 @@ fn ir_output_overwrite_allowed() -> anyhow::Result<()> {
 
     // First run to create files
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--emit-llvm-ir",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),
@@ -277,7 +277,7 @@ fn ir_output_overwrite_allowed() -> anyhow::Result<()> {
 
     // Second run with --overwrite should succeed
     let args_with_overwrite = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--emit-llvm-ir",
         "--overwrite",
         "--output-dir",
@@ -298,7 +298,7 @@ fn standard_json_llvm_ir_via_ir() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_SELECT_LLVM_IR_PATH,
+        crate::common::standard_json!("select_llvm_ir.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -318,7 +318,7 @@ fn standard_json_evmla_ethir() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_SELECT_EVMLA_ETHIR_PATH,
+        crate::common::standard_json!("select_evmla_ethir.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;

@@ -5,8 +5,6 @@
 pub mod function_call;
 pub mod literal;
 
-use std::collections::BTreeSet;
-
 use solx_codegen_evm::IContext;
 
 use crate::error::Error;
@@ -77,17 +75,6 @@ impl Expression {
                 location,
                 identifier.inner,
             ))),
-        }
-    }
-
-    ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        match self {
-            Self::FunctionCall(inner) => inner.get_unlinked_libraries(),
-            Self::Identifier(_) => BTreeSet::new(),
-            Self::Literal(_) => BTreeSet::new(),
         }
     }
 

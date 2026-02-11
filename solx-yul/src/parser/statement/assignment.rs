@@ -2,8 +2,6 @@
 //! The assignment expression statement.
 //!
 
-use std::collections::BTreeSet;
-
 use inkwell::types::BasicType;
 use solx_codegen_evm::IContext;
 use solx_codegen_evm::ISolidityData;
@@ -117,13 +115,6 @@ impl Assignment {
             }
             .into()),
         }
-    }
-
-    ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        self.initializer.get_unlinked_libraries()
     }
 
     ///

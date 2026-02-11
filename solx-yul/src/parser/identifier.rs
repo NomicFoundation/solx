@@ -8,7 +8,6 @@ use crate::lexer::token::Token;
 use crate::lexer::token::lexeme::Lexeme;
 use crate::lexer::token::lexeme::symbol::Symbol;
 use crate::lexer::token::location::Location;
-use crate::parser::r#type::Type;
 
 ///
 /// The Yul source code identifier.
@@ -19,8 +18,6 @@ pub struct Identifier {
     pub location: Location,
     /// The inner string.
     pub inner: String,
-    /// The type, if it has been explicitly specified.
-    pub r#type: Option<Type>,
 }
 
 impl Identifier {
@@ -28,22 +25,7 @@ impl Identifier {
     /// A shortcut constructor.
     ///
     pub fn new(location: Location, inner: String) -> Self {
-        Self {
-            location,
-            inner,
-            r#type: None,
-        }
-    }
-
-    ///
-    /// A shortcut constructor for a typed identifier.
-    ///
-    pub fn new_with_type(location: Location, inner: String, r#type: Option<Type>) -> Self {
-        Self {
-            location,
-            inner,
-            r#type,
-        }
+        Self { location, inner }
     }
 
     ///
@@ -66,49 +48,6 @@ impl Identifier {
                     ..
                 } if !expected_comma => {
                     result.push(Self::new(location, identifier.inner));
-                    expected_comma = true;
-                }
-                Token {
-                    lexeme: Lexeme::Symbol(Symbol::Comma),
-                    ..
-                } if expected_comma => {
-                    expected_comma = false;
-                }
-                token => return Ok((result, Some(token))),
-            }
-        }
-    }
-
-    ///
-    /// Parses the identifier list where the types may be optionally specified.
-    ///
-    pub fn parse_typed_list(
-        lexer: &mut Lexer,
-        mut initial: Option<Token>,
-    ) -> Result<(Vec<Self>, Option<Token>), Error> {
-        let mut result = Vec::new();
-
-        let mut expected_comma = false;
-        loop {
-            let token = crate::parser::take_or_next(initial.take(), lexer)?;
-
-            match token {
-                Token {
-                    lexeme: Lexeme::Identifier(identifier),
-                    location,
-                    ..
-                } if !expected_comma => {
-                    let r#type = match lexer.peek()? {
-                        Token {
-                            lexeme: Lexeme::Symbol(Symbol::Colon),
-                            ..
-                        } => {
-                            lexer.next()?;
-                            Some(Type::parse(lexer, None)?)
-                        }
-                        _ => None,
-                    };
-                    result.push(Self::new_with_type(location, identifier.inner, r#type));
                     expected_comma = true;
                 }
                 Token {

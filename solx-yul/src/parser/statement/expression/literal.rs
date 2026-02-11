@@ -16,10 +16,8 @@ use crate::lexer::token::lexeme::Lexeme;
 use crate::lexer::token::lexeme::literal::Literal as LexicalLiteral;
 use crate::lexer::token::lexeme::literal::boolean::Boolean as BooleanLiteral;
 use crate::lexer::token::lexeme::literal::integer::Integer as IntegerLiteral;
-use crate::lexer::token::lexeme::symbol::Symbol;
 use crate::lexer::token::location::Location;
 use crate::parser::error::Error as ParserError;
-use crate::parser::r#type::Type;
 
 ///
 /// Represents a literal in Yul without differentiating its type.
@@ -30,8 +28,6 @@ pub struct Literal {
     pub location: Location,
     /// The lexical literal.
     pub inner: LexicalLiteral,
-    /// The type, if it has been explicitly specified.
-    pub yul_type: Option<Type>,
     /// The solc source code location.
     pub solc_location: Option<solx_utils::DebugInfoSolcLocation>,
 }
@@ -67,21 +63,9 @@ impl Literal {
             }
         };
 
-        let yul_type = match lexer.peek()? {
-            Token {
-                lexeme: Lexeme::Symbol(Symbol::Colon),
-                ..
-            } => {
-                lexer.next()?;
-                Some(Type::parse(lexer, None)?)
-            }
-            _ => None,
-        };
-
         Ok(Self {
             location,
             inner: literal,
-            yul_type,
             solc_location,
         })
     }
@@ -103,10 +87,8 @@ impl Literal {
 
         match self.inner {
             LexicalLiteral::Boolean(inner) => {
-                let value = self
-                    .yul_type
-                    .unwrap_or_default()
-                    .into_llvm(context)
+                let value = context
+                    .field_type()
                     .const_int(
                         match inner {
                             BooleanLiteral::False => 0,
@@ -124,7 +106,7 @@ impl Literal {
                 Ok(solx_codegen_evm::Value::new_with_constant(value, constant))
             }
             LexicalLiteral::Integer(inner) => {
-                let r#type = self.yul_type.unwrap_or_default().into_llvm(context);
+                let r#type = context.field_type();
                 let value = match inner {
                     IntegerLiteral::Decimal { ref inner } => r#type.const_int_from_string(
                         inner.as_str(),
@@ -153,7 +135,7 @@ impl Literal {
             }
             LexicalLiteral::String(inner) => {
                 let string = inner.inner;
-                let r#type = self.yul_type.unwrap_or_default().into_llvm(context);
+                let r#type = context.field_type();
 
                 let mut hex_string = if inner.is_hexadecimal {
                     string.clone()

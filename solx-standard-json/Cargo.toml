@@ -21,3 +21,6 @@ boolinator = "2.4"
 
 solx-evm-assembly = { path = "../solx-evm-assembly" }
 solx-utils = { path = "../solx-utils" }
+
+[dev-dependencies]
+serde_json.workspace = true

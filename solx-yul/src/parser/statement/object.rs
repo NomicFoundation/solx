@@ -3,7 +3,7 @@
 //!
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+
 use std::collections::HashSet;
 
 use crate::error::Error;
@@ -173,17 +173,6 @@ impl Object {
             factory_dependencies,
             sources,
         })
-    }
-
-    ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        let mut unlinked_libraries = self.code.get_unlinked_libraries();
-        if let Some(inner_object) = &self.inner_object {
-            unlinked_libraries.extend(inner_object.get_unlinked_libraries());
-        }
-        unlinked_libraries
     }
 
     ///

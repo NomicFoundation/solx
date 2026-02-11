@@ -9,7 +9,10 @@ use tempfile::TempDir;
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT_PATH, "--benchmarks"];
+    let args = &[
+        crate::common::contract!("solidity/Test.sol"),
+        "--benchmarks",
+    ];
 
     let result = crate::cli::execute_solx(args)?;
 
@@ -26,7 +29,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::standard_json!("solidity.json"),
         "--benchmarks",
     ];
 

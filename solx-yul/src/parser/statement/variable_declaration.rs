@@ -2,8 +2,6 @@
 //! The variable declaration statement.
 //!
 
-use std::collections::BTreeSet;
-
 use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 use solx_codegen_evm::IContext;
@@ -70,7 +68,7 @@ impl VariableDeclaration {
             }
         }
 
-        let (bindings, next) = Identifier::parse_typed_list(lexer, None)?;
+        let (bindings, next) = Identifier::parse_list(lexer, None)?;
         for binding in bindings.iter() {
             match FunctionName::from(binding.inner.as_str()) {
                 FunctionName::UserDefined(_) => continue,
@@ -116,17 +114,6 @@ impl VariableDeclaration {
     }
 
     ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        self.expression
-            .as_ref()
-            .map_or_else(BTreeSet::new, |expression| {
-                expression.get_unlinked_libraries()
-            })
-    }
-
-    ///
     /// Get the list of EVM dependencies.
     ///
     pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
@@ -149,7 +136,7 @@ impl VariableDeclaration {
 
         if self.bindings.len() == 1 {
             let identifier = self.bindings.remove(0);
-            let r#type = identifier.r#type.unwrap_or_default().into_llvm(context);
+            let r#type = context.field_type();
             let pointer = context.build_alloca(r#type, identifier.inner.as_str())?;
             context
                 .current_function()
@@ -169,16 +156,12 @@ impl VariableDeclaration {
         }
 
         for (index, binding) in self.bindings.iter().enumerate() {
-            let yul_type = binding
-                .r#type
-                .to_owned()
-                .unwrap_or_default()
-                .into_llvm(context);
+            let field_type = context.field_type();
             let pointer = context.build_alloca(
-                yul_type.as_basic_type_enum(),
+                field_type.as_basic_type_enum(),
                 format!("binding_{index}_pointer").as_str(),
             )?;
-            context.build_store(pointer, yul_type.const_zero())?;
+            context.build_store(pointer, field_type.const_zero())?;
             context
                 .current_function()
                 .borrow_mut()
@@ -198,14 +181,7 @@ impl VariableDeclaration {
         let llvm_type = context.structure_type(
             self.bindings
                 .iter()
-                .map(|binding| {
-                    binding
-                        .r#type
-                        .to_owned()
-                        .unwrap_or_default()
-                        .into_llvm(context)
-                        .as_basic_type_enum()
-                })
+                .map(|_| context.field_type().as_basic_type_enum())
                 .collect::<Vec<inkwell::types::BasicTypeEnum<'ctx>>>()
                 .as_slice(),
         );
@@ -227,7 +203,7 @@ impl VariableDeclaration {
                         .integer_type(solx_utils::BIT_LENGTH_X32)
                         .const_int(index as u64, false),
                 ],
-                binding.r#type.unwrap_or_default().into_llvm(context),
+                context.field_type(),
                 format!("binding_{index}_gep_pointer").as_str(),
             )?;
 
@@ -253,8 +229,6 @@ impl VariableDeclaration {
 #[cfg(test)]
 mod tests {
     use crate::lexer::Lexer;
-    use crate::lexer::token::location::Location;
-    use crate::parser::error::Error;
     use crate::parser::statement::object::Object;
 
     #[test]
@@ -281,37 +255,5 @@ object "Test" {
         let mut lexer = Lexer::new(input);
         let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
         assert!(result.is_ok());
-    }
-
-    #[test]
-    fn error_reserved_identifier() {
-        let input = r#"
-object "Test" {
-    code {
-        {
-            return(0, 0)
-        }
-    }
-    object "Test_deployed" {
-        code {
-            {
-                let basefee := 42
-                return(0, 0)
-            }
-        }
-    }
-}
-    "#;
-
-        let mut lexer = Lexer::new(input);
-        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
-        assert_eq!(
-            result,
-            Err(Error::ReservedIdentifier {
-                location: Location::new(11, 21),
-                identifier: "basefee".to_owned()
-            }
-            .into())
-        );
     }
 }

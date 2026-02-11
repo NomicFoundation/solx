@@ -133,16 +133,6 @@ impl Error {
     ///
     /// Creates a new warning with optional code location and error code.
     ///
-    pub fn new_warning<S>(path: Option<&str>, message: S) -> Self
-    where
-        S: std::fmt::Display,
-    {
-        Self::new_warning_with_data(path, None, message, None, None)
-    }
-
-    ///
-    /// Creates a new warning with optional code location and error code.
-    ///
     pub fn new_warning_with_data<S>(
         path: Option<&str>,
         error_code: Option<isize>,

@@ -10,11 +10,11 @@ fn default() -> anyhow::Result<()> {
 
     let args = &[
         "--base-path",
-        crate::common::TEST_CONTRACTS_PATH,
+        "tests/data/contracts/",
         "--include-path",
-        crate::common::TEST_CONTRACTS_PATH,
+        "tests/data/contracts/",
         "--bin",
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -31,12 +31,12 @@ fn yul() -> anyhow::Result<()> {
 
     let args = &[
         "--base-path",
-        crate::common::TEST_CONTRACTS_PATH,
+        "tests/data/contracts/",
         "--include-path",
-        crate::common::TEST_CONTRACTS_PATH,
+        "tests/data/contracts/",
         "--yul",
         "--bin",
-        crate::common::TEST_YUL_CONTRACT_PATH,
+        crate::common::contract!("yul/Test.yul"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -53,12 +53,12 @@ fn llvm_ir() -> anyhow::Result<()> {
 
     let args = &[
         "--base-path",
-        crate::common::TEST_CONTRACTS_PATH,
+        "tests/data/contracts/",
         "--include-path",
-        crate::common::TEST_CONTRACTS_PATH,
+        "tests/data/contracts/",
         "--llvm-ir",
         "--bin",
-        crate::common::TEST_LLVM_IR_CONTRACT_PATH,
+        crate::common::contract!("llvm_ir/Test.ll"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -75,9 +75,9 @@ fn base_path_missing() -> anyhow::Result<()> {
 
     let args = &[
         "--include-path",
-        crate::common::TEST_CONTRACTS_PATH,
+        "tests/data/contracts/",
         "--bin",
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
     ];
 
     let result = crate::cli::execute_solx(args)?;

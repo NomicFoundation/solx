@@ -4,8 +4,6 @@
 
 pub mod size_level;
 
-use itertools::Itertools;
-
 use self::size_level::SizeLevel;
 
 ///
@@ -129,17 +127,6 @@ impl Settings {
     }
 
     ///
-    /// Returns the settings without optimizations.
-    ///
-    pub fn none() -> Self {
-        Self::new(
-            inkwell::OptimizationLevel::None,
-            SizeLevel::Zero,
-            inkwell::OptimizationLevel::None,
-        )
-    }
-
-    ///
     /// Returns the settings for the optimal number of VM execution cycles.
     ///
     pub fn cycles() -> Self {
@@ -173,57 +160,6 @@ impl Settings {
             (_, SizeLevel::S) => 's',
             (_, SizeLevel::Z) => 'z',
         }
-    }
-
-    ///
-    /// Checks whether there are middle-end optimizations enabled.
-    ///
-    pub fn is_middle_end_enabled(&self) -> bool {
-        self.level_middle_end != inkwell::OptimizationLevel::None
-            || self.level_middle_end_size != SizeLevel::Zero
-    }
-
-    ///
-    /// Returns all possible combinations of the optimizer settings.
-    ///
-    /// Used only for testing purposes.
-    ///
-    pub fn combinations() -> Vec<Self> {
-        let middle_end_levels = vec![
-            inkwell::OptimizationLevel::Less,
-            inkwell::OptimizationLevel::Default,
-            inkwell::OptimizationLevel::Aggressive,
-        ];
-        let back_end_levels = vec![inkwell::OptimizationLevel::Aggressive];
-
-        let performance_combinations: Vec<Self> = middle_end_levels
-            .into_iter()
-            .cartesian_product(back_end_levels.clone())
-            .map(|(optimization_level_middle, optimization_level_back)| {
-                Self::new(
-                    optimization_level_middle,
-                    SizeLevel::Zero,
-                    optimization_level_back,
-                )
-            })
-            .collect();
-
-        let size_combinations: Vec<Self> = vec![SizeLevel::S, SizeLevel::Z]
-            .into_iter()
-            .cartesian_product(back_end_levels)
-            .map(|(size_level, optimization_level_back)| {
-                Self::new(
-                    inkwell::OptimizationLevel::Default,
-                    size_level,
-                    optimization_level_back,
-                )
-            })
-            .collect();
-
-        let mut combinations = performance_combinations;
-        combinations.extend(size_combinations);
-
-        combinations
     }
 
     ///
@@ -269,13 +205,6 @@ impl Settings {
     ///
     pub fn set_metadata_size(&mut self, size: u64) {
         self.metadata_size = Some(size);
-    }
-
-    ///
-    /// Returns the metadata size.
-    ///
-    pub fn metadata_size(&self) -> Option<u64> {
-        self.metadata_size
     }
 }
 

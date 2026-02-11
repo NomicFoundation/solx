@@ -7,7 +7,6 @@ pub mod debug_info;
 pub mod error;
 pub mod identifier;
 pub mod statement;
-pub mod r#type;
 
 use crate::lexer::Lexer;
 use crate::lexer::error::Error as LexerError;

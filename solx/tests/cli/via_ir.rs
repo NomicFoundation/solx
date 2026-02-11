@@ -11,7 +11,7 @@ fn default() -> anyhow::Result<()> {
     let args = &[
         "--via-ir",
         "--bin",
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -30,7 +30,7 @@ fn yul() -> anyhow::Result<()> {
         "--yul",
         "--via-ir",
         "--bin",
-        crate::common::TEST_YUL_CONTRACT_PATH,
+        crate::common::contract!("yul/Test.yul"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -49,7 +49,7 @@ fn llvm_ir() -> anyhow::Result<()> {
         "--llvm-ir",
         "--via-ir",
         "--bin",
-        crate::common::TEST_LLVM_IR_CONTRACT_PATH,
+        crate::common::contract!("llvm_ir/Test.ll"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -67,7 +67,7 @@ fn standard_json() -> anyhow::Result<()> {
     let args = &[
         "--via-ir",
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::standard_json!("solidity.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
