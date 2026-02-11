@@ -165,3 +165,125 @@ fn standard_json() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn with_runtime() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/Test.sol"),
+        "--bin",
+        "--bin-runtime",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Binary:"))
+        .stdout(predicate::str::contains("Binary of the runtime part"));
+
+    Ok(())
+}
+
+#[test]
+fn no_output_flags() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[crate::common::contract!("solidity/Test.sol")];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("No output generated"));
+
+    Ok(())
+}
+
+#[test]
+fn multiple_files() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/caller/Main.sol"),
+        crate::common::contract!("solidity/caller/Callable.sol"),
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains("Binary:"));
+
+    Ok(())
+}
+
+#[test]
+fn all_terminal_outputs() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/Test.sol"),
+        "--bin",
+        "--bin-runtime",
+        "--metadata",
+        "--abi",
+        "--hashes",
+        "--userdoc",
+        "--devdoc",
+        "--storage-layout",
+        "--transient-storage-layout",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Binary:"))
+        .stdout(predicate::str::contains("Binary of the runtime part"))
+        .stdout(predicate::str::contains("Function signatures:"))
+        .stdout(predicate::str::contains("Contract JSON ABI:"))
+        .stdout(predicate::str::contains("Developer Documentation:"))
+        .stdout(predicate::str::contains("User Documentation:"))
+        .stdout(predicate::str::contains("Contract Storage Layout:"))
+        .stdout(predicate::str::contains(
+            "Contract Transient Storage Layout:",
+        ))
+        .stdout(predicate::str::contains("Metadata:"));
+
+    Ok(())
+}
+
+#[test]
+fn combined_terminal_outputs() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/Test.sol"),
+        "--abi",
+        "--metadata",
+        "--userdoc",
+        "--devdoc",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(
+        predicate::str::contains("Contract JSON ABI")
+            .and(predicate::str::contains("Metadata"))
+            .and(predicate::str::contains("User Documentation"))
+            .and(predicate::str::contains("Developer Documentation")),
+    );
+
+    Ok(())
+}
+
+#[test]
+fn interface_empty_yul() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/InterfaceEmptyYul.sol"),
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains("Binary"));
+
+    Ok(())
+}

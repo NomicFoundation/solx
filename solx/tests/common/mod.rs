@@ -9,6 +9,22 @@ pub mod r#const;
 
 pub use self::r#const::*;
 
+/// Returns a path under `tests/data/contracts/` for test contract files.
+macro_rules! contract {
+    ($relative:literal) => {
+        concat!("tests/data/contracts/", $relative)
+    };
+}
+pub(crate) use contract;
+
+/// Returns a path under `tests/data/standard_json_input/` for standard JSON input files.
+macro_rules! standard_json {
+    ($relative:literal) => {
+        concat!("tests/data/standard_json_input/", $relative)
+    };
+}
+pub(crate) use standard_json;
+
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::PathBuf;

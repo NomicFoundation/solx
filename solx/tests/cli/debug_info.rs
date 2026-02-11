@@ -3,6 +3,7 @@
 //!
 
 use predicates::prelude::*;
+use tempfile::TempDir;
 use test_case::test_case;
 
 #[test_case(true ; "yul")]
@@ -38,6 +39,27 @@ fn standard_json() -> anyhow::Result<()> {
     result.success().stdout(predicate::str::contains(
         "Cannot output data outside of JSON in standard JSON mode.",
     ));
+
+    Ok(())
+}
+
+#[test]
+fn output_dir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_debug_output")?;
+
+    let args = &[
+        crate::common::contract!("solidity/Test.sol"),
+        "--debug-info",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stderr(predicate::str::contains("Compiler run successful"));
 
     Ok(())
 }

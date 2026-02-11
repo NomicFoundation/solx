@@ -122,3 +122,69 @@ fn standard_json() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn multiple_outputs() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_sol_output")?;
+
+    let args = &[
+        crate::common::contract!("solidity/Test.sol"),
+        "--bin",
+        "--asm",
+        "--metadata",
+        "--abi",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stderr(predicate::str::contains("Compiler run successful"));
+
+    Ok(())
+}
+
+#[test]
+fn multiple_outputs_simple_contract() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_output_dir_multi_test")?;
+
+    let args = &[
+        crate::common::contract!("solidity/SimpleContract.sol"),
+        "--bin",
+        "--abi",
+        "--metadata",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success();
+
+    Ok(())
+}
+
+#[test]
+fn env_var() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_debug_env")?;
+
+    let args = &[crate::common::contract!("solidity/Test.sol"), "--bin"];
+
+    let result = crate::cli::execute_solx_with_env_vars(
+        args,
+        vec![(
+            "SOLX_OUTPUT_DIR",
+            output_directory.path().to_string_lossy().to_string(),
+        )],
+    )?;
+
+    result.success().stdout(predicate::str::contains("Binary"));
+
+    Ok(())
+}

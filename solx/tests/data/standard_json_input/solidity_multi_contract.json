@@ -1,0 +1,28 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; contract First { function f() public pure returns (uint256) { return 1; } } contract Second { function g() public pure returns (uint256) { return 2; } }"
+    }
+  },
+  "settings": {
+    "viaIR": true,
+    "optimizer": {
+      "mode": "3"
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.methodIdentifiers",
+          "evm.bytecode.object",
+          "evm.deployedBytecode.object",
+          "evm.bytecode.opcodes",
+          "evm.bytecode.sourceMap",
+          "evm.deployedBytecode.opcodes",
+          "evm.deployedBytecode.sourceMap"
+        ]
+      }
+    }
+  }
+}

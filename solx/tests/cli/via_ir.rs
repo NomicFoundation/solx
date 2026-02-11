@@ -77,3 +77,24 @@ fn standard_json() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn emit_llvm_ir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/Test.sol"),
+        "--via-ir",
+        "--emit-llvm-ir",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Deploy LLVM IR:"))
+        .stdout(predicate::str::contains("Runtime LLVM IR:"))
+        .stdout(predicate::str::contains("target datalayout"));
+
+    Ok(())
+}

@@ -3,6 +3,7 @@
 //!
 
 use predicates::prelude::*;
+use tempfile::TempDir;
 use test_case::test_case;
 
 #[test]
@@ -263,6 +264,85 @@ fn standard_json_debug_info() -> anyhow::Result<()> {
     result.success().stdout(predicate::str::contains(
         "Error: Debug info is only supported for Solidity source code input.",
     ));
+
+    Ok(())
+}
+
+#[test]
+fn bin_runtime() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("llvm_ir/Test.ll"),
+        "--llvm-ir",
+        "--bin-runtime",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Binary of the runtime part"));
+
+    Ok(())
+}
+
+#[test]
+fn output_dir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_llvm_ir_output")?;
+
+    let args = &[
+        crate::common::contract!("llvm_ir/Test.ll"),
+        "--llvm-ir",
+        "--bin",
+        "--asm",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stderr(predicate::str::contains("Compiler run successful"));
+
+    Ok(())
+}
+
+#[test]
+fn emit_llvm_ir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("llvm_ir/Test.ll"),
+        "--llvm-ir",
+        "--emit-llvm-ir",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("LLVM IR:"))
+        .stdout(predicate::str::contains("target datalayout"));
+
+    Ok(())
+}
+
+#[test]
+fn debug_info_error() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("llvm_ir/Test.ll"),
+        "--llvm-ir",
+        "--debug-info",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .failure()
+        .stderr(predicate::str::contains("can be only emitted for Solidity"));
 
     Ok(())
 }

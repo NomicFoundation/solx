@@ -110,3 +110,39 @@ fn standard_json_invalid_env_var() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test_case('s')]
+#[test_case('z')]
+fn yul(level: char) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("yul/Test.yul"),
+        "--yul",
+        &format!("-O{level}"),
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains("Binary"));
+
+    Ok(())
+}
+
+#[test_case('s')]
+#[test_case('z')]
+fn llvm_ir(level: char) -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("llvm_ir/Test.ll"),
+        "--llvm-ir",
+        &format!("-O{level}"),
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains("Binary"));
+
+    Ok(())
+}

@@ -1,0 +1,24 @@
+{
+  "language": "Yul",
+  "sources": {
+    "ParserCoverage": {
+      "urls": [
+        "tests/data/contracts/yul/ParserCoverage.yul"
+      ]
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": true
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.bytecode.object",
+          "evm.deployedBytecode.object"
+        ]
+      }
+    },
+    "libraries": {}
+  }
+}

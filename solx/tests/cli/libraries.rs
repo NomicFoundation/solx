@@ -95,3 +95,37 @@ fn invalid_address() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn linked_mixed_deps() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/LinkedMixedDeps.sol"),
+        "--bin",
+        "--libraries",
+        "tests/data/contracts/solidity/MiniMath.sol:MiniMath=0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains("Binary"));
+
+    Ok(())
+}
+
+#[test]
+fn linked_mixed_deps_multi_level() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("solidity/LinkedMixedDepsMultiLevel.sol"),
+        "--bin",
+        "--libraries",
+        "tests/data/contracts/solidity/MiniMath.sol:MiniMath=0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains("Binary"));
+
+    Ok(())
+}
