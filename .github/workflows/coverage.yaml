@@ -31,7 +31,7 @@ jobs:
       PROFDATA_FILE: solx.profdata
       LCOV_FILE: codecov.lcov
       OUTPUT_HTML_DIR: COVERAGE
-      COVERAGE_IGNORE_REGEX: '/(solx-llvm|target-llvm|solx-solidity|\.cargo|cargo/registry)/'
+      COVERAGE_IGNORE_REGEX: '/(solx-llvm|target-llvm|solx-solidity|solx-tester|solx-dev|solx-benchmark-converter|solx-compiler-downloader|solx-solc-test-adapter|\.cargo|cargo/registry)/'
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -75,19 +75,20 @@ jobs:
         run: |
           TMP="${PROFDATA_FILE}.tmp"
           for TEST_PATH in tests/solidity/complex/* tests/solidity/simple/*; do
-          WORKDIR=$(basename ${TEST_PATH})
-          mkdir -p "${GITHUB_WORKSPACE}/${WORKDIR}"
-          ./target/release/solx-dev test solx-tester --solidity-compiler ${{ steps.build-solx.outputs.binary-path }} --path ${TEST_PATH} --workflow build
-          mv *.profraw "${GITHUB_WORKSPACE}/${WORKDIR}/" || true
-          du -hs "${GITHUB_WORKSPACE}/${WORKDIR}"
-          find ${GITHUB_WORKSPACE}/${WORKDIR} -type f -name '*.profraw' -print > profiles.lst
-          if [[ -f "${PROFDATA_FILE}" ]]; then
-           llvm-profdata merge -sparse -num-threads="$(nproc)" -o "${TMP}" "${PROFDATA_FILE}" @profiles.lst
-          else
-           llvm-profdata merge -sparse -num-threads="$(nproc)" -o "${TMP}" @profiles.lst
-          fi
-          mv -f "${TMP}" "${PROFDATA_FILE}"
-          rm -rf "${GITHUB_WORKSPACE}/${WORKDIR}"
+            WORKDIR=$(basename ${TEST_PATH})
+            mkdir -p "${GITHUB_WORKSPACE}/${WORKDIR}"
+            ./target/release/solx-dev test solx-tester \
+              --solidity-compiler ${{ steps.build-solx.outputs.binary-path }} \
+              --path ${TEST_PATH} --workflow build --optimizer M3B3
+            mv *.profraw "${GITHUB_WORKSPACE}/${WORKDIR}/" || true
+            find "${GITHUB_WORKSPACE}/${WORKDIR}" -type f -name '*.profraw' -print > profiles.lst
+            if [[ -f "${PROFDATA_FILE}" ]]; then
+              llvm-profdata merge -sparse -num-threads="$(nproc)" -o "${TMP}" "${PROFDATA_FILE}" @profiles.lst
+            else
+              llvm-profdata merge -sparse -num-threads="$(nproc)" -o "${TMP}" @profiles.lst
+            fi
+            mv -f "${TMP}" "${PROFDATA_FILE}"
+            rm -rf "${GITHUB_WORKSPACE}/${WORKDIR}"
           done
 
       - name: Preserve instrumented binary
@@ -96,11 +97,21 @@ jobs:
         run: cp "${SOLX_BINARY}" "${GITHUB_WORKSPACE}/solx-instrumented"
 
       - name: Run unit tests
-        uses: ./.github/actions/rust-unit-tests
-        with:
-          target: 'x86_64-unknown-linux-gnu'
-          enable-coverage: 'true'
-          upload-results: 'false'
+        env:
+          RUSTC_BOOTSTRAP: 1
+          RUSTFLAGS: '-C target-feature=+crt-static -C instrument-coverage -C link-arg=-fuse-ld=lld'
+          LLVM_PROFILE_FILE: 'unit-tests-%p-%m.profraw'
+        run: cargo test --release --target x86_64-unknown-linux-gnu
+
+      - name: Merge unit test profraw
+        run: |
+          find . -name 'unit-tests-*.profraw' -print > unit-profiles.lst
+          if [ -s unit-profiles.lst ]; then
+            TMP="${PROFDATA_FILE}.tmp"
+            llvm-profdata merge -sparse -num-threads="$(nproc)" -o "${TMP}" "${PROFDATA_FILE}" @unit-profiles.lst
+            mv -f "${TMP}" "${PROFDATA_FILE}"
+            find . -name 'unit-tests-*.profraw' -delete
+          fi
 
       - name: Generate coverage reports
         run: |
@@ -195,6 +206,6 @@ jobs:
         if: (success() || failure())
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: 'lcov.info,llvm/codecov.lcov'
+          files: 'llvm/codecov.lcov'
           slug: ${{ github.repository }}
           fail_ci_if_error: false

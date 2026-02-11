@@ -20,6 +20,7 @@
 /solc-bin*/
 /*.json
 /*.txt
+/**/*.profraw
 
 # Local dev tooling
 CLAUDE.md
