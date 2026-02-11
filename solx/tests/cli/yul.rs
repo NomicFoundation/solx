@@ -3,6 +3,7 @@
 //!
 
 use predicates::prelude::*;
+use tempfile::TempDir;
 use test_case::test_case;
 
 #[test]
@@ -212,6 +213,194 @@ fn standard_json_default_urls_debug_info() -> anyhow::Result<()> {
     result.success().stdout(predicate::str::contains(
         "Error: Debug info is only supported for Solidity source code input.",
     ));
+
+    Ok(())
+}
+
+#[test]
+fn bin_runtime() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("yul/ParserCoverage.yul"),
+        "--yul",
+        "--bin-runtime",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Binary of the runtime part"));
+
+    Ok(())
+}
+
+#[test]
+fn asm_parser_coverage() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("yul/ParserCoverage.yul"),
+        "--yul",
+        "--asm",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("assembly"));
+
+    Ok(())
+}
+
+#[test]
+fn emit_llvm_ir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("yul/ParserCoverage.yul"),
+        "--yul",
+        "--emit-llvm-ir",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Runtime LLVM IR:"))
+        .stdout(predicate::str::contains("target datalayout"));
+
+    Ok(())
+}
+
+#[test]
+fn output_dir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_yul_output")?;
+
+    let args = &[
+        crate::common::contract!("yul/ParserCoverage.yul"),
+        "--yul",
+        "--bin",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stderr(predicate::str::contains("Compiler run successful"));
+
+    Ok(())
+}
+
+#[test]
+fn output_dir_multiple() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_yul_output")?;
+
+    let args = &[
+        crate::common::contract!("yul/ParserCoverage.yul"),
+        "--yul",
+        "--bin",
+        "--asm",
+        "--emit-llvm-ir",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stderr(predicate::str::contains("Compiler run successful"));
+
+    Ok(())
+}
+
+#[test]
+fn opcode_coverage_bin() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("yul/OpcodeCoverage.yul"),
+        "--yul",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains("Binary"));
+
+    Ok(())
+}
+
+#[test]
+fn opcode_coverage_bin_runtime() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("yul/OpcodeCoverage.yul"),
+        "--yul",
+        "--bin-runtime",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Binary of the runtime part"));
+
+    Ok(())
+}
+
+#[test]
+fn external_calls_bin() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("yul/ExternalCalls.yul"),
+        "--yul",
+        "--bin",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains("Binary:"));
+
+    Ok(())
+}
+
+#[test]
+fn external_calls_bin_runtime() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("yul/ExternalCalls.yul"),
+        "--yul",
+        "--bin-runtime",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stdout(predicate::str::contains("Binary of the runtime part"));
+
+    Ok(())
+}
+
+#[test]
+fn debug_info_error() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        crate::common::contract!("yul/Test.yul"),
+        "--yul",
+        "--debug-info",
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .failure()
+        .stderr(predicate::str::contains("can be only emitted for Solidity"));
 
     Ok(())
 }

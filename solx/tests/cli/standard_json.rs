@@ -491,3 +491,39 @@ fn select_all(path: &str) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn select_llvm_ir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let result = crate::cli::execute_solx_with_stdin(
+        &["--standard-json"],
+        crate::common::standard_json!("select_llvm_ir.json"),
+    )?;
+
+    result.success().stdout(
+        predicate::str::contains("llvmIr")
+            .and(predicate::str::contains("llvmIrUnoptimized"))
+            .and(predicate::str::contains("object")),
+    );
+
+    Ok(())
+}
+
+#[test]
+fn select_evmla_ethir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let result = crate::cli::execute_solx_with_stdin(
+        &["--standard-json"],
+        crate::common::standard_json!("select_evmla_ethir.json"),
+    )?;
+
+    result.success().stdout(
+        predicate::str::contains("evmla")
+            .and(predicate::str::contains("ethir"))
+            .and(predicate::str::contains("object")),
+    );
+
+    Ok(())
+}

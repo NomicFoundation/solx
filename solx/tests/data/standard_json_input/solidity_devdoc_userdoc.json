@@ -1,0 +1,20 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0;\n/// @title A simple contract\n/// @author test\ncontract C {\n    /// @notice Get 42\n    /// @return The answer\n    function foo() public pure returns (uint256) { return 42; }\n}"
+    }
+  },
+  "settings": {
+    "viaIR": true,
+    "outputSelection": {
+      "*": {
+        "*": [
+          "devdoc",
+          "userdoc",
+          "evm.bytecode.object"
+        ]
+      }
+    }
+  }
+}

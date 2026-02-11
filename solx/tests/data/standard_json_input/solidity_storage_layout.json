@@ -1,0 +1,22 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A": {
+      "content": "// SPDX-License-Identifier: Unlicensed\npragma solidity >=0.0; contract C { uint256 public x; uint256 public y; function set(uint256 _x) public { x = _x; } }"
+    }
+  },
+  "settings": {
+    "viaIR": true,
+    "optimizer": {
+      "mode": "3"
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.bytecode.object",
+          "storageLayout"
+        ]
+      }
+    }
+  }
+}
