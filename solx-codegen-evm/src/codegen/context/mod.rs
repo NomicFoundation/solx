@@ -427,20 +427,6 @@ impl<'ctx> Context<'ctx> {
     }
 
     ///
-    /// Takes the captured EVM legacy assembly IR.
-    ///
-    pub fn take_captured_evmla(&mut self) -> Option<String> {
-        self.captured_evmla.take()
-    }
-
-    ///
-    /// Takes the captured Ethereal IR.
-    ///
-    pub fn take_captured_ethir(&mut self) -> Option<String> {
-        self.captured_ethir.take()
-    }
-
-    ///
     /// Returns the LLVM intrinsics collection reference.
     ///
     pub fn intrinsics(&self) -> &Intrinsics<'ctx> {

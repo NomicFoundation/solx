@@ -5,10 +5,10 @@
 pub mod multi_line;
 pub mod single_line;
 
-use crate::lexer::token::Token;
-
 use self::multi_line::Comment as MultiLineComment;
 use self::single_line::Comment as SingleLineComment;
+
+use crate::lexer::token::Token;
 
 ///
 /// The comment lexeme.

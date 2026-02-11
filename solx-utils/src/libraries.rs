@@ -3,7 +3,6 @@
 //!
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 
 ///
 /// The unified representation of Solidity libraries.
@@ -46,21 +45,6 @@ impl Libraries {
     }
 
     ///
-    /// Returns a representation of libraries suitable for filtering.
-    ///
-    pub fn as_paths(&self) -> BTreeSet<String> {
-        self.inner
-            .iter()
-            .flat_map(|(file, names)| {
-                names
-                    .keys()
-                    .map(|name| format!("{file}:{name}"))
-                    .collect::<BTreeSet<String>>()
-            })
-            .collect::<BTreeSet<String>>()
-    }
-
-    ///
     /// Checks whether the libraries are empty.
     ///
     pub fn is_empty(&self) -> bool {
@@ -72,13 +56,6 @@ impl Libraries {
     ///
     pub fn as_inner(&self) -> &BTreeMap<String, BTreeMap<String, String>> {
         &self.inner
-    }
-
-    ///
-    /// Returns a mutable reference to the inner value.
-    ///
-    pub fn as_inner_mut(&mut self) -> &mut BTreeMap<String, BTreeMap<String, String>> {
-        &mut self.inner
     }
 }
 

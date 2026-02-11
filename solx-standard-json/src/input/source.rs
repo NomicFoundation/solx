@@ -97,15 +97,6 @@ impl Source {
     }
 }
 
-impl From<String> for Source {
-    fn from(content: String) -> Self {
-        Self {
-            content: Some(content),
-            urls: None,
-        }
-    }
-}
-
 impl From<&Path> for Source {
     fn from(path: &Path) -> Self {
         Self {

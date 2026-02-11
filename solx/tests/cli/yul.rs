@@ -9,7 +9,7 @@ use test_case::test_case;
 fn bin() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_YUL_CONTRACT_PATH, "--yul", "--bin"];
+    let args = &[crate::common::contract!("yul/Test.yul"), "--yul", "--bin"];
 
     let result = crate::cli::execute_solx(args)?;
     result.success().stdout(predicate::str::contains("Binary"));
@@ -27,7 +27,8 @@ fn stdin() -> anyhow::Result<()> {
         solx_standard_json::InputSource::STDIN_INPUT_IDENTIFIER,
     ];
 
-    let result = crate::cli::execute_solx_with_stdin(args, crate::common::TEST_YUL_CONTRACT_PATH)?;
+    let result =
+        crate::cli::execute_solx_with_stdin(args, crate::common::contract!("yul/Test.yul"))?;
 
     result
         .success()
@@ -40,7 +41,7 @@ fn stdin() -> anyhow::Result<()> {
 fn asm() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_YUL_CONTRACT_PATH, "--yul", "--asm"];
+    let args = &[crate::common::contract!("yul/Test.yul"), "--yul", "--asm"];
 
     let result = crate::cli::execute_solx(args)?;
     result
@@ -54,7 +55,11 @@ fn asm() -> anyhow::Result<()> {
 fn metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_YUL_CONTRACT_PATH, "--yul", "--metadata"];
+    let args = &[
+        crate::common::contract!("yul/Test.yul"),
+        "--yul",
+        "--metadata",
+    ];
 
     let result = crate::cli::execute_solx(args)?;
     result
@@ -76,7 +81,7 @@ fn metadata() -> anyhow::Result<()> {
 fn unavailable(flag: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_YUL_CONTRACT_PATH, "--yul", flag];
+    let args = &[crate::common::contract!("yul/Test.yul"), "--yul", flag];
 
     let result = crate::cli::execute_solx(args)?;
     result.failure().stderr(predicate::str::contains(
@@ -91,7 +96,7 @@ fn object_naming() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_YUL_CONTRACT_OBJECT_NAMING_PATH,
+        crate::common::contract!("yul/ObjectNaming.yul"),
         "--yul",
         "--bin",
     ];
@@ -106,7 +111,7 @@ fn object_naming() -> anyhow::Result<()> {
 fn solc() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_YUL_CONTRACT_PATH, "--yul", "--bin"];
+    let args = &[crate::common::contract!("yul/Test.yul"), "--yul", "--bin"];
 
     let result = crate::cli::execute_solx(args)?;
     result.success().stdout(predicate::str::contains("Binary"));
@@ -118,7 +123,7 @@ fn solc() -> anyhow::Result<()> {
 fn invalid_input() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT_PATH, "--yul"];
+    let args = &[crate::common::contract!("solidity/Test.sol"), "--yul"];
 
     let result = crate::cli::execute_solx(args)?;
     result
@@ -133,7 +138,7 @@ fn invalid_standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_YUL_CONTRACT_PATH,
+        crate::common::contract!("yul/Test.yul"),
         "--yul",
         "--standard-json",
     ];
@@ -150,10 +155,7 @@ fn invalid_standard_json() -> anyhow::Result<()> {
 fn standard_json_default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        "--standard-json",
-        crate::common::TEST_YUL_STANDARD_JSON_PATH,
-    ];
+    let args = &["--standard-json", crate::common::standard_json!("yul.json")];
 
     let result = crate::cli::execute_solx(args)?;
     result
@@ -170,7 +172,7 @@ fn standard_json_default_urls() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_YUL_STANDARD_JSON_URLS_PATH,
+        crate::common::standard_json!("yul_urls.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -188,7 +190,7 @@ fn standard_json_default_urls_invalid() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_YUL_STANDARD_JSON_URLS_INVALID_PATH,
+        crate::common::standard_json!("yul_urls_invalid.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -205,7 +207,7 @@ fn standard_json_default_urls_debug_info() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_YUL_STANDARD_JSON_URLS_DEBUG_INFO_PATH,
+        crate::common::standard_json!("yul_urls_debug_info.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;

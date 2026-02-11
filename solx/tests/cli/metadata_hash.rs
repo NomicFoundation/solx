@@ -14,7 +14,7 @@ fn none() -> anyhow::Result<()> {
         "--metadata-hash",
         hash_type.as_str(),
         "--bin",
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -32,7 +32,7 @@ fn ipfs() -> anyhow::Result<()> {
         "--metadata-hash",
         hash_type.as_str(),
         "--bin",
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -47,7 +47,7 @@ fn standard_json_cli_excess_arg() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::standard_json!("solidity.json"),
         "--metadata-hash",
         "ipfs",
     ];

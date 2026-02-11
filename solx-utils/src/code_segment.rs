@@ -2,8 +2,6 @@
 //! Contract code segment.
 //!
 
-use std::str::FromStr;
-
 ///
 /// Contract code segment.
 ///
@@ -16,18 +14,6 @@ pub enum CodeSegment {
     Deploy,
     /// The runtime code segment.
     Runtime,
-}
-
-impl FromStr for CodeSegment {
-    type Err = anyhow::Error;
-
-    fn from_str(string: &str) -> Result<Self, Self::Err> {
-        match string {
-            "deploy" => Ok(Self::Deploy),
-            "runtime" => Ok(Self::Runtime),
-            string => anyhow::bail!("unknown code segment: `{string}`"),
-        }
-    }
 }
 
 impl std::fmt::Display for CodeSegment {

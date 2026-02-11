@@ -15,7 +15,7 @@ fn default() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_output")?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_CALLER_MAIN_PATH,
+        crate::common::contract!("solidity/caller/Main.sol"),
         "--bin",
         "--bin-runtime",
         "--asm",
@@ -49,7 +49,7 @@ fn default() -> anyhow::Result<()> {
 fn yul(extension: String) -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let input_path = PathBuf::from(crate::common::TEST_YUL_CONTRACT_PATH);
+    let input_path = PathBuf::from(crate::common::contract!("yul/Test.yul"));
     let output_directory = TempDir::with_prefix("solx_output")?;
     let mut output_file = input_path
         .join("Return")
@@ -86,7 +86,7 @@ fn unusual_path_characters() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("File!and#$%-XXXXXX")?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--bin",
         "--bin-runtime",
         "--asm",
@@ -110,7 +110,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::standard_json!("solidity.json"),
         "--output-dir",
         "output",
     ];

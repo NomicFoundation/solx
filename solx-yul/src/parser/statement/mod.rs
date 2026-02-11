@@ -16,8 +16,6 @@ pub mod object;
 pub mod switch;
 pub mod variable_declaration;
 
-use std::collections::BTreeSet;
-
 use crate::error::Error;
 use crate::lexer::Lexer;
 use crate::lexer::token::Token;
@@ -157,27 +155,6 @@ impl Statement {
                 found: token.lexeme.to_string(),
             }
             .into()),
-        }
-    }
-
-    ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        match self {
-            Self::Object(inner) => inner.get_unlinked_libraries(),
-            Self::Code(inner) => inner.get_unlinked_libraries(),
-            Self::Block(inner) => inner.get_unlinked_libraries(),
-            Self::Expression(inner) => inner.get_unlinked_libraries(),
-            Self::FunctionDefinition(inner) => inner.get_unlinked_libraries(),
-            Self::VariableDeclaration(inner) => inner.get_unlinked_libraries(),
-            Self::Assignment(inner) => inner.get_unlinked_libraries(),
-            Self::IfConditional(inner) => inner.get_unlinked_libraries(),
-            Self::Switch(inner) => inner.get_unlinked_libraries(),
-            Self::ForLoop(inner) => inner.get_unlinked_libraries(),
-            Self::Continue(_) => BTreeSet::new(),
-            Self::Break(_) => BTreeSet::new(),
-            Self::Leave(_) => BTreeSet::new(),
         }
     }
 

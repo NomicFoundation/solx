@@ -2,8 +2,6 @@
 //! The Yul code.
 //!
 
-use std::collections::BTreeSet;
-
 use crate::error::Error;
 use crate::lexer::Lexer;
 use crate::lexer::token::Token;
@@ -49,13 +47,6 @@ impl Code {
         let block = Block::parse(lexer, None)?;
 
         Ok(Self { location, block })
-    }
-
-    ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        self.block.get_unlinked_libraries()
     }
 
     ///

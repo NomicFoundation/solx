@@ -20,25 +20,3 @@ pub struct SecondarySourceLocation {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
 }
-
-impl SecondarySourceLocation {
-    ///
-    /// A shortcut constructor.
-    ///
-    pub fn new<S>(
-        file: S,
-        start: Option<isize>,
-        end: Option<isize>,
-        message: Option<String>,
-    ) -> Self
-    where
-        S: Into<String>,
-    {
-        Self {
-            file: file.into(),
-            start,
-            end,
-            message,
-        }
-    }
-}

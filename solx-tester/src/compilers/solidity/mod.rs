@@ -222,7 +222,10 @@ impl SolidityCompiler {
             .map(|(path, source)| {
                 (
                     path.to_owned(),
-                    solx_standard_json::InputSource::from(source.to_owned()),
+                    solx_standard_json::InputSource {
+                        content: Some(source.to_owned()),
+                        urls: None,
+                    },
                 )
             })
             .collect();
@@ -245,10 +248,11 @@ impl SolidityCompiler {
             sources_json,
             libraries.clone(),
             BTreeSet::new(),
-            solx_standard_json::InputOptimizer::new(
-                llvm_settings.middle_end_as_char(),
-                llvm_settings.is_fallback_to_size_enabled,
-            ),
+            solx_standard_json::InputOptimizer {
+                enabled: None,
+                mode: Some(llvm_settings.middle_end_as_char()),
+                size_fallback: Some(llvm_settings.is_fallback_to_size_enabled),
+            },
             evm_version,
             mode.via_ir,
             &solx_standard_json::InputSelection::new(selectors),
@@ -277,7 +281,10 @@ impl SolidityCompiler {
             .map(|(path, source)| {
                 (
                     path.to_owned(),
-                    solx_standard_json::InputSource::from(source.to_owned()),
+                    solx_standard_json::InputSource {
+                        content: Some(source.to_owned()),
+                        urls: None,
+                    },
                 )
             })
             .collect();
@@ -293,10 +300,11 @@ impl SolidityCompiler {
         solx_standard_json::Input::from_yul_sources(
             sources_json,
             libraries.clone(),
-            solx_standard_json::InputOptimizer::new(
-                llvm_settings.middle_end_as_char(),
-                llvm_settings.is_fallback_to_size_enabled,
-            ),
+            solx_standard_json::InputOptimizer {
+                enabled: None,
+                mode: Some(llvm_settings.middle_end_as_char()),
+                size_fallback: Some(llvm_settings.is_fallback_to_size_enabled),
+            },
             &solx_standard_json::InputSelection::new(selectors),
             solx_standard_json::InputMetadata::default(),
             llvm_options,
@@ -319,7 +327,7 @@ impl SolidityCompiler {
             mode => panic!("Unsupported mode for solc input: {mode}"),
         };
 
-        let output_selection = solx_standard_json::InputSelection::new_required_for_testing(via_ir);
+        let output_selection = crate::compilers::input_ext::selection_required_for_testing(via_ir);
 
         let evm_version = match mode {
             Mode::Solidity(_) => test_params.map(|params| params.evm_version.newest_matching()),
@@ -327,11 +335,11 @@ impl SolidityCompiler {
             _ => None,
         };
 
-        let debug = test_params.map(|test_params| {
-            solx_standard_json::InputDebug::new(Some(test_params.revert_strings.to_string()))
+        let debug = test_params.map(|test_params| solx_standard_json::InputDebug {
+            revert_strings: Some(test_params.revert_strings.to_string()),
         });
 
-        solx_standard_json::Input::new_for_solc(
+        crate::compilers::input_ext::new_input_for_solc(
             language,
             sources.iter().cloned().collect(),
             libraries.clone(),
@@ -456,12 +464,15 @@ impl SolidityCompiler {
         solx_standard_json::CollectableError::check_errors(&output)?;
 
         let method_identifiers = match self.language {
-            solx_standard_json::InputLanguage::Solidity => Some(output.get_method_identifiers()?),
+            solx_standard_json::InputLanguage::Solidity => Some(
+                crate::compilers::output_ext::get_method_identifiers(&output)?,
+            ),
             _ => None,
         };
 
-        let last_contract = output.get_last_contract(self.language, &sources)?;
-        let builds = output.extract_bytecode_builds()?;
+        let last_contract =
+            crate::compilers::output_ext::get_last_contract(&output, self.language, &sources)?;
+        let builds = crate::compilers::output_ext::extract_bytecode_builds(&output)?;
 
         // For Yul, strip the contract name suffix
         if self.language == solx_standard_json::InputLanguage::Yul {
@@ -499,7 +510,7 @@ impl SolidityCompiler {
         let output =
             self.compile_solc_cached(test_path, &sources, &libraries, mode, test_params)?;
 
-        if let Some(errors) = output.errors_opt() {
+        if let Some(errors) = crate::compilers::output_ext::errors_opt(&output) {
             let mut has_errors = false;
             let mut error_messages = Vec::with_capacity(errors.len());
 
@@ -516,15 +527,18 @@ impl SolidityCompiler {
         }
 
         let method_identifiers = match self.language {
-            solx_standard_json::InputLanguage::Solidity => Some(output.get_method_identifiers()?),
+            solx_standard_json::InputLanguage::Solidity => Some(
+                crate::compilers::output_ext::get_method_identifiers(&output)?,
+            ),
             solx_standard_json::InputLanguage::Yul => None,
             solx_standard_json::InputLanguage::LLVMIR => {
                 anyhow::bail!("LLVM IR language is not supported by solc")
             }
         };
 
-        let last_contract = output.get_last_contract(self.language, &sources)?;
-        let builds = output.extract_bytecode_builds()?;
+        let last_contract =
+            crate::compilers::output_ext::get_last_contract(&output, self.language, &sources)?;
+        let builds = crate::compilers::output_ext::extract_bytecode_builds(&output)?;
 
         // For Yul, strip the contract name suffix
         if self.language == solx_standard_json::InputLanguage::Yul {
@@ -583,7 +597,7 @@ impl Compiler for SolidityCompiler {
                     codegen_versions.push((via_ir, self.version.to_owned()));
                 }
 
-                solx_codegen_evm::OptimizerSettings::combinations()
+                super::optimizer_combinations()
                     .into_iter()
                     .cartesian_product(codegen_versions)
                     .map(|(llvm_optimizer_settings, (via_ir, version))| {
@@ -600,7 +614,7 @@ impl Compiler for SolidityCompiler {
                 modes
             }
             (solx_standard_json::InputLanguage::Yul, Toolchain::Solx) => {
-                solx_codegen_evm::OptimizerSettings::combinations()
+                super::optimizer_combinations()
                     .into_iter()
                     .map(|llvm_optimizer_settings| {
                         YulMode::new_solx(llvm_optimizer_settings).into()

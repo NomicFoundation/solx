@@ -11,7 +11,7 @@ fn default(via_ir: bool) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let mut args = vec![
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--debug-info-runtime",
     ];
     if via_ir {
@@ -33,7 +33,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::standard_json!("solidity.json"),
         "--debug-info-runtime",
     ];
 

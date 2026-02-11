@@ -28,8 +28,6 @@ pub use self::output::contract::evm::EVM as OutputContractEVM;
 pub use self::output::contract::evm::bytecode::Bytecode as OutputContractEVMBytecode;
 pub use self::output::error::Error as OutputError;
 pub use self::output::error::collectable::Collectable as CollectableError;
-pub use self::output::error::source_location::SourceLocation as OutputErrorSourceLocation;
-pub use self::output::source::Source as OutputSource;
 pub use self::version::Version;
 
 /// The standard JSON debug environment variable.

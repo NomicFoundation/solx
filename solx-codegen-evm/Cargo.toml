@@ -15,8 +15,11 @@ thiserror.workspace = true
 serde.workspace = true
 semver.workspace = true
 num.workspace = true
-itertools.workspace = true
 inkwell.workspace = true
 indexmap = { version = "2.13", features = ["serde"] }
 
 solx-utils = { path = "../solx-utils" }
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile = "3.24"

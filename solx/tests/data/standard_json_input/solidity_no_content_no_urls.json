@@ -1,0 +1,16 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "A": {}
+  },
+  "settings": {
+    "viaIR": true,
+    "outputSelection": {
+      "*": {
+        "*": [
+          "evm.bytecode.object"
+        ]
+      }
+    }
+  }
+}

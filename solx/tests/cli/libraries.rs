@@ -8,9 +8,9 @@ use predicates::prelude::*;
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--libraries",
-        crate::common::LIBRARY_DEFAULT,
+        "tests/data/contracts/solidity/MiniMath.sol:MiniMath=0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC",
         "--bin",
     ];
 
@@ -26,9 +26,9 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::standard_json!("solidity.json"),
         "--libraries",
-        crate::common::LIBRARY_DEFAULT,
+        "tests/data/contracts/solidity/MiniMath.sol:MiniMath=0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC",
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -45,9 +45,9 @@ fn missing_contract_name() -> anyhow::Result<()> {
 
     let args = &[
         "--yul",
-        crate::common::TEST_YUL_CONTRACT_PATH,
+        crate::common::contract!("yul/Test.yul"),
         "--libraries",
-        crate::common::LIBRARY_CONTRACT_NAME_MISSING,
+        "tests/data/contracts/solidity/MiniMath.sol=0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC",
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -64,9 +64,9 @@ fn missing_address() -> anyhow::Result<()> {
 
     let args = &[
         "--yul",
-        crate::common::TEST_YUL_CONTRACT_PATH,
+        crate::common::contract!("yul/Test.yul"),
         "--libraries",
-        crate::common::LIBRARY_ADDRESS_MISSING,
+        "tests/data/contracts/solidity/MiniMath.sol:MiniMath",
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -83,9 +83,9 @@ fn invalid_address() -> anyhow::Result<()> {
 
     let args = &[
         "--yul",
-        crate::common::TEST_YUL_CONTRACT_PATH,
+        crate::common::contract!("yul/Test.yul"),
         "--libraries",
-        crate::common::LIBRARY_ADDRESS_INVALID,
+        "tests/data/contracts/solidity/MiniMath.sol:MiniMath=INVALID",
     ];
 
     let result = crate::cli::execute_solx(args)?;

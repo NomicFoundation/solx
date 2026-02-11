@@ -26,7 +26,7 @@ fn default(flag: &str) -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_output")?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         flag,
         "--output-dir",
         output_directory.path().to_str().unwrap(),
@@ -63,7 +63,7 @@ fn missing(flag: &str) -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_output")?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         flag,
         "--output-dir",
         output_directory.path().to_str().unwrap(),
@@ -86,7 +86,7 @@ fn all() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_output")?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--bin",
         "--asm",
         "--metadata",
@@ -122,7 +122,7 @@ fn all_missing() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_output")?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::contract!("solidity/Test.sol"),
         "--bin",
         "--bin-runtime",
         "--asm",
@@ -157,7 +157,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::standard_json!("solidity.json"),
         "--output-dir",
         "output",
         "--overwrite",

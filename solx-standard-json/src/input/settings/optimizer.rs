@@ -37,43 +37,6 @@ impl Default for Optimizer {
 
 impl Optimizer {
     ///
-    /// A shortcut constructor for solx (LLVM mode).
-    ///
-    pub fn new(mode: char, size_fallback: bool) -> Self {
-        Self {
-            enabled: None,
-            mode: Some(mode),
-            size_fallback: Some(size_fallback),
-        }
-    }
-
-    ///
-    /// A shortcut constructor for solc.
-    ///
-    pub fn new_solc(enabled: bool) -> Self {
-        Self {
-            enabled: Some(enabled),
-            mode: None,
-            size_fallback: None,
-        }
-    }
-
-    ///
-    /// A shortcut constructor with all options.
-    ///
-    pub fn new_full(
-        enabled: Option<bool>,
-        mode: Option<char>,
-        size_fallback: Option<bool>,
-    ) -> Self {
-        Self {
-            enabled,
-            mode,
-            size_fallback,
-        }
-    }
-
-    ///
     /// The default optimization mode.
     ///
     pub fn default_mode() -> Option<char> {

@@ -2,8 +2,6 @@
 //! Compilation target.
 //!
 
-use std::str::FromStr;
-
 ///
 /// Compilation target.
 ///
@@ -21,25 +19,6 @@ impl Target {
     pub fn triple(&self) -> &str {
         match self {
             Self::EVM => "evm-unknown-unknown",
-        }
-    }
-}
-
-impl FromStr for Target {
-    type Err = anyhow::Error;
-
-    fn from_str(string: &str) -> Result<Self, Self::Err> {
-        match string {
-            "evm" => Ok(Self::EVM),
-            _ => Err(anyhow::anyhow!(
-                "Unknown target `{}`. Supported targets: {}",
-                string,
-                vec![Self::EVM]
-                    .into_iter()
-                    .map(|target| target.to_string())
-                    .collect::<Vec<String>>()
-                    .join(", ")
-            )),
         }
     }
 }

@@ -2,8 +2,6 @@
 //! The if-conditional statement.
 //!
 
-use std::collections::BTreeSet;
-
 use solx_codegen_evm::IContext;
 use solx_codegen_evm::ISolidityData;
 use solx_codegen_evm::WriteLLVM;
@@ -74,15 +72,6 @@ impl IfConditional {
             block,
             solc_location,
         })
-    }
-
-    ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        let mut libraries = self.condition.get_unlinked_libraries();
-        libraries.extend(self.block.get_unlinked_libraries());
-        libraries
     }
 
     ///

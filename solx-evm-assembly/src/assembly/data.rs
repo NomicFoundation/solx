@@ -2,8 +2,6 @@
 //! The inner JSON legacy assembly code element.
 //!
 
-use std::collections::BTreeSet;
-
 use crate::assembly::Assembly;
 
 ///
@@ -22,16 +20,6 @@ pub enum Data {
 
 impl Data {
     ///
-    /// Returns the inner assembly reference if it is present.
-    ///
-    pub fn get_assembly(&self) -> Option<&Assembly> {
-        match self {
-            Self::Assembly(assembly) => Some(assembly),
-            Self::Hash(_) => None,
-            Self::Path(_) => None,
-        }
-    }
-    ///
     /// Returns the inner assembly mutable reference if it is present.
     ///
     pub fn get_assembly_mut(&mut self) -> Option<&mut Assembly> {
@@ -39,17 +27,6 @@ impl Data {
             Self::Assembly(assembly) => Some(assembly),
             Self::Hash(_) => None,
             Self::Path(_) => None,
-        }
-    }
-
-    ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        match self {
-            Self::Assembly(assembly) => assembly.get_unlinked_libraries(),
-            Self::Hash(_) => BTreeSet::new(),
-            Self::Path(_) => BTreeSet::new(),
         }
     }
 }

@@ -118,7 +118,7 @@ impl FunctionDefinition {
             }
         }
 
-        let (arguments, next) = Identifier::parse_typed_list(lexer, None)?;
+        let (arguments, next) = Identifier::parse_list(lexer, None)?;
 
         match crate::parser::take_or_next(next, lexer)? {
             Token {
@@ -141,7 +141,7 @@ impl FunctionDefinition {
                 ..
             } => {
                 lexer.next()?;
-                Identifier::parse_typed_list(lexer, None)?
+                Identifier::parse_list(lexer, None)?
             }
             Token {
                 lexeme: Lexeme::Symbol(Symbol::BracketCurlyLeft),
@@ -173,13 +173,6 @@ impl FunctionDefinition {
     }
 
     ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        self.body.get_unlinked_libraries()
-    }
-
-    ///
     /// Get the list of EVM dependencies.
     ///
     pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
@@ -193,10 +186,7 @@ impl FunctionDefinition {
         let argument_types: Vec<_> = self
             .arguments
             .iter()
-            .map(|argument| {
-                let yul_type = argument.r#type.to_owned().unwrap_or_default();
-                yul_type.into_llvm(context).as_basic_type_enum()
-            })
+            .map(|_| context.field_type().as_basic_type_enum())
             .collect();
 
         let function_type = context.function_type(argument_types, self.result.len());
@@ -227,8 +217,7 @@ impl FunctionDefinition {
                     .result
                     .pop()
                     .ok_or_else(|| anyhow::anyhow!("Function return variable is missing"))?;
-                let r#type = identifier.r#type.unwrap_or_default();
-                context.build_store(pointer, r#type.into_llvm(context).const_zero())?;
+                context.build_store(pointer, context.field_type().const_zero())?;
                 context
                     .current_function()
                     .borrow_mut()
@@ -236,7 +225,7 @@ impl FunctionDefinition {
             }
             solx_codegen_evm::FunctionReturn::Compound { pointer, .. } => {
                 for (index, identifier) in self.result.into_iter().enumerate() {
-                    let r#type = identifier.r#type.unwrap_or_default().into_llvm(context);
+                    let r#type = context.field_type();
                     let pointer = context.build_gep(
                         pointer,
                         &[
@@ -260,10 +249,7 @@ impl FunctionDefinition {
         let argument_types: Vec<_> = self
             .arguments
             .iter()
-            .map(|argument| {
-                let yul_type = argument.r#type.to_owned().unwrap_or_default();
-                yul_type.into_llvm(context)
-            })
+            .map(|_| context.field_type())
             .collect();
         for (index, argument) in self.arguments.iter().enumerate() {
             let pointer = context.build_alloca(argument_types[index], argument.inner.as_str())?;
@@ -299,272 +285,5 @@ impl FunctionDefinition {
         }
 
         Ok(())
-    }
-}
-
-///
-/// This module contains both dialect-agnostic and dialect-specific tests.
-///
-#[cfg(test)]
-mod tests {
-    use std::collections::BTreeSet;
-
-    use crate::lexer::Lexer;
-    use crate::lexer::token::location::Location;
-    use crate::parser::error::Error;
-    use crate::parser::statement::object::Object;
-
-    #[test]
-    fn error_invalid_token_identifier() {
-        let input = r#"
-object "Test" {
-    code {
-        {
-            return(0, 0)
-        }
-    }
-    object "Test_deployed" {
-        code {
-            {
-                return(0, 0)
-            }
-
-            function 256() -> result {
-                result := 42
-            }
-        }
-    }
-}
-    "#;
-
-        let mut lexer = Lexer::new(input);
-        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
-        assert_eq!(
-            result,
-            Err(Error::InvalidToken {
-                location: Location::new(14, 22),
-                expected: vec!["{identifier}"],
-                found: "256".to_owned(),
-            }
-            .into())
-        );
-    }
-
-    #[test]
-    fn error_invalid_token_parenthesis_left() {
-        let input = r#"
-object "Test" {
-    code {
-        {
-            return(0, 0)
-        }
-    }
-    object "Test_deployed" {
-        code {
-            {
-                return(0, 0)
-            }
-
-            function test{) -> result {
-                result := 42
-            }
-        }
-    }
-}
-    "#;
-
-        let mut lexer = Lexer::new(input);
-        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
-        assert_eq!(
-            result,
-            Err(Error::InvalidToken {
-                location: Location::new(14, 26),
-                expected: vec!["("],
-                found: "{".to_owned(),
-            }
-            .into())
-        );
-    }
-
-    #[test]
-    fn error_invalid_token_parenthesis_right() {
-        let input = r#"
-object "Test" {
-    code {
-        {
-            return(0, 0)
-        }
-    }
-    object "Test_deployed" {
-        code {
-            {
-                return(0, 0)
-            }
-
-            function test(} -> result {
-                result := 42
-            }
-        }
-    }
-}
-    "#;
-
-        let mut lexer = Lexer::new(input);
-        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
-        assert_eq!(
-            result,
-            Err(Error::InvalidToken {
-                location: Location::new(14, 27),
-                expected: vec![")"],
-                found: "}".to_owned(),
-            }
-            .into())
-        );
-    }
-
-    #[test]
-    fn error_invalid_token_arrow_or_bracket_curly_left() {
-        let input = r#"
-object "Test" {
-    code {
-        {
-            return(0, 0)
-        }
-    }
-    object "Test_deployed" {
-        code {
-            {
-                return(0, 0)
-            }
-
-            function test() := result {
-                result := 42
-            }
-        }
-    }
-}
-    "#;
-
-        let mut lexer = Lexer::new(input);
-        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
-        assert_eq!(
-            result,
-            Err(Error::InvalidToken {
-                location: Location::new(14, 29),
-                expected: vec!["->", "{"],
-                found: ":=".to_owned(),
-            }
-            .into())
-        );
-    }
-
-    #[test]
-    fn error_reserved_identifier() {
-        let input = r#"
-object "Test" {
-    code {
-        {
-            return(0, 0)
-        }
-    }
-    object "Test_deployed" {
-        code {
-            {
-                return(0, 0)
-            }
-
-            function basefee() -> result {
-                result := 42
-            }
-        }
-    }
-}
-    "#;
-
-        let mut lexer = Lexer::new(input);
-        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
-        assert_eq!(
-            result,
-            Err(Error::ReservedIdentifier {
-                location: Location::new(14, 22),
-                identifier: "basefee".to_owned()
-            }
-            .into())
-        );
-    }
-
-    #[test]
-    fn error_invalid_attributes_single() {
-        let input = r#"
-object "Test" {
-    code {
-        {
-            return(0, 0)
-        }
-    }
-    object "Test_deployed" {
-        code {
-            {
-                return(0, 0)
-            }
-
-            function test_$llvm_UnknownAttribute_llvm$_test() -> result {
-                result := 42
-            }
-        }
-    }
-}
-    "#;
-        let mut invalid_attributes = BTreeSet::new();
-        invalid_attributes.insert("UnknownAttribute".to_owned());
-
-        let mut lexer = Lexer::new(input);
-        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
-        assert_eq!(
-            result,
-            Err(Error::InvalidAttributes {
-                location: Location::new(14, 22),
-                values: invalid_attributes,
-            }
-            .into())
-        );
-    }
-
-    #[test]
-    fn error_invalid_attributes_multiple_repeated() {
-        let input = r#"
-object "Test" {
-    code {
-        {
-            return(0, 0)
-        }
-    }
-    object "Test_deployed" {
-        code {
-            {
-                return(0, 0)
-            }
-
-            function test_$llvm_UnknownAttribute1_UnknownAttribute1_UnknownAttribute2_llvm$_test() -> result {
-                result := 42
-            }
-        }
-    }
-}
-    "#;
-        let mut invalid_attributes = BTreeSet::new();
-        invalid_attributes.insert("UnknownAttribute1".to_owned());
-        invalid_attributes.insert("UnknownAttribute2".to_owned());
-
-        let mut lexer = Lexer::new(input);
-        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
-        assert_eq!(
-            result,
-            Err(Error::InvalidAttributes {
-                location: Location::new(14, 22),
-                values: invalid_attributes,
-            }
-            .into())
-        );
     }
 }
