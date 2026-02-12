@@ -22,3 +22,6 @@ twox-hash = "2.1"
 
 solx-codegen-evm = { path = "../solx-codegen-evm" }
 solx-utils = { path = "../solx-utils" }
+
+[dev-dependencies]
+serde_json.workspace = true

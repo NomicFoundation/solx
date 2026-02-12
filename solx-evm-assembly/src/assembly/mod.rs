@@ -6,7 +6,7 @@ pub mod data;
 pub mod instruction;
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
+
 use std::sync::OnceLock;
 
 use rayon::iter::IntoParallelIterator;
@@ -110,27 +110,6 @@ impl Assembly {
                 anyhow::bail!("Expected runtime code, found path `{path}`");
             }
         }
-    }
-
-    ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        let mut unlinked_libraries = BTreeSet::new();
-        if let Some(code) = self.code.as_ref() {
-            for instruction in code.iter() {
-                if let InstructionName::PUSHLIB = instruction.name {
-                    let library_path = instruction.value.to_owned().expect("Always exists");
-                    unlinked_libraries.insert(library_path);
-                }
-            }
-        }
-        if let Some(data) = self.data.as_ref() {
-            for (_, data) in data.iter() {
-                unlinked_libraries.extend(data.get_unlinked_libraries());
-            }
-        }
-        unlinked_libraries
     }
 
     ///

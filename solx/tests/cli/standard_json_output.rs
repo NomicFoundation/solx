@@ -85,7 +85,7 @@ fn gas_estimates() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test_case(crate::common::standard_json!("solidity.json"))]
+#[test_case(crate::common::TEST_SOLIDITY_STANDARD_JSON)]
 #[test_case(crate::common::standard_json!("solidity_method_identifiers.json"))]
 #[test_case(crate::common::standard_json!("solidity_multi_contract.json"))]
 fn output_has_no_errors(path: &str) -> anyhow::Result<()> {
@@ -224,7 +224,7 @@ fn warning_output_has_correct_severity() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::standard_json!("solidity.json"),
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--optimization-size-fallback",
     ];
 

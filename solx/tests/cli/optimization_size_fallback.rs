@@ -9,7 +9,7 @@ fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--optimization-size-fallback",
         "--bin",
     ];
@@ -26,7 +26,7 @@ fn default() -> anyhow::Result<()> {
 fn with_env_var() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT_PATH, "--bin"];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--bin"];
     let env_vars = vec![(
         solx_core::SOLX_OPTIMIZATION_SIZE_FALLBACK_ENV,
         "true".to_owned(),
@@ -46,7 +46,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--optimization-size-fallback",
     ];
 

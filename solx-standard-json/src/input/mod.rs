@@ -14,7 +14,6 @@ use std::path::PathBuf;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 
-use crate::input::settings::debug::Debug as InputSettingsDebug;
 use crate::input::settings::metadata::Metadata as InputSettingsMetadata;
 use crate::input::settings::optimizer::Optimizer as InputSettingsOptimizer;
 use crate::input::settings::selection::Selection as InputSettingsSelection;
@@ -195,101 +194,6 @@ impl Input {
                 metadata,
                 None,
                 llvm_options,
-            ),
-        }
-    }
-
-    ///
-    /// A shortcut constructor from paths to LLVM IR source files.
-    ///
-    pub fn from_llvm_ir_paths(
-        paths: &[PathBuf],
-        libraries: solx_utils::Libraries,
-        optimizer: InputSettingsOptimizer,
-        output_selection: &InputSettingsSelection,
-        metadata: InputSettingsMetadata,
-        llvm_options: Vec<String>,
-    ) -> Self {
-        let sources = paths
-            .iter()
-            .map(|path| {
-                (
-                    path.to_string_lossy().to_string(),
-                    Source::from(path.as_path()),
-                )
-            })
-            .collect();
-
-        Self::from_llvm_ir_sources(
-            sources,
-            libraries,
-            optimizer,
-            output_selection,
-            metadata,
-            llvm_options,
-        )
-    }
-
-    ///
-    /// A shortcut constructor from LLVM IR source code.
-    ///
-    pub fn from_llvm_ir_sources(
-        sources: BTreeMap<String, Source>,
-        libraries: solx_utils::Libraries,
-        optimizer: InputSettingsOptimizer,
-        output_selection: &InputSettingsSelection,
-        metadata: InputSettingsMetadata,
-        llvm_options: Vec<String>,
-    ) -> Self {
-        Self {
-            language: Language::LLVMIR,
-            sources,
-            settings: Settings::new(
-                optimizer,
-                libraries,
-                BTreeSet::new(),
-                None,
-                false,
-                output_selection.to_owned(),
-                metadata,
-                None,
-                llvm_options,
-            ),
-        }
-    }
-
-    ///
-    /// A shortcut constructor for solc from source code strings.
-    ///
-    /// Takes solc-specific parameters: optimizer enabled flag, debug settings.
-    ///
-    pub fn new_for_solc(
-        language: Language,
-        sources: BTreeMap<String, String>,
-        libraries: solx_utils::Libraries,
-        remappings: Option<BTreeSet<String>>,
-        evm_version: Option<solx_utils::EVMVersion>,
-        via_ir: bool,
-        output_selection: InputSettingsSelection,
-        optimizer_enabled: bool,
-        debug: Option<InputSettingsDebug>,
-    ) -> Self {
-        let sources = sources
-            .into_iter()
-            .map(|(path, content)| (path, Source::from(content)))
-            .collect();
-
-        Self {
-            language,
-            sources,
-            settings: Settings::new_for_solc(
-                optimizer_enabled,
-                libraries,
-                remappings.unwrap_or_default(),
-                evm_version,
-                via_ir,
-                output_selection,
-                debug,
             ),
         }
     }

@@ -89,14 +89,6 @@ impl<'ctx> Function<'ctx> {
     }
 
     ///
-    /// Checks whether the function is defined outside of the front-end.
-    ///
-    pub fn is_name_external(name: &str) -> bool {
-        name.starts_with("llvm.")
-            || (name.starts_with("__") && name != crate::r#const::ENTRY_FUNCTION_NAME)
-    }
-
-    ///
     /// Returns the LLVM function declaration.
     ///
     pub fn declaration(&self) -> FunctionDeclaration<'ctx> {
@@ -160,35 +152,6 @@ impl<'ctx> Function<'ctx> {
         declaration.value.add_attribute(
             inkwell::attributes::AttributeLoc::Function,
             llvm.create_enum_attribute(Attribute::NullPointerIsValid as u32, 0),
-        );
-    }
-
-    ///
-    /// Sets the front-end runtime attributes.
-    ///
-    pub fn set_frontend_runtime_attributes(
-        llvm: &'ctx inkwell::context::Context,
-        declaration: FunctionDeclaration<'ctx>,
-        optimizer: &Optimizer,
-    ) {
-        if optimizer.settings().level_middle_end_size == SizeLevel::Z {
-            declaration.value.add_attribute(
-                inkwell::attributes::AttributeLoc::Function,
-                llvm.create_enum_attribute(Attribute::NoInline as u32, 0),
-            );
-        }
-    }
-
-    ///
-    /// Sets the exception handler attributes.
-    ///
-    pub fn set_exception_handler_attributes(
-        llvm: &'ctx inkwell::context::Context,
-        declaration: FunctionDeclaration<'ctx>,
-    ) {
-        declaration.value.add_attribute(
-            inkwell::attributes::AttributeLoc::Function,
-            llvm.create_enum_attribute(Attribute::NoInline as u32, 0),
         );
     }
 
@@ -285,13 +248,6 @@ impl<'ctx> Function<'ctx> {
     ///
     pub fn get_stack_pointer(&self, name: &str) -> Option<Pointer<'ctx, AddressSpace>> {
         self.stack.get(name).copied()
-    }
-
-    ///
-    /// Removes the pointer to a stack variable.
-    ///
-    pub fn remove_stack_pointer(&mut self, name: &str) {
-        self.stack.remove(name);
     }
 
     ///

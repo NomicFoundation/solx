@@ -9,10 +9,7 @@ use tempfile::TempDir;
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--asm-solc-json",
-    ];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--asm-solc-json"];
 
     let result = crate::cli::execute_solx(args)?;
 
@@ -29,7 +26,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--asm-solc-json",
     ];
 
@@ -48,7 +45,7 @@ fn output_dir() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_evmasm_output")?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--asm-solc-json",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),

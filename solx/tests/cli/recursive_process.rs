@@ -24,7 +24,7 @@ fn excess_args() -> anyhow::Result<()> {
 
     let args = &[
         "--recursive-process",
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "excess",
     ];
 

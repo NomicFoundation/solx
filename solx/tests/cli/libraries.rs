@@ -4,13 +4,17 @@
 
 use predicates::prelude::*;
 
+/// Library linking argument for the MiniMath contract at a fixed address.
+/// Format: `<source-path>:<contract-name>=<address>`
+const LIBRARY_MINIMATH: &str = "tests/data/contracts/solidity/MiniMath.sol:MiniMath=0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC";
+
 #[test]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--libraries",
-        crate::common::LIBRARY_DEFAULT,
+        LIBRARY_MINIMATH,
         "--bin",
     ];
 
@@ -26,9 +30,9 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--libraries",
-        crate::common::LIBRARY_DEFAULT,
+        LIBRARY_MINIMATH,
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -45,9 +49,9 @@ fn missing_contract_name() -> anyhow::Result<()> {
 
     let args = &[
         "--yul",
-        crate::common::TEST_YUL_CONTRACT_PATH,
+        crate::common::TEST_YUL_CONTRACT,
         "--libraries",
-        crate::common::LIBRARY_CONTRACT_NAME_MISSING,
+        "tests/data/contracts/solidity/MiniMath.sol=0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC",
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -64,9 +68,9 @@ fn missing_address() -> anyhow::Result<()> {
 
     let args = &[
         "--yul",
-        crate::common::TEST_YUL_CONTRACT_PATH,
+        crate::common::TEST_YUL_CONTRACT,
         "--libraries",
-        crate::common::LIBRARY_ADDRESS_MISSING,
+        "tests/data/contracts/solidity/MiniMath.sol:MiniMath",
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -83,9 +87,9 @@ fn invalid_address() -> anyhow::Result<()> {
 
     let args = &[
         "--yul",
-        crate::common::TEST_YUL_CONTRACT_PATH,
+        crate::common::TEST_YUL_CONTRACT,
         "--libraries",
-        crate::common::LIBRARY_ADDRESS_INVALID,
+        "tests/data/contracts/solidity/MiniMath.sol:MiniMath=INVALID",
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -104,7 +108,7 @@ fn linked_mixed_deps() -> anyhow::Result<()> {
         crate::common::contract!("solidity/LinkedMixedDeps.sol"),
         "--bin",
         "--libraries",
-        "tests/data/contracts/solidity/MiniMath.sol:MiniMath=0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC",
+        LIBRARY_MINIMATH,
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -121,7 +125,7 @@ fn linked_mixed_deps_multi_level() -> anyhow::Result<()> {
         crate::common::contract!("solidity/LinkedMixedDepsMultiLevel.sol"),
         "--bin",
         "--libraries",
-        "tests/data/contracts/solidity/MiniMath.sol:MiniMath=0xF9702469Dfb84A9aC171E284F71615bd3D3f1EdC",
+        LIBRARY_MINIMATH,
     ];
 
     let result = crate::cli::execute_solx(args)?;

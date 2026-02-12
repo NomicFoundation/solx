@@ -94,20 +94,6 @@ where
     }
 
     ///
-    /// Casts the pointer into another type.
-    ///
-    pub fn cast<T>(self, r#type: T) -> Self
-    where
-        T: BasicType<'ctx>,
-    {
-        Self {
-            r#type: r#type.as_basic_type_enum(),
-            address_space: self.address_space,
-            value: self.value,
-        }
-    }
-
-    ///
     /// Converts the pointer to a value enum.
     ///
     pub fn as_basic_value_enum(self) -> inkwell::values::BasicValueEnum<'ctx> {

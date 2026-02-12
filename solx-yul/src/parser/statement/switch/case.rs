@@ -2,8 +2,6 @@
 //! The switch statement case.
 //!
 
-use std::collections::BTreeSet;
-
 use crate::error::Error;
 use crate::lexer::Lexer;
 use crate::lexer::token::Token;
@@ -56,13 +54,6 @@ impl Case {
             literal,
             block,
         })
-    }
-
-    ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        self.block.get_unlinked_libraries()
     }
 
     ///

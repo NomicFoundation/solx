@@ -9,7 +9,7 @@ use test_case::test_case;
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT_PATH, "--bin"];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--bin"];
 
     let result = crate::cli::execute_solx(args)?;
 
@@ -29,8 +29,7 @@ fn stdin() -> anyhow::Result<()> {
         solx_standard_json::InputSource::STDIN_INPUT_IDENTIFIER,
     ];
 
-    let result =
-        crate::cli::execute_solx_with_stdin(args, crate::common::TEST_SOLIDITY_CONTRACT_PATH)?;
+    let result = crate::cli::execute_solx_with_stdin(args, crate::common::TEST_SOLIDITY_CONTRACT)?;
 
     result
         .success()
@@ -39,9 +38,9 @@ fn stdin() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test_case(crate::common::TEST_SOLIDITY_CONTRACT_SIMPLE_CONTRACT_PATH, vec!["__$733ff2b5a7b9002c636c19ae8206a21f88$__"])]
-#[test_case(crate::common::TEST_SOLIDITY_CONTRACT_LINKER_MIXED_DEPS_PATH, vec!["__$65ec92bf84627f42eab2cb5e40b5cc19ff$__"])]
-#[test_case(crate::common::TEST_SOLIDITY_CONTRACT_LINKER_MIXED_DEPS_MULTI_LEVEL_PATH, vec!["__$c1091a910937160002c95b60eab1fc9a86$__", "__$71eefe2b783075e8d047b21bbc2b61aa32$__"])]
+#[test_case(crate::common::contract!("solidity/SimpleContract.sol"), vec!["__$733ff2b5a7b9002c636c19ae8206a21f88$__"])]
+#[test_case(crate::common::contract!("solidity/LinkedMixedDeps.sol"), vec!["__$65ec92bf84627f42eab2cb5e40b5cc19ff$__"])]
+#[test_case(crate::common::contract!("solidity/LinkedMixedDepsMultiLevel.sol"), vec!["__$c1091a910937160002c95b60eab1fc9a86$__", "__$71eefe2b783075e8d047b21bbc2b61aa32$__"])]
 fn deploy_time_linking(path: &str, placeholders: Vec<&str>) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -62,7 +61,7 @@ fn stack_too_deep_solc() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_STACK_TOO_DEEP_SOLC_PATH,
+        crate::common::contract!("solidity/StackTooDeepSolc.sol"),
         "--bin",
     ];
 
@@ -80,7 +79,7 @@ fn stack_too_deep_llvm() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_STACK_TOO_DEEP_LLVM_PATH,
+        crate::common::contract!("solidity/StackTooDeepLLVM.sol"),
         "--bin",
         "-O1",
     ];
@@ -99,7 +98,7 @@ fn stack_too_deep_llvm_suppressed() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_STACK_TOO_DEEP_LLVM_PATH,
+        crate::common::contract!("solidity/StackTooDeepLLVM.sol"),
         "--bin",
         "-O1",
     ];
@@ -119,7 +118,7 @@ fn fuzzed_linker_error() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_FUZZED_LINKER_ERROR_PATH,
+        crate::common::contract!("solidity/FuzzedLinkerError.sol"),
         "--bin-runtime",
         "-O1",
     ];
@@ -137,7 +136,7 @@ fn fuzzed_linker_error() -> anyhow::Result<()> {
 fn invalid_input() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_YUL_CONTRACT_PATH, "--bin"];
+    let args = &[crate::common::TEST_YUL_CONTRACT, "--bin"];
 
     let result = crate::cli::execute_solx(args)?;
 
@@ -154,7 +153,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--bin",
     ];
 
@@ -171,7 +170,7 @@ fn with_runtime() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--bin",
         "--bin-runtime",
     ];
@@ -189,7 +188,7 @@ fn with_runtime() -> anyhow::Result<()> {
 fn no_output_flags() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::contract!("solidity/Test.sol")];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT];
 
     let result = crate::cli::execute_solx(args)?;
     result
@@ -220,7 +219,7 @@ fn all_terminal_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--bin",
         "--bin-runtime",
         "--metadata",
@@ -255,7 +254,7 @@ fn combined_terminal_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--abi",
         "--metadata",
         "--userdoc",

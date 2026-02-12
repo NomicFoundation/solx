@@ -2,8 +2,6 @@
 //! The source code block.
 //!
 
-use std::collections::BTreeSet;
-
 use solx_codegen_evm::IContext;
 use solx_codegen_evm::ISolidityData;
 
@@ -145,17 +143,6 @@ impl Block {
             solc_location,
             end_solc_location,
         })
-    }
-
-    ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        let mut libraries = BTreeSet::new();
-        for statement in self.statements.iter() {
-            libraries.extend(statement.get_unlinked_libraries());
-        }
-        libraries
     }
 
     ///

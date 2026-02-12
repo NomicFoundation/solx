@@ -10,7 +10,7 @@ fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_CALLER_MAIN_PATH,
+        crate::common::contract!("solidity/caller/Main.sol"),
         "--hashes",
     ];
 
@@ -29,7 +29,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--hashes",
     ];
 
@@ -48,7 +48,7 @@ fn output_dir() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_hashes_output")?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--hashes",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),

@@ -41,7 +41,6 @@ pub use self::error::*;
 pub use self::evm_version::EVMVersion;
 pub use self::exit_code::*;
 pub use self::extension::*;
-pub use self::hash::Hash;
 pub use self::hash::ipfs::IPFS as IPFSHash;
 pub use self::hash::keccak256::Keccak256 as Keccak256Hash;
 pub use self::libraries::Libraries;

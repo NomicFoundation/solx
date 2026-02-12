@@ -3962,10 +3962,10 @@ dependencies = [
  "anyhow",
  "indexmap 2.13.0",
  "inkwell",
- "itertools 0.14.0",
  "num",
  "semver 1.0.27",
  "serde",
+ "serde_json",
  "solx-utils",
  "thiserror 2.0.18",
 ]
@@ -4038,6 +4038,7 @@ dependencies = [
  "rayon",
  "semver 1.0.27",
  "serde",
+ "serde_json",
  "solx-codegen-evm",
  "solx-utils",
  "twox-hash 2.1.2",
@@ -4080,7 +4081,6 @@ name = "solx-tester"
 version = "0.1.4"
 dependencies = [
  "anyhow",
- "assert_cmd",
  "clap",
  "colored",
  "glob",

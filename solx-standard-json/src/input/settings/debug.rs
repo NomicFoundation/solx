@@ -12,12 +12,3 @@ pub struct Debug {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub revert_strings: Option<String>,
 }
-
-impl Debug {
-    ///
-    /// A shortcut constructor.
-    ///
-    pub fn new(revert_strings: Option<String>) -> Self {
-        Self { revert_strings }
-    }
-}

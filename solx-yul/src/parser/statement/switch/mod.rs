@@ -4,8 +4,6 @@
 
 pub mod case;
 
-use std::collections::BTreeSet;
-
 use solx_codegen_evm::IContext;
 use solx_codegen_evm::ISolidityData;
 use solx_codegen_evm::WriteLLVM;
@@ -141,20 +139,6 @@ impl Switch {
     }
 
     ///
-    /// Get the list of unlinked deployable libraries.
-    ///
-    pub fn get_unlinked_libraries(&self) -> BTreeSet<String> {
-        let mut libraries = BTreeSet::new();
-        for case in self.cases.iter() {
-            libraries.extend(case.get_unlinked_libraries());
-        }
-        if let Some(default) = &self.default {
-            libraries.extend(default.get_unlinked_libraries());
-        }
-        libraries
-    }
-
-    ///
     /// Get the list of EVM dependencies.
     ///
     pub fn accumulate_evm_dependencies(&self, dependencies: &mut solx_codegen_evm::Dependencies) {
@@ -224,48 +208,5 @@ impl Switch {
         context.set_basic_block(join_block);
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::lexer::Lexer;
-    use crate::lexer::token::location::Location;
-    use crate::parser::error::Error;
-    use crate::parser::statement::object::Object;
-
-    #[test]
-    fn error_invalid_token_case() {
-        let input = r#"
-object "Test" {
-    code {
-        {
-            return(0, 0)
-        }
-    }
-    object "Test_deployed" {
-        code {
-            {
-                switch 42
-                    branch x {}
-                    default {}
-                }
-            }
-        }
-    }
-}
-    "#;
-
-        let mut lexer = Lexer::new(input);
-        let result = Object::parse(&mut lexer, None, solx_utils::CodeSegment::Deploy);
-        assert_eq!(
-            result,
-            Err(Error::InvalidToken {
-                location: Location::new(12, 21),
-                expected: vec!["case", "default"],
-                found: "branch".to_owned(),
-            }
-            .into())
-        );
     }
 }

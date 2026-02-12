@@ -9,10 +9,7 @@ use tempfile::TempDir;
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--storage-layout",
-    ];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--storage-layout"];
 
     let result = crate::cli::execute_solx(args)?;
 
@@ -29,7 +26,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--storage-layout",
     ];
 
@@ -48,7 +45,7 @@ fn output_dir() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_storage_output")?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--storage-layout",
         "--transient-storage-layout",
         "--output-dir",
@@ -68,7 +65,7 @@ fn with_transient() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--storage-layout",
         "--transient-storage-layout",
     ];

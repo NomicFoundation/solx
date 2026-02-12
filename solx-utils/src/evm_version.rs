@@ -43,7 +43,7 @@ impl FromStr for EVMVersion {
             "prague" => Self::Prague,
             "osaka" => Self::Osaka,
             _ => anyhow::bail!(
-                "Unsuppored EVM version: {value}. Supported ones are: {}",
+                "Unsupported EVM version: {value}. Supported ones are: {}",
                 vec![Self::Cancun, Self::Prague, Self::Osaka,]
                     .into_iter()
                     .map(|target| target.to_string())

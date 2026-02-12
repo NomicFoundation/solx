@@ -10,11 +10,7 @@ use test_case::test_case;
 fn bin() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        crate::common::TEST_LLVM_IR_CONTRACT_PATH,
-        "--llvm-ir",
-        "--bin",
-    ];
+    let args = &[crate::common::TEST_LLVM_IR_CONTRACT, "--llvm-ir", "--bin"];
 
     let result = crate::cli::execute_solx(args)?;
     result.success().stdout(predicate::str::contains("Binary"));
@@ -32,8 +28,7 @@ fn stdin() -> anyhow::Result<()> {
         solx_standard_json::InputSource::STDIN_INPUT_IDENTIFIER,
     ];
 
-    let result =
-        crate::cli::execute_solx_with_stdin(args, crate::common::TEST_LLVM_IR_CONTRACT_PATH)?;
+    let result = crate::cli::execute_solx_with_stdin(args, crate::common::TEST_LLVM_IR_CONTRACT)?;
 
     result
         .success()
@@ -46,11 +41,7 @@ fn stdin() -> anyhow::Result<()> {
 fn asm() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        crate::common::TEST_LLVM_IR_CONTRACT_PATH,
-        "--llvm-ir",
-        "--asm",
-    ];
+    let args = &[crate::common::TEST_LLVM_IR_CONTRACT, "--llvm-ir", "--asm"];
 
     let result = crate::cli::execute_solx(args)?;
     result
@@ -65,7 +56,7 @@ fn metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_LLVM_IR_CONTRACT_PATH,
+        crate::common::TEST_LLVM_IR_CONTRACT,
         "--llvm-ir",
         "--metadata",
     ];
@@ -90,7 +81,7 @@ fn metadata() -> anyhow::Result<()> {
 fn unavailable(flag: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_LLVM_IR_CONTRACT_PATH, "--llvm-ir", flag];
+    let args = &[crate::common::TEST_LLVM_IR_CONTRACT, "--llvm-ir", flag];
 
     let result = crate::cli::execute_solx(args)?;
     result.failure().stderr(predicate::str::contains(
@@ -104,7 +95,7 @@ fn unavailable(flag: &str) -> anyhow::Result<()> {
 fn invalid_input_text() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &["--llvm-ir", "--bin", crate::common::TEST_BROKEN_INPUT_PATH];
+    let args = &["--llvm-ir", "--bin", "tests/data/broken.bad"];
 
     let result = crate::cli::execute_solx(args)?;
     result
@@ -117,11 +108,7 @@ fn invalid_input_text() -> anyhow::Result<()> {
 #[test]
 fn invalid_input_solidity() -> anyhow::Result<()> {
     crate::common::setup()?;
-    let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
-        "--llvm-ir",
-        "--bin",
-    ];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--llvm-ir", "--bin"];
 
     let result = crate::cli::execute_solx(args)?;
     result
@@ -138,7 +125,7 @@ fn invalid_input_llvm_ir() -> anyhow::Result<()> {
     let args = &[
         "--llvm-ir",
         "--bin",
-        crate::common::TEST_LLVM_IR_CONTRACT_INVALID_PATH,
+        crate::common::contract!("llvm_ir/Invalid.ll"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -153,7 +140,7 @@ fn invalid_input_llvm_ir() -> anyhow::Result<()> {
 fn missing_file() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &["--llvm-ir", "--bin", crate::common::TEST_NON_EXISTENT_PATH];
+    let args = &["--llvm-ir", "--bin", "tests/data/non_existent"];
 
     let result = crate::cli::execute_solx(args)?;
     result
@@ -170,7 +157,7 @@ fn linker_error() -> anyhow::Result<()> {
     let args = &[
         "--llvm-ir",
         "--bin",
-        crate::common::TEST_LLVM_IR_CONTRACT_LINKER_ERROR_PATH,
+        crate::common::contract!("llvm_ir/LinkerError.ll"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -186,7 +173,7 @@ fn excess_mode_standard_json() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_LLVM_IR_CONTRACT_PATH,
+        crate::common::TEST_LLVM_IR_CONTRACT,
         "--llvm-ir",
         "--standard-json",
     ];
@@ -205,7 +192,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_LLVM_IR_STANDARD_JSON_PATH,
+        crate::common::standard_json!("llvm_ir_urls.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -223,7 +210,7 @@ fn standard_json_invalid() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_LLVM_IR_STANDARD_JSON_INVALID_PATH,
+        crate::common::standard_json!("llvm_ir_urls_invalid.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -240,7 +227,7 @@ fn standard_json_missing_file() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_LLVM_IR_STANDARD_JSON_MISSING_FILE_PATH,
+        crate::common::standard_json!("llvm_ir_urls_missing_file.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -257,7 +244,7 @@ fn standard_json_debug_info() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_LLVM_IR_STANDARD_JSON_DEBUG_INFO_PATH,
+        crate::common::standard_json!("llvm_ir_urls_debug_info.json"),
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -273,7 +260,7 @@ fn bin_runtime() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("llvm_ir/Test.ll"),
+        crate::common::TEST_LLVM_IR_CONTRACT,
         "--llvm-ir",
         "--bin-runtime",
     ];
@@ -293,7 +280,7 @@ fn output_dir() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_llvm_ir_output")?;
 
     let args = &[
-        crate::common::contract!("llvm_ir/Test.ll"),
+        crate::common::TEST_LLVM_IR_CONTRACT,
         "--llvm-ir",
         "--bin",
         "--asm",
@@ -314,7 +301,7 @@ fn emit_llvm_ir() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("llvm_ir/Test.ll"),
+        crate::common::TEST_LLVM_IR_CONTRACT,
         "--llvm-ir",
         "--emit-llvm-ir",
         "--bin",
@@ -334,7 +321,7 @@ fn debug_info_error() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("llvm_ir/Test.ll"),
+        crate::common::TEST_LLVM_IR_CONTRACT,
         "--llvm-ir",
         "--debug-info",
     ];

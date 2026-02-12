@@ -15,22 +15,6 @@ pub enum Boolean {
     True,
 }
 
-impl Boolean {
-    ///
-    /// Creates a `false` value.
-    ///
-    pub fn r#false() -> Self {
-        Self::False
-    }
-
-    ///
-    /// Creates a `true` value.
-    ///
-    pub fn r#true() -> Self {
-        Self::True
-    }
-}
-
 impl TryFrom<Keyword> for Boolean {
     type Error = Keyword;
 

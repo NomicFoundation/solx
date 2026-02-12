@@ -9,7 +9,7 @@ use tempfile::TempDir;
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::TEST_SOLIDITY_CONTRACT_PATH, "--ir"];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--ir"];
 
     let result = crate::cli::execute_solx(args)?;
 
@@ -26,7 +26,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--ir",
     ];
 
@@ -42,11 +42,7 @@ fn standard_json() -> anyhow::Result<()> {
 fn via_ir_to_terminal() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        crate::common::contract!("solidity/Test.sol"),
-        "--ir",
-        "--via-ir",
-    ];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--ir", "--via-ir"];
 
     let result = crate::cli::execute_solx(args)?;
     result.success().stdout(predicate::str::contains("IR:"));
@@ -61,7 +57,7 @@ fn via_ir_output_dir() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_ir_output")?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--ir",
         "--via-ir",
         "--output-dir",

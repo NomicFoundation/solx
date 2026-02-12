@@ -29,20 +29,6 @@ where
 }
 
 ///
-/// Deserializes a `serde_json` object from reader with the recursion limit disabled.
-///
-/// Must be used for all JSON I/O to avoid crashes due to the aforementioned limit.
-///
-pub fn deserialize_from_reader<R, O>(reader: R) -> anyhow::Result<O>
-where
-    R: std::io::Read,
-    O: serde::de::DeserializeOwned,
-{
-    let deserializer = serde_json::Deserializer::from_reader(reader);
-    deserialize(deserializer)
-}
-
-///
 /// Runs the generic deserializer.
 ///
 pub fn deserialize<'de, R, O>(mut deserializer: serde_json::Deserializer<R>) -> anyhow::Result<O>

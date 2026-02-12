@@ -38,15 +38,3 @@ impl Run {
         self.duration = Some(self.start_time.elapsed());
     }
 }
-
-impl std::fmt::Display for Run {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let duration = self
-            .duration
-            .as_ref()
-            .expect("Duration has not been recorded yet");
-
-        write!(f, "{duration:?}")?;
-        Ok(())
-    }
-}

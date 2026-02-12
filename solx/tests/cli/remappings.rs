@@ -9,7 +9,7 @@ fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "./path/to/1.sol=./path/to/2.sol",
         "--bin",
     ];
@@ -27,7 +27,7 @@ fn excess_equals_sign() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::TEST_SOLIDITY_CONTRACT_PATH,
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "./path/to/1.sol=./path/to/2.sol=./path/to/3.sol",
         "--bin",
     ];
@@ -47,7 +47,7 @@ fn standard_json() -> anyhow::Result<()> {
     let args = &[
         "./path/to/1.sol=./path/to/2.sol",
         "--standard-json",
-        crate::common::TEST_SOLIDITY_STANDARD_JSON_PATH,
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
     ];
 
     let result = crate::cli::execute_solx(args)?;

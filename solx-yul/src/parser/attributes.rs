@@ -68,7 +68,6 @@ mod tests {
         Identifier {
             location: Location { line: 0, column: 0 },
             inner: name.to_string(),
-            r#type: None,
         }
     }
 

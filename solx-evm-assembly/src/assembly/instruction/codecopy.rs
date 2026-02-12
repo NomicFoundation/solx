@@ -7,27 +7,6 @@ use inkwell::values::BasicValue;
 use solx_codegen_evm::IContext;
 
 ///
-/// Translates the contract hash copying.
-///
-pub fn dependency<'ctx>(
-    context: &mut solx_codegen_evm::Context<'ctx>,
-    offset: inkwell::values::IntValue<'ctx>,
-    value: inkwell::values::IntValue<'ctx>,
-) -> anyhow::Result<()> {
-    let offset = solx_codegen_evm::Context::build_binary_operator(
-        context,
-        inkwell::builder::Builder::build_int_add,
-        offset,
-        context.field_const((solx_utils::BYTE_LENGTH_X32 + solx_utils::BYTE_LENGTH_FIELD) as u64),
-        "datacopy_dependency_offset",
-    )?;
-
-    solx_codegen_evm::memory::store(context, offset, value)?;
-
-    Ok(())
-}
-
-///
 /// Translates the static data copying.
 ///
 pub fn static_data<'ctx>(
