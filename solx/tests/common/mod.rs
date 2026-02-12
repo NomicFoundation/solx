@@ -24,6 +24,11 @@ macro_rules! standard_json {
 }
 pub(crate) use standard_json;
 
+pub const TEST_SOLIDITY_CONTRACT: &str = contract!("solidity/Test.sol");
+pub const TEST_YUL_CONTRACT: &str = contract!("yul/Test.yul");
+pub const TEST_LLVM_IR_CONTRACT: &str = contract!("llvm_ir/Test.ll");
+pub const TEST_SOLIDITY_STANDARD_JSON: &str = standard_json!("solidity.json");
+
 ///
 /// Setup required test dependencies.
 ///

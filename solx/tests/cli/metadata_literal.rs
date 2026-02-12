@@ -9,7 +9,7 @@ fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--metadata-literal",
         "--bin",
     ];
@@ -28,7 +28,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::standard_json!("solidity.json"),
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--metadata-literal",
     ];
 

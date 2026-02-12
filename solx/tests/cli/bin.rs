@@ -9,7 +9,7 @@ use test_case::test_case;
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::contract!("solidity/Test.sol"), "--bin"];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--bin"];
 
     let result = crate::cli::execute_solx(args)?;
 
@@ -29,8 +29,7 @@ fn stdin() -> anyhow::Result<()> {
         solx_standard_json::InputSource::STDIN_INPUT_IDENTIFIER,
     ];
 
-    let result =
-        crate::cli::execute_solx_with_stdin(args, crate::common::contract!("solidity/Test.sol"))?;
+    let result = crate::cli::execute_solx_with_stdin(args, crate::common::TEST_SOLIDITY_CONTRACT)?;
 
     result
         .success()
@@ -137,7 +136,7 @@ fn fuzzed_linker_error() -> anyhow::Result<()> {
 fn invalid_input() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::contract!("yul/Test.yul"), "--bin"];
+    let args = &[crate::common::TEST_YUL_CONTRACT, "--bin"];
 
     let result = crate::cli::execute_solx(args)?;
 
@@ -154,7 +153,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::standard_json!("solidity.json"),
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--bin",
     ];
 
@@ -171,7 +170,7 @@ fn with_runtime() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--bin",
         "--bin-runtime",
     ];
@@ -189,7 +188,7 @@ fn with_runtime() -> anyhow::Result<()> {
 fn no_output_flags() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::contract!("solidity/Test.sol")];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT];
 
     let result = crate::cli::execute_solx(args)?;
     result
@@ -220,7 +219,7 @@ fn all_terminal_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--bin",
         "--bin-runtime",
         "--metadata",
@@ -255,7 +254,7 @@ fn combined_terminal_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--abi",
         "--metadata",
         "--userdoc",

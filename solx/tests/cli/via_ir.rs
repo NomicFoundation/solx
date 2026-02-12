@@ -8,11 +8,7 @@ use predicates::prelude::*;
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[
-        "--via-ir",
-        "--bin",
-        crate::common::contract!("solidity/Test.sol"),
-    ];
+    let args = &["--via-ir", "--bin", crate::common::TEST_SOLIDITY_CONTRACT];
 
     let result = crate::cli::execute_solx(args)?;
     result
@@ -30,7 +26,7 @@ fn yul() -> anyhow::Result<()> {
         "--yul",
         "--via-ir",
         "--bin",
-        crate::common::contract!("yul/Test.yul"),
+        crate::common::TEST_YUL_CONTRACT,
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -49,7 +45,7 @@ fn llvm_ir() -> anyhow::Result<()> {
         "--llvm-ir",
         "--via-ir",
         "--bin",
-        crate::common::contract!("llvm_ir/Test.ll"),
+        crate::common::TEST_LLVM_IR_CONTRACT,
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -67,7 +63,7 @@ fn standard_json() -> anyhow::Result<()> {
     let args = &[
         "--via-ir",
         "--standard-json",
-        crate::common::standard_json!("solidity.json"),
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -83,7 +79,7 @@ fn emit_llvm_ir() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--via-ir",
         "--emit-llvm-ir",
         "--bin",

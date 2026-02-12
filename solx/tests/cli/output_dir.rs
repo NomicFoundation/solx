@@ -49,7 +49,7 @@ fn default() -> anyhow::Result<()> {
 fn yul(extension: String) -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let input_path = PathBuf::from(crate::common::contract!("yul/Test.yul"));
+    let input_path = PathBuf::from(crate::common::TEST_YUL_CONTRACT);
     let output_directory = TempDir::with_prefix("solx_output")?;
     let mut output_file = input_path
         .join("Return")
@@ -86,7 +86,7 @@ fn unusual_path_characters() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("File!and#$%-XXXXXX")?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--bin",
         "--bin-runtime",
         "--asm",
@@ -110,7 +110,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::standard_json!("solidity.json"),
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--output-dir",
         "output",
     ];
@@ -130,7 +130,7 @@ fn multiple_outputs() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_sol_output")?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--bin",
         "--asm",
         "--metadata",
@@ -174,7 +174,7 @@ fn env_var() -> anyhow::Result<()> {
 
     let output_directory = TempDir::with_prefix("solx_debug_env")?;
 
-    let args = &[crate::common::contract!("solidity/Test.sol"), "--bin"];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--bin"];
 
     let result = crate::cli::execute_solx_with_env_vars(
         args,

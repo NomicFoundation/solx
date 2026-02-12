@@ -108,7 +108,7 @@ fn cli_optimization_with_metadata(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         &format!("-O{level}"),
         "--bin",
         "--metadata",
@@ -132,7 +132,7 @@ fn cli_optimization_with_asm(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         &format!("-O{level}"),
         "--asm",
     ];
@@ -151,7 +151,7 @@ fn cli_size_optimization_with_size_fallback(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         &format!("-O{level}"),
         "--optimization-size-fallback",
         "--bin",
@@ -169,7 +169,7 @@ fn cli_size_optimization_with_size_fallback_env(level: char) -> anyhow::Result<(
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         &format!("-O{level}"),
         "--bin",
     ];
@@ -213,7 +213,7 @@ fn cli_all_optimization_levels(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         &format!("-O{level}"),
         "--bin",
     ];
@@ -233,7 +233,7 @@ fn cli_optimization_with_bin_runtime(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         &format!("-O{level}"),
         "--bin-runtime",
     ];

@@ -22,7 +22,7 @@ fn default() -> anyhow::Result<()> {
 fn excess_args() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &["--version", crate::common::contract!("solidity/Test.sol")];
+    let args = &["--version", crate::common::TEST_SOLIDITY_CONTRACT];
 
     let result = crate::cli::execute_solx(args)?;
     result.failure().stderr(predicate::str::contains(

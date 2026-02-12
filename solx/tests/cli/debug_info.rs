@@ -11,10 +11,7 @@ use test_case::test_case;
 fn default(via_ir: bool) -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let mut args = vec![
-        crate::common::contract!("solidity/Test.sol"),
-        "--debug-info",
-    ];
+    let mut args = vec![crate::common::TEST_SOLIDITY_CONTRACT, "--debug-info"];
     if via_ir {
         args.push("--via-ir");
     }
@@ -34,7 +31,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::standard_json!("solidity.json"),
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--debug-info",
     ];
 
@@ -53,7 +50,7 @@ fn output_dir() -> anyhow::Result<()> {
     let output_directory = TempDir::with_prefix("solx_debug_output")?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--debug-info",
         "--output-dir",
         output_directory.path().to_str().expect("Always valid"),

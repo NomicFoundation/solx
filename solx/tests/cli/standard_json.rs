@@ -13,7 +13,7 @@ fn default() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::standard_json!("solidity.json"),
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -33,7 +33,7 @@ fn stdin() -> anyhow::Result<()> {
     let args = &["--standard-json"];
 
     let result =
-        crate::cli::execute_solx_with_stdin(args, crate::common::standard_json!("solidity.json"))?;
+        crate::cli::execute_solx_with_stdin(args, crate::common::TEST_SOLIDITY_STANDARD_JSON)?;
     result
         .success()
         .stdout(predicate::str::contains("bytecode"))
@@ -53,7 +53,7 @@ fn stdin_hyphen() -> anyhow::Result<()> {
     ];
 
     let result =
-        crate::cli::execute_solx_with_stdin(args, crate::common::standard_json!("solidity.json"))?;
+        crate::cli::execute_solx_with_stdin(args, crate::common::TEST_SOLIDITY_STANDARD_JSON)?;
     result
         .success()
         .stdout(predicate::str::contains("bytecode"))
@@ -122,7 +122,7 @@ fn fuzzed_simple_use_expression() -> anyhow::Result<()> {
 fn invalid_input() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &["--standard-json", crate::common::contract!("yul/Test.yul")];
+    let args = &["--standard-json", crate::common::TEST_YUL_CONTRACT];
 
     let result = crate::cli::execute_solx(args)?;
     result
@@ -501,7 +501,7 @@ fn debug_env_writes_input() -> anyhow::Result<()> {
     let temp_dir = tempfile::tempdir()?;
     let debug_path = temp_dir.path().join("debug_input.json");
 
-    let input_path = crate::common::standard_json!("solidity.json");
+    let input_path = crate::common::TEST_SOLIDITY_STANDARD_JSON;
     let args = &["--standard-json", input_path];
 
     let result = crate::cli::execute_solx_with_env_vars(

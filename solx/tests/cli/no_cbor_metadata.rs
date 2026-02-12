@@ -11,7 +11,7 @@ fn none() -> anyhow::Result<()> {
 
     let hash_type = MetadataHashType::None.to_string();
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--metadata-hash",
         hash_type.as_str(),
         "--no-cbor-metadata",
@@ -34,7 +34,7 @@ fn ipfs_solidity() -> anyhow::Result<()> {
 
     let hash_type = MetadataHashType::IPFS.to_string();
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "--metadata-hash",
         hash_type.as_str(),
         "--no-cbor-metadata",
@@ -58,7 +58,7 @@ fn ipfs_yul() -> anyhow::Result<()> {
     let hash_type = MetadataHashType::IPFS.to_string();
     let args = &[
         "--yul",
-        crate::common::contract!("yul/Test.yul"),
+        crate::common::TEST_YUL_CONTRACT,
         "--metadata-hash",
         hash_type.as_str(),
         "--no-cbor-metadata",
@@ -82,7 +82,7 @@ fn ipfs_llvm_ir() -> anyhow::Result<()> {
     let hash_type = MetadataHashType::IPFS.to_string();
     let args = &[
         "--llvm-ir",
-        crate::common::contract!("llvm_ir/Test.ll"),
+        crate::common::TEST_LLVM_IR_CONTRACT,
         "--metadata-hash",
         hash_type.as_str(),
         "--no-cbor-metadata",

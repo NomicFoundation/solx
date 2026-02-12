@@ -16,7 +16,7 @@ fn default(evm_version: solx_utils::EVMVersion) -> anyhow::Result<()> {
         "--evm-version",
         evm_version.as_str(),
         "--bin",
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -39,7 +39,7 @@ fn yul(evm_version: solx_utils::EVMVersion) -> anyhow::Result<()> {
         evm_version.as_str(),
         "--yul",
         "--bin",
-        crate::common::contract!("yul/Test.yul"),
+        crate::common::TEST_YUL_CONTRACT,
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -62,7 +62,7 @@ fn llvm_ir(evm_version: solx_utils::EVMVersion) -> anyhow::Result<()> {
         evm_version.as_str(),
         "--llvm-ir",
         "--bin",
-        crate::common::contract!("llvm_ir/Test.ll"),
+        crate::common::TEST_LLVM_IR_CONTRACT,
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -80,7 +80,7 @@ fn standard_json() -> anyhow::Result<()> {
     let evm_version = solx_utils::EVMVersion::Cancun.to_string();
     let args = &[
         "--standard-json",
-        crate::common::standard_json!("solidity.json"),
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "--evm-version",
         evm_version.as_str(),
     ];
@@ -101,7 +101,7 @@ fn too_old() -> anyhow::Result<()> {
         "--evm-version",
         "shanghai",
         "--bin",
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
     ];
 
     let result = crate::cli::execute_solx(args)?;

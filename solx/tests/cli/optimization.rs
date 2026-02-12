@@ -15,7 +15,7 @@ fn all(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         &format!("-O{level}"),
         "--bin",
     ];
@@ -35,7 +35,7 @@ fn all(level: char) -> anyhow::Result<()> {
 fn all_with_env_var(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::contract!("solidity/Test.sol"), "--bin"];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--bin"];
     let env_vars = vec![(solx_core::SOLX_OPTIMIZATION_ENV, level.to_string())];
 
     let result = crate::cli::execute_solx_with_env_vars(args, env_vars)?;
@@ -48,7 +48,7 @@ fn all_with_env_var(level: char) -> anyhow::Result<()> {
 fn invalid() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::contract!("solidity/Test.sol"), "-O", "99"];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "-O", "99"];
 
     let result = crate::cli::execute_solx(args)?;
     result.failure().stderr(
@@ -63,7 +63,7 @@ fn invalid() -> anyhow::Result<()> {
 fn invalid_with_env_var() -> anyhow::Result<()> {
     crate::common::setup()?;
 
-    let args = &[crate::common::contract!("solidity/Test.sol")];
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT];
     let env_vars = vec![(solx_core::SOLX_OPTIMIZATION_ENV, "99".to_string())];
 
     let result = crate::cli::execute_solx_with_env_vars(args, env_vars)?;
@@ -80,7 +80,7 @@ fn standard_json() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::standard_json!("solidity.json"),
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
         "-O",
         "3",
     ];
@@ -99,7 +99,7 @@ fn standard_json_invalid_env_var() -> anyhow::Result<()> {
 
     let args = &[
         "--standard-json",
-        crate::common::standard_json!("solidity.json"),
+        crate::common::TEST_SOLIDITY_STANDARD_JSON,
     ];
     let env_vars = vec![(solx_core::SOLX_OPTIMIZATION_ENV, "99".to_string())];
 
@@ -117,7 +117,7 @@ fn yul(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("yul/Test.yul"),
+        crate::common::TEST_YUL_CONTRACT,
         "--yul",
         &format!("-O{level}"),
         "--bin",
@@ -135,7 +135,7 @@ fn llvm_ir(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[
-        crate::common::contract!("llvm_ir/Test.ll"),
+        crate::common::TEST_LLVM_IR_CONTRACT,
         "--llvm-ir",
         &format!("-O{level}"),
         "--bin",

@@ -12,7 +12,7 @@ fn default() -> anyhow::Result<()> {
         "--allow-paths",
         "tests/data/contracts/",
         "--bin",
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -32,7 +32,7 @@ fn yul() -> anyhow::Result<()> {
         "tests/data/contracts/",
         "--yul",
         "--bin",
-        crate::common::contract!("yul/Test.yul"),
+        crate::common::TEST_YUL_CONTRACT,
     ];
 
     let result = crate::cli::execute_solx(args)?;
@@ -52,7 +52,7 @@ fn llvm_ir() -> anyhow::Result<()> {
         "tests/data/contracts/",
         "--llvm-ir",
         "--bin",
-        crate::common::contract!("llvm_ir/Test.ll"),
+        crate::common::TEST_LLVM_IR_CONTRACT,
     ];
 
     let result = crate::cli::execute_solx(args)?;

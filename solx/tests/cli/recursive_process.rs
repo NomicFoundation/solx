@@ -24,7 +24,7 @@ fn excess_args() -> anyhow::Result<()> {
 
     let args = &[
         "--recursive-process",
-        crate::common::contract!("solidity/Test.sol"),
+        crate::common::TEST_SOLIDITY_CONTRACT,
         "excess",
     ];
 
