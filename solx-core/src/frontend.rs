@@ -1,13 +1,18 @@
 //!
-//! `solc` compiler interface trait.
+//! Solidity frontend interface trait.
 //!
 
 use std::path::PathBuf;
 
 ///
-/// `solc` compiler interface trait.
+/// Solidity frontend interface trait.
 ///
-pub trait Solc {
+pub trait Frontend {
+    ///
+    /// Returns the frontend compiler name.
+    ///
+    fn name(&self) -> &str;
+
     ///
     /// The Solidity `--standard-json` mirror.
     ///
@@ -41,7 +46,7 @@ pub trait Solc {
     ) -> anyhow::Result<solx_standard_json::Output>;
 
     ///
-    /// Returns the `solc` compiler version.
+    /// Returns the frontend compiler version.
     ///
     fn version(&self) -> &solx_standard_json::Version;
 }

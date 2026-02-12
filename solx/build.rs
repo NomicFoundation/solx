@@ -2,11 +2,13 @@
 //! The default build script for `solc` libraries used by `solx`.
 //!
 
+#[cfg(feature = "solc")]
 use std::path::PathBuf;
 
 ///
 /// Links solc and Boost libraries statically.
 ///
+#[cfg(feature = "solc")]
 fn main() {
     // Re-run if the Boost path environment variable is changed.
     println!("cargo:rerun-if-env-changed={}", env!("BOOST_PREFIX"));
@@ -138,3 +140,10 @@ fn main() {
         }
     }
 }
+
+///
+/// Empty build script variant when the `solc` frontend is disabled.
+/// LLVM will be linked when MLIR support is needed.
+///
+#[cfg(not(feature = "solc"))]
+fn main() {}

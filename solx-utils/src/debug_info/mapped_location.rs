@@ -124,7 +124,10 @@ impl std::fmt::Display for MappedLocation {
                         " {} | {} {}",
                         " ".repeat(line_number_length),
                         " ".repeat(column),
-                        "^".repeat(std::cmp::min(length, source_code_line.len() - column))
+                        "^".repeat(std::cmp::min(
+                            length,
+                            source_code_line.len().saturating_sub(column),
+                        ))
                     )?;
                 }
             }

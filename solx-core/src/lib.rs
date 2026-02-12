@@ -14,9 +14,9 @@ pub mod arguments;
 pub mod build;
 pub mod r#const;
 pub mod error;
+pub mod frontend;
 pub mod process;
 pub mod project;
-pub mod solc;
 
 pub use self::arguments::Arguments;
 pub use self::build::Build as EVMBuild;
@@ -24,13 +24,13 @@ pub use self::build::contract::Contract as EVMContractBuild;
 pub use self::r#const::*;
 pub use self::error::Error;
 pub use self::error::stack_too_deep::StackTooDeep as StackTooDeepError;
+pub use self::frontend::Frontend;
 pub use self::process::EXECUTABLE;
 pub use self::process::input::Input as EVMProcessInput;
 pub use self::process::output::Output as EVMProcessOutput;
 pub use self::process::run as run_recursive;
 pub use self::project::Project;
 pub use self::project::contract::Contract as ProjectContract;
-pub use self::solc::Solc;
 
 use std::collections::BTreeSet;
 use std::io::Write;
@@ -48,18 +48,19 @@ pub type Result<T> = std::result::Result<T, Error>;
 ///
 pub fn main(
     arguments: Arguments,
-    solc: impl Solc,
+    frontend: impl Frontend,
     messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
 ) -> anyhow::Result<()> {
     if arguments.version {
-        let version = solc.version();
+        let version = frontend.version();
         writeln!(
             std::io::stdout(),
-            "{DEFAULT_EXECUTABLE_NAME}, {DEFAULT_PACKAGE_DESCRIPTION} v{}, LLVM build: {}",
+            "{DEFAULT_EXECUTABLE_NAME} v{}, {DEFAULT_PACKAGE_DESCRIPTION}, LLVM build: {}",
             env!("CARGO_PKG_VERSION"),
             inkwell::support::get_commit_id().to_string(),
         )?;
         writeln!(std::io::stdout(), "Version: {}", version.long)?;
+        writeln!(std::io::stdout(), "Frontend: {}", frontend.name())?;
         return Ok(());
     }
 
@@ -228,7 +229,7 @@ pub fn main(
 
     let build = if arguments.yul {
         self::yul_to_evm(
-            solc,
+            frontend,
             input_files.as_slice(),
             arguments.libraries.as_slice(),
             &output_selection,
@@ -255,7 +256,7 @@ pub fn main(
         )
     } else if let Some(standard_json) = arguments.standard_json {
         return self::standard_json_evm(
-            solc,
+            frontend,
             standard_json.map(PathBuf::from),
             messages,
             arguments.base_path,
@@ -266,7 +267,7 @@ pub fn main(
         );
     } else {
         self::standard_output_evm(
-            solc,
+            frontend,
             input_files.as_slice(),
             arguments.libraries.as_slice(),
             &output_selection,
@@ -308,7 +309,7 @@ pub fn main(
 /// Runs the Yul mode for the EVM target.
 ///
 pub fn yul_to_evm(
-    solc: impl Solc,
+    frontend: impl Frontend,
     paths: &[PathBuf],
     libraries: &[String],
     output_selection: &solx_standard_json::InputSelection,
@@ -329,10 +330,10 @@ pub fn yul_to_evm(
     let libraries = solx_utils::Libraries::try_from(libraries)?;
     let linker_symbols = libraries.as_linker_symbols()?;
 
-    solc.validate_yul_paths(paths, libraries.clone())?;
+    frontend.validate_yul_paths(paths, libraries.clone())?;
 
     let project = Project::try_from_yul_paths(
-        solc.version(),
+        frontend.version(),
         paths,
         libraries,
         output_selection,
@@ -416,7 +417,7 @@ pub fn llvm_ir_to_evm(
 /// Runs the standard output mode for the EVM target.
 ///
 pub fn standard_output_evm(
-    solc: impl Solc,
+    frontend: impl Frontend,
     paths: &[PathBuf],
     libraries: &[String],
     output_selection: &solx_standard_json::InputSelection,
@@ -450,7 +451,7 @@ pub fn standard_output_evm(
     )?;
 
     let run_solc_standard_json = profiler.start_pipeline_element("solc_Solidity_Standard_JSON");
-    let mut solc_output = solc.standard_json(
+    let mut solc_output = frontend.standard_json(
         &mut solc_input,
         use_import_callback,
         base_path.as_deref(),
@@ -467,7 +468,7 @@ pub fn standard_output_evm(
 
     let run_solx_project = profiler.start_pipeline_element("solx_Solidity_IR_Analysis");
     let project = Project::try_from_solc_output(
-        solc.version(),
+        frontend.version(),
         solc_input.settings.libraries.clone(),
         via_ir,
         &mut solc_output,
@@ -515,7 +516,7 @@ pub fn standard_output_evm(
 /// Runs the standard JSON mode for the EVM target.
 ///
 pub fn standard_json_evm(
-    solc: impl Solc,
+    frontend: impl Frontend,
     json_path: Option<PathBuf>,
     messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
     base_path: Option<String>,
@@ -566,7 +567,7 @@ pub fn standard_json_evm(
         solx_standard_json::InputLanguage::Solidity => {
             let run_solc_standard_json =
                 profiler.start_pipeline_element("solc_Solidity_Standard_JSON");
-            let mut solc_output = solc.standard_json(
+            let mut solc_output = frontend.standard_json(
                 &mut solc_input,
                 use_import_callback,
                 base_path.as_deref(),
@@ -588,7 +589,7 @@ pub fn standard_json_evm(
 
             let run_solx_project = profiler.start_pipeline_element("solx_Solidity_IR_Analysis");
             let project = Project::try_from_solc_output(
-                solc.version(),
+                frontend.version(),
                 solc_input.settings.libraries.clone(),
                 via_ir,
                 &mut solc_output,
@@ -614,7 +615,7 @@ pub fn standard_json_evm(
             }
 
             let run_solc_validate_yul = profiler.start_pipeline_element("solc_Yul_Validation");
-            let mut solc_output = solc.validate_yul_standard_json(&mut solc_input)?;
+            let mut solc_output = frontend.validate_yul_standard_json(&mut solc_input)?;
             run_solc_validate_yul.borrow_mut().finish();
             if solc_output.has_errors() {
                 solc_output.write_and_exit(&solc_input.settings.output_selection);
@@ -622,7 +623,7 @@ pub fn standard_json_evm(
 
             let run_solx_yul_project = profiler.start_pipeline_element("solx_Yul_IR_Analysis");
             let project = Project::try_from_yul_sources(
-                solc.version(),
+                frontend.version(),
                 solc_input.sources,
                 solc_input.settings.libraries.clone(),
                 &solc_input.settings.output_selection,
