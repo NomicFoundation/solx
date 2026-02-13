@@ -59,8 +59,12 @@ pub fn main(
             env!("CARGO_PKG_VERSION"),
             inkwell::support::get_commit_id().to_string(),
         )?;
-        writeln!(std::io::stdout(), "Version: {}", version.long)?;
-        writeln!(std::io::stdout(), "Frontend: {}", frontend.name())?;
+        writeln!(
+            std::io::stdout(),
+            "Version: {} ({})",
+            version.long,
+            frontend.name()
+        )?;
         return Ok(());
     }
 
