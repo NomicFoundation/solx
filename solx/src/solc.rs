@@ -55,7 +55,11 @@ impl Default for Solc {
     }
 }
 
-impl solx_core::Solc for Solc {
+impl solx_core::Frontend for Solc {
+    fn name(&self) -> &str {
+        "solc"
+    }
+
     fn standard_json(
         &self,
         input_json: &mut solx_standard_json::Input,

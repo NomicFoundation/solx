@@ -46,7 +46,7 @@ impl Toolchain {
         let stdout = String::from_utf8_lossy(result.stdout.as_slice());
         let first_line = stdout.lines().next().unwrap_or_default();
 
-        if first_line.starts_with("solx,") {
+        if first_line.starts_with("solx") {
             Ok(Self::Solx)
         } else {
             Ok(Self::Solc)

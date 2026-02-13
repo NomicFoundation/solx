@@ -6,6 +6,15 @@ use std::io::Write;
 
 use clap::Parser;
 
+#[cfg(not(any(feature = "solc", feature = "slang")))]
+compile_error!(
+    "No Solidity frontend is enabled. Please enable exactly one: --features solc or --features slang."
+);
+#[cfg(all(feature = "solc", feature = "slang"))]
+compile_error!(
+    "Multiple Solidity frontends are enabled. Please enable exactly one: --features solc or --features slang."
+);
+
 ///
 /// The application entry point.
 ///
@@ -43,7 +52,12 @@ fn main() -> anyhow::Result<()> {
                 )
                 .expect("Stderr writing error");
         }
-        if let Err(error) = solx_core::main(arguments, solx::Solc::default(), messages.clone()) {
+        #[cfg(feature = "solc")]
+        let frontend = solx::Solc::default();
+        #[cfg(all(feature = "slang", not(feature = "solc")))]
+        let frontend = solx_slang::SlangFrontend::default();
+
+        if let Err(error) = solx_core::main(arguments, frontend, messages.clone()) {
             messages
                 .lock()
                 .expect("Sync")

@@ -1,0 +1,19 @@
+[package]
+name = "solx-slang"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+description = "Slang Solidity frontend for solx"
+license = "MIT OR Apache-2.0"
+
+[lib]
+doctest = false
+
+[dependencies]
+anyhow.workspace = true
+semver.workspace = true
+slang_solidity = "1.3"
+
+solx-core = { path = "../solx-core" }
+solx-standard-json = { path = "../solx-standard-json" }
+solx-utils = { path = "../solx-utils" }
