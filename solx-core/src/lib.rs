@@ -55,16 +55,12 @@ pub fn main(
         let version = frontend.version();
         writeln!(
             std::io::stdout(),
-            "{DEFAULT_EXECUTABLE_NAME} v{}, {DEFAULT_PACKAGE_DESCRIPTION}, LLVM build: {}",
+            "{DEFAULT_EXECUTABLE_NAME} v{}, {DEFAULT_PACKAGE_DESCRIPTION}, Front end: {}, LLVM build: {}",
             env!("CARGO_PKG_VERSION"),
+            frontend.name(),
             inkwell::support::get_commit_id().to_string(),
         )?;
-        writeln!(
-            std::io::stdout(),
-            "Version: {} ({})",
-            version.long,
-            frontend.name()
-        )?;
+        writeln!(std::io::stdout(), "Version: {}", version.long)?;
         return Ok(());
     }
 
