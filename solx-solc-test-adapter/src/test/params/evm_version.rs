@@ -65,14 +65,20 @@ impl TryFrom<&str> for EVMVersion {
     type Error = anyhow::Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let regex = Regex::new(r"^(=|>|<|>=|<=)(\w*)$").expect("Always valid");
+        let regex = Regex::new(r"^(=|>|<|>=|<=)(\w*)$").expect("regex is compile-time constant");
 
         let captures = regex
             .captures(value)
             .ok_or_else(|| anyhow::anyhow!("Invalid EVM version description: {value}"))?;
 
-        let symbol = captures.get(1).expect("Always exists").as_str();
-        let version = captures.get(2).expect("Always exists").as_str();
+        let symbol = captures
+            .get(1)
+            .expect("capture group 1 always present in matched pattern")
+            .as_str();
+        let version = captures
+            .get(2)
+            .expect("capture group 2 always present in matched pattern")
+            .as_str();
 
         let version = solx_utils::EVMVersion::from_str(version)?;
 
