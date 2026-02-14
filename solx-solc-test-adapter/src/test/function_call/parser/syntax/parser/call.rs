@@ -15,7 +15,6 @@ use crate::test::function_call::parser::syntax::error::Error as SyntaxError;
 use crate::test::function_call::parser::syntax::error::ParsingError;
 use crate::test::function_call::parser::syntax::parser;
 use crate::test::function_call::parser::syntax::parser::event::Parser as EventParser;
-use crate::test::function_call::parser::syntax::parser::gas::Parser as GasParser;
 use crate::test::function_call::parser::syntax::parser::literal::Parser as LiteralParser;
 use crate::test::function_call::parser::syntax::parser::r#type::Parser as TypeParser;
 use crate::test::function_call::parser::syntax::parser::value::Parser as ValueParser;
@@ -65,8 +64,6 @@ pub enum State {
     CommaExpected,
     /// The `...{event}: ` has been parsed so far.
     Event,
-    /// The `...{gas option}` has been parsed so far.
-    Gas,
 }
 
 ///
@@ -153,7 +150,12 @@ impl Parser {
                         } => {
                             self.builder
                                 .set_library(Identifier::new(location, identifier.inner));
-                            return Ok((self.builder.finish(), None));
+                            return Ok((
+                                self.builder
+                                    .finish()
+                                    .expect("Unreachable as long as the parser works correctly"),
+                                None,
+                            ));
                         }
                         Token {
                             lexeme: Lexeme::Literal(LexicalLiteral::String(string)),
@@ -191,7 +193,12 @@ impl Parser {
                         } => {
                             self.builder
                                 .set_library(Identifier::new(location, identifier.inner));
-                            Ok((self.builder.finish(), None))
+                            Ok((
+                                self.builder
+                                    .finish()
+                                    .expect("Unreachable as long as the parser works correctly"),
+                                None,
+                            ))
                         }
                         Token { lexeme, location } => {
                             Err(SyntaxError::new(location, vec!["{identifier}"], lexeme).into())
@@ -241,17 +248,14 @@ impl Parser {
                             self.next = next;
                             self.state = State::Event;
                         }
-                        token @ Token {
-                            lexeme: Lexeme::Keyword(Keyword::Gas),
-                            ..
-                        } => {
-                            let (gas, next) =
-                                GasParser::default().parse(stream.clone(), Some(token))?;
-                            self.builder.push_gas(gas);
-                            self.next = next;
-                            self.state = State::Gas;
+                        token => {
+                            return Ok((
+                                self.builder
+                                    .finish()
+                                    .expect("Unreachable as long as the parser works correctly"),
+                                Some(token),
+                            ));
                         }
-                        token => return Ok((self.builder.finish(), Some(token))),
                     }
                 }
                 State::ParenthesisLeft => {
@@ -328,17 +332,14 @@ impl Parser {
                         self.next = next;
                         self.state = State::Event;
                     }
-                    token @ Token {
-                        lexeme: Lexeme::Keyword(Keyword::Gas),
-                        ..
-                    } => {
-                        let (gas, next) =
-                            GasParser::default().parse(stream.clone(), Some(token))?;
-                        self.builder.push_gas(gas);
-                        self.next = next;
-                        self.state = State::Gas;
+                    token => {
+                        return Ok((
+                            self.builder
+                                .finish()
+                                .expect("Unreachable as long as the parser works correctly"),
+                            Some(token),
+                        ));
                     }
-                    token => return Ok((self.builder.finish(), Some(token))),
                 },
                 State::Value => match parser::take_or_next(self.next.take(), stream.clone())? {
                     Token {
@@ -365,17 +366,14 @@ impl Parser {
                         self.next = next;
                         self.state = State::Event;
                     }
-                    token @ Token {
-                        lexeme: Lexeme::Keyword(Keyword::Gas),
-                        ..
-                    } => {
-                        let (gas, next) =
-                            GasParser::default().parse(stream.clone(), Some(token))?;
-                        self.builder.push_gas(gas);
-                        self.next = next;
-                        self.state = State::Gas;
+                    token => {
+                        return Ok((
+                            self.builder
+                                .finish()
+                                .expect("Unreachable as long as the parser works correctly"),
+                            Some(token),
+                        ));
                     }
-                    token => return Ok((self.builder.finish(), Some(token))),
                 },
                 State::Colon => match parser::take_or_next(self.next.take(), stream.clone())? {
                     token @ Token {
@@ -408,17 +406,14 @@ impl Parser {
                         self.next = next;
                         self.state = State::Event;
                     }
-                    token @ Token {
-                        lexeme: Lexeme::Keyword(Keyword::Gas),
-                        ..
-                    } => {
-                        let (gas, next) =
-                            GasParser::default().parse(stream.clone(), Some(token))?;
-                        self.builder.push_gas(gas);
-                        self.next = next;
-                        self.state = State::Gas;
+                    token => {
+                        return Ok((
+                            self.builder
+                                .finish()
+                                .expect("Unreachable as long as the parser works correctly"),
+                            Some(token),
+                        ));
                     }
-                    token => return Ok((self.builder.finish(), Some(token))),
                 },
                 State::Input => match parser::take_or_next(self.next.take(), stream.clone())? {
                     Token {
@@ -444,17 +439,14 @@ impl Parser {
                         self.next = next;
                         self.state = State::Event;
                     }
-                    token @ Token {
-                        lexeme: Lexeme::Keyword(Keyword::Gas),
-                        ..
-                    } => {
-                        let (gas, next) =
-                            GasParser::default().parse(stream.clone(), Some(token))?;
-                        self.builder.push_gas(gas);
-                        self.next = next;
-                        self.state = State::Gas;
+                    token => {
+                        return Ok((
+                            self.builder
+                                .finish()
+                                .expect("Unreachable as long as the parser works correctly"),
+                            Some(token),
+                        ));
                     }
-                    token => return Ok((self.builder.finish(), Some(token))),
                 },
                 State::CommaInput => {
                     let (input, next) =
@@ -481,7 +473,7 @@ impl Parser {
                         lexeme: Lexeme::Keyword(Keyword::Failure),
                         ..
                     } => {
-                        self.builder.set_failure();
+                        self.builder.failure = true;
                         self.state = State::Expected;
                     }
                     token @ Token {
@@ -494,17 +486,14 @@ impl Parser {
                         self.next = next;
                         self.state = State::Event;
                     }
-                    token @ Token {
-                        lexeme: Lexeme::Keyword(Keyword::Gas),
-                        ..
-                    } => {
-                        let (gas, next) =
-                            GasParser::default().parse(stream.clone(), Some(token))?;
-                        self.builder.push_gas(gas);
-                        self.next = next;
-                        self.state = State::Gas;
+                    token => {
+                        return Ok((
+                            self.builder
+                                .finish()
+                                .expect("Unreachable as long as the parser works correctly"),
+                            Some(token),
+                        ));
                     }
-                    token => return Ok((self.builder.finish(), Some(token))),
                 },
                 State::Expected => match parser::take_or_next(self.next.take(), stream.clone())? {
                     Token {
@@ -523,17 +512,14 @@ impl Parser {
                         self.next = next;
                         self.state = State::Event;
                     }
-                    token @ Token {
-                        lexeme: Lexeme::Keyword(Keyword::Gas),
-                        ..
-                    } => {
-                        let (gas, next) =
-                            GasParser::default().parse(stream.clone(), Some(token))?;
-                        self.builder.push_gas(gas);
-                        self.next = next;
-                        self.state = State::Gas;
+                    token => {
+                        return Ok((
+                            self.builder
+                                .finish()
+                                .expect("Unreachable as long as the parser works correctly"),
+                            Some(token),
+                        ));
                     }
-                    token => return Ok((self.builder.finish(), Some(token))),
                 },
                 State::CommaExpected => {
                     let (expected, next) =
@@ -553,30 +539,14 @@ impl Parser {
                         self.next = next;
                         self.state = State::Event;
                     }
-                    token @ Token {
-                        lexeme: Lexeme::Keyword(Keyword::Gas),
-                        ..
-                    } => {
-                        let (gas, next) =
-                            GasParser::default().parse(stream.clone(), Some(token))?;
-                        self.builder.push_gas(gas);
-                        self.next = next;
-                        self.state = State::Gas;
+                    token => {
+                        return Ok((
+                            self.builder
+                                .finish()
+                                .expect("Unreachable as long as the parser works correctly"),
+                            Some(token),
+                        ));
                     }
-                    token => return Ok((self.builder.finish(), Some(token))),
-                },
-                State::Gas => match parser::take_or_next(self.next.take(), stream.clone())? {
-                    token @ Token {
-                        lexeme: Lexeme::Keyword(Keyword::Gas),
-                        ..
-                    } => {
-                        let (gas, next) =
-                            GasParser::default().parse(stream.clone(), Some(token))?;
-                        self.builder.push_gas(gas);
-                        self.next = next;
-                        self.state = State::Gas;
-                    }
-                    token => return Ok((self.builder.finish(), Some(token))),
                 },
             }
         }
@@ -586,8 +556,8 @@ impl Parser {
 #[cfg(test)]
 mod tests {
 
+    use crate::test::function_call::parser::lexical::Keyword;
     use crate::test::function_call::parser::lexical::Lexeme;
-
     use crate::test::function_call::parser::lexical::Location;
     use crate::test::function_call::parser::lexical::Symbol;
     use crate::test::function_call::parser::lexical::Token;
@@ -599,12 +569,9 @@ mod tests {
     use crate::test::function_call::parser::syntax::tree::call::Call;
     use crate::test::function_call::parser::syntax::tree::call::variant::Variant as CallVariant;
 
+    use crate::test::function_call::parser::syntax::Identifier;
     use crate::test::function_call::parser::syntax::tree::event::Event;
     use crate::test::function_call::parser::syntax::tree::event::variant::Variant as EventVariant;
-    use crate::test::function_call::parser::syntax::tree::gas::Gas;
-    use crate::test::function_call::parser::syntax::tree::gas::variant::Variant as GasVariant;
-
-    use crate::test::function_call::parser::syntax::Identifier;
     use crate::test::function_call::parser::syntax::tree::r#type::variant::Variant as TypeVariant;
     use crate::test::function_call::parser::syntax::tree::value::Value;
     use crate::test::function_call::parser::syntax::tree::value::unit::Unit;
@@ -668,16 +635,11 @@ gas legacy: 100("#;
                     Some(Vec::new()),
                     true,
                     Vec::new(),
-                    vec![Gas::new(
-                        Location::test(2, 1),
-                        GasVariant::Legacy,
-                        "100".to_owned(),
-                    )],
                 ),
             ),
             Some(Token::new(
-                Lexeme::Symbol(Symbol::ParenthesisLeft),
-                Location::test(2, 16),
+                Lexeme::Keyword(Keyword::Gas),
+                Location::test(2, 1),
             )),
         ));
 
@@ -715,7 +677,6 @@ gas legacy: 100("#;
                         None,
                         None,
                     )],
-                    Vec::new(),
                 ),
             ),
             Some(Token::new(Lexeme::Eof, Location::test(2, 18))),

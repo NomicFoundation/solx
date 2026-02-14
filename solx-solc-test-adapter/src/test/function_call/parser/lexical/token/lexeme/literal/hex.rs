@@ -28,11 +28,10 @@ impl Hex {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<std::string::String> for Hex {
-    fn into(self) -> std::string::String {
+impl From<Hex> for std::string::String {
+    fn from(value: Hex) -> std::string::String {
         let mut string = "hex\"".to_owned();
-        string.push_str(&self.inner);
+        string.push_str(&value.inner);
         string.push('"');
         string
     }

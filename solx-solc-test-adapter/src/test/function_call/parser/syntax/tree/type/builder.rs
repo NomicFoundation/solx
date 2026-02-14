@@ -67,14 +67,14 @@ impl Builder {
     ///
     /// Finalizes the builder and returns the built value.
     ///
-    /// # Panics
+    /// # Errors
     /// If some of the required items has not been set.
     ///
-    pub fn finish(mut self) -> Type {
+    pub fn finish(mut self) -> anyhow::Result<Type> {
         let location = self
             .location
             .take()
-            .unwrap_or_else(|| panic!("{}{}", "Mandatory value missing: ", "location"));
+            .ok_or_else(|| anyhow::anyhow!("Missing mandatory field: location"))?;
 
         let variant = if let Some(keyword) = self.keyword.take() {
             match keyword {
@@ -87,7 +87,7 @@ impl Builder {
                 }
                 Keyword::IntegerSigned { bit_length } => TypeVariant::integer_signed(bit_length),
                 Keyword::Bytes { byte_length } => TypeVariant::bytes(byte_length),
-                keyword => panic!("{}{}", self::BUILDER_TYPE_INVALID_KEYWORD, keyword),
+                keyword => anyhow::bail!("{}{}", self::BUILDER_TYPE_INVALID_KEYWORD, keyword),
             }
         } else if let Some(array_type) = self.array_type.take() {
             TypeVariant::array(array_type, self.array_size.take())
@@ -97,6 +97,6 @@ impl Builder {
             TypeVariant::tuple(Vec::new())
         };
 
-        Type::new(location, variant)
+        Ok(Type::new(location, variant))
     }
 }

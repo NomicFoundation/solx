@@ -64,7 +64,7 @@ f(uint256): 2 -> -2
     let mut result = Vec::with_capacity(expected.len());
     let mut stream = TokenStream::test(input);
     loop {
-        match stream.next().expect("Always valid") {
+        match stream.next().expect("test input lexes without errors") {
             Token {
                 lexeme: Lexeme::Eof,
                 ..

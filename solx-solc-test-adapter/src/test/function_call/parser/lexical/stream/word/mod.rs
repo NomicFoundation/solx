@@ -12,8 +12,8 @@ use std::str::FromStr;
 use crate::test::function_call::parser::lexical::token::lexeme::Lexeme;
 use crate::test::function_call::parser::lexical::token::lexeme::identifier::Error as IdentifierError;
 use crate::test::function_call::parser::lexical::token::lexeme::identifier::Identifier;
+use crate::test::function_call::parser::lexical::token::lexeme::keyword::Keyword;
 use crate::test::function_call::parser::lexical::token::lexeme::literal::Literal;
-use crate::test::function_call::parser::lexical::token::lexeme::literal::boolean::Boolean;
 
 use self::output::Output;
 
@@ -66,9 +66,10 @@ pub fn parse(input: &str) -> Output {
 
     let lexeme = match Identifier::from_str(&input[..size]) {
         Ok(identifier) => Lexeme::Identifier(identifier),
-        Err(IdentifierError::IsKeyword(keyword)) => match Boolean::try_from(keyword) {
-            Ok(boolean) => Lexeme::Literal(Literal::Boolean(boolean)),
-            Err(keyword) => Lexeme::Keyword(keyword),
+        Err(IdentifierError::IsKeyword(keyword)) => match keyword {
+            Keyword::True => Lexeme::Literal(Literal::Boolean(true)),
+            Keyword::False => Lexeme::Literal(Literal::Boolean(false)),
+            keyword => Lexeme::Keyword(keyword),
         },
     };
     Output::new(size, lexeme)

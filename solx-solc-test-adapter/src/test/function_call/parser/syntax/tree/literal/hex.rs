@@ -39,7 +39,7 @@ impl Literal {
     pub fn as_bytes_be(&self) -> Vec<u8> {
         let mut result = vec![0u8; solx_utils::BYTE_LENGTH_FIELD];
         web3::types::U256::from_str(self.inner.inner.as_str())
-            .expect("Always valid")
+            .expect("validated by parser before semantic conversion")
             .to_big_endian(&mut result);
         result = result[result.len() - self.inner.inner.len().div_ceil(2)..].to_owned();
         result

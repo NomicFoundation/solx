@@ -78,17 +78,6 @@ impl Variant {
     ///
     /// A shortcut constructor.
     ///
-    pub fn integer(is_signed: bool, bit_length: usize) -> Self {
-        if is_signed {
-            Self::integer_signed(bit_length)
-        } else {
-            Self::integer_unsigned(bit_length)
-        }
-    }
-
-    ///
-    /// A shortcut constructor.
-    ///
     pub fn integer_unsigned(bit_length: usize) -> Self {
         Self::IntegerUnsigned { bit_length }
     }

@@ -9,7 +9,6 @@ pub mod string;
 
 use std::fmt;
 
-use self::boolean::Boolean;
 use self::hex::Hex;
 use self::integer::Integer;
 use self::string::String;
@@ -20,7 +19,7 @@ use self::string::String;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Literal {
     /// A boolean literal, like `true`, or `false`.
-    Boolean(Boolean),
+    Boolean(bool),
     /// An integer literal, like `42`, or `0xff`.
     Integer(Integer),
     /// A string literal, like `"message"`.

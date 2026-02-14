@@ -80,7 +80,7 @@ impl Parser {
                             lexeme: Lexeme::Symbol(Symbol::ParenthesisRight),
                             ..
                         } => {
-                            return Ok((self.builder.finish(), None));
+                            return Ok((self.builder.finish()?, None));
                         }
                         token => {
                             let (element_type, next) =
@@ -100,7 +100,7 @@ impl Parser {
                         Token {
                             lexeme: Lexeme::Symbol(Symbol::ParenthesisRight),
                             ..
-                        } => return Ok((self.builder.finish(), None)),
+                        } => return Ok((self.builder.finish()?, None)),
                         Token { lexeme, location } => {
                             return Err(SyntaxError::new(location, vec![",", ")"], lexeme).into());
                         }

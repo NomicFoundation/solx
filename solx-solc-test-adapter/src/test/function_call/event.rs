@@ -38,19 +38,20 @@ impl TryFrom<SyntaxEvent> for Event {
                 }
             }
         }
-        let mut topics = super::bytes_as_u256(topics.as_slice());
+        let mut topics = super::FunctionCall::bytes_as_u256(topics.as_slice());
         if let EventVariant::Signature { identifier, types } = event.variant {
             topics.insert(
                 0,
                 web3::types::U256::from_big_endian(
                     web3::signing::keccak256(
-                        super::signature(Some(identifier), Some(types)).as_bytes(),
+                        super::FunctionCall::signature(Some(&identifier), Some(types.as_slice()))
+                            .as_bytes(),
                     )
                     .as_slice(),
                 ),
             )
         }
-        let expected = super::bytes_as_u256(expected.as_slice());
+        let expected = super::FunctionCall::bytes_as_u256(expected.as_slice());
         Ok(Self {
             address,
             topics,

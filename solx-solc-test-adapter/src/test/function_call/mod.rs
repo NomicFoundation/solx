@@ -3,7 +3,6 @@
 //!
 
 pub mod event;
-pub mod gas_option;
 pub mod parser;
 
 use crate::test::function_call::parser::Call;
@@ -11,9 +10,10 @@ use crate::test::function_call::parser::CallVariant;
 use crate::test::function_call::parser::Identifier;
 use crate::test::function_call::parser::Type;
 use crate::test::function_call::parser::Unit;
+use crate::test::function_call::parser::syntax::tree::literal::Literal;
+use crate::test::function_call::parser::syntax::tree::value::Value;
 
 use self::event::Event;
-use self::gas_option::GasOption;
 
 ///
 /// The function call.
@@ -41,8 +41,6 @@ pub enum FunctionCall {
         failure: bool,
         /// The expected events.
         events: Vec<Event>,
-        /// The expected gas options.
-        gas_options: Vec<GasOption>,
     },
     /// The constructor call.
     Constructor {
@@ -52,8 +50,6 @@ pub enum FunctionCall {
         value: Option<web3::types::U256>,
         /// The expected events.
         events: Vec<Event>,
-        /// The expected gas options.
-        gas_options: Vec<GasOption>,
     },
     /// The `isoltest_builtin_test` standard function.
     IsoltestBuiltinTest {
@@ -75,8 +71,6 @@ pub enum FunctionCall {
         expected: web3::types::U256,
         /// The expected events.
         events: Vec<Event>,
-        /// The expected gas options.
-        gas_options: Vec<GasOption>,
     },
     /// The `storageEmpty` standard function.
     StorageEmpty {
@@ -109,58 +103,12 @@ impl TryFrom<parser::Call> for FunctionCall {
                 expected,
                 failure,
                 events,
-                gas,
             } => {
-                let signature = signature(identifier.clone(), types);
-
-                let value = match value {
-                    Some(value) => {
-                        let mut amount = web3::types::U256::from_dec_str(value.amount.as_str())
-                            .expect(VALIDATED_BY_THE_PARSER);
-                        if value.unit == Unit::Ether {
-                            amount = amount
-                                .checked_mul(web3::types::U256::from(u64::pow(10, 18)))
-                                .ok_or_else(|| anyhow::anyhow!("Overflow: amount too much"))?;
-                        }
-                        Some(amount)
-                    }
-                    None => None,
-                };
-
-                let input = match input {
-                    Some(input) => input
-                        .into_iter()
-                        .map(|literal| literal.as_bytes_be())
-                        .collect::<anyhow::Result<Vec<Vec<u8>>>>()?
-                        .into_iter()
-                        .flatten()
-                        .collect::<Vec<u8>>(),
-                    None => Vec::new(),
-                };
-
-                let expected = match expected {
-                    Some(expected) => bytes_as_u256(
-                        expected
-                            .into_iter()
-                            .map(|literal| literal.as_bytes_be())
-                            .collect::<anyhow::Result<Vec<Vec<u8>>>>()?
-                            .into_iter()
-                            .flatten()
-                            .collect::<Vec<u8>>()
-                            .as_slice(),
-                    ),
-                    None => Vec::new(),
-                };
-
-                let events = events
-                    .into_iter()
-                    .map(|event| event.try_into())
-                    .collect::<anyhow::Result<Vec<Event>>>()?;
-
-                let gas_options: Vec<GasOption> = gas
-                    .into_iter()
-                    .map(|gas_option| gas_option.into())
-                    .collect();
+                let signature = Self::signature(identifier.as_ref(), types.as_deref());
+                let value = Self::parse_value(value)?;
+                let input = Self::parse_input(input)?;
+                let expected = Self::parse_expected(expected)?;
+                let events = Self::parse_events(events)?;
 
                 match signature.as_str() {
                     "constructor()" => {
@@ -171,7 +119,6 @@ impl TryFrom<parser::Call> for FunctionCall {
                             calldata: input,
                             value,
                             events,
-                            gas_options,
                         })
                     }
                     "isoltest_builtin_test" => {
@@ -184,19 +131,13 @@ impl TryFrom<parser::Call> for FunctionCall {
                         if !events.is_empty() {
                             anyhow::bail!("standard functions don't emit events");
                         }
-                        if !gas_options.is_empty() {
-                            anyhow::bail!("standard functions can not have gas options");
-                        }
                         Ok(Self::IsoltestBuiltinTest {
-                            expected: expected.into_iter().next().expect("Always valid"),
+                            expected: expected.into_iter().next().expect("length checked above"),
                         })
                     }
                     "isoltest_side_effects_test" => {
                         if !events.is_empty() {
                             anyhow::bail!("standard functions don't emit events");
-                        }
-                        if !gas_options.is_empty() {
-                            anyhow::bail!("standard functions can not have gas options");
                         }
                         Ok(Self::IsoltestSideEffectsTest { input, expected })
                     }
@@ -228,9 +169,8 @@ impl TryFrom<parser::Call> for FunctionCall {
                                         - solx_utils::BYTE_LENGTH_ETH_ADDRESS..],
                                 ))
                             },
-                            expected: expected.into_iter().next().expect("Always valid"),
+                            expected: expected.into_iter().next().expect("length checked above"),
                             events,
-                            gas_options,
                         })
                     }
                     "storageEmpty" => {
@@ -243,11 +183,12 @@ impl TryFrom<parser::Call> for FunctionCall {
                         if !events.is_empty() {
                             anyhow::bail!("standard functions don't emit events");
                         }
-                        if !gas_options.is_empty() {
-                            anyhow::bail!("standard functions can not have gas options");
-                        }
                         Ok(Self::StorageEmpty {
-                            expected: !expected.into_iter().next().expect("Always valid").is_zero(),
+                            expected: !expected
+                                .into_iter()
+                                .next()
+                                .expect("length checked above")
+                                .is_zero(),
                         })
                     }
                     "account" => {
@@ -260,11 +201,8 @@ impl TryFrom<parser::Call> for FunctionCall {
                         if !events.is_empty() {
                             anyhow::bail!("standard functions don't emit events");
                         }
-                        if !gas_options.is_empty() {
-                            anyhow::bail!("standard functions can not have gas options");
-                        }
                         let input = web3::types::U256::from_big_endian(input.as_slice());
-                        let expected = expected.into_iter().next().expect("Always valid");
+                        let expected = expected.into_iter().next().expect("length checked above");
                         let mut expected_bytes = [0u8; solx_utils::BYTE_LENGTH_FIELD];
                         expected.to_big_endian(&mut expected_bytes);
                         Ok(Self::Account {
@@ -293,7 +231,6 @@ impl TryFrom<parser::Call> for FunctionCall {
                             expected,
                             failure,
                             events,
-                            gas_options,
                         })
                     }
                 }
@@ -314,45 +251,97 @@ impl FunctionCall {
             .map(|call| call.try_into())
             .collect::<anyhow::Result<Vec<FunctionCall>>>()
     }
+    ///
+    /// Parses value option into wei amount.
+    ///
+    fn parse_value(value: Option<Value>) -> anyhow::Result<Option<web3::types::U256>> {
+        match value {
+            Some(value) => {
+                let mut amount = web3::types::U256::from_dec_str(value.amount.as_str())
+                    .expect(VALIDATED_BY_THE_PARSER);
+                if value.unit == Unit::Ether {
+                    amount = amount
+                        .checked_mul(web3::types::U256::from(u64::pow(10, 18)))
+                        .ok_or_else(|| anyhow::anyhow!("Overflow: amount too much"))?;
+                }
+                Ok(Some(amount))
+            }
+            None => Ok(None),
+        }
+    }
+
+    ///
+    /// Parses literals into bytes.
+    ///
+    fn parse_input(input: Option<Vec<Literal>>) -> anyhow::Result<Vec<u8>> {
+        Ok(match input {
+            Some(input) => input
+                .into_iter()
+                .map(|literal| literal.as_bytes_be())
+                .collect::<anyhow::Result<Vec<Vec<u8>>>>()?
+                .into_iter()
+                .flatten()
+                .collect::<Vec<u8>>(),
+            None => Vec::new(),
+        })
+    }
+
+    ///
+    /// Parses expected literals into U256 values.
+    ///
+    fn parse_expected(expected: Option<Vec<Literal>>) -> anyhow::Result<Vec<web3::types::U256>> {
+        let expected = Self::parse_input(expected)?;
+        Ok(Self::bytes_as_u256(expected.as_slice()))
+    }
+
+    ///
+    /// Parses expected events.
+    ///
+    fn parse_events(events: Vec<parser::Event>) -> anyhow::Result<Vec<Event>> {
+        events
+            .into_iter()
+            .map(|event| event.try_into())
+            .collect::<anyhow::Result<Vec<Event>>>()
+    }
+
+    ///
+    /// Returns signature from identifier and types.
+    ///
+    fn signature(identifier: Option<&Identifier>, types: Option<&[Type]>) -> String {
+        let mut signature = identifier
+            .map(|identifier| identifier.name.clone())
+            .unwrap_or_default();
+        if let Some(types) = types {
+            signature.push_str(
+                format!(
+                    "({})",
+                    types
+                        .iter()
+                        .map(|r#type| r#type.to_string())
+                        .collect::<Vec<String>>()
+                        .join(",")
+                )
+                .as_str(),
+            );
+        }
+        signature
+    }
+
+    ///
+    /// Converts bytes to vector of U256.
+    ///
+    fn bytes_as_u256(bytes: &[u8]) -> Vec<web3::types::U256> {
+        let mut result = Vec::new();
+        for value in bytes.chunks(solx_utils::BYTE_LENGTH_FIELD) {
+            let mut value = value.to_owned();
+            while value.len() < solx_utils::BYTE_LENGTH_FIELD {
+                value.push(0);
+            }
+            result.push(web3::types::U256::from_big_endian(value.as_slice()));
+        }
+        result
+    }
 }
 
 /// The unreachable branch panic, which is prevented by the parser.
 static VALIDATED_BY_THE_PARSER: &str = "Unreachable as long as the parser works correctly";
-
-///
-/// Returns signature from identifier and types.
-///
-fn signature(identifier: Option<Identifier>, types: Option<Vec<Type>>) -> String {
-    let mut signature = identifier
-        .map(|identifier| identifier.name)
-        .unwrap_or_default();
-    if let Some(types) = types {
-        signature.push_str(
-            format!(
-                "({})",
-                types
-                    .into_iter()
-                    .map(|r#type| r#type.to_string())
-                    .collect::<Vec<String>>()
-                    .join(",")
-            )
-            .as_str(),
-        );
-    }
-    signature
-}
-
-///
-/// Converts bytes to vector of U256.
-///
-fn bytes_as_u256(bytes: &[u8]) -> Vec<web3::types::U256> {
-    let mut result = Vec::new();
-    for value in bytes.chunks(solx_utils::BYTE_LENGTH_FIELD) {
-        let mut value = value.to_owned();
-        while value.len() < solx_utils::BYTE_LENGTH_FIELD {
-            value.push(0);
-        }
-        result.push(web3::types::U256::from_big_endian(value.as_slice()));
-    }
-    result
-}
