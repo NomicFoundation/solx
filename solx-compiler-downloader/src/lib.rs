@@ -4,9 +4,9 @@
 
 pub(crate) mod config;
 
-pub use self::config::Config;
-pub use self::config::compiler_list::CompilerList;
-pub use self::config::executable::protocol::Protocol;
+use self::config::Config;
+use self::config::compiler_list::CompilerList;
+use self::config::executable::protocol::Protocol;
 
 #[cfg(target_family = "unix")]
 use std::os::unix::fs::PermissionsExt;

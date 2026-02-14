@@ -7,7 +7,6 @@ pub mod compilation_time;
 pub mod error;
 pub mod foundry_gas;
 pub mod foundry_size;
-pub mod source;
 pub mod test_failures;
 pub mod testing_time;
 

@@ -51,20 +51,19 @@ impl Integer {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<String> for Integer {
-    fn into(self) -> String {
-        match self {
-            Self::Decimal {
+impl From<Integer> for String {
+    fn from(value: Integer) -> String {
+        match value {
+            Integer::Decimal {
                 mut inner,
                 negative,
             } => {
                 if negative {
-                    inner.insert(0, Self::CHARACTER_MINUS);
+                    inner.insert(0, Integer::CHARACTER_MINUS);
                 }
                 inner
             }
-            Self::Hexadecimal(inner) => inner,
+            Integer::Hexadecimal(inner) => inner,
         }
     }
 }

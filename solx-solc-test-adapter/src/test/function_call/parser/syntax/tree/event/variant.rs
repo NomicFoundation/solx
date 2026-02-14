@@ -2,7 +2,8 @@
 //! The event signature variant.
 //!
 
-use crate::test::function_call::parser::syntax::{Identifier, Type};
+use crate::test::function_call::parser::syntax::Identifier;
+use crate::test::function_call::parser::syntax::Type;
 
 ///
 /// The event signature variant.

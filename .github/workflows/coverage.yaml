@@ -31,7 +31,7 @@ jobs:
       PROFDATA_FILE: solx.profdata
       LCOV_FILE: codecov.lcov
       OUTPUT_HTML_DIR: COVERAGE
-      COVERAGE_IGNORE_REGEX: '/(solx-llvm|target-llvm|solx-solidity|solx-tester|solx-dev|solx-benchmark-converter|solx-compiler-downloader|solx-solc-test-adapter|\.cargo|cargo/registry)/'
+      COVERAGE_IGNORE_REGEX: '/(solx-llvm|target-llvm|solx-solidity|\.cargo|cargo/registry)/'
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -68,16 +68,15 @@ jobs:
           enable-coverage: 'true'
           target: 'x86_64-unknown-linux-gnu'
 
-      - name: Build solx-dev and solx-tester
-        run: cargo build --release --bin solx-dev --bin solx-tester
-
       - name: Run integration tests
         run: |
           TMP="${PROFDATA_FILE}.tmp"
-          for TEST_PATH in tests/solidity/complex/* tests/solidity/simple/*; do
+          TARGET_DIR="./target/x86_64-unknown-linux-gnu/release"
+          for TEST_PATH in tests/solidity/simple/default.sol tests/solidity/complex/default; do
             WORKDIR=$(basename ${TEST_PATH})
             mkdir -p "${GITHUB_WORKSPACE}/${WORKDIR}"
-            ./target/release/solx-dev test solx-tester \
+            "${TARGET_DIR}/solx-dev" test solx-tester \
+              --binary "${TARGET_DIR}/solx-tester" \
               --solidity-compiler ${{ steps.build-solx.outputs.binary-path }} \
               --path ${TEST_PATH} --workflow build --optimizer M3B3
             mv *.profraw "${GITHUB_WORKSPACE}/${WORKDIR}/" || true
@@ -94,7 +93,10 @@ jobs:
       - name: Preserve instrumented binary
         env:
           SOLX_BINARY: ${{ steps.build-solx.outputs.binary-path }}
-        run: cp "${SOLX_BINARY}" "${GITHUB_WORKSPACE}/solx-instrumented"
+        run: |
+          cp "${SOLX_BINARY}" "${GITHUB_WORKSPACE}/solx-instrumented"
+          cp "./target/x86_64-unknown-linux-gnu/release/solx-tester" "${GITHUB_WORKSPACE}/solx-tester-instrumented"
+          cp "./target/x86_64-unknown-linux-gnu/release/solx-dev" "${GITHUB_WORKSPACE}/solx-dev-instrumented"
 
       - name: Run unit tests
         env:
@@ -115,20 +117,30 @@ jobs:
 
       - name: Generate coverage reports
         run: |
+          OBJECTS=(
+            -object "${GITHUB_WORKSPACE}/solx-instrumented"
+            -object "${GITHUB_WORKSPACE}/solx-tester-instrumented"
+            -object "${GITHUB_WORKSPACE}/solx-dev-instrumented"
+          )
           llvm-cov show --show-directory-coverage \
             --format=html --output-dir=${OUTPUT_HTML_DIR} \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
-            -instr-profile=${PROFDATA_FILE} "${GITHUB_WORKSPACE}/solx-instrumented"
+            -instr-profile=${PROFDATA_FILE} "${OBJECTS[@]}"
           mkdir -p llvm
           llvm-cov export --format=lcov \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
             -instr-profile=${PROFDATA_FILE} \
-            "${GITHUB_WORKSPACE}/solx-instrumented" > ./llvm/${LCOV_FILE}
+            "${OBJECTS[@]}" > ./llvm/${LCOV_FILE}
 
       - name: Coverage summary
         id: coverage-summary
         run: |
-          llvm-cov report -instr-profile=${PROFDATA_FILE} "${GITHUB_WORKSPACE}/solx-instrumented" \
+          OBJECTS=(
+            -object "${GITHUB_WORKSPACE}/solx-instrumented"
+            -object "${GITHUB_WORKSPACE}/solx-tester-instrumented"
+            -object "${GITHUB_WORKSPACE}/solx-dev-instrumented"
+          )
+          llvm-cov report -instr-profile=${PROFDATA_FILE} "${OBJECTS[@]}" \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
             > coverage-report.txt
 

@@ -74,14 +74,14 @@ impl Builder {
     ///
     /// Finalizes the builder and returns the built value.
     ///
-    /// # Panics
+    /// # Errors
     /// If some of the required items has not been set.
     ///
-    pub fn finish(mut self) -> Event {
+    pub fn finish(mut self) -> anyhow::Result<Event> {
         let location = self
             .location
             .take()
-            .unwrap_or_else(|| panic!("{}{}", "Mandatory value missing: ", "location"));
+            .ok_or_else(|| anyhow::anyhow!("Missing mandatory field: location"))?;
 
         let expected = if self.expected.is_empty() {
             if !self.is_expected {
@@ -99,6 +99,6 @@ impl Builder {
             Variant::anonymous()
         };
 
-        Event::new(location, variant, self.address, expected)
+        Ok(Event::new(location, variant, self.address, expected))
     }
 }

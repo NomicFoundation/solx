@@ -4,7 +4,6 @@
 
 pub mod abi_encoder_v1_only;
 pub mod allow_non_existing_functions;
-pub mod compile_to_ewasm;
 pub mod compile_via_yul;
 pub mod evm_version;
 pub mod revert_strings;
@@ -13,7 +12,6 @@ use regex::Regex;
 
 use self::abi_encoder_v1_only::ABIEncoderV1Only;
 use self::allow_non_existing_functions::AllowNonExistingFunctions;
-use self::compile_to_ewasm::CompileToEwasm;
 use self::compile_via_yul::CompileViaYul;
 use self::evm_version::EVMVersion;
 use self::revert_strings::RevertStrings;
@@ -25,8 +23,6 @@ use self::revert_strings::RevertStrings;
 pub struct Params {
     /// The compileViaYul param value.
     pub compile_via_yul: CompileViaYul,
-    /// The compileToEwasm param value.
-    pub compile_to_ewasm: CompileToEwasm,
     /// The ABIEncoderV1Only param value.
     pub abi_encoder_v1_only: ABIEncoderV1Only,
     /// EVM versions param value.
@@ -44,14 +40,13 @@ impl TryFrom<&str> for Params {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let mut compile_via_yul = CompileViaYul::Default;
-        let mut compile_to_ewasm = CompileToEwasm::Default;
         let mut abi_encoder_v1_only = ABIEncoderV1Only::Default;
         let mut evm_version = EVMVersion::Default;
         let mut revert_strings = RevertStrings::Default;
         let mut allow_non_existing_functions = AllowNonExistingFunctions::Default;
         let mut bytecode_format = String::new();
 
-        let regex = Regex::new("^(.*): (.*)$").expect("Always valid");
+        let regex = Regex::new("^(.*): (.*)$").expect("regex is compile-time constant");
         for (index, line) in value.lines().enumerate() {
             let captures = regex.captures(line).ok_or_else(|| {
                 anyhow::anyhow!(
@@ -61,19 +56,21 @@ impl TryFrom<&str> for Params {
                 )
             })?;
 
-            let param = captures.get(1).expect("Always exists").as_str();
-            let value = captures.get(2).expect("Always exists").as_str();
+            let param = captures
+                .get(1)
+                .expect("capture group 1 always present in matched pattern")
+                .as_str();
+            let value = captures
+                .get(2)
+                .expect("capture group 2 always present in matched pattern")
+                .as_str();
             match param {
                 "compileViaYul" => {
                     compile_via_yul = value
                         .try_into()
                         .map_err(|error| anyhow::anyhow!("{} on line {}", error, index + 1))?;
                 }
-                "compileToEwasm" => {
-                    compile_to_ewasm = value
-                        .try_into()
-                        .map_err(|error| anyhow::anyhow!("{} on line {}", error, index + 1))?;
-                }
+                "compileToEwasm" => {}
                 "ABIEncoderV1Only" => {
                     abi_encoder_v1_only = value
                         .try_into()
@@ -105,7 +102,6 @@ impl TryFrom<&str> for Params {
 
         Ok(Self {
             compile_via_yul,
-            compile_to_ewasm,
             abi_encoder_v1_only,
             evm_version,
             revert_strings,

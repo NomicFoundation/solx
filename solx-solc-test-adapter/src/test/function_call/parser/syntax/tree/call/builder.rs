@@ -6,7 +6,6 @@ use crate::test::function_call::parser::lexical::Location;
 use crate::test::function_call::parser::syntax::tree::call::Call;
 use crate::test::function_call::parser::syntax::tree::call::variant::Variant;
 use crate::test::function_call::parser::syntax::tree::event::Event;
-use crate::test::function_call::parser::syntax::tree::gas::Gas;
 use crate::test::function_call::parser::syntax::tree::identifier::Identifier;
 use crate::test::function_call::parser::syntax::tree::literal::Literal;
 use crate::test::function_call::parser::syntax::tree::r#type::Type;
@@ -40,11 +39,9 @@ pub struct Builder {
     /// The flag if for empty expected should be empty vector.
     is_expected: bool,
     /// The failure expected flag.
-    failure: bool,
+    pub(crate) failure: bool,
     /// The expected events.
     events: Vec<Event>,
-    /// The gas options.
-    gas: Vec<Gas>,
 }
 
 impl Builder {
@@ -126,37 +123,22 @@ impl Builder {
     }
 
     ///
-    /// Sets the corresponding builder value.
-    ///
-    pub fn set_failure(&mut self) {
-        self.failure = true;
-    }
-
-    ///
     /// Pushes the corresponding builder value.
     ///
     pub fn push_event(&mut self, value: Event) {
         self.events.push(value)
     }
 
-    ///
-    /// Pushes the corresponding builder value.
-    ///
-    pub fn push_gas(&mut self, value: Gas) {
-        self.gas.push(value)
-    }
-
-    ///
     /// Finalizes the builder and returns the built value.
     ///
-    /// # Panics
+    /// # Errors
     /// If some of the required items has not been set.
     ///
-    pub fn finish(mut self) -> Call {
+    pub fn finish(mut self) -> anyhow::Result<Call> {
         let location = self
             .location
             .take()
-            .unwrap_or_else(|| panic!("{}{}", "Mandatory value missing: ", "location"));
+            .ok_or_else(|| anyhow::anyhow!("Missing mandatory field: location"))?;
 
         let variant = if let Some(identifier) = self.library.take() {
             Variant::library(identifier, self.library_source)
@@ -200,10 +182,9 @@ impl Builder {
                 expected,
                 self.failure,
                 self.events,
-                self.gas,
             )
         };
 
-        Call::new(location, variant)
+        Ok(Call::new(location, variant))
     }
 }

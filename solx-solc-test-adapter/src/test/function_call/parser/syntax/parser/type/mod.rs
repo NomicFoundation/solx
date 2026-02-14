@@ -117,7 +117,7 @@ impl Parser {
                             let base_type = if let Some(tuple) = tuple.take() {
                                 tuple
                             } else {
-                                self.builder.finish()
+                                self.builder.finish()?
                             };
                             self.builder = TypeBuilder::default();
                             self.builder.set_location(base_type.location);
@@ -125,10 +125,12 @@ impl Parser {
                             self.state = State::SizeOrBracketSquareRight;
                         }
                         token => {
-                            return Ok((
-                                tuple.unwrap_or_else(|| self.builder.finish()),
-                                Some(token),
-                            ));
+                            let r#type = if let Some(tuple) = tuple.take() {
+                                tuple
+                            } else {
+                                self.builder.finish()?
+                            };
+                            return Ok((r#type, Some(token)));
                         }
                     }
                 }

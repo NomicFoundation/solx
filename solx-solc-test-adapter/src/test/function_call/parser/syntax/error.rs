@@ -28,6 +28,8 @@ pub enum ParsingError {
     Lexical(LexicalError),
     /// The syntax analysis error.
     Syntax(Error),
+    /// Internal parser state error.
+    Builder(String),
 }
 
 impl From<LexicalError> for ParsingError {
@@ -39,6 +41,12 @@ impl From<LexicalError> for ParsingError {
 impl From<Error> for ParsingError {
     fn from(inner: Error) -> Self {
         Self::Syntax(inner)
+    }
+}
+
+impl From<anyhow::Error> for ParsingError {
+    fn from(inner: anyhow::Error) -> Self {
+        Self::Builder(inner.to_string())
     }
 }
 

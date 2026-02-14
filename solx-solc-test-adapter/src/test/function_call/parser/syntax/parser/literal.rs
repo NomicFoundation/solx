@@ -73,7 +73,7 @@ impl Parser {
                     } => {
                         self.builder.set_location(location);
                         self.builder.set_literal(literal);
-                        return Ok((self.builder.finish(), None));
+                        return Ok((self.builder.finish()?, None));
                     }
                     Token {
                         lexeme: Lexeme::Keyword(Keyword::Left),
@@ -132,7 +132,7 @@ impl Parser {
                         Token {
                             lexeme: Lexeme::Symbol(Symbol::ParenthesisRight),
                             ..
-                        } => Ok((self.builder.finish(), None)),
+                        } => Ok((self.builder.finish()?, None)),
                         Token { lexeme, location } => {
                             Err(SyntaxError::new(location, vec![")"], lexeme).into())
                         }

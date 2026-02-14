@@ -94,39 +94,6 @@ impl FSEntity {
     }
 
     ///
-    /// Returns the enabled test by the path with the `initial` directory prefix (None if not found or test disabled).
-    ///
-    pub fn into_enabled_test(self, initial: &Path, path: &Path) -> Option<EnabledTest> {
-        let mut current_entity = self;
-        for path_part in path.iter() {
-            match current_entity {
-                FSEntity::Directory(mut directory) => {
-                    current_entity = directory
-                        .entries
-                        .remove(path_part.to_string_lossy().as_ref())?;
-                }
-                FSEntity::File(_) => return None,
-            }
-        }
-        match current_entity {
-            FSEntity::Directory(_) => None,
-            FSEntity::File(file) => {
-                if !file.enabled {
-                    return None;
-                }
-                let mut file_path = initial.to_path_buf();
-                file_path.push(path);
-                Some(EnabledTest::new(
-                    file_path,
-                    file.modes,
-                    file.version,
-                    file.group,
-                ))
-            }
-        }
-    }
-
-    ///
     /// Updates new index, tests and lists changes.
     ///
     fn update_recursive(

@@ -109,7 +109,6 @@ impl EthereumTest {
             calldata: vec![],
             value: None,
             events: vec![],
-            gas_options: vec![],
         };
         let constructor_insert_index = calls
             .iter()

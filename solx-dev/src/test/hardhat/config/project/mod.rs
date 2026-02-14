@@ -13,10 +13,11 @@ use self::build_system::BuildSystem;
 ///
 #[derive(Debug, serde::Deserialize)]
 pub struct Project {
+    /// Project description.
+    #[serde(default)]
+    pub description: String,
     /// Project URL.
     pub url: String,
-    /// Project description.
-    pub description: String,
     /// Project build system.
     #[serde(default)]
     pub build_system: BuildSystem,

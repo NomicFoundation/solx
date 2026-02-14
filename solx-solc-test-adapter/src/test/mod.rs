@@ -93,8 +93,8 @@ fn process_sources(data: &str, path: &Path) -> anyhow::Result<Vec<(String, Strin
     let mut source_name = None;
     let mut source = String::new();
 
-    let line_regex = Regex::new(r"^==== (.*): (.*) ====$").expect("Always valid");
-    let path_regex = Regex::new("^([^=]*)=(.*)$").expect("Always valid");
+    let line_regex = Regex::new(r"^==== (.*): (.*) ====$").expect("regex is compile-time constant");
+    let path_regex = Regex::new("^([^=]*)=(.*)$").expect("regex is compile-time constant");
 
     for (index, line) in data.lines().enumerate() {
         let captures = match line_regex.captures(line) {
@@ -106,13 +106,29 @@ fn process_sources(data: &str, path: &Path) -> anyhow::Result<Vec<(String, Strin
             }
         };
 
-        match captures.get(1).expect("Always exists").as_str() {
+        match captures
+            .get(1)
+            .expect("capture group 1 always present in matched pattern")
+            .as_str()
+        {
             "ExternalSource" => {
-                let data = captures.get(2).expect("Always exists").as_str();
+                let data = captures
+                    .get(2)
+                    .expect("capture group 2 always present in matched pattern")
+                    .as_str();
                 let (name, relative_path) = match path_regex.captures(data) {
                     Some(captures) => (
-                        captures.get(1).expect("Always exists").as_str().to_owned(),
-                        PathBuf::from(captures.get(2).expect("Always exists").as_str()),
+                        captures
+                            .get(1)
+                            .expect("capture group 1 always present in matched pattern")
+                            .as_str()
+                            .to_owned(),
+                        PathBuf::from(
+                            captures
+                                .get(2)
+                                .expect("capture group 2 always present in matched pattern")
+                                .as_str(),
+                        ),
                     ),
                     None => (data.to_owned(), PathBuf::from(data)),
                 };
@@ -131,7 +147,11 @@ fn process_sources(data: &str, path: &Path) -> anyhow::Result<Vec<(String, Strin
                 sources.push((name.replace(std::path::MAIN_SEPARATOR, "/"), data));
             }
             "Source" => {
-                let name = captures.get(2).expect("Always exists").as_str().to_owned();
+                let name = captures
+                    .get(2)
+                    .expect("capture group 2 always present in matched pattern")
+                    .as_str()
+                    .to_owned();
 
                 if let Some(source_name) = source_name {
                     sources.push((source_name, source));

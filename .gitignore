@@ -18,6 +18,10 @@
 /temp*
 /logs/
 /solc-bin*/
+/cache/
+/out/
+/broadcast/
+*.xlsx
 /*.json
 /*.txt
 /**/*.profraw

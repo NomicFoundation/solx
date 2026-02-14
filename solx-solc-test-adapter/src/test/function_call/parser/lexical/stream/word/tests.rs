@@ -8,7 +8,6 @@ use crate::test::function_call::parser::lexical::token::lexeme::Lexeme;
 use crate::test::function_call::parser::lexical::token::lexeme::identifier::Identifier;
 use crate::test::function_call::parser::lexical::token::lexeme::keyword::Keyword;
 use crate::test::function_call::parser::lexical::token::lexeme::literal::Literal;
-use crate::test::function_call::parser::lexical::token::lexeme::literal::boolean::Boolean;
 
 #[test]
 fn ok_identifier() {
@@ -84,10 +83,7 @@ fn ok_keyword_unsigned_integer_max() {
 #[test]
 fn ok_literal_boolean() {
     let input = "true";
-    let expected = Output::new(
-        input.len(),
-        Lexeme::Literal(Literal::Boolean(Boolean::r#true())),
-    );
+    let expected = Output::new(input.len(), Lexeme::Literal(Literal::Boolean(true)));
     let result = parse(input);
     assert_eq!(result, expected);
 }

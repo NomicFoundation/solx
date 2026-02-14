@@ -235,7 +235,7 @@ impl Parser {
                         } => {
                             self.state = State::Address;
                         }
-                        token => return Ok((self.builder.finish(), Some(token))),
+                        token => return Ok((self.builder.finish()?, Some(token))),
                     }
                 }
                 State::Address => match parser::take_or_next(self.next.take(), stream.clone())? {
@@ -267,7 +267,7 @@ impl Parser {
                             self.builder.set_is_expected();
                             self.state = State::LiteralOrEnd;
                         }
-                        token => return Ok((self.builder.finish(), Some(token))),
+                        token => return Ok((self.builder.finish()?, Some(token))),
                     }
                 }
                 State::LiteralOrEnd => {
@@ -287,7 +287,7 @@ impl Parser {
                                 self.next = next;
                                 self.state = State::CommaOrEnd;
                             } else {
-                                return Ok((self.builder.finish(), self.next));
+                                return Ok((self.builder.finish()?, self.next));
                             }
                         }
                     }
@@ -308,7 +308,7 @@ impl Parser {
                         } => {
                             self.state = State::Literal;
                         }
-                        token => return Ok((self.builder.finish(), Some(token))),
+                        token => return Ok((self.builder.finish()?, Some(token))),
                     }
                 }
                 State::Literal => match parser::take_or_next(self.next.take(), stream.clone())? {

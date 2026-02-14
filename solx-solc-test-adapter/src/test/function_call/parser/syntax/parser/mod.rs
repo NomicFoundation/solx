@@ -12,11 +12,13 @@ pub mod value;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::test::function_call::parser::lexical::Keyword;
 use crate::test::function_call::parser::lexical::Lexeme;
 use crate::test::function_call::parser::lexical::Token;
 use crate::test::function_call::parser::lexical::TokenStream;
 use crate::test::function_call::parser::syntax::error::ParsingError;
 use crate::test::function_call::parser::syntax::parser::call::Parser as CallParser;
+use crate::test::function_call::parser::syntax::parser::gas::Parser as GasParser;
 use crate::test::function_call::parser::syntax::tree::call::Call;
 
 ///
@@ -42,10 +44,27 @@ impl Parser {
                     lexeme: Lexeme::Eof,
                     ..
                 } => break,
+                token @ Token {
+                    lexeme: Lexeme::Keyword(Keyword::Gas),
+                    ..
+                } => {
+                    let (_gas, next) = GasParser::default().parse(stream.clone(), Some(token))?;
+                    self.next = next;
+                }
                 token => {
                     let (call, next) = CallParser::default().parse(stream.clone(), Some(token))?;
                     self.next = next;
                     calls.push(call);
+                    // Skip gas annotations (parsed and discarded).
+                    while let Some(Token {
+                        lexeme: Lexeme::Keyword(Keyword::Gas),
+                        ..
+                    }) = &self.next
+                    {
+                        let (_gas, next) =
+                            GasParser::default().parse(stream.clone(), self.next.take())?;
+                        self.next = next;
+                    }
                 }
             }
         }

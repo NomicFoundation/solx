@@ -49,31 +49,31 @@ impl Builder {
     ///
     /// Finalizes the builder and returns the built value.
     ///
-    /// # Panics
+    /// # Errors
     /// If some of the required items has not been set.
     ///
-    pub fn finish(mut self) -> Literal {
+    pub fn finish(mut self) -> anyhow::Result<Literal> {
         let location = self
             .location
             .take()
-            .unwrap_or_else(|| panic!("{}{}", "Mandatory value missing: ", "location"));
+            .ok_or_else(|| anyhow::anyhow!("Missing mandatory field: location"))?;
 
         let alignment = self.alignment.take().unwrap_or(Alignment::Default);
 
         match self.literal {
-            Some(LexicalLiteral::Integer(integer)) => {
-                Literal::Integer(IntegerLiteral::new(location, integer, alignment))
-            }
-            Some(LexicalLiteral::String(string)) => {
-                Literal::String(StringLiteral::new(location, string, alignment))
-            }
-            Some(LexicalLiteral::Boolean(boolean)) => {
-                Literal::Boolean(BooleanLiteral::new(location, boolean, alignment))
-            }
+            Some(LexicalLiteral::Integer(integer)) => Ok(Literal::Integer(IntegerLiteral::new(
+                location, integer, alignment,
+            ))),
+            Some(LexicalLiteral::String(string)) => Ok(Literal::String(StringLiteral::new(
+                location, string, alignment,
+            ))),
+            Some(LexicalLiteral::Boolean(boolean)) => Ok(Literal::Boolean(BooleanLiteral::new(
+                location, boolean, alignment,
+            ))),
             Some(LexicalLiteral::Hex(hex)) => {
-                Literal::Hex(HexLiteral::new(location, hex, alignment))
+                Ok(Literal::Hex(HexLiteral::new(location, hex, alignment)))
             }
-            None => panic!("{}{}", "Mandatory value missing: ", "literal"),
+            None => Err(anyhow::anyhow!("Missing mandatory field: literal")),
         }
     }
 }

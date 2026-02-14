@@ -4,7 +4,6 @@
 
 use std::fs;
 use std::io::Read;
-use std::io::Write;
 use std::path::Path;
 
 use serde::Deserialize;
@@ -83,18 +82,5 @@ impl TestFile {
     ///
     pub fn md5(data: &str) -> String {
         format!("0x{:x}", md5::compute(data.as_bytes()))
-    }
-
-    ///
-    /// Write data to the file (overwrites).
-    ///
-    pub fn write_to_file(path: &Path, data: &[u8]) -> anyhow::Result<()> {
-        let mut file_to_write = fs::OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .open(path)?;
-        file_to_write
-            .write_all(data)
-            .map_err(|error| anyhow::anyhow!("Failed to write data to the file: {error}"))
     }
 }

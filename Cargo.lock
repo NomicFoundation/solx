@@ -4094,13 +4094,10 @@ version = "0.1.4"
 dependencies = [
  "anyhow",
  "clap",
- "colored",
  "glob",
  "rust_xlsxwriter",
- "semver 1.0.27",
  "serde",
  "serde_json",
- "solx-utils",
  "thiserror 2.0.18",
 ]
 

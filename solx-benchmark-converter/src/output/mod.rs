@@ -3,7 +3,6 @@
 //!
 
 pub mod comparison;
-pub mod file;
 pub mod format;
 pub mod json;
 pub mod xlsx;
@@ -16,19 +15,14 @@ use crate::output::format::Format;
 use crate::output::json::Json;
 use crate::output::xlsx::Xlsx;
 
-use self::file::File;
-
 ///
 /// Result of comparing two benchmarks.
 ///
 pub enum Output {
-    /// Benchmark output is a single unnamed file.
-    SingleFile(String),
-    /// Benchmark output is a single unnamed file.
-    SingleFileXlsx(rust_xlsxwriter::Workbook),
-    /// Benchmark output is structured as a file tree, relative to some
-    /// user-provided output directory.
-    MultipleFiles(Vec<File>),
+    /// Benchmark JSON output.
+    Json(String),
+    /// Benchmark Excel/XLSX output.
+    Xlsx(rust_xlsxwriter::Workbook),
 }
 
 impl Output {
@@ -37,29 +31,14 @@ impl Output {
     ///
     pub fn write_to_file(self, path: PathBuf) -> anyhow::Result<()> {
         match self {
-            Output::SingleFile(content) => {
+            Output::Json(content) => {
                 std::fs::write(path.as_path(), content)
                     .map_err(|error| anyhow::anyhow!("Benchmark file {path:?} writing: {error}"))?;
             }
-            Output::SingleFileXlsx(mut workbook) => {
+            Output::Xlsx(mut workbook) => {
                 workbook
                     .save(path.as_path())
                     .map_err(|error| anyhow::anyhow!("Benchmark file {path:?} writing: {error}"))?;
-            }
-            Output::MultipleFiles(files) => {
-                if !files.is_empty() {
-                    std::fs::create_dir_all(&path)?;
-                }
-                for File {
-                    path: relative_path,
-                    content: contents,
-                } in files
-                {
-                    let file_path = path.join(relative_path);
-                    std::fs::write(file_path.as_path(), contents).map_err(|error| {
-                        anyhow::anyhow!("Benchmark file {file_path:?} writing: {error}")
-                    })?;
-                }
             }
         }
         Ok(())
@@ -81,12 +60,12 @@ impl TryFrom<(Benchmark, Vec<Comparison>, Format)> for Output {
 
 impl From<Json> for Output {
     fn from(value: Json) -> Self {
-        Output::SingleFile(value.content)
+        Output::Json(value.content)
     }
 }
 
 impl From<Xlsx> for Output {
     fn from(value: Xlsx) -> Self {
-        Output::SingleFileXlsx(value.finalize())
+        Output::Xlsx(value.finalize())
     }
 }

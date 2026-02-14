@@ -9,10 +9,11 @@ use std::collections::HashMap;
 ///
 #[derive(Debug, serde::Deserialize)]
 pub struct Project {
+    /// Project description.
+    #[serde(default)]
+    pub description: String,
     /// Project URL.
     pub url: String,
-    /// Project description.
-    pub description: String,
     /// Whether the project requires `yarn`.
     #[serde(default)]
     pub requires_yarn: bool,

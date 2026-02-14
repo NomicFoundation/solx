@@ -42,8 +42,8 @@ impl Literal {
         let mut result = vec![0u8; solx_utils::BYTE_LENGTH_FIELD];
         match &self.inner {
             LexicalIntegerLiteral::Decimal { inner, negative } => {
-                let mut number =
-                    web3::types::U256::from_dec_str(inner.as_str()).expect("Always valid");
+                let mut number = web3::types::U256::from_dec_str(inner.as_str())
+                    .expect("validated by parser before semantic conversion");
                 if *negative {
                     number = number.bitxor(web3::types::U256::max_value());
                     number = number.add(web3::types::U256::one());
@@ -57,7 +57,7 @@ impl Literal {
             }
             LexicalIntegerLiteral::Hexadecimal(inner) => {
                 web3::types::U256::from_str(inner)
-                    .expect("Always valid")
+                    .expect("validated by parser before semantic conversion")
                     .to_big_endian(&mut result);
                 result = result[result.len() - inner.len().div_ceil(2)..].to_owned();
             }
