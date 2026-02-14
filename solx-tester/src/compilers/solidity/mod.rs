@@ -71,13 +71,6 @@ impl SolidityCompiler {
     }
 
     ///
-    /// Returns the compiler version.
-    ///
-    pub fn version(&self) -> &semver::Version {
-        &self.version
-    }
-
-    ///
     /// Gets the compiler version from its executable.
     /// Works for both solx and solc as they have the same version output format.
     ///

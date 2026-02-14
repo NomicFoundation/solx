@@ -87,7 +87,7 @@ impl Parser {
                         ..
                     } => {
                         self.builder.set_keyword(keyword);
-                        return Ok((self.builder.finish(), None));
+                        return Ok((self.builder.finish()?, None));
                     }
                     Token { lexeme, location } => {
                         return Err(SyntaxError::new(location, vec!["ether", "wei"], lexeme).into());

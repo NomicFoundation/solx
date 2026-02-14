@@ -49,27 +49,27 @@ impl Builder {
     ///
     /// Finalizes the builder and returns the built value.
     ///
-    /// # Panics
+    /// # Errors
     /// If some of the required items has not been set.
     ///
-    pub fn finish(mut self) -> Value {
+    pub fn finish(mut self) -> anyhow::Result<Value> {
         let location = self
             .location
             .take()
-            .unwrap_or_else(|| panic!("{}{}", "Mandatory value missing: ", "location"));
+            .ok_or_else(|| anyhow::anyhow!("Missing mandatory field: location"))?;
 
         let unit = match self.keyword.take() {
             Some(Keyword::Ether) => Unit::ether(),
             Some(Keyword::Wei) => Unit::wei(),
-            Some(keyword) => panic!("{}{}", self::BUILDER_VALUE_INVALID_KEYWORD, keyword),
-            None => panic!("{}{}", "Mandatory value missing: ", "keyword"),
+            Some(keyword) => anyhow::bail!("{}{}", self::BUILDER_VALUE_INVALID_KEYWORD, keyword),
+            None => anyhow::bail!("Missing mandatory field: keyword"),
         };
 
         let amount = self
             .amount
             .take()
-            .unwrap_or_else(|| panic!("{}{}", "Mandatory value missing: ", "amount"));
+            .ok_or_else(|| anyhow::anyhow!("Missing mandatory field: amount"))?;
 
-        Value::new(location, unit, amount)
+        Ok(Value::new(location, unit, amount))
     }
 }

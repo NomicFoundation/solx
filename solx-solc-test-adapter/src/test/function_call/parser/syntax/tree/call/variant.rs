@@ -4,7 +4,6 @@
 
 use crate::test::function_call::parser::syntax::Identifier;
 use crate::test::function_call::parser::syntax::tree::event::Event;
-use crate::test::function_call::parser::syntax::tree::gas::Gas;
 use crate::test::function_call::parser::syntax::tree::literal::Literal;
 use crate::test::function_call::parser::syntax::tree::r#type::Type;
 use crate::test::function_call::parser::syntax::tree::value::Value;
@@ -37,8 +36,6 @@ pub enum Variant {
         failure: bool,
         /// The expected events.
         events: Vec<Event>,
-        /// The gas options.
-        gas: Vec<Gas>,
     },
 }
 
@@ -53,7 +50,6 @@ impl Variant {
     ///
     /// A shortcut constructor.
     ///
-    #[allow(clippy::too_many_arguments)]
     pub fn call(
         identifier: Option<Identifier>,
         types: Option<Vec<Type>>,
@@ -62,7 +58,6 @@ impl Variant {
         expected: Option<Vec<Literal>>,
         failure: bool,
         events: Vec<Event>,
-        gas: Vec<Gas>,
     ) -> Self {
         Self::Call {
             identifier,
@@ -72,7 +67,6 @@ impl Variant {
             expected,
             failure,
             events,
-            gas,
         }
     }
 }

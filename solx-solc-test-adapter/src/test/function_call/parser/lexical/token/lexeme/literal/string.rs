@@ -22,10 +22,9 @@ impl String {
     }
 }
 
-#[allow(clippy::from_over_into)]
-impl Into<std::string::String> for String {
-    fn into(self) -> std::string::String {
-        self.inner
+impl From<String> for std::string::String {
+    fn from(value: String) -> std::string::String {
+        value.inner
     }
 }
 
