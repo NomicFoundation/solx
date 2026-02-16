@@ -59,11 +59,11 @@ jobs:
         id: prepare-matrix
         run: |
           # Define general matrix parameters
-          WINDOWS='{"name":"Windows","runner":"solx-windows-amd64","release-suffix":"windows-amd64-gnu"}'
-          MACOS_AMD64='{"name":"MacOS-x86","runner":"macos-latest-large","release-suffix":"macosx-amd64"}'
-          MACOS_ARM64='{"name":"MacOS-arm64","runner":"macos-latest-xlarge","release-suffix":"macosx-arm64"}'
-          LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"solx-linux-amd64","image":"ghcr.io/matter-labs/zksync-llvm-runner:latest","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
-          LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"solx-linux-arm64","image":"ghcr.io/matter-labs/zksync-llvm-runner:latest","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
+          WINDOWS='{"name":"Windows","runner":"windows-latest","release-suffix":"windows-amd64-gnu"}'
+          MACOS_AMD64='{"name":"MacOS-x86","runner":"macos-15-intel","release-suffix":"macosx-amd64"}'
+          MACOS_ARM64='{"name":"MacOS-arm64","runner":"macos-latest","release-suffix":"macosx-arm64"}'
+          LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"ubuntu-latest","image":"ghcr.io/matter-labs/zksync-llvm-runner:latest","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
+          LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"ubuntu-24.04-arm","image":"ghcr.io/matter-labs/zksync-llvm-runner:latest","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
           # Disable platforms for non-tag builds if user requested
           if [ ${GITHUB_REF_TYPE} != tag ]; then
             [ ${{ github.event.inputs.release_windows_amd64 }} != true ] && WINDOWS=
@@ -117,6 +117,14 @@ jobs:
           cmake-build-type: 'Release'
           working-dir: 'solx-solidity'
 
+      - name: Free disk space (remove LLVM build artifacts)
+        if: runner.arch == 'ARM64'
+        shell: bash
+        run: |
+          echo "Before cleanup:" && df -h .
+          rm -rf target-llvm/build-final
+          echo "After cleanup:" && df -h .
+
       - name: Build solx
         uses: ./.github/actions/build-rust
         env:
@@ -156,7 +164,7 @@ jobs:
       attestations: write
       contents: write
     name: Prepare release
-    runs-on: solx-linux-amd64
+    runs-on: ubuntu-latest
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner:latest
     needs: [build, get-previous-release]
@@ -294,13 +302,13 @@ jobs:
       matrix:
         include:
           - name: "MacOS x86"
-            runner: macos-latest-large
+            runner: macos-15-intel
           - name: "MacOS arm64"
-            runner: macos-latest-xlarge
+            runner: macos-latest
           - name: "Linux x86 gnu"
-            runner: solx-linux-amd64
+            runner: ubuntu-latest
           - name: "Linux ARM64 gnu"
-            runner: solx-linux-arm64
+            runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     name: ${{ matrix.name }}
     env:
