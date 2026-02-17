@@ -33,13 +33,23 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Install build target
+      if: inputs.target != '' && runner.os != 'Windows'
+      uses: ./.github/actions/setup-rust
+      with:
+        target: ${{ inputs.target }}
+
     - name: Define build target
       id: build-target
       if: inputs.target != ''
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: |
-        rustup target add ${{ inputs.target }}
-        echo "target=--target ${{ inputs.target }}" >> $GITHUB_OUTPUT
+      run: echo "target=--target ${{ inputs.target }}" >> $GITHUB_OUTPUT
+
+    - name: Install sanitizer components
+      if: inputs.sanitizer != '' && runner.os != 'Windows'
+      uses: ./.github/actions/setup-rust
+      with:
+        components: rust-src
 
     - name: Build
       id: build
@@ -49,7 +59,6 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash -ex {0}' }}
       run: |
         if [ '${{ inputs.sanitizer }}' != '' ]; then
-          rustup component add rust-src --toolchain "$(rustc --version | cut -d ' ' -f2)-${{ inputs.target }}"
           export RUSTFLAGS="-Z sanitizer=${{ inputs.sanitizer }}"
           BUILD_STD_LIB='-Zbuild-std'
         fi

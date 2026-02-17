@@ -15,8 +15,9 @@ runs:
   steps:
 
     - name: Install rustc nightly
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: rustup toolchain install nightly
+      uses: ./.github/actions/setup-rust
+      with:
+        toolchain: nightly
 
     - name: Cargo deny
       uses: EmbarkStudios/cargo-deny-action@v2
