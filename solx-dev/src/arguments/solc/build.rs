@@ -5,6 +5,7 @@
 use clap::Args;
 
 use crate::BuildType;
+use crate::CcacheVariant;
 
 ///
 /// Solc build arguments.
@@ -42,6 +43,10 @@ pub struct Build {
     /// Use GCC compiler instead of clang.
     #[arg(long)]
     pub use_gcc: bool,
+
+    /// Whether to use compiler cache (ccache) to speed-up builds.
+    #[arg(long)]
+    pub ccache_variant: Option<CcacheVariant>,
 
     /// Extra arguments to pass to cmake configure step.
     #[arg(long, num_args = 1..)]

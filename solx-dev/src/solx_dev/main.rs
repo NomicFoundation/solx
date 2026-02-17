@@ -79,6 +79,10 @@ fn main_inner() -> anyhow::Result<()> {
             )?;
         }
         Arguments::Solc(SolcArguments::Build(arguments)) => {
+            if let Some(ccache_variant) = arguments.ccache_variant {
+                solx_dev::exists(ccache_variant.to_string().as_str())?;
+            }
+
             solx_dev::solc_build(
                 arguments.build_type,
                 arguments.pedantic,
@@ -89,6 +93,7 @@ fn main_inner() -> anyhow::Result<()> {
                 arguments.enable_mlir,
                 arguments.use_gcc,
                 arguments.build_boost,
+                arguments.ccache_variant,
             )?;
         }
         Arguments::Test(TestArguments::Hardhat(arguments)) => {

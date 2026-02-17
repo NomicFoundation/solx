@@ -5,7 +5,7 @@
 use clap::Args;
 
 use crate::BuildType;
-use crate::LLVMCcacheVariant;
+use crate::CcacheVariant;
 use crate::LLVMProject;
 use crate::LLVMSanitizer;
 
@@ -40,7 +40,7 @@ pub struct Build {
 
     /// Whether to use compiler cache (ccache) to speed-up builds.
     #[arg(long, help_heading = "Build Configuration")]
-    pub ccache_variant: Option<LLVMCcacheVariant>,
+    pub ccache_variant: Option<CcacheVariant>,
 
     //
     // Build Features

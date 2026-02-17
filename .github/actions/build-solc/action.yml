@@ -32,12 +32,35 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: cargo build --release --bin solx-dev
 
+    # CCache action requires `apt update` on Linux Docker jobs
+    - name: Prepare ccache installation
+      if: runner.os == 'Linux'
+      shell: 'bash'
+      run: apt update
+
+    - name: Set up compiler cache for solc
+      uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
+      env:
+        CCACHE_BASEDIR: ${{ github.workspace }}
+        CCACHE_NOHASHDIR: "true"
+        CCACHE_COMPILERCHECK: "content"
+      with:
+        key: solc-${{ runner.os }}-${{ runner.arch }}
+        restore-keys: solc-${{ runner.os }}-${{ runner.arch }}
+        append-timestamp: false
+        max-size: "2G"
+        verbose: 2
+        save: ${{ github.event_name != 'pull_request' }}
+
     - name: Build solc
       # Run from the checkout root that owns solx-solidity
       working-directory: ${{ inputs.working-dir }}/..
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
         CXXFLAGS: "-Wno-narrowing"
+        CCACHE_BASEDIR: ${{ github.workspace }}
+        CCACHE_NOHASHDIR: "true"
+        CCACHE_COMPILERCHECK: "content"
       run: |
         set -x
         [ "${{ inputs.enable-mlir }}" = "true" ] && ENABLE_MLIR="--enable-mlir"
@@ -46,4 +69,10 @@ runs:
           --build-type ${{ inputs.cmake-build-type }} \
           --boost-version ${{ inputs.boost-version }} \
           --build-boost \
+          --ccache-variant=ccache \
           ${ENABLE_MLIR}
+
+    - name: Show ccache stats
+      if: always()
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      run: ccache --show-stats

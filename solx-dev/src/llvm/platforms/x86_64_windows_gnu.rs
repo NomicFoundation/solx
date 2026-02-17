@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::build_type::BuildType;
-use crate::llvm::ccache_variant::CcacheVariant;
+use crate::ccache_variant::CcacheVariant;
 use crate::llvm::path::Path;
 use crate::llvm::project::Project;
 use crate::llvm::sanitizer::Sanitizer;
@@ -75,9 +75,7 @@ pub fn build(
             .args(crate::llvm::platforms::shared::SHARED_BUILD_OPTS)
             .args(crate::llvm::platforms::shared::shared_build_opts_werror())
             .args(extra_args)
-            .args(crate::llvm::platforms::shared::shared_build_opts_ccache(
-                ccache_variant,
-            ))
+            .args(CcacheVariant::cmake_args(ccache_variant))
             .args(crate::llvm::platforms::shared::shared_build_opts_assertions(enable_assertions))
             .args(crate::llvm::platforms::shared::shared_build_opts_rtti(
                 enable_rtti,

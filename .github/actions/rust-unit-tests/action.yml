@@ -34,13 +34,6 @@ runs:
         rustup target add ${{ inputs.target }}
         echo "target=--target ${{ inputs.target }}" >> "${GITHUB_OUTPUT}"
 
-    - name: Rust cache
-      if: ${{ !(runner.os == 'macOS' && runner.arch == 'arm64') }}
-      uses: Swatinem/rust-cache@v2
-      with:
-        shared-key: "rust-cargo-cache-${{ runner.os }}-${{ runner.arch }}"
-        save-if: ${{ github.ref == 'refs/heads/main' }}
-
     - name: Prepare test env
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |

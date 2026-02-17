@@ -118,3 +118,8 @@ runs:
 
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} \
           --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${LLVM_PROJECTS} ${ENABLE_RTTI} ${SANITIZER}
+
+    - name: Show ccache stats
+      if: always()
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      run: ccache --show-stats

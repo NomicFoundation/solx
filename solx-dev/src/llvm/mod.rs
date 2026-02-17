@@ -2,17 +2,17 @@
 //! `solx` LLVM tools.
 //!
 
-pub mod ccache_variant;
 pub mod path;
 pub mod platforms;
 pub mod project;
 pub mod sanitizer;
 
-pub use self::ccache_variant::CcacheVariant;
 pub use self::path::Path;
 pub use self::project::Project;
 pub use self::sanitizer::Sanitizer;
 pub use crate::build_type::BuildType;
+
+use crate::ccache_variant::CcacheVariant;
 
 use std::collections::HashSet;
 

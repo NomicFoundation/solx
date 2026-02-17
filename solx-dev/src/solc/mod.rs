@@ -8,6 +8,7 @@ pub mod platforms;
 use std::path::PathBuf;
 
 use crate::build_type::BuildType;
+use crate::ccache_variant::CcacheVariant;
 use crate::solc::boost::BoostConfig;
 
 /// The solc-solidity submodule directory.
@@ -35,6 +36,7 @@ pub fn build(
     enable_mlir: bool,
     use_gcc: bool,
     build_boost: bool,
+    ccache_variant: Option<CcacheVariant>,
 ) -> anyhow::Result<()> {
     let solidity_dir = PathBuf::from(SOLIDITY_DIR);
     if !solidity_dir.exists() {
@@ -93,6 +95,7 @@ pub fn build(
                 boost_config.as_ref(),
                 enable_mlir,
                 use_gcc,
+                ccache_variant,
             )?;
         } else if cfg!(target_os = "macos") {
             platforms::x86_64_macos::build(
@@ -104,6 +107,7 @@ pub fn build(
                 extra_args,
                 boost_config.as_ref(),
                 enable_mlir,
+                ccache_variant,
             )?;
         } else if cfg!(target_os = "windows") {
             platforms::x86_64_windows_gnu::build(
@@ -116,6 +120,7 @@ pub fn build(
                 boost_config.as_ref(),
                 enable_mlir,
                 use_gcc,
+                ccache_variant,
             )?;
         } else {
             anyhow::bail!("Unsupported target OS for x86_64");
@@ -132,6 +137,7 @@ pub fn build(
                 boost_config.as_ref(),
                 enable_mlir,
                 use_gcc,
+                ccache_variant,
             )?;
         } else if cfg!(target_os = "macos") {
             platforms::aarch64_macos::build(
@@ -143,6 +149,7 @@ pub fn build(
                 extra_args,
                 boost_config.as_ref(),
                 enable_mlir,
+                ccache_variant,
             )?;
         } else {
             anyhow::bail!("Unsupported target OS for aarch64");
