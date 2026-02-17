@@ -100,7 +100,7 @@ runs:
         CCACHE_BASEDIR: ${{ github.workspace }}
         CCACHE_NOHASHDIR: "true"
         CCACHE_COMPILERCHECK: "content"
-        LIBSTDCPP_SOURCE_PATH: "C:/a/_temp/msys64/mingw64/lib/libstdc++.a"
+        LIBSTDCPP_SOURCE_PATH: "${{ runner.temp }}/msys64/mingw64/lib/libstdc++.a"
       run: |
         set -x
         [ "${{ inputs.enable-tests }}" = "true" ] && ENABLE_TESTS="--enable-tests"
