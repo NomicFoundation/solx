@@ -51,8 +51,8 @@ jobs:
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
-          build-type: 'Release'
-          enable-assertions: 'false'
+          build-type: RelWithDebInfo
+          enable-assertions: 'true'
 
       - name: Cargo checks
         uses: ./.github/actions/cargo-check
