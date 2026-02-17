@@ -6,6 +6,7 @@ use std::path::Path;
 use std::process::Command;
 
 use crate::build_type::BuildType;
+use crate::ccache_variant::CcacheVariant;
 use crate::solc::boost::BoostConfig;
 use crate::solc::platforms::shared;
 
@@ -21,6 +22,7 @@ pub fn build(
     extra_args: Vec<String>,
     boost_config: Option<&BoostConfig>,
     enable_mlir: bool,
+    ccache_variant: Option<CcacheVariant>,
 ) -> anyhow::Result<()> {
     crate::utils::exists("cmake")?;
     let ninja_available = crate::utils::exists("ninja").is_ok();
@@ -65,6 +67,11 @@ pub fn build(
         for arg in shared::mlir_cmake_args(&llvm_build_dir) {
             cmake.arg(arg);
         }
+    }
+
+    // Compiler cache
+    for arg in CcacheVariant::cmake_args(ccache_variant) {
+        cmake.arg(arg);
     }
 
     // Extra arguments

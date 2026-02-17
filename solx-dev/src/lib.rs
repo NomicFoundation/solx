@@ -7,6 +7,7 @@
 
 pub mod arguments;
 pub(crate) mod build_type;
+pub(crate) mod ccache_variant;
 pub(crate) mod llvm;
 pub(crate) mod solc;
 pub(crate) mod test;
@@ -16,8 +17,8 @@ pub mod workflow;
 pub use self::arguments::Arguments;
 pub use self::arguments::test::SolxTester as SolxTesterArguments;
 pub use self::build_type::BuildType;
+pub use self::ccache_variant::CcacheVariant;
 pub use self::llvm::build as llvm_build;
-pub use self::llvm::ccache_variant::CcacheVariant as LLVMCcacheVariant;
 pub use self::llvm::project::Project as LLVMProject;
 pub use self::llvm::sanitizer::Sanitizer as LLVMSanitizer;
 pub use self::solc::build as solc_build;
