@@ -2,11 +2,7 @@ name: Integration Tests
 
 on:
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
-      - "**/*.mdx"
-      - "LICENSE"
+    types: [labeled, synchronize]
 
 permissions:
   contents: read
@@ -23,6 +19,7 @@ defaults:
 
 jobs:
   integration:
+    if: contains(github.event.pull_request.labels.*.name, 'ci:integration')
     runs-on: solx-linux-amd64
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner:latest
