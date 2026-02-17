@@ -26,13 +26,17 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Install build target
+      if: inputs.target != '' && runner.os != 'Windows'
+      uses: ./.github/actions/setup-rust
+      with:
+        target: ${{ inputs.target }}
+
     - name: Define build target
       id: build-target
       if: inputs.target != ''
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: |
-        rustup target add ${{ inputs.target }}
-        echo "target=--target ${{ inputs.target }}" >> "${GITHUB_OUTPUT}"
+      run: echo "target=--target ${{ inputs.target }}" >> "${GITHUB_OUTPUT}"
 
     - name: Prepare test env
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
@@ -64,13 +68,18 @@ runs:
           cargo2junit < release-results.json > "release-${{ inputs.results-xml }}"
         fi
 
+    - name: Install sanitizer components
+      if: inputs.sanitizer != '' && runner.os != 'Windows'
+      uses: ./.github/actions/setup-rust
+      with:
+        components: rust-src
+
     - name: Run unit tests (debug)
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash -ex {0}' }}
       env:
         RUSTC_BOOTSTRAP: 1
       run: |
         if [ '${{ inputs.sanitizer }}' != '' ]; then
-          rustup component add rust-src --toolchain "$(rustc --version | cut -d ' ' -f2)-${{ inputs.target }}"
           export ASAN_SYMBOLIZER_PATH=$(which llvm-symbolizer)
         fi
         # Use LLD on Windows/Linux to properly link with libstdc++.
