@@ -45,7 +45,7 @@ on:
 jobs:
 
   prepare-matrix:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.prepare-matrix.outputs.matrix }}
     steps:
@@ -59,10 +59,10 @@ jobs:
         id: prepare-matrix
         run: |
           # Define general matrix parameters
-          WINDOWS='{"name":"Windows","runner":"windows-latest","release-suffix":"windows-amd64-gnu"}'
+          WINDOWS='{"name":"Windows","runner":"windows-2025","release-suffix":"windows-amd64-gnu"}'
           MACOS_AMD64='{"name":"MacOS-x86","runner":"macos-15-intel","release-suffix":"macosx-amd64"}'
-          MACOS_ARM64='{"name":"MacOS-arm64","runner":"macos-latest","release-suffix":"macosx-arm64"}'
-          LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"ubuntu-latest","image":"ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
+          MACOS_ARM64='{"name":"MacOS-arm64","runner":"macos-15","release-suffix":"macosx-arm64"}'
+          LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"ubuntu-24.04","image":"ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
           LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"ubuntu-24.04-arm","image":"ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
           # Disable platforms for non-tag builds if user requested
           if [ ${GITHUB_REF_TYPE} != tag ]; then
@@ -137,7 +137,7 @@ jobs:
 
   get-previous-release:
     if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.latest_release.outputs.tag }}
     steps:
@@ -164,7 +164,7 @@ jobs:
       attestations: write
       contents: write
     name: Prepare release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
     needs: [build, get-previous-release]
@@ -306,9 +306,9 @@ jobs:
           - name: "MacOS x86"
             runner: macos-15-intel
           - name: "MacOS arm64"
-            runner: macos-latest
+            runner: macos-15
           - name: "Linux x86 gnu"
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
           - name: "Linux ARM64 gnu"
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
