@@ -6,6 +6,12 @@ on:
       - 'docs/**'
       - 'deploy-docs.yaml'
   workflow_call:
+    inputs:
+      deploy:
+        type: boolean
+        description: "Deploy to GitHub Pages"
+        required: false
+        default: false
   workflow_dispatch:
     inputs:
       version:
@@ -17,6 +23,11 @@ on:
         description: "Directory with the documentation"
         required: false
         default: "docs"
+      deploy:
+        type: boolean
+        description: "Deploy to GitHub Pages"
+        required: false
+        default: false
 
 # Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
 # However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
@@ -41,5 +52,5 @@ jobs:
           docs-dir: ${{ inputs.docs-dir || 'docs' }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           enable-tests: true
-          deploy: ${{ github.event_name != 'pull_request' }}
+          deploy: ${{ inputs.deploy }}
           create-latest-symlink: true

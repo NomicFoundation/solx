@@ -42,7 +42,7 @@ inputs:
     type: boolean
     description: "Enable or disable the deployment"
     required: false
-    default: true
+    default: false
   create-latest-symlink:
     type: boolean
     description: "Create a symlink to the latest version"
