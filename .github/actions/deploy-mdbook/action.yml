@@ -42,7 +42,7 @@ inputs:
     type: boolean
     description: "Enable or disable the deployment"
     required: false
-    default: true
+    default: false
   create-latest-symlink:
     type: boolean
     description: "Create a symlink to the latest version"
@@ -60,33 +60,18 @@ runs:
         echo "::error title=⛔ error hint::Only Linux is supported for this action."
         exit 1
 
-    - name: Install latest mdbook
-      shell: 'bash -ex {0}'
-      env:
-        MDBOOK_DOWNLOAD_URL: "https://github.com/rust-lang/mdBook/releases/download/v0.4.47/mdbook-v0.4.47-x86_64-unknown-linux-musl.tar.gz"
-      run: |
-        echo "::group::Install mdbook"
-        MDBOOK_INSTALL_DIR="${PWD}/.mdbook_$(date +%s)"
-        mkdir -p "${MDBOOK_INSTALL_DIR}"
-        curl -sSL "${MDBOOK_DOWNLOAD_URL}" | tar -xz --directory="${MDBOOK_INSTALL_DIR}"
-        echo "MDBOOK_INSTALL_DIR=${MDBOOK_INSTALL_DIR}" >> "${GITHUB_ENV}"
-        echo "${MDBOOK_INSTALL_DIR}" >> "${GITHUB_PATH}"
-        echo "::endgroup::"
+    - name: Install cargo-binstall
+      uses: cargo-bins/cargo-binstall@7691a5b29cda4f5499b819e5618012ba4b6c3334 # v1.17.5
 
-    - name: Install mdbook addons
+    - name: Install mdbook and addons
       shell: 'bash -ex {0}'
-      env:
-        MDBOOK_MERMAID_DOWNLOAD_URL: "https://github.com/badboy/mdbook-mermaid/releases/download/v0.14.0/mdbook-mermaid-v0.14.0-x86_64-unknown-linux-musl.tar.gz"
-        MDBOOK_ADMONISH_DOWNLOAD_URL: "https://github.com/tommilligan/mdbook-admonish/releases/download/v1.19.0/mdbook-admonish-v1.19.0-x86_64-unknown-linux-musl.tar.gz"
-        MDBOOK_LINKCHECK_URL: "https://github.com/Michael-F-Bryan/mdbook-linkcheck/releases/download/v0.7.7/mdbook-linkcheck.x86_64-unknown-linux-gnu.zip"
       run: |
-        echo "::group::Install mdbook addons"
-        curl -sSL "${MDBOOK_MERMAID_DOWNLOAD_URL}" | tar -xz --directory="${MDBOOK_INSTALL_DIR}"
-        curl -sSL "${MDBOOK_ADMONISH_DOWNLOAD_URL}" | tar -xz --directory="${MDBOOK_INSTALL_DIR}"
-        cd ${MDBOOK_INSTALL_DIR}
-        curl -sSL "${MDBOOK_LINKCHECK_URL}" -o mdbook-linkcheck.zip
-        unzip mdbook-linkcheck.zip
-        chmod +x mdbook-linkcheck
+        echo "::group::Install mdbook and addons"
+        cargo binstall --no-confirm --no-symlinks \
+          mdbook@0.4.47 \
+          mdbook-mermaid@0.14.0 \
+          mdbook-admonish@1.19.0 \
+          mdbook-linkcheck@0.7.7
         echo "::endgroup::"
 
     - name: Build Book

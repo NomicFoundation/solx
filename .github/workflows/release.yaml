@@ -288,6 +288,8 @@ jobs:
     if: github.ref_type == 'tag'
     needs: prepare-release
     uses: ./.github/workflows/deploy-docs.yaml
+    with:
+      deploy: true
     secrets: inherit
     permissions:
       id-token: write
@@ -314,5 +316,8 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Run installation script
-        run: curl -L https://raw.githubusercontent.com/NomicFoundation/solx/${{ github.ref_name }}/install-solx | bash
+      - name: Download and run installation script
+        run: |
+          curl -fsSL -o "${{ runner.temp }}/install-solx" \
+            "https://raw.githubusercontent.com/NomicFoundation/solx/${{ github.ref_name }}/install-solx"
+          bash "${{ runner.temp }}/install-solx"
