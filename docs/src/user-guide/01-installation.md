@@ -4,8 +4,7 @@ You can start using **solx** in the following ways:
 
 1. Use the installation script.
    ```shell
-   curl -fsSL -o install-solx https://raw.githubusercontent.com/NomicFoundation/solx/main/install-solx
-   bash install-solx
+   curl -L https://raw.githubusercontent.com/NomicFoundation/solx/main/install-solx | bash
    ```
 
    The script will download the latest stable release of **solx** and install it in your `PATH`.
