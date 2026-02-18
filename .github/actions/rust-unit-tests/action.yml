@@ -115,7 +115,7 @@ runs:
 
     - name: Upload results Linux
       if: (success() || failure()) && runner.os == 'Linux' && inputs.upload-results == 'true'
-      uses: EnricoMi/publish-unit-test-result-action@v2
+      uses: EnricoMi/publish-unit-test-result-action@27d65e188ec43221b20d26de30f4892fad91df2f # v2
       with:
         check_name: ${{ runner.os }} ${{ runner.arch }} Unit Tests Results
         files: '*${{ inputs.results-xml }}'
@@ -124,7 +124,7 @@ runs:
 
     - name: Upload test results MacOS
       if: (success() || failure()) && runner.os == 'macOS' && inputs.upload-results == 'true'
-      uses: EnricoMi/publish-unit-test-result-action/macos@v2
+      uses: EnricoMi/publish-unit-test-result-action/macos@27d65e188ec43221b20d26de30f4892fad91df2f # v2
       with:
         check_name: ${{ runner.os }} ${{ runner.arch }} Unit Tests Results
         files: '*${{ inputs.results-xml }}'
@@ -133,7 +133,7 @@ runs:
 
     - name: Upload test results Windows
       if: (success() || failure()) && runner.os == 'Windows' && inputs.upload-results == 'true'
-      uses: EnricoMi/publish-unit-test-result-action/windows@v2
+      uses: EnricoMi/publish-unit-test-result-action/windows@27d65e188ec43221b20d26de30f4892fad91df2f # v2
       with:
         check_name: ${{ runner.os }} ${{ runner.arch }} Unit Tests Results
         files: '*${{ inputs.results-xml }}'
