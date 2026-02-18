@@ -30,7 +30,7 @@ runs:
       # Run from the checkout root that owns solx-solidity
       working-directory: ${{ inputs.working-dir }}/..
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo build --locked --release --bin solx-dev
+      run: cargo fetch --locked && cargo build --frozen --release --bin solx-dev
 
     # CCache action requires `apt update` on Linux Docker jobs
     - name: Prepare ccache installation
