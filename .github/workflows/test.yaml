@@ -31,7 +31,7 @@ jobs:
 
   # Check for cargo issues
   cargo-checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
     steps:
@@ -68,9 +68,9 @@ jobs:
           - name: "MacOS x86"
             runner: macos-15-intel
           - name: "MacOS arm64"
-            runner: macos-latest
+            runner: macos-15
           - name: "Linux x86 gnu"
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
             target: "x86_64-unknown-linux-gnu"
           - name: "Linux ARM64 gnu"
@@ -78,7 +78,7 @@ jobs:
             image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
             target: "aarch64-unknown-linux-gnu"
           - name: "Windows"
-            runner: windows-latest
+            runner: windows-2025
             target: "x86_64-pc-windows-gnu"
     runs-on: ${{ matrix.runner }}
     container:
@@ -182,7 +182,7 @@ jobs:
   # Special job that allows some of the jobs to be skipped or failed
   # requiring others to be successful
   pr-checks:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: always()
     needs:
       - cargo-checks
