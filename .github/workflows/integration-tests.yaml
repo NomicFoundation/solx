@@ -22,7 +22,7 @@ jobs:
     if: contains(github.event.pull_request.labels.*.name, 'ci:integration')
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/matter-labs/zksync-llvm-runner:latest
+      image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
       options: -m 110g
     steps:
       - name: Checkout PR
