@@ -58,6 +58,7 @@ runs:
         RUSTFLAGS: '-C target-feature=+crt-static'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash -ex {0}' }}
       run: |
+        cargo fetch --locked
         if [ '${{ inputs.sanitizer }}' != '' ]; then
           export RUSTFLAGS="-Z sanitizer=${{ inputs.sanitizer }}"
           BUILD_STD_LIB='-Zbuild-std'
@@ -69,7 +70,7 @@ runs:
         if [[ "${RUNNER_OS}" == "Windows" ]] || [[ "${RUNNER_OS}" == "Linux" ]]; then
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
-        cargo ${BUILD_STD_LIB} build ${RELEASE} ${{ steps.build-target.outputs.target }}
+        cargo ${BUILD_STD_LIB} build --frozen ${RELEASE} ${{ steps.build-target.outputs.target }}
         if [ '${{ inputs.target }}' != '' ]; then
           BINARY_DIR="${PWD}/target/${{ inputs.target }}/${{ inputs.build-type }}"
         else

@@ -38,12 +38,16 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: echo "target=--target ${{ inputs.target }}" >> "${GITHUB_OUTPUT}"
 
+    - name: Fetch dependencies
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      run: cargo fetch --locked
+
     - name: Prepare test env
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
-        cargo install cargo2junit
+        cargo install cargo2junit --locked
         if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
-          cargo install cargo-llvm-cov
+          cargo install cargo-llvm-cov --locked
         fi
 
     - name: Run unit tests (release)
@@ -62,7 +66,7 @@ runs:
         if [[ ${RUNNER_OS} = Windows ]] || [[ ${RUNNER_OS} = Linux ]]; then
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
-        cargo build && cargo ${TEST_COMMAND} --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
+        cargo build --frozen && cargo ${TEST_COMMAND} --frozen --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a release-results.json | grep 'failed'
         if [ $? -eq 0 ]; then
           cargo2junit < release-results.json > "release-${{ inputs.results-xml }}"
@@ -107,7 +111,7 @@ runs:
         if [ '${{ inputs.target }}' != '' ]; then
           export CARGO_BIN_EXE_SOLX="./target/${{ inputs.target }}/debug/solx"
         fi
-        cargo build ${{ steps.build-target.outputs.target }} && cargo test ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
+        cargo build --frozen ${{ steps.build-target.outputs.target }} && cargo test --frozen ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a debug-results.json | grep 'failed'
         if [ $? -eq 0 ]; then
           cargo2junit < debug-results.json > "debug-${{ inputs.results-xml }}"

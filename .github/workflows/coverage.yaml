@@ -103,7 +103,7 @@ jobs:
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: '-C target-feature=+crt-static -C instrument-coverage -C link-arg=-fuse-ld=lld'
           LLVM_PROFILE_FILE: 'unit-tests-%p-%m.profraw'
-        run: cargo test --release --target x86_64-unknown-linux-gnu
+        run: cargo fetch --locked && cargo test --frozen --release --target x86_64-unknown-linux-gnu
 
       - name: Merge unit test profraw
         run: |
