@@ -50,7 +50,7 @@ jobs:
       matrix: ${{ steps.prepare-matrix.outputs.matrix }}
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           submodules: 'recursive'
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
@@ -86,7 +86,7 @@ jobs:
     name: ${{ matrix.name }}
     steps:
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           submodules: 'recursive'
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
@@ -143,7 +143,7 @@ jobs:
     steps:
 
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
@@ -175,13 +175,13 @@ jobs:
     steps:
 
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: release*
           path: releases
@@ -229,7 +229,7 @@ jobs:
             ./releases/release-macosx-arm64-${RELEASE_SUFFIX}/macosx-arm64-${RELEASE_SUFFIX}/solx-macosx-arm64-${RELEASE_SUFFIX}
 
       - name: Binaries attestation
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         if: github.ref_type == 'tag'
         with:
           subject-path: 'releases/**/**'
@@ -237,7 +237,7 @@ jobs:
       - name: Build changelog
         if: github.ref_type == 'tag'
         id: build_changelog
-        uses: mikepenz/release-changelog-builder-action@v5
+        uses: mikepenz/release-changelog-builder-action@c9dc8369bccbc41e0ac887f8fd674f5925d315f7 # v5
         with:
           fromTag: ${{ needs.get-previous-release.outputs.tag || '' }}
           toTag: ${{ github.ref_name }}
@@ -273,7 +273,7 @@ jobs:
             }
 
       - name: Prepare release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           name: ${{ steps.release.outputs.release_title }}
           generate_release_notes: false

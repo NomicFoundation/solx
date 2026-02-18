@@ -26,13 +26,13 @@ jobs:
       options: -m 110g
     steps:
       - name: Checkout PR
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           submodules: true
 
       - name: Checkout main
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         continue-on-error: true
         with:
           ref: main
@@ -160,14 +160,14 @@ jobs:
       - name: Upload solx-tester report
         if: always() && hashFiles('solx-tester-report.xlsx') != ''
         id: solx-tester-report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: solx-tester-report
           path: solx-tester-report.xlsx
 
       - name: Post solx-tester report comment
         if: always() && steps.solx-tester-report.outcome == 'success'
-        uses: mshick/add-pr-comment@v2
+        uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2
         with:
           message-id: 'solx-tester-report'
           message: |
@@ -176,17 +176,17 @@ jobs:
             ➡️ [**Download**](${{ steps.solx-tester-report.outputs.artifact-url }})
 
       - name: Install Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.13'
 
       - name: Install Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 25
 
       - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
+        uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
 
       - name: Install Yarn
         run: npm install -g yarn bun pnpm
@@ -205,14 +205,14 @@ jobs:
       - name: Upload Hardhat report
         if: always() && hashFiles('temp-hardhat-reports/hardhat-report.xlsx') != ''
         id: hardhat-report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: hardhat-report
           path: ./temp-hardhat-reports/hardhat-report.xlsx
 
       - name: Post Hardhat report comment
         if: always() && steps.hardhat-report.outcome == 'success'
-        uses: mshick/add-pr-comment@v2
+        uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2
         with:
           message-id: 'hardhat-report'
           message: |
@@ -228,14 +228,14 @@ jobs:
       - name: Upload Foundry report
         if: always() && hashFiles('temp-foundry-reports/foundry-report.xlsx') != ''
         id: foundry-report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: foundry-report
           path: ./temp-foundry-reports/foundry-report.xlsx
 
       - name: Post Foundry report comment
         if: always() && steps.foundry-report.outcome == 'success'
-        uses: mshick/add-pr-comment@v2
+        uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2
         with:
           message-id: 'foundry-report'
           message: |
