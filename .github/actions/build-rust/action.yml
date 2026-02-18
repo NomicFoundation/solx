@@ -69,7 +69,7 @@ runs:
         if [[ "${RUNNER_OS}" == "Windows" ]] || [[ "${RUNNER_OS}" == "Linux" ]]; then
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
-        cargo ${BUILD_STD_LIB} build ${RELEASE} ${{ steps.build-target.outputs.target }}
+        cargo ${BUILD_STD_LIB} build --locked ${RELEASE} ${{ steps.build-target.outputs.target }}
         if [ '${{ inputs.target }}' != '' ]; then
           BINARY_DIR="${PWD}/target/${{ inputs.target }}/${{ inputs.build-type }}"
         else

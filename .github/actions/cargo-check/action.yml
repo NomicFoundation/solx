@@ -26,7 +26,7 @@ runs:
 
     - name: Cargo check
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo check --verbose
+      run: cargo check --locked --verbose
 
     - name: Cargo format
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
@@ -34,13 +34,13 @@ runs:
 
     - name: Cargo clippy
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo clippy
+      run: cargo clippy --locked
 
     - name: Cargo udeps
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
         cargo install cargo-udeps --locked
-        cargo +nightly udeps --all-targets
+        cargo +nightly udeps --locked --all-targets
 
     - name: Cargo audit
       if: ${{ inputs.run_cargo_audit == 'true' }}

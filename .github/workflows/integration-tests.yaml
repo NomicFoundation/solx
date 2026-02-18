@@ -74,7 +74,7 @@ jobs:
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
-        run: cargo build --release --bin solx
+        run: cargo build --locked --release --bin solx
 
       - name: Build solx-dev and solx-tester (main)
         working-directory: temp-solx-main
@@ -82,7 +82,7 @@ jobs:
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
-        run: cargo build --release --bin solx-dev --bin solx-tester
+        run: cargo build --locked --release --bin solx-dev --bin solx-tester
 
       - name: Build LLVM (PR)
         uses: ./.github/actions/build-llvm
@@ -103,13 +103,13 @@ jobs:
         env:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-        run: cargo build --release --bin solx
+        run: cargo build --locked --release --bin solx
 
       - name: Build solx-dev and solx-tester (PR)
         env:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-        run: cargo build --release --bin solx-dev --bin solx-tester
+        run: cargo build --locked --release --bin solx-dev --bin solx-tester
 
       - name: Run solx-tester tests (PR)
         id: solx_tester_tests
@@ -145,7 +145,7 @@ jobs:
             --benchmark=candidate-benchmark.json
 
       - name: Build benchmark converter
-        run: cargo build --release --bin solx-benchmark-converter
+        run: cargo build --locked --release --bin solx-benchmark-converter
 
       - name: Run benchmark converter
         if: hashFiles('reference-benchmark.json') != '' && hashFiles('candidate-benchmark.json') != ''

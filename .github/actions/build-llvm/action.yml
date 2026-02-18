@@ -59,7 +59,7 @@ runs:
     - name: Install LLVM builder
       working-directory: ${{ inputs.working-dir }}
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo build --release --bin solx-dev
+      run: cargo build --locked --release --bin solx-dev
 
     - name: Define ccache key
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
