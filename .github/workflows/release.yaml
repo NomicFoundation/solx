@@ -287,7 +287,6 @@ jobs:
     uses: ./.github/workflows/deploy-docs.yaml
     with:
       deploy: true
-    secrets: inherit
     permissions:
       id-token: write
       attestations: write

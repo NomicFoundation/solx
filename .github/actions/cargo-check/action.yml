@@ -4,7 +4,8 @@ description: 'Checks cargo with check, deny, format, clippy, udeps and audit.'
 inputs:
   github_token:
     description: 'GitHub token for cargo audit.'
-    required: true
+    required: false
+    default: ''
   run_cargo_audit:
     description: 'Whether to run cargo audit.'
     required: false
