@@ -82,7 +82,7 @@ features = ["http-rustls-tls", "test", "signing"]
 # LLVM
 [workspace.dependencies.inkwell]
 git = "https://github.com/NomicFoundation/inkwell"
-branch = "main"
+rev = "4f9f86e15f43dc8555b8b51d4dda01e60f756f22"
 default-features = false
 features = [
     "llvm21-1",
