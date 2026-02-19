@@ -80,39 +80,48 @@ jobs:
           target: ${{ matrix.target }}
           cargo-test-command: 'test-slang'
 
-  slang-sanitizer:
-    needs: label-check
-    if: contains(github.event.pull_request.labels.*.name, 'ci:sanitizer')
-    runs-on: solx-linux-amd64
-    container:
-      image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
-      options: -m 110g
-    env:
-      TARGET: x86_64-unknown-linux-gnu
-      RUST_SANITIZER: 'address'
-      LLVM_SANITIZER: 'Address'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          submodules: true
-
-      - name: Checkout submodules
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --force --depth=1 --recursive --checkout
-
-      - name: Build LLVM
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: RelWithDebInfo
-          sanitizer: ${{ env.LLVM_SANITIZER }}
-          enable-assertions: 'true'
-          enable-mlir: 'true'
-
-      - name: Run slang tests with sanitizer
-        uses: ./.github/actions/rust-unit-tests
-        with:
-          target: ${{ env.TARGET }}
-          sanitizer: ${{ env.RUST_SANITIZER }}
-          cargo-test-command: 'test-slang'
+  # TODO: slang sanitizer is disabled. When host == target triple,
+  # Cargo's per-target RUSTFLAGS (-Z sanitizer=address) leak into
+  # proc-macro compilation. melior_macro depends on tblgen which
+  # compiles C++ via the cc crate; rustc then tries to link the
+  # proc-macro with ASan runtime that isn't available on the host.
+  # This is a Rust toolchain limitation (no host vs target flag
+  # separation when triples match). Fix options:
+  #   1. Cross-compile from a different host triple
+  #   2. Wait for Cargo host/target RUSTFLAGS separation
+  # slang-sanitizer:
+  #   needs: label-check
+  #   if: contains(github.event.pull_request.labels.*.name, 'ci:sanitizer')
+  #   runs-on: solx-linux-amd64
+  #   container:
+  #     image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
+  #     options: -m 110g
+  #   env:
+  #     TARGET: x86_64-unknown-linux-gnu
+  #     RUST_SANITIZER: 'address'
+  #     LLVM_SANITIZER: 'Address'
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+  #       with:
+  #         submodules: true
+  #
+  #     - name: Checkout submodules
+  #       run: |
+  #         git config --global --add safe.directory '*'
+  #         git submodule update --force --depth=1 --recursive --checkout
+  #
+  #     - name: Build LLVM
+  #       uses: ./.github/actions/build-llvm
+  #       with:
+  #         build-type: RelWithDebInfo
+  #         sanitizer: ${{ env.LLVM_SANITIZER }}
+  #         enable-assertions: 'true'
+  #         enable-mlir: 'true'
+  #
+  #     - name: Run slang tests with sanitizer
+  #       uses: ./.github/actions/rust-unit-tests
+  #       with:
+  #         target: ${{ env.TARGET }}
+  #         sanitizer: ${{ env.RUST_SANITIZER }}
+  #         cargo-test-command: 'test-slang'
