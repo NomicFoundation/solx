@@ -22,11 +22,6 @@ serde_yaml.workspace = true
 semver.workspace = true
 md5.workspace = true
 regex.workspace = true
+web3.workspace = true
 
 solx-utils = { path = "../solx-utils" }
-
-[dependencies.web3]
-git = "https://github.com/jacques-kigo/rust-web3"
-branch = "master"
-default-features = false
-features = ["http-rustls-tls", "test", "signing"]

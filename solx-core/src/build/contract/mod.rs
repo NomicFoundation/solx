@@ -95,8 +95,8 @@ impl Contract {
             self.name.path.as_str(),
             self.name.name.as_deref(),
             solx_standard_json::InputSelector::EVMLegacyAssembly,
-        ) {
-            let legacy_assembly = self.legacy_assembly.take().expect("Always exists");
+        ) && let Some(legacy_assembly) = self.legacy_assembly.take()
+        {
             writeln!(std::io::stdout(), "EVM assembly:\n{legacy_assembly}")?;
         }
 
@@ -211,8 +211,8 @@ impl Contract {
             self.name.path.as_str(),
             self.name.name.as_deref(),
             solx_standard_json::InputSelector::Yul,
-        ) {
-            let yul = self.yul.take().expect("Always exists");
+        ) && let Some(yul) = self.yul.take()
+        {
             writeln!(std::io::stdout(), "IR:\n{yul}")?;
         }
 

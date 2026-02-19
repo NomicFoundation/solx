@@ -125,7 +125,7 @@ This repository maintains intuitive and stable naming for the executables and pr
 5. Build the LLVM framework using **solx-dev**.
 
    ```shell
-   ./target/release/solx-dev llvm build --llvm-projects mlir lld --enable-rtti
+   ./target/release/solx-dev llvm build --enable-mlir
    ```
 
    This builds LLVM with the EVM target, MLIR, and LLD projects enabled. The build artifacts will be placed in `target-llvm/`.
@@ -157,11 +157,8 @@ This repository maintains intuitive and stable naming for the executables and pr
 ## Tuning the LLVM build
 
 * For more information and available build options, run `./target/release/solx-dev llvm build --help`.
-* The `--llvm-projects` option specifies which LLVM subprojects to build. Common options:
-  - `mlir` — Required for MLIR-based optimizations
-  - `lld` — The LLVM linker
+* The `--enable-mlir` flag enables MLIR support in the LLVM build (required for MLIR-based optimizations). LLD is always built.
 * Use the `--ccache-variant ccache` option to speed up the build process if you have [ccache](https://ccache.dev) installed.
-* Use `--enable-rtti` to enable run-time type information (required for some configurations).
 
 ### Building LLVM manually
 

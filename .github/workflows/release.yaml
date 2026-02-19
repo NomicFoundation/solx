@@ -107,9 +107,6 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
-          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
-          # llvm-projects: 'mlir lld'
-          llvm-projects: ''
 
       - name: Building solc
         uses: ./.github/actions/build-solc
@@ -118,7 +115,6 @@ jobs:
           working-dir: 'solx-solidity'
 
       - name: Free disk space (remove LLVM build artifacts)
-        if: runner.arch == 'ARM64'
         shell: bash
         run: |
           echo "Before cleanup:" && df -h .

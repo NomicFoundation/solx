@@ -9,16 +9,16 @@ use test_case::test_case;
 #[test_case("--bin")]
 #[test_case("--bin-runtime")]
 #[test_case("--asm")]
-#[test_case("--metadata")]
+#[cfg_attr(feature = "solc", test_case("--metadata"))]
 #[test_case("--ast-json")]
-#[test_case("--abi")]
-#[test_case("--hashes")]
-#[test_case("--userdoc")]
-#[test_case("--devdoc")]
-#[test_case("--storage-layout")]
-#[test_case("--transient-storage-layout")]
-#[test_case("--asm-solc-json")]
-#[test_case("--ir")]
+#[cfg_attr(feature = "solc", test_case("--abi"))]
+#[cfg_attr(feature = "solc", test_case("--hashes"))]
+#[cfg_attr(feature = "solc", test_case("--userdoc"))]
+#[cfg_attr(feature = "solc", test_case("--devdoc"))]
+#[cfg_attr(feature = "solc", test_case("--storage-layout"))]
+#[cfg_attr(feature = "solc", test_case("--transient-storage-layout"))]
+#[cfg_attr(feature = "solc", test_case("--asm-solc-json"))]
+#[cfg_attr(feature = "solc", test_case("--ir"))]
 #[test_case("--benchmarks")]
 fn default(flag: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -46,16 +46,16 @@ fn default(flag: &str) -> anyhow::Result<()> {
 #[test_case("--bin")]
 #[test_case("--bin-runtime")]
 #[test_case("--asm")]
-#[test_case("--metadata")]
+#[cfg_attr(feature = "solc", test_case("--metadata"))]
 #[test_case("--ast-json")]
-#[test_case("--abi")]
-#[test_case("--hashes")]
-#[test_case("--userdoc")]
-#[test_case("--devdoc")]
-#[test_case("--storage-layout")]
-#[test_case("--transient-storage-layout")]
-#[test_case("--asm-solc-json")]
-#[test_case("--ir")]
+#[cfg_attr(feature = "solc", test_case("--abi"))]
+#[cfg_attr(feature = "solc", test_case("--hashes"))]
+#[cfg_attr(feature = "solc", test_case("--userdoc"))]
+#[cfg_attr(feature = "solc", test_case("--devdoc"))]
+#[cfg_attr(feature = "solc", test_case("--storage-layout"))]
+#[cfg_attr(feature = "solc", test_case("--transient-storage-layout"))]
+#[cfg_attr(feature = "solc", test_case("--asm-solc-json"))]
+#[cfg_attr(feature = "solc", test_case("--ir"))]
 #[test_case("--benchmarks")]
 fn missing(flag: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -79,6 +79,7 @@ fn missing(flag: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn all() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -115,6 +116,7 @@ fn all() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn all_missing() -> anyhow::Result<()> {
     crate::common::setup()?;

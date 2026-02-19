@@ -1,0 +1,24 @@
+[package]
+name = "solx-mlir"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+description = "MLIR integration for solx via melior"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+melior = { version = "0.26", features = ["ods-dialects", "helpers"] }
+# mlir-sys 210 wraps LLVM 21.0 C API; llvm-sys (via inkwell) targets 21.1.
+# Both are built from the same LLVM source tree (LLVM_SYS_211_PREFIX ==
+# MLIR_SYS_210_PREFIX), so the pointer casts between their types are ABI-
+# compatible. If these crates diverge to different LLVM builds, the
+# transmutes in context.rs become unsound. Track mlir-sys 211 availability.
+mlir-sys = "210.0"
+
+inkwell = { workspace = true, features = ["llvm21-1-no-llvm-linking"] }
+
+solx-codegen-evm = { path = "../solx-codegen-evm" }
+solx-utils = { path = "../solx-utils" }
+
+[dev-dependencies]
+hex.workspace = true

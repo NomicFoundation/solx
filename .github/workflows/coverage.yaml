@@ -17,8 +17,14 @@ permissions:
 
 jobs:
 
-  coverage:
+  label-check:
     if: contains(github.event.pull_request.labels.*.name, 'ci:coverage') && !github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-24.04
+    steps:
+      - run: 'true'
+
+  coverage:
+    needs: label-check
     runs-on: solx-linux-amd64
     permissions:
       contents: read
@@ -49,9 +55,7 @@ jobs:
           build-type: 'RelWithDebInfo'
           enable-assertions: false
           enable-coverage: 'true'
-          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
-          # llvm-projects: 'mlir lld'
-          llvm-projects: ''
+          enable-mlir: ${{ contains(github.event.pull_request.labels.*.name, 'ci:slang') }}
 
       - name: Building solc
         uses: ./.github/actions/build-solc
@@ -105,6 +109,34 @@ jobs:
           LLVM_PROFILE_FILE: 'unit-tests-%p-%m.profraw'
         run: cargo fetch --locked && cargo test --frozen --release --target x86_64-unknown-linux-gnu
 
+      # Inkwell feature poisoning: solc path builds inkwell with LLVM linking,
+      # slang path needs no-llvm-linking. cargo clean cannot reliably clear
+      # cached llvm-sys build script output. Use a separate target directory
+      # for complete isolation.
+      - name: Run slang unit tests
+        if: contains(github.event.pull_request.labels.*.name, 'ci:slang')
+        env:
+          RUSTC_BOOTSTRAP: 1
+          RUSTFLAGS: '-C instrument-coverage -C link-arg=-fuse-ld=lld'
+          LLVM_PROFILE_FILE: 'slang-tests-%p-%m.profraw'
+          CARGO_TARGET_DIR: target-slang
+        run: cargo test-slang --frozen --release --target x86_64-unknown-linux-gnu
+
+      - name: Preserve slang instrumented binary
+        if: contains(github.event.pull_request.labels.*.name, 'ci:slang')
+        run: cp "./target-slang/x86_64-unknown-linux-gnu/release/solx" "${GITHUB_WORKSPACE}/solx-slang-instrumented"
+
+      - name: Merge slang test profraw
+        if: contains(github.event.pull_request.labels.*.name, 'ci:slang')
+        run: |
+          find . -name 'slang-tests-*.profraw' -print > slang-profiles.lst
+          if [ -s slang-profiles.lst ]; then
+            TMP="${PROFDATA_FILE}.tmp"
+            llvm-profdata merge -sparse -num-threads="$(nproc)" -o "${TMP}" "${PROFDATA_FILE}" @slang-profiles.lst
+            mv -f "${TMP}" "${PROFDATA_FILE}"
+            find . -name 'slang-tests-*.profraw' -delete
+          fi
+
       - name: Merge unit test profraw
         run: |
           find . -name 'unit-tests-*.profraw' -print > unit-profiles.lst
@@ -122,6 +154,7 @@ jobs:
             -object "${GITHUB_WORKSPACE}/solx-tester-instrumented"
             -object "${GITHUB_WORKSPACE}/solx-dev-instrumented"
           )
+          [ -f "${GITHUB_WORKSPACE}/solx-slang-instrumented" ] && OBJECTS+=(-object "${GITHUB_WORKSPACE}/solx-slang-instrumented")
           llvm-cov show --show-directory-coverage \
             --format=html --output-dir=${OUTPUT_HTML_DIR} \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
@@ -140,6 +173,7 @@ jobs:
             -object "${GITHUB_WORKSPACE}/solx-tester-instrumented"
             -object "${GITHUB_WORKSPACE}/solx-dev-instrumented"
           )
+          [ -f "${GITHUB_WORKSPACE}/solx-slang-instrumented" ] && OBJECTS+=(-object "${GITHUB_WORKSPACE}/solx-slang-instrumented")
           llvm-cov report -instr-profile=${PROFDATA_FILE} "${OBJECTS[@]}" \
             --ignore-filename-regex="${COVERAGE_IGNORE_REGEX}" \
             > coverage-report.txt

@@ -8,32 +8,46 @@ use std::process::Command;
 use assert_cmd::assert::Assert;
 use assert_cmd::assert::OutputAssertExt;
 
+#[cfg(feature = "solc")]
 mod abi;
+#[cfg(feature = "solc")]
 mod allow_paths;
 mod asm;
+#[cfg(feature = "solc")]
 mod asm_solc_json;
 mod ast_json;
+#[cfg(feature = "solc")]
 mod base_path;
 mod benchmarks;
 mod bin;
 mod bin_runtime;
+#[cfg(feature = "solc")]
 mod debug_info;
+#[cfg(feature = "solc")]
 mod debug_info_runtime;
+#[cfg(feature = "solc")]
 mod devdoc;
 mod empty;
 mod evm_version;
+#[cfg(feature = "solc")]
 mod hashes;
 mod help;
+#[cfg(feature = "solc")]
 mod include_path;
+#[cfg(feature = "solc")]
 mod ir;
 mod ir_output;
+#[cfg(feature = "solc")]
 mod libraries;
 mod llvm_ir;
 mod llvm_options;
+#[cfg(feature = "solc")]
 mod metadata;
 mod metadata_hash;
+#[cfg(feature = "solc")]
 mod metadata_literal;
 mod no_cbor_metadata;
+#[cfg(feature = "solc")]
 mod no_import_callback;
 mod optimization;
 mod optimization_size_fallback;
@@ -44,13 +58,19 @@ mod remappings;
 mod standard_json;
 mod standard_json_optimizer;
 mod standard_json_output;
+#[cfg(feature = "solc")]
 mod storage_layout;
 mod threads;
+#[cfg(feature = "solc")]
 mod transient_storage_layout;
+#[cfg(feature = "solc")]
 mod userdoc;
 mod version;
+#[cfg(feature = "solc")]
 mod via_ir;
+#[cfg(feature = "solc")]
 mod yul;
+#[cfg(feature = "solc")]
 mod yul_parser;
 
 ///

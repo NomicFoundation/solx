@@ -100,6 +100,9 @@ impl solx_core::Frontend for SlangFrontend {
                         Some(&input_json.sources),
                     )
                 }));
+
+            output.sources.get_mut(path).expect("Always exists").ast =
+                Some(serde_json::to_value(parse_output.tree()).expect("CST serialization failure"));
         }
 
         Ok(output)

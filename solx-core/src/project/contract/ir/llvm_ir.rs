@@ -7,8 +7,6 @@
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct LLVMIR {
-    /// LLVM IR file path.
-    pub path: String,
     /// LLVM IR source code.
     pub source: String,
     /// Dependencies of the LLVM IR translation unit.
@@ -35,7 +33,6 @@ impl LLVMIR {
         };
 
         Self {
-            path,
             source,
             dependencies,
         }

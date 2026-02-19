@@ -8,6 +8,7 @@ use predicates::prelude::*;
 use tempfile::TempDir;
 use test_case::test_case;
 
+#[cfg(feature = "solc")]
 #[test]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -79,6 +80,7 @@ fn yul(extension: String) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn unusual_path_characters() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -123,6 +125,7 @@ fn standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn multiple_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -147,6 +150,7 @@ fn multiple_outputs() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn multiple_outputs_simple_contract() -> anyhow::Result<()> {
     crate::common::setup()?;

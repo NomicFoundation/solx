@@ -18,8 +18,15 @@ defaults:
     shell: bash -ex {0}
 
 jobs:
+
+  label-check:
+    if: contains(github.event.pull_request.labels.*.name, 'ci:integration') && !github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-24.04
+    steps:
+      - run: 'true'
+
   integration:
-    if: contains(github.event.pull_request.labels.*.name, 'ci:integration')
+    needs: label-check
     runs-on: solx-linux-amd64
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
@@ -57,9 +64,6 @@ jobs:
           build-type: Release
           working-dir: 'temp-solx-main'
           enable-assertions: 'false'
-          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
-          # llvm-projects: 'mlir lld'
-          llvm-projects: ''
 
       - name: Build solc (main)
         uses: ./.github/actions/build-solc
@@ -94,9 +98,6 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
-          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
-          # llvm-projects: 'mlir lld'
-          llvm-projects: ''
 
       - name: Build solc (PR)
         uses: ./.github/actions/build-solc

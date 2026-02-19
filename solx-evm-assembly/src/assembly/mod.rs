@@ -54,25 +54,6 @@ impl Assembly {
     pub const DEFAULT_SERDE_BUFFER_SIZE: usize = 1048576;
 
     ///
-    /// Sets the full contract path.
-    ///
-    pub fn set_full_path(&mut self, full_path: String) {
-        self.full_path = Some(full_path);
-    }
-
-    ///
-    /// Returns the full contract path if it is set, or `<undefined>` otherwise.
-    ///
-    /// # Panics
-    /// If the `full_path` has not been set.
-    ///
-    pub fn full_path(&self) -> &str {
-        self.full_path
-            .as_deref()
-            .unwrap_or_else(|| panic!("The full path of some contracts is unset"))
-    }
-
-    ///
     /// Returns a runtime code reference from the deploy code assembly.
     ///
     pub fn runtime_code(&self) -> anyhow::Result<&Assembly> {
@@ -205,8 +186,6 @@ impl Assembly {
         assembly: &mut Assembly,
         hash_path_mapping: &BTreeMap<u64, String>,
     ) -> anyhow::Result<()> {
-        assembly.set_full_path(full_path.to_owned());
-
         let deploy_code_index_path_mapping =
             assembly.deploy_dependencies_pass(full_path, hash_path_mapping)?;
         if let Some(deploy_code_instructions) = assembly.code.as_deref_mut() {

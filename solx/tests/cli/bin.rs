@@ -3,6 +3,7 @@
 //!
 
 use predicates::prelude::*;
+#[cfg(feature = "solc")]
 use test_case::test_case;
 
 #[test]
@@ -20,6 +21,7 @@ fn default() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn stdin() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -38,6 +40,7 @@ fn stdin() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test_case(crate::common::contract!("solidity/SimpleContract.sol"), vec!["__$733ff2b5a7b9002c636c19ae8206a21f88$__"])]
 #[test_case(crate::common::contract!("solidity/LinkedMixedDeps.sol"), vec!["__$65ec92bf84627f42eab2cb5e40b5cc19ff$__"])]
 #[test_case(crate::common::contract!("solidity/LinkedMixedDepsMultiLevel.sol"), vec!["__$c1091a910937160002c95b60eab1fc9a86$__", "__$71eefe2b783075e8d047b21bbc2b61aa32$__"])]
@@ -56,6 +59,7 @@ fn deploy_time_linking(path: &str, placeholders: Vec<&str>) -> anyhow::Result<()
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn stack_too_deep_solc() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -74,6 +78,7 @@ fn stack_too_deep_solc() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn stack_too_deep_llvm() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -93,6 +98,7 @@ fn stack_too_deep_llvm() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn stack_too_deep_llvm_suppressed() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -113,6 +119,7 @@ fn stack_too_deep_llvm_suppressed() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn fuzzed_linker_error() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -132,6 +139,7 @@ fn fuzzed_linker_error() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn invalid_input() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -198,6 +206,7 @@ fn no_output_flags() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn multiple_files() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -214,6 +223,7 @@ fn multiple_files() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn all_terminal_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -249,6 +259,7 @@ fn all_terminal_outputs() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn combined_terminal_outputs() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -272,6 +283,7 @@ fn combined_terminal_outputs() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn interface_empty_yul() -> anyhow::Result<()> {
     crate::common::setup()?;

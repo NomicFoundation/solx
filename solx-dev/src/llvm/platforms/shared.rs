@@ -33,6 +33,18 @@ pub const SHARED_BUILD_OPTS: [&str; 23] = [
 ];
 
 ///
+/// The CMake argument for LLVM_ENABLE_PROJECTS.
+/// LLD is always included; MLIR is added when `enable_mlir` is true.
+///
+pub fn shared_build_opts_projects(enable_mlir: bool) -> Vec<String> {
+    let mut projects = vec!["lld"];
+    if enable_mlir {
+        projects.push("mlir");
+    }
+    vec![format!("-DLLVM_ENABLE_PROJECTS='{}'", projects.join(";"))]
+}
+
+///
 /// The shared build options to treat warnings as errors.
 ///
 /// Disabled on Windows due to the following upstream issue with MSYS2 with mingw-w64:
@@ -50,16 +62,6 @@ pub fn shared_build_opts_werror() -> Vec<String> {
 pub fn shared_build_opts_assertions(enabled: bool) -> Vec<String> {
     vec![format!(
         "-DLLVM_ENABLE_ASSERTIONS='{}'",
-        if enabled { "On" } else { "Off" },
-    )]
-}
-
-///
-/// The build options to build with RTTI support.
-///
-pub fn shared_build_opts_rtti(enabled: bool) -> Vec<String> {
-    vec![format!(
-        "-DLLVM_ENABLE_RTTI='{}'",
         if enabled { "On" } else { "Off" },
     )]
 }

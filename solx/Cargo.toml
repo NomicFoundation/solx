@@ -4,7 +4,7 @@ authors.workspace = true
 edition.workspace = true
 version.workspace = true
 description = "LLVM-based Solidity compiler for the EVM"
-license = "GPL-3.0"
+license = "GPL-3.0-only"
 
 [[bin]]
 name = "solx"
@@ -15,8 +15,9 @@ doctest = false
 
 [features]
 default = ["solc"]
-solc = []
-slang = ["dep:solx-slang"]
+solc = ["solx-core/solc"]
+mlir = ["solx-core/mlir"]
+slang = ["mlir", "dep:solx-slang"]
 
 [dependencies]
 anyhow.workspace = true
@@ -40,5 +41,6 @@ object = "0.36"
 gimli = "0.31"
 hex = "0.4"
 
-solx-codegen-evm = { path = "../solx-codegen-evm" }
 inkwell.workspace = true
+
+solx-codegen-evm = { path = "../solx-codegen-evm" }

@@ -14,6 +14,14 @@ compile_error!(
 compile_error!(
     "Multiple Solidity frontends are enabled. Please enable exactly one: --features solc or --features slang."
 );
+#[cfg(all(feature = "mlir", not(any(feature = "slang", feature = "solc"))))]
+compile_error!(
+    "Feature `mlir` requires a frontend. Enable `solc` (for C++ MLIR) or `slang` (for Rust MLIR via solx-mlir)."
+);
+#[cfg(all(feature = "slang", not(feature = "mlir")))]
+compile_error!(
+    "Feature `slang` requires `mlir`. This should be automatic — check that `slang` includes `mlir` in its feature list."
+);
 
 ///
 /// The application entry point.
@@ -52,12 +60,26 @@ fn main() -> anyhow::Result<()> {
                 )
                 .expect("Stderr writing error");
         }
-        #[cfg(feature = "solc")]
-        let frontend = solx::Solc::default();
-        #[cfg(all(feature = "slang", not(feature = "solc")))]
+        #[cfg(feature = "slang")]
         let frontend = solx_slang::SlangFrontend::default();
+        #[cfg(not(feature = "slang"))]
+        let frontend = solx::Solc::default();
 
-        if let Err(error) = solx_core::main(arguments, frontend, messages.clone()) {
+        let result = if arguments.version {
+            solx_core::print_version(&frontend)
+        } else if arguments.llvm_ir || arguments.yul {
+            solx_core::main(arguments, frontend, messages.clone())
+        } else {
+            #[cfg(feature = "slang")]
+            {
+                solx_slang::main(arguments, frontend, messages.clone())
+            }
+            #[cfg(not(feature = "slang"))]
+            {
+                solx_core::main(arguments, frontend, messages.clone())
+            }
+        };
+        if let Err(error) = result {
             messages
                 .lock()
                 .expect("Sync")

@@ -13,6 +13,26 @@ members = [
     "solx-benchmark-converter",
     "solx-solc-test-adapter",
     "solx-compiler-downloader",
+    "solx-mlir",
+]
+# IMPORTANT: solx-slang and solx-mlir are intentionally excluded from
+# default-members. They depend on inkwell with `llvm21-1-no-llvm-linking`,
+# while solx-codegen-evm uses inkwell with `llvm21-1` (links LLVM). Cargo
+# feature unification would merge these into one inkwell with conflicting
+# features, causing linker failures. Use `cargo test-slang` to test them.
+default-members = [
+    "solx",
+    "solx-core",
+    "solx-standard-json",
+    "solx-evm-assembly",
+    "solx-yul",
+    "solx-codegen-evm",
+    "solx-utils",
+    "solx-dev",
+    "solx-tester",
+    "solx-benchmark-converter",
+    "solx-solc-test-adapter",
+    "solx-compiler-downloader",
 ]
 resolver = "2"
 
@@ -51,6 +71,13 @@ glob = "0.3"
 itertools = "0.14"
 sha3 = "0.10"
 md5 = "0.7"
+
+# Testing
+[workspace.dependencies.web3]
+git = "https://github.com/tomusdrw/rust-web3"
+rev = "8d889ae3270508f1e68b6a29bbe51b2bedf7fb1e"
+default-features = false
+features = ["http-rustls-tls", "test", "signing"]
 
 # LLVM
 [workspace.dependencies.inkwell]

@@ -170,6 +170,7 @@ impl Project {
                     legacy_assembly.as_ref().map(|legacy_assembly| {
                         Ok(Some(ContractIR::from(
                             ContractEVMLegacyAssembly::from_contract(
+                                name.full_path.as_str(),
                                 legacy_assembly.to_owned(),
                                 extra_metadata,
                             )?,
@@ -550,6 +551,24 @@ impl Project {
                             ),
                         );
                         (deploy_code.into(), runtime_code.into())
+                    }
+                    #[cfg(feature = "mlir")]
+                    Some(ContractIR::MLIR(mlir)) => {
+                        let deploy_code_identifier = contract.name.full_path.to_owned();
+                        let runtime_code_identifier = format!(
+                            "{deploy_code_identifier}.{}",
+                            solx_utils::CodeSegment::Runtime
+                        );
+
+                        let deploy_code = ContractLLVMIR::new(
+                            deploy_code_identifier.clone(),
+                            solx_utils::CodeSegment::Deploy,
+                            solx_codegen_evm::minimal_deploy_code(
+                                deploy_code_identifier.as_str(),
+                                runtime_code_identifier.as_str(),
+                            ),
+                        );
+                        (deploy_code.into(), ContractIR::MLIR(mlir))
                     }
                     None => {
                         let build = EVMContractBuild::new(

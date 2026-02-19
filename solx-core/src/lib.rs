@@ -28,7 +28,7 @@ pub use self::frontend::Frontend;
 pub use self::process::EXECUTABLE;
 pub use self::process::input::Input as EVMProcessInput;
 pub use self::process::output::Output as EVMProcessOutput;
-pub use self::process::run as run_recursive;
+pub use self::process::run as run_subprocess;
 pub use self::project::Project;
 pub use self::project::contract::Contract as ProjectContract;
 
@@ -44,26 +44,14 @@ use solx_standard_json::CollectableError;
 pub type Result<T> = std::result::Result<T, Error>;
 
 ///
-/// The `main` function that implements the core CLI application logic.
+/// Initialize the compiler runtime: rayon thread pool, LLVM stack trace, and
+/// EVM target.
 ///
-pub fn main(
-    arguments: Arguments,
-    frontend: impl Frontend,
-    messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
-) -> anyhow::Result<()> {
-    if arguments.version {
-        let version = frontend.version();
-        writeln!(
-            std::io::stdout(),
-            "{DEFAULT_EXECUTABLE_NAME} v{}, {DEFAULT_PACKAGE_DESCRIPTION}, Front end: {}, LLVM build: {}",
-            env!("CARGO_PKG_VERSION"),
-            frontend.name(),
-            inkwell::support::get_commit_id().to_string(),
-        )?;
-        writeln!(std::io::stdout(), "Version: {}", version.long)?;
-        return Ok(());
-    }
-
+/// If `arguments.recursive_process` is set, runs the subprocess handler and
+/// returns `Ok(true)` — the caller should return immediately.
+/// Otherwise returns `Ok(false)`.
+///
+pub fn initialize(arguments: &Arguments) -> anyhow::Result<bool> {
     let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
     if let Some(threads) = arguments.threads {
         thread_pool_builder = thread_pool_builder.num_threads(threads);
@@ -77,149 +65,32 @@ pub fn main(
     solx_codegen_evm::initialize_target();
 
     if arguments.recursive_process {
-        return self::run_recursive();
+        self::run_subprocess()?;
+        return Ok(true);
+    }
+
+    Ok(false)
+}
+
+///
+/// The `main` function that implements the core CLI application logic.
+///
+pub fn main(
+    arguments: Arguments,
+    frontend: impl Frontend,
+    messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
+) -> anyhow::Result<()> {
+    if self::initialize(&arguments)? {
+        return Ok(());
     }
 
     let (input_files, remappings) = arguments.split_input_files_and_remappings()?;
 
-    let mut optimizer_settings = match arguments.optimization {
-        Some(mode) => solx_codegen_evm::OptimizerSettings::try_from_cli(mode)?,
-        None if arguments.standard_json.is_none() => {
-            if let Ok(optimization) = std::env::var(SOLX_OPTIMIZATION_ENV) {
-                if !solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS
-                    .contains(&optimization.as_str())
-                {
-                    anyhow::bail!(
-                        "Invalid value `{optimization}` for environment variable '{SOLX_OPTIMIZATION_ENV}': only values {} are supported.",
-                        solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.join(", ")
-                    );
-                }
-                solx_codegen_evm::OptimizerSettings::try_from_cli(
-                    optimization.chars().next().expect("Always exists"),
-                )?
-            } else {
-                solx_codegen_evm::OptimizerSettings::cycles()
-            }
-        }
-        None => solx_codegen_evm::OptimizerSettings::cycles(),
-    };
-    if arguments.size_fallback || std::env::var(SOLX_OPTIMIZATION_SIZE_FALLBACK_ENV).is_ok() {
-        optimizer_settings.enable_fallback_to_size();
-    }
-    optimizer_settings.is_verify_each_enabled = arguments.llvm_verify_each;
-    optimizer_settings.is_debug_logging_enabled = arguments.llvm_debug_logging;
+    let optimizer_settings = arguments.optimizer_settings()?;
+    let output_selection = arguments.output_selection();
+    let llvm_options = arguments.llvm_options();
 
-    let mut selectors = BTreeSet::new();
-    if arguments.output_evmla {
-        selectors.insert(solx_standard_json::InputSelector::BytecodeEVMLA);
-        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEVMLA);
-    }
-    if arguments.output_ethir {
-        selectors.insert(solx_standard_json::InputSelector::BytecodeEthIR);
-        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEthIR);
-    }
-    if arguments.output_llvm_ir {
-        selectors.insert(solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized);
-        selectors.insert(solx_standard_json::InputSelector::BytecodeLLVMIR);
-        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized);
-        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR);
-    }
-    if arguments.output_bytecode {
-        selectors.insert(solx_standard_json::InputSelector::BytecodeObject);
-    }
-    if arguments.output_bytecode_runtime {
-        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeObject);
-    }
-    if arguments.output_assembly {
-        selectors.insert(solx_standard_json::InputSelector::BytecodeLLVMAssembly);
-        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly);
-    }
-    if arguments.output_debug_info {
-        selectors.insert(solx_standard_json::InputSelector::BytecodeDebugInfo);
-    }
-    if arguments.output_debug_info_runtime {
-        selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo);
-    }
-    if arguments.output_metadata {
-        selectors.insert(solx_standard_json::InputSelector::Metadata);
-    }
-    if arguments.output_abi {
-        selectors.insert(solx_standard_json::InputSelector::ABI);
-    }
-    if arguments.output_hashes {
-        selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
-    }
-    if arguments.output_userdoc {
-        selectors.insert(solx_standard_json::InputSelector::UserDocumentation);
-    }
-    if arguments.output_devdoc {
-        selectors.insert(solx_standard_json::InputSelector::DeveloperDocumentation);
-    }
-    if arguments.output_storage_layout {
-        selectors.insert(solx_standard_json::InputSelector::StorageLayout);
-    }
-    if arguments.output_transient_storage_layout {
-        selectors.insert(solx_standard_json::InputSelector::TransientStorageLayout);
-    }
-    if arguments.output_ast_json {
-        selectors.insert(solx_standard_json::InputSelector::AST);
-    }
-    if arguments.output_asm_solc_json {
-        selectors.insert(solx_standard_json::InputSelector::EVMLegacyAssembly);
-    }
-    if arguments.output_ir {
-        selectors.insert(solx_standard_json::InputSelector::Yul);
-    }
-    if arguments.output_benchmarks {
-        selectors.insert(solx_standard_json::InputSelector::Benchmarks);
-    }
-    let output_selection = solx_standard_json::InputSelection::new(selectors);
-
-    let llvm_options: Vec<String> = arguments
-        .llvm_options
-        .as_ref()
-        .map(|options| {
-            options
-                .split_whitespace()
-                .map(|option| option.to_owned())
-                .collect()
-        })
-        .unwrap_or_default();
-
-    // Determine the output configuration for IR artifacts.
-    // Priority: SOLX_OUTPUT_DIR env var (debug mode) > --output-dir with IR flags
-    let output_config = if let Some(debug_output_directory) =
-        std::env::var("SOLX_OUTPUT_DIR").ok().map(PathBuf::from)
-    {
-        // Debug mode via environment variable: output all IRs, always overwrite
-        std::fs::create_dir_all(debug_output_directory.as_path())?;
-        Some(solx_codegen_evm::OutputConfig::new_debug(
-            debug_output_directory,
-        ))
-    } else if let Some(ref output_directory) = arguments.output_dir {
-        // New mode: output selected IRs based on CLI flags
-        let has_ir_flags = arguments.output_ir
-            || arguments.output_evmla
-            || arguments.output_ethir
-            || arguments.output_llvm_ir
-            || arguments.output_assembly;
-        if has_ir_flags {
-            std::fs::create_dir_all(output_directory.as_path())?;
-            Some(solx_codegen_evm::OutputConfig::new(
-                output_directory.to_owned(),
-                arguments.overwrite,
-                arguments.output_ir,
-                arguments.output_evmla,
-                arguments.output_ethir,
-                arguments.output_llvm_ir,
-                arguments.output_assembly,
-            ))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let output_config = arguments.output_config()?;
 
     let metadata_hash_type = arguments
         .metadata_hash
@@ -698,4 +569,19 @@ pub fn standard_json_evm(
     };
     build.write_to_standard_json(&mut solc_output, &output_selection, true, profiler.to_vec())?;
     solc_output.write_and_exit(&output_selection);
+}
+
+///
+/// Prints the compiler version information to stdout.
+///
+pub fn print_version(frontend: &impl Frontend) -> anyhow::Result<()> {
+    writeln!(
+        std::io::stdout(),
+        "{DEFAULT_EXECUTABLE_NAME} v{}, {DEFAULT_PACKAGE_DESCRIPTION}, Front end: {}, LLVM build: {}",
+        env!("CARGO_PKG_VERSION"),
+        frontend.name(),
+        inkwell::support::get_commit_id().to_string(),
+    )?;
+    writeln!(std::io::stdout(), "Version: {}", frontend.version().long)?;
+    Ok(())
 }

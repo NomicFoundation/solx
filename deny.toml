@@ -3,7 +3,7 @@ yanked = "warn"
 
 [licenses]
 allow = [
-    "GPL-3.0",
+    "GPL-3.0-only",
     "MIT",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
@@ -20,6 +20,11 @@ allow = [
 ]
 confidence-threshold = 0.8
 unused-allowed-license = "allow"
+
+[[licenses.clarify]]
+name = "mlir-sys"
+expression = "MIT"
+license-files = [{ path = "LICENSE", hash = 0x0637b9b4 }]
 
 [licenses.private]
 ignore = false

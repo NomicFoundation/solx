@@ -449,6 +449,237 @@ impl Arguments {
     }
 
     ///
+    /// Builds an `InputSelection` from CLI output flags.
+    ///
+    /// Only flags supported by the current feature set are included.
+    /// Flags behind `#[cfg(feature = "solc")]` require the solc frontend.
+    ///
+    pub fn output_selection(&self) -> solx_standard_json::InputSelection {
+        let mut selectors = std::collections::BTreeSet::new();
+
+        if self.output_bytecode {
+            selectors.insert(solx_standard_json::InputSelector::BytecodeObject);
+        }
+        if self.output_bytecode_runtime {
+            selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeObject);
+        }
+        if self.output_assembly {
+            selectors.insert(solx_standard_json::InputSelector::BytecodeLLVMAssembly);
+            selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeLLVMAssembly);
+        }
+        if self.output_llvm_ir {
+            selectors.insert(solx_standard_json::InputSelector::BytecodeLLVMIRUnoptimized);
+            selectors.insert(solx_standard_json::InputSelector::BytecodeLLVMIR);
+            selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeLLVMIRUnoptimized);
+            selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeLLVMIR);
+        }
+        if self.output_benchmarks {
+            selectors.insert(solx_standard_json::InputSelector::Benchmarks);
+        }
+        if self.output_ast_json {
+            selectors.insert(solx_standard_json::InputSelector::AST);
+        }
+
+        if self.output_metadata {
+            selectors.insert(solx_standard_json::InputSelector::Metadata);
+        }
+
+        #[cfg(feature = "solc")]
+        {
+            if self.output_evmla {
+                selectors.insert(solx_standard_json::InputSelector::BytecodeEVMLA);
+                selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEVMLA);
+            }
+            if self.output_ethir {
+                selectors.insert(solx_standard_json::InputSelector::BytecodeEthIR);
+                selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeEthIR);
+            }
+            if self.output_debug_info {
+                selectors.insert(solx_standard_json::InputSelector::BytecodeDebugInfo);
+            }
+            if self.output_debug_info_runtime {
+                selectors.insert(solx_standard_json::InputSelector::RuntimeBytecodeDebugInfo);
+            }
+            if self.output_abi {
+                selectors.insert(solx_standard_json::InputSelector::ABI);
+            }
+            if self.output_hashes {
+                selectors.insert(solx_standard_json::InputSelector::MethodIdentifiers);
+            }
+            if self.output_userdoc {
+                selectors.insert(solx_standard_json::InputSelector::UserDocumentation);
+            }
+            if self.output_devdoc {
+                selectors.insert(solx_standard_json::InputSelector::DeveloperDocumentation);
+            }
+            if self.output_storage_layout {
+                selectors.insert(solx_standard_json::InputSelector::StorageLayout);
+            }
+            if self.output_transient_storage_layout {
+                selectors.insert(solx_standard_json::InputSelector::TransientStorageLayout);
+            }
+            if self.output_asm_solc_json {
+                selectors.insert(solx_standard_json::InputSelector::EVMLegacyAssembly);
+            }
+            if self.output_ir {
+                selectors.insert(solx_standard_json::InputSelector::Yul);
+            }
+        }
+
+        solx_standard_json::InputSelection::new(selectors)
+    }
+
+    ///
+    /// Warn about CLI output flags that require the solc frontend.
+    ///
+    /// These flags are accepted by clap but silently produce no output on
+    /// the MLIR/slang path because the underlying data comes from solc.
+    /// No-op when the `solc` feature is enabled (all flags are supported).
+    ///
+    #[cfg(feature = "solc")]
+    pub fn warn_unsupported_outputs(
+        &self,
+        _messages: &std::sync::Arc<std::sync::Mutex<Vec<solx_standard_json::OutputError>>>,
+    ) {
+    }
+
+    ///
+    /// Warn about CLI output flags that require the solc frontend.
+    ///
+    /// These flags are accepted by clap but silently produce no output on
+    /// the MLIR/slang path because the underlying data comes from solc.
+    ///
+    #[cfg(not(feature = "solc"))]
+    pub fn warn_unsupported_outputs(
+        &self,
+        messages: &std::sync::Arc<std::sync::Mutex<Vec<solx_standard_json::OutputError>>>,
+    ) {
+        let unsupported: Vec<&str> = [
+            (self.output_abi, "--abi"),
+            (self.output_hashes, "--hashes"),
+            (self.output_userdoc, "--userdoc"),
+            (self.output_devdoc, "--devdoc"),
+            (self.output_storage_layout, "--storage-layout"),
+            (
+                self.output_transient_storage_layout,
+                "--transient-storage-layout",
+            ),
+            (self.output_asm_solc_json, "--asm-solc-json"),
+            (self.output_ir, "--ir"),
+            (self.output_evmla, "--evmla"),
+            (self.output_ethir, "--ethir"),
+            (self.output_debug_info, "--debug-info"),
+            (self.output_debug_info_runtime, "--debug-info-runtime"),
+        ]
+        .into_iter()
+        .filter_map(|(flag, name)| flag.then_some(name))
+        .collect();
+
+        if unsupported.is_empty() {
+            return;
+        }
+
+        messages.lock().expect("Sync").push(
+            solx_standard_json::OutputError::new_warning(format!(
+                "The following output flags are not supported by the current frontend and will be ignored: {}",
+                unsupported.join(", ")
+            )),
+        );
+    }
+
+    ///
+    /// Resolve optimizer settings from CLI arguments and environment variables.
+    ///
+    pub fn optimizer_settings(&self) -> anyhow::Result<solx_codegen_evm::OptimizerSettings> {
+        let mut settings = match self.optimization {
+            Some(mode) => solx_codegen_evm::OptimizerSettings::try_from_cli(mode)?,
+            None => self.optimizer_settings_from_env()?,
+        };
+        if self.size_fallback || std::env::var(crate::SOLX_OPTIMIZATION_SIZE_FALLBACK_ENV).is_ok() {
+            settings.enable_fallback_to_size();
+        }
+        settings.is_verify_each_enabled = self.llvm_verify_each;
+        settings.is_debug_logging_enabled = self.llvm_debug_logging;
+        Ok(settings)
+    }
+
+    ///
+    /// Resolve optimizer settings from the `SOLX_OPTIMIZATION` environment
+    /// variable, falling back to the default (cycles) when unset.
+    ///
+    fn optimizer_settings_from_env(&self) -> anyhow::Result<solx_codegen_evm::OptimizerSettings> {
+        let Ok(optimization) = std::env::var(crate::SOLX_OPTIMIZATION_ENV) else {
+            return Ok(solx_codegen_evm::OptimizerSettings::cycles());
+        };
+        if !solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.contains(&optimization.as_str())
+        {
+            anyhow::bail!(
+                "Invalid value `{optimization}` for environment variable '{}': only values {} are supported.",
+                crate::SOLX_OPTIMIZATION_ENV,
+                solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.join(", ")
+            );
+        }
+        solx_codegen_evm::OptimizerSettings::try_from_cli(
+            optimization.chars().next().expect("Always exists"),
+        )
+    }
+
+    ///
+    /// Build the IR output configuration from CLI arguments.
+    ///
+    /// Priority: `SOLX_OUTPUT_DIR` env var (debug, all IRs) > `--output-dir` with IR flags.
+    ///
+    pub fn output_config(&self) -> anyhow::Result<Option<solx_codegen_evm::OutputConfig>> {
+        if let Some(debug_output_directory) =
+            std::env::var("SOLX_OUTPUT_DIR").ok().map(PathBuf::from)
+        {
+            std::fs::create_dir_all(debug_output_directory.as_path())?;
+            return Ok(Some(solx_codegen_evm::OutputConfig::new_debug(
+                debug_output_directory,
+            )));
+        }
+
+        let Some(ref output_directory) = self.output_dir else {
+            return Ok(None);
+        };
+
+        let has_ir_flags = self.output_ir
+            || self.output_evmla
+            || self.output_ethir
+            || self.output_llvm_ir
+            || self.output_assembly;
+        if !has_ir_flags {
+            return Ok(None);
+        }
+
+        std::fs::create_dir_all(output_directory.as_path())?;
+        Ok(Some(solx_codegen_evm::OutputConfig::new(
+            output_directory.to_owned(),
+            self.overwrite,
+            self.output_ir,
+            self.output_evmla,
+            self.output_ethir,
+            self.output_llvm_ir,
+            self.output_assembly,
+        )))
+    }
+
+    ///
+    /// Parse the `--llvm-options` string into individual options.
+    ///
+    pub fn llvm_options(&self) -> Vec<String> {
+        self.llvm_options
+            .as_ref()
+            .map(|options| {
+                options
+                    .split_whitespace()
+                    .map(|option| option.to_owned())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    ///
     /// Normalizes an input path by converting it to POSIX format.
     ///
     fn path_to_posix(path: &Path) -> anyhow::Result<PathBuf> {

@@ -5,8 +5,10 @@
 use std::io::Read;
 
 use predicates::prelude::*;
+#[cfg(feature = "solc")]
 use test_case::test_case;
 
+#[cfg(feature = "solc")]
 #[test]
 fn default() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -26,6 +28,7 @@ fn default() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn stdin() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -43,6 +46,7 @@ fn stdin() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn stdin_hyphen() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -63,6 +67,7 @@ fn stdin_hyphen() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn deploy_time_linking() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -80,6 +85,7 @@ fn deploy_time_linking() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn recursion() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -99,6 +105,7 @@ fn recursion() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn fuzzed_simple_use_expression() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -132,6 +139,7 @@ fn invalid_input() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn invalid_input_solc_error() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -217,6 +225,7 @@ fn stdin_hyphen_missing() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn empty_sources() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -251,6 +260,7 @@ fn missing_sources() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn metadata_hash_ipfs_and_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -269,6 +279,7 @@ fn metadata_hash_ipfs_and_metadata() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn metadata_hash_ipfs_no_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -287,6 +298,7 @@ fn metadata_hash_ipfs_no_metadata() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn metadata_hash_none_and_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -323,6 +335,7 @@ fn metadata_hash_none_no_metadata() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn select_evm() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -419,6 +432,7 @@ fn select_evm_deployed_bytecode_link_references() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn select_single() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -456,6 +470,7 @@ fn select_none() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test_case(crate::common::standard_json!("select_all.json"))]
 #[test_case(crate::common::standard_json!("select_all_wildcard.json"))]
 fn select_all(path: &str) -> anyhow::Result<()> {
@@ -541,6 +556,7 @@ fn select_llvm_ir() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn select_evmla_ethir() -> anyhow::Result<()> {
     crate::common::setup()?;

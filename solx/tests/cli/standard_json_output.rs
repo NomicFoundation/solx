@@ -8,6 +8,7 @@
 use predicates::prelude::*;
 use test_case::test_case;
 
+#[cfg(feature = "solc")]
 #[test]
 fn method_identifiers() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -28,6 +29,7 @@ fn method_identifiers() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn multi_contract() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -101,6 +103,7 @@ fn output_has_no_errors(path: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn yul_standard_json_output_has_contracts() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -117,6 +120,7 @@ fn yul_standard_json_output_has_contracts() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test_case(crate::common::standard_json!("metadata_hash_ipfs_and_metadata.json"), true, true)]
 #[test_case(crate::common::standard_json!("metadata_hash_ipfs_no_metadata.json"), true, false)]
 #[test_case(crate::common::standard_json!("metadata_hash_none_and_metadata.json"), false, true)]
@@ -146,6 +150,7 @@ fn metadata_hash_variants(
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn error_output_has_formatted_message() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -203,8 +208,18 @@ fn error_output_component_is_general() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test_case(crate::common::standard_json!("solidity_empty_sources.json"), "No input sources specified")]
-#[test_case(crate::common::standard_json!("solidity_missing_sources.json"), "missing field `sources`")]
+#[cfg_attr(
+    not(feature = "solc"),
+    test_case(crate::common::standard_json!("solidity_missing_sources.json"), "missing field `sources`")
+)]
+#[cfg_attr(
+    feature = "solc",
+    test_case(crate::common::standard_json!("solidity_empty_sources.json"), "No input sources specified")
+)]
+#[cfg_attr(
+    feature = "solc",
+    test_case(crate::common::standard_json!("solidity_missing_sources.json"), "missing field `sources`")
+)]
 fn error_messages(path: &str, expected_message: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -270,6 +285,7 @@ fn select_specific_bytecode(path: &str, expected_key: &str) -> anyhow::Result<()
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn via_ir_output_structure() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -343,6 +359,7 @@ fn evm_version_in_standard_json() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn storage_layout_output() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -361,6 +378,7 @@ fn storage_layout_output() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn abi_only_output() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -380,6 +398,7 @@ fn abi_only_output() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn devdoc_userdoc_output() -> anyhow::Result<()> {
     crate::common::setup()?;

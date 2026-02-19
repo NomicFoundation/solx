@@ -19,7 +19,6 @@ pub use self::arguments::test::SolxTester as SolxTesterArguments;
 pub use self::build_type::BuildType;
 pub use self::ccache_variant::CcacheVariant;
 pub use self::llvm::build as llvm_build;
-pub use self::llvm::project::Project as LLVMProject;
 pub use self::llvm::sanitizer::Sanitizer as LLVMSanitizer;
 pub use self::solc::build as solc_build;
 pub use self::test::foundry::config::Config as FoundryTestConfig;
