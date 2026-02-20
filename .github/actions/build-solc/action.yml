@@ -71,7 +71,7 @@ runs:
           --build-type ${{ inputs.cmake-build-type }} \
           --boost-version ${{ inputs.boost-version }} \
           --build-boost \
-          --ccache-variant=ccache \
+          --ccache-variant=${{ runner.os == 'Windows' && 'sccache' || 'ccache' }} \
           ${ENABLE_MLIR}
 
     - name: Show ccache stats

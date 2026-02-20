@@ -90,12 +90,6 @@ runs:
         verbose: 2
         save: ${{ github.event_name != 'pull_request' }}
 
-    - name: Set up compiler cache (sccache, Windows)
-      if: runner.os == 'Windows'
-      uses: mozilla-actions/sccache-action@v0.0.9
-      env:
-        SCCACHE_GHA_ENABLED: 'true'
-
     - name: Build LLVM
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       working-directory: ${{ inputs.working-dir }}
