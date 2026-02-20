@@ -61,6 +61,14 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
 
+      # bindgen's embedded clang needs to know it's targeting MinGW,
+      # otherwise it can't parse MinGW-specific __attribute__ extensions
+      # in stdlib.h (rust-lang/rust-bindgen#1760).
+      - name: Set bindgen target for MinGW
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
+
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
