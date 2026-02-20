@@ -17,11 +17,6 @@ inputs:
     description: 'Boost version.'
     required: false
     default: '1.83.0'
-  enable-mlir:
-    description: 'Enable MLIR support.'
-    required: false
-    default: 'false'
-
 runs:
   using: "composite"
   steps:
@@ -65,14 +60,11 @@ runs:
         CCACHE_COMPILERCHECK: "content"
       run: |
         set -x
-        [ "${{ inputs.enable-mlir }}" = "true" ] && ENABLE_MLIR="--enable-mlir"
-
         ./target/release/solx-dev solc build \
           --build-type ${{ inputs.cmake-build-type }} \
           --boost-version ${{ inputs.boost-version }} \
           --build-boost \
-          --ccache-variant=${{ runner.os == 'Windows' && 'sccache' || 'ccache' }} \
-          ${ENABLE_MLIR}
+          --ccache-variant=ccache
 
     - name: Show ccache stats
       if: always()
