@@ -69,6 +69,7 @@ jobs:
           enable-mlir: 'true'
 
       - name: Free disk space (remove LLVM build artifacts)
+        shell: bash
         run: |
           echo "Before cleanup:" && df -h .
           rm -rf target-llvm/build-final
