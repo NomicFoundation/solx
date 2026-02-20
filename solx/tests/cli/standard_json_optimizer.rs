@@ -99,6 +99,7 @@ fn size_fallback_true_produces_bytecode() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test_case('1')]
 #[test_case('2')]
 #[test_case('3')]

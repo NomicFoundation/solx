@@ -104,6 +104,16 @@ impl Error {
     }
 
     ///
+    /// Creates a new simple warning.
+    ///
+    pub fn new_warning<S>(message: S) -> Self
+    where
+        S: std::fmt::Display,
+    {
+        Self::new_warning_with_data(None, None, message, None, None)
+    }
+
+    ///
     /// Creates a new simple error with a contract data.
     ///
     pub fn new_error_contract<S>(path: Option<&str>, message: S) -> Self

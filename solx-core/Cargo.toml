@@ -28,4 +28,9 @@ solx-standard-json = { path = "../solx-standard-json" }
 solx-evm-assembly = { path = "../solx-evm-assembly" }
 solx-yul = { path = "../solx-yul" }
 solx-codegen-evm = { path = "../solx-codegen-evm" }
+solx-mlir = { path = "../solx-mlir", optional = true }
 solx-utils = { path = "../solx-utils" }
+
+[features]
+solc = []
+mlir = ["dep:solx-mlir"]

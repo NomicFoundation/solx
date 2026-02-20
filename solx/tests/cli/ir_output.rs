@@ -27,6 +27,7 @@ fn emit_llvm_to_stdout() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn evmla_to_stdout() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -43,6 +44,7 @@ fn evmla_to_stdout() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn ethir_to_stdout() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -88,6 +90,7 @@ fn emit_llvm_with_output_dir() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn evmla_with_output_dir() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -117,6 +120,7 @@ fn evmla_with_output_dir() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn ethir_with_output_dir() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -146,6 +150,7 @@ fn ethir_with_output_dir() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn multiple_ir_flags_with_output_dir() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -304,6 +309,7 @@ fn standard_json_llvm_ir_via_ir() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn standard_json_evmla_ethir() -> anyhow::Result<()> {
     crate::common::setup()?;

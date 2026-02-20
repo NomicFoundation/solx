@@ -20,10 +20,10 @@ inputs:
     description: "Enable coverage."
     required: false
     default: 'false'
-  llvm-projects:
-    description: "LLVM projects to build. Sets up LLVM_ENABLE_PROJECTS variable."
+  enable-mlir:
+    description: "Enable MLIR support in the LLVM build."
     required: false
-    default: ''
+    default: 'false'
   sanitizer:
     description: 'A sanitizer to build LLVM with. Possible values are Address, Memory, MemoryWithOrigins, Undefined, Thread, DataFlow, and Address;Undefined'
     required: false
@@ -36,10 +36,6 @@ inputs:
     description: 'Space-separated list of additional valgrind options for LLVM regression tests.'
     required: false
     default: ''
-  enable-rtti:
-    description: 'Enable RTTI for LLVM. Required when building with MLIR.'
-    required: false
-    default: 'false'
   build-type:
     description: 'LLVM build type. Possible values are `Debug`, `Release`, `RelWithDebInfo`, or `MinSizeRel`. [default: Release]'
     required: false
@@ -68,7 +64,7 @@ runs:
         KEY="llvm-${{ runner.os }}-${{ runner.arch }}"
         [ '${{ inputs.build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.build-type }}"
         [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
-        [ -n '${{ inputs.llvm-projects }}' ] && KEY="${KEY}-$(echo '${{ inputs.llvm-projects }}' | tr ' ' '-')"
+        [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
         [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
@@ -78,7 +74,8 @@ runs:
       shell: 'bash'
       run: apt update
 
-    - name: Set up compiler cache
+    - name: Set up compiler cache (ccache)
+      if: runner.os != 'Windows'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
@@ -108,8 +105,7 @@ runs:
         [ "${{ inputs.enable-tests }}" = "true" ] && ENABLE_TESTS="--enable-tests"
         [ "${{ inputs.enable-assertions }}" = "true" ] && ENABLE_ASSERTIONS="--enable-assertions"
         [ "${{ inputs.enable-coverage }}" = "true" ] && ENABLE_COVERAGE="--enable-coverage"
-        [ "${{ inputs.llvm-projects }}" != "" ] && LLVM_PROJECTS="--llvm-projects ${{ inputs.llvm-projects }}"
-        [ "${{ inputs.enable-rtti }}" = "true" ] && ENABLE_RTTI="--enable-rtti"
+        [ "${{ inputs.enable-mlir }}" = "true" ] && ENABLE_MLIR="--enable-mlir"
         [ "${{ inputs.sanitizer }}" != "" ] && SANITIZER="--sanitizer ${{ inputs.sanitizer }}"
         if [ "${{ inputs.enable-valgrind }}" = "true" ]; then
           ENABLE_VALGRIND="--enable-valgrind"
@@ -118,12 +114,18 @@ runs:
           fi
         fi
 
+        CCACHE_VARIANT=${{ runner.os == 'Windows' && 'sccache' || 'ccache' }}
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} \
-          --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${LLVM_PROJECTS} ${ENABLE_RTTI} ${SANITIZER}
+          --ccache-variant=${CCACHE_VARIANT} ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER}
 
     - name: Show ccache stats
-      if: always()
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      if: always() && runner.os != 'Windows'
+      shell: bash
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
       run: ccache --show-stats
+
+    - name: Show sccache stats
+      if: always() && runner.os == 'Windows'
+      shell: msys2 {0}
+      run: sccache --show-stats

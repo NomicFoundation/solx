@@ -2,13 +2,11 @@
 //! `solx` LLVM amd64 `linux-gnu` builder.
 //!
 
-use std::collections::HashSet;
 use std::process::Command;
 
 use crate::build_type::BuildType;
 use crate::ccache_variant::CcacheVariant;
 use crate::llvm::path::Path;
-use crate::llvm::project::Project;
 use crate::llvm::sanitizer::Sanitizer;
 
 ///
@@ -16,8 +14,7 @@ use crate::llvm::sanitizer::Sanitizer;
 ///
 pub fn build(
     build_type: BuildType,
-    llvm_projects: HashSet<Project>,
-    enable_rtti: bool,
+    enable_mlir: bool,
     enable_tests: bool,
     enable_coverage: bool,
     extra_args: Vec<String>,
@@ -54,17 +51,11 @@ pub fn build(
                 format!("-DCMAKE_BUILD_TYPE='{build_type}'").as_str(),
                 "-DCMAKE_C_COMPILER='clang'",
                 "-DCMAKE_CXX_COMPILER='clang++'",
-                format!(
-                    "-DLLVM_ENABLE_PROJECTS='{}'",
-                    llvm_projects
-                        .into_iter()
-                        .map(|project| project.to_string())
-                        .collect::<Vec<String>>()
-                        .join(";")
-                )
-                .as_str(),
                 "-DLLVM_USE_LINKER='lld'",
             ])
+            .args(crate::llvm::platforms::shared::shared_build_opts_projects(
+                enable_mlir,
+            ))
             .args(crate::llvm::platforms::shared::shared_build_opts_targets())
             .args(crate::llvm::platforms::shared::shared_build_opts_tests(
                 enable_tests,
@@ -77,9 +68,6 @@ pub fn build(
             .args(crate::llvm::platforms::shared::shared_build_opts_werror())
             .args(extra_args)
             .args(crate::llvm::platforms::shared::shared_build_opts_assertions(enable_assertions))
-            .args(crate::llvm::platforms::shared::shared_build_opts_rtti(
-                enable_rtti,
-            ))
             .args(crate::llvm::platforms::shared::shared_build_opts_sanitizers(sanitizer))
             .args(crate::llvm::platforms::shared::shared_build_opts_valgrind(
                 enable_valgrind,

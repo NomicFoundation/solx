@@ -36,7 +36,10 @@ fn ipfs() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
+    #[cfg(feature = "solc")]
     result.success().stdout(predicate::str::contains("a264"));
+    #[cfg(not(feature = "solc"))]
+    result.success().stdout(predicate::str::contains("a164"));
 
     Ok(())
 }

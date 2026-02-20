@@ -25,7 +25,14 @@ rustflags = [
 strip = true
 
 [env]
-BOOST_PREFIX = { value = "./solx-solidity/boost/lib/", relative = true, force = false }
-LLVM_SYS_211_PREFIX = { value = "./target-llvm/target-final/", relative = true, force = false }
 SOLC_PREFIX = { value = "./solx-solidity/build/", relative = true, force = false }
+BOOST_PREFIX = { value = "./solx-solidity/boost/lib/", relative = true, force = false }
+
+LLVM_SYS_211_PREFIX = { value = "./target-llvm/target-final/", relative = true, force = false }
+MLIR_SYS_210_PREFIX = { value = "./target-llvm/target-final/", relative = true, force = false }
+TABLEGEN_210_PREFIX = { value = "./target-llvm/target-final/", relative = true, force = false }
+
 CARGO_BIN_EXE_SOLX = { value = "./target/debug/solx", relative = true, force = false }
+
+[alias]
+test-slang = "test -p solx-slang -p solx-mlir -p solx --no-default-features --features slang"

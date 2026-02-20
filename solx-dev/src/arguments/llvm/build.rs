@@ -6,7 +6,6 @@ use clap::Args;
 
 use crate::BuildType;
 use crate::CcacheVariant;
-use crate::LLVMProject;
 use crate::LLVMSanitizer;
 
 ///
@@ -29,9 +28,9 @@ pub struct Build {
     #[arg(long)]
     pub clean: bool,
 
-    /// LLVM projects to build LLVM with.
-    #[arg(long, num_args = 1.., help_heading = "Build Configuration")]
-    pub llvm_projects: Vec<LLVMProject>,
+    /// Enable MLIR support in the LLVM build.
+    #[arg(long, help_heading = "Build Features")]
+    pub enable_mlir: bool,
 
     /// Extra arguments to pass to CMake.
     /// A leading backslash will be unescaped.
@@ -45,10 +44,6 @@ pub struct Build {
     //
     // Build Features
     //
-    /// Whether to build LLVM with run-time type information (RTTI) enabled.
-    #[arg(long, help_heading = "Build Features")]
-    pub enable_rtti: bool,
-
     /// Whether to build the LLVM tests.
     #[arg(long, help_heading = "Build Features")]
     pub enable_tests: bool,

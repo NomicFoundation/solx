@@ -21,6 +21,10 @@ inputs:
     description: 'Upload unit test results as a GitHub check.'
     required: false
     default: 'true'
+  cargo-test-command:
+    description: 'Cargo test command or alias to run (e.g., test, test-slang).'
+    required: false
+    default: 'test'
 
 
 runs:
@@ -56,7 +60,7 @@ runs:
         RUSTC_BOOTSTRAP: 1
       if: inputs.sanitizer == ''
       run: |
-        TEST_COMMAND="test"
+        TEST_COMMAND="${{ inputs.cargo-test-command }}"
         if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
           export LLVM_COV=$(which llvm-cov)
           export LLVM_PROFDATA=$(which llvm-profdata)
@@ -66,7 +70,8 @@ runs:
         if [[ ${RUNNER_OS} = Windows ]] || [[ ${RUNNER_OS} = Linux ]]; then
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
-        cargo build --frozen && cargo ${TEST_COMMAND} --frozen --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
+        if [ "${TEST_COMMAND}" = "test" ]; then cargo build --frozen; fi
+        cargo ${TEST_COMMAND} --frozen --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a release-results.json | grep 'failed'
         if [ $? -eq 0 ]; then
           cargo2junit < release-results.json > "release-${{ inputs.results-xml }}"
@@ -111,7 +116,8 @@ runs:
         if [ '${{ inputs.target }}' != '' ]; then
           export CARGO_BIN_EXE_SOLX="./target/${{ inputs.target }}/debug/solx"
         fi
-        cargo build --frozen ${{ steps.build-target.outputs.target }} && cargo test --frozen ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
+        if [ "${{ inputs.cargo-test-command }}" = "test" ]; then cargo build --frozen ${{ steps.build-target.outputs.target }}; fi
+        cargo ${{ inputs.cargo-test-command }} --frozen ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a debug-results.json | grep 'failed'
         if [ $? -eq 0 ]; then
           cargo2junit < debug-results.json > "debug-${{ inputs.results-xml }}"

@@ -5,9 +5,6 @@
 #![allow(clippy::upper_case_acronyms)]
 #![allow(clippy::too_many_arguments)]
 
-use std::collections::HashSet;
-use std::str::FromStr;
-
 use clap::Parser;
 
 use solx_dev::Arguments;
@@ -55,18 +52,9 @@ fn main_inner() -> anyhow::Result<()> {
                 solx_dev::exists(ccache_variant.to_string().as_str())?;
             }
 
-            let mut projects = arguments
-                .llvm_projects
-                .into_iter()
-                .map(|project| solx_dev::LLVMProject::from_str(project.to_string().as_str()))
-                .collect::<Result<HashSet<solx_dev::LLVMProject>, String>>()
-                .map_err(|project| anyhow::anyhow!("Unknown LLVM project `{project}`"))?;
-            projects.insert(solx_dev::LLVMProject::LLD);
-
             solx_dev::llvm_build(
                 arguments.build_type,
-                projects,
-                arguments.enable_rtti,
+                arguments.enable_mlir,
                 arguments.enable_tests,
                 arguments.enable_coverage,
                 extra_args_unescaped,

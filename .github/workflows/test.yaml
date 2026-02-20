@@ -53,6 +53,7 @@ jobs:
         with:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
+          enable-mlir: 'true'
 
       - name: Cargo checks
         uses: ./.github/actions/cargo-check
@@ -107,9 +108,7 @@ jobs:
         with:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
-          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
-          # llvm-projects: 'mlir lld'
-          llvm-projects: ''
+          enable-mlir: 'true'
 
       - name: Building solc
         uses: ./.github/actions/build-solc
@@ -118,7 +117,7 @@ jobs:
           working-dir: 'solx-solidity'
 
       - name: Free disk space (remove LLVM build artifacts)
-        if: runner.arch == 'ARM64'
+        shell: bash
         run: |
           echo "Before cleanup:" && df -h .
           rm -rf target-llvm/build-final
@@ -160,9 +159,6 @@ jobs:
           build-type: RelWithDebInfo
           sanitizer: ${{ env.LLVM_SANITIZER }}
           enable-assertions: 'true'
-          # TODO: enable MLIR once submodules are switched (also enable-rtti: true)
-          # llvm-projects: 'mlir lld'
-          llvm-projects: ''
 
       - name: Building solc
         uses: ./.github/actions/build-solc

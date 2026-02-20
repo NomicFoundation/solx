@@ -11,9 +11,11 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
+serde_json.workspace = true
 semver.workspace = true
 slang_solidity = "1.3"
 
-solx-core = { path = "../solx-core" }
+solx-codegen-evm = { path = "../solx-codegen-evm" }
+solx-core = { path = "../solx-core", features = ["mlir"] }
 solx-standard-json = { path = "../solx-standard-json" }
 solx-utils = { path = "../solx-utils" }
