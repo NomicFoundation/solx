@@ -130,3 +130,8 @@ runs:
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
       run: ccache --show-stats
+
+    - name: Show sccache stats
+      if: always() && runner.os == 'Windows'
+      shell: msys2 {0}
+      run: sccache --show-stats
