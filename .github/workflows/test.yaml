@@ -53,6 +53,7 @@ jobs:
         with:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
+          enable-mlir: 'true'
 
       - name: Cargo checks
         uses: ./.github/actions/cargo-check
@@ -107,6 +108,7 @@ jobs:
         with:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
+          enable-mlir: 'true'
 
       - name: Building solc
         uses: ./.github/actions/build-solc

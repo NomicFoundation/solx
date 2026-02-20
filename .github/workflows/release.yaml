@@ -107,6 +107,7 @@ jobs:
         with:
           build-type: Release
           enable-assertions: 'false'
+          enable-mlir: 'false'
 
       - name: Building solc
         uses: ./.github/actions/build-solc
