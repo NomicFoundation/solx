@@ -74,7 +74,8 @@ runs:
       shell: 'bash'
       run: apt update
 
-    - name: Set up compiler cache
+    - name: Set up compiler cache (ccache)
+      if: runner.os != 'Windows'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
@@ -88,6 +89,12 @@ runs:
         max-size: "2G"
         verbose: 2
         save: ${{ github.event_name != 'pull_request' }}
+
+    - name: Set up compiler cache (sccache, Windows)
+      if: runner.os == 'Windows'
+      uses: mozilla-actions/sccache-action@v0.0.9
+      env:
+        SCCACHE_GHA_ENABLED: 'true'
 
     - name: Build LLVM
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
@@ -113,12 +120,13 @@ runs:
           fi
         fi
 
+        CCACHE_VARIANT=${{ runner.os == 'Windows' && 'sccache' || 'ccache' }}
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} \
-          --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER}
+          --ccache-variant=${CCACHE_VARIANT} ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER}
 
     - name: Show ccache stats
-      if: always()
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      if: always() && runner.os != 'Windows'
+      shell: bash
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
       run: ccache --show-stats
