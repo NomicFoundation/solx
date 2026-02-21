@@ -21,6 +21,10 @@ inputs:
     description: 'Upload unit test results as a GitHub check.'
     required: false
     default: 'true'
+  check-name:
+    description: 'GitHub check name for published test results.'
+    required: false
+    default: 'Unit Tests Results'
   cargo-test-command:
     description: 'Cargo test command or alias to run (e.g., test, test-slang).'
     required: false
@@ -127,7 +131,7 @@ runs:
       if: (success() || failure()) && runner.os == 'Linux' && inputs.upload-results == 'true'
       uses: EnricoMi/publish-unit-test-result-action@27d65e188ec43221b20d26de30f4892fad91df2f # v2
       with:
-        check_name: ${{ runner.os }} ${{ runner.arch }} Unit Tests Results
+        check_name: ${{ runner.os }} ${{ runner.arch }} ${{ inputs.check-name }}
         files: '*${{ inputs.results-xml }}'
         action_fail_on_inconclusive: true
         comment_mode: off
@@ -136,7 +140,7 @@ runs:
       if: (success() || failure()) && runner.os == 'macOS' && inputs.upload-results == 'true'
       uses: EnricoMi/publish-unit-test-result-action/macos@27d65e188ec43221b20d26de30f4892fad91df2f # v2
       with:
-        check_name: ${{ runner.os }} ${{ runner.arch }} Unit Tests Results
+        check_name: ${{ runner.os }} ${{ runner.arch }} ${{ inputs.check-name }}
         files: '*${{ inputs.results-xml }}'
         action_fail_on_inconclusive: true
         comment_mode: off
@@ -145,7 +149,7 @@ runs:
       if: (success() || failure()) && runner.os == 'Windows' && inputs.upload-results == 'true'
       uses: EnricoMi/publish-unit-test-result-action/windows@27d65e188ec43221b20d26de30f4892fad91df2f # v2
       with:
-        check_name: ${{ runner.os }} ${{ runner.arch }} Unit Tests Results
+        check_name: ${{ runner.os }} ${{ runner.arch }} ${{ inputs.check-name }}
         files: '*${{ inputs.results-xml }}'
         action_fail_on_inconclusive: true
         comment_mode: off
