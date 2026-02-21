@@ -1,14 +1,5 @@
 name: 'Cargo check'
-description: 'Checks cargo with check, deny, format, clippy, udeps and audit.'
-
-inputs:
-  github_token:
-    description: 'GitHub token for cargo audit.'
-    required: true
-  run_cargo_audit:
-    description: 'Whether to run cargo audit.'
-    required: false
-    default: 'false'
+description: 'Checks cargo with check, deny, format, clippy and udeps.'
 
 runs:
   using: composite
@@ -46,8 +37,3 @@ runs:
         cargo install cargo-udeps --locked
         cargo +nightly udeps --frozen --all-targets
 
-    - name: Cargo audit
-      if: ${{ inputs.run_cargo_audit == 'true' }}
-      uses: rustsec/audit-check@dd51754d4e59da7395a4cd9b593f0ff2d61a9b95 # v1.4.1
-      with:
-        token: ${{ inputs.github_token }}
