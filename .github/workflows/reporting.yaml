@@ -1,0 +1,274 @@
+name: CI Reporting
+
+on:
+  workflow_run:
+    workflows: ["Tests", "Code coverage", "Integration Tests"]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  pull-requests: write
+
+jobs:
+
+  # Publish unit test results as GitHub Checks (triggered by "Tests" workflow)
+  test-results:
+    if: github.event.workflow_run.name == 'Tests'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download event file
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        continue-on-error: true
+        with:
+          pattern: event-file-*
+          merge-multiple: true
+          path: event-file
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download test results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        continue-on-error: true
+        with:
+          pattern: test-results-*
+          path: test-results
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Linux X64 test results
+        if: hashFiles('test-results/test-results-Linux x86 gnu/*.xml') != ''
+        uses: EnricoMi/publish-unit-test-result-action@27d65e188ec43221b20d26de30f4892fad91df2f # v2
+        with:
+          check_name: Linux X64 Unit Tests Results
+          commit: ${{ github.event.workflow_run.head_sha }}
+          event_file: event-file/event.json
+          event_name: ${{ github.event.workflow_run.event }}
+          files: 'test-results/test-results-Linux x86 gnu/*.xml'
+          action_fail_on_inconclusive: true
+          comment_mode: off
+
+      - name: Publish Linux ARM64 test results
+        if: hashFiles('test-results/test-results-Linux ARM64 gnu/*.xml') != ''
+        uses: EnricoMi/publish-unit-test-result-action@27d65e188ec43221b20d26de30f4892fad91df2f # v2
+        with:
+          check_name: Linux ARM64 Unit Tests Results
+          commit: ${{ github.event.workflow_run.head_sha }}
+          event_file: event-file/event.json
+          event_name: ${{ github.event.workflow_run.event }}
+          files: 'test-results/test-results-Linux ARM64 gnu/*.xml'
+          action_fail_on_inconclusive: true
+          comment_mode: off
+
+      - name: Publish macOS X64 test results
+        if: hashFiles('test-results/test-results-MacOS x86/*.xml') != ''
+        uses: EnricoMi/publish-unit-test-result-action@27d65e188ec43221b20d26de30f4892fad91df2f # v2
+        with:
+          check_name: macOS X64 Unit Tests Results
+          commit: ${{ github.event.workflow_run.head_sha }}
+          event_file: event-file/event.json
+          event_name: ${{ github.event.workflow_run.event }}
+          files: 'test-results/test-results-MacOS x86/*.xml'
+          action_fail_on_inconclusive: true
+          comment_mode: off
+
+      - name: Publish macOS ARM64 test results
+        if: hashFiles('test-results/test-results-MacOS arm64/*.xml') != ''
+        uses: EnricoMi/publish-unit-test-result-action@27d65e188ec43221b20d26de30f4892fad91df2f # v2
+        with:
+          check_name: macOS ARM64 Unit Tests Results
+          commit: ${{ github.event.workflow_run.head_sha }}
+          event_file: event-file/event.json
+          event_name: ${{ github.event.workflow_run.event }}
+          files: 'test-results/test-results-MacOS arm64/*.xml'
+          action_fail_on_inconclusive: true
+          comment_mode: off
+
+      - name: Publish Windows X64 test results
+        if: hashFiles('test-results/test-results-Windows/*.xml') != ''
+        uses: EnricoMi/publish-unit-test-result-action@27d65e188ec43221b20d26de30f4892fad91df2f # v2
+        with:
+          check_name: Windows X64 Unit Tests Results
+          commit: ${{ github.event.workflow_run.head_sha }}
+          event_file: event-file/event.json
+          event_name: ${{ github.event.workflow_run.event }}
+          files: 'test-results/test-results-Windows/*.xml'
+          action_fail_on_inconclusive: true
+          comment_mode: off
+
+      - name: Publish sanitizer test results
+        if: hashFiles('test-results/test-results-sanitizer/*.xml') != ''
+        uses: EnricoMi/publish-unit-test-result-action@27d65e188ec43221b20d26de30f4892fad91df2f # v2
+        with:
+          check_name: Sanitizer Unit Tests Results
+          commit: ${{ github.event.workflow_run.head_sha }}
+          event_file: event-file/event.json
+          event_name: ${{ github.event.workflow_run.event }}
+          files: 'test-results/test-results-sanitizer/*.xml'
+          action_fail_on_inconclusive: true
+          comment_mode: off
+
+  # Post coverage PR comment and upload to Codecov (triggered by "Code coverage" workflow)
+  coverage-report:
+    if: github.event.workflow_run.name == 'Code coverage'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download event file
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        continue-on-error: true
+        with:
+          name: event-file
+          path: event-file
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download coverage summary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        continue-on-error: true
+        with:
+          name: coverage-summary-md
+          path: coverage-summary
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download LCOV
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        continue-on-error: true
+        with:
+          name: coverage-lcov
+          path: coverage-lcov
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract PR number
+        id: pr
+        run: |
+          PR=""
+          if [ -f event-file/event.json ]; then
+            PR=$(jq -r '.pull_request.number // empty' event-file/event.json)
+          fi
+          if [ -z "$PR" ]; then
+            PR="${{ github.event.workflow_run.pull_requests[0].number }}"
+          fi
+          echo "number=${PR}" >> "$GITHUB_OUTPUT"
+
+      - name: Read coverage summary
+        id: summary
+        if: hashFiles('coverage-summary/coverage-summary.md') != ''
+        run: |
+          {
+            echo "content<<COVERAGE_EOF"
+            cat coverage-summary/coverage-summary.md
+            echo "COVERAGE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post PR coverage comment
+        if: steps.pr.outputs.number != '' && steps.summary.outputs.content != ''
+        uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2
+        with:
+          issue: ${{ steps.pr.outputs.number }}
+          message-id: 'coverage-summary'
+          message: |
+            ### Coverage Summary
+
+            ${{ steps.summary.outputs.content }}
+
+            [Codecov Report](https://app.codecov.io/gh/${{ github.repository }}/pull/${{ steps.pr.outputs.number }}) | [HTML Report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}#artifacts) | [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }})
+
+      - name: Upload coverage to Codecov
+        if: hashFiles('coverage-lcov/codecov.lcov') != ''
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage-lcov/codecov.lcov
+          slug: ${{ github.repository }}
+          fail_ci_if_error: false
+          override_commit: ${{ github.event.workflow_run.head_sha }}
+          override_pr: ${{ steps.pr.outputs.number }}
+
+  # Post integration test report comments (triggered by "Integration Tests" workflow)
+  integration-report:
+    if: github.event.workflow_run.name == 'Integration Tests'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Download event file
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        continue-on-error: true
+        with:
+          name: event-file
+          path: event-file
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract PR number
+        id: pr
+        run: |
+          PR=""
+          if [ -f event-file/event.json ]; then
+            PR=$(jq -r '.pull_request.number // empty' event-file/event.json)
+          fi
+          if [ -z "$PR" ]; then
+            PR="${{ github.event.workflow_run.pull_requests[0].number }}"
+          fi
+          echo "number=${PR}" >> "$GITHUB_OUTPUT"
+
+      - name: Query artifact URLs
+        id: artifacts
+        run: |
+          REPO="${{ github.repository }}"
+          RUN_ID="${{ github.event.workflow_run.id }}"
+          ARTIFACTS=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" --jq '.artifacts')
+          has_artifact() {
+            echo "$ARTIFACTS" | jq -e --arg name "$1" '.[] | select(.name == $name)' > /dev/null 2>&1
+          }
+          get_url() {
+            echo "$ARTIFACTS" | jq -r --arg name "$1" '.[] | select(.name == $name) | .archive_download_url'
+          }
+          if has_artifact "solx-tester-report"; then
+            echo "has_solx_tester=true" >> "$GITHUB_OUTPUT"
+            echo "solx_tester_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${RUN_ID}" >> "$GITHUB_OUTPUT"
+          fi
+          if has_artifact "hardhat-report"; then
+            echo "has_hardhat=true" >> "$GITHUB_OUTPUT"
+            echo "hardhat_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${RUN_ID}" >> "$GITHUB_OUTPUT"
+          fi
+          if has_artifact "foundry-report"; then
+            echo "has_foundry=true" >> "$GITHUB_OUTPUT"
+            echo "foundry_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${RUN_ID}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post solx-tester report comment
+        if: steps.pr.outputs.number != '' && steps.artifacts.outputs.has_solx_tester == 'true'
+        uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2
+        with:
+          issue: ${{ steps.pr.outputs.number }}
+          message-id: 'solx-tester-report'
+          message: |
+            **solx Tester Report**
+
+            [**Download from workflow run**](${{ steps.artifacts.outputs.solx_tester_url }})
+
+      - name: Post Hardhat report comment
+        if: steps.pr.outputs.number != '' && steps.artifacts.outputs.has_hardhat == 'true'
+        uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2
+        with:
+          issue: ${{ steps.pr.outputs.number }}
+          message-id: 'hardhat-report'
+          message: |
+            **Hardhat Projects Report**
+
+            [**Download from workflow run**](${{ steps.artifacts.outputs.hardhat_url }})
+
+      - name: Post Foundry report comment
+        if: steps.pr.outputs.number != '' && steps.artifacts.outputs.has_foundry == 'true'
+        uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2
+        with:
+          issue: ${{ steps.pr.outputs.number }}
+          message-id: 'foundry-report'
+          message: |
+            **Foundry Projects Report**
+
+            [**Download from workflow run**](${{ steps.artifacts.outputs.foundry_url }})

@@ -21,8 +21,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  checks: write
 
 # Cancel the workflow if any new changes pushed to a feature branch or the trunk
 concurrency:
@@ -59,8 +57,6 @@ jobs:
 
       - name: Cargo checks
         uses: ./.github/actions/cargo-check
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   # Build and run regression tests
   build-and-test:
@@ -132,6 +128,24 @@ jobs:
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
         with:
           target: ${{ matrix.target || '' }}
+          upload-results: 'false'
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: test-results-${{ matrix.name }}
+          path: |
+            release-unit-tests-results.xml
+            debug-unit-tests-results.xml
+          if-no-files-found: ignore
+
+      - name: Upload event file
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: event-file-${{ matrix.name }}
+          path: ${{ github.event_path }}
 
       - name: Free disk space (remove default build artifacts before slang tests)
         if: contains(github.event.pull_request.labels.*.name, 'ci:slang')
@@ -203,6 +217,17 @@ jobs:
         with:
           target: ${{ env.TARGET }}
           sanitizer: ${{ env.RUST_SANITIZER }}
+          upload-results: 'false'
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: test-results-sanitizer
+          path: |
+            release-unit-tests-results.xml
+            debug-unit-tests-results.xml
+          if-no-files-found: ignore
 
   # Special job that allows some of the jobs to be skipped or failed
   # requiring others to be successful

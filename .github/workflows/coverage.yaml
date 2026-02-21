@@ -26,9 +26,6 @@ jobs:
   coverage:
     needs: label-check
     runs-on: solx-linux-amd64
-    permissions:
-      contents: read
-      pull-requests: write
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
     env:
@@ -230,28 +227,27 @@ jobs:
             echo "COVERAGE_EOF"
           } >> "${GITHUB_OUTPUT}"
 
-      - name: Post PR coverage summary
-        uses: mshick/add-pr-comment@b8f338c590a895d50bcbfa6c5859251edc8952fc # v2
-        with:
-          message-id: 'coverage-summary'
-          message: |
-            ### Coverage Summary
-
-            ${{ steps.coverage-summary.outputs.summary }}
-
-            [Codecov Report](https://app.codecov.io/gh/${{ github.repository }}/pull/${{ github.event.pull_request.number }}) | [HTML Report](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts) | [Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: 'Coverage integration tests HTML'
           path: ${{ env.OUTPUT_HTML_DIR }}
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
-        if: (success() || failure())
+      - name: Upload LCOV for reporting
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: 'llvm/codecov.lcov'
-          slug: ${{ github.repository }}
-          fail_ci_if_error: false
+          name: coverage-lcov
+          path: llvm/codecov.lcov
+
+      - name: Upload coverage summary for reporting
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coverage-summary-md
+          path: coverage-summary.md
+
+      - name: Upload event file
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: event-file
+          path: ${{ github.event_path }}
