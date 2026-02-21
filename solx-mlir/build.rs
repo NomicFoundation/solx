@@ -16,4 +16,12 @@ fn main() {
     println!("cargo:rustc-link-lib=static=lldC");
     println!("cargo:rustc-link-lib=static=lldCommon");
     println!("cargo:rustc-link-lib=static=lldELF");
+
+    // Compile stub definitions for the six MLIR ExecutionEngine C API symbols
+    // that melior references unconditionally. See mlir_execution_engine_stubs.c
+    // for the full explanation.
+    println!("cargo:rerun-if-changed=mlir_execution_engine_stubs.c");
+    cc::Build::new()
+        .file("mlir_execution_engine_stubs.c")
+        .compile("mlir_execution_engine_stubs");
 }

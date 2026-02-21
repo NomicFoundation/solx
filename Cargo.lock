@@ -4324,6 +4324,7 @@ dependencies = [
 name = "solx-mlir"
 version = "0.1.4"
 dependencies = [
+ "cc",
  "hex",
  "inkwell",
  "melior",
