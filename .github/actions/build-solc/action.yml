@@ -44,7 +44,7 @@ runs:
         key: solc-${{ runner.os }}-${{ runner.arch }}
         restore-keys: solc-${{ runner.os }}-${{ runner.arch }}
         append-timestamp: true
-        max-size: "2G"
+        max-size: "10G"
         verbose: 2
         save: ${{ github.event_name != 'pull_request' }}
 

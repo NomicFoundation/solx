@@ -3,6 +3,8 @@ name: Tests
 # Execute workflow for each PR and with each merge to the trunk
 on:
   pull_request:
+    # `labeled` allows slang tests to run when the ci:slang label is added
+    types: [opened, synchronize, reopened, labeled]
     paths-ignore:
       - "docs/**"
       - "**/*.md"
@@ -116,11 +118,11 @@ jobs:
           cmake-build-type: RelWithDebInfo
           working-dir: 'solx-solidity'
 
-      - name: Free disk space (remove LLVM build artifacts)
+      - name: Free disk space (remove LLVM source and build artifacts)
         shell: bash
         run: |
           echo "Before cleanup:" && df -h .
-          rm -rf target-llvm/build-final
+          rm -rf solx-llvm target-llvm/build-final
           echo "After cleanup:" && df -h .
 
       - name: Run tests
@@ -130,6 +132,33 @@ jobs:
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
         with:
           target: ${{ matrix.target || '' }}
+
+      - name: Free disk space (remove default build artifacts before slang tests)
+        if: contains(github.event.pull_request.labels.*.name, 'ci:slang')
+        shell: bash
+        run: |
+          echo "Before cleanup:" && df -h .
+          rm -rf target solx-solidity/build solx-solidity/boost
+          echo "After cleanup:" && df -h .
+
+      # bindgen's embedded clang needs to know it's targeting MinGW,
+      # otherwise it can't parse MinGW-specific __attribute__ extensions
+      # in stdlib.h (rust-lang/rust-bindgen#1760).
+      - name: Set bindgen target for MinGW
+        if: runner.os == 'Windows' && contains(github.event.pull_request.labels.*.name, 'ci:slang')
+        shell: bash
+        run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
+
+      - name: Run slang tests
+        if: contains(github.event.pull_request.labels.*.name, 'ci:slang')
+        uses: ./.github/actions/rust-unit-tests
+        env:
+          CARGO_TARGET_DIR: target-slang
+        with:
+          target: ${{ matrix.target || '' }}
+          cargo-test-command: 'test-slang'
+          results-xml: 'slang-unit-tests-results.xml'
+          check-name: 'Slang Unit Tests Results'
 
   # Run tests with address sanitizer (label-gated)
   sanitizer:
