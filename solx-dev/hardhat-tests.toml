@@ -27,8 +27,8 @@
 #   disabled = true/false           # Whether to skip this comparison
 
 [compilers.solc]
-name = "00.solc-0.8.33"
-path = "./temp-compilers/solc-0.8.33"
+name = "00.solc-0.8.34"
+path = "./temp-compilers/solc-0.8.34"
 description = "solc the latest downloaded from the official repo"
 disabled = true
 
@@ -79,12 +79,12 @@ disabled = false
 
 [[comparisons]]
 left = "03.solx-legacy"
-right = "00.solc-0.8.33-legacy"
+right = "00.solc-0.8.34-legacy"
 disabled = false
 
 [[comparisons]]
 left = "03.solx-viaIR"
-right = "00.solc-0.8.33-viaIR"
+right = "00.solc-0.8.34-viaIR"
 disabled = false
 
 [projects.hardhat-v2]

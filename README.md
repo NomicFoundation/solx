@@ -15,7 +15,7 @@
 - [Foundry projects](./solx-dev/foundry-tests.toml)
 - [Hardhat projects](./solx-dev/hardhat-tests.toml)
 - [DeFi protocols](./tests/solidity/complex/defi): UniswapV2, UniswapV3, Mooniswap, StarkEx
-- [Semantic tests](https://github.com/NomicFoundation/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests) from the **solc** repository
+- [Semantic tests](https://github.com/NomicFoundation/solx-solidity/tree/0.8.34/test/libsolidity/semanticTests) from the **solc** repository
 - [Additional tests](./tests/solidity) written by the **solx** team
 
 ## Documentation
@@ -25,7 +25,7 @@ To build the book, follow these [instructions](./docs/README.md).
 
 See also:
 
-- [Solidity Documentation](https://docs.soliditylang.org/en/v0.8.33/)
+- [Solidity Documentation](https://docs.soliditylang.org/en/v0.8.34/)
 - [LLVM Documentation](https://llvm.org/docs/)
 
 ## Installation
@@ -73,7 +73,7 @@ For reference, see [llvm-sys](https://crates.io/crates/llvm-sys) and [Local LLVM
 - All other crates are licensed under the terms of either
   - Apache License, Version 2.0 ([LICENSE-APACHE](./solx-standard-json/LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
   - MIT license ([LICENSE-MIT](./solx-standard-json/LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
-- [`solx-solidity`](https://github.com/NomicFoundation/solx-solidity/) is licensed under [GNU General Public License v3.0](https://github.com/NomicFoundation/solx-solidity/blob/0.8.33/LICENSE.txt)
+- [`solx-solidity`](https://github.com/NomicFoundation/solx-solidity/) is licensed under [GNU General Public License v3.0](https://github.com/NomicFoundation/solx-solidity/blob/0.8.34/LICENSE.txt)
 - [`solx-llvm`](https://github.com/matter-labs/solx-llvm) is licensed under the terms of Apache License, Version 2.0 with LLVM Exceptions, ([LICENSE](https://github.com/matter-labs/solx-llvm/blob/main/LICENSE) or https://llvm.org/LICENSE.txt)
 
 Additionally, this repository vendors tests and test projects that preserve their original licenses:

@@ -1,7 +1,7 @@
 [submodule "solidity"]
 	path = solx-solidity
 	url = https://github.com/NomicFoundation/solx-solidity
-	branch = 0.8.33
+	branch = 0.8.34
 [submodule "solx-llvm"]
 	path = solx-llvm
 	url = https://github.com/matter-labs/solx-llvm
