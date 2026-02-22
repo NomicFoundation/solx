@@ -1,0 +1,446 @@
+name: "Release v2 (3-stage: prepare / review / publish)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git REF to use for manual pre-release. Keep it empty to use the workflow branch."
+        required: false
+        type: string
+      prerelease_suffix:
+        description: "Suffix which has been used for manual pre-release name"
+        required: false
+        type: string
+        default: "notag"
+      release_macos_amd64:
+        description: "Release for MacOS amd64?"
+        required: false
+        type: boolean
+        default: true
+      release_macos_arm64:
+        description: "Release for MacOS arm64?"
+        required: false
+        type: boolean
+        default: true
+      release_linux_amd64_gnu:
+        description: "Release for Linux amd64 gnu?"
+        required: false
+        type: boolean
+        default: true
+      release_linux_arm64_gnu:
+        description: "Release for Linux arm64 gnu?"
+        required: false
+        type: boolean
+        default: true
+      release_windows_amd64:
+        description: "Release for Windows amd64?"
+        required: false
+        type: boolean
+        default: true
+
+# Zero permissions baseline — each job declares only what it needs.
+permissions: {}
+
+jobs:
+
+  # ───────────────────────────────────────────────
+  # Stage 0: Build matrix & platform binaries
+  # ───────────────────────────────────────────────
+
+  prepare-matrix:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.prepare-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          submodules: 'recursive'
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
+
+      - name: Prepare matrix
+        id: prepare-matrix
+        run: |
+          # Define general matrix parameters
+          WINDOWS='{"name":"Windows","runner":"windows-2025","release-suffix":"windows-amd64-gnu"}'
+          MACOS_AMD64='{"name":"MacOS-x86","runner":"macos-15-intel","release-suffix":"macosx-amd64"}'
+          MACOS_ARM64='{"name":"MacOS-arm64","runner":"macos-15","release-suffix":"macosx-arm64"}'
+          LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"ubuntu-24.04","image":"ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
+          LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"ubuntu-24.04-arm","image":"ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
+          # Disable platforms for non-tag builds if user requested
+          if [ ${GITHUB_REF_TYPE} != tag ]; then
+            [ ${{ github.event.inputs.release_windows_amd64 }} != true ] && WINDOWS=
+            [ ${{ github.event.inputs.release_macos_amd64 }} != true ] && MACOS_AMD64=
+            [ ${{ github.event.inputs.release_macos_arm64 }} != true ] && MACOS_ARM64=
+            [ ${{ github.event.inputs.release_linux_amd64_gnu }} != true ] && LINUX_AMD64_GNU=
+            [ ${{ github.event.inputs.release_linux_arm64_gnu }} != true ] && LINUX_ARM64_GNU=
+          fi
+          PLATFORMS=(${WINDOWS} ${MACOS_AMD64} ${MACOS_ARM64} ${LINUX_AMD64_GNU} ${LINUX_ARM64_GNU})
+          echo "matrix={ \"include\": [ $(IFS=, ; echo "${PLATFORMS[*]}") ] }" | tee -a "${GITHUB_OUTPUT}"
+
+  build:
+    permissions:
+      contents: read
+    needs: prepare-matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare-matrix.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ${{ matrix.image || '' }} # Special workaround to allow matrix builds with optional container
+    name: ${{ matrix.name }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          submodules: 'recursive'
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
+
+      # This step is required to checkout submodules
+      # that are disabled in .gitmodules config
+      - name: Checkout submodules
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --force --depth=1 --recursive --checkout
+
+      - name: Prepare Windows env
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/prepare-msys
+
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: Release
+          enable-assertions: 'false'
+          enable-mlir: 'false'
+
+      - name: Building solc
+        uses: ./.github/actions/build-solc
+        with:
+          cmake-build-type: 'Release'
+          working-dir: 'solx-solidity'
+
+      - name: Free disk space (remove LLVM build artifacts)
+        shell: bash
+        run: |
+          echo "Before cleanup:" && df -h .
+          rm -rf target-llvm/build-final
+          echo "After cleanup:" && df -h .
+
+      - name: Build solx
+        uses: ./.github/actions/build-rust
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        with:
+          exec_name: 'solx'
+          target: ${{ matrix.target }}
+          release-suffix: ${{ format('{0}-{1}', matrix.release-suffix, inputs.prerelease_suffix || format('v{0}', github.ref_name)) }}
+
+  get-previous-release:
+    permissions:
+      contents: read
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.latest_release.outputs.tag }}
+    steps:
+
+      - name: Checkout source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
+
+      # Gets the tag of the published release marked `latest`
+      # ignoring all intermediate releases and tags for manual releases
+      - name: Get latest release tag
+        id: latest_release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag=$(gh release view --json tagName --jq .tagName)
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+  # ───────────────────────────────────────────────
+  # Stage 1: Prepare — bundle all artifacts
+  # ───────────────────────────────────────────────
+
+  prepare:
+    permissions:
+      contents: read
+    name: Prepare release bundle
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
+    needs: [build, get-previous-release]
+    if: |
+      always() &&
+      (needs.get-previous-release.result == 'skipped' || needs.get-previous-release.result == 'success') &&
+      needs.build.result == 'success'
+    outputs:
+      tarball_name: ${{ steps.bundle.outputs.tarball_name }}
+      release_title: ${{ steps.release.outputs.release_title }}
+      version_or_sha: ${{ steps.release.outputs.version_or_sha }}
+      full_sha: ${{ steps.release.outputs.full_sha }}
+    steps:
+
+      - name: Checkout source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
+
+      - name: Download artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release*
+          path: releases
+
+      - name: Identify release name
+        id: release
+        run: |
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
+            VERSION_OR_SHA=$(git rev-parse --short HEAD)
+            echo "version_or_sha=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
+            echo "full_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+            echo "release_title=prerelease-${VERSION_OR_SHA}-${{ github.event.inputs.prerelease_suffix }}" >> $GITHUB_OUTPUT
+          else
+            VERSION_OR_SHA="${GITHUB_REF#refs/tags/}"
+            echo "version_or_sha=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
+            echo "release_title=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check release version
+        if: github.ref_type == 'tag'
+        run: |
+          TAG="${{ steps.release.outputs.version_or_sha }}"
+          CARGO_PACKAGE_VERSION="$(cargo pkgid --manifest-path solx/Cargo.toml | cut -d "#" -f2)"
+          # All versions must be equal
+          if [ "${CARGO_PACKAGE_VERSION}" != "${TAG}" ]; then
+            echo "Version mismatch: TAG=${TAG}, CARGO_PACKAGE_VERSION=${CARGO_PACKAGE_VERSION}"
+            echo "Please update the version in Cargo.toml and tag the commit with the same version."
+            exit 1
+          fi
+
+      - name: Prepare universal macOS binary
+        if: github.ref_type == 'tag' || (inputs.release_macos_amd64 && inputs.release_macos_arm64)
+        env:
+          MACOSX_UNIVERSAL_SUFFIX: "macosx"
+          RELEASE_SUFFIX: ${{ inputs.prerelease_suffix || format('v{0}', github.ref_name) }}
+        run: |
+          OUTDIR="./releases/release-${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}/${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}"
+          mkdir -p "${OUTDIR}"
+          OUTPUT="${OUTDIR}/solx-${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}"
+          llvm-lipo -create -output "${OUTPUT}" \
+            ./releases/release-macosx-amd64-${RELEASE_SUFFIX}/macosx-amd64-${RELEASE_SUFFIX}/solx-macosx-amd64-${RELEASE_SUFFIX} \
+            ./releases/release-macosx-arm64-${RELEASE_SUFFIX}/macosx-arm64-${RELEASE_SUFFIX}/solx-macosx-arm64-${RELEASE_SUFFIX}
+          rm -f ./releases/release-macosx-amd64-${RELEASE_SUFFIX}/macosx-amd64-${RELEASE_SUFFIX}/solx-macosx-amd64-${RELEASE_SUFFIX} \
+            ./releases/release-macosx-arm64-${RELEASE_SUFFIX}/macosx-arm64-${RELEASE_SUFFIX}/solx-macosx-arm64-${RELEASE_SUFFIX}
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd releases
+          find . -type f -not -name '*.sha256' | sort | while read -r file; do
+            sha256sum "${file}" > "${file}.sha256"
+            echo "Checksum: $(cat "${file}.sha256")"
+          done
+
+      - name: Bundle release artifacts
+        id: bundle
+        run: |
+          TARBALL="solx-release-bundle.tar.gz"
+          tar czf "${TARBALL}" -C releases .
+          echo "tarball_name=${TARBALL}" >> $GITHUB_OUTPUT
+          echo "Bundle size: $(du -h "${TARBALL}" | cut -f1)"
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: solx-release-bundle
+          path: solx-release-bundle.tar.gz
+          retention-days: 2
+
+  # ───────────────────────────────────────────────
+  # Stage 2: Review — validate the bundle
+  # ───────────────────────────────────────────────
+
+  review:
+    permissions:
+      contents: read
+    name: Review release bundle
+    needs: [prepare]
+    runs-on: ubuntu-24.04
+    steps:
+
+      - name: Download release bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: solx-release-bundle
+
+      - name: Extract bundle
+        run: |
+          mkdir -p bundle
+          tar xzf solx-release-bundle.tar.gz -C bundle
+
+      - name: List all files (audit trail)
+        run: |
+          echo "=== Release bundle contents ==="
+          find bundle -type f | sort
+
+      - name: Validate binary count
+        run: |
+          BINARY_COUNT=$(find bundle -type f -not -name '*.sha256' | wc -l)
+          echo "Found ${BINARY_COUNT} binary file(s)"
+          if [ "${BINARY_COUNT}" -lt 1 ]; then
+            echo "ERROR: Expected at least 1 binary in the release bundle"
+            exit 1
+          fi
+
+      - name: Verify SHA256 checksums
+        run: |
+          cd bundle
+          FAIL=0
+          find . -name '*.sha256' | sort | while read -r checksum_file; do
+            echo "Verifying: ${checksum_file}"
+            if ! sha256sum --check "${checksum_file}"; then
+              echo "FAILED: ${checksum_file}"
+              FAIL=1
+            fi
+          done
+          if [ "${FAIL}" -ne 0 ]; then
+            echo "ERROR: One or more checksums failed verification"
+            exit 1
+          fi
+
+      - name: Display binary sizes
+        run: |
+          echo "=== Binary sizes ==="
+          find bundle -type f -not -name '*.sha256' -exec ls -lh {} \; | awk '{print $5, $9}'
+
+  # ───────────────────────────────────────────────
+  # Stage 3: Publish (DRY-RUN)
+  # ───────────────────────────────────────────────
+
+  publish:
+    permissions:
+      contents: read
+    name: "Publish release (dry-run)"
+    needs: [prepare, review, get-previous-release]
+    if: |
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.review.result == 'success' &&
+      (needs.get-previous-release.result == 'skipped' || needs.get-previous-release.result == 'success')
+    environment: release
+    runs-on: ubuntu-24.04
+    steps:
+
+      - name: Checkout source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
+
+      - name: Download release bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: solx-release-bundle
+
+      - name: Extract bundle
+        run: |
+          mkdir -p releases
+          tar xzf solx-release-bundle.tar.gz -C releases
+
+      - name: Build changelog
+        if: github.ref_type == 'tag'
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@c9dc8369bccbc41e0ac887f8fd674f5925d315f7 # v5
+        with:
+          fromTag: ${{ needs.get-previous-release.outputs.tag || '' }}
+          toTag: ${{ github.ref_name }}
+          mode: "COMMIT"
+          configurationJson: |
+            {
+              "template": "# 📝 Changelog\n\n#{{CHANGELOG}}",
+              "categories": [
+                {
+                  "title": "## ✨ Features",
+                  "labels": ["feat", "feature"]
+                },
+                {
+                  "title": "## 🐛 Fixes",
+                  "labels": ["fix", "bug"]
+                },
+                {
+                  "title": "## 📚 Documentation",
+                  "labels": ["docs", "documentation"]
+                },
+                {
+                  "title": "## 📦 Other Changes",
+                  "labels": []
+                }
+              ],
+              "label_extractor": [
+                {
+                  "pattern": "^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\\([\\w\\-\\.]+\\))?(!)?: ([\\w ])+([\\s\\S]*)",
+                  "on_property": "title",
+                  "target": "$1"
+                }
+              ]
+            }
+
+      - name: "DRY-RUN: Publish release"
+        env:
+          RELEASE_TITLE: ${{ needs.prepare.outputs.release_title }}
+          VERSION_OR_SHA: ${{ needs.prepare.outputs.version_or_sha }}
+          FULL_SHA: ${{ needs.prepare.outputs.full_sha }}
+          IS_TAG: ${{ github.ref_type == 'tag' }}
+          CHANGELOG: ${{ steps.build_changelog.outputs.changelog }}
+        run: |
+          echo "============================================"
+          echo "  DRY-RUN: Release would be published"
+          echo "============================================"
+          echo ""
+          echo "Release title:    ${RELEASE_TITLE}"
+          echo "Version / SHA:    ${VERSION_OR_SHA}"
+          echo "Full SHA:         ${FULL_SHA}"
+          echo "Is tag release:   ${IS_TAG}"
+          echo "Prerelease:       ${{ github.ref_type != 'tag' }}"
+          echo "Make latest:      ${{ github.ref_type == 'tag' }}"
+          echo ""
+          echo "--- Changelog ---"
+          echo "${CHANGELOG:-'(no changelog — not a tag release)'}"
+          echo ""
+          echo "--- Files that would be uploaded ---"
+          find releases -type f -not -name '*.sha256' | sort
+          echo ""
+          echo "--- Checksums ---"
+          find releases -name '*.sha256' -exec cat {} \; | sort
+          echo ""
+          echo "--- Skipped steps (dry-run) ---"
+          echo "  - actions/attest-build-provenance (attestation)"
+          echo "  - softprops/action-gh-release (GitHub Release creation)"
+          echo ""
+          echo "============================================"
+          echo "  DRY-RUN complete. No release was created."
+          echo "============================================"
+
+      - name: Summary
+        run: |
+          echo "### Release Dry-Run Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Title** | \`${{ needs.prepare.outputs.release_title }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`${{ needs.prepare.outputs.version_or_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Prerelease** | \`${{ github.ref_type != 'tag' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`release\` (manual approval required) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Files:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          find releases -type f -not -name '*.sha256' | sort >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
