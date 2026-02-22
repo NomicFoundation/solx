@@ -95,12 +95,15 @@ runs:
         if [ '${{ inputs.sanitizer }}' != '' ]; then
           export ASAN_SYMBOLIZER_PATH=$(which llvm-symbolizer)
         fi
-        # Use LLD on Windows/Linux to properly link with libstdc++.
+        # Use LLD on Windows and Linux to properly link with libstdc++.
+        # On Windows, also strip debuginfo: PE/COFF has a 2 GB SizeOfImage limit
+        # and debug binaries statically linking LLVM+MLIR+LLD can exceed it,
+        # producing "%1 is not a valid Win32 application" (os error 193).
         # Skip when using sanitizers — clang needs its native linker for ASan runtime.
-        if [[ ${RUNNER_OS} = Windows ]] || [[ ${RUNNER_OS} = Linux ]]; then
-          if [ '${{ inputs.sanitizer }}' = '' ]; then
-            export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
-          fi
+        if [[ ${RUNNER_OS} = Windows ]]; then
+          export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld -C strip=debuginfo"
+        elif [[ ${RUNNER_OS} = Linux && '${{ inputs.sanitizer }}' = '' ]]; then
+          export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
         # Set sanitizer flags per-target to avoid breaking proc-macro builds.
         # -Z sanitizer=address instruments Rust code AND links Rust's bundled
