@@ -139,7 +139,8 @@ jobs:
         with:
           exec_name: 'solx'
           target: ${{ matrix.target }}
-          release-suffix: ${{ format('{0}-{1}', matrix.release-suffix, inputs.prerelease_suffix || format('v{0}', github.ref_name)) }}
+          # TODO: revert PR guard when the temporary pull_request trigger is removed
+          release-suffix: ${{ format('{0}-{1}', matrix.release-suffix, inputs.prerelease_suffix || (github.event_name == 'pull_request' && format('pr{0}', github.event.pull_request.number) || format('v{0}', github.ref_name))) }}
 
   get-previous-release:
     permissions:
@@ -232,7 +233,8 @@ jobs:
         if: github.ref_type == 'tag' || (inputs.release_macos_amd64 && inputs.release_macos_arm64)
         env:
           MACOSX_UNIVERSAL_SUFFIX: "macosx"
-          RELEASE_SUFFIX: ${{ inputs.prerelease_suffix || format('v{0}', github.ref_name) }}
+          # TODO: revert PR guard when the temporary pull_request trigger is removed
+          RELEASE_SUFFIX: ${{ inputs.prerelease_suffix || (github.event_name == 'pull_request' && format('pr{0}', github.event.pull_request.number) || format('v{0}', github.ref_name)) }}
         run: |
           OUTDIR="./releases/release-${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}/${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}"
           mkdir -p "${OUTDIR}"
