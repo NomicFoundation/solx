@@ -786,7 +786,7 @@ entries:
             - E
             version: '>=0.4.12'
           array_copy_including_array.sol:
-            hash: '0xa698abf01d34c86c7f8787c41e6f84c2'
+            hash: '0xd311e57b1e76765aa534cb29f26c68f8'
             enabled: true
             version: '>=0.6.0'
           array_copy_memory_to_storage.sol:
@@ -1260,7 +1260,7 @@ entries:
             enabled: true
             version: '>=0.7.0'
           delete_storage_array_packed.sol:
-            hash: '0x69d8f3f3fc593cf880e5e87c3c269c83'
+            hash: '0x48f87663335e319816a95b8bcccbfeec'
             enabled: true
             version: '>=0.7.0'
           memory_arrays_delete.sol:
@@ -1292,7 +1292,7 @@ entries:
         enabled: true
         version: '>=0.5.0'
       fixed_array_cleanup.sol:
-        hash: '0x793f334d16f24f7c88db552f9c38c6b4'
+        hash: '0x3d7eebe6bfd6eb3e412e8eb93c511af4'
         enabled: true
         version: '>=0.4.12'
       fixed_arrays_as_return_type.sol:
@@ -1401,7 +1401,7 @@ entries:
         enabled: true
         version: '>=0.8.33'
       long_byte_array_cleanup_after_overwrite_with_long.sol:
-        hash: '0xb46fd70b0b4c8cca32fb5c52f25c5049'
+        hash: '0xa43e265f1ed52874bf95acbf4cefe7b5'
         enabled: true
         version: '>=0.8.33'
       memory.sol:
@@ -1428,7 +1428,7 @@ entries:
             enabled: true
             version: '>=0.5.0'
           array_pop_array_transition.sol:
-            hash: '0xa317374377b95cbc24c1005d71e01e73'
+            hash: '0x02939bea35c6a950e060473594906a78'
             enabled: true
             version: '>=0.5.0'
           array_pop_empty_exception.sol:
@@ -5635,6 +5635,54 @@ entries:
         hash: '0x97870b3584182a9932583c14c8f4bab3'
         enabled: true
         version: '>=0.7.0'
+      delete_overlapping_transient_after_inherited_storage_same_value_type.sol:
+        hash: '0x20d45e2c1ce57f61ddf1d3917b047228'
+        enabled: true
+        version: '>=0.8.34'
+      delete_overlapping_transient_after_storage_array_delete_different_base_type.sol:
+        hash: '0xa14a01c0107cabd839d714d44f5b65a4'
+        enabled: true
+        version: '>=0.8.34'
+      delete_overlapping_transient_after_storage_array_pop_same_base_type.sol:
+        hash: '0x5e5ed45d3425d9e325c8cb938082e41f'
+        enabled: true
+        version: '>=0.8.34'
+      delete_overlapping_transient_after_storage_delete_same_value_type.sol:
+        hash: '0x01446acfc6bdded451d46c1595751e70'
+        enabled: true
+        version: '>=0.8.34'
+      delete_overlapping_transient_after_storage_mapping_delete_same_value_type.sol:
+        hash: '0x9fb339fac1391224524d190e34730c19'
+        enabled: true
+        version: '>=0.8.34'
+      delete_overlapping_transient_after_storage_struct_delete_same_value_type.sol:
+        hash: '0xea03dcd31f001b0bbb99f3f4dee30f7f'
+        enabled: true
+        version: '>=0.8.34'
+      delete_overlapping_transient_before_inherited_storage_same_value_type.sol:
+        hash: '0xe6f16e260bc5f1e8f32aff8679676019'
+        enabled: true
+        version: '>=0.8.34'
+      delete_overlapping_transient_before_storage_array_delete_different_base_type.sol:
+        hash: '0x9e064a26662bd36e35c793894ddeacdb'
+        enabled: true
+        version: '>=0.8.34'
+      delete_overlapping_transient_before_storage_array_partial_assignment_same_base_type.sol:
+        hash: '0xc299aa521d41720fd29272a74b229d9b'
+        enabled: true
+        version: '>=0.8.34'
+      delete_overlapping_transient_before_storage_delete_same_value_type.sol:
+        hash: '0x0a867288ad877febb601f8994024f68e'
+        enabled: true
+        version: '>=0.8.34'
+      delete_overlapping_transient_before_storage_mapping_delete_same_value_type.sol:
+        hash: '0x6a07e2a760026889c641a96a98c31111'
+        enabled: true
+        version: '>=0.8.34'
+      delete_overlapping_transient_before_storage_struct_delete_same_value_type.sol:
+        hash: '0x3f2106e4ee5687b8e660ce7bcf567832'
+        enabled: true
+        version: '>=0.8.34'
       empty_nonempty_empty.sol:
         hash: '0xc2fe84b5bff810d13fe05999547e3428'
         enabled: true
@@ -5732,7 +5780,7 @@ entries:
         enabled: true
         version: '>=0.8.33'
       storage_boundary_delete_overflow_bug.sol:
-        hash: '0xea52115b6572a919783605de75f54822'
+        hash: '0x467bec8e1009457967599a17957c1a51'
         enabled: true
         version: '>=0.8.33'
       storage_boundary_packed_array.sol:
@@ -5740,11 +5788,11 @@ entries:
         enabled: true
         version: '>=0.8.33'
       storage_boundary_struct_array_mixed_types.sol:
-        hash: '0xa6286f6bb07850f6ced70588ec508076'
+        hash: '0xdada9ddcfc3d2dbaa5e2d92bc42fff92'
         enabled: true
         version: '>=0.8.33'
       storage_boundary_struct_array_multislot.sol:
-        hash: '0xaadd4bf227fbc691e79287bb08be136e'
+        hash: '0x1bcc5ecaa8ef0f1c0ea577896cb1285e'
         enabled: true
         version: '>=0.8.33'
       storage_boundary_struct_array_packed.sol:
@@ -6254,7 +6302,7 @@ entries:
         enabled: true
         version: '>=0.4.12'
       struct_delete_storage_with_array.sol:
-        hash: '0xa0349ddde704e89994dd5490cc18fbc6'
+        hash: '0x560c4751343b036f912b6ea0d5a2e2f9'
         enabled: true
         version: '>=0.7.5'
       struct_delete_storage_with_arrays_small.sol:
@@ -6597,7 +6645,7 @@ entries:
         enabled: true
         version: '>=0.8.8'
       calldata.sol:
-        hash: '0x25b038e646c80832c6a39ef4b7492cc4'
+        hash: '0xe1ba309062865ad1c434be9c4ffc232b'
         enabled: true
         version: '>=0.8.8'
       calldata_to_storage.sol:

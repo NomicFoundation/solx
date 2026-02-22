@@ -78,7 +78,7 @@ This section describes the format of test files used by **solx-tester**.
 
 The repository contains three types of tests:
 
-- **Upstream** — Tests following the [Solidity semantic test format](https://github.com/NomicFoundation/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests).
+- **Upstream** — Tests following the [Solidity semantic test format](https://github.com/NomicFoundation/solx-solidity/tree/0.8.34/test/libsolidity/semanticTests).
 - **Simple** — Single-contract tests.
 - **Complex** — Multi-contract tests and vendored DeFi projects.
 
@@ -182,5 +182,5 @@ Notes:
 
 ### Upstream Solidity Semantic Tests
 
-These tests follow the [Solidity semantic test format](https://github.com/NomicFoundation/solx-solidity/tree/0.8.33/test/libsolidity/semanticTests).
+These tests follow the [Solidity semantic test format](https://github.com/NomicFoundation/solx-solidity/tree/0.8.34/test/libsolidity/semanticTests).
 Test descriptions and expected results are embedded as comments in the test file. Lines begin with `//` for Solidity files. The beginning of the test description is indicated by a comment line containing `----`.

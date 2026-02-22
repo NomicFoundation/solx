@@ -3,9 +3,9 @@
     {
       "is_enabled": true,
       "protocol": "https",
-      "source": "https://github.com/argotorg/solc-bin/raw/refs/heads/gh-pages/${PLATFORM}/solc-${PLATFORM}-v0.8.33+commit.64118f21",
-      "destination": "./temp-compilers/solc-0.8.33",
-      "version": "0.8.33",
+      "source": "https://github.com/argotorg/solc-bin/raw/refs/heads/gh-pages/${PLATFORM}/solc-${PLATFORM}-v0.8.34+commit.80d5c536",
+      "destination": "./temp-compilers/solc-0.8.34",
+      "version": "0.8.34",
       "platforms": {
         "linux-amd64": "linux-amd64",
         "linux-arm64": "linux-arm64",
