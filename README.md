@@ -30,7 +30,7 @@ See also:
 
 ## Installation
 
-For the detailed installation and usage guide, visit [the respective page of our documentation](https://nomicfoundation.github.io/solx/latest/#installation).
+For the detailed installation and usage guide, visit [the respective page of our documentation](./docs/src/user-guide/01-installation.md).
 
 ## Quick Start
 
@@ -47,11 +47,11 @@ solx Contract.sol --bin --abi -o ./build
 
 ## Architecture
 
-For details on the compilation pipeline and components, see [the architecture documentation](https://nomicfoundation.github.io/solx/latest/internals/01-architecture.html).
+For details on the compilation pipeline and components, see [the architecture documentation](./docs/src/internals/01-architecture.md).
 
 ## Testing
 
-For details on running unit tests, integration tests, and project tests, see [the testing documentation](https://nomicfoundation.github.io/solx/latest/developer-guide/01-testing.html).
+For details on running unit tests, integration tests, and project tests, see [the testing documentation](./docs/src/developer-guide/01-testing.md).
 
 ## Troubleshooting
 
