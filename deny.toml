@@ -1,5 +1,5 @@
 [advisories]
-yanked = "warn"
+yanked = "deny"
 
 [licenses]
 allow = [
@@ -36,7 +36,60 @@ highlight = "all"
 workspace-default-features = "allow"
 external-default-features = "allow"
 
+# Transitive duplicates not under our control.
+skip = [
+    { crate = "ark-ff" },
+    { crate = "ark-ff-asm" },
+    { crate = "ark-ff-macros" },
+    { crate = "ark-serialize" },
+    { crate = "ark-std" },
+    { crate = "arrayvec" },
+    { crate = "block-buffer" },
+    { crate = "convert_case" },
+    { crate = "derive_more" },
+    { crate = "digest" },
+    { crate = "fastrlp" },
+    { crate = "getrandom" },
+    { crate = "hashbrown" },
+    { crate = "indexmap" },
+    { crate = "itertools" },
+    { crate = "rand" },
+    { crate = "rand_chacha" },
+    { crate = "rand_core" },
+    { crate = "redox_syscall" },
+    { crate = "rlp" },
+    { crate = "rustc_version" },
+    { crate = "schemars" },
+    { crate = "secp256k1" },
+    { crate = "secp256k1-sys" },
+    { crate = "semver" },
+    { crate = "sha2" },
+    { crate = "sha3" },
+    { crate = "syn" },
+    { crate = "thiserror" },
+    { crate = "thiserror-impl" },
+    { crate = "toml_datetime" },
+    { crate = "toml_edit" },
+    { crate = "twox-hash" },
+    { crate = "unsigned-varint" },
+    { crate = "windows-sys" },
+    { crate = "windows-targets" },
+    { crate = "windows_aarch64_gnullvm" },
+    { crate = "windows_aarch64_msvc" },
+    { crate = "windows_i686_gnu" },
+    { crate = "windows_i686_gnullvm" },
+    { crate = "windows_i686_msvc" },
+    { crate = "windows_x86_64_gnu" },
+    { crate = "windows_x86_64_gnullvm" },
+    { crate = "windows_x86_64_msvc" },
+]
+
 [sources]
 unknown-registry = "deny"
-unknown-git = "allow"
+unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = [
+    "https://github.com/NomicFoundation/inkwell",
+    "https://github.com/NomicFoundation/llvm-sys.rs",
+    "https://github.com/tomusdrw/rust-web3",
+]
