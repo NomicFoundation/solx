@@ -71,7 +71,8 @@ jobs:
           LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"ubuntu-24.04","image":"ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
           LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"ubuntu-24.04-arm","image":"ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
           # Disable platforms for non-tag builds if user requested
-          if [ ${GITHUB_REF_TYPE} != tag ]; then
+          # TODO: revert to `if [ ${GITHUB_REF_TYPE} != tag ]; then` when the temporary pull_request trigger is removed
+          if [ '${{ github.event_name }}' = 'workflow_dispatch' ] && [ ${GITHUB_REF_TYPE} != tag ]; then
             [ ${{ github.event.inputs.release_windows_amd64 }} != true ] && WINDOWS=
             [ ${{ github.event.inputs.release_macos_amd64 }} != true ] && MACOS_AMD64=
             [ ${{ github.event.inputs.release_macos_arm64 }} != true ] && MACOS_ARM64=
@@ -304,18 +305,7 @@ jobs:
       - name: Verify SHA256 checksums
         run: |
           cd bundle
-          FAIL=0
-          find . -name '*.sha256' | sort | while read -r checksum_file; do
-            echo "Verifying: ${checksum_file}"
-            if ! sha256sum --check "${checksum_file}"; then
-              echo "FAILED: ${checksum_file}"
-              FAIL=1
-            fi
-          done
-          if [ "${FAIL}" -ne 0 ]; then
-            echo "ERROR: One or more checksums failed verification"
-            exit 1
-          fi
+          find . -name '*.sha256' -print0 | xargs -0 sha256sum --check
 
       - name: Display binary sizes
         run: |
