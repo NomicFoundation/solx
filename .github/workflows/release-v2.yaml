@@ -1,6 +1,7 @@
 name: "Release v2 (3-stage: prepare / review / publish)"
 
 on:
+  pull_request: # temporary — remove before merging
   workflow_dispatch:
     inputs:
       ref:
