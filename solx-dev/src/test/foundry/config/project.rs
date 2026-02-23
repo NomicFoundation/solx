@@ -14,6 +14,9 @@ pub struct Project {
     pub description: String,
     /// Project URL.
     pub url: String,
+    /// Git commit SHA to pin the repository to.
+    #[serde(default)]
+    pub commit: Option<String>,
     /// Whether the project requires `yarn`.
     #[serde(default)]
     pub requires_yarn: bool,

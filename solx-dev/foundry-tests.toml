@@ -12,6 +12,7 @@
 # Projects:
 #   [projects.<name>]
 #   url = "https://github.com/..."  # Git repository URL
+#   commit = "abc123..."            # Git commit SHA to pin (optional, HEAD if omitted)
 #   description = "..."             # Project description
 #   requires_yarn = true/false      # Run yarn install before building
 #   disabled = true/false           # Whether to skip this project
@@ -86,63 +87,77 @@ disabled = false
 
 [projects.openzeppelin]
 url = "https://github.com/OpenZeppelin/openzeppelin-contracts"
+commit = "6b55a93ee9bf4c412de1a03536701de33dfccb87"
 description = "A library for secure smart contract development."
 
 [projects.lil-web3]
 url = "https://github.com/m1guelpf/lil-web3"
+commit = "7346bd28c2586da3b07102d5290175a276949b15"
 description = "lil web3 aims to build really simple, intentionally-limited versions of web3 protocols & apps."
 
 [projects.maple-erc20]
 url = "https://github.com/maple-labs/erc20"
+commit = "baf791a9f894b0b319a2d42d5b9f8d30349ebaad"
 description = "Basic ERC-20 contract designed to be inherited and extended."
 
 [projects.diamonds]
 url = "https://github.com/Timidan/Foundry-Hardhat-Diamonds"
+commit = "e9fdadc94d35c77611fd5788b99d0840cab7d3f8"
 description = "A minimal template for Diamonds EIP-2535."
 requires_yarn = true
 
 [projects.lido-core]
 url = "https://github.com/lidofinance/core"
+commit = "96738395ca3bffd6513700a45d4c9389662c5835"
 description = "Lido DAO smart contracts"
 disabled = true # written in Solidity v0.4
 
 [projects.rollcall]
 url = "https://github.com/withtally/rollcall"
+commit = "f81b68cf02e0a2a8f2d30746cc1e3afd42e8e1eb"
 description = "A set of cross chain governance solutions."
 
 [projects.playpen]
 url = "https://github.com/ZeframLou/playpen"
+commit = "77d4fd2dd5399c97bb40eccc7cedd296376acf6a"
 description = "A set of modern, gas optimized staking pool contracts."
 
 [projects.solmate]
 url = "https://github.com/transmissions11/solmate"
+commit = "89365b880c4f3c786bdd453d4b8e8fe410344a69"
 description = "Modern, opinionated, and gas optimized building blocks for smart contract development."
 
 [projects.prb-math]
 url = "https://github.com/paulrberg/prb-math"
+commit = "b21433de7519fe021b176fa0b99dd3b360f28f70"
 description = "Solidity library for advanced fixed-point math operations."
 requires_yarn = true
 
 [projects.solady]
 url = "https://github.com/Vectorized/solady"
+commit = "90db92ce173856605d24a554969f2c67cadbc7e9"
 description = "Gas optimized Solidity snippets."
 
 [projects.unix]
 url = "https://github.com/refcell/unix"
+commit = "ebd26fea4e86544606bc0be58aaab0215c729382"
 description = "A lightweight, extensible foundry library for shell scripting."
 [projects.unix.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.foundry-upgrades]
 url = "https://github.com/odyslam/foundry-upgrades"
+commit = "e736e4f5d707c9d1227bb71a6f337d0bed2964bf"
 description = "Helper smart contracts to deploy and manage upgradeable contracts."
 
 [projects.art-gobblers]
 url = "https://github.com/antonbaliasnikov/art-gobblers"
+commit = "95d30903a33f0b359e39d7791891adfb458689d1"
 description = "A decentralized art factory and marketplace. Fork with fixed tests."
 
 [projects.lens-core]
 url = "https://github.com/lens-protocol/core"
+commit = "d4c662aac780e669cd23769730cdc4f0189ee5be"
 description = "Lens protocol, non-custodial social graph."
 requires_yarn = true
 [projects.lens-core.env]
@@ -150,35 +165,42 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.balance-snapshot]
 url = "https://github.com/pilagod/balance-snapshot"
+commit = "1cec2c808500bffc9e00d73dadcb6207615e27a4"
 description = "A Solidity library to improve balance change check in Foundry tests."
 
 [projects.diamond-foundry]
 url = "https://github.com/FydeTreasury/Diamond-Foundry"
+commit = "bdba406856b7e099038b6a696a4fd5b9ac69c500"
 description = "a reference implementation for EIP-2535 Diamonds."
 [projects.diamond-foundry.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.fixed-term-loan]
 url = "https://github.com/maple-labs/fixed-term-loan"
+commit = "8fb3675288897cb0b5748a5bbe90a12055bf9fa1"
 description = "A set of contracts to facilitate on-chain loans."
 disabled = true
 
 [projects.forge-std]
 url = "https://github.com/foundry-rs/forge-std"
+commit = "0844d7e1fc5e60d77b68e469bff60265f236c398"
 description = "Forge Standard Library is a collection of helpful contracts and libraries for use with Forge and Foundry."
 
 [projects.tokenlon]
 url = "https://github.com/consenlabs/tokenlon-contracts"
+commit = "ada28eb58dc50cde59f87fcb97165a0a5c6655cd"
 description = "A decentralized exchange and payment settlement protocol."
 [projects.tokenlon.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.uniswap-v4]
 url = "https://github.com/Uniswap/v4-core"
+commit = "d153b048868a60c2403a3ef5b2301bb247884d46"
 description = "A new automated market maker protocol."
 
 [projects.beefy]
 url = "https://github.com/beefyfinance/beefy-contracts"
+commit = "a6d9a475e8af7947cd2ca5bec77016bfd92193c2"
 description = "Official url for strategies and vaults from Beefy."
 requires_yarn = true
 [projects.beefy.env]
@@ -186,22 +208,26 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.gov-of-venice]
 url = "https://github.com/pentagonxyz/gov-of-venice"
+commit = "46ea4138d2296ac9433dc2ba6eb884f0c31e25ef"
 description = "A new paradigm in DAO governance."
 
 [projects.cicada]
 url = "https://github.com/a16z/cicada"
+commit = "dec37d732f8ef8a91119650c416ae9bfb531a64a"
 description = "A private on-chain voting protocol based on homomorphic time-lock puzzles."
 [projects.cicada.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.seaport]
 url = "https://github.com/ProjectOpenSea/seaport"
+commit = "080133906585660f6a76b82984f3fb690ff4b2a9"
 description = "A marketplace protocol for safely and efficiently buying and selling NFTs."
 category = "huge"
 disabled = true # compilation hangs, required to disable fuzzing tests
 
 [projects.lens-v3]
 url = "https://github.com/lens-protocol/lens-v3"
+commit = "8a71192c9479091f8fc6fff5e17a0a11530ac50d"
 description = "Lens Protocol V3"
 requires_yarn = true
 [projects.lens-v3.env]
@@ -209,11 +235,13 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.morpho-blue]
 url = "https://github.com/morpho-org/morpho-blue"
+commit = "57d444d9e243be21a80e8d4bf8794ebce4a089d9"
 description = "Morpho Blue Protocol"
 requires_yarn = true
 
 [projects.aave-v3]
 url = "https://github.com/aave-dao/aave-v3-origin"
+commit = "1e3d70c4151a94166ebc59e2eaa4aff6e6ba6978"
 description = "A non-custodial liquidity protocol on Ethereum."
 requires_yarn = true
 [projects.aave-v3.env]
@@ -221,4 +249,5 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.wtf-gas]
 url = "https://github.com/hedgar2017/WTF-gas-optimization"
+commit = "1a2b0ca46d0ae04ffbd57cdbfe9f603ecdd61c25"
 description = "WTF Solidity gas optimization techniques"

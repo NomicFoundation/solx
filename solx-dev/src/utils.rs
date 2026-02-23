@@ -129,6 +129,71 @@ pub fn command_with_json_output<T: serde::de::DeserializeOwned>(
 }
 
 ///
+/// Clones a git repository into the given directory.
+///
+/// When `commit` is `Some(sha)`, performs a shallow fetch of the exact commit:
+/// `git init` -> `git remote add` -> `git fetch --depth 1 origin <sha>` -> `git checkout FETCH_HEAD`
+/// -> `git submodule update --init --depth 1 --recursive` (only if `.gitmodules` exists).
+///
+/// When `commit` is `None`, falls back to `git clone --depth 1 --recurse-submodules --shallow-submodules`.
+///
+pub fn clone_repository(
+    url: &str,
+    directory: &str,
+    commit: Option<&str>,
+    description: &str,
+) -> anyhow::Result<()> {
+    if let Some(sha) = commit {
+        if sha.len() != 40 || !sha.chars().all(|character| character.is_ascii_hexdigit()) {
+            anyhow::bail!("commit must be a 40-character hex SHA, got: {sha}");
+        }
+
+        let mut init_command = Command::new("git");
+        init_command.args(["init", directory]);
+        command(&mut init_command, description)?;
+
+        let mut remote_command = Command::new("git");
+        remote_command.args(["-C", directory, "remote", "add", "origin", url]);
+        command(&mut remote_command, description)?;
+
+        let mut fetch_command = Command::new("git");
+        fetch_command.args(["-C", directory, "fetch", "--depth", "1", "origin", sha]);
+        command_with_retries(&mut fetch_command, description, 16)?;
+
+        let mut checkout_command = Command::new("git");
+        checkout_command.args(["-C", directory, "checkout", "FETCH_HEAD"]);
+        command(&mut checkout_command, description)?;
+
+        let gitmodules_path = std::path::Path::new(directory).join(".gitmodules");
+        if gitmodules_path.exists() {
+            let mut submodule_command = Command::new("git");
+            submodule_command.args([
+                "-C",
+                directory,
+                "submodule",
+                "update",
+                "--init",
+                "--depth",
+                "1",
+                "--recursive",
+            ]);
+            command_with_retries(&mut submodule_command, description, 16)?;
+        }
+    } else {
+        let mut clone_command = Command::new("git");
+        clone_command.arg("clone");
+        clone_command.args(["--depth", "1"]);
+        clone_command.arg("--recurse-submodules");
+        clone_command.arg("--shallow-submodules");
+        clone_command.arg(url);
+        clone_command.arg(directory);
+        command_with_retries(&mut clone_command, description, 16)?;
+    }
+
+    Ok(())
+}
+
+///
 /// Removes the project directory after building and testing.
 ///
 pub fn remove(project_directory: &Path, project_name: &str) -> anyhow::Result<()> {

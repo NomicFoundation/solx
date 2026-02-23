@@ -86,22 +86,15 @@ pub fn test(
                 .unwrap_or(solidity_version.as_str());
 
             let project_directory_str = project_directory.to_string_lossy();
-            let mut clone_command = Command::new("git");
-            clone_command.arg("clone");
-            clone_command.args(["--depth", "1"]);
-            clone_command.arg("--recurse-submodules");
-            clone_command.arg("--shallow-submodules");
-            clone_command.arg(project.url.as_str());
-            clone_command.arg(&*project_directory_str);
-            crate::utils::command_with_retries(
-                &mut clone_command,
-                format!(
+            crate::utils::clone_repository(
+                project.url.as_str(),
+                &project_directory_str,
+                project.commit.as_deref(),
+                &format!(
                     "{} Hardhat project {}",
                     solx_utils::cargo_status_ok("Cloning"),
                     project_name.bright_white().bold()
-                )
-                .as_str(),
-                16,
+                ),
             )?;
 
             eprintln!(
