@@ -275,6 +275,7 @@ jobs:
       contents: read
     name: Review release bundle
     needs: [prepare]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
     runs-on: ubuntu-24.04
     steps:
 
