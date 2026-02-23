@@ -1,6 +1,8 @@
 name: Build and release binaries
 
 on:
+  pull_request:
+    types: [labeled, synchronize]
   workflow_dispatch:
     inputs:
       ref:
@@ -41,10 +43,30 @@ on:
     tags:
       - "*.*.*"
 
+# Zero permissions baseline — each job declares only what it needs.
+permissions: {}
 
 jobs:
 
+  label-check:
+    if: >-
+      github.event_name != 'pull_request'
+      || (contains(github.event.pull_request.labels.*.name, 'ci:release')
+          && !github.event.pull_request.head.repo.fork)
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    steps:
+      - run: 'true'
+
+  # ───────────────────────────────────────────────
+  # Stage 0: Build matrix & platform binaries
+  # ───────────────────────────────────────────────
+
   prepare-matrix:
+    needs: [label-check]
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.prepare-matrix.outputs.matrix }}
@@ -65,7 +87,7 @@ jobs:
           LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"ubuntu-24.04","image":"ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
           LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"ubuntu-24.04-arm","image":"ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
           # Disable platforms for non-tag builds if user requested
-          if [ ${GITHUB_REF_TYPE} != tag ]; then
+          if [ '${{ github.event_name }}' = 'workflow_dispatch' ] && [ ${GITHUB_REF_TYPE} != tag ]; then
             [ ${{ github.event.inputs.release_windows_amd64 }} != true ] && WINDOWS=
             [ ${{ github.event.inputs.release_macos_amd64 }} != true ] && MACOS_AMD64=
             [ ${{ github.event.inputs.release_macos_arm64 }} != true ] && MACOS_ARM64=
@@ -76,6 +98,8 @@ jobs:
           echo "matrix={ \"include\": [ $(IFS=, ; echo "${PLATFORMS[*]}") ] }" | tee -a "${GITHUB_OUTPUT}"
 
   build:
+    permissions:
+      contents: read
     needs: prepare-matrix
     strategy:
       fail-fast: false
@@ -130,10 +154,12 @@ jobs:
         with:
           exec_name: 'solx'
           target: ${{ matrix.target }}
-          release-suffix: ${{ format('{0}-{1}', matrix.release-suffix, inputs.prerelease_suffix || format('v{0}', github.ref_name)) }}
+          release-suffix: ${{ format('{0}-{1}', matrix.release-suffix, github.ref_type == 'tag' && format('v{0}', github.ref_name) || inputs.prerelease_suffix || 'notag') }}
 
   get-previous-release:
-    if: github.ref_type == 'tag'
+    needs: [label-check]
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.latest_release.outputs.tag }}
@@ -155,20 +181,23 @@ jobs:
           tag=$(gh release view --json tagName --jq .tagName)
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
 
-  prepare-release:
+  # ───────────────────────────────────────────────
+  # Stage 1: Prepare — bundle all artifacts
+  # ───────────────────────────────────────────────
+
+  prepare:
     permissions:
-      id-token: write
-      attestations: write
-      contents: write
-    name: Prepare release
+      contents: read
+    name: Prepare release bundle
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
-    needs: [build, get-previous-release]
-    if: |
-      always() &&
-      (needs.get-previous-release.result == 'skipped' || needs.get-previous-release.result == 'success') &&
-      needs.build.result == 'success'
+    needs: [build]
+    outputs:
+      tarball_name: ${{ steps.bundle.outputs.tarball_name }}
+      release_title: ${{ steps.release.outputs.release_title }}
+      version_or_sha: ${{ steps.release.outputs.version_or_sha }}
+      full_sha: ${{ steps.release.outputs.full_sha }}
     steps:
 
       - name: Checkout source
@@ -187,16 +216,19 @@ jobs:
         id: release
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
-            VERSION_OR_SHA=$(git rev-parse --short HEAD)
-            echo "version_or_sha=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
-            echo "full_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-            echo "release_title=prerelease-${VERSION_OR_SHA}-${{ github.event.inputs.prerelease_suffix }}" >> $GITHUB_OUTPUT
-          else
+          if [ '${{ github.ref_type }}' = 'tag' ]; then
             VERSION_OR_SHA="${GITHUB_REF#refs/tags/}"
-            echo "version_or_sha=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
             echo "release_title=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
+          else
+            VERSION_OR_SHA=$(git rev-parse --short HEAD)
+            echo "full_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+            if [ '${{ github.event_name }}' = 'pull_request' ]; then
+              echo "release_title=pr-dry-run-${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
+            else
+              echo "release_title=prerelease-${VERSION_OR_SHA}-${{ github.event.inputs.prerelease_suffix }}" >> $GITHUB_OUTPUT
+            fi
           fi
+          echo "version_or_sha=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
 
       - name: Check release version
         if: github.ref_type == 'tag'
@@ -210,11 +242,11 @@ jobs:
             exit 1
           fi
 
-      - name: Prepare universal macos binary
-        if: github.ref_type == 'tag' || (inputs.release_macos_amd64 && inputs.release_macos_arm64)
+      - name: Prepare universal macOS binary
+        if: github.ref_type == 'tag' || github.event_name == 'pull_request' || (inputs.release_macos_amd64 && inputs.release_macos_arm64)
         env:
           MACOSX_UNIVERSAL_SUFFIX: "macosx"
-          RELEASE_SUFFIX: ${{ inputs.prerelease_suffix || format('v{0}', github.ref_name) }}
+          RELEASE_SUFFIX: ${{ github.ref_type == 'tag' && format('v{0}', github.ref_name) || inputs.prerelease_suffix || 'notag' }}
         run: |
           OUTDIR="./releases/release-${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}/${MACOSX_UNIVERSAL_SUFFIX}-${RELEASE_SUFFIX}"
           mkdir -p "${OUTDIR}"
@@ -225,19 +257,115 @@ jobs:
           rm -f ./releases/release-macosx-amd64-${RELEASE_SUFFIX}/macosx-amd64-${RELEASE_SUFFIX}/solx-macosx-amd64-${RELEASE_SUFFIX} \
             ./releases/release-macosx-arm64-${RELEASE_SUFFIX}/macosx-arm64-${RELEASE_SUFFIX}/solx-macosx-arm64-${RELEASE_SUFFIX}
 
-      - name: Binaries attestation
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        if: github.ref_type == 'tag'
+      - name: Generate SHA256 checksums
+        run: |
+          cd releases
+          find . -type f -not -name '*.sha256' | sort | while read -r file; do
+            sha256sum "${file}" > "${file}.sha256"
+            echo "Checksum: $(cat "${file}.sha256")"
+          done
+
+      - name: Bundle release artifacts
+        id: bundle
+        run: |
+          TARBALL="solx-release-bundle.tar.gz"
+          tar czf "${TARBALL}" -C releases .
+          echo "tarball_name=${TARBALL}" >> $GITHUB_OUTPUT
+          echo "Bundle size: $(du -h "${TARBALL}" | cut -f1)"
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          subject-path: 'releases/**/**'
+          name: solx-release-bundle
+          path: solx-release-bundle.tar.gz
+          retention-days: 2
+
+  # ───────────────────────────────────────────────
+  # Stage 2: Review — validate the bundle
+  # ───────────────────────────────────────────────
+
+  review:
+    permissions:
+      contents: read
+    name: Review release bundle
+    needs: [prepare]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+
+      - name: Download release bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: solx-release-bundle
+
+      - name: Extract bundle
+        run: |
+          mkdir -p bundle
+          tar xzf solx-release-bundle.tar.gz -C bundle
+
+      - name: List all files (audit trail)
+        run: |
+          echo "=== Release bundle contents ==="
+          find bundle -type f | sort
+
+      - name: Validate binary count
+        run: |
+          BINARY_COUNT=$(find bundle -type f -not -name '*.sha256' | wc -l)
+          echo "Found ${BINARY_COUNT} binary file(s)"
+          if [ "${BINARY_COUNT}" -lt 1 ]; then
+            echo "ERROR: Expected at least 1 binary in the release bundle"
+            exit 1
+          fi
+
+      - name: Verify SHA256 checksums
+        run: |
+          cd bundle
+          find . -name '*.sha256' -print0 | xargs -0 sha256sum --check
+
+      - name: Display binary sizes
+        run: |
+          echo "=== Binary sizes ==="
+          find bundle -type f -not -name '*.sha256' -exec ls -lh {} \; | awk '{print $5, $9}'
+
+  # ───────────────────────────────────────────────
+  # Stage 3: Publish
+  # ───────────────────────────────────────────────
+
+  publish:
+    permissions:
+      id-token: write
+      attestations: write
+      contents: write
+    name: Publish release
+    needs: [prepare, review, get-previous-release]
+    # PR dry-runs skip the manual approval gate; tag/dispatch runs still require it.
+    environment: ${{ github.event_name != 'pull_request' && 'solx-release' || '' }}
+    runs-on: ubuntu-24.04
+    steps:
+
+      - name: Checkout source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
+
+      - name: Download release bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: solx-release-bundle
+
+      - name: Extract bundle
+        run: |
+          mkdir -p releases
+          tar xzf solx-release-bundle.tar.gz -C releases
 
       - name: Build changelog
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || github.event_name == 'pull_request'
         id: build_changelog
         uses: mikepenz/release-changelog-builder-action@c9dc8369bccbc41e0ac887f8fd674f5925d315f7 # v5
         with:
           fromTag: ${{ needs.get-previous-release.outputs.tag || '' }}
-          toTag: ${{ github.ref_name }}
+          toTag: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
           mode: "COMMIT"
           configurationJson: |
             {
@@ -269,21 +397,81 @@ jobs:
               ]
             }
 
-      - name: Prepare release
+      - name: Binaries attestation
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        if: github.ref_type == 'tag'
+        with:
+          subject-path: 'releases/**/**'
+
+      - name: Publish release
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
-          name: ${{ steps.release.outputs.release_title }}
+          name: ${{ needs.prepare.outputs.release_title }}
           generate_release_notes: false
           body: ${{ steps.build_changelog.outputs.changelog }}
-          tag_name: ${{ steps.release.outputs.version_or_sha }}
-          target_commitish: ${{ steps.release.outputs.full_sha }}
+          tag_name: ${{ needs.prepare.outputs.version_or_sha }}
+          target_commitish: ${{ needs.prepare.outputs.full_sha }}
           prerelease: ${{ github.ref_type != 'tag' }}
           make_latest: ${{ github.ref_type == 'tag' }}
           files: releases/**/**
 
+      - name: "DRY-RUN: publish summary"
+        if: github.event_name == 'pull_request'
+        env:
+          RELEASE_TITLE: ${{ needs.prepare.outputs.release_title }}
+          VERSION_OR_SHA: ${{ needs.prepare.outputs.version_or_sha }}
+          FULL_SHA: ${{ needs.prepare.outputs.full_sha }}
+          IS_TAG: ${{ github.ref_type == 'tag' }}
+          CHANGELOG: ${{ steps.build_changelog.outputs.changelog }}
+        run: |
+          echo "============================================"
+          echo "  DRY-RUN: Release would be published"
+          echo "============================================"
+          echo ""
+          echo "Release title:    ${RELEASE_TITLE}"
+          echo "Version / SHA:    ${VERSION_OR_SHA}"
+          echo "Full SHA:         ${FULL_SHA}"
+          echo "Is tag release:   ${IS_TAG}"
+          echo "Prerelease:       ${{ github.ref_type != 'tag' }}"
+          echo "Make latest:      ${{ github.ref_type == 'tag' }}"
+          echo ""
+          echo "--- Changelog ---"
+          echo "${CHANGELOG:-'(no changelog — not a tag release)'}"
+          echo ""
+          echo "--- Files that would be uploaded ---"
+          find releases -type f -not -name '*.sha256' | sort
+          echo ""
+          echo "--- Checksums ---"
+          find releases -name '*.sha256' -exec cat {} \; | sort
+          echo ""
+          echo "--- Skipped steps (dry-run) ---"
+          echo "  - actions/attest-build-provenance (attestation)"
+          echo "  - softprops/action-gh-release (GitHub Release creation)"
+          echo ""
+          echo "============================================"
+          echo "  DRY-RUN complete. No release was created."
+          echo "============================================"
+
+      - name: Summary
+        run: |
+          echo "### Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Title** | \`${{ needs.prepare.outputs.release_title }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | \`${{ needs.prepare.outputs.version_or_sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Prerelease** | \`${{ github.ref_type != 'tag' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Environment** | \`${{ github.event_name != 'pull_request' && 'solx-release' || 'none (dry-run)' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Files:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          find releases -type f -not -name '*.sha256' | sort >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
   deploy-docs:
     if: github.ref_type == 'tag'
-    needs: prepare-release
+    needs: publish
     uses: ./.github/workflows/deploy-docs.yaml
     with:
       deploy: true
@@ -295,7 +483,7 @@ jobs:
 
   check-install-script:
     if: github.ref_type == 'tag'
-    needs: prepare-release
+    needs: publish
     strategy:
       fail-fast: false
       matrix:
