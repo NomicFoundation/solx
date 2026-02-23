@@ -13,6 +13,7 @@
 # Projects:
 #   [projects.<name>]
 #   url = "https://github.com/..."  # Git repository URL
+#   commit = "abc123..."            # Git commit SHA to pin (optional, HEAD if omitted)
 #   description = "..."             # Project description
 #   build_system = "npm"            # npm, yarn, pnpm, or bun (default: npm)
 #   dependencies = ["pkg@version"]  # Additional npm dependencies to install
@@ -89,17 +90,20 @@ disabled = false
 
 [projects.hardhat-v2]
 url = "https://github.com/antonbaliasnikov/hardhat-template"
+commit = "05f2ce84c7da0ce4ce986107c15cb7a197e04daf"
 description = "An example Hardhat v2 project with solx support."
 build_system = "bun"
 dependencies = [ "hardhat@2.20.1" ]
 
 [projects.hardhat-v3]
 url = "https://github.com/antonbaliasnikov/solx-hh3"
+commit = "bfe0366f7f5936ec9e5e76fa37fe21d284a53c88"
 description = "An example Hardhat v3 project with solx support."
 dependencies = [ "ts-node" ]
 
 [projects.openzeppelin]
 url = "https://github.com/antonbaliasnikov/openzeppelin-contracts"
+commit = "bd3c4ba5d950860ecd957a84acc65083c3aec20e"
 description = "A library for secure smart contract development."
 build_system = "pnpm"
 dependencies = [ "hardhat@2.20.1" ]
@@ -108,6 +112,7 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.zksafe]
 url = "https://github.com/antonbaliasnikov/zksafe"
+commit = "4f2d7db24d114367c32f1f9b6be62ace160edba6"
 description = "A Safe module for privacy of Safe transaction signing."
 build_system = "pnpm"
 disabled = true # some verification failures
@@ -116,18 +121,21 @@ EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
 [projects.ens-contracts]
 url = "https://github.com/antonbaliasnikov/ens-contracts"
+commit = "85ddeb9ff8def53e580a1fa70b156fe1c88775da"
 description = "The core contracts of the ENS protocol."
 build_system = "bun"
 disabled = true
 
 [projects.olympus]
 url = "https://github.com/antonbaliasnikov/olympus-contracts"
+commit = "825a5e49ba21c3a15c2335584bb58bd3ced435e7"
 description = "A collection of contracts for Olympus DAO."
 build_system = "yarn"
 disabled = true
 
 [projects.synthetix]
 url = "https://github.com/antonbaliasnikov/synthetix"
+commit = "1609d156708eb77025478cbcd92b98de51faf1e3"
 description = "A crypto-backed synthetic asset platform."
 build_system = "npm"
 disabled = true

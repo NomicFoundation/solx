@@ -18,6 +18,9 @@ pub struct Project {
     pub description: String,
     /// Project URL.
     pub url: String,
+    /// Git commit SHA to pin the repository to.
+    #[serde(default)]
+    pub commit: Option<String>,
     /// Project build system.
     #[serde(default)]
     pub build_system: BuildSystem,
