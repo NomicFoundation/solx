@@ -1,7 +1,8 @@
 name: "Release v2 (3-stage: prepare / review / publish)"
 
 on:
-  pull_request: # temporary — remove before merging
+  pull_request:
+    types: [labeled, synchronize]
   workflow_dispatch:
     inputs:
       ref:
@@ -44,11 +45,23 @@ permissions: {}
 
 jobs:
 
+  label-check:
+    if: >-
+      github.event_name != 'pull_request'
+      || (contains(github.event.pull_request.labels.*.name, 'ci:release')
+          && !github.event.pull_request.head.repo.fork)
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    steps:
+      - run: 'true'
+
   # ───────────────────────────────────────────────
   # Stage 0: Build matrix & platform binaries
   # ───────────────────────────────────────────────
 
   prepare-matrix:
+    needs: [label-check]
     permissions:
       contents: read
     runs-on: ubuntu-24.04
@@ -71,7 +84,6 @@ jobs:
           LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"ubuntu-24.04","image":"ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
           LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"ubuntu-24.04-arm","image":"ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
           # Disable platforms for non-tag builds if user requested
-          # TODO: revert to `if [ ${GITHUB_REF_TYPE} != tag ]; then` when the temporary pull_request trigger is removed
           if [ '${{ github.event_name }}' = 'workflow_dispatch' ] && [ ${GITHUB_REF_TYPE} != tag ]; then
             [ ${{ github.event.inputs.release_windows_amd64 }} != true ] && WINDOWS=
             [ ${{ github.event.inputs.release_macos_amd64 }} != true ] && MACOS_AMD64=
@@ -142,9 +154,10 @@ jobs:
           release-suffix: ${{ format('{0}-{1}', matrix.release-suffix, github.ref_type == 'tag' && format('v{0}', github.ref_name) || inputs.prerelease_suffix || 'notag') }}
 
   get-previous-release:
+    needs: [label-check]
     permissions:
       contents: read
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.latest_release.outputs.tag }}
@@ -205,16 +218,19 @@ jobs:
         id: release
         run: |
           git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-          if [ '${{ github.event_name }}' = 'workflow_dispatch' ]; then
-            VERSION_OR_SHA=$(git rev-parse --short HEAD)
-            echo "version_or_sha=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
-            echo "full_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-            echo "release_title=prerelease-${VERSION_OR_SHA}-${{ github.event.inputs.prerelease_suffix }}" >> $GITHUB_OUTPUT
-          else
+          if [ '${{ github.ref_type }}' = 'tag' ]; then
             VERSION_OR_SHA="${GITHUB_REF#refs/tags/}"
-            echo "version_or_sha=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
             echo "release_title=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
+          else
+            VERSION_OR_SHA=$(git rev-parse --short HEAD)
+            echo "full_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+            if [ '${{ github.event_name }}' = 'pull_request' ]; then
+              echo "release_title=pr-dry-run-${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
+            else
+              echo "release_title=prerelease-${VERSION_OR_SHA}-${{ github.event.inputs.prerelease_suffix }}" >> $GITHUB_OUTPUT
+            fi
           fi
+          echo "version_or_sha=${VERSION_OR_SHA}" >> $GITHUB_OUTPUT
 
       - name: Check release version
         if: github.ref_type == 'tag'
@@ -327,7 +343,8 @@ jobs:
       needs.prepare.result == 'success' &&
       needs.review.result == 'success' &&
       (needs.get-previous-release.result == 'skipped' || needs.get-previous-release.result == 'success')
-    environment: release
+    # PR dry-runs skip the manual approval gate; tag/dispatch runs still require it.
+    environment: ${{ github.event_name != 'pull_request' && 'release' || '' }}
     runs-on: ubuntu-24.04
     steps:
 
@@ -348,12 +365,12 @@ jobs:
           tar xzf solx-release-bundle.tar.gz -C releases
 
       - name: Build changelog
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || github.event_name == 'pull_request'
         id: build_changelog
         uses: mikepenz/release-changelog-builder-action@c9dc8369bccbc41e0ac887f8fd674f5925d315f7 # v5
         with:
           fromTag: ${{ needs.get-previous-release.outputs.tag || '' }}
-          toTag: ${{ github.ref_name }}
+          toTag: ${{ github.ref_type == 'tag' && github.ref_name || github.sha }}
           mode: "COMMIT"
           configurationJson: |
             {
