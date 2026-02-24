@@ -17,7 +17,7 @@ doctest = false
 default = ["solc"]
 solc = ["solx-core/solc"]
 mlir = ["solx-core/mlir"]
-slang = ["mlir", "solx-core/solx-mlir", "dep:solx-slang"]
+slang = ["mlir", "dep:solx-slang"]
 
 [dependencies]
 anyhow.workspace = true

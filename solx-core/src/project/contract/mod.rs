@@ -202,7 +202,7 @@ impl Contract {
                 ) {
                     context.set_capture_llvm_ir(true);
                 }
-                let build = context.build(
+                let mut build = context.build(
                     output_selection.check_selection(
                         contract_name.path.as_str(),
                         contract_name.name.as_deref(),
@@ -214,27 +214,20 @@ impl Contract {
                 )?;
                 let (immutables_out, metadata_out) = match code_segment {
                     solx_utils::CodeSegment::Deploy => (None, None),
-                    solx_utils::CodeSegment::Runtime => {
-                        (Some(build.immutables.unwrap_or_default()), metadata_bytes)
-                    }
+                    solx_utils::CodeSegment::Runtime => (
+                        Some(build.immutables.take().unwrap_or_default()),
+                        metadata_bytes,
+                    ),
                 };
-                let object = EVMContractObject::new(
+                let object = EVMContractObject::from_build(
                     code_identifier,
                     contract_name.clone(),
-                    build.assembly,
-                    build.bytecode,
-                    build.debug_info,
-                    build.evmla,
-                    build.ethir,
-                    build.llvm_ir_unoptimized,
-                    build.llvm_ir,
+                    build,
                     true,
                     code_segment,
                     immutables_out,
                     metadata_out,
                     yul.dependencies,
-                    build.is_size_fallback,
-                    build.warnings,
                     profiler.to_vec(),
                 );
                 Ok(object)
@@ -336,7 +329,7 @@ impl Contract {
                 ) {
                     context.set_capture_llvm_ir(true);
                 }
-                let build = context.build(
+                let mut build = context.build(
                     output_selection.check_selection(
                         contract_name.path.as_str(),
                         contract_name.name.as_deref(),
@@ -352,27 +345,20 @@ impl Contract {
                 };
                 let (immutables_out, metadata_out) = match code_segment {
                     solx_utils::CodeSegment::Deploy => (None, None),
-                    solx_utils::CodeSegment::Runtime => {
-                        (Some(build.immutables.unwrap_or_default()), metadata_bytes)
-                    }
+                    solx_utils::CodeSegment::Runtime => (
+                        Some(build.immutables.take().unwrap_or_default()),
+                        metadata_bytes,
+                    ),
                 };
-                let object = EVMContractObject::new(
+                let object = EVMContractObject::from_build(
                     code_identifier,
                     contract_name.clone(),
-                    build.assembly,
-                    build.bytecode,
-                    build.debug_info,
-                    build.evmla,
-                    build.ethir,
-                    build.llvm_ir_unoptimized,
-                    build.llvm_ir,
+                    build,
                     false,
                     code_segment,
                     immutables_out,
                     metadata_out,
                     dependencies,
-                    build.is_size_fallback,
-                    build.warnings,
                     profiler.to_vec(),
                 );
                 Ok(object)
@@ -449,28 +435,20 @@ impl Contract {
                     solx_utils::CodeSegment::Deploy => (None, None),
                     solx_utils::CodeSegment::Runtime => (Some(BTreeMap::new()), metadata_bytes),
                 };
-                let object = EVMContractObject::new(
+                let object = EVMContractObject::from_build(
                     code_identifier,
                     contract_name.clone(),
-                    build.assembly,
-                    build.bytecode,
-                    build.debug_info,
-                    build.evmla,
-                    build.ethir,
-                    build.llvm_ir_unoptimized,
-                    build.llvm_ir,
+                    build,
                     false,
                     code_segment,
                     immutables_out,
                     metadata_out,
                     llvm_ir.dependencies,
-                    build.is_size_fallback,
-                    build.warnings,
                     profiler.to_vec(),
                 );
                 Ok(object)
             }
-            #[cfg(feature = "solx-mlir")]
+            #[cfg(feature = "mlir")]
             (IR::MLIR(mlir), code_segment) => {
                 let code_identifier = match code_segment {
                     solx_utils::CodeSegment::Deploy => contract_name.full_path.to_owned(),
@@ -542,23 +520,15 @@ impl Contract {
                     solx_utils::CodeSegment::Deploy => (None, None),
                     solx_utils::CodeSegment::Runtime => (Some(BTreeMap::new()), metadata_bytes),
                 };
-                let object = EVMContractObject::new(
+                let object = EVMContractObject::from_build(
                     code_identifier.clone(),
                     contract_name.clone(),
-                    build.assembly,
-                    build.bytecode,
-                    build.debug_info,
-                    build.evmla,
-                    build.ethir,
-                    build.llvm_ir_unoptimized,
-                    build.llvm_ir,
+                    build,
                     false,
                     code_segment,
                     immutables_out,
                     metadata_out,
                     solx_codegen_evm::Dependencies::new(code_identifier.as_str()),
-                    build.is_size_fallback,
-                    build.warnings,
                     profiler.to_vec(),
                 );
                 Ok(object)

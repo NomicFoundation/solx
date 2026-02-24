@@ -373,7 +373,7 @@ pub fn standard_output_evm(
     {
         let _ = &optimizer_settings;
         let _ = &output_config;
-        Ok(EVMBuild::from_solc_output(&solc_output, messages))
+        Ok(EVMBuild::from_solc_output(solc_output, messages))
     }
 
     #[cfg(not(all(feature = "solc", feature = "mlir")))]

@@ -60,53 +60,37 @@ impl Build {
     ///
     #[cfg(all(feature = "solc", feature = "mlir"))]
     pub fn from_solc_output(
-        solc_output: &solx_standard_json::Output,
+        solc_output: solx_standard_json::Output,
         messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
     ) -> Self {
         let mut contracts = BTreeMap::new();
 
-        for (path, file_contracts) in solc_output.contracts.iter() {
-            for (name, solc_contract) in file_contracts.iter() {
-                let contract_name = solx_utils::ContractName::new(path.clone(), Some(name.clone()));
+        for (path, file_contracts) in solc_output.contracts.into_iter() {
+            for (name, solc_contract) in file_contracts.into_iter() {
+                let contract_name = solx_utils::ContractName::new(path.clone(), Some(name));
 
-                let deploy_bytecode_hex = solc_contract
-                    .evm
-                    .as_ref()
-                    .and_then(|evm| evm.bytecode.as_ref())
-                    .and_then(|bytecode| bytecode.object.clone());
-
-                let runtime_bytecode_hex = solc_contract
-                    .evm
-                    .as_ref()
-                    .and_then(|evm| evm.deployed_bytecode.as_ref())
-                    .and_then(|bytecode| bytecode.object.clone());
+                let (
+                    deploy_bytecode_hex,
+                    runtime_bytecode_hex,
+                    method_identifiers,
+                    legacy_assembly,
+                ) = match solc_contract.evm {
+                    Some(evm) => (
+                        evm.bytecode.and_then(|bytecode| bytecode.object),
+                        evm.deployed_bytecode.and_then(|bytecode| bytecode.object),
+                        evm.method_identifiers,
+                        evm.legacy_assembly,
+                    ),
+                    None => (None, None, None, None),
+                };
 
                 let deploy_object = deploy_bytecode_hex.map(|hex| {
-                    let mut object = ContractObject::new(
+                    ContractObject::new_passthrough(
                         contract_name.full_path.clone(),
                         contract_name.clone(),
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        false,
                         solx_utils::CodeSegment::Deploy,
-                        None,
-                        None,
-                        solx_codegen_evm::Dependencies {
-                            identifier: contract_name.full_path.clone(),
-                            inner: Vec::new(),
-                        },
-                        false,
-                        Vec::new(),
-                        Vec::new(),
-                    );
-                    object.bytecode_hex = Some(hex);
-                    object.is_assembled = true;
-                    object
+                        hex,
+                    )
                 });
 
                 let runtime_object = runtime_bytecode_hex.map(|hex| {
@@ -115,56 +99,27 @@ impl Build {
                         contract_name.full_path,
                         solx_utils::CodeSegment::Runtime
                     );
-                    let mut object = ContractObject::new(
+                    ContractObject::new_passthrough(
                         runtime_identifier,
                         contract_name.clone(),
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                        false,
                         solx_utils::CodeSegment::Runtime,
-                        None,
-                        None,
-                        solx_codegen_evm::Dependencies {
-                            identifier: contract_name.full_path.clone(),
-                            inner: Vec::new(),
-                        },
-                        false,
-                        Vec::new(),
-                        Vec::new(),
-                    );
-                    object.bytecode_hex = Some(hex);
-                    object.is_assembled = true;
-                    object
+                        hex,
+                    )
                 });
-
-                let method_identifiers = solc_contract
-                    .evm
-                    .as_ref()
-                    .and_then(|evm| evm.method_identifiers.clone());
-
-                let legacy_assembly = solc_contract
-                    .evm
-                    .as_ref()
-                    .and_then(|evm| evm.legacy_assembly.clone());
 
                 let contract = Contract::new(
                     contract_name,
                     deploy_object.map(Ok),
                     runtime_object.map(Ok),
-                    solc_contract.metadata.clone(),
-                    solc_contract.abi.clone(),
+                    solc_contract.metadata,
+                    solc_contract.abi,
                     method_identifiers,
-                    solc_contract.userdoc.clone(),
-                    solc_contract.devdoc.clone(),
-                    solc_contract.storage_layout.clone(),
-                    solc_contract.transient_storage_layout.clone(),
+                    solc_contract.userdoc,
+                    solc_contract.devdoc,
+                    solc_contract.storage_layout,
+                    solc_contract.transient_storage_layout,
                     legacy_assembly,
-                    solc_contract.ir.clone(),
+                    solc_contract.ir,
                 );
 
                 contracts.insert(contract.name.full_path.clone(), contract);
@@ -177,8 +132,8 @@ impl Build {
             Some(
                 solc_output
                     .sources
-                    .iter()
-                    .map(|(path, source)| (path.clone(), source.ast.clone()))
+                    .into_iter()
+                    .map(|(path, source)| (path, source.ast))
                     .collect(),
             )
         };
