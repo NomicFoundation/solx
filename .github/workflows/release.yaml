@@ -362,6 +362,69 @@ jobs:
           find bundle -type f -not -name '*.sha256' -exec ls -lh {} \; | awk '{print $5, $9}'
 
   # ───────────────────────────────────────────────
+  # Stage 2.5: Notify — Slack notification before environment gate
+  # ───────────────────────────────────────────────
+
+  notify-deploy:
+    name: Notify pre-deploy to Slack
+    runs-on: ubuntu-24.04
+    needs: [prepare, review]
+    if: >-
+      !cancelled()
+      && needs.prepare.result == 'success'
+      && needs.review.result == 'success'
+      && github.event_name != 'pull_request'
+    continue-on-error: true
+    steps:
+      - name: Notify pre-deploy
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+        with:
+          webhook: ${{ secrets.PUBLISHING_NOTIFICATIONS_SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "solx release — Review requested: ${{ needs.prepare.outputs.release_title }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "solx release — Review requested"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Release:*\n`${{ needs.prepare.outputs.release_title }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Type:*\n${{ github.ref_type == 'tag' && 'Production release' || 'Internal / nightly release' }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Commit:* <${{ github.event.head_commit.url || format('{0}/{1}/commit/{2}', github.server_url, github.repository, github.sha) }}|View commit>\n*Approve:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Open workflow run>"
+                  }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Triggered by *${{ github.actor }}* via `${{ github.event_name }}`"
+                    }
+                  ]
+                }
+              ]
+            }
+
+  # ───────────────────────────────────────────────
   # Stage 3: Publish
   # ───────────────────────────────────────────────
 
@@ -371,7 +434,7 @@ jobs:
       attestations: write
       contents: write
     name: Publish release
-    needs: [prepare, review, get-previous-release]
+    needs: [prepare, review, get-previous-release, notify-deploy]
     # Run as long as prepare and review succeeded — tolerate get-previous-release
     # failure so a transient GitHub API issue doesn't silently skip the release.
     if: >-
@@ -382,6 +445,56 @@ jobs:
     environment: ${{ github.event_name != 'pull_request' && 'solx-release' || '' }}
     runs-on: ubuntu-24.04
     steps:
+
+      - name: Notify deployment approved to Slack
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+        with:
+          webhook: ${{ secrets.PUBLISHING_NOTIFICATIONS_SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "solx release — Deployment starting: ${{ needs.prepare.outputs.release_title }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "solx release — Deployment starting"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Release:*\n`${{ needs.prepare.outputs.release_title }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Type:*\n${{ github.ref_type == 'tag' && 'Production release' || 'Internal / nightly release' }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Open workflow run>"
+                  }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Triggered by *${{ github.actor }}*"
+                    }
+                  ]
+                }
+              ]
+            }
 
       - name: Checkout source
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
