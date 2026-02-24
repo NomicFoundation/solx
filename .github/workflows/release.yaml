@@ -361,6 +361,57 @@ jobs:
           echo "=== Binary sizes ==="
           find bundle -type f -not -name '*.sha256' -exec ls -lh {} \; | awk '{print $5, $9}'
 
+      # ── TEMPORARY: remove before merging ──
+      - name: "TEST: Slack notification dry-run"
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
+        with:
+          webhook: ${{ secrets.PUBLISHING_NOTIFICATIONS_SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": "[TEST] solx release notifications — this is a test message",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "[TEST] solx release — Notification test"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Release:*\n`${{ needs.prepare.outputs.release_title }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Type:*\nDry-run (PR #${{ github.event.pull_request.number }})"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Open workflow run>"
+                  }
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": ":test_tube: *This is a test message* — triggered by *${{ github.actor }}* from a pull request. Remove this step before merging."
+                    }
+                  ]
+                }
+              ]
+            }
+
   # ───────────────────────────────────────────────
   # Stage 2.5: Notify — Slack notification before environment gate
   # ───────────────────────────────────────────────
