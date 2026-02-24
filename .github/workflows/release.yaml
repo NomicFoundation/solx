@@ -374,9 +374,9 @@ jobs:
       && needs.prepare.result == 'success'
       && needs.review.result == 'success'
       && github.event_name != 'pull_request'
-    continue-on-error: true
     steps:
       - name: Notify pre-deploy
+        continue-on-error: true
         uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1
         with:
           webhook: ${{ secrets.PUBLISHING_NOTIFICATIONS_SLACK_WEBHOOK_URL }}
