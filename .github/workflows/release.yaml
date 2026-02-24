@@ -1,3 +1,18 @@
+# Three trigger flows:
+#
+#   push tag (X.Y.Z)       — Full production release: build, review, publish
+#                             to GitHub Releases with attestation, deploy docs,
+#                             and verify the install script. Requires manual
+#                             approval via the solx-release environment.
+#
+#   workflow_dispatch       — Nightly / ad-hoc pre-release: same build & review
+#                             pipeline, publishes a GitHub pre-release. Individual
+#                             platforms can be toggled off. Requires manual approval.
+#
+#   pull_request (ci:release label) — Dry-run: exercises the full pipeline but
+#                             skips attestation, GitHub Release creation, docs
+#                             deploy, and install-script check. No approval needed.
+
 name: Build and release binaries
 
 on:
@@ -178,7 +193,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag=$(gh release view --json tagName --jq .tagName)
+          tag=$(gh release view --json tagName --jq .tagName 2>/dev/null || echo "")
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
 
   # ───────────────────────────────────────────────
@@ -194,7 +209,6 @@ jobs:
       image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
     needs: [build]
     outputs:
-      tarball_name: ${{ steps.bundle.outputs.tarball_name }}
       release_title: ${{ steps.release.outputs.release_title }}
       version_or_sha: ${{ steps.release.outputs.version_or_sha }}
       full_sha: ${{ steps.release.outputs.full_sha }}
@@ -243,7 +257,10 @@ jobs:
           fi
 
       - name: Prepare universal macOS binary
-        if: github.ref_type == 'tag' || github.event_name == 'pull_request' || (inputs.release_macos_amd64 && inputs.release_macos_arm64)
+        if: >-
+          github.ref_type == 'tag'
+          || github.event_name == 'pull_request'
+          || (github.event_name == 'workflow_dispatch' && inputs.release_macos_amd64 && inputs.release_macos_arm64)
         env:
           MACOSX_UNIVERSAL_SUFFIX: "macosx"
           RELEASE_SUFFIX: ${{ github.ref_type == 'tag' && format('v{0}', github.ref_name) || inputs.prerelease_suffix || 'notag' }}
@@ -320,6 +337,12 @@ jobs:
       - name: Verify SHA256 checksums
         run: |
           cd bundle
+          CHECKSUM_COUNT=$(find . -name '*.sha256' | wc -l)
+          echo "Found ${CHECKSUM_COUNT} checksum file(s)"
+          if [ "${CHECKSUM_COUNT}" -lt 1 ]; then
+            echo "ERROR: Expected at least 1 checksum file in the release bundle"
+            exit 1
+          fi
           find . -name '*.sha256' -print0 | xargs -0 sha256sum --check
 
       - name: Display binary sizes
@@ -411,7 +434,7 @@ jobs:
           generate_release_notes: false
           body: ${{ steps.build_changelog.outputs.changelog }}
           tag_name: ${{ needs.prepare.outputs.version_or_sha }}
-          target_commitish: ${{ needs.prepare.outputs.full_sha }}
+          target_commitish: ${{ needs.prepare.outputs.full_sha || github.sha }}
           prerelease: ${{ github.ref_type != 'tag' }}
           make_latest: ${{ github.ref_type == 'tag' }}
           files: releases/**/**
@@ -477,13 +500,13 @@ jobs:
       deploy: true
     secrets: inherit
     permissions:
-      id-token: write
-      attestations: write
       contents: write
 
   check-install-script:
     if: github.ref_type == 'tag'
     needs: publish
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
