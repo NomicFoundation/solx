@@ -552,7 +552,7 @@ impl Project {
                         );
                         (deploy_code.into(), runtime_code.into())
                     }
-                    #[cfg(feature = "mlir")]
+                    #[cfg(feature = "solx-mlir")]
                     Some(ContractIR::MLIR(mlir)) => {
                         let deploy_code_identifier = contract.name.full_path.to_owned();
                         let runtime_code_identifier = format!(

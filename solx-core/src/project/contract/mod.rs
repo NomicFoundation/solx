@@ -470,7 +470,7 @@ impl Contract {
                 );
                 Ok(object)
             }
-            #[cfg(feature = "mlir")]
+            #[cfg(feature = "solx-mlir")]
             (IR::MLIR(mlir), code_segment) => {
                 let code_identifier = match code_segment {
                     solx_utils::CodeSegment::Deploy => contract_name.full_path.to_owned(),

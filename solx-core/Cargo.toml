@@ -33,4 +33,4 @@ solx-utils = { path = "../solx-utils" }
 
 [features]
 solc = []
-mlir = ["dep:solx-mlir"]
+mlir = []

@@ -16,6 +16,6 @@ semver.workspace = true
 slang_solidity = "1.3"
 
 solx-codegen-evm = { path = "../solx-codegen-evm" }
-solx-core = { path = "../solx-core", features = ["mlir"] }
+solx-core = { path = "../solx-core", features = ["mlir", "solx-mlir"] }
 solx-standard-json = { path = "../solx-standard-json" }
 solx-utils = { path = "../solx-utils" }

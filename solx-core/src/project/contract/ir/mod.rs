@@ -4,13 +4,13 @@
 
 pub mod evmla;
 pub mod llvm_ir;
-#[cfg(feature = "mlir")]
+#[cfg(feature = "solx-mlir")]
 pub mod mlir;
 pub mod yul;
 
 use self::evmla::EVMLegacyAssembly;
 use self::llvm_ir::LLVMIR;
-#[cfg(feature = "mlir")]
+#[cfg(feature = "solx-mlir")]
 use self::mlir::MLIR;
 use self::yul::Yul;
 
@@ -26,7 +26,7 @@ pub enum IR {
     /// The LLVM IR source code.
     LLVMIR(LLVMIR),
     /// The MLIR source code.
-    #[cfg(feature = "mlir")]
+    #[cfg(feature = "solx-mlir")]
     MLIR(MLIR),
 }
 
@@ -48,7 +48,7 @@ impl From<LLVMIR> for IR {
     }
 }
 
-#[cfg(feature = "mlir")]
+#[cfg(feature = "solx-mlir")]
 impl From<MLIR> for IR {
     fn from(inner: MLIR) -> Self {
         Self::MLIR(inner)

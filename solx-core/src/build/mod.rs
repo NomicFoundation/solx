@@ -54,6 +54,139 @@ impl Build {
     }
 
     ///
+    /// Creates a build directly from solc standard JSON output.
+    ///
+    /// Used in MLIR passthrough mode where solc produces final bytecode.
+    ///
+    #[cfg(all(feature = "solc", feature = "mlir"))]
+    pub fn from_solc_output(
+        solc_output: &solx_standard_json::Output,
+        messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
+    ) -> Self {
+        let mut contracts = BTreeMap::new();
+
+        for (path, file_contracts) in solc_output.contracts.iter() {
+            for (name, solc_contract) in file_contracts.iter() {
+                let contract_name = solx_utils::ContractName::new(path.clone(), Some(name.clone()));
+
+                let deploy_bytecode_hex = solc_contract
+                    .evm
+                    .as_ref()
+                    .and_then(|evm| evm.bytecode.as_ref())
+                    .and_then(|bytecode| bytecode.object.clone());
+
+                let runtime_bytecode_hex = solc_contract
+                    .evm
+                    .as_ref()
+                    .and_then(|evm| evm.deployed_bytecode.as_ref())
+                    .and_then(|bytecode| bytecode.object.clone());
+
+                let deploy_object = deploy_bytecode_hex.map(|hex| {
+                    let mut object = ContractObject::new(
+                        contract_name.full_path.clone(),
+                        contract_name.clone(),
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        false,
+                        solx_utils::CodeSegment::Deploy,
+                        None,
+                        None,
+                        solx_codegen_evm::Dependencies {
+                            identifier: contract_name.full_path.clone(),
+                            inner: Vec::new(),
+                        },
+                        false,
+                        Vec::new(),
+                        Vec::new(),
+                    );
+                    object.bytecode_hex = Some(hex);
+                    object.is_assembled = true;
+                    object
+                });
+
+                let runtime_object = runtime_bytecode_hex.map(|hex| {
+                    let runtime_identifier = format!(
+                        "{}.{}",
+                        contract_name.full_path,
+                        solx_utils::CodeSegment::Runtime
+                    );
+                    let mut object = ContractObject::new(
+                        runtime_identifier,
+                        contract_name.clone(),
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        false,
+                        solx_utils::CodeSegment::Runtime,
+                        None,
+                        None,
+                        solx_codegen_evm::Dependencies {
+                            identifier: contract_name.full_path.clone(),
+                            inner: Vec::new(),
+                        },
+                        false,
+                        Vec::new(),
+                        Vec::new(),
+                    );
+                    object.bytecode_hex = Some(hex);
+                    object.is_assembled = true;
+                    object
+                });
+
+                let method_identifiers = solc_contract
+                    .evm
+                    .as_ref()
+                    .and_then(|evm| evm.method_identifiers.clone());
+
+                let legacy_assembly = solc_contract
+                    .evm
+                    .as_ref()
+                    .and_then(|evm| evm.legacy_assembly.clone());
+
+                let contract = Contract::new(
+                    contract_name,
+                    deploy_object.map(Ok),
+                    runtime_object.map(Ok),
+                    solc_contract.metadata.clone(),
+                    solc_contract.abi.clone(),
+                    method_identifiers,
+                    solc_contract.userdoc.clone(),
+                    solc_contract.devdoc.clone(),
+                    solc_contract.storage_layout.clone(),
+                    solc_contract.transient_storage_layout.clone(),
+                    legacy_assembly,
+                    solc_contract.ir.clone(),
+                );
+
+                contracts.insert(contract.name.full_path.clone(), contract);
+            }
+        }
+
+        let ast_jsons = if solc_output.sources.is_empty() {
+            None
+        } else {
+            Some(
+                solc_output
+                    .sources
+                    .iter()
+                    .map(|(path, source)| (path.clone(), source.ast.clone()))
+                    .collect(),
+            )
+        };
+
+        Self::new(contracts, ast_jsons, messages)
+    }
+
+    ///
     /// Links the EVM build.
     ///
     pub fn link(

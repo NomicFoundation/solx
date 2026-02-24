@@ -36,3 +36,5 @@ CARGO_BIN_EXE_SOLX = { value = "./target/debug/solx", relative = true, force = f
 
 [alias]
 test-slang = "test -p solx-slang -p solx-mlir -p solx --no-default-features --features slang"
+build-mlir = "build --features mlir"
+test-mlir = "test -p solx --features mlir"
