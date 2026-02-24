@@ -17,7 +17,7 @@ name: Build and release binaries
 
 on:
   pull_request:
-    types: [labeled, synchronize]
+    types: [opened, labeled, synchronize]
   workflow_dispatch:
     inputs:
       ref:
@@ -283,11 +283,9 @@ jobs:
           done
 
       - name: Bundle release artifacts
-        id: bundle
         run: |
           TARBALL="solx-release-bundle.tar.gz"
           tar czf "${TARBALL}" -C releases .
-          echo "tarball_name=${TARBALL}" >> $GITHUB_OUTPUT
           echo "Bundle size: $(du -h "${TARBALL}" | cut -f1)"
 
       - name: Upload release bundle
@@ -295,7 +293,7 @@ jobs:
         with:
           name: solx-release-bundle
           path: solx-release-bundle.tar.gz
-          retention-days: 2
+          retention-days: 5
 
   # ───────────────────────────────────────────────
   # Stage 2: Review — validate the bundle
@@ -306,7 +304,7 @@ jobs:
       contents: read
     name: Review release bundle
     needs: [prepare]
-    if: ${{ !cancelled() && needs.prepare.result == 'success' }}
+    if: "!cancelled() && needs.prepare.result == 'success'"
     runs-on: ubuntu-24.04
     steps:
 
@@ -326,10 +324,23 @@ jobs:
           find bundle -type f | sort
 
       - name: Validate binary count
+        env:
+          IS_TAG: ${{ github.ref_type == 'tag' }}
         run: |
           BINARY_COUNT=$(find bundle -type f -not -name '*.sha256' | wc -l)
           echo "Found ${BINARY_COUNT} binary file(s)"
-          if [ "${BINARY_COUNT}" -lt 1 ]; then
+          # Tag releases require all 4 platform binaries — catch partial builds
+          # caused by individual matrix legs failing (fail-fast: false).
+          # Non-tag builds (dispatch/PR) only need >= 1 since platforms can be
+          # toggled off intentionally.
+          if [ "${IS_TAG}" = "true" ]; then
+            EXPECTED=4
+            if [ "${BINARY_COUNT}" -ne "${EXPECTED}" ]; then
+              echo "ERROR: Tag release expected exactly ${EXPECTED} binaries, found ${BINARY_COUNT}"
+              find bundle -type f -not -name '*.sha256' | sort
+              exit 1
+            fi
+          elif [ "${BINARY_COUNT}" -lt 1 ]; then
             echo "ERROR: Expected at least 1 binary in the release bundle"
             exit 1
           fi
@@ -361,6 +372,12 @@ jobs:
       contents: write
     name: Publish release
     needs: [prepare, review, get-previous-release]
+    # Run as long as prepare and review succeeded — tolerate get-previous-release
+    # failure so a transient GitHub API issue doesn't silently skip the release.
+    if: >-
+      !cancelled()
+      && needs.prepare.result == 'success'
+      && needs.review.result == 'success'
     # PR dry-runs skip the manual approval gate; tag/dispatch runs still require it.
     environment: ${{ github.event_name != 'pull_request' && 'solx-release' || '' }}
     runs-on: ubuntu-24.04
