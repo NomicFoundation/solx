@@ -334,6 +334,7 @@ jobs:
           # Non-tag builds (dispatch/PR) only need >= 1 since platforms can be
           # toggled off intentionally.
           if [ "${IS_TAG}" = "true" ]; then
+            # linux-amd64-gnu, linux-arm64-gnu, windows-amd64, macosx-universal
             EXPECTED=4
             if [ "${BINARY_COUNT}" -ne "${EXPECTED}" ]; then
               echo "ERROR: Tag release expected exactly ${EXPECTED} binaries, found ${BINARY_COUNT}"
