@@ -11,8 +11,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  checks: write
 
 # Cancel the workflow if any new changes pushed to a feature branch or the trunk
 concurrency:
@@ -25,6 +23,7 @@ jobs:
   changes:
     runs-on: ubuntu-24.04
     permissions:
+      contents: read
       pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
@@ -77,6 +76,9 @@ jobs:
   build-and-test:
     needs: changes
     if: needs.changes.outputs.code == 'true'
+    permissions:
+      contents: read
+      checks: write
     strategy:
       fail-fast: false # finalize testing of all targets even if one failed
       matrix:
@@ -176,6 +178,9 @@ jobs:
   # Run tests with address sanitizer (label-gated)
   sanitizer:
     if: contains(github.event.pull_request.labels.*.name, 'ci:sanitizer') && !github.event.pull_request.head.repo.fork
+    permissions:
+      contents: read
+      checks: write
     runs-on: solx-linux-amd64
     container:
       image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
