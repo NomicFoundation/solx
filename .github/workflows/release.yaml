@@ -115,6 +115,7 @@ jobs:
   build:
     permissions:
       contents: read
+      packages: read
     needs: prepare-matrix
     strategy:
       fail-fast: false
@@ -203,6 +204,7 @@ jobs:
   prepare:
     permissions:
       contents: read
+      packages: read
     name: Prepare release bundle
     runs-on: ubuntu-24.04
     container:

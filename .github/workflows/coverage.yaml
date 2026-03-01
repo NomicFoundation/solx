@@ -29,6 +29,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      packages: read
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner:a17f03e
     env:

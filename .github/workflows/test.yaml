@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 # Cancel the workflow if any new changes pushed to a feature branch or the trunk
 concurrency:
@@ -79,6 +80,7 @@ jobs:
     permissions:
       contents: read
       checks: write
+      packages: read
     strategy:
       fail-fast: false # finalize testing of all targets even if one failed
       matrix:
@@ -181,6 +183,7 @@ jobs:
     permissions:
       contents: read
       checks: write
+      packages: read
     runs-on: solx-linux-amd64
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner:a17f03e
