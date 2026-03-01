@@ -6,11 +6,16 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+use sha2::Digest;
+
 /// Default Boost version.
 pub const DEFAULT_BOOST_VERSION: &str = "1.83.0";
 
 /// Boost download URL template.
 const BOOST_DOWNLOAD_URL: &str = "https://archives.boost.io/release";
+
+/// SHA256 checksum of `boost_1_83_0.tar.gz` from the official Boost release page.
+const BOOST_SHA256: &str = "c0685b68dd44cc46574cce86c4e17c0f611b15e195be9848dfd0769a0a207628";
 
 /// Marker file to track the installed Boost version.
 const BOOST_VERSION_MARKER: &str = ".solx-boost-version";
@@ -151,6 +156,7 @@ pub fn download_and_build(
     let archive_path = working_dir.join(boost_config.archive_filename());
     if !archive_path.exists() {
         download(&boost_config.download_url(), &archive_path)?;
+        verify_checksum(&archive_path, BOOST_SHA256)?;
     }
 
     // Extract
@@ -187,6 +193,27 @@ fn download(url: &str, output_path: &Path) -> anyhow::Result<()> {
     curl.arg(url);
 
     crate::utils::command(&mut curl, "Downloading Boost")?;
+    Ok(())
+}
+
+///
+/// Verifies the SHA256 checksum of a downloaded file.
+///
+fn verify_checksum(file_path: &Path, expected_hex: &str) -> anyhow::Result<()> {
+    eprintln!("Verifying checksum of {}...", file_path.display());
+    let file_bytes = std::fs::read(file_path)?;
+    let actual_hex = hex::encode(sha2::Sha256::digest(&file_bytes));
+    if actual_hex != expected_hex {
+        // Remove the corrupted download so it isn't reused on retry
+        let _ = std::fs::remove_file(file_path);
+        anyhow::bail!(
+            "SHA256 checksum mismatch for {}:\n  expected: {}\n  actual:   {}",
+            file_path.display(),
+            expected_hex,
+            actual_hex
+        );
+    }
+    eprintln!("Checksum verified.");
     Ok(())
 }
 
