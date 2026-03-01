@@ -58,6 +58,16 @@ runs:
         RUSTFLAGS: '-C target-feature=+crt-static'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash -ex {0}' }}
       run: |
+        # Sanitize build environment: clear variables that could tamper with compilation.
+        # RUSTC_WRAPPER: could redirect compilation through a malicious wrapper.
+        # LD_PRELOAD / DYLD_*: could inject code into compiler and linker processes.
+        # LLVM_SYS_* / MLIR_SYS_* / TABLEGEN_*: could redirect to a trojaned LLVM
+        #   (safe defaults from .cargo/config.toml will be used instead).
+        unset RUSTC_WRAPPER LD_PRELOAD \
+          DYLD_INSERT_LIBRARIES DYLD_LIBRARY_PATH DYLD_FRAMEWORK_PATH \
+          DYLD_FALLBACK_LIBRARY_PATH DYLD_FALLBACK_FRAMEWORK_PATH \
+          2>/dev/null || true
+        for var in $(env | grep -oE '^(LLVM_SYS|MLIR_SYS|TABLEGEN)_[^=]*'); do unset "$var"; done
         cargo fetch --locked
         if [ '${{ inputs.sanitizer }}' != '' ]; then
           export RUSTFLAGS="-Z sanitizer=${{ inputs.sanitizer }}"
