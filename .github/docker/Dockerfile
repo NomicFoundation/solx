@@ -66,6 +66,9 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 ENV PATH="/root/.cargo/bin:/usr/lib/llvm-21/bin:${PATH}" \
     LD_LIBRARY_PATH="/usr/lib/llvm-21/lib"
 
+# ── Cargo tools ────────────────────────────────────────────────────────────
+RUN cargo install cargo2junit cargo-llvm-cov cargo-udeps --locked
+
 # Smoke-test: ensure key tools are on PATH
 RUN set -eux \
     && rustc --version \
