@@ -65,6 +65,7 @@ pub fn build(
             ))
             .args(CcacheVariant::cmake_args(ccache_variant))
             .args(crate::llvm::platforms::shared::SHARED_BUILD_OPTS)
+            .args(crate::llvm::platforms::shared::shared_build_opts_split_dwarf(build_type))
             .args(crate::llvm::platforms::shared::shared_build_opts_werror())
             .args(extra_args)
             .args(crate::llvm::platforms::shared::shared_build_opts_assertions(enable_assertions))
