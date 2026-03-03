@@ -6,6 +6,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 
+use sha2::Digest;
+
 /// Default Boost version.
 pub const DEFAULT_BOOST_VERSION: &str = "1.83.0";
 
@@ -153,6 +155,10 @@ pub fn download_and_build(
         download(&boost_config.download_url(), &archive_path)?;
     }
 
+    // Verify checksum before extraction (even if archive already existed on disk)
+    let expected_checksum = boost_checksum(&boost_config.version)?;
+    verify_checksum(&archive_path, expected_checksum)?;
+
     // Extract
     let source_dir = boost_config.source_dir(&working_dir);
     if !source_dir.exists() {
@@ -177,6 +183,23 @@ pub fn download_and_build(
 }
 
 ///
+/// Returns the expected SHA256 checksum for a given Boost version's tar.gz archive.
+///
+/// Checksums are taken from the official Boost release page JSON files
+/// (e.g. https://archives.boost.io/release/1.83.0/source/boost_1_83_0.tar.gz.json).
+///
+fn boost_checksum(version: &str) -> anyhow::Result<&'static str> {
+    match version {
+        "1.83.0" => Ok("c0685b68dd44cc46574cce86c4e17c0f611b15e195be9848dfd0769a0a207628"),
+        _ => anyhow::bail!(
+            "No known SHA256 checksum for Boost {}. \
+             Please add the checksum to boost_checksum() in boost.rs before using this version.",
+            version
+        ),
+    }
+}
+
+///
 /// Downloads a file from URL.
 ///
 fn download(url: &str, output_path: &Path) -> anyhow::Result<()> {
@@ -187,6 +210,30 @@ fn download(url: &str, output_path: &Path) -> anyhow::Result<()> {
     curl.arg(url);
 
     crate::utils::command(&mut curl, "Downloading Boost")?;
+    Ok(())
+}
+
+///
+/// Verifies the SHA256 checksum of a downloaded file.
+///
+fn verify_checksum(file_path: &Path, expected_hex: &str) -> anyhow::Result<()> {
+    eprintln!("Verifying checksum of {}...", file_path.display());
+    let file = std::fs::File::open(file_path)?;
+    let mut reader = std::io::BufReader::new(file);
+    let mut hasher = sha2::Sha256::new();
+    std::io::copy(&mut reader, &mut hasher)?;
+    let actual_hex = hex::encode(hasher.finalize());
+    if actual_hex != expected_hex {
+        // Remove the corrupted download so it isn't reused on retry
+        let _ = std::fs::remove_file(file_path);
+        anyhow::bail!(
+            "SHA256 checksum mismatch for {}:\n  expected: {}\n  actual:   {}",
+            file_path.display(),
+            expected_hex,
+            actual_hex
+        );
+    }
+    eprintln!("Checksum verified.");
     Ok(())
 }
 
@@ -247,6 +294,58 @@ fn bootstrap(source_dir: &Path, install_prefix: &Path) -> anyhow::Result<()> {
 }
 
 ///
+/// Builds Boost with b2.
+///
+fn build(source_dir: &Path) -> anyhow::Result<()> {
+    let job_count = std::thread::available_parallelism()
+        .map(|parallelism| parallelism.get())
+        .unwrap_or(1);
+
+    let with_libraries: Vec<String> = BOOST_LIBRARIES
+        .iter()
+        .map(|lib| format!("--with-{lib}"))
+        .collect();
+
+    #[cfg(target_os = "windows")]
+    let b2_cmd = {
+        // Build b2 command string for sh
+        // Use "sh" instead of "bash" because "bash" on Windows PATH often
+        // resolves to WSL's bash, while "sh" resolves to MSYS2's shell
+        let b2_args = format!(
+            "./b2 -d0 link=static runtime-link=static variant=release threading=multi address-model=64 {} -j{} install",
+            with_libraries.join(" "),
+            job_count
+        );
+        let mut cmd = Command::new("sh");
+        cmd.current_dir(source_dir);
+        cmd.arg("-c");
+        cmd.arg(b2_args);
+        cmd
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let b2_cmd = {
+        let mut cmd = Command::new("./b2");
+        cmd.current_dir(source_dir);
+        cmd.arg("-d0"); // Suppress output
+        cmd.arg("link=static");
+        cmd.arg("runtime-link=static");
+        cmd.arg("variant=release");
+        cmd.arg("threading=multi");
+        cmd.arg("address-model=64");
+        cmd.args(&with_libraries);
+        cmd.arg(format!("-j{job_count}"));
+        cmd.arg("install");
+        cmd
+    };
+
+    crate::utils::command(&mut { b2_cmd }, "Boost b2 build")?;
+    Ok(())
+}
+
+// ── Utility helpers ─────────────────────────────────────────────────────────
+
+///
 /// Normalizes a path for use with MSYS2 shell commands.
 ///
 /// On Windows, converts backslashes to forward slashes (e.g., C:\foo\bar -> C:/foo/bar).
@@ -301,55 +400,5 @@ fn read_boost_version_marker(install_prefix: &Path) -> Option<String> {
 fn write_boost_version_marker(install_prefix: &Path, version: &str) -> anyhow::Result<()> {
     let marker_path = install_prefix.join(BOOST_VERSION_MARKER);
     std::fs::write(marker_path, format!("{version}\n"))?;
-    Ok(())
-}
-
-///
-/// Builds Boost with b2.
-///
-fn build(source_dir: &Path) -> anyhow::Result<()> {
-    let job_count = std::thread::available_parallelism()
-        .map(|parallelism| parallelism.get())
-        .unwrap_or(1);
-
-    let with_libraries: Vec<String> = BOOST_LIBRARIES
-        .iter()
-        .map(|lib| format!("--with-{lib}"))
-        .collect();
-
-    #[cfg(target_os = "windows")]
-    let b2_cmd = {
-        // Build b2 command string for sh
-        // Use "sh" instead of "bash" because "bash" on Windows PATH often
-        // resolves to WSL's bash, while "sh" resolves to MSYS2's shell
-        let b2_args = format!(
-            "./b2 -d0 link=static runtime-link=static variant=release threading=multi address-model=64 {} -j{} install",
-            with_libraries.join(" "),
-            job_count
-        );
-        let mut cmd = Command::new("sh");
-        cmd.current_dir(source_dir);
-        cmd.arg("-c");
-        cmd.arg(b2_args);
-        cmd
-    };
-
-    #[cfg(not(target_os = "windows"))]
-    let b2_cmd = {
-        let mut cmd = Command::new("./b2");
-        cmd.current_dir(source_dir);
-        cmd.arg("-d0"); // Suppress output
-        cmd.arg("link=static");
-        cmd.arg("runtime-link=static");
-        cmd.arg("variant=release");
-        cmd.arg("threading=multi");
-        cmd.arg("address-model=64");
-        cmd.args(&with_libraries);
-        cmd.arg(format!("-j{job_count}"));
-        cmd.arg("install");
-        cmd
-    };
-
-    crate::utils::command(&mut { b2_cmd }, "Boost b2 build")?;
     Ok(())
 }
