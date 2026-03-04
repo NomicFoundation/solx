@@ -7,7 +7,7 @@ use crate::llvm::platforms::Platform;
 use crate::llvm::sanitizer::Sanitizer;
 
 /// The build options shared by all platforms.
-pub const SHARED_BUILD_OPTS: [&str; 24] = [
+pub const SHARED_BUILD_OPTS: [&str; 23] = [
     "-DPACKAGE_VENDOR='Matter Labs'",
     "-DCMAKE_BUILD_WITH_INSTALL_RPATH=1",
     "-DLLVM_BUILD_DOCS='Off'",
@@ -28,7 +28,6 @@ pub const SHARED_BUILD_OPTS: [&str; 24] = [
     "-DLLVM_ENABLE_LIBEDIT='Off'",
     "-DLLVM_ENABLE_LIBPFM='Off'",
     "-DLLVM_OPTIMIZED_TABLEGEN='On'",
-    "-DLLVM_PARALLEL_LINK_JOBS='2'",
     "-DCMAKE_EXPORT_COMPILE_COMMANDS='On'",
     "-DPython3_FIND_REGISTRY='LAST'", // Use Python version from $PATH, not from registry
     "-DBUG_REPORT_URL='https://github.com/matter-labs/solx-llvm/issues'",
