@@ -23,8 +23,27 @@ jobs:
     steps:
       - run: 'true'
 
-  coverage:
+  cooldown-check:
+    name: Cargo cooldown check
+    runs-on: ubuntu-24.04
     needs: label-check
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-rust
+
+      - name: Cache cooldown data
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            **/solx-cache/cargo-cooldown-check
+          key: cooldown-check-v1-${{ hashFiles('**/Cargo.lock') }}
+
+      - uses: NomicFoundation/cargo-cooldown-check@ac40e701f9f1155741a761ac9039987fb892af4b
+
+  coverage:
+    needs: [label-check, cooldown-check]
     runs-on: solx-linux-amd64
     permissions:
       contents: read

@@ -74,6 +74,29 @@ jobs:
     steps:
       - run: 'true'
 
+  # Extra-defensive cooldown check: `main` branch and PRs already require
+  # passing this in CI, but we re-check here to guarantee we never release
+  # with too-fresh dependencies.
+  cooldown-check:
+    name: Cargo cooldown check
+    runs-on: ubuntu-24.04
+    needs: [label-check]
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.ref || '' }}
+      - uses: ./.github/actions/setup-rust
+
+      - name: Cache cooldown data
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            **/solx-cache/cargo-cooldown-check
+          key: cooldown-check-v1-${{ hashFiles('**/Cargo.lock') }}
+
+      - uses: NomicFoundation/cargo-cooldown-check@ac40e701f9f1155741a761ac9039987fb892af4b
+
   # ───────────────────────────────────────────────
   # Stage 0: Build matrix & platform binaries
   # ───────────────────────────────────────────────
@@ -371,11 +394,12 @@ jobs:
   notify-deploy:
     name: Notify pre-deploy to Slack
     runs-on: ubuntu-24.04
-    needs: [prepare, review]
+    needs: [prepare, review, cooldown-check]
     if: >-
       !cancelled()
       && needs.prepare.result == 'success'
       && needs.review.result == 'success'
+      && needs.cooldown-check.result == 'success'
       && github.event_name != 'pull_request'
     steps:
       - name: Notify pre-deploy
@@ -437,13 +461,15 @@ jobs:
       attestations: write
       contents: write
     name: Publish release
-    needs: [prepare, review, get-previous-release, notify-deploy]
-    # Run as long as prepare and review succeeded — tolerate get-previous-release
-    # failure so a transient GitHub API issue doesn't silently skip the release.
+    needs: [prepare, review, get-previous-release, notify-deploy, cooldown-check]
+    # Run as long as prepare, review, and cooldown-check succeeded — tolerate
+    # get-previous-release failure so a transient GitHub API issue doesn't
+    # silently skip the release.
     if: >-
       !cancelled()
       && needs.prepare.result == 'success'
       && needs.review.result == 'success'
+      && needs.cooldown-check.result == 'success'
     # PR dry-runs skip the manual approval gate; tag/dispatch runs still require it.
     environment: ${{ github.event_name != 'pull_request' && 'solx-release' || '' }}
     runs-on: ubuntu-24.04
