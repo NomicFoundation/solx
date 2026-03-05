@@ -63,6 +63,13 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: RelWithDebInfo
+          enable-assertions: 'true'
+          enable-mlir: 'true'
+
       - name: Cargo checks
         uses: ./.github/actions/cargo-check
 
