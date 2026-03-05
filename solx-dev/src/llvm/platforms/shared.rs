@@ -2,6 +2,7 @@
 //! The shared options for building various platforms.
 //!
 
+use crate::build_type::BuildType;
 use crate::llvm::platforms::Platform;
 use crate::llvm::sanitizer::Sanitizer;
 
@@ -73,6 +74,24 @@ pub fn shared_build_opts_sanitizers(sanitizer: Option<Sanitizer>) -> Vec<String>
     match sanitizer {
         Some(sanitizer) => vec![format!("-DLLVM_USE_SANITIZER='{sanitizer}'")],
         None => vec![],
+    }
+}
+
+///
+/// The build options to enable split DWARF debug info on Linux.
+///
+/// Split DWARF keeps debug info in separate `.dwo` files so the linker never
+/// processes it, significantly reducing link time. Only useful when debug info
+/// is generated (Debug / RelWithDebInfo) and only supported on ELF targets
+/// (Linux). Release and MinSizeRel builds keep full embedded DWARF.
+///
+pub fn shared_build_opts_split_dwarf(build_type: BuildType) -> Vec<String> {
+    if cfg!(target_os = "linux")
+        && matches!(build_type, BuildType::Debug | BuildType::RelWithDebInfo)
+    {
+        vec!["-DLLVM_USE_SPLIT_DWARF='On'".to_owned()]
+    } else {
+        vec![]
     }
 }
 
