@@ -79,6 +79,8 @@ jobs:
   # with too-fresh dependencies.
   cooldown-check:
     name: Cargo cooldown check
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     needs: [label-check]
     steps:
