@@ -34,7 +34,7 @@ pub struct Build {
 
     /// Extra arguments to pass to CMake.
     /// A leading backslash will be unescaped.
-    #[arg(long, num_args = 1.., help_heading = "Build Configuration")]
+    #[arg(long, num_args = 1.., allow_hyphen_values = true, help_heading = "Build Configuration")]
     pub extra_args: Vec<String>,
 
     /// Whether to use compiler cache (ccache) to speed-up builds.
