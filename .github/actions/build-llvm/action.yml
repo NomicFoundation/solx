@@ -117,7 +117,7 @@ runs:
 
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} \
           --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
-          --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='2'"
+          --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='2'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"
 
     - name: Show ccache stats
       if: always()
