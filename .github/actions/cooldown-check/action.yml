@@ -2,22 +2,11 @@ name: Cargo cooldown check
 description: >-
   Verifies that all Cargo dependencies have been published for at least the
   cooldown period configured in .cargo/cooldown.toml (default 7 days).
-
-inputs:
-  ref:
-    description: "Git ref to checkout. Leave empty for the default ref."
-    required: false
-    default: ""
+  The repository must already be checked out before calling this action.
 
 runs:
   using: composite
   steps:
-    - name: Checkout source
-      uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-      with:
-        persist-credentials: false
-        ref: ${{ inputs.ref }}
-
     - uses: ./.github/actions/setup-rust
 
     - name: Cache cooldown data
