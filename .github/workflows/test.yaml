@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 # Cancel the workflow if any new changes pushed to a feature branch or the trunk
 concurrency:
@@ -47,7 +48,7 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:eb1dda883faac05d5dc2acff3b776c28e9a146790b2a939efad09de331abdbf3
     steps:
 
       - name: Checkout source
@@ -79,6 +80,7 @@ jobs:
     permissions:
       contents: read
       checks: write
+      packages: read
     strategy:
       fail-fast: false # finalize testing of all targets even if one failed
       matrix:
@@ -89,11 +91,11 @@ jobs:
             runner: macos-15
           - name: "Linux x86 gnu"
             runner: ubuntu-24.04
-            image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:eb1dda883faac05d5dc2acff3b776c28e9a146790b2a939efad09de331abdbf3
             target: "x86_64-unknown-linux-gnu"
           - name: "Linux ARM64 gnu"
             runner: ubuntu-24.04-arm
-            image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:eb1dda883faac05d5dc2acff3b776c28e9a146790b2a939efad09de331abdbf3
             target: "aarch64-unknown-linux-gnu"
           - name: "Windows"
             runner: windows-2025
@@ -181,9 +183,10 @@ jobs:
     permissions:
       contents: read
       checks: write
+      packages: read
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/matter-labs/zksync-llvm-runner@sha256:adcadcafaa4e6604837f6608b7b5628ae429c05f0ddf56ab4e809477721f39e4
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:eb1dda883faac05d5dc2acff3b776c28e9a146790b2a939efad09de331abdbf3
       options: -m 110g
     env:
       TARGET: x86_64-unknown-linux-gnu
