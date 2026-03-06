@@ -14,6 +14,8 @@ runs:
       with:
         path: |
           **/target/solx-cache/cargo-cooldown-check
-        key: cooldown-check-v1-${{ hashFiles('**/Cargo.lock') }}
+        key: cooldown-check-v1-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          cooldown-check-v1-${{ runner.os }}-
 
     - uses: NomicFoundation/cargo-cooldown-check@ac40e701f9f1155741a761ac9039987fb892af4b
