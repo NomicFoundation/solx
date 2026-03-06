@@ -46,6 +46,7 @@ RUN curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key \
         clang-21 \
         lld-21 \
         llvm-21 \
+        libclang-rt-21-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Symlink versioned LLVM binaries to unversioned names so workflows can call
