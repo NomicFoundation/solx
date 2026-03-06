@@ -21,7 +21,26 @@ runs:
   using: "composite"
   steps:
 
+    - name: Compute solc cache key
+      id: solc-cache
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}/..
+      run: |
+        SHA=$(git -C solx-solidity rev-parse HEAD)
+        KEY="v1-solc-${{ runner.os }}-${{ runner.arch }}"
+        [ '${{ inputs.cmake-build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.cmake-build-type }}"
+        KEY="${KEY}-boost${{ inputs.boost-version }}-${SHA}"
+        echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
+
+    - name: Restore solc artifact cache
+      id: solc-artifact-cache
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ${{ inputs.working-dir }}/build
+        key: ${{ steps.solc-cache.outputs.key }}
+
     - name: Build solx-dev
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
       # Run from the checkout root that owns solx-solidity
       working-directory: ${{ inputs.working-dir }}/..
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
@@ -29,11 +48,12 @@ runs:
 
     # CCache action requires `apt update` on Linux Docker jobs
     - name: Prepare ccache installation
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && steps.solc-artifact-cache.outputs.cache-hit != 'true'
       shell: 'bash'
       run: apt update
 
     - name: Set up compiler cache for solc
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-solc
@@ -55,6 +75,7 @@ runs:
         key: v1-boost-${{ inputs.boost-version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('solx-dev/src/solc/boost.rs') }}
 
     - name: Build solc
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
       # Run from the checkout root that owns solx-solidity
       working-directory: ${{ inputs.working-dir }}/..
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
@@ -73,15 +94,22 @@ runs:
           --ccache-variant=ccache
 
     - name: Save Boost cache
-      if: github.event_name != 'pull_request'
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ inputs.working-dir }}/boost
         key: v1-boost-${{ inputs.boost-version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('solx-dev/src/solc/boost.rs') }}
 
     - name: Show ccache stats
-      if: always()
+      if: always() && steps.solc-artifact-cache.outputs.cache-hit != 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-solc
       run: ccache --show-stats
+
+    - name: Save solc artifact cache
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: ${{ inputs.working-dir }}/build
+        key: ${{ steps.solc-cache.outputs.key }}

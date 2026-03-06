@@ -45,19 +45,43 @@ runs:
   using: "composite"
   steps:
 
+    - name: Compute LLVM cache key
+      id: llvm-cache
+      shell: bash
+      working-directory: ${{ inputs.working-dir }}
+      run: |
+        SHA=$(git -C solx-llvm rev-parse HEAD)
+        KEY="v1-llvm-${{ runner.os }}-${{ runner.arch }}"
+        [ '${{ inputs.build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.build-type }}"
+        [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
+        [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
+        [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
+        [ '${{ inputs.enable-assertions }}' != 'true' ] && KEY="${KEY}-no-assertions"
+        KEY="${KEY}-${SHA}"
+        echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
+
+    - name: Restore LLVM artifact cache
+      id: llvm-artifact-cache
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: target-llvm/target-final
+        key: ${{ steps.llvm-cache.outputs.key }}
+
     # Ninja build tool is not available on MacOS x64 runners by default. See:
     # https://github.com/actions/runner-images/issues/514
     - name: Install Ninja on MacOS x64
-      if: runner.os == 'macOS' && runner.arch == 'X64'
+      if: runner.os == 'macOS' && runner.arch == 'X64' && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       shell: 'bash'
       run: HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja
 
     - name: Install LLVM builder
+      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       working-directory: ${{ inputs.working-dir }}
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: cargo fetch --locked && cargo build --frozen --release --bin solx-dev
 
     - name: Define ccache key
+      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       id: ccache-key
       run: |
@@ -70,13 +94,14 @@ runs:
 
     # CCache action requires `apt update` on Linux Docker jobs
     - name: Prepare ccache installation
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       shell: 'bash'
       run: apt update
 
     # sccache is broken with cmake+ninja+clang on MSYS2/Windows
     # (https://github.com/mozilla/sccache/issues/1097). Using ccache everywhere.
     - name: Set up compiler cache
+      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
@@ -92,6 +117,7 @@ runs:
         save: ${{ github.event_name != 'pull_request' }}
 
     - name: Build LLVM
+      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       working-directory: ${{ inputs.working-dir }}
       env:
@@ -120,8 +146,15 @@ runs:
           --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='2'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"
 
     - name: Show ccache stats
-      if: always()
+      if: always() && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
       run: ccache --show-stats
+
+    - name: Save LLVM artifact cache
+      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: target-llvm/target-final
+        key: ${{ steps.llvm-cache.outputs.key }}
