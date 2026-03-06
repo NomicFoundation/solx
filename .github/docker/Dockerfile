@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libssl-dev \
         openssh-client \
         xz-utils \
+        libc6-dbg \
     && rm -rf /var/lib/apt/lists/*
 
 # ── LLVM 21 (system toolchain for coverage, sanitizers, lipo) ────────────────
