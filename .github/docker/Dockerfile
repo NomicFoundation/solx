@@ -56,6 +56,30 @@ RUN for bin in /usr/lib/llvm-21/bin/*; do \
         update-alternatives --install "/usr/bin/${name}" "${name}" "${bin}" 100; \
     done
 
+# ── Replace glibc's libm.a linker script with a real merged archive ────────
+# glibc ships libm.a as a GNU ld linker script that references libm-<ver>.a
+# and libmvec.a.  LLVM's lld cannot parse this format, which breaks Rust
+# builds that use -C target-feature=+crt-static -C link-arg=-fuse-ld=lld.
+# Approach copied from matter-labs/compiler-infra.
+ARG TARGETPLATFORM
+RUN set -eux; \
+    case "${TARGETPLATFORM}" in \
+        linux/amd64) LIBDIR=/usr/lib/x86_64-linux-gnu ;; \
+        linux/arm64) LIBDIR=/usr/lib/aarch64-linux-gnu ;; \
+        *)           echo "unsupported platform: ${TARGETPLATFORM}"; exit 1 ;; \
+    esac; \
+    rm -f "${LIBDIR}/libm.a"; \
+    ar -cqT "${LIBDIR}/libm.a" "${LIBDIR}/libm-2.39.a" "${LIBDIR}/libmvec.a"; \
+    bash -c "ar -M <<< \$(echo -e \"create ${LIBDIR}/libm.a\naddlib ${LIBDIR}/libm.a\nsave\nend\")"
+
+# ── Valgrind (for LLVM regression tests under valgrind) ───────────────────
+ENV VALGRIND_VERSION=3.23.0
+RUN curl -Lo valgrind-${VALGRIND_VERSION}.tar.bz2 \
+        https://sourceware.org/pub/valgrind/valgrind-${VALGRIND_VERSION}.tar.bz2 \
+    && tar -xf valgrind-${VALGRIND_VERSION}.tar.bz2 \
+    && cd valgrind-${VALGRIND_VERSION} && ./configure && make && make install \
+    && cd .. && rm -rf valgrind-${VALGRIND_VERSION}.tar.bz2 valgrind-${VALGRIND_VERSION}
+
 # ── Rust ─────────────────────────────────────────────────────────────────────
 # Version must match rust-toolchain.toml in the solx repo.
 ARG RUST_VERSION=1.93.0
@@ -81,4 +105,5 @@ RUN set -eux \
     && command -v llvm-cov \
     && command -v llvm-profdata \
     && command -v llvm-lipo \
-    && command -v llvm-symbolizer
+    && command -v llvm-symbolizer \
+    && valgrind --version
