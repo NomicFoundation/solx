@@ -54,9 +54,9 @@ jobs:
         uses: ./.github/actions/build-llvm
         with:
           build-type: 'RelWithDebInfo'
-          enable-assertions: false
+          enable-assertions: 'true'
           enable-coverage: 'true'
-          enable-mlir: ${{ contains(github.event.pull_request.labels.*.name, 'ci:slang') }}
+          enable-mlir: 'true'
 
       - name: Building solc
         uses: ./.github/actions/build-solc
