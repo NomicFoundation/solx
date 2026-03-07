@@ -70,7 +70,9 @@ RUN set -eux; \
         *)           echo "unsupported platform: ${TARGETPLATFORM}"; exit 1 ;; \
     esac; \
     rm -f "${LIBDIR}/libm.a"; \
-    ar -cqT "${LIBDIR}/libm.a" "${LIBDIR}/libm-2.39.a" "${LIBDIR}/libmvec.a"; \
+    LIBM_STATIC=$(find "${LIBDIR}" -maxdepth 1 -name 'libm-*.a' ! -name 'libmvec.a' | head -1); \
+    [ -n "${LIBM_STATIC}" ] || { echo "error: no libm-*.a found in ${LIBDIR}"; exit 1; }; \
+    ar -cqT "${LIBDIR}/libm.a" "${LIBM_STATIC}" "${LIBDIR}/libmvec.a"; \
     bash -c "ar -M <<< \$(echo -e \"create ${LIBDIR}/libm.a\naddlib ${LIBDIR}/libm.a\nsave\nend\")"
 
 # ── Symlink libstdc++.a into system library path for rustc/lld ────────────
@@ -89,7 +91,7 @@ RUN set -eux; \
 
 # ── Valgrind (for LLVM regression tests under valgrind) ───────────────────
 ENV VALGRIND_VERSION=3.23.0
-RUN curl -Lo valgrind-${VALGRIND_VERSION}.tar.bz2 \
+RUN curl -fsSL -o valgrind-${VALGRIND_VERSION}.tar.bz2 \
         https://sourceware.org/pub/valgrind/valgrind-${VALGRIND_VERSION}.tar.bz2 \
     && tar -xf valgrind-${VALGRIND_VERSION}.tar.bz2 \
     && cd valgrind-${VALGRIND_VERSION} && ./configure && make && make install \
@@ -121,4 +123,8 @@ RUN set -eux \
     && command -v llvm-profdata \
     && command -v llvm-lipo \
     && command -v llvm-symbolizer \
-    && valgrind --version
+    && valgrind --version \
+    && case "${TARGETPLATFORM}" in \
+        linux/amd64) test -f /usr/lib/x86_64-linux-gnu/libstdc++.a ;; \
+        linux/arm64) test -f /usr/lib/aarch64-linux-gnu/libstdc++.a ;; \
+       esac
