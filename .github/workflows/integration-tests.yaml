@@ -32,7 +32,7 @@ jobs:
       packages: read
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:e94806a51fb6acb82e7ae51e2b564c0250b297074d22014a360508df8c249c18
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:ba6c017ac68e658c3ba35edf5a1f1030a578737075e952c6c944efa4a7143992
       options: -m 110g
     steps:
       - name: Checkout PR
