@@ -73,6 +73,20 @@ RUN set -eux; \
     ar -cqT "${LIBDIR}/libm.a" "${LIBDIR}/libm-2.39.a" "${LIBDIR}/libmvec.a"; \
     bash -c "ar -M <<< \$(echo -e \"create ${LIBDIR}/libm.a\naddlib ${LIBDIR}/libm.a\nsave\nend\")"
 
+# ── Symlink libstdc++.a into system library path for rustc/lld ────────────
+# GCC installs libstdc++.a inside its own versioned directory (e.g.
+# /usr/lib/gcc/x86_64-linux-gnu/13/) which neither rustc nor lld search by
+# default.  Coverage builds use -C target-feature=+crt-static which requires
+# the static C++ standard library to be discoverable.
+RUN set -eux; \
+    case "${TARGETPLATFORM}" in \
+        linux/amd64) TRIPLE=x86_64-linux-gnu ;; \
+        linux/arm64) TRIPLE=aarch64-linux-gnu ;; \
+        *)           echo "unsupported platform: ${TARGETPLATFORM}"; exit 1 ;; \
+    esac; \
+    GCC_VER=$(ls /usr/lib/gcc/${TRIPLE}/ | sort -V | tail -1); \
+    ln -sf "/usr/lib/gcc/${TRIPLE}/${GCC_VER}/libstdc++.a" "/usr/lib/${TRIPLE}/libstdc++.a"
+
 # ── Valgrind (for LLVM regression tests under valgrind) ───────────────────
 ENV VALGRIND_VERSION=3.23.0
 RUN curl -Lo valgrind-${VALGRIND_VERSION}.tar.bz2 \
