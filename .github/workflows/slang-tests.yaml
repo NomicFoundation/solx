@@ -79,6 +79,13 @@ jobs:
         shell: bash
         run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
 
+      - name: Free disk space (remove build artifacts before slang tests)
+        shell: bash
+        run: |
+          echo "Before cleanup:" && df -h .
+          rm -rf solx-llvm target-llvm/build-final target solx-solidity
+          echo "After cleanup:" && df -h .
+
       - name: Run slang tests
         uses: ./.github/actions/rust-unit-tests
         env:
