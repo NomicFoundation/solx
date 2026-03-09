@@ -23,7 +23,7 @@ Alternative pipeline via Slang (Rust-based frontend, WIP):
 Solidity → Slang (parse, analyze) → MLIR → LLVM IR → EVM bytecode
 ```
 
-### Workspace Crates (17 total)
+### Workspace Crates (14 total)
 
 | Crate | Purpose |
 |---|---|
