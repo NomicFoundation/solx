@@ -1,7 +1,7 @@
 name: Setup Socket Firewall (SFW)
 description: >
   Installs and configures Socket Firewall to monitor package installations.
-  Gracefully skips on unsupported platforms (Windows, containers).
+  Gracefully skips inside containers (install via npm instead).
 
 inputs:
   mode:
@@ -21,13 +21,6 @@ runs:
       id: detect
       shell: bash
       run: |
-        # Skip on Windows
-        if [[ "$RUNNER_OS" == "Windows" ]]; then
-          echo "::notice::SFW skipped: Windows is not supported"
-          echo "available=false" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-
         # Skip inside containers (GitHub sets 'container' env var for container jobs;
         # /.dockerenv is a fallback heuristic)
         if [[ -n "${container:-}" ]] || [[ -f /.dockerenv ]]; then
