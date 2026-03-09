@@ -118,6 +118,12 @@ RUN cargo install \
     cargo-udeps@0.1.60 \
     --locked
 
+# ── Node.js (for SFW and npm-based CI tools) ─────────────────────────────
+ARG NODE_MAJOR=24
+RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
 # Smoke-test: ensure key tools are on PATH
 RUN set -eux \
     && rustc --version \
@@ -130,6 +136,8 @@ RUN set -eux \
     && command -v llvm-profdata \
     && command -v llvm-lipo \
     && command -v llvm-symbolizer \
+    && node --version \
+    && npm --version \
     && valgrind --version \
     && case "${TARGETPLATFORM}" in \
         linux/amd64) test -f /usr/lib/x86_64-linux-gnu/libstdc++.a ;; \
