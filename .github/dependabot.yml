@@ -21,4 +21,3 @@ updates:
       prefix: "build"
     cooldown:
       default-days: 7
-      semver-major-days: 30
