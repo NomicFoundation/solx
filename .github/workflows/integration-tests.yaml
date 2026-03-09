@@ -19,7 +19,10 @@ defaults:
 jobs:
 
   label-check:
-    if: contains(github.event.pull_request.labels.*.name, 'ci:integration') && !github.event.pull_request.head.repo.fork
+    if: >-
+      (github.event.action == 'labeled' && github.event.label.name == 'ci:integration'
+      || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:integration'))
+      && !github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
     steps:
       - run: 'true'
