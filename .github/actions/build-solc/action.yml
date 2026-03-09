@@ -94,7 +94,7 @@ runs:
           --ccache-variant=ccache
 
     - name: Save Boost cache
-      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
       uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ inputs.working-dir }}/boost
@@ -108,7 +108,7 @@ runs:
       run: ccache --show-stats
 
     - name: Save solc artifact cache
-      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
       uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ inputs.working-dir }}/build
