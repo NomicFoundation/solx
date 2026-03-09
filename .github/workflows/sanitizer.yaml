@@ -79,4 +79,4 @@ jobs:
         with:
           jobs: ${{ toJSON(needs) }}
           allowed-skips: >-
-            ${{ !contains(github.event.pull_request.labels.*.name, 'ci:sanitizer') && 'label-check, sanitizer' || '' }}
+            ${{ needs.label-check.result == 'skipped' && 'label-check, sanitizer' || '' }}

@@ -111,4 +111,4 @@ jobs:
         with:
           jobs: ${{ toJSON(needs) }}
           allowed-skips: >-
-            ${{ !contains(github.event.pull_request.labels.*.name, 'ci:slang') && 'label-check, slang-tests' || '' }}
+            ${{ needs.label-check.result == 'skipped' && 'label-check, slang-tests' || '' }}
