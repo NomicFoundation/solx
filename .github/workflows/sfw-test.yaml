@@ -35,6 +35,10 @@ jobs:
             runner: ubuntu-24.04
           - name: macOS ARM64
             runner: macos-15
+          - name: macOS x86
+            runner: macos-15-intel
+          - name: Windows
+            runner: windows-2025
     runs-on: ${{ matrix.runner }}
     name: Runner — ${{ matrix.name }}
     steps:
@@ -53,7 +57,7 @@ jobs:
       - name: Verify SFW is available
         if: steps.sfw.outputs.available == 'true'
         run: |
-          which sfw
+          command -v sfw
           sfw --version
 
       - name: Test sfw npm install
@@ -87,39 +91,9 @@ jobs:
 
       - name: Verify SFW binary
         run: |
-          which sfw
+          command -v sfw
           sfw --version
 
       - name: Test sfw npm install
         run: sfw npm install -g semver
 
-  # Verify SFW correctly skips on Windows
-  windows-skip:
-    needs: label-check
-    runs-on: windows-2025
-    name: Windows — skip verification
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          persist-credentials: false
-
-      - name: Setup SFW
-        id: sfw
-        uses: ./.github/actions/setup-sfw
-        with:
-          mode: firewall
-
-      - name: Verify SFW was skipped
-        shell: bash
-        run: |
-          if [[ "${{ steps.sfw.outputs.available }}" != "false" ]]; then
-            echo "::error::Expected SFW to be unavailable on Windows"
-            exit 1
-          fi
-          if command -v sfw &>/dev/null; then
-            echo "::error::SFW binary should not be installed on Windows"
-            exit 1
-          fi
-          echo "::notice::SFW correctly skipped on Windows"
