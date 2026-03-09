@@ -73,7 +73,7 @@ jobs:
     needs: label-check
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:ba6c017ac68e658c3ba35edf5a1f1030a578737075e952c6c944efa4a7143992
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:1df3890912821b043446539f20af01404650d2ae8f13528ce3d06bd933fb5a08
     name: Container — Linux AMD64
     steps:
       - name: Checkout
