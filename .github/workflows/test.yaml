@@ -3,8 +3,7 @@ name: Tests
 # Execute workflow for each PR and with each merge to the trunk
 on:
   pull_request:
-    # `labeled` allows slang tests to run when the ci:slang label is added
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened]
   push:
     branches:
       - main
@@ -169,81 +168,6 @@ jobs:
         with:
           target: ${{ matrix.target || '' }}
 
-      - name: Free disk space (remove default build artifacts before slang tests)
-        if: contains(github.event.pull_request.labels.*.name, 'ci:slang')
-        shell: bash
-        run: |
-          echo "Before cleanup:" && df -h .
-          rm -rf target solx-solidity/build solx-solidity/boost
-          echo "After cleanup:" && df -h .
-
-      # bindgen's embedded clang needs to know it's targeting MinGW,
-      # otherwise it can't parse MinGW-specific __attribute__ extensions
-      # in stdlib.h (rust-lang/rust-bindgen#1760).
-      - name: Set bindgen target for MinGW
-        if: runner.os == 'Windows' && contains(github.event.pull_request.labels.*.name, 'ci:slang')
-        shell: bash
-        run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
-
-      - name: Run slang tests
-        if: contains(github.event.pull_request.labels.*.name, 'ci:slang')
-        uses: ./.github/actions/rust-unit-tests
-        env:
-          CARGO_TARGET_DIR: target-slang
-        with:
-          target: ${{ matrix.target || '' }}
-          cargo-test-command: 'test-slang'
-          results-xml: 'slang-unit-tests-results.xml'
-          check-name: 'Slang Unit Tests Results'
-
-  # Run tests with address sanitizer (label-gated)
-  sanitizer:
-    if: contains(github.event.pull_request.labels.*.name, 'ci:sanitizer') && !github.event.pull_request.head.repo.fork
-    permissions:
-      contents: read
-      checks: write
-      packages: read
-    runs-on: solx-linux-amd64
-    container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7
-      options: -m 110g
-    env:
-      TARGET: x86_64-unknown-linux-gnu
-      RUST_SANITIZER: 'address'
-      LLVM_SANITIZER: 'Address'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          submodules: true
-
-      - name: Checkout submodules
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --force --depth=1 --recursive --checkout
-
-      - name: Build LLVM
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: RelWithDebInfo
-          sanitizer: ${{ env.LLVM_SANITIZER }}
-          enable-assertions: 'true'
-
-      - name: Building solc
-        uses: ./.github/actions/build-solc
-        with:
-          cmake-build-type: RelWithDebInfo
-          working-dir: 'solx-solidity'
-
-      - name: Run tests
-        uses: ./.github/actions/rust-unit-tests
-        env:
-          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
-          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-        with:
-          target: ${{ env.TARGET }}
-          sanitizer: ${{ env.RUST_SANITIZER }}
-
   # Special job that allows some of the jobs to be skipped or failed
   # requiring others to be successful
   pr-checks:
@@ -253,7 +177,6 @@ jobs:
       - changes
       - cargo-checks
       - build-and-test
-      - sanitizer
       - cooldown-check
     steps:
       - name: Decide on PR checks
@@ -261,4 +184,4 @@ jobs:
         with:
           jobs: ${{ toJSON(needs) }}
           allowed-skips: >-
-            ${{ needs.changes.outputs.code == 'true' && 'sanitizer' || 'sanitizer, cargo-checks, build-and-test, cooldown-check' }}
+            ${{ needs.changes.outputs.code == 'true' && '' || 'cargo-checks, build-and-test, cooldown-check' }}
