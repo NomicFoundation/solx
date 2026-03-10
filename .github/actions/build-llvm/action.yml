@@ -80,52 +80,12 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: cargo fetch --locked && cargo build --frozen --release --bin solx-dev
 
-    - name: Define ccache key
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      id: ccache-key
-      run: |
-        KEY="llvm-${{ runner.os }}-${{ runner.arch }}"
-        [ '${{ inputs.build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.build-type }}"
-        [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
-        [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
-        [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
-        echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
-
-    # CCache action requires `apt update` on Linux Docker jobs
-    - name: Prepare ccache installation
-      if: runner.os == 'Linux' && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
-      shell: 'bash'
-      run: apt update
-
-    # sccache is broken with cmake+ninja+clang on MSYS2/Windows
-    # (https://github.com/mozilla/sccache/issues/1097). Using ccache everywhere.
-    - name: Set up compiler cache
-      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
-      uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5
-      env:
-        CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
-        CCACHE_BASEDIR: ${{ github.workspace }}
-        CCACHE_NOHASHDIR: "true"
-        CCACHE_COMPILERCHECK: "content"
-      with:
-        key: ${{ steps.ccache-key.outputs.key }}
-        restore-keys: ${{ steps.ccache-key.outputs.key }}
-        append-timestamp: true
-        max-size: "10G"
-        verbose: 2
-        save: ${{ github.event_name != 'pull_request' }}
-
     - name: Build LLVM
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       working-directory: ${{ inputs.working-dir }}
       env:
         VERBOSE: 1
-        CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
-        CCACHE_BASEDIR: ${{ github.workspace }}
-        CCACHE_NOHASHDIR: "true"
-        CCACHE_COMPILERCHECK: "content"
         LIBSTDCPP_SOURCE_PATH: "${{ runner.temp }}/msys64/mingw64/lib/libstdc++.a"
       run: |
         set -x
@@ -142,15 +102,8 @@ runs:
         fi
 
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} \
-          --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
+          ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
           --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='2'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"
-
-    - name: Show ccache stats
-      if: always() && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
-      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      env:
-        CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
-      run: ccache --show-stats
 
     - name: Save LLVM artifact cache
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
