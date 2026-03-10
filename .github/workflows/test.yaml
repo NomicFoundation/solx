@@ -63,6 +63,13 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
+      - name: Set SFW prefix
+        shell: bash
+        run: |
+          if command -v sfw &>/dev/null; then
+            echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
+          fi
+
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
@@ -139,6 +146,13 @@ jobs:
       - name: Install SFW (container)
         if: matrix.image != ''
         run: npm install -g sfw
+
+      - name: Set SFW prefix
+        shell: bash
+        run: |
+          if command -v sfw &>/dev/null; then
+            echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
+          fi
 
       - name: Prepare Windows env
         if: runner.os == 'Windows'

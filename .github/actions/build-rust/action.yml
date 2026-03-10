@@ -70,7 +70,7 @@ runs:
           SOLC_PREFIX BOOST_PREFIX CARGO_BIN_EXE_SOLX \
           2>/dev/null || true
         for var in $(env | awk -F= '/^(LLVM_SYS|MLIR_SYS|TABLEGEN)_/ {print $1}'); do unset "$var"; done
-        cargo fetch --locked
+        ${SFW_PREFIX:-} cargo fetch --locked
         if [ '${{ inputs.sanitizer }}' != '' ]; then
           export RUSTFLAGS="-Z sanitizer=${{ inputs.sanitizer }}"
           BUILD_STD_LIB='-Zbuild-std'
@@ -82,7 +82,7 @@ runs:
         if [[ "${RUNNER_OS}" == "Windows" ]] || [[ "${RUNNER_OS}" == "Linux" ]]; then
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
-        cargo ${BUILD_STD_LIB} build --frozen ${RELEASE} ${{ steps.build-target.outputs.target }}
+        ${SFW_PREFIX:-} cargo ${BUILD_STD_LIB} build --frozen ${RELEASE} ${{ steps.build-target.outputs.target }}
         if [ '${{ inputs.target }}' != '' ]; then
           BINARY_DIR="${PWD}/target/${{ inputs.target }}/${{ inputs.build-type }}"
         else
