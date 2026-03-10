@@ -1,6 +1,5 @@
 # Compiled artifacts
-/target/
-/target-llvm*/
+/target*/
 
 # Backup files
 **/*.rs.bk
@@ -26,8 +25,7 @@
 /*.txt
 /**/*.profraw
 
-# Local dev tooling
-CLAUDE.md
-.claude/
-.aider*
+# AI
 .mcp.json
+opencode.json
+.claude/settings.local.json
