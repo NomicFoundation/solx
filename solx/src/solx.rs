@@ -20,7 +20,7 @@ compile_error!(
 );
 #[cfg(all(feature = "slang", not(feature = "mlir")))]
 compile_error!(
-    "Feature `slang` requires `mlir`. This should be automatic — check that `slang` includes `mlir` in its feature list."
+    "Feature `slang` requires `mlir`. This should be automatic -- check that `slang` includes `mlir` in its feature list."
 );
 
 ///
@@ -42,7 +42,7 @@ fn main() -> anyhow::Result<()> {
     let messages = arguments.validate();
     if messages
         .lock()
-        .expect("Sync")
+        .expect("lock is never poisoned because worker threads do not panic")
         .iter()
         .all(|error| error.severity != "error")
     {
@@ -51,7 +51,7 @@ fn main() -> anyhow::Result<()> {
                 .write_all(
                     messages
                         .lock()
-                        .expect("Sync")
+                        .expect("lock is never poisoned because worker threads do not panic")
                         .drain(..)
                         .map(|error| error.to_string())
                         .collect::<Vec<String>>()
@@ -65,24 +65,25 @@ fn main() -> anyhow::Result<()> {
         #[cfg(not(feature = "slang"))]
         let frontend = solx::Solc::default();
 
+        let compiler = solx_core::Compiler::new(&arguments);
         let result = if arguments.version {
-            solx_core::print_version(&frontend)
+            compiler.print_version(&frontend)
         } else if arguments.llvm_ir || arguments.yul {
-            solx_core::main(arguments, frontend, messages.clone())
+            compiler.run(frontend, messages.clone())
         } else {
             #[cfg(feature = "slang")]
             {
-                solx_slang::main(arguments, frontend, messages.clone())
+                solx_slang::SlangFrontend::main(arguments, frontend, messages.clone())
             }
             #[cfg(not(feature = "slang"))]
             {
-                solx_core::main(arguments, frontend, messages.clone())
+                compiler.run(frontend, messages.clone())
             }
         };
         if let Err(error) = result {
             messages
                 .lock()
-                .expect("Sync")
+                .expect("lock is never poisoned because worker threads do not panic")
                 .push(solx_standard_json::OutputError::new_error(error));
         }
     }
@@ -94,7 +95,7 @@ fn main() -> anyhow::Result<()> {
 
     let exit_code = if messages
         .lock()
-        .expect("Sync")
+        .expect("lock is never poisoned because worker threads do not panic")
         .iter()
         .any(|error| error.severity == "error")
     {
@@ -106,7 +107,7 @@ fn main() -> anyhow::Result<()> {
         .write_all(
             messages
                 .lock()
-                .expect("Sync")
+                .expect("lock is never poisoned because worker threads do not panic")
                 .iter()
                 .map(|error| error.to_string())
                 .collect::<Vec<String>>()

@@ -9,7 +9,7 @@ use self::size_level::SizeLevel;
 ///
 /// The LLVM optimizer settings.
 ///
-#[derive(Debug, Clone, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Settings {
     /// The middle-end optimization level.
     pub level_middle_end: inkwell::OptimizationLevel,

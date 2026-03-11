@@ -30,7 +30,7 @@ impl<'a> Metadata<'a> {
     ) -> Self {
         Self {
             solc_version: solc_version.map(|version| version.default.to_owned()),
-            solx_version: crate::version().parse().expect("Always valid"),
+            solx_version: crate::Compiler::version().parse().expect("version string is valid semver"),
             optimizer_settings,
             llvm_options,
         }

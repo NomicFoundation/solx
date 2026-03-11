@@ -8,30 +8,36 @@ use slang_solidity::backend::ir::ir2_flat_contracts::TypeName;
 /// Maps Solidity types to MLIR LLVM dialect types.
 pub struct TypeMapper;
 
+/// The ABI-encoded size of a single word slot in bytes.
+#[allow(dead_code)]
+const ABI_ENCODED_WORD_SIZE: usize = 32;
+
 impl TypeMapper {
     /// Returns the MLIR type string for a Solidity type.
     ///
     /// In the first pass all value types map to `i256` (the EVM word size).
-    pub fn mlir_type(_type_name: &TypeName) -> &'static str {
+    #[allow(dead_code)]
+    pub(crate) fn mlir_type(_type_name: &TypeName) -> &'static str {
         "i256"
     }
 
     /// Returns the ABI-encoded size in bytes for a Solidity type.
     ///
     /// In the first pass all types are treated as a single 32-byte slot.
-    pub fn abi_encoded_size(_type_name: &TypeName) -> usize {
-        32
+    #[allow(dead_code)]
+    pub(crate) fn abi_encoded_size(_type_name: &TypeName) -> usize {
+        ABI_ENCODED_WORD_SIZE
     }
 
     /// Returns whether a type is a signed integer (`int8`..`int256`).
-    pub fn is_signed(type_name: &TypeName) -> bool {
+    pub(crate) fn is_signed(type_name: &TypeName) -> bool {
         matches!(type_name, TypeName::ElementaryType(ElementaryType::IntKeyword(_)))
     }
 
     /// Returns the canonical ABI type string for a Solidity type name.
     ///
     /// Used when computing function selectors.
-    pub fn canonical_type(type_name: &TypeName) -> String {
+    pub(crate) fn canonical_type(type_name: &TypeName) -> String {
         match type_name {
             TypeName::ElementaryType(elementary) => Self::canonical_elementary(elementary),
             TypeName::IdentifierPath(path) => path
@@ -54,7 +60,7 @@ impl TypeMapper {
 
     /// Returns the canonical ABI string for an elementary type.
     ///
-    /// Normalizes `uint` → `uint256` and `int` → `int256` per ABI spec.
+    /// Normalizes `uint` -> `uint256` and `int` -> `int256` per ABI spec.
     fn canonical_elementary(elementary: &ElementaryType) -> String {
         match elementary {
             ElementaryType::AddressType(_) => "address".to_owned(),

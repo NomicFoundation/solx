@@ -5,32 +5,25 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use melior::ir::BlockRef;
 use melior::ir::Value;
+
+use crate::LoopTarget;
 
 /// Tracks variable bindings (alloca'd pointers) and loop break/continue targets.
 ///
 /// Variables are stored as alloca'd pointers on the stack (address space 0).
 /// Each variable name maps to the `llvm.alloca` result pointer. Reads produce
 /// `llvm.load`, writes produce `llvm.store`.
-pub struct Environment<'c, 'b> {
-    /// Variable name → alloca'd pointer value.
-    variables: HashMap<String, Value<'c, 'b>>,
+pub struct Environment<'context, 'block> {
+    /// Variable name -> alloca'd pointer value.
+    variables: HashMap<String, Value<'context, 'block>>,
     /// Names of variables with signed integer types (`int8`..`int256`).
     signed_variables: HashSet<String>,
     /// Stack of (break_block, continue_block) for nested loops.
-    loop_targets: Vec<LoopTarget<'c, 'b>>,
+    loop_targets: Vec<LoopTarget<'context, 'block>>,
 }
 
-/// Break and continue targets for a loop.
-pub struct LoopTarget<'c, 'b> {
-    /// Block to branch to on `break`.
-    pub break_block: BlockRef<'c, 'b>,
-    /// Block to branch to on `continue`.
-    pub continue_block: BlockRef<'c, 'b>,
-}
-
-impl<'c, 'b> Environment<'c, 'b> {
+impl<'context, 'block> Environment<'context, 'block> {
     /// Creates a new empty environment.
     pub fn new() -> Self {
         Self {
@@ -41,7 +34,7 @@ impl<'c, 'b> Environment<'c, 'b> {
     }
 
     /// Registers a variable with its alloca'd pointer.
-    pub fn define_variable(&mut self, name: String, ptr: Value<'c, 'b>) {
+    pub fn define_variable(&mut self, name: String, ptr: Value<'context, 'block>) {
         self.variables.insert(name, ptr);
     }
 
@@ -56,12 +49,12 @@ impl<'c, 'b> Environment<'c, 'b> {
     }
 
     /// Looks up a variable's alloca'd pointer by name.
-    pub fn get_variable(&self, name: &str) -> Option<Value<'c, 'b>> {
+    pub fn get_variable(&self, name: &str) -> Option<Value<'context, 'block>> {
         self.variables.get(name).copied()
     }
 
     /// Pushes a new loop context for break/continue resolution.
-    pub fn push_loop(&mut self, target: LoopTarget<'c, 'b>) {
+    pub fn push_loop(&mut self, target: LoopTarget<'context, 'block>) {
         self.loop_targets.push(target);
     }
 
@@ -71,7 +64,7 @@ impl<'c, 'b> Environment<'c, 'b> {
     }
 
     /// Returns the current innermost loop target.
-    pub fn current_loop(&self) -> Option<&LoopTarget<'c, 'b>> {
+    pub fn current_loop(&self) -> Option<&LoopTarget<'context, 'block>> {
         self.loop_targets.last()
     }
 }

@@ -11,13 +11,15 @@ pub mod builder;
 pub mod context;
 pub mod environment;
 pub mod function_entry;
+pub mod icmp_predicate;
 pub mod llvm_module;
+pub mod loop_target;
 pub mod ops;
 
-pub use self::builder::ICmpPredicate;
 pub use self::builder::MlirContext;
 pub use self::context::Context;
 pub use self::environment::Environment;
-pub use self::environment::LoopTarget;
 pub use self::function_entry::FunctionEntry;
+pub use self::icmp_predicate::ICmpPredicate;
 pub use self::llvm_module::LlvmModule;
+pub use self::loop_target::LoopTarget;

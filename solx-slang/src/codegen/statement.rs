@@ -14,7 +14,6 @@ use slang_solidity::backend::ir::ir2_flat_contracts::Statement;
 
 use solx_mlir::Environment;
 use solx_mlir::LoopTarget;
-use solx_mlir::ops;
 
 use crate::codegen::MlirContext;
 use crate::codegen::expression::ExpressionEmitter;
@@ -24,65 +23,65 @@ use crate::codegen::types::TypeMapper;
 ///
 /// Returns `Some(block)` as the continuation block, or `None` when control
 /// flow has been terminated (by `return`, `break`, or `continue`).
-pub struct StatementEmitter<'a, 'c, 'b> {
+pub struct StatementEmitter<'state, 'context, 'block> {
     /// The shared MLIR context.
-    state: &'a MlirContext<'c>,
+    state: &'state MlirContext<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
-    env: &'a mut Environment<'c, 'b>,
+    environment: &'state mut Environment<'context, 'block>,
     /// The function region for creating new blocks.
-    region: &'a Region<'c>,
+    region: &'state Region<'context>,
 }
 
-impl<'a, 'c, 'b> StatementEmitter<'a, 'c, 'b> {
+impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Creates a new statement emitter.
-    pub fn new(
-        state: &'a MlirContext<'c>,
-        env: &'a mut Environment<'c, 'b>,
-        region: &'a Region<'c>,
+    pub(crate) fn new(
+        state: &'state MlirContext<'context>,
+        environment: &'state mut Environment<'context, 'block>,
+        region: &'state Region<'context>,
     ) -> Self {
-        Self { state, env, region }
+        Self { state, environment, region }
     }
 
     /// Emits MLIR for a statement.
     ///
     /// Returns `Some(block)` as the continuation block for the next statement,
     /// or `None` if control flow was terminated.
-    pub fn emit(
+    pub(crate) fn emit(
         &mut self,
-        stmt: &Statement,
-        block: BlockRef<'c, 'b>,
-    ) -> anyhow::Result<Option<BlockRef<'c, 'b>>> {
-        match stmt {
-            Statement::VariableDeclarationStatement(decl) => {
-                self.emit_variable_declaration(decl, block)
+        statement: &Statement,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        match statement {
+            Statement::VariableDeclarationStatement(declaration) => {
+                self.emit_variable_declaration(declaration, block)
             }
-            Statement::ExpressionStatement(expr_stmt) => {
-                let emitter = ExpressionEmitter::new(self.state, self.env, self.region);
-                let (_val, block) = emitter.emit(&expr_stmt.expression, block)?;
+            Statement::ExpressionStatement(expression_statement) => {
+                let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
+                let (_value, block) = emitter.emit(&expression_statement.expression, block)?;
                 Ok(Some(block))
             }
-            Statement::ReturnStatement(ret) => self.emit_return(ret, block),
-            Statement::IfStatement(if_stmt) => self.emit_if(if_stmt, block),
-            Statement::ForStatement(for_stmt) => self.emit_for(for_stmt, block),
-            Statement::WhileStatement(while_stmt) => self.emit_while(while_stmt, block),
+            Statement::ReturnStatement(return_statement) => self.emit_return(return_statement, block),
+            Statement::IfStatement(if_statement) => self.emit_if(if_statement, block),
+            Statement::ForStatement(for_statement) => self.emit_for(for_statement, block),
+            Statement::WhileStatement(while_statement) => self.emit_while(while_statement, block),
             Statement::DoWhileStatement(do_while) => self.emit_do_while(do_while, block),
             Statement::BreakStatement(_) => self.emit_break(block),
             Statement::ContinueStatement(_) => self.emit_continue(block),
             Statement::Block(inner) => self.emit_block(&inner.statements, block),
             Statement::UncheckedBlock(inner) => self.emit_block(&inner.block.statements, block),
-            _ => anyhow::bail!("unsupported statement: {stmt:?}"),
+            _ => anyhow::bail!("unsupported statement: {statement:?}"),
         }
     }
 
     /// Emits a sequence of statements.
     fn emit_block(
         &mut self,
-        stmts: &[Statement],
-        block: BlockRef<'c, 'b>,
-    ) -> anyhow::Result<Option<BlockRef<'c, 'b>>> {
+        statements: &[Statement],
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let mut current = block;
-        for stmt in stmts {
-            match self.emit(stmt, current)? {
+        for statement in statements {
+            match self.emit(statement, current)? {
                 Some(next) => current = next,
                 None => return Ok(None),
             }
@@ -93,29 +92,29 @@ impl<'a, 'c, 'b> StatementEmitter<'a, 'c, 'b> {
     /// Emits a variable declaration with optional initializer.
     fn emit_variable_declaration(
         &mut self,
-        decl: &slang_solidity::backend::ir::ir2_flat_contracts::VariableDeclarationStatement,
-        block: BlockRef<'c, 'b>,
-    ) -> anyhow::Result<Option<BlockRef<'c, 'b>>> {
-        let name = decl.name.text.as_str();
+        declaration: &slang_solidity::backend::ir::ir2_flat_contracts::VariableDeclarationStatement,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        let name = declaration.name.text.as_str();
 
-        let emitter = ExpressionEmitter::new(self.state, self.env, self.region);
+        let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
         let ptr = emitter.emit_alloca(&block);
 
-        if let Some(ref init_expr) = decl.value {
-            let (init_val, block) = emitter.emit(init_expr, block)?;
-            emitter.emit_store(init_val, ptr, &block)?;
-            if decl.type_name.as_ref().is_some_and(|t| TypeMapper::is_signed(t)) {
-                self.env.mark_signed(name);
+        if let Some(ref initializer_expression) = declaration.value {
+            let (initial_value, block) = emitter.emit(initializer_expression, block)?;
+            emitter.emit_store(initial_value, ptr, &block);
+            if declaration.type_name.as_ref().is_some_and(|t| TypeMapper::is_signed(t)) {
+                self.environment.mark_signed(name);
             }
-            self.env.define_variable(name.to_owned(), ptr);
+            self.environment.define_variable(name.to_owned(), ptr);
             Ok(Some(block))
         } else {
             let zero = emitter.emit_i256_constant(0, &block);
-            emitter.emit_store(zero, ptr, &block)?;
-            if decl.type_name.as_ref().is_some_and(|t| TypeMapper::is_signed(t)) {
-                self.env.mark_signed(name);
+            emitter.emit_store(zero, ptr, &block);
+            if declaration.type_name.as_ref().is_some_and(|t| TypeMapper::is_signed(t)) {
+                self.environment.mark_signed(name);
             }
-            self.env.define_variable(name.to_owned(), ptr);
+            self.environment.define_variable(name.to_owned(), ptr);
             Ok(Some(block))
         }
     }
@@ -123,25 +122,25 @@ impl<'a, 'c, 'b> StatementEmitter<'a, 'c, 'b> {
     /// Emits a return statement.
     fn emit_return(
         &mut self,
-        ret: &slang_solidity::backend::ir::ir2_flat_contracts::ReturnStatement,
-        block: BlockRef<'c, 'b>,
-    ) -> anyhow::Result<Option<BlockRef<'c, 'b>>> {
+        return_statement: &slang_solidity::backend::ir::ir2_flat_contracts::ReturnStatement,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let location = self.state.location();
 
-        if let Some(ref expr) = ret.expression {
-            let emitter = ExpressionEmitter::new(self.state, self.env, self.region);
+        if let Some(ref expr) = return_statement.expression {
+            let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
             let (value, block) = emitter.emit(expr, block)?;
             block.append_operation(
-                melior::ir::operation::OperationBuilder::new(ops::RETURN, location)
+                melior::ir::operation::OperationBuilder::new(solx_mlir::ops::RETURN, location)
                     .add_operands(&[value])
                     .build()
-                    .expect("valid llvm.return"),
+                    .expect("llvm.return operation is well-formed"),
             );
         } else {
             block.append_operation(
-                melior::ir::operation::OperationBuilder::new(ops::RETURN, location)
+                melior::ir::operation::OperationBuilder::new(solx_mlir::ops::RETURN, location)
                     .build()
-                    .expect("valid llvm.return"),
+                    .expect("llvm.return operation is well-formed"),
             );
         }
 
@@ -151,28 +150,28 @@ impl<'a, 'c, 'b> StatementEmitter<'a, 'c, 'b> {
     /// Emits an if/else statement with conditional branching.
     fn emit_if(
         &mut self,
-        if_stmt: &slang_solidity::backend::ir::ir2_flat_contracts::IfStatement,
-        block: BlockRef<'c, 'b>,
-    ) -> anyhow::Result<Option<BlockRef<'c, 'b>>> {
-        let emitter = ExpressionEmitter::new(self.state, self.env, self.region);
-        let (cond_val, block) = emitter.emit(&if_stmt.condition, block)?;
-        let cond_bool = emitter.emit_is_nonzero(cond_val, &block);
+        if_statement: &slang_solidity::backend::ir::ir2_flat_contracts::IfStatement,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
+        let (condition_value, block) = emitter.emit(&if_statement.condition, block)?;
+        let condition_boolean = emitter.emit_is_nonzero(condition_value, &block);
 
         let then_block = self.region.append_block(Block::new(&[]));
         let merge_block = self.region.append_block(Block::new(&[]));
 
-        if let Some(ref else_stmt) = if_stmt.else_branch {
+        if let Some(ref else_statement) = if_statement.else_branch {
             let else_block = self.region.append_block(Block::new(&[]));
             block.append_operation(
-                self.state.llvm_cond_br(cond_bool, &then_block, &else_block, &[], &[]),
+                self.state.llvm_cond_br(condition_boolean, &then_block, &else_block, &[], &[]),
             );
 
-            let then_end = self.emit(&if_stmt.body, then_block)?;
+            let then_end = self.emit(&if_statement.body, then_block)?;
             if let Some(then_end) = then_end {
                 then_end.append_operation(self.state.llvm_br(&merge_block, &[]));
             }
 
-            let else_end = self.emit(else_stmt, else_block)?;
+            let else_end = self.emit(else_statement, else_block)?;
             if let Some(else_end) = else_end {
                 else_end.append_operation(self.state.llvm_br(&merge_block, &[]));
             }
@@ -184,10 +183,10 @@ impl<'a, 'c, 'b> StatementEmitter<'a, 'c, 'b> {
             }
         } else {
             block.append_operation(
-                self.state.llvm_cond_br(cond_bool, &then_block, &merge_block, &[], &[]),
+                self.state.llvm_cond_br(condition_boolean, &then_block, &merge_block, &[], &[]),
             );
 
-            let then_end = self.emit(&if_stmt.body, then_block)?;
+            let then_end = self.emit(&if_statement.body, then_block)?;
             if let Some(then_end) = then_end {
                 then_end.append_operation(self.state.llvm_br(&merge_block, &[]));
             }
@@ -199,19 +198,19 @@ impl<'a, 'c, 'b> StatementEmitter<'a, 'c, 'b> {
     /// Emits a for loop.
     fn emit_for(
         &mut self,
-        for_stmt: &slang_solidity::backend::ir::ir2_flat_contracts::ForStatement,
-        block: BlockRef<'c, 'b>,
-    ) -> anyhow::Result<Option<BlockRef<'c, 'b>>> {
+        for_statement: &slang_solidity::backend::ir::ir2_flat_contracts::ForStatement,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         // Emit initialization.
-        let block = match &for_stmt.initialization {
-            ForStatementInitialization::VariableDeclarationStatement(decl) => {
-                match self.emit(&Statement::VariableDeclarationStatement(decl.clone()), block)? {
+        let block = match &for_statement.initialization {
+            ForStatementInitialization::VariableDeclarationStatement(declaration) => {
+                match self.emit(&Statement::VariableDeclarationStatement(declaration.clone()), block)? {
                     Some(b) => b,
                     None => return Ok(None),
                 }
             }
-            ForStatementInitialization::ExpressionStatement(expr_stmt) => {
-                match self.emit(&Statement::ExpressionStatement(expr_stmt.clone()), block)? {
+            ForStatementInitialization::ExpressionStatement(expression_statement) => {
+                match self.emit(&Statement::ExpressionStatement(expression_statement.clone()), block)? {
                     Some(b) => b,
                     None => return Ok(None),
                 }
@@ -222,48 +221,45 @@ impl<'a, 'c, 'b> StatementEmitter<'a, 'c, 'b> {
             ForStatementInitialization::Semicolon => block,
         };
 
-        let cond_block = self.region.append_block(Block::new(&[]));
+        let condition_block = self.region.append_block(Block::new(&[]));
         let body_block = self.region.append_block(Block::new(&[]));
-        let iter_block = self.region.append_block(Block::new(&[]));
+        let iterator_block = self.region.append_block(Block::new(&[]));
         let exit_block = self.region.append_block(Block::new(&[]));
 
-        block.append_operation(self.state.llvm_br(&cond_block, &[]));
+        block.append_operation(self.state.llvm_br(&condition_block, &[]));
 
         // Condition.
-        match &for_stmt.condition {
-            ForStatementCondition::ExpressionStatement(expr_stmt) => {
-                let emitter = ExpressionEmitter::new(self.state, self.env, self.region);
-                let (cond_val, cond_block_end) =
-                    emitter.emit(&expr_stmt.expression, cond_block)?;
-                let cond_bool = emitter.emit_is_nonzero(cond_val, &cond_block_end);
-                cond_block_end.append_operation(
-                    self.state.llvm_cond_br(cond_bool, &body_block, &exit_block, &[], &[]),
+        match &for_statement.condition {
+            ForStatementCondition::ExpressionStatement(expression_statement) => {
+                let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
+                let (condition_value, condition_end) =
+                    emitter.emit(&expression_statement.expression, condition_block)?;
+                let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
+                condition_end.append_operation(
+                    self.state.llvm_cond_br(condition_boolean, &body_block, &exit_block, &[], &[]),
                 );
             }
             ForStatementCondition::Semicolon => {
-                cond_block.append_operation(self.state.llvm_br(&body_block, &[]));
+                condition_block.append_operation(self.state.llvm_br(&body_block, &[]));
             }
         }
 
         // Body with loop targets.
-        self.env.push_loop(LoopTarget {
-            break_block: exit_block,
-            continue_block: iter_block,
-        });
-        let body_end = self.emit(&for_stmt.body, body_block)?;
-        self.env.pop_loop();
+        self.environment.push_loop(LoopTarget::new(exit_block, iterator_block));
+        let body_end = self.emit(&for_statement.body, body_block)?;
+        self.environment.pop_loop();
 
         if let Some(body_end) = body_end {
-            body_end.append_operation(self.state.llvm_br(&iter_block, &[]));
+            body_end.append_operation(self.state.llvm_br(&iterator_block, &[]));
         }
 
         // Iterator.
-        if let Some(ref iter_expr) = for_stmt.iterator {
-            let expr_emitter = ExpressionEmitter::new(self.state, self.env, self.region);
-            let (_val, iter_end) = expr_emitter.emit(iter_expr, iter_block)?;
-            iter_end.append_operation(self.state.llvm_br(&cond_block, &[]));
+        if let Some(ref iterator_expression) = for_statement.iterator {
+            let expression_emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
+            let (_value, iterator_end) = expression_emitter.emit(iterator_expression, iterator_block)?;
+            iterator_end.append_operation(self.state.llvm_br(&condition_block, &[]));
         } else {
-            iter_block.append_operation(self.state.llvm_br(&cond_block, &[]));
+            iterator_block.append_operation(self.state.llvm_br(&condition_block, &[]));
         }
 
         Ok(Some(exit_block))
@@ -272,31 +268,28 @@ impl<'a, 'c, 'b> StatementEmitter<'a, 'c, 'b> {
     /// Emits a while loop.
     fn emit_while(
         &mut self,
-        while_stmt: &slang_solidity::backend::ir::ir2_flat_contracts::WhileStatement,
-        block: BlockRef<'c, 'b>,
-    ) -> anyhow::Result<Option<BlockRef<'c, 'b>>> {
-        let cond_block = self.region.append_block(Block::new(&[]));
+        while_statement: &slang_solidity::backend::ir::ir2_flat_contracts::WhileStatement,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        let condition_block = self.region.append_block(Block::new(&[]));
         let body_block = self.region.append_block(Block::new(&[]));
         let exit_block = self.region.append_block(Block::new(&[]));
 
-        block.append_operation(self.state.llvm_br(&cond_block, &[]));
+        block.append_operation(self.state.llvm_br(&condition_block, &[]));
 
-        let emitter = ExpressionEmitter::new(self.state, self.env, self.region);
-        let (cond_val, cond_end) = emitter.emit(&while_stmt.condition, cond_block)?;
-        let cond_bool = emitter.emit_is_nonzero(cond_val, &cond_end);
-        cond_end.append_operation(
-            self.state.llvm_cond_br(cond_bool, &body_block, &exit_block, &[], &[]),
+        let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
+        let (condition_value, condition_end) = emitter.emit(&while_statement.condition, condition_block)?;
+        let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
+        condition_end.append_operation(
+            self.state.llvm_cond_br(condition_boolean, &body_block, &exit_block, &[], &[]),
         );
 
-        self.env.push_loop(LoopTarget {
-            break_block: exit_block,
-            continue_block: cond_block,
-        });
-        let body_end = self.emit(&while_stmt.body, body_block)?;
-        self.env.pop_loop();
+        self.environment.push_loop(LoopTarget::new(exit_block, condition_block));
+        let body_end = self.emit(&while_statement.body, body_block)?;
+        self.environment.pop_loop();
 
         if let Some(body_end) = body_end {
-            body_end.append_operation(self.state.llvm_br(&cond_block, &[]));
+            body_end.append_operation(self.state.llvm_br(&condition_block, &[]));
         }
 
         Ok(Some(exit_block))
@@ -306,53 +299,50 @@ impl<'a, 'c, 'b> StatementEmitter<'a, 'c, 'b> {
     fn emit_do_while(
         &mut self,
         do_while: &slang_solidity::backend::ir::ir2_flat_contracts::DoWhileStatement,
-        block: BlockRef<'c, 'b>,
-    ) -> anyhow::Result<Option<BlockRef<'c, 'b>>> {
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let body_block = self.region.append_block(Block::new(&[]));
-        let cond_block = self.region.append_block(Block::new(&[]));
+        let condition_block = self.region.append_block(Block::new(&[]));
         let exit_block = self.region.append_block(Block::new(&[]));
 
         block.append_operation(self.state.llvm_br(&body_block, &[]));
 
-        self.env.push_loop(LoopTarget {
-            break_block: exit_block,
-            continue_block: cond_block,
-        });
+        self.environment.push_loop(LoopTarget::new(exit_block, condition_block));
         let body_end = self.emit(&do_while.body, body_block)?;
-        self.env.pop_loop();
+        self.environment.pop_loop();
 
         if let Some(body_end) = body_end {
-            body_end.append_operation(self.state.llvm_br(&cond_block, &[]));
+            body_end.append_operation(self.state.llvm_br(&condition_block, &[]));
         }
 
-        let emitter = ExpressionEmitter::new(self.state, self.env, self.region);
-        let (cond_val, cond_end) = emitter.emit(&do_while.condition, cond_block)?;
-        let cond_bool = emitter.emit_is_nonzero(cond_val, &cond_end);
-        cond_end.append_operation(
-            self.state.llvm_cond_br(cond_bool, &body_block, &exit_block, &[], &[]),
+        let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
+        let (condition_value, condition_end) = emitter.emit(&do_while.condition, condition_block)?;
+        let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
+        condition_end.append_operation(
+            self.state.llvm_cond_br(condition_boolean, &body_block, &exit_block, &[], &[]),
         );
 
         Ok(Some(exit_block))
     }
 
     /// Emits a break statement.
-    fn emit_break(&self, block: BlockRef<'c, 'b>) -> anyhow::Result<Option<BlockRef<'c, 'b>>> {
-        let target = self.env.current_loop().ok_or_else(|| {
+    fn emit_break(&self, block: BlockRef<'context, 'block>) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        let target = self.environment.current_loop().ok_or_else(|| {
             anyhow::anyhow!("break outside of loop")
         })?;
-        block.append_operation(self.state.llvm_br(&target.break_block, &[]));
+        block.append_operation(self.state.llvm_br(&target.break_block(), &[]));
         Ok(None)
     }
 
     /// Emits a continue statement.
     fn emit_continue(
         &self,
-        block: BlockRef<'c, 'b>,
-    ) -> anyhow::Result<Option<BlockRef<'c, 'b>>> {
-        let target = self.env.current_loop().ok_or_else(|| {
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        let target = self.environment.current_loop().ok_or_else(|| {
             anyhow::anyhow!("continue outside of loop")
         })?;
-        block.append_operation(self.state.llvm_br(&target.continue_block, &[]));
+        block.append_operation(self.state.llvm_br(&target.continue_block(), &[]));
         Ok(None)
     }
 }

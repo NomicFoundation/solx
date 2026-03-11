@@ -128,9 +128,9 @@ impl solx_core::Frontend for SlangFrontend {
             return Ok(output);
         }
 
-        let sources = crate::collect_sources(&input_json.sources, &mut output);
+        let sources = Self::collect_sources(&input_json.sources, &mut output);
         let unit = self.compile(sources)?;
-        crate::report_compilation_results(&unit, &input_json.sources, &mut output)?;
+        Self::report_compilation_results(&unit, &input_json.sources, &mut output)?;
 
         Ok(output)
     }

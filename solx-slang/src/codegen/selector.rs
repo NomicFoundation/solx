@@ -13,35 +13,35 @@ impl SelectorComputer {
     /// Computes the 4-byte selector and canonical signature for a function.
     ///
     /// The selector is the first 4 bytes of `keccak256(signature)`.
-    pub fn compute(func: &FunctionDefinition) -> ([u8; 4], String) {
-        let signature = Self::canonical_signature(func);
-        let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
-        let bytes = hash.to_vec();
-        let selector = [bytes[0], bytes[1], bytes[2], bytes[3]];
+    pub(crate) fn compute(function: &FunctionDefinition) -> ([u8; 4], String) {
+        let signature = Self::canonical_signature(function);
+        let selector = Self::selector_from_signature(&signature);
         (selector, signature)
     }
 
     /// Computes the 4-byte selector from a pre-built signature string.
-    pub fn selector_from_signature(signature: &str) -> [u8; 4] {
+    pub(crate) fn selector_from_signature(signature: &str) -> [u8; 4] {
         let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
         let bytes = hash.to_vec();
-        [bytes[0], bytes[1], bytes[2], bytes[3]]
+        bytes[..4]
+            .try_into()
+            .expect("keccak256 always produces at least 4 bytes")
     }
 
     /// Builds the canonical signature string (e.g. `get()` or `transfer(address,uint256)`).
-    fn canonical_signature(func: &FunctionDefinition) -> String {
-        let name = func
+    fn canonical_signature(function: &FunctionDefinition) -> String {
+        let name = function
             .name
             .as_ref()
             .map(|terminal| terminal.text.as_str())
             .unwrap_or("");
 
-        let param_types: Vec<String> = func
+        let parameter_types: Vec<String> = function
             .parameters
             .iter()
-            .map(|param| TypeMapper::canonical_type(&param.type_name))
+            .map(|parameter| TypeMapper::canonical_type(&parameter.type_name))
             .collect();
 
-        format!("{name}({})", param_types.join(","))
+        format!("{name}({})", parameter_types.join(","))
     }
 }

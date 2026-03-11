@@ -5,12 +5,19 @@
 //! builder primitives from `solx_mlir`.
 //!
 
-pub mod contract;
-pub mod expression;
-pub mod function;
-pub mod selector;
-pub mod source_unit;
-pub mod statement;
-pub mod types;
+/// Contract definition lowering to MLIR.
+pub(crate) mod contract;
+/// Expression lowering to MLIR SSA values.
+pub(crate) mod expression;
+/// Function definition lowering to MLIR.
+pub(crate) mod function;
+/// EVM function selector computation.
+pub(crate) mod selector;
+/// Source unit (top-level file) lowering to MLIR.
+pub(crate) mod source_unit;
+/// Statement lowering to MLIR operations.
+pub(crate) mod statement;
+/// Solidity to MLIR type mapping.
+pub(crate) mod types;
 
 pub use solx_mlir::MlirContext;

@@ -9,14 +9,14 @@ use crate::codegen::MlirContext;
 use crate::codegen::contract::ContractEmitter;
 
 /// Walks a `SourceUnit` and lowers its contract definitions to MLIR.
-pub struct SourceUnitEmitter<'a, 'c> {
+pub struct SourceUnitEmitter<'state, 'context> {
     /// The shared MLIR context.
-    state: &'a mut MlirContext<'c>,
+    state: &'state mut MlirContext<'context>,
 }
 
-impl<'a, 'c> SourceUnitEmitter<'a, 'c> {
+impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
     /// Creates a new source unit emitter.
-    pub fn new(state: &'a mut MlirContext<'c>) -> Self {
+    pub(crate) fn new(state: &'state mut MlirContext<'context>) -> Self {
         Self { state }
     }
 
@@ -32,7 +32,7 @@ impl<'a, 'c> SourceUnitEmitter<'a, 'c> {
     /// # Errors
     ///
     /// Returns an error if code generation encounters unsupported constructs.
-    pub fn emit(&mut self, unit: &SourceUnit) -> anyhow::Result<bool> {
+    pub(crate) fn emit(&mut self, unit: &SourceUnit) -> anyhow::Result<bool> {
         for member in &unit.members {
             if let SourceUnitMember::ContractDefinition(contract) = member {
                 let mut emitter = ContractEmitter::new(self.state);
