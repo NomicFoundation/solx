@@ -2,10 +2,15 @@
 //! Slang Solidity frontend implementation.
 //!
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use slang_solidity::parser::Parser;
+use slang_solidity::compilation::CompilationBuilder;
+use slang_solidity::compilation::CompilationUnit;
 use slang_solidity::utils::LanguageFacts;
+
+use crate::SlangCompilationConfig;
 
 ///
 /// The Slang frontend implementation.
@@ -23,6 +28,72 @@ impl Default for SlangFrontend {
         Self {
             version: solx_standard_json::Version::new(default.to_string(), default),
         }
+    }
+}
+
+impl SlangFrontend {
+    /// Builds a Slang compilation unit from the given source files.
+    ///
+    /// Uses the `CompilationBuilder` to parse all sources and resolve imports.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the compilation builder fails to initialize or
+    /// if import resolution fails.
+    pub fn compile(
+        &self,
+        sources: BTreeMap<String, String>,
+    ) -> anyhow::Result<CompilationUnit> {
+        let keys: Vec<String> = sources.keys().cloned().collect();
+        let configuration = SlangCompilationConfig::new(sources);
+        let mut builder =
+            CompilationBuilder::create(self.version.default.clone(), configuration)
+                .map_err(|error| anyhow::anyhow!("slang compilation builder: {error}"))?;
+
+        for path in &keys {
+            builder.add_file(path)?;
+        }
+
+        Ok(builder.build())
+    }
+
+    /// Compiles Solidity source files from filesystem paths.
+    ///
+    /// Resolves sources, builds and returns a compilation unit with all files
+    /// parsed and imports resolved.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if source resolution or compilation fails.
+    pub fn compile_from_paths(
+        &self,
+        input_files: &[PathBuf],
+        libraries: &[String],
+        remappings: BTreeSet<String>,
+    ) -> anyhow::Result<CompilationUnit> {
+        let mut input = solx_standard_json::Input::try_from_solidity_paths(
+            input_files,
+            libraries,
+            remappings,
+            solx_standard_json::InputOptimizer::default(),
+            None,
+            false,
+            &solx_standard_json::InputSelection::default(),
+            solx_standard_json::InputMetadata::default(),
+            vec![],
+        )?;
+
+        input.resolve_sources()?;
+
+        let mut sources = BTreeMap::new();
+        for (path, source) in &input.sources {
+            let content = source.content().ok_or_else(|| {
+                anyhow::anyhow!("source content unavailable for '{path}'")
+            })?;
+            sources.insert(path.clone(), content.to_owned());
+        }
+
+        self.compile(sources)
     }
 }
 
@@ -57,53 +128,9 @@ impl solx_core::Frontend for SlangFrontend {
             return Ok(output);
         }
 
-        let parser = Parser::create(LanguageFacts::LATEST_VERSION)
-            .map_err(|error| anyhow::anyhow!("slang parser initialization: {error}"))?;
-
-        for (path, source) in input_json.sources.iter() {
-            let Some(source_code) = source.content() else {
-                output
-                    .errors
-                    .push(solx_standard_json::OutputError::new_error_with_data(
-                        Some(path.as_str()),
-                        None,
-                        "Source content is unavailable.",
-                        Some(
-                            solx_standard_json::output::error::source_location::SourceLocation::new(
-                                path.to_owned(),
-                                None,
-                                None,
-                            ),
-                        ),
-                        Some(&input_json.sources),
-                    ));
-                continue;
-            };
-
-            let parse_output = parser.parse_file_contents(source_code);
-            output
-                .errors
-                .extend(parse_output.errors().iter().map(|error| {
-                    let text_range = error.text_range();
-                    let source_location =
-                        solx_standard_json::output::error::source_location::SourceLocation::new(
-                            path.to_owned(),
-                            Some(text_range.start.utf8 as isize),
-                            Some(text_range.end.utf8 as isize),
-                        );
-
-                    solx_standard_json::OutputError::new_error_with_data(
-                        Some(path.as_str()),
-                        None,
-                        error.message(),
-                        Some(source_location),
-                        Some(&input_json.sources),
-                    )
-                }));
-
-            output.sources.get_mut(path).expect("Always exists").ast =
-                Some(serde_json::to_value(parse_output.tree()).expect("CST serialization failure"));
-        }
+        let sources = crate::collect_sources(&input_json.sources, &mut output);
+        let unit = self.compile(sources)?;
+        crate::report_compilation_results(&unit, &input_json.sources, &mut output)?;
 
         Ok(output)
     }

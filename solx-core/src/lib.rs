@@ -401,33 +401,10 @@ pub fn standard_json_evm(
     let via_ir = solc_input.settings.via_ir;
     let linker_symbols = solc_input.settings.libraries.as_linker_symbols()?;
 
-    let optimization_mode = if let Ok(optimization) = std::env::var(SOLX_OPTIMIZATION_ENV) {
-        if !solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.contains(&optimization.as_str())
-        {
-            anyhow::bail!(
-                "Invalid value `{optimization}` for environment variable '{SOLX_OPTIMIZATION_ENV}': only values {} are supported.",
-                solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.join(", ")
-            );
-        }
-        optimization.chars().next().expect("Always exists")
-    } else {
-        solc_input
-            .settings
-            .optimizer
-            .mode
-            .unwrap_or(solx_standard_json::InputOptimizer::default_mode().expect("Always exists"))
-    };
-    let mut optimizer_settings =
-        solx_codegen_evm::OptimizerSettings::try_from_cli(optimization_mode)?;
-    if solc_input
-        .settings
-        .optimizer
-        .size_fallback
-        .unwrap_or_default()
-        || std::env::var(SOLX_OPTIMIZATION_SIZE_FALLBACK_ENV).is_ok()
-    {
-        optimizer_settings.enable_fallback_to_size();
-    }
+    let optimizer_settings = solx_codegen_evm::OptimizerSettings::try_from_standard_json(
+        solc_input.settings.optimizer.mode,
+        solc_input.settings.optimizer.size_fallback,
+    )?;
     let llvm_options = solc_input.settings.llvm_options.clone();
 
     let metadata_hash_type = solc_input.settings.metadata.bytecode_hash;
