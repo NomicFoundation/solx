@@ -1,13 +1,23 @@
 //!
 //! MLIR integration for solx via melior.
 //!
-//! Provides an MLIR `Context` with all dialects and LLVM translations
-//! registered, and binary MLIR-to-LLVM module translation (no text
-//! serialization).
+//! Provides low-level MLIR building primitives and LLVM translation
+//! infrastructure. Frontend crates (e.g. `solx-slang`) use [`MlirContext`]
+//! to emit LLVM dialect operations without dealing with raw `melior` API
+//! details, analogous to how `solx-yul` uses `solx-codegen-evm`.
 //!
 
+pub mod builder;
 pub mod context;
+pub mod environment;
+pub mod function_entry;
 pub mod llvm_module;
+pub mod ops;
 
+pub use self::builder::ICmpPredicate;
+pub use self::builder::MlirContext;
 pub use self::context::Context;
+pub use self::environment::Environment;
+pub use self::environment::LoopTarget;
+pub use self::function_entry::FunctionEntry;
 pub use self::llvm_module::LlvmModule;

@@ -28,7 +28,7 @@ fn with_env_var() -> anyhow::Result<()> {
 
     let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--bin"];
     let env_vars = vec![(
-        solx_core::SOLX_OPTIMIZATION_SIZE_FALLBACK_ENV,
+        solx_codegen_evm::OptimizerSettings::SIZE_FALLBACK_ENV,
         "true".to_owned(),
     )];
 

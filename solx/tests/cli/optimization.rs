@@ -36,7 +36,7 @@ fn all_with_env_var(level: char) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "--bin"];
-    let env_vars = vec![(solx_core::SOLX_OPTIMIZATION_ENV, level.to_string())];
+    let env_vars = vec![(solx_codegen_evm::OptimizerSettings::OPTIMIZATION_ENV, level.to_string())];
 
     let result = crate::cli::execute_solx_with_env_vars(args, env_vars)?;
     result.success().stdout(predicate::str::contains("Binary"));
@@ -64,7 +64,7 @@ fn invalid_with_env_var() -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &[crate::common::TEST_SOLIDITY_CONTRACT];
-    let env_vars = vec![(solx_core::SOLX_OPTIMIZATION_ENV, "99".to_string())];
+    let env_vars = vec![(solx_codegen_evm::OptimizerSettings::OPTIMIZATION_ENV, "99".to_string())];
 
     let result = crate::cli::execute_solx_with_env_vars(args, env_vars)?;
     result.failure().stderr(
@@ -101,7 +101,7 @@ fn standard_json_invalid_env_var() -> anyhow::Result<()> {
         "--standard-json",
         crate::common::TEST_SOLIDITY_STANDARD_JSON,
     ];
-    let env_vars = vec![(solx_core::SOLX_OPTIMIZATION_ENV, "99".to_string())];
+    let env_vars = vec![(solx_codegen_evm::OptimizerSettings::OPTIMIZATION_ENV, "99".to_string())];
 
     let result = crate::cli::execute_solx_with_env_vars(args, env_vars)?;
     result.success().stdout(
