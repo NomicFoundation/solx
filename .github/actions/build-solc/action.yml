@@ -36,7 +36,9 @@ runs:
       id: solc-artifact-cache
       uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
-        path: ${{ inputs.working-dir }}/build
+        path: |
+          ${{ inputs.working-dir }}/build
+          ${{ inputs.working-dir }}/boost
         key: ${{ steps.solc-cache.outputs.key }}
 
     - name: Build solx-dev
@@ -45,12 +47,6 @@ runs:
       working-directory: ${{ inputs.working-dir }}/..
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: cargo fetch --locked && cargo build --frozen --release --bin solx-dev
-
-    - name: Restore Boost cache
-      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-      with:
-        path: ${{ inputs.working-dir }}/boost
-        key: v1-boost-${{ inputs.boost-version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('solx-dev/src/solc/boost.rs') }}
 
     - name: Build solc
       if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
@@ -66,16 +62,11 @@ runs:
           --boost-version ${{ inputs.boost-version }} \
           --build-boost
 
-    - name: Save Boost cache
-      if: steps.solc-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
-      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-      with:
-        path: ${{ inputs.working-dir }}/boost
-        key: v1-boost-${{ inputs.boost-version }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('solx-dev/src/solc/boost.rs') }}
-
     - name: Save solc artifact cache
       if: steps.solc-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
       uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
-        path: ${{ inputs.working-dir }}/build
+        path: |
+          ${{ inputs.working-dir }}/build
+          ${{ inputs.working-dir }}/boost
         key: ${{ steps.solc-cache.outputs.key }}
