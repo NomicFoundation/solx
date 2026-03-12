@@ -31,9 +31,11 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: cargo clippy --frozen
 
+    # Version pinned to match .github/docker/Dockerfile — on container
+    # jobs this is already installed and `cargo install` is a no-op.
     - name: Cargo udeps
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
-        cargo install cargo-udeps --locked
+        cargo install cargo-udeps@0.1.60 --locked
         cargo +nightly udeps --frozen --all-targets
 

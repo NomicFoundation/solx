@@ -109,7 +109,14 @@ ENV PATH="/root/.cargo/bin:/usr/lib/llvm-21/bin:${PATH}" \
     LD_LIBRARY_PATH="/usr/lib/llvm-21/lib"
 
 # ── Cargo tools ────────────────────────────────────────────────────────────
-RUN cargo install cargo2junit cargo-llvm-cov cargo-udeps --locked
+# When updating versions here, also update the matching pins in:
+#   .github/actions/cargo-check/action.yml
+#   .github/actions/rust-unit-tests/action.yml
+RUN cargo install \
+    cargo2junit@0.1.15 \
+    cargo-llvm-cov@0.8.4 \
+    cargo-udeps@0.1.60 \
+    --locked
 
 # Smoke-test: ensure key tools are on PATH
 RUN set -eux \

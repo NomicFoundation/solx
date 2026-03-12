@@ -50,12 +50,14 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: cargo fetch --locked
 
+    # Versions pinned to match .github/docker/Dockerfile — on container
+    # jobs these are already installed and `cargo install` is a no-op.
     - name: Prepare test env
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
-        cargo install cargo2junit --locked
+        cargo install cargo2junit@0.1.15 --locked
         if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
-          cargo install cargo-llvm-cov --locked
+          cargo install cargo-llvm-cov@0.8.4 --locked
         fi
 
     - name: Run unit tests (release)
