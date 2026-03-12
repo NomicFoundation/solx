@@ -2,7 +2,7 @@ name: Integration Tests
 
 on:
   pull_request:
-    types: [labeled, synchronize]
+    types: [opened, synchronize, reopened, labeled]
 
 permissions:
   contents: read

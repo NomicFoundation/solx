@@ -22,10 +22,20 @@ jobs:
       && !github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
     steps:
-      - run: echo "ci:sanitizer label is present"
+      - run: 'true'
+
+  cooldown-check:
+    name: Cargo cooldown check
+    runs-on: ubuntu-24.04
+    needs: label-check
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/cooldown-check
 
   sanitizer:
-    needs: label-check
+    needs: [label-check, cooldown-check]
     runs-on: solx-linux-amd64
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:ba6c017ac68e658c3ba35edf5a1f1030a578737075e952c6c944efa4a7143992
@@ -72,6 +82,7 @@ jobs:
     if: always()
     needs:
       - label-check
+      - cooldown-check
       - sanitizer
     steps:
       - name: Decide on PR checks
@@ -79,4 +90,4 @@ jobs:
         with:
           jobs: ${{ toJSON(needs) }}
           allowed-skips: >-
-            ${{ needs.label-check.result == 'skipped' && 'label-check, sanitizer' || '' }}
+            ${{ needs.label-check.result == 'skipped' && 'label-check, cooldown-check, sanitizer' || '' }}

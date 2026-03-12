@@ -2,7 +2,7 @@ name: Code coverage
 
 on:
   pull_request:
-    types: [labeled, synchronize]
+    types: [opened, synchronize, reopened, labeled]
 
 concurrency:
   group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.ref }}
