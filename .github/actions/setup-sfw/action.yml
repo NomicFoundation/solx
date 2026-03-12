@@ -1,0 +1,38 @@
+name: Setup Socket Firewall (SFW)
+description: >
+  Installs and configures Socket Firewall to monitor package installations.
+  Gracefully skips inside containers (install via npm instead).
+
+inputs:
+  mode:
+    description: 'SFW mode: "firewall" blocks risky packages, "audit" only warns'
+    required: false
+    default: 'firewall'
+
+outputs:
+  available:
+    description: 'Whether SFW is available for use (true/false)'
+    value: ${{ steps.detect.outputs.available }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect platform support
+      id: detect
+      shell: bash
+      run: |
+        # Skip inside containers (GitHub sets 'container' env var for container jobs;
+        # /.dockerenv is a fallback heuristic)
+        if [[ -n "${container:-}" ]] || [[ -f /.dockerenv ]]; then
+          echo "::notice::SFW skipped: running inside a container (install via npm instead)"
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "available=true" >> "$GITHUB_OUTPUT"
+
+    - name: Install SFW
+      if: steps.detect.outputs.available == 'true'
+      uses: socketdev/action@4337a545deecc20f19a909e52db7a2f6ba292f42 # v1
+      with:
+        mode: ${{ inputs.mode }}

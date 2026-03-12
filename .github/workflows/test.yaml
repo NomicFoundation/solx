@@ -48,7 +48,7 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:ba6c017ac68e658c3ba35edf5a1f1030a578737075e952c6c944efa4a7143992
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:1df3890912821b043446539f20af01404650d2ae8f13528ce3d06bd933fb5a08
     steps:
 
       - name: Checkout source
@@ -62,6 +62,13 @@ jobs:
         run: |
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
+
+      - name: Set SFW prefix
+        shell: bash
+        run: |
+          if command -v sfw &>/dev/null; then
+            echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
+          fi
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -102,11 +109,11 @@ jobs:
             runner: macos-15
           - name: "Linux x86 gnu"
             runner: ubuntu-24.04
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:ba6c017ac68e658c3ba35edf5a1f1030a578737075e952c6c944efa4a7143992
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:1df3890912821b043446539f20af01404650d2ae8f13528ce3d06bd933fb5a08
             target: "x86_64-unknown-linux-gnu"
           - name: "Linux ARM64 gnu"
             runner: ubuntu-24.04-arm
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:ba6c017ac68e658c3ba35edf5a1f1030a578737075e952c6c944efa4a7143992
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:1df3890912821b043446539f20af01404650d2ae8f13528ce3d06bd933fb5a08
             target: "aarch64-unknown-linux-gnu"
           - name: "Windows"
             runner: windows-2025
@@ -128,6 +135,24 @@ jobs:
         run: |
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
+
+      - name: Setup SFW
+        if: matrix.image == ''
+        id: sfw
+        uses: ./.github/actions/setup-sfw
+        with:
+          mode: firewall
+
+      - name: Install SFW (container)
+        if: matrix.image != ''
+        run: npm install -g sfw
+
+      - name: Set SFW prefix
+        shell: bash
+        run: |
+          if command -v sfw &>/dev/null; then
+            echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
+          fi
 
       - name: Prepare Windows env
         if: runner.os == 'Windows'
@@ -197,7 +222,7 @@ jobs:
       packages: read
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:ba6c017ac68e658c3ba35edf5a1f1030a578737075e952c6c944efa4a7143992
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:1df3890912821b043446539f20af01404650d2ae8f13528ce3d06bd933fb5a08
       options: -m 110g
     env:
       TARGET: x86_64-unknown-linux-gnu

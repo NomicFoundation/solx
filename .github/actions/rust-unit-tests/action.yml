@@ -48,14 +48,14 @@ runs:
 
     - name: Fetch dependencies
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo fetch --locked
+      run: ${SFW_PREFIX:-} cargo fetch --locked
 
     - name: Prepare test env
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
-        cargo install cargo2junit --locked
+        ${SFW_PREFIX:-} cargo install cargo2junit --locked
         if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
-          cargo install cargo-llvm-cov --locked
+          ${SFW_PREFIX:-} cargo install cargo-llvm-cov --locked
         fi
 
     - name: Run unit tests (release)
@@ -74,8 +74,8 @@ runs:
         if [[ ${RUNNER_OS} = Windows ]] || [[ ${RUNNER_OS} = Linux ]]; then
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
-        if [ "${TEST_COMMAND}" = "test" ]; then cargo build --frozen; fi
-        cargo ${TEST_COMMAND} --frozen --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
+        if [ "${TEST_COMMAND}" = "test" ]; then ${SFW_PREFIX:-} cargo build --frozen; fi
+        ${SFW_PREFIX:-} cargo ${TEST_COMMAND} --frozen --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a release-results.json | grep 'failed'
         if [ $? -eq 0 ]; then
           cargo2junit < release-results.json > "release-${{ inputs.results-xml }}"
@@ -123,8 +123,8 @@ runs:
         if [ '${{ inputs.target }}' != '' ]; then
           export CARGO_BIN_EXE_SOLX="./target/${{ inputs.target }}/debug/solx"
         fi
-        if [ "${{ inputs.cargo-test-command }}" = "test" ]; then cargo build --frozen ${{ steps.build-target.outputs.target }}; fi
-        cargo ${{ inputs.cargo-test-command }} --frozen ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
+        if [ "${{ inputs.cargo-test-command }}" = "test" ]; then ${SFW_PREFIX:-} cargo build --frozen ${{ steps.build-target.outputs.target }}; fi
+        ${SFW_PREFIX:-} cargo ${{ inputs.cargo-test-command }} --frozen ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a debug-results.json | grep 'failed'
         if [ $? -eq 0 ]; then
           cargo2junit < debug-results.json > "debug-${{ inputs.results-xml }}"

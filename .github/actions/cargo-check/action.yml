@@ -17,23 +17,23 @@ runs:
 
     - name: Fetch dependencies
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo fetch --locked
+      run: ${SFW_PREFIX:-} cargo fetch --locked
 
     - name: Cargo check
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo check --frozen --verbose
+      run: ${SFW_PREFIX:-} cargo check --frozen --verbose
 
     - name: Cargo format
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo fmt --all -- --check --verbose
+      run: ${SFW_PREFIX:-} cargo fmt --all -- --check --verbose
 
     - name: Cargo clippy
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo clippy --frozen
+      run: ${SFW_PREFIX:-} cargo clippy --frozen
 
     - name: Cargo udeps
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
-        cargo install cargo-udeps --locked
-        cargo +nightly udeps --frozen --all-targets
+        ${SFW_PREFIX:-} cargo install cargo-udeps --locked
+        ${SFW_PREFIX:-} cargo +nightly udeps --frozen --all-targets
 

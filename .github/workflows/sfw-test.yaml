@@ -1,0 +1,99 @@
+name: SFW Test
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash -ex {0}
+
+jobs:
+
+  label-check:
+    if: contains(github.event.pull_request.labels.*.name, 'ci:sfw') && !github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-24.04
+    steps:
+      - run: 'true'
+
+  # Test SFW on native runners (no container)
+  runner-matrix:
+    needs: label-check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux AMD64
+            runner: ubuntu-24.04
+          - name: macOS ARM64
+            runner: macos-15
+          - name: macOS x86
+            runner: macos-15-intel
+          - name: Windows
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
+    name: Runner — ${{ matrix.name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Setup SFW
+        id: sfw
+        uses: ./.github/actions/setup-sfw
+        with:
+          mode: firewall
+
+      - name: Verify SFW is available
+        if: steps.sfw.outputs.available == 'true'
+        run: |
+          command -v sfw
+          sfw --version
+
+      - name: Test sfw npm install
+        if: steps.sfw.outputs.available == 'true'
+        run: sfw npm install -g semver
+
+      - name: Test sfw cargo fetch (expected SSL failure — tracking)
+        if: steps.sfw.outputs.available == 'true'
+        continue-on-error: true
+        run: sfw cargo fetch --locked
+
+      - name: Baseline cargo fetch (without SFW)
+        run: cargo fetch --locked
+
+  # Test SFW inside a container via npm install
+  container:
+    needs: label-check
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:1df3890912821b043446539f20af01404650d2ae8f13528ce3d06bd933fb5a08
+    name: Container — Linux AMD64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Install SFW via npm
+        run: npm install -g sfw
+
+      - name: Verify SFW binary
+        run: |
+          command -v sfw
+          sfw --version
+
+      - name: Test sfw npm install
+        run: sfw npm install -g semver
+
