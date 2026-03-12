@@ -63,12 +63,6 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
-      - name: Cache cargo artifacts
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
-        with:
-          prefix-key: cargo-checks
-          cache-on-failure: true
-
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
@@ -140,6 +134,7 @@ jobs:
         uses: ./.github/actions/prepare-msys
 
       - name: Cache cargo artifacts
+        if: ${{ !matrix.image }}
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
         with:
           prefix-key: build-and-test
