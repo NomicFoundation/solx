@@ -99,6 +99,14 @@ jobs:
           rm -rf solx-llvm target-llvm/build-final target solx-solidity
           echo "After cleanup:" && df -h .
 
+      - name: Cache cargo artifacts
+        if: ${{ !matrix.image }}
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          prefix-key: slang-tests
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Run slang tests
         uses: ./.github/actions/rust-unit-tests
         env:
