@@ -110,6 +110,7 @@ jobs:
           check-name: 'Slang Unit Tests Results'
 
   pr-checks:
+    name: PR Checks (Slang)
     runs-on: ubuntu-24.04
     if: always()
     needs:

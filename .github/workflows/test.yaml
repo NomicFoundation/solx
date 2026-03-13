@@ -171,6 +171,7 @@ jobs:
   # Special job that allows some of the jobs to be skipped or failed
   # requiring others to be successful
   pr-checks:
+    name: PR Checks (Tests)
     runs-on: ubuntu-24.04
     if: always()
     needs:
