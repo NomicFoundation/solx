@@ -3,54 +3,52 @@
 //!
 
 use std::collections::BTreeMap;
+use std::rc::Rc;
 
-use slang_solidity::backend::ir::ir2_flat_contracts::SourceUnit;
-use slang_solidity::backend::passes::p0_build_ast;
-use slang_solidity::backend::passes::p1_flatten_contracts;
+use slang_solidity::backend::ir::ast::SourceUnit;
+use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::compilation::CompilationUnit;
 
-/// Flattened ASTs produced from a Slang compilation unit.
-pub struct FlatAst {
-    files: BTreeMap<String, SourceUnit>,
+/// Semantic ASTs produced from a Slang compilation unit.
+///
+/// Uses the `SemanticAnalysis` layer to obtain `ir::ast` nodes with
+/// `Rc`-wrapped types, accessor methods, and name resolution support.
+pub struct SemanticAst {
+    semantic: Rc<SemanticAnalysis>,
+    file_ids: Vec<String>,
 }
 
-impl FlatAst {
-    /// Builds the flattened AST for each file in the compilation unit.
+impl SemanticAst {
+    /// Builds the semantic AST from a compilation unit.
     ///
-    /// Runs the Slang `p0_build_ast` and `p1_flatten_contracts` passes to produce
-    /// `ir2_flat_contracts::SourceUnit` per file.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any file fails to produce a valid structured AST.
-    pub fn build(unit: &CompilationUnit) -> anyhow::Result<Self> {
-        let mut files = BTreeMap::new();
-
-        for file in unit.files() {
-            let structured = p0_build_ast::run_file(&file).ok_or_else(|| {
-                anyhow::anyhow!("failed to build structured AST for '{}'", file.id())
-            })?;
-            let flattened = p1_flatten_contracts::run_file(unit.language_version(), &structured);
-            files.insert(file.id().to_owned(), flattened);
-        }
-
-        Ok(Self { files })
+    /// Runs the full Slang semantic analysis pipeline (AST construction,
+    /// contract flattening, definition collection, linearisation,
+    /// type resolution, reference resolution) and caches the result.
+    pub fn build(unit: &CompilationUnit) -> Self {
+        let semantic = Rc::clone(unit.semantic_analysis());
+        let file_ids: Vec<String> = unit.files().iter().map(|f| f.id().to_owned()).collect();
+        Self { semantic, file_ids }
     }
 
-    /// Returns the flattened ASTs indexed by file identifier.
-    pub fn files(&self) -> &BTreeMap<String, SourceUnit> {
-        &self.files
+    /// Returns the semantic AST root for a given file identifier.
+    pub fn file_ast(&self, file_id: &str) -> Option<SourceUnit> {
+        self.semantic.get_file_ast_root(file_id)
+    }
+
+    /// Returns the file identifiers in this AST.
+    pub fn file_ids(&self) -> &[String] {
+        &self.file_ids
     }
 
     /// Produces stub AST JSON entries for each file in this AST.
     ///
-    /// The `ir2_flat_contracts` types do not implement `Serialize` yet, so this
+    /// The `ir::ast` types do not implement `Serialize` yet, so this
     /// is a placeholder until proper AST JSON serialization is available.
-    /// 
+    ///
     /// TODO: fix when Slang AST implements `Serialize`.
     pub fn stub_ast_jsons(&self) -> BTreeMap<String, Option<serde_json::Value>> {
-        self.files
-            .keys()
+        self.file_ids
+            .iter()
             .map(|path| {
                 let stub = serde_json::json!({
                     "nodeType": "SourceUnit",

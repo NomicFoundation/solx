@@ -2,8 +2,8 @@
 //! Source unit (top-level file) lowering to MLIR.
 //!
 
-use slang_solidity::backend::ir::ir2_flat_contracts::SourceUnit;
-use slang_solidity::backend::ir::ir2_flat_contracts::SourceUnitMember;
+use slang_solidity::backend::ir::ast::SourceUnit;
+use slang_solidity::backend::ir::ast::SourceUnitMember;
 
 use crate::codegen::MlirContext;
 use crate::codegen::contract::ContractEmitter;
@@ -33,10 +33,10 @@ impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
     ///
     /// Returns an error if code generation encounters unsupported constructs.
     pub(crate) fn emit(&mut self, unit: &SourceUnit) -> anyhow::Result<bool> {
-        for member in &unit.members {
+        for member in unit.members().iter() {
             if let SourceUnitMember::ContractDefinition(contract) = member {
                 let mut emitter = ContractEmitter::new(self.state);
-                emitter.emit(contract)?;
+                emitter.emit(&contract)?;
                 return Ok(true);
             }
         }

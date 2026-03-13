@@ -2,8 +2,9 @@
 //! Solidity to MLIR type mapping.
 //!
 
-use slang_solidity::backend::ir::ir2_flat_contracts::ElementaryType;
-use slang_solidity::backend::ir::ir2_flat_contracts::TypeName;
+use slang_solidity::backend::ir::ast::ElementaryType;
+use slang_solidity::backend::ir::ast::Expression;
+use slang_solidity::backend::ir::ast::TypeName;
 
 /// Maps Solidity types to MLIR LLVM dialect types.
 pub struct TypeMapper;
@@ -40,19 +41,20 @@ impl TypeMapper {
     pub(crate) fn canonical_type(type_name: &TypeName) -> String {
         match type_name {
             TypeName::ElementaryType(elementary) => Self::canonical_elementary(elementary),
-            TypeName::IdentifierPath(path) => path
-                .iter()
-                .map(|segment| segment.text.as_str())
-                .collect::<Vec<_>>()
-                .join("."),
+            // TODO: resolve IdentifierPath to struct fields for ABI tuple encoding.
+            TypeName::IdentifierPath(path) => path.name(),
             TypeName::ArrayTypeName(array) => {
-                let base = Self::canonical_type(&array.operand);
-                if let Some(ref size_expr) = array.index {
-                    format!("{base}[{size_expr:?}]")
-                } else {
-                    format!("{base}[]")
+                let base = Self::canonical_type(&array.operand());
+                match array.index() {
+                    Some(Expression::DecimalNumberExpression(decimal)) => {
+                        let size = &decimal.literal().text;
+                        format!("{base}[{size}]")
+                    }
+                    Some(_) => format!("{base}[?]"),
+                    None => format!("{base}[]"),
                 }
             }
+            // TODO: MappingType and FunctionType are not valid ABI parameter types.
             TypeName::MappingType(_) => "mapping".to_owned(),
             TypeName::FunctionType(_) => "function".to_owned(),
         }

@@ -997,7 +997,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1242,7 +1242,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ab67060fc6b8ef687992d439ca0fa36e7ed17e9a0b16b25b601e8757df720de"
 dependencies = [
  "data-encoding",
- "syn 1.0.109",
+ "syn 2.0.114",
 ]
 
 [[package]]
@@ -1487,7 +1487,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2495,9 +2495,9 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
 name = "metaslang_bindings"
-version = "1.3.2"
+version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5810dba52dac527bc0cdc4ebad76c7d0d422974e434bafbecacc85e34827589"
+checksum = "84b83af3074b9e33cf6f3f92586d60ed1a9302390bafbf681d17252dcac7bff4"
 dependencies = [
  "metaslang_cst",
  "metaslang_graph_builder",
@@ -2508,9 +2508,9 @@ dependencies = [
 
 [[package]]
 name = "metaslang_cst"
-version = "1.3.2"
+version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4f590d634fcddd7f48e7de2ef297c22d10947093c79c64d735e0451fed0da98"
+checksum = "42e69550cffd1df2109642f0ea5563df572c37b1ed27f87fd3b569435ebdfb77"
 dependencies = [
  "nom",
  "serde",
@@ -2519,9 +2519,9 @@ dependencies = [
 
 [[package]]
 name = "metaslang_graph_builder"
-version = "1.3.2"
+version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9f25a2bc2422a985c0048bde313a14474999abccf3fc6cd586dd5a693cf4bf4"
+checksum = "b13b116894dc14e7d5d80024a6585338520b672e0deef9f872be93fc97ff9883"
 dependencies = [
  "log",
  "metaslang_cst",
@@ -2534,9 +2534,9 @@ dependencies = [
 
 [[package]]
 name = "metaslang_stack_graphs"
-version = "1.3.2"
+version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9be27c246386e523b04e85c1141f9628f2ed085632165058c3b511daca9e137"
+checksum = "e3437d352189d14cb1646c0ba18dfa9e636117825d666c1648ffa92394f7011b"
 dependencies = [
  "bitvec",
  "controlled-option",
@@ -3154,7 +3154,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3730,7 +3730,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4154,15 +4154,19 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slang_solidity"
-version = "1.3.2"
+version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1580e667e0e0076ee692552749dbc639c704030fbbfa738b5ddd2466c0371aff"
+checksum = "e4d8f3691b7eecf4e80e28433ce0f1f9887a9422c02525ef26baa1dd42d329c2"
 dependencies = [
  "indexmap 2.13.0",
  "metaslang_bindings",
  "metaslang_cst",
+ "num-bigint",
+ "num-traits",
+ "paste",
  "semver 1.0.27",
  "serde",
+ "sha3 0.10.8",
  "strum",
  "strum_macros",
  "thiserror 2.0.18",
@@ -4575,7 +4579,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -10,7 +10,7 @@ use melior::ir::RegionLike;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 
-use slang_solidity::backend::ir::ir2_flat_contracts::FunctionDefinition;
+use slang_solidity::backend::ir::ast::FunctionDefinition;
 
 use solx_mlir::Environment;
 
@@ -41,15 +41,14 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Returns an error if the function body contains unsupported statements.
     pub(crate) fn emit(&self, function: &FunctionDefinition) -> anyhow::Result<String> {
         let name = function
-            .name
-            .as_ref()
-            .map(|terminal| terminal.text.as_str())
-            .unwrap_or("unnamed");
+            .name()
+            .map(|id| id.name())
+            .unwrap_or_else(|| "unnamed".to_owned());
 
-        let parameter_types: Vec<String> = function
-            .parameters
+        let parameters = function.parameters();
+        let parameter_types: Vec<String> = parameters
             .iter()
-            .map(|p| TypeMapper::canonical_type(&p.type_name))
+            .map(|p| TypeMapper::canonical_type(&p.type_name()))
             .collect();
         let mlir_name = format!("solx.fn.{name}({})", parameter_types.join(","));
 
@@ -58,12 +57,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let i256 = self.state.i256();
 
         let has_returns = function
-            .returns
-            .as_ref()
+            .returns()
             .is_some_and(|returns| !returns.is_empty());
 
         let mlir_parameter_types: Vec<melior::ir::Type<'context>> =
-            function.parameters.iter().map(|_| i256).collect();
+            parameter_types.iter().map(|_| i256).collect();
 
         let function_type = llvm::r#type::function(
             if has_returns {
@@ -83,29 +81,28 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut environment = Environment::new();
 
         // Create allocas for parameters and bind to environment.
-        for (i, parameter) in function.parameters.iter().enumerate() {
+        for (i, parameter) in parameters.iter().enumerate() {
             let parameter_name = parameter
-                .name
-                .as_ref()
-                .map(|t| t.text.as_str())
-                .unwrap_or("_");
+                .name()
+                .map(|id| id.name())
+                .unwrap_or_else(|| "_".to_owned());
             let parameter_value: melior::ir::Value<'context, '_> = entry_block.argument(i)?.into();
 
             let expression_emitter = ExpressionEmitter::new(self.state, &environment, &region);
             let ptr = expression_emitter.emit_alloca(&entry_block);
             expression_emitter.emit_store(parameter_value, ptr, &entry_block);
 
-            if TypeMapper::is_signed(&parameter.type_name) {
-                environment.mark_signed(parameter_name);
+            if TypeMapper::is_signed(&parameter.type_name()) {
+                environment.mark_signed(&parameter_name);
             }
-            environment.define_variable(parameter_name.to_owned(), ptr);
+            environment.define_variable(parameter_name, ptr);
         }
 
-        if let Some(ref body) = function.body {
+        if let Some(ref body) = function.body() {
             let mut current_block = entry_block;
-            for statement in &body.statements {
+            for statement in body.statements().iter() {
                 let mut emitter = StatementEmitter::new(self.state, &mut environment, &region);
-                match emitter.emit(statement, current_block)? {
+                match emitter.emit(&statement, current_block)? {
                     Some(next) => current_block = next,
                     None => {
                         // Control flow terminated (return/break/continue).

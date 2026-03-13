@@ -2,7 +2,7 @@
 //! EVM function selector computation.
 //!
 
-use slang_solidity::backend::ir::ir2_flat_contracts::FunctionDefinition;
+use slang_solidity::backend::ir::ast::FunctionDefinition;
 
 use crate::codegen::types::TypeMapper;
 
@@ -31,15 +31,14 @@ impl SelectorComputer {
     /// Builds the canonical signature string (e.g. `get()` or `transfer(address,uint256)`).
     fn canonical_signature(function: &FunctionDefinition) -> String {
         let name = function
-            .name
-            .as_ref()
-            .map(|terminal| terminal.text.as_str())
-            .unwrap_or("");
+            .name()
+            .map(|id| id.name())
+            .unwrap_or_default();
 
         let parameter_types: Vec<String> = function
-            .parameters
+            .parameters()
             .iter()
-            .map(|parameter| TypeMapper::canonical_type(&parameter.type_name))
+            .map(|parameter| TypeMapper::canonical_type(&parameter.type_name()))
             .collect();
 
         format!("{name}({})", parameter_types.join(","))

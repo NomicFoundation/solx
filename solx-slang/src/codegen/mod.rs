@@ -1,5 +1,5 @@
 //!
-//! MLIR code generation from the Slang FlatAst.
+//! MLIR code generation from the Slang SemanticAst.
 //!
 //! AST-driven emitters that lower Solidity constructs to MLIR using the
 //! builder primitives from `solx_mlir`.

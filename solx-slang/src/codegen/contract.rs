@@ -10,10 +10,10 @@ use melior::ir::RegionLike;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 
-use slang_solidity::backend::ir::ir2_flat_contracts::ContractDefinition;
-use slang_solidity::backend::ir::ir2_flat_contracts::ContractMember;
-use slang_solidity::backend::ir::ir2_flat_contracts::FunctionVisibility;
-use slang_solidity::backend::ir::ir2_flat_contracts::StateVariableVisibility;
+use slang_solidity::backend::ir::ast::ContractDefinition;
+use slang_solidity::backend::ir::ast::ContractMember;
+use slang_solidity::backend::ir::ast::FunctionVisibility;
+use slang_solidity::backend::ir::ast::StateVariableVisibility;
 
 use solx_mlir::FunctionEntry;
 use solx_mlir::ICmpPredicate;
@@ -114,10 +114,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// Registers state variables with sequential storage slot assignments.
     fn register_state_variables(&mut self, contract: &ContractDefinition) {
         let mut slot = 0u64;
-        for member in &contract.members {
+        for member in contract.members().iter() {
             if let ContractMember::StateVariableDefinition(variable) = member {
                 self.state
-                    .register_state_variable(variable.name.text.to_string(), slot);
+                    .register_state_variable(variable.name().name(), slot);
                 slot += 1;
             }
         }
@@ -128,32 +128,30 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// This enables forward references: function A can call function B even if B
     /// is defined after A in the source.
     fn pre_register_functions(&mut self, contract: &ContractDefinition) {
-        for member in &contract.members {
+        for member in contract.members().iter() {
             let ContractMember::FunctionDefinition(function) = member else {
                 continue;
             };
             let name = function
-                .name
-                .as_ref()
-                .map(|t| t.text.as_str())
-                .unwrap_or("unnamed");
+                .name()
+                .map(|id| id.name())
+                .unwrap_or_else(|| "unnamed".to_owned());
 
             let parameter_types: Vec<String> = function
-                .parameters
+                .parameters()
                 .iter()
-                .map(|p| TypeMapper::canonical_type(&p.type_name))
+                .map(|p| TypeMapper::canonical_type(&p.type_name()))
                 .collect();
             let mlir_name = format!("solx.fn.{name}({})", parameter_types.join(","));
 
             let has_returns = function
-                .returns
-                .as_ref()
+                .returns()
                 .is_some_and(|r| !r.is_empty());
 
             self.state.register_function_signature(
-                name,
+                &name,
                 mlir_name,
-                function.parameters.len(),
+                parameter_types.len(),
                 has_returns,
             );
         }
@@ -172,19 +170,19 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let i256 = self.state.i256();
         let storage_ptr = self.state.ptr(AddressSpace::Storage);
 
-        for member in &contract.members {
+        for member in contract.members().iter() {
             let ContractMember::StateVariableDefinition(variable) = member else {
                 continue;
             };
-            if !matches!(variable.visibility, StateVariableVisibility::Public) {
+            if !matches!(variable.visibility(), StateVariableVisibility::Public) {
                 continue;
             }
 
-            let name = variable.name.text.as_str();
+            let name = variable.name().name();
             let mlir_name = format!("solx.fn.{name}()");
             let slot = self
                 .state
-                .state_variable_slot(name)
+                .state_variable_slot(&name)
                 .ok_or_else(|| anyhow::anyhow!("state variable '{name}' has no assigned storage slot"))?;
 
             // Build getter function body: sload from storage slot.
@@ -219,7 +217,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 selector,
             ));
             self.state
-                .register_function_signature(name, mlir_name, 0, true);
+                .register_function_signature(&name, mlir_name, 0, true);
         }
         Ok(())
     }
@@ -230,25 +228,25 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// internal calls work. Only external/public functions are registered for
     /// selector dispatch.
     fn emit_functions(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
-        for member in &contract.members {
+        for member in contract.members().iter() {
             let ContractMember::FunctionDefinition(function) = member else {
                 continue;
             };
 
             let emitter = FunctionEmitter::new(self.state);
-            let mlir_name = emitter.emit(function)?;
+            let mlir_name = emitter.emit(&function)?;
 
             let is_dispatched = matches!(
-                function.visibility,
+                function.visibility(),
                 FunctionVisibility::External | FunctionVisibility::Public
             );
             if is_dispatched {
-                let (selector, _signature) = SelectorComputer::compute(function);
+                let (selector, _signature) = SelectorComputer::compute(&function);
                 self.state.register_function(FunctionEntry::new(
                     mlir_name,
                     selector,
-                    function.parameters.len(),
-                    function.returns.as_ref().is_some_and(|r| !r.is_empty()),
+                    function.parameters().len(),
+                    function.returns().is_some_and(|r| !r.is_empty()),
                 ));
             }
         }
@@ -287,7 +285,6 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let mut dispatch_blocks = Vec::new();
 
         // Build dispatch blocks for each function.
-        let calldata_pointer_type = self.state.ptr(AddressSpace::Calldata);
         for function_entry in self.state.functions() {
             let dispatch_block = Block::new(&[]);
 

@@ -18,14 +18,14 @@ use solx_standard_json::CollectableError;
 
 /// Slang AST construction from parsed compilation units.
 pub mod ast;
-/// MLIR code generation from the Slang FlatAst.
+/// MLIR code generation from the Slang SemanticAst.
 pub mod codegen;
 /// Compilation builder configuration for the Slang frontend.
 pub mod compilation_config;
 /// Slang Solidity frontend implementation.
 pub mod slang;
 
-pub use self::ast::FlatAst;
+pub use self::ast::SemanticAst;
 pub use self::compilation_config::SlangCompilationConfig;
 pub use self::slang::SlangFrontend;
 
@@ -168,7 +168,7 @@ impl SlangFrontend {
 
     /// Core MLIR -> EVM compilation.
     ///
-    /// Generates MLIR from the `FlatAst` using the melior API, compiles through
+    /// Generates MLIR from the `SemanticAst` using the melior API, compiles through
     /// the `Project` pipeline, and links. Returns the linked `EVMBuild`.
     ///
     /// Only the first contract per source file is lowered. Function bodies are
@@ -178,7 +178,7 @@ impl SlangFrontend {
         libraries: solx_utils::Libraries,
         output_selection: &solx_standard_json::InputSelection,
         slang_version: &solx_standard_json::Version,
-        flat_ast: &FlatAst,
+        semantic_ast: &SemanticAst,
         messages: Arc<Mutex<Vec<solx_standard_json::OutputError>>>,
         evm_version: Option<solx_utils::EVMVersion>,
         metadata_hash_type: solx_utils::MetadataHashType,
@@ -195,13 +195,13 @@ impl SlangFrontend {
 
         let mut contracts = BTreeMap::new();
         for path in contract_paths {
-            let source_unit = flat_ast.files().get(path).ok_or_else(|| {
+            let source_unit = semantic_ast.file_ast(path).ok_or_else(|| {
                 anyhow::anyhow!("no AST for source file '{path}'")
             })?;
 
             let mut state = codegen::MlirContext::new(mlir_context.mlir());
             let has_contract =
-                codegen::source_unit::SourceUnitEmitter::new(&mut state).emit(source_unit)?;
+                codegen::source_unit::SourceUnitEmitter::new(&mut state).emit(&source_unit)?;
             if !has_contract {
                 continue;
             }
@@ -290,7 +290,7 @@ impl SlangFrontend {
             anyhow::bail!("parse errors:\n{}", parse_errors.join("\n"));
         }
 
-        let flat_ast = FlatAst::build(&unit)?;
+        let semantic_ast = SemanticAst::build(&unit);
 
         let paths: Vec<String> = input_files
             .iter()
@@ -302,7 +302,7 @@ impl SlangFrontend {
             libraries,
             output_selection,
             slang.version(),
-            &flat_ast,
+            &semantic_ast,
             messages,
             evm_version,
             metadata_hash_type,
@@ -311,7 +311,7 @@ impl SlangFrontend {
             llvm_options,
             output_config,
         )?;
-        build.ast_jsons = Some(flat_ast.stub_ast_jsons());
+        build.ast_jsons = Some(semantic_ast.stub_ast_jsons());
         Ok(build)
     }
 
@@ -455,7 +455,7 @@ impl SlangFrontend {
             .expect("lock is never poisoned because worker threads do not panic")
             .extend(output.errors.drain(..));
 
-        let flat_ast = FlatAst::build(&unit)?;
+        let semantic_ast = SemanticAst::build(&unit);
 
         let contract_paths: Vec<String> = input.sources.keys().cloned().collect();
         let mut build = Self::mlir_to_evm(
@@ -463,7 +463,7 @@ impl SlangFrontend {
             input.settings.libraries,
             &output_selection,
             slang.version(),
-            &flat_ast,
+            &semantic_ast,
             messages,
             evm_version,
             metadata_hash_type,
@@ -472,7 +472,7 @@ impl SlangFrontend {
             llvm_options,
             output_config,
         )?;
-        build.ast_jsons = Some(flat_ast.stub_ast_jsons());
+        build.ast_jsons = Some(semantic_ast.stub_ast_jsons());
 
         build.write_to_standard_json(&mut output, &output_selection, true, vec![])?;
         output.write_and_exit(&output_selection);

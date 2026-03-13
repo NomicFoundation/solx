@@ -12,8 +12,9 @@ use melior::ir::RegionLike;
 use melior::ir::Value;
 use melior::ir::operation::OperationBuilder;
 
-use slang_solidity::backend::ir::ir2_flat_contracts::ArgumentsDeclaration;
-use slang_solidity::backend::ir::ir2_flat_contracts::Expression;
+use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
+use slang_solidity::backend::ir::ast::Expression;
+use slang_solidity::backend::ir::ast::PositionalArguments;
 
 use solx_mlir::Environment;
 use solx_mlir::ICmpPredicate;
@@ -55,7 +56,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         match expr {
             Expression::DecimalNumberExpression(decimal) => {
-                let text = decimal.literal.text.as_str();
+                let literal = decimal.literal();
+                let text = literal.text.as_str();
                 let value = if let Ok(value) = text.parse::<i64>() {
                     self.emit_i256_constant(value, &block)
                 } else {
@@ -64,7 +66,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 Ok((value, block))
             }
             Expression::HexNumberExpression(hex) => {
-                let text = hex.literal.text.as_str();
+                let literal = hex.literal();
+                let text = literal.text.as_str();
                 let stripped = text
                     .strip_prefix("0x")
                     .or(text.strip_prefix("0X"))
@@ -84,12 +87,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let value = self.emit_i256_constant(0, &block);
                 Ok((value, block))
             }
-            Expression::Identifier(terminal) => {
-                let name = terminal.text.as_str();
-                if let Some(ptr) = self.environment.get_variable(name) {
+            Expression::Identifier(identifier) => {
+                let name = identifier.name();
+                if let Some(ptr) = self.environment.get_variable(&name) {
                     let value = self.emit_load(ptr, &block)?;
                     Ok((value, block))
-                } else if let Some(slot) = self.state.state_variable_slot(name) {
+                } else if let Some(slot) = self.state.state_variable_slot(&name) {
                     let value = self.emit_storage_load(slot, &block)?;
                     Ok((value, block))
                 } else {
@@ -100,65 +103,89 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 self.emit_assignment(assign, block)
             }
             Expression::AdditiveExpression(expr) => {
-                self.emit_binary_op(&expr.left_operand, &expr.right_operand, &expr.operator.text, block)
+                let left = expr.left_operand();
+                let right = expr.right_operand();
+                let operator = expr.operator();
+                self.emit_binary_op(&left, &right, &operator.text, block)
             }
             Expression::MultiplicativeExpression(expr) => {
-                self.emit_binary_op(&expr.left_operand, &expr.right_operand, &expr.operator.text, block)
+                let left = expr.left_operand();
+                let right = expr.right_operand();
+                let operator = expr.operator();
+                self.emit_binary_op(&left, &right, &operator.text, block)
             }
             Expression::EqualityExpression(expr) => {
-                self.emit_icmp(&expr.left_operand, &expr.right_operand, &expr.operator.text, block)
+                let left = expr.left_operand();
+                let right = expr.right_operand();
+                let operator = expr.operator();
+                self.emit_icmp(&left, &right, &operator.text, block)
             }
             Expression::InequalityExpression(expr) => {
-                self.emit_icmp(&expr.left_operand, &expr.right_operand, &expr.operator.text, block)
+                let left = expr.left_operand();
+                let right = expr.right_operand();
+                let operator = expr.operator();
+                self.emit_icmp(&left, &right, &operator.text, block)
             }
             Expression::AndExpression(expr) => {
-                self.emit_and(&expr.left_operand, &expr.right_operand, block)
+                let left = expr.left_operand();
+                let right = expr.right_operand();
+                self.emit_and(&left, &right, block)
             }
             Expression::OrExpression(expr) => {
-                self.emit_or(&expr.left_operand, &expr.right_operand, block)
+                let left = expr.left_operand();
+                let right = expr.right_operand();
+                self.emit_or(&left, &right, block)
             }
             Expression::PostfixExpression(expr) => {
-                self.emit_postfix(&expr.operand, &expr.operator.text, block)
+                let operand = expr.operand();
+                let operator = expr.operator();
+                self.emit_postfix(&operand, &operator.text, block)
             }
             Expression::PrefixExpression(expr) => {
-                self.emit_prefix(&expr.operator.text, &expr.operand, block)
+                let operator = expr.operator();
+                let operand = expr.operand();
+                self.emit_prefix(&operator.text, &operand, block)
             }
             Expression::BitwiseAndExpression(expr) => {
-                let (lhs, block) = self.emit(&expr.left_operand, block)?;
-                let (rhs, block) = self.emit(&expr.right_operand, block)?;
-                let value = self.emit_llvm_op(solx_mlir::ops::AND, lhs, rhs, &block)?;
-                Ok((value, block))
+                let left = expr.left_operand();
+                let right = expr.right_operand();
+                self.emit_binary_op(&left, &right, "&", block)
             }
             Expression::BitwiseOrExpression(expr) => {
-                let (lhs, block) = self.emit(&expr.left_operand, block)?;
-                let (rhs, block) = self.emit(&expr.right_operand, block)?;
-                let value = self.emit_llvm_op(solx_mlir::ops::OR, lhs, rhs, &block)?;
-                Ok((value, block))
+                let left = expr.left_operand();
+                let right = expr.right_operand();
+                self.emit_binary_op(&left, &right, "|", block)
             }
             Expression::BitwiseXorExpression(expr) => {
-                let (lhs, block) = self.emit(&expr.left_operand, block)?;
-                let (rhs, block) = self.emit(&expr.right_operand, block)?;
-                let value = self.emit_llvm_op(solx_mlir::ops::XOR, lhs, rhs, &block)?;
-                Ok((value, block))
+                let left = expr.left_operand();
+                let right = expr.right_operand();
+                self.emit_binary_op(&left, &right, "^", block)
             }
             Expression::ShiftExpression(expr) => {
-                let (lhs, block) = self.emit(&expr.left_operand, block)?;
-                let (rhs, block) = self.emit(&expr.right_operand, block)?;
-                let op = match expr.operator.text.as_str() {
+                let left = expr.left_operand();
+                let right = expr.right_operand();
+                let operator = expr.operator();
+                let (lhs, block) = self.emit(&left, block)?;
+                let (rhs, block) = self.emit(&right, block)?;
+                let op = match operator.text.as_str() {
                     "<<" => solx_mlir::ops::SHL,
                     ">>" => solx_mlir::ops::LSHR,
-                    _ => anyhow::bail!("unsupported shift operator: {}", expr.operator.text),
+                    _ => anyhow::bail!("unsupported shift operator: {}", operator.text),
                 };
                 let value = self.emit_llvm_op(op, lhs, rhs, &block)?;
                 Ok((value, block))
             }
             Expression::FunctionCallExpression(call) => {
-                self.emit_function_call(&call.operand, &call.arguments, block)
+                let callee = call.operand();
+                let arguments = call.arguments();
+                self.emit_function_call(&callee, &arguments, block)
             }
             Expression::MemberAccessExpression(access) => {
-                self.emit_member_access(&access.operand, access.member.text.as_str(), block)
+                let operand = access.operand();
+                let member = access.member().name();
+                self.emit_member_access(&operand, &member, block)
             }
-            _ => anyhow::bail!("unsupported expression: {expr:?}"),
+            _ => anyhow::bail!("unsupported expression: {:?}", std::mem::discriminant(expr)),
         }
     }
 
@@ -219,24 +246,27 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits an assignment expression (`=`, `+=`, `-=`, `*=`).
     fn emit_assignment(
         &self,
-        assign: &slang_solidity::backend::ir::ir2_flat_contracts::AssignmentExpression,
+        assign: &slang_solidity::backend::ir::ast::AssignmentExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let Expression::Identifier(terminal) = &assign.left_operand else {
-            anyhow::bail!("unsupported assignment target: {:?}", assign.left_operand);
+        let left = assign.left_operand();
+        let Expression::Identifier(identifier) = &left else {
+            anyhow::bail!("unsupported assignment target");
         };
-        let name = terminal.text.as_str();
+        let name = identifier.name();
 
         // Determine whether this is a local variable or a state variable.
-        let local_ptr = self.environment.get_variable(name);
-        let storage_slot = self.state.state_variable_slot(name);
+        let local_ptr = self.environment.get_variable(&name);
+        let storage_slot = self.state.state_variable_slot(&name);
         if local_ptr.is_none() && storage_slot.is_none() {
             anyhow::bail!("undefined variable: {name}");
         }
 
-        let op = assign.operator.text.as_str();
+        let operator = assign.operator();
+        let op = operator.text.as_str();
+        let right = assign.right_operand();
         let (value, block) = if op == "=" {
-            self.emit(&assign.right_operand, block)?
+            self.emit(&right, block)?
         } else {
             let old = if let Some(ptr) = local_ptr {
                 self.emit_load(ptr, &block)?
@@ -246,7 +276,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 })?;
                 self.emit_storage_load(slot, &block)?
             };
-            let (rhs, block) = self.emit(&assign.right_operand, block)?;
+            let (rhs, block) = self.emit(&right, block)?;
             let arith_op = match op {
                 "+=" => solx_mlir::ops::ADD,
                 "-=" => solx_mlir::ops::SUB,
@@ -321,6 +351,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             "*" => solx_mlir::ops::MUL,
             "/" => solx_mlir::ops::UDIV,
             "%" => solx_mlir::ops::UREM,
+            "&" => solx_mlir::ops::AND,
+            "|" => solx_mlir::ops::OR,
+            "^" => solx_mlir::ops::XOR,
             _ => anyhow::bail!("unsupported binary operator: {operator}"),
         };
         let value = self.emit_llvm_op(op, lhs, rhs, &block)?;
@@ -341,8 +374,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Returns whether an expression has a signed integer type.
     fn is_signed_expr(&self, expr: &Expression) -> bool {
         match expr {
-            Expression::Identifier(t) => self.environment.is_signed(t.text.as_str()),
-            Expression::PrefixExpression(p) if p.operator.text == "-" => true,
+            Expression::Identifier(id) => self.environment.is_signed(&id.name()),
+            Expression::PrefixExpression(p) if p.operator().text == "-" => true,
             _ => false,
         }
     }
@@ -451,11 +484,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         operator: &str,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let Expression::Identifier(terminal) = operand else {
-            anyhow::bail!("unsupported postfix operand: {operand:?}");
+        let Expression::Identifier(identifier) = operand else {
+            anyhow::bail!("unsupported postfix operand");
         };
-        let name = terminal.text.as_str();
-        let ptr = self.environment.get_variable(name).ok_or_else(|| {
+        let name = identifier.name();
+        let ptr = self.environment.get_variable(&name).ok_or_else(|| {
             anyhow::anyhow!("undefined variable: {name}")
         })?;
         let old = self.emit_load(ptr, &block)?;
@@ -508,15 +541,23 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             anyhow::bail!("only positional arguments supported");
         };
 
+        // Resolve callee name once for all downstream checks.
+        let callee_name = match callee {
+            Expression::Identifier(id) => id.name(),
+            Expression::MemberAccessExpression(member) => member.member().name(),
+            Expression::PayableKeyword => "payable".to_owned(),
+            _ => anyhow::bail!("unsupported callee expression"),
+        };
+
         // Handle member function calls: recipient.send(1), recipient.transfer(1).
         if let Expression::MemberAccessExpression(member) = callee {
-            let method = member.member.text.as_str();
-            match method {
+            match callee_name.as_str() {
                 "send" | "transfer" => {
+                    let operand = member.operand();
                     return self.emit_address_call(
-                        &member.operand,
+                        &operand,
                         positional_arguments,
-                        method == "transfer",
+                        callee_name == "transfer",
                         block,
                     );
                 }
@@ -525,35 +566,26 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
 
         // Handle type-conversion calls: payable(x), uint256(x), etc.
-        let is_type_conversion = match callee {
-            Expression::PayableKeyword => true,
-            Expression::Identifier(t) => matches!(
-                t.text.as_str(),
-                "payable" | "address" | "uint256" | "uint8" | "int256" | "bool"
-            ),
-            _ => false,
-        };
+        let is_type_conversion = matches!(
+            callee_name.as_str(),
+            "payable" | "address" | "uint256" | "uint8" | "int256" | "bool"
+        ) && matches!(callee, Expression::PayableKeyword | Expression::Identifier(_));
         if is_type_conversion && positional_arguments.len() == 1 {
-            return self.emit(&positional_arguments[0], block);
+            let first = positional_arguments.iter().next().unwrap();
+            return self.emit(&first, block);
         }
-
-        let callee_name = match callee {
-            Expression::Identifier(terminal) => terminal.text.as_str(),
-            Expression::MemberAccessExpression(member) => member.member.text.as_str(),
-            _ => anyhow::bail!("unsupported callee expression: {callee:?}"),
-        };
 
         let mut argument_values = Vec::new();
         let mut current_block = block;
 
-        for argument in positional_arguments {
-            let (value, next_block) = self.emit(argument, current_block)?;
+        for argument in positional_arguments.iter() {
+            let (value, next_block) = self.emit(&argument, current_block)?;
             argument_values.push(value);
             current_block = next_block;
         }
 
         let (mlir_name, has_returns) =
-            self.state.resolve_function(callee_name, argument_values.len())?;
+            self.state.resolve_function(&callee_name, argument_values.len())?;
 
         if has_returns {
             let i256 = self.state.i256();
@@ -577,9 +609,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         member: &str,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        if let Expression::Identifier(terminal) = operand {
-            let obj = terminal.text.as_str();
-            let intrinsic = match (obj, member) {
+        if let Expression::Identifier(id) = operand {
+            let obj = id.name();
+            let intrinsic = match (obj.as_str(), member) {
                 ("tx", "origin") => solx_mlir::ops::EVM_ORIGIN,
                 ("tx", "gasprice") => solx_mlir::ops::EVM_GASPRICE,
                 ("msg", "sender") => solx_mlir::ops::EVM_CALLER,
@@ -608,14 +640,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     fn emit_address_call(
         &self,
         address_expr: &Expression,
-        arguments: &[Expression],
+        arguments: &PositionalArguments,
         revert_on_fail: bool,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (address, block) = self.emit(address_expr, block)?;
 
         let (value, block) = if arguments.len() == 1 {
-            self.emit(&arguments[0], block)?
+            let first = arguments.iter().next().unwrap();
+            self.emit(&first, block)?
         } else {
             (self.emit_i256_constant(0, &block), block)
         };
