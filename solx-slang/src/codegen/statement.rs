@@ -40,7 +40,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         environment: &'state mut Environment<'context, 'block>,
         region: &'state Region<'context>,
     ) -> Self {
-        Self { state, environment, region }
+        Self {
+            state,
+            environment,
+            region,
+        }
     }
 
     /// Emits MLIR for a statement.
@@ -62,7 +66,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let (_value, block) = emitter.emit(&expr, block)?;
                 Ok(Some(block))
             }
-            Statement::ReturnStatement(return_statement) => self.emit_return(return_statement, block),
+            Statement::ReturnStatement(return_statement) => {
+                self.emit_return(return_statement, block)
+            }
             Statement::IfStatement(if_statement) => self.emit_if(if_statement, block),
             Statement::ForStatement(for_statement) => self.emit_for(for_statement, block),
             Statement::WhileStatement(while_statement) => self.emit_while(while_statement, block),
@@ -71,7 +77,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Statement::ContinueStatement(_) => self.emit_continue(block),
             Statement::Block(inner) => self.emit_block(inner.statements(), block),
             Statement::UncheckedBlock(inner) => self.emit_block(inner.block().statements(), block),
-            _ => anyhow::bail!("unsupported statement: {:?}", std::mem::discriminant(statement)),
+            _ => anyhow::bail!(
+                "unsupported statement: {:?}",
+                std::mem::discriminant(statement)
+            ),
         }
     }
 
@@ -98,7 +107,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let name = declaration.name().name();
-        let is_signed = declaration.type_name().is_some_and(|ref t| TypeMapper::is_signed(t));
+        let is_signed = declaration
+            .type_name()
+            .is_some_and(|ref t| TypeMapper::is_signed(t));
 
         let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
         let ptr = emitter.emit_alloca(&block);
@@ -164,9 +175,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         if let Some(ref else_statement) = if_statement.else_branch() {
             let else_block = self.region.append_block(Block::new(&[]));
-            block.append_operation(
-                self.state.llvm_cond_br(condition_boolean, &then_block, &else_block, &[], &[]),
-            );
+            block.append_operation(self.state.llvm_cond_br(
+                condition_boolean,
+                &then_block,
+                &else_block,
+                &[],
+                &[],
+            ));
 
             let body = if_statement.body();
             let then_end = self.emit(&body, then_block)?;
@@ -185,9 +200,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 Ok(None)
             }
         } else {
-            block.append_operation(
-                self.state.llvm_cond_br(condition_boolean, &then_block, &merge_block, &[], &[]),
-            );
+            block.append_operation(self.state.llvm_cond_br(
+                condition_boolean,
+                &then_block,
+                &merge_block,
+                &[],
+                &[],
+            ));
 
             let body = if_statement.body();
             let then_end = self.emit(&body, then_block)?;
@@ -207,18 +226,22 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         // Emit initialization.
         let block = match for_statement.initialization() {
-            ForStatementInitialization::VariableDeclarationStatement(declaration) => {
-                match self.emit(&Statement::VariableDeclarationStatement(declaration.clone()), block)? {
-                    Some(b) => b,
-                    None => return Ok(None),
-                }
-            }
-            ForStatementInitialization::ExpressionStatement(expression_statement) => {
-                match self.emit(&Statement::ExpressionStatement(expression_statement.clone()), block)? {
-                    Some(b) => b,
-                    None => return Ok(None),
-                }
-            }
+            ForStatementInitialization::VariableDeclarationStatement(declaration) => match self
+                .emit(
+                    &Statement::VariableDeclarationStatement(declaration.clone()),
+                    block,
+                )? {
+                Some(b) => b,
+                None => return Ok(None),
+            },
+            ForStatementInitialization::ExpressionStatement(expression_statement) => match self
+                .emit(
+                    &Statement::ExpressionStatement(expression_statement.clone()),
+                    block,
+                )? {
+                Some(b) => b,
+                None => return Ok(None),
+            },
             ForStatementInitialization::TupleDeconstructionStatement(_) => {
                 anyhow::bail!("tuple deconstruction in for-init not yet supported")
             }
@@ -237,12 +260,15 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             ForStatementCondition::ExpressionStatement(expression_statement) => {
                 let expr = expression_statement.expression();
                 let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
-                let (condition_value, condition_end) =
-                    emitter.emit(&expr, condition_block)?;
+                let (condition_value, condition_end) = emitter.emit(&expr, condition_block)?;
                 let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
-                condition_end.append_operation(
-                    self.state.llvm_cond_br(condition_boolean, &body_block, &exit_block, &[], &[]),
-                );
+                condition_end.append_operation(self.state.llvm_cond_br(
+                    condition_boolean,
+                    &body_block,
+                    &exit_block,
+                    &[],
+                    &[],
+                ));
             }
             ForStatementCondition::Semicolon => {
                 condition_block.append_operation(self.state.llvm_br(&body_block, &[]));
@@ -250,7 +276,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         }
 
         // Body with loop targets.
-        self.environment.push_loop(LoopTarget::new(exit_block, iterator_block));
+        self.environment
+            .push_loop(LoopTarget::new(exit_block, iterator_block));
         let body = for_statement.body();
         let body_end = self.emit(&body, body_block)?;
         self.environment.pop_loop();
@@ -261,8 +288,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         // Iterator.
         if let Some(ref iterator_expression) = for_statement.iterator() {
-            let expression_emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
-            let (_value, iterator_end) = expression_emitter.emit(iterator_expression, iterator_block)?;
+            let expression_emitter =
+                ExpressionEmitter::new(self.state, self.environment, self.region);
+            let (_value, iterator_end) =
+                expression_emitter.emit(iterator_expression, iterator_block)?;
             iterator_end.append_operation(self.state.llvm_br(&condition_block, &[]));
         } else {
             iterator_block.append_operation(self.state.llvm_br(&condition_block, &[]));
@@ -287,11 +316,16 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
         let (condition_value, condition_end) = emitter.emit(&condition_expr, condition_block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
-        condition_end.append_operation(
-            self.state.llvm_cond_br(condition_boolean, &body_block, &exit_block, &[], &[]),
-        );
+        condition_end.append_operation(self.state.llvm_cond_br(
+            condition_boolean,
+            &body_block,
+            &exit_block,
+            &[],
+            &[],
+        ));
 
-        self.environment.push_loop(LoopTarget::new(exit_block, condition_block));
+        self.environment
+            .push_loop(LoopTarget::new(exit_block, condition_block));
         let body = while_statement.body();
         let body_end = self.emit(&body, body_block)?;
         self.environment.pop_loop();
@@ -315,7 +349,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         block.append_operation(self.state.llvm_br(&body_block, &[]));
 
-        self.environment.push_loop(LoopTarget::new(exit_block, condition_block));
+        self.environment
+            .push_loop(LoopTarget::new(exit_block, condition_block));
         let body = do_while.body();
         let body_end = self.emit(&body, body_block)?;
         self.environment.pop_loop();
@@ -328,18 +363,26 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
         let (condition_value, condition_end) = emitter.emit(&condition_expr, condition_block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
-        condition_end.append_operation(
-            self.state.llvm_cond_br(condition_boolean, &body_block, &exit_block, &[], &[]),
-        );
+        condition_end.append_operation(self.state.llvm_cond_br(
+            condition_boolean,
+            &body_block,
+            &exit_block,
+            &[],
+            &[],
+        ));
 
         Ok(Some(exit_block))
     }
 
     /// Emits a break statement.
-    fn emit_break(&self, block: BlockRef<'context, 'block>) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let target = self.environment.current_loop().ok_or_else(|| {
-            anyhow::anyhow!("break outside of loop")
-        })?;
+    fn emit_break(
+        &self,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        let target = self
+            .environment
+            .current_loop()
+            .ok_or_else(|| anyhow::anyhow!("break outside of loop"))?;
         block.append_operation(self.state.llvm_br(&target.break_block(), &[]));
         Ok(None)
     }
@@ -349,9 +392,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         &self,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let target = self.environment.current_loop().ok_or_else(|| {
-            anyhow::anyhow!("continue outside of loop")
-        })?;
+        let target = self
+            .environment
+            .current_loop()
+            .ok_or_else(|| anyhow::anyhow!("continue outside of loop"))?;
         block.append_operation(self.state.llvm_br(&target.continue_block(), &[]));
         Ok(None)
     }

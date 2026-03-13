@@ -49,7 +49,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let parameter_types: Vec<String> = parameters
             .iter()
             .map(|p| TypeMapper::canonical_type(&p.type_name()))
-            .collect();
+            .collect::<anyhow::Result<_>>()?;
         let mlir_name = format!("solx.fn.{name}({})", parameter_types.join(","));
 
         let context = self.state.context();
@@ -75,7 +75,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         let region = Region::new();
         let block_arguments: Vec<(melior::ir::Type<'context>, melior::ir::Location<'context>)> =
-            mlir_parameter_types.iter().map(|t| (*t, location)).collect();
+            mlir_parameter_types
+                .iter()
+                .map(|t| (*t, location))
+                .collect();
         let entry_block = region.append_block(Block::new(&block_arguments));
 
         let mut environment = Environment::new();
@@ -107,8 +110,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     None => {
                         // Control flow terminated (return/break/continue).
                         // Remaining statements are dead code.
-                        current_block =
-                            region.append_block(Block::new(&[]));
+                        current_block = region.append_block(Block::new(&[]));
                         break;
                     }
                 }
@@ -143,7 +145,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Dead blocks can appear from control flow constructs (e.g. `for` loop
     /// exit/iter blocks when the body always returns). MLIR requires every
     /// block to end with a terminator.
-    fn terminate_empty_blocks(region: &Region<'context>, has_returns: bool, state: &MlirContext<'context>) {
+    fn terminate_empty_blocks(
+        region: &Region<'context>,
+        has_returns: bool,
+        state: &MlirContext<'context>,
+    ) {
         let location = state.location();
         let mut maybe_block = region.first_block();
         while let Some(block) = maybe_block {
@@ -152,10 +158,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 if has_returns {
                     let zero = state.emit_i256_constant(0, &block);
                     block.append_operation(
-                        melior::ir::operation::OperationBuilder::new(solx_mlir::ops::RETURN, location)
-                            .add_operands(&[zero])
-                            .build()
-                            .expect("llvm.return operation is well-formed"),
+                        melior::ir::operation::OperationBuilder::new(
+                            solx_mlir::ops::RETURN,
+                            location,
+                        )
+                        .add_operands(&[zero])
+                        .build()
+                        .expect("llvm.return operation is well-formed"),
                     );
                 } else {
                     block.append_operation(llvm::unreachable(location));

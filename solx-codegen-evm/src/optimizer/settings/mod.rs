@@ -110,9 +110,7 @@ impl Settings {
             mode.unwrap_or(Self::DEFAULT_OPTIMIZATION_MODE)
         };
         let mut settings = Self::try_from_cli(optimization_mode)?;
-        if size_fallback.unwrap_or_default()
-            || std::env::var(Self::SIZE_FALLBACK_ENV).is_ok()
-        {
+        if size_fallback.unwrap_or_default() || std::env::var(Self::SIZE_FALLBACK_ENV).is_ok() {
             settings.enable_fallback_to_size();
         }
         Ok(settings)

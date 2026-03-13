@@ -117,11 +117,7 @@ impl<'context> MlirContext<'context> {
     /// Emits an `llvm.mlir.constant` producing an `i256` value.
     ///
     /// Works with both owned `Block` and borrowed `BlockRef`.
-    pub fn emit_i256_constant<'block, B>(
-        &self,
-        value: i64,
-        block: &B,
-    ) -> Value<'context, 'block>
+    pub fn emit_i256_constant<'block, B>(&self, value: i64, block: &B) -> Value<'context, 'block>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
@@ -130,10 +126,7 @@ impl<'context> MlirContext<'context> {
         block
             .append_operation(
                 OperationBuilder::new(crate::ops::MLIR_CONSTANT, self.unknown_location)
-                    .add_attributes(&[(
-                        Identifier::new(self.context, "value"),
-                        attribute.into(),
-                    )])
+                    .add_attributes(&[(Identifier::new(self.context, "value"), attribute.into())])
                     .add_results(&[self.i256_type])
                     .build()
                     .expect("llvm.mlir.constant operation is well-formed"),
@@ -327,11 +320,8 @@ impl<'context> MlirContext<'context> {
                     ),
                     (
                         Identifier::new(self.context, "operandSegmentSizes"),
-                        DenseI32ArrayAttribute::new(
-                            self.context,
-                            &[operands.len() as i32, 0],
-                        )
-                        .into(),
+                        DenseI32ArrayAttribute::new(self.context, &[operands.len() as i32, 0])
+                            .into(),
                     ),
                     (
                         Identifier::new(self.context, "op_bundle_sizes"),
@@ -375,11 +365,7 @@ impl<'context> MlirContext<'context> {
     }
 
     /// Emits an `i256` constant from a `u64` value without truncation.
-    pub fn emit_i256_from_u64<'block, B>(
-        &self,
-        value: u64,
-        block: &B,
-    ) -> Value<'context, 'block>
+    pub fn emit_i256_from_u64<'block, B>(&self, value: u64, block: &B) -> Value<'context, 'block>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
@@ -455,11 +441,7 @@ impl<'context> MlirContext<'context> {
     ///
     /// Each limb is at most `u32::MAX`, so it fits in a positive `i64` without
     /// sign-extension issues.
-    fn emit_i256_from_limbs<'block, B>(
-        &self,
-        limbs: &[u32],
-        block: &B,
-    ) -> Value<'context, 'block>
+    fn emit_i256_from_limbs<'block, B>(&self, limbs: &[u32], block: &B) -> Value<'context, 'block>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
@@ -472,12 +454,12 @@ impl<'context> MlirContext<'context> {
             }
             let limb_val = self.emit_i256_constant(limb as i64, block);
             let shift = self.emit_i256_constant(i as i64 * LIMB_BIT_WIDTH, block);
-            let shifted =
-                self.emit_llvm_op(crate::ops::SHL, limb_val, shift, self.i256_type, block)
-                    .expect("llvm.shl operation is well-formed");
-            result =
-                self.emit_llvm_op(crate::ops::OR, result, shifted, self.i256_type, block)
-                    .expect("llvm.or operation is well-formed");
+            let shifted = self
+                .emit_llvm_op(crate::ops::SHL, limb_val, shift, self.i256_type, block)
+                .expect("llvm.shl operation is well-formed");
+            result = self
+                .emit_llvm_op(crate::ops::OR, result, shifted, self.i256_type, block)
+                .expect("llvm.or operation is well-formed");
         }
         result
     }
@@ -512,21 +494,18 @@ impl<'context> MlirContext<'context> {
         bare_name: &str,
         arg_count: usize,
     ) -> anyhow::Result<(&str, bool)> {
-        let sigs = self.function_signatures.get(bare_name).ok_or_else(|| {
-            anyhow::anyhow!("undefined function: {bare_name}")
-        })?;
+        let sigs = self
+            .function_signatures
+            .get(bare_name)
+            .ok_or_else(|| anyhow::anyhow!("undefined function: {bare_name}"))?;
         let matches: Vec<_> = sigs
             .iter()
             .filter(|s| s.parameter_count == arg_count)
             .collect();
         match matches.len() {
-            0 => anyhow::bail!(
-                "no overload of '{bare_name}' takes {arg_count} arguments"
-            ),
+            0 => anyhow::bail!("no overload of '{bare_name}' takes {arg_count} arguments"),
             1 => Ok((&matches[0].mlir_name, matches[0].has_returns)),
-            _ => anyhow::bail!(
-                "ambiguous call to overloaded function '{bare_name}'"
-            ),
+            _ => anyhow::bail!("ambiguous call to overloaded function '{bare_name}'"),
         }
     }
 

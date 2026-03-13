@@ -699,7 +699,9 @@ impl Project {
         let mut cbor_version_parts = Vec::with_capacity(2);
         cbor_version_parts.push((
             crate::r#const::DEFAULT_EXECUTABLE_NAME.to_owned(),
-            crate::Compiler::version().parse().expect("version string is valid semver"),
+            crate::Compiler::version()
+                .parse()
+                .expect("version string is valid semver"),
         ));
         if let Some(solc_version) = solc_version {
             cbor_version_parts.push((

@@ -5,8 +5,8 @@
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
-use slang_solidity::backend::ir::ast::SourceUnit;
 use slang_solidity::backend::SemanticAnalysis;
+use slang_solidity::backend::ir::ast::SourceUnit;
 use slang_solidity::compilation::CompilationUnit;
 
 /// Semantic ASTs produced from a Slang compilation unit.
@@ -19,11 +19,11 @@ pub struct SemanticAst {
 }
 
 impl SemanticAst {
-    /// Builds the semantic AST from a compilation unit.
+    /// Wraps the semantic analysis already performed by the `CompilationUnit`.
     ///
-    /// Runs the full Slang semantic analysis pipeline (AST construction,
-    /// contract flattening, definition collection, linearisation,
-    /// type resolution, reference resolution) and caches the result.
+    /// No analysis is run here — the `CompilationUnit` drives parsing and
+    /// semantic analysis. This constructor captures a reference to the
+    /// analysis result and collects the file identifiers.
     pub fn build(unit: &CompilationUnit) -> Self {
         let semantic = Rc::clone(unit.semantic_analysis());
         let file_ids: Vec<String> = unit.files().iter().map(|f| f.id().to_owned()).collect();

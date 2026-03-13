@@ -54,7 +54,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     pub(crate) fn emit(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
         self.emit_intrinsic_declarations();
         self.register_state_variables(contract);
-        self.pre_register_functions(contract);
+        self.pre_register_functions(contract)?;
         self.emit_state_variable_getters(contract)?;
         self.emit_functions(contract)?;
         self.emit_entry()?;
@@ -71,8 +71,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         let no_arguments_i256 = llvm::r#type::function(i256, &[], false);
         let intrinsics = [
-            (solx_mlir::ops::EVM_RETURN, llvm::r#type::function(void, &[heap_ptr, i256], false)),
-            (solx_mlir::ops::EVM_REVERT, llvm::r#type::function(void, &[heap_ptr, i256], false)),
+            (
+                solx_mlir::ops::EVM_RETURN,
+                llvm::r#type::function(void, &[heap_ptr, i256], false),
+            ),
+            (
+                solx_mlir::ops::EVM_REVERT,
+                llvm::r#type::function(void, &[heap_ptr, i256], false),
+            ),
             (
                 solx_mlir::ops::EVM_CALLDATALOAD,
                 llvm::r#type::function(i256, &[self.state.ptr(AddressSpace::Calldata)], false),
@@ -127,7 +133,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ///
     /// This enables forward references: function A can call function B even if B
     /// is defined after A in the source.
-    fn pre_register_functions(&mut self, contract: &ContractDefinition) {
+    fn pre_register_functions(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
         for member in contract.members().iter() {
             let ContractMember::FunctionDefinition(function) = member else {
                 continue;
@@ -141,12 +147,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .parameters()
                 .iter()
                 .map(|p| TypeMapper::canonical_type(&p.type_name()))
-                .collect();
+                .collect::<anyhow::Result<_>>()?;
             let mlir_name = format!("solx.fn.{name}({})", parameter_types.join(","));
 
-            let has_returns = function
-                .returns()
-                .is_some_and(|r| !r.is_empty());
+            let has_returns = function.returns().is_some_and(|r| !r.is_empty());
 
             self.state.register_function_signature(
                 &name,
@@ -155,16 +159,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 has_returns,
             );
         }
+        Ok(())
     }
 
     /// Emits getter functions for public state variables.
     ///
     /// Each public state variable `x` at slot `s` gets a function
     /// `@solx.fn.x() -> i256` that loads from storage slot `s`.
-    fn emit_state_variable_getters(
-        &mut self,
-        contract: &ContractDefinition,
-    ) -> anyhow::Result<()> {
+    fn emit_state_variable_getters(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
         let context = self.state.context();
         let location = self.state.location();
         let i256 = self.state.i256();
@@ -180,17 +182,18 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
             let name = variable.name().name();
             let mlir_name = format!("solx.fn.{name}()");
-            let slot = self
-                .state
-                .state_variable_slot(&name)
-                .ok_or_else(|| anyhow::anyhow!("state variable '{name}' has no assigned storage slot"))?;
+            let slot = self.state.state_variable_slot(&name).ok_or_else(|| {
+                anyhow::anyhow!("state variable '{name}' has no assigned storage slot")
+            })?;
 
             // Build getter function body: sload from storage slot.
             let region = Region::new();
             let entry_block = Block::new(&[]);
 
             let slot_value = self.state.emit_i256_from_u64(slot, &entry_block);
-            let slot_pointer = self.state.emit_inttoptr(slot_value, storage_ptr, &entry_block);
+            let slot_pointer = self
+                .state
+                .emit_inttoptr(slot_value, storage_ptr, &entry_block);
             let loaded = self.state.emit_load(slot_pointer, i256, &entry_block)?;
             entry_block.append_operation(llvm::r#return(Some(loaded), location));
 
@@ -212,10 +215,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             let selector = SelectorComputer::selector_from_signature(&selector_signature);
 
             // Register for dispatch and call resolution.
-            self.state.register_function(FunctionEntry::getter(
-                mlir_name.clone(),
-                selector,
-            ));
+            self.state
+                .register_function(FunctionEntry::getter(mlir_name.clone(), selector));
             self.state
                 .register_function_signature(&name, mlir_name, 0, true);
         }
@@ -241,7 +242,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 FunctionVisibility::External | FunctionVisibility::Public
             );
             if is_dispatched {
-                let (selector, _signature) = SelectorComputer::compute(&function);
+                let (selector, _signature) = SelectorComputer::compute(&function)?;
                 self.state.register_function(FunctionEntry::new(
                     mlir_name,
                     selector,
@@ -266,19 +267,38 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         let c0 = self.state.emit_i256_constant(0, &entry_block);
         let calldata_pointer_type = self.state.ptr(AddressSpace::Calldata);
-        let calldata_pointer = self.state.emit_inttoptr(c0, calldata_pointer_type, &entry_block);
+        let calldata_pointer = self
+            .state
+            .emit_inttoptr(c0, calldata_pointer_type, &entry_block);
         let raw_selector = self
             .state
-            .emit_call(solx_mlir::ops::EVM_CALLDATALOAD, &[calldata_pointer], &[i256], &entry_block)?
+            .emit_call(
+                solx_mlir::ops::EVM_CALLDATALOAD,
+                &[calldata_pointer],
+                &[i256],
+                &entry_block,
+            )?
             .expect("calldataload always produces one result");
-        let shift_amount = self.state.emit_i256_constant(SELECTOR_SHIFT_BITS, &entry_block);
-        let selector = self.state.emit_llvm_op(solx_mlir::ops::LSHR, raw_selector, shift_amount, i256, &entry_block)?;
+        let shift_amount = self
+            .state
+            .emit_i256_constant(SELECTOR_SHIFT_BITS, &entry_block);
+        let selector = self.state.emit_llvm_op(
+            solx_mlir::ops::LSHR,
+            raw_selector,
+            shift_amount,
+            i256,
+            &entry_block,
+        )?;
 
         let revert_block = Block::new(&[]);
         let revert_ptr = self.state.emit_inttoptr(c0, heap_ptr, &revert_block);
         let revert_size = self.state.emit_i256_constant(0, &revert_block);
-        self.state
-            .emit_call(solx_mlir::ops::EVM_REVERT, &[revert_ptr, revert_size], &[], &revert_block)?;
+        self.state.emit_call(
+            solx_mlir::ops::EVM_REVERT,
+            &[revert_ptr, revert_size],
+            &[],
+            &revert_block,
+        )?;
         let location = self.state.location();
         revert_block.append_operation(llvm::unreachable(location));
 
@@ -294,10 +314,17 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             for parameter_index in 0..function_entry.parameter_count() {
                 let offset = SELECTOR_SIZE_BYTES + ABI_WORD_SIZE * parameter_index as i64;
                 let offset_value = self.state.emit_i256_constant(offset, &dispatch_block);
-                let calldata_argument_pointer = self.state.emit_inttoptr(offset_value, calldata_pointer_type, &dispatch_block);
+                let calldata_argument_pointer =
+                    self.state
+                        .emit_inttoptr(offset_value, calldata_pointer_type, &dispatch_block);
                 let argument = self
                     .state
-                    .emit_call(solx_mlir::ops::EVM_CALLDATALOAD, &[calldata_argument_pointer], &[i256], &dispatch_block)?
+                    .emit_call(
+                        solx_mlir::ops::EVM_CALLDATALOAD,
+                        &[calldata_argument_pointer],
+                        &[i256],
+                        &dispatch_block,
+                    )?
                     .expect("calldataload always produces one result");
                 arguments.push(argument);
             }
@@ -305,20 +332,40 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             if function_entry.has_returns() {
                 let return_value = self
                     .state
-                    .emit_call(function_entry.mlir_name(), &arguments, &[i256], &dispatch_block)?
+                    .emit_call(
+                        function_entry.mlir_name(),
+                        &arguments,
+                        &[i256],
+                        &dispatch_block,
+                    )?
                     .expect("function call always produces one result");
                 let store_ptr = self.state.emit_inttoptr(c0, heap_ptr, &dispatch_block);
-                self.state.emit_store(return_value, store_ptr, &dispatch_block);
-                let c32 = self.state.emit_i256_constant(ABI_WORD_SIZE, &dispatch_block);
                 self.state
-                    .emit_call(solx_mlir::ops::EVM_RETURN, &[store_ptr, c32], &[], &dispatch_block)?;
+                    .emit_store(return_value, store_ptr, &dispatch_block);
+                let c32 = self
+                    .state
+                    .emit_i256_constant(ABI_WORD_SIZE, &dispatch_block);
+                self.state.emit_call(
+                    solx_mlir::ops::EVM_RETURN,
+                    &[store_ptr, c32],
+                    &[],
+                    &dispatch_block,
+                )?;
             } else {
-                self.state
-                    .emit_call(function_entry.mlir_name(), &arguments, &[], &dispatch_block)?;
+                self.state.emit_call(
+                    function_entry.mlir_name(),
+                    &arguments,
+                    &[],
+                    &dispatch_block,
+                )?;
                 let return_pointer = self.state.emit_inttoptr(c0, heap_ptr, &dispatch_block);
                 let c0_size = self.state.emit_i256_constant(0, &dispatch_block);
-                self.state
-                    .emit_call(solx_mlir::ops::EVM_RETURN, &[return_pointer, c0_size], &[], &dispatch_block)?;
+                self.state.emit_call(
+                    solx_mlir::ops::EVM_RETURN,
+                    &[return_pointer, c0_size],
+                    &[],
+                    &dispatch_block,
+                )?;
             }
             dispatch_block.append_operation(llvm::unreachable(location));
             dispatch_blocks.push(dispatch_block);
@@ -346,12 +393,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 let selector_bytes = function_entry.selector();
                 let selector_value = u32::from_be_bytes(selector_bytes) as i64;
                 let selector_constant = self.state.emit_i256_constant(selector_value, cmp_block);
-                let cmp = self.state.emit_icmp(
-                    selector,
-                    selector_constant,
-                    ICmpPredicate::Eq,
-                    cmp_block,
-                );
+                let cmp =
+                    self.state
+                        .emit_icmp(selector, selector_constant, ICmpPredicate::Eq, cmp_block);
 
                 let fallthrough: &Block<'context> = if i + 1 < function_count {
                     &check_blocks[i]
@@ -359,10 +403,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     &revert_block
                 };
 
-                cmp_block.append_operation(
-                    self.state
-                        .llvm_cond_br(cmp, &dispatch_blocks[i], fallthrough, &[], &[]),
-                );
+                cmp_block.append_operation(self.state.llvm_cond_br(
+                    cmp,
+                    &dispatch_blocks[i],
+                    fallthrough,
+                    &[],
+                    &[],
+                ));
             }
         }
 

@@ -9,12 +9,12 @@ use std::sync::Mutex;
 use solx_standard_json::CollectableError;
 
 use crate::Arguments;
+use crate::DEFAULT_EXECUTABLE_NAME;
+use crate::DEFAULT_PACKAGE_DESCRIPTION;
 use crate::EVMBuild;
 use crate::Frontend;
 use crate::Project;
 use crate::WORKER_THREAD_STACK_SIZE;
-use crate::DEFAULT_EXECUTABLE_NAME;
-use crate::DEFAULT_PACKAGE_DESCRIPTION;
 
 /// Orchestrates compilation from Solidity sources to EVM bytecode.
 pub struct Compiler<'arguments> {
@@ -117,7 +117,7 @@ impl<'arguments> Compiler<'arguments> {
         } else if let Some(ref standard_json) = self.arguments.standard_json {
             return self.standard_json_evm(
                 frontend,
-                standard_json.as_ref().map(|s| PathBuf::from(s)),
+                standard_json.as_ref().map(PathBuf::from),
                 messages,
                 self.arguments.base_path.clone(),
                 self.arguments.include_path.clone(),
@@ -257,8 +257,7 @@ impl<'arguments> Compiler<'arguments> {
         let libraries = solx_utils::Libraries::try_from(libraries)?;
         let linker_symbols = libraries.as_linker_symbols()?;
 
-        let project =
-            Project::try_from_llvm_ir_paths(paths, libraries, output_selection, None)?;
+        let project = Project::try_from_llvm_ir_paths(paths, libraries, output_selection, None)?;
 
         let mut build = project.compile_to_evm(
             messages,
@@ -320,12 +319,15 @@ impl<'arguments> Compiler<'arguments> {
             evm_version,
             via_ir,
             output_selection,
-            solx_standard_json::InputMetadata::new(metadata_literal, append_cbor, metadata_hash_type),
+            solx_standard_json::InputMetadata::new(
+                metadata_literal,
+                append_cbor,
+                metadata_hash_type,
+            ),
             llvm_options.clone(),
         )?;
 
-        let run_solc_standard_json =
-            profiler.start_pipeline_element("solc_Solidity_Standard_JSON");
+        let run_solc_standard_json = profiler.start_pipeline_element("solc_Solidity_Standard_JSON");
         let mut solc_output = frontend.standard_json(
             &mut solc_input,
             use_import_callback,
@@ -443,8 +445,7 @@ impl<'arguments> Compiler<'arguments> {
                     .expect("lock is never poisoned because worker threads do not panic")
                     .extend(solc_output.errors.drain(..));
 
-                let run_solx_project =
-                    profiler.start_pipeline_element("solx_Solidity_IR_Analysis");
+                let run_solx_project = profiler.start_pipeline_element("solx_Solidity_IR_Analysis");
                 let project = Project::try_from_solc_output(
                     frontend.version(),
                     solc_input.settings.libraries.clone(),
@@ -471,17 +472,14 @@ impl<'arguments> Compiler<'arguments> {
                     ));
                 }
 
-                let run_solc_validate_yul =
-                    profiler.start_pipeline_element("solc_Yul_Validation");
-                let mut solc_output =
-                    frontend.validate_yul_standard_json(&mut solc_input)?;
+                let run_solc_validate_yul = profiler.start_pipeline_element("solc_Yul_Validation");
+                let mut solc_output = frontend.validate_yul_standard_json(&mut solc_input)?;
                 run_solc_validate_yul.borrow_mut().finish();
                 if solc_output.has_errors() {
                     solc_output.write_and_exit(&solc_input.settings.output_selection);
                 }
 
-                let run_solx_yul_project =
-                    profiler.start_pipeline_element("solx_Yul_IR_Analysis");
+                let run_solx_yul_project = profiler.start_pipeline_element("solx_Yul_IR_Analysis");
                 let project = Project::try_from_yul_sources(
                     frontend.version(),
                     solc_input.sources,

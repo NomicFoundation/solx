@@ -40,15 +40,11 @@ impl SlangFrontend {
     ///
     /// Returns an error if the compilation builder fails to initialize or
     /// if import resolution fails.
-    pub fn compile(
-        &self,
-        sources: BTreeMap<String, String>,
-    ) -> anyhow::Result<CompilationUnit> {
+    pub fn compile(&self, sources: BTreeMap<String, String>) -> anyhow::Result<CompilationUnit> {
         let keys: Vec<String> = sources.keys().cloned().collect();
         let configuration = SlangCompilationConfig::new(sources);
-        let mut builder =
-            CompilationBuilder::create(self.version.default.clone(), configuration)
-                .map_err(|error| anyhow::anyhow!("slang compilation builder: {error}"))?;
+        let mut builder = CompilationBuilder::create(self.version.default.clone(), configuration)
+            .map_err(|error| anyhow::anyhow!("slang compilation builder: {error}"))?;
 
         for path in &keys {
             builder.add_file(path)?;
@@ -87,9 +83,9 @@ impl SlangFrontend {
 
         let mut sources = BTreeMap::new();
         for (path, source) in &input.sources {
-            let content = source.content().ok_or_else(|| {
-                anyhow::anyhow!("source content unavailable for '{path}'")
-            })?;
+            let content = source
+                .content()
+                .ok_or_else(|| anyhow::anyhow!("source content unavailable for '{path}'"))?;
             sources.insert(path.clone(), content.to_owned());
         }
 

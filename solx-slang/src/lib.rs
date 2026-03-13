@@ -68,25 +68,23 @@ impl SlangFrontend {
     ) -> anyhow::Result<()> {
         for file in unit.files() {
             let file_identifier = file.id();
-            output
-                .errors
-                .extend(file.errors().iter().map(|error| {
-                    let text_range = error.text_range();
-                    let source_location =
-                        solx_standard_json::output::error::source_location::SourceLocation::new(
-                            file_identifier.to_owned(),
-                            Some(text_range.start.utf8 as isize),
-                            Some(text_range.end.utf8 as isize),
-                        );
+            output.errors.extend(file.errors().iter().map(|error| {
+                let text_range = error.text_range();
+                let source_location =
+                    solx_standard_json::output::error::source_location::SourceLocation::new(
+                        file_identifier.to_owned(),
+                        Some(text_range.start.utf8 as isize),
+                        Some(text_range.end.utf8 as isize),
+                    );
 
-                    solx_standard_json::OutputError::new_error_with_data(
-                        Some(file_identifier),
-                        None,
-                        error.message(),
-                        Some(source_location),
-                        Some(input_sources),
-                    )
-                }));
+                solx_standard_json::OutputError::new_error_with_data(
+                    Some(file_identifier),
+                    None,
+                    error.message(),
+                    Some(source_location),
+                    Some(input_sources),
+                )
+            }));
 
             if let Some(output_source) = output.sources.get_mut(file_identifier) {
                 output_source.ast = Some(
@@ -195,9 +193,9 @@ impl SlangFrontend {
 
         let mut contracts = BTreeMap::new();
         for path in contract_paths {
-            let source_unit = semantic_ast.file_ast(path).ok_or_else(|| {
-                anyhow::anyhow!("no AST for source file '{path}'")
-            })?;
+            let source_unit = semantic_ast
+                .file_ast(path)
+                .ok_or_else(|| anyhow::anyhow!("no AST for source file '{path}'"))?;
 
             let mut state = codegen::MlirContext::new(mlir_context.mlir());
             let has_contract =

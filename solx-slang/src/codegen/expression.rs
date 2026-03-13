@@ -42,7 +42,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         environment: &'state Environment<'context, 'block>,
         region: &'state Region<'context>,
     ) -> Self {
-        Self { state, environment, region }
+        Self {
+            state,
+            environment,
+            region,
+        }
     }
 
     /// Emits MLIR for an expression, appending operations to `block`.
@@ -99,9 +103,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     anyhow::bail!("undefined variable: {name}")
                 }
             }
-            Expression::AssignmentExpression(assign) => {
-                self.emit_assignment(assign, block)
-            }
+            Expression::AssignmentExpression(assign) => self.emit_assignment(assign, block),
             Expression::AdditiveExpression(expr) => {
                 let left = expr.left_operand();
                 let right = expr.right_operand();
@@ -209,7 +211,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits an `llvm.alloca` for a local variable, returning the pointer.
-    pub(crate) fn emit_alloca(&self, block: &BlockRef<'context, 'block>) -> Value<'context, 'block> {
+    pub(crate) fn emit_alloca(
+        &self,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
         let i256 = self.state.i256();
         let location = self.state.location();
         let context = self.state.context();
@@ -318,7 +323,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let i256 = self.state.i256();
         let storage_ptr_type = self.state.ptr(AddressSpace::Storage);
         let slot_value = self.state.emit_i256_from_u64(slot, block);
-        let ptr = self.state.emit_inttoptr(slot_value, storage_ptr_type, block);
+        let ptr = self
+            .state
+            .emit_inttoptr(slot_value, storage_ptr_type, block);
         self.state.emit_load(ptr, i256, block)
     }
 
@@ -331,7 +338,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ) {
         let storage_ptr_type = self.state.ptr(AddressSpace::Storage);
         let slot_value = self.state.emit_i256_from_u64(slot, block);
-        let ptr = self.state.emit_inttoptr(slot_value, storage_ptr_type, block);
+        let ptr = self
+            .state
+            .emit_inttoptr(slot_value, storage_ptr_type, block);
         self.state.emit_store(value, ptr, block);
     }
 
@@ -368,7 +377,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         rhs: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
-        self.state.emit_llvm_op(op_name, lhs, rhs, self.state.i256(), block)
+        self.state
+            .emit_llvm_op(op_name, lhs, rhs, self.state.i256(), block)
     }
 
     /// Returns whether an expression has a signed integer type.
@@ -432,9 +442,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let merge_block = self.region.append_block(Block::new(&[(i256, location)]));
 
         let zero = self.emit_i256_constant(0, &block);
-        block.append_operation(
-            self.state.llvm_cond_br(lhs_bool, &rhs_block, &merge_block, &[], &[zero]),
-        );
+        block.append_operation(self.state.llvm_cond_br(
+            lhs_bool,
+            &rhs_block,
+            &merge_block,
+            &[],
+            &[zero],
+        ));
 
         let (rhs, rhs_block) = self.emit(right, rhs_block)?;
         let rhs_bool = self.emit_is_nonzero(rhs, &rhs_block);
@@ -464,9 +478,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let rhs_block = self.region.append_block(Block::new(&[]));
         let merge_block = self.region.append_block(Block::new(&[(i256, location)]));
 
-        block.append_operation(
-            self.state.llvm_cond_br(lhs_bool, &merge_block, &rhs_block, &[one], &[]),
-        );
+        block.append_operation(self.state.llvm_cond_br(
+            lhs_bool,
+            &merge_block,
+            &rhs_block,
+            &[one],
+            &[],
+        ));
 
         let (rhs, rhs_block) = self.emit(right, rhs_block)?;
         let rhs_bool = self.emit_is_nonzero(rhs, &rhs_block);
@@ -488,9 +506,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             anyhow::bail!("unsupported postfix operand");
         };
         let name = identifier.name();
-        let ptr = self.environment.get_variable(&name).ok_or_else(|| {
-            anyhow::anyhow!("undefined variable: {name}")
-        })?;
+        let ptr = self
+            .environment
+            .get_variable(&name)
+            .ok_or_else(|| anyhow::anyhow!("undefined variable: {name}"))?;
         let old = self.emit_load(ptr, &block)?;
         let one = self.emit_i256_constant(1, &block);
         let op = match operator {
@@ -569,7 +588,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let is_type_conversion = matches!(
             callee_name.as_str(),
             "payable" | "address" | "uint256" | "uint8" | "int256" | "bool"
-        ) && matches!(callee, Expression::PayableKeyword | Expression::Identifier(_));
+        ) && matches!(
+            callee,
+            Expression::PayableKeyword | Expression::Identifier(_)
+        );
         if is_type_conversion && positional_arguments.len() == 1 {
             let first = positional_arguments.iter().next().unwrap();
             return self.emit(&first, block);
@@ -584,8 +606,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             current_block = next_block;
         }
 
-        let (mlir_name, has_returns) =
-            self.state.resolve_function(&callee_name, argument_values.len())?;
+        let (mlir_name, has_returns) = self
+            .state
+            .resolve_function(&callee_name, argument_values.len())?;
 
         if has_returns {
             let i256 = self.state.i256();
@@ -669,12 +692,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         if revert_on_fail {
             // transfer: revert if call failed (result == 0).
-            let is_zero_i1 = self.state.emit_icmp(
-                result,
-                zero,
-                ICmpPredicate::Eq,
-                &block,
-            );
+            let is_zero_i1 = self
+                .state
+                .emit_icmp(result, zero, ICmpPredicate::Eq, &block);
 
             // Insert blocks into region to get BlockRefs (avoids linear walk).
             let revert_ref = self.region.append_block(Block::new(&[]));
@@ -692,10 +712,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             )?;
             revert_ref.append_operation(llvm::unreachable(self.state.location()));
 
-            block.append_operation(
-                self.state
-                    .llvm_cond_br(is_zero_i1, &revert_ref, &cont_ref, &[], &[]),
-            );
+            block.append_operation(self.state.llvm_cond_br(
+                is_zero_i1,
+                &revert_ref,
+                &cont_ref,
+                &[],
+                &[],
+            ));
 
             let zero2 = self.emit_i256_constant(0, &cont_ref);
             Ok((zero2, cont_ref))

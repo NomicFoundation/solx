@@ -32,31 +32,48 @@ impl TypeMapper {
 
     /// Returns whether a type is a signed integer (`int8`..`int256`).
     pub(crate) fn is_signed(type_name: &TypeName) -> bool {
-        matches!(type_name, TypeName::ElementaryType(ElementaryType::IntKeyword(_)))
+        matches!(
+            type_name,
+            TypeName::ElementaryType(ElementaryType::IntKeyword(_))
+        )
     }
 
     /// Returns the canonical ABI type string for a Solidity type name.
     ///
     /// Used when computing function selectors.
-    pub(crate) fn canonical_type(type_name: &TypeName) -> String {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for non-literal array size expressions.
+    pub(crate) fn canonical_type(type_name: &TypeName) -> anyhow::Result<String> {
         match type_name {
-            TypeName::ElementaryType(elementary) => Self::canonical_elementary(elementary),
+            TypeName::ElementaryType(elementary) => Ok(Self::canonical_elementary(elementary)),
             // TODO: resolve IdentifierPath to struct fields for ABI tuple encoding.
-            TypeName::IdentifierPath(path) => path.name(),
+            TypeName::IdentifierPath(path) => Ok(path.name()),
             TypeName::ArrayTypeName(array) => {
-                let base = Self::canonical_type(&array.operand());
+                let base = Self::canonical_type(&array.operand())?;
                 match array.index() {
                     Some(Expression::DecimalNumberExpression(decimal)) => {
                         let size = &decimal.literal().text;
-                        format!("{base}[{size}]")
+                        Ok(format!("{base}[{size}]"))
                     }
-                    Some(_) => format!("{base}[?]"),
-                    None => format!("{base}[]"),
+                    Some(Expression::HexNumberExpression(hex)) => {
+                        let text = &hex.literal().text;
+                        let stripped = text
+                            .strip_prefix("0x")
+                            .or(text.strip_prefix("0X"))
+                            .unwrap_or(text);
+                        let decimal = u64::from_str_radix(stripped, 16)
+                            .map_err(|_| anyhow::anyhow!("invalid hex array size: {text}"))?;
+                        Ok(format!("{base}[{decimal}]"))
+                    }
+                    Some(_) => anyhow::bail!("unsupported array size expression"),
+                    None => Ok(format!("{base}[]")),
                 }
             }
             // TODO: MappingType and FunctionType are not valid ABI parameter types.
-            TypeName::MappingType(_) => "mapping".to_owned(),
-            TypeName::FunctionType(_) => "function".to_owned(),
+            TypeName::MappingType(_) => Ok("mapping".to_owned()),
+            TypeName::FunctionType(_) => Ok("function".to_owned()),
         }
     }
 

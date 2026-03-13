@@ -656,7 +656,9 @@ impl Arguments {
             Some(mode) => solx_codegen_evm::OptimizerSettings::try_from_cli(mode)?,
             None => self.optimizer_settings_from_env()?,
         };
-        if self.size_fallback || std::env::var(solx_codegen_evm::OptimizerSettings::SIZE_FALLBACK_ENV).is_ok() {
+        if self.size_fallback
+            || std::env::var(solx_codegen_evm::OptimizerSettings::SIZE_FALLBACK_ENV).is_ok()
+        {
             settings.enable_fallback_to_size();
         }
         settings.is_verify_each_enabled = self.llvm_verify_each;
@@ -669,7 +671,8 @@ impl Arguments {
     /// variable, falling back to the default (cycles) when unset.
     ///
     fn optimizer_settings_from_env(&self) -> anyhow::Result<solx_codegen_evm::OptimizerSettings> {
-        let Ok(optimization) = std::env::var(solx_codegen_evm::OptimizerSettings::OPTIMIZATION_ENV) else {
+        let Ok(optimization) = std::env::var(solx_codegen_evm::OptimizerSettings::OPTIMIZATION_ENV)
+        else {
             return Ok(solx_codegen_evm::OptimizerSettings::cycles());
         };
         if !solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.contains(&optimization.as_str())
@@ -681,7 +684,10 @@ impl Arguments {
             );
         }
         solx_codegen_evm::OptimizerSettings::try_from_cli(
-            optimization.chars().next().expect("validated string is non-empty"),
+            optimization
+                .chars()
+                .next()
+                .expect("validated string is non-empty"),
         )
     }
 
