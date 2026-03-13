@@ -35,7 +35,7 @@ solx-utils = { path = "../solx-utils" }
 [dev-dependencies]
 assert_cmd = "2.1"
 predicates = "3.1"
-tempfile = "3.24"
+tempfile = "3.26"
 test-case = "3.3"
 object = "0.37"
 gimli = "0.31"
