@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: label-check
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
       - uses: ./.github/actions/cooldown-check
@@ -54,7 +54,7 @@ jobs:
       COVERAGE_IGNORE_REGEX: '/(solx-llvm|target-llvm|solx-solidity|\.cargo|cargo/registry)/'
     steps:
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
 
