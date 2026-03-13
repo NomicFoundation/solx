@@ -1,0 +1,134 @@
+name: Slang Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+  checks: write
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  label-check:
+    if: >-
+      (github.event.action == 'labeled' && github.event.label.name == 'ci:slang'
+      || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:slang'))
+      && !github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-24.04
+    steps:
+      - run: 'true'
+
+  cooldown-check:
+    name: Cargo cooldown check
+    runs-on: ubuntu-24.04
+    needs: label-check
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/cooldown-check
+
+  slang-tests:
+    needs: [label-check, cooldown-check]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "MacOS x86"
+            runner: macos-15-intel
+          - name: "MacOS arm64"
+            runner: macos-15
+          - name: "Linux x86 gnu"
+            runner: ubuntu-24.04
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:ba6c017ac68e658c3ba35edf5a1f1030a578737075e952c6c944efa4a7143992
+            target: "x86_64-unknown-linux-gnu"
+          - name: "Linux ARM64 gnu"
+            runner: ubuntu-24.04-arm
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:ba6c017ac68e658c3ba35edf5a1f1030a578737075e952c6c944efa4a7143992
+            target: "aarch64-unknown-linux-gnu"
+          - name: "Windows"
+            runner: windows-2025
+            target: "x86_64-pc-windows-gnu"
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ${{ matrix.image || '' }}
+    name: ${{ matrix.name }}
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          submodules: true
+
+      # This step is required to checkout submodules
+      # that are disabled in .gitmodules config
+      - name: Checkout submodules
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --force --depth=1 --recursive --checkout
+
+      - name: Prepare Windows env
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/prepare-msys
+
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: RelWithDebInfo
+          enable-assertions: 'true'
+          enable-mlir: 'true'
+
+      # bindgen's embedded clang needs to know it's targeting MinGW,
+      # otherwise it can't parse MinGW-specific __attribute__ extensions
+      # in stdlib.h (rust-lang/rust-bindgen#1760).
+      - name: Set bindgen target for MinGW
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
+
+      - name: Free disk space (remove build artifacts before slang tests)
+        shell: bash
+        run: |
+          echo "Before cleanup:" && df -h .
+          rm -rf solx-llvm target-llvm/build-final target solx-solidity
+          echo "After cleanup:" && df -h .
+
+      - name: Cache cargo artifacts
+        if: ${{ !matrix.image }}
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          prefix-key: slang-tests
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Run slang tests
+        uses: ./.github/actions/rust-unit-tests
+        env:
+          CARGO_TARGET_DIR: target-slang
+        with:
+          target: ${{ matrix.target || '' }}
+          cargo-test-command: 'test-slang'
+          results-xml: 'slang-unit-tests-results.xml'
+          check-name: 'Slang Unit Tests Results'
+
+  pr-checks:
+    name: PR Checks (Slang)
+    runs-on: ubuntu-24.04
+    if: always()
+    needs:
+      - label-check
+      - cooldown-check
+      - slang-tests
+    steps:
+      - name: Decide on PR checks
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
+          allowed-skips: >-
+            ${{ needs.label-check.result == 'skipped' && 'label-check, cooldown-check, slang-tests' || '' }}

@@ -1,0 +1,94 @@
+name: Sanitizer
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+permissions:
+  contents: read
+  checks: write
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  label-check:
+    if: >-
+      (github.event.action == 'labeled' && github.event.label.name == 'ci:sanitizer'
+      || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:sanitizer'))
+      && !github.event.pull_request.head.repo.fork
+    runs-on: ubuntu-24.04
+    steps:
+      - run: 'true'
+
+  cooldown-check:
+    name: Cargo cooldown check
+    runs-on: ubuntu-24.04
+    needs: label-check
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/cooldown-check
+
+  sanitizer:
+    needs: [label-check, cooldown-check]
+    runs-on: solx-linux-amd64
+    container:
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:ba6c017ac68e658c3ba35edf5a1f1030a578737075e952c6c944efa4a7143992
+      options: -m 110g
+    env:
+      TARGET: x86_64-unknown-linux-gnu
+      RUST_SANITIZER: 'address'
+      LLVM_SANITIZER: 'Address'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          submodules: true
+
+      - name: Checkout submodules
+        run: |
+          git config --global --add safe.directory '*'
+          git submodule update --force --depth=1 --recursive --checkout
+
+      - name: Build LLVM
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: RelWithDebInfo
+          sanitizer: ${{ env.LLVM_SANITIZER }}
+          enable-assertions: 'true'
+
+      - name: Building solc
+        uses: ./.github/actions/build-solc
+        with:
+          cmake-build-type: RelWithDebInfo
+          working-dir: 'solx-solidity'
+
+      - name: Run tests
+        uses: ./.github/actions/rust-unit-tests
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        with:
+          target: ${{ env.TARGET }}
+          sanitizer: ${{ env.RUST_SANITIZER }}
+
+  pr-checks:
+    name: PR Checks (Sanitizer)
+    runs-on: ubuntu-24.04
+    if: always()
+    needs:
+      - label-check
+      - cooldown-check
+      - sanitizer
+    steps:
+      - name: Decide on PR checks
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
+          allowed-skips: >-
+            ${{ needs.label-check.result == 'skipped' && 'label-check, cooldown-check, sanitizer' || '' }}
