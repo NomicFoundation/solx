@@ -159,6 +159,7 @@ jobs:
         with:
           prefix-key: build-and-test
           cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run tests
         uses: ./.github/actions/rust-unit-tests
