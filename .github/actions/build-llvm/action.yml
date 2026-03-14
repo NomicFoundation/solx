@@ -3,6 +3,13 @@
 
 name: 'Build LLVM'
 description: 'Builds backend LLVM framework'
+outputs:
+  cache-hit:
+    description: 'Whether the LLVM cache was hit'
+    value: ${{ steps.llvm-artifact-cache.outputs.cache-hit }}
+  llvm-prefix:
+    description: 'Path to the LLVM installation'
+    value: 'target-llvm/target-final'
 inputs:
   working-dir:
     description: 'Working directory.'
