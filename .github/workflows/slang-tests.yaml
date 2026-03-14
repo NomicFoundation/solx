@@ -38,6 +38,7 @@ jobs:
     needs: [label-check, cooldown-check]
     env:
       CARGO_TARGET_DIR: target-slang
+      CARGO_INCREMENTAL: "0"
     strategy:
       fail-fast: false
       matrix:
@@ -105,7 +106,7 @@ jobs:
         if: ${{ !matrix.image }}
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
         with:
-          prefix-key: slang-tests
+          prefix-key: slang-tests-v2
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
