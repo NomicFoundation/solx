@@ -68,7 +68,10 @@ fn link_mlir_libs() {
     for library in [
         // Custom solx dialects (built in solx-llvm)
         "MLIRSolDialect",
+        "MLIRSolToStandard",
+        "MLIRSolTransforms",
         "MLIRYulDialect",
+        "MLIRYulTransforms",
         // Core dialects
         "MLIRFuncDialect",
         "MLIRSCFDialect",
@@ -88,6 +91,7 @@ fn link_mlir_libs() {
         "MLIRArithToLLVM",
         "MLIRLLVMCommonConversion",
         "MLIRPDLToPDLInterp",
+        "MLIRReconcileUnrealizedCasts",
         // Translations
         "MLIRBuiltinToLLVMIRTranslation",
         "MLIRLLVMToLLVMIRTranslation",
@@ -112,6 +116,7 @@ fn link_mlir_libs() {
         "MLIRSCFTransforms",
         "MLIRDialectUtils",
         "MLIRArithUtils",
+        "MLIRArithTransforms",
         "MLIRLLVMIRTransforms",
         // Core
         "MLIRSupport",
