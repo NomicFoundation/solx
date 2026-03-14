@@ -74,13 +74,36 @@ jobs:
         run: |
           git submodule update --init --force --recursive --depth 1 --checkout
 
-      - name: Build LLVM (main)
+      - name: Build LLVM
         uses: ./.github/actions/build-llvm
-        continue-on-error: true
         with:
           build-type: Release
-          working-dir: 'temp-solx-main'
           enable-assertions: 'false'
+
+      - name: Share LLVM with main checkout
+        continue-on-error: true
+        run: |
+          MAIN_SHA=$(git -C temp-solx-main/solx-llvm rev-parse HEAD)
+          PR_SHA=$(git -C solx-llvm rev-parse HEAD)
+          if [ "$MAIN_SHA" = "$PR_SHA" ]; then
+            echo "LLVM SHAs match ($PR_SHA), sharing via symlink"
+            mkdir -p temp-solx-main/target-llvm
+            ln -snf "$GITHUB_WORKSPACE/target-llvm/target-final" \
+                    temp-solx-main/target-llvm/target-final
+          else
+            echo "::notice::LLVM SHAs differ (main=$MAIN_SHA PR=$PR_SHA), building main separately"
+            pushd temp-solx-main
+            cargo fetch --locked
+            cargo build --frozen --release --bin solx-dev
+            ./target/release/solx-dev llvm build --build-type Release
+            popd
+          fi
+
+      - name: Build solc (PR)
+        uses: ./.github/actions/build-solc
+        with:
+          cmake-build-type: Release
+          working-dir: 'solx-solidity'
 
       - name: Build solc (main)
         uses: ./.github/actions/build-solc
@@ -88,6 +111,21 @@ jobs:
         with:
           cmake-build-type: 'Release'
           working-dir: 'temp-solx-main/solx-solidity'
+
+      - name: Fetch dependencies (PR)
+        run: cargo fetch --locked
+
+      - name: Build solx (PR)
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        run: cargo build --frozen --release --bin solx
+
+      - name: Build solx-dev and solx-tester (PR)
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        run: cargo build --frozen --release --bin solx-dev --bin solx-tester
 
       - name: Fetch dependencies (main)
         working-directory: temp-solx-main
@@ -108,33 +146,6 @@ jobs:
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
-        run: cargo build --frozen --release --bin solx-dev --bin solx-tester
-
-      - name: Build LLVM (PR)
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: Release
-          enable-assertions: 'false'
-
-      - name: Build solc (PR)
-        uses: ./.github/actions/build-solc
-        with:
-          cmake-build-type: Release
-          working-dir: 'solx-solidity'
-
-      - name: Fetch dependencies (PR)
-        run: cargo fetch --locked
-
-      - name: Build solx (PR)
-        env:
-          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
-          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-        run: cargo build --frozen --release --bin solx
-
-      - name: Build solx-dev and solx-tester (PR)
-        env:
-          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
-          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
         run: cargo build --frozen --release --bin solx-dev --bin solx-tester
 
       - name: Run solx-tester tests (PR)
