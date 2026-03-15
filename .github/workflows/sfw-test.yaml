@@ -68,18 +68,15 @@ jobs:
         if: steps.sfw.outputs.available == 'true'
         run: |
           echo "=== Environment inside sfw subprocess ==="
-          sfw sh -c 'env' | grep -iE 'cert|ca|proxy|ssl|tls|sfw' || true
+          sfw node -e "Object.entries(process.env).filter(([k]) => /cert|ca|proxy|ssl|tls|sfw/i.test(k)).forEach(([k,v]) => console.log(k + '=' + v))" || true
 
           echo "=== Check NODE_EXTRA_CA_CERTS ==="
-          SFW_CA=$(sfw sh -c 'echo $NODE_EXTRA_CA_CERTS')
+          SFW_CA=$(sfw node -e "console.log(process.env.NODE_EXTRA_CA_CERTS || '')" 2>/dev/null)
           echo "SFW CA cert path: $SFW_CA"
           if [ -n "$SFW_CA" ] && [ -f "$SFW_CA" ]; then
             ls -la "$SFW_CA"
             cat "$SFW_CA"
           fi
-
-          echo "=== Fallback: ask Node.js for the cert path ==="
-          sfw node -e 'console.log(process.env.NODE_EXTRA_CA_CERTS || "(not set)")' || true
 
           echo "=== SFW temp files ==="
           ls -la /tmp/sfw* /tmp/socket* 2>/dev/null || true
@@ -92,7 +89,7 @@ jobs:
           sfw npm ping || true
 
           # Discover SFW CA cert path
-          SFW_CA=$(sfw sh -c 'echo $NODE_EXTRA_CA_CERTS')
+          SFW_CA=$(sfw node -e "console.log(process.env.NODE_EXTRA_CA_CERTS || '')" 2>/dev/null)
           echo "SFW CA: $SFW_CA"
 
           if [ -n "$SFW_CA" ] && [ -f "$SFW_CA" ]; then

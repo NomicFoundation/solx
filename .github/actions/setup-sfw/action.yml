@@ -45,11 +45,9 @@ runs:
         sfw npm ping > /dev/null 2>&1 || true
 
         # Discover SFW CA cert path
-        SFW_CA=$(sfw sh -c 'echo $NODE_EXTRA_CA_CERTS')
-        if [ -z "$SFW_CA" ] || [ ! -f "$SFW_CA" ]; then
-          # Fallback: ask Node.js directly
-          SFW_CA=$(sfw node -e 'console.log(process.env.NODE_EXTRA_CA_CERTS || "")' 2>/dev/null)
-        fi
+        # Use `sfw node -e` instead of `sfw sh -c` to avoid Windows path-splitting
+        # issues (Git Bash path with spaces breaks cmd.exe argument parsing).
+        SFW_CA=$(sfw node -e "console.log(process.env.NODE_EXTRA_CA_CERTS || '')" 2>/dev/null)
 
         if [ -z "$SFW_CA" ] || [ ! -f "$SFW_CA" ]; then
           echo "::warning::SFW CA cert not found — cargo may fail with SSL errors under sfw"
