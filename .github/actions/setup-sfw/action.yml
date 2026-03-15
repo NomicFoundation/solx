@@ -102,4 +102,7 @@ runs:
         echo "CARGO_HTTP_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
         echo "GIT_SSL_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
         echo "SSL_CERT_FILE=$BUNDLE" >> "$GITHUB_ENV"
+        # Use git CLI instead of libgit2 for git deps — libgit2's native TLS
+        # (LibreSSL on macOS, Schannel on Windows) rejects the SFW MITM cert
+        echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> "$GITHUB_ENV"
         echo "CA bundle created at $BUNDLE ($(wc -l < "$BUNDLE") lines)"
