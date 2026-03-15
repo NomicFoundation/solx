@@ -36,3 +36,63 @@ runs:
       uses: socketdev/action@4337a545deecc20f19a909e52db7a2f6ba292f42 # v1
       with:
         mode: ${{ inputs.mode }}
+
+    - name: Configure cargo TLS trust for SFW
+      if: steps.detect.outputs.available == 'true'
+      shell: bash
+      run: |
+        # Trigger SFW cert generation (may be lazy)
+        sfw npm ping > /dev/null 2>&1 || true
+
+        # Discover SFW CA cert path
+        SFW_CA=$(sfw sh -c 'echo $NODE_EXTRA_CA_CERTS')
+        if [ -z "$SFW_CA" ] || [ ! -f "$SFW_CA" ]; then
+          # Fallback: ask Node.js directly
+          SFW_CA=$(sfw node -e 'console.log(process.env.NODE_EXTRA_CA_CERTS || "")' 2>/dev/null)
+        fi
+
+        if [ -z "$SFW_CA" ] || [ ! -f "$SFW_CA" ]; then
+          echo "::warning::SFW CA cert not found — cargo may fail with SSL errors under sfw"
+          exit 0
+        fi
+
+        echo "SFW CA cert: $SFW_CA"
+        BUNDLE="${RUNNER_TEMP}/sfw-ca-bundle.pem"
+
+        # Find system CA bundle
+        FOUND_SYSTEM=false
+        for f in \
+          /etc/ssl/certs/ca-certificates.crt \
+          /etc/ssl/certs/ca-bundle.crt \
+          /etc/pki/tls/certs/ca-bundle.crt \
+          /mingw64/etc/ssl/certs/ca-bundle.crt \
+          "$(brew --prefix 2>/dev/null)/etc/ca-certificates/cert.pem"; do
+          if [ -f "$f" ]; then
+            cp "$f" "$BUNDLE"
+            echo "System CA bundle: $f"
+            FOUND_SYSTEM=true
+            break
+          fi
+        done
+
+        # macOS: export system keychain certs as fallback
+        if [ "$FOUND_SYSTEM" = false ] && [[ "$RUNNER_OS" == "macOS" ]]; then
+          security export -t certs -f pemseq \
+            -k /System/Library/Keychains/SystemRootCertificates.keychain \
+            > "$BUNDLE" 2>/dev/null && FOUND_SYSTEM=true
+          echo "Used macOS system keychain export"
+        fi
+
+        if [ "$FOUND_SYSTEM" = false ]; then
+          echo "::warning::Could not find system CA bundle — using SFW cert only"
+          cp "$SFW_CA" "$BUNDLE"
+        else
+          # Append SFW CA cert to system bundle
+          echo "" >> "$BUNDLE"
+          cat "$SFW_CA" >> "$BUNDLE"
+        fi
+
+        # Export for cargo and git
+        echo "CARGO_HTTP_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
+        echo "GIT_SSL_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
+        echo "CA bundle created at $BUNDLE ($(wc -l < "$BUNDLE") lines)"
