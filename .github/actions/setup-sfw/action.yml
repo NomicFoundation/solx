@@ -44,10 +44,18 @@ runs:
         # Trigger SFW cert generation (may be lazy)
         sfw npm ping > /dev/null 2>&1 || true
 
-        # Discover SFW CA cert path
-        # Use `sfw node -e` instead of `sfw sh -c` to avoid Windows path-splitting
-        # issues (Git Bash path with spaces breaks cmd.exe argument parsing).
-        SFW_CA=$(sfw node -e "console.log(process.env.NODE_EXTRA_CA_CERTS || '')" 2>/dev/null)
+        # Discover SFW CA cert path via temp file to avoid:
+        # 1. stdout pollution (sfw prepends/appends banner lines)
+        # 2. Windows quoting issues (cmd.exe mangles inline JS)
+        cat > "${RUNNER_TEMP}/sfw-get-cert.js" << 'SCRIPT'
+        const fs = require("fs");
+        const p = process.env.NODE_EXTRA_CA_CERTS || "";
+        fs.writeFileSync(process.env.RUNNER_TEMP + "/sfw-cert-path.txt", p);
+        SCRIPT
+        sfw node "${RUNNER_TEMP}/sfw-get-cert.js" > /dev/null 2>&1 || true
+        SFW_CA=""
+        [ -f "${RUNNER_TEMP}/sfw-cert-path.txt" ] && SFW_CA=$(cat "${RUNNER_TEMP}/sfw-cert-path.txt")
+        rm -f "${RUNNER_TEMP}/sfw-get-cert.js" "${RUNNER_TEMP}/sfw-cert-path.txt"
 
         if [ -z "$SFW_CA" ] || [ ! -f "$SFW_CA" ]; then
           echo "::warning::SFW CA cert not found — cargo may fail with SSL errors under sfw"
