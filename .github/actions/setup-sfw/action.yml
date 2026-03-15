@@ -98,7 +98,8 @@ runs:
           cat "$SFW_CA" >> "$BUNDLE"
         fi
 
-        # Export for cargo and git
+        # Export for cargo, git, and rustup (SSL_CERT_FILE is needed by rustls-native-certs)
         echo "CARGO_HTTP_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
         echo "GIT_SSL_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
+        echo "SSL_CERT_FILE=$BUNDLE" >> "$GITHUB_ENV"
         echo "CA bundle created at $BUNDLE ($(wc -l < "$BUNDLE") lines)"
