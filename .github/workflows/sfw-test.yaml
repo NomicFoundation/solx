@@ -64,7 +64,79 @@ jobs:
         if: steps.sfw.outputs.available == 'true'
         run: sfw npm install -g semver
 
-      - name: Test sfw cargo fetch (expected SSL failure — tracking)
+      - name: Discover SFW CA cert
+        if: steps.sfw.outputs.available == 'true'
+        run: |
+          echo "=== Environment inside sfw subprocess ==="
+          sfw sh -c 'env' | grep -iE 'cert|ca|proxy|ssl|tls|sfw' || true
+
+          echo "=== Check NODE_EXTRA_CA_CERTS ==="
+          SFW_CA=$(sfw sh -c 'echo $NODE_EXTRA_CA_CERTS')
+          echo "SFW CA cert path: $SFW_CA"
+          if [ -n "$SFW_CA" ] && [ -f "$SFW_CA" ]; then
+            ls -la "$SFW_CA"
+            cat "$SFW_CA"
+          fi
+
+          echo "=== Fallback: ask Node.js for the cert path ==="
+          sfw node -e 'console.log(process.env.NODE_EXTRA_CA_CERTS || "(not set)")' || true
+
+          echo "=== SFW temp files ==="
+          ls -la /tmp/sfw* /tmp/socket* 2>/dev/null || true
+
+      - name: Test cargo fetch with SFW CA bundle
+        if: steps.sfw.outputs.available == 'true'
+        continue-on-error: true
+        run: |
+          # Trigger SFW cert generation
+          sfw npm ping || true
+
+          # Discover SFW CA cert path
+          SFW_CA=$(sfw sh -c 'echo $NODE_EXTRA_CA_CERTS')
+          echo "SFW CA: $SFW_CA"
+
+          if [ -n "$SFW_CA" ] && [ -f "$SFW_CA" ]; then
+            BUNDLE="${RUNNER_TEMP}/sfw-cargo-ca-bundle.pem"
+
+            # Find system CA bundle and use it as base
+            for f in \
+              /etc/ssl/certs/ca-certificates.crt \
+              /etc/ssl/certs/ca-bundle.crt \
+              /etc/pki/tls/certs/ca-bundle.crt \
+              /mingw64/etc/ssl/certs/ca-bundle.crt \
+              "$(brew --prefix 2>/dev/null)/etc/ca-certificates/cert.pem"; do
+              if [ -f "$f" ]; then
+                cp "$f" "$BUNDLE"
+                echo "System CA bundle: $f"
+                break
+              fi
+            done
+
+            # macOS: export system keychain certs as fallback
+            if [ ! -f "$BUNDLE" ] && [ "$RUNNER_OS" = "macOS" ]; then
+              security export -t certs -f pemseq \
+                -k /System/Library/Keychains/SystemRootCertificates.keychain \
+                > "$BUNDLE" 2>/dev/null
+              echo "Used macOS system keychain export"
+            fi
+
+            # Append SFW CA cert to the bundle
+            if [ -f "$BUNDLE" ]; then
+              echo "" >> "$BUNDLE"
+              cat "$SFW_CA" >> "$BUNDLE"
+              echo "Combined bundle: $(wc -l < "$BUNDLE") lines"
+              export CARGO_HTTP_CAINFO="$BUNDLE"
+              export GIT_SSL_CAINFO="$BUNDLE"
+            else
+              echo "::warning::Could not find system CA bundle"
+            fi
+          else
+            echo "::warning::SFW CA cert not found at: $SFW_CA"
+          fi
+
+          sfw cargo fetch --locked
+
+      - name: Test sfw cargo fetch (without CA fix — expected SSL failure)
         if: steps.sfw.outputs.available == 'true'
         continue-on-error: true
         run: sfw cargo fetch --locked
