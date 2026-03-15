@@ -21,6 +21,15 @@ runs:
       id: detect
       shell: bash
       run: |
+        # SFW's MITM proxy is only compatible with Linux TLS stacks.
+        # macOS (LibreSSL) and Windows (Schannel) reject the SFW cert
+        # at the crypto level — not a CA trust issue.
+        if [[ "$RUNNER_OS" != "Linux" ]]; then
+          echo "::notice::SFW skipped: MITM proxy not compatible with $RUNNER_OS TLS stack"
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
         # Skip inside containers (GitHub sets 'container' env var for container jobs;
         # /.dockerenv is a fallback heuristic)
         if [[ -n "${container:-}" ]] || [[ -f /.dockerenv ]]; then
@@ -44,9 +53,8 @@ runs:
         # Trigger SFW cert generation (may be lazy)
         sfw npm ping > /dev/null 2>&1 || true
 
-        # Discover SFW CA cert path via temp file to avoid:
-        # 1. stdout pollution (sfw prepends/appends banner lines)
-        # 2. Windows quoting issues (cmd.exe mangles inline JS)
+        # Discover SFW CA cert path via temp file to avoid
+        # stdout pollution (sfw prepends/appends banner lines)
         cat > "${RUNNER_TEMP}/sfw-get-cert.js" << 'SCRIPT'
         const fs = require("fs");
         const p = process.env.NODE_EXTRA_CA_CERTS || "";
@@ -65,14 +73,12 @@ runs:
         echo "SFW CA cert: $SFW_CA"
         BUNDLE="${RUNNER_TEMP}/sfw-ca-bundle.pem"
 
-        # Find system CA bundle
+        # Find system CA bundle (Linux paths only — macOS/Windows are skipped above)
         FOUND_SYSTEM=false
         for f in \
           /etc/ssl/certs/ca-certificates.crt \
           /etc/ssl/certs/ca-bundle.crt \
-          /etc/pki/tls/certs/ca-bundle.crt \
-          /mingw64/etc/ssl/certs/ca-bundle.crt \
-          "$(brew --prefix 2>/dev/null)/etc/ca-certificates/cert.pem"; do
+          /etc/pki/tls/certs/ca-bundle.crt; do
           if [ -f "$f" ]; then
             cp "$f" "$BUNDLE"
             echo "System CA bundle: $f"
@@ -80,14 +86,6 @@ runs:
             break
           fi
         done
-
-        # macOS: export system keychain certs as fallback
-        if [ "$FOUND_SYSTEM" = false ] && [[ "$RUNNER_OS" == "macOS" ]]; then
-          security export -t certs -f pemseq \
-            -k /System/Library/Keychains/SystemRootCertificates.keychain \
-            > "$BUNDLE" 2>/dev/null && FOUND_SYSTEM=true
-          echo "Used macOS system keychain export"
-        fi
 
         if [ "$FOUND_SYSTEM" = false ]; then
           echo "::warning::Could not find system CA bundle — using SFW cert only"
@@ -102,7 +100,4 @@ runs:
         echo "CARGO_HTTP_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
         echo "GIT_SSL_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
         echo "SSL_CERT_FILE=$BUNDLE" >> "$GITHUB_ENV"
-        # Use git CLI instead of libgit2 for git deps — libgit2's native TLS
-        # (LibreSSL on macOS, Schannel on Windows) rejects the SFW MITM cert
-        echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> "$GITHUB_ENV"
         echo "CA bundle created at $BUNDLE ($(wc -l < "$BUNDLE") lines)"

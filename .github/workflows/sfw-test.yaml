@@ -33,12 +33,6 @@ jobs:
         include:
           - name: Linux AMD64
             runner: ubuntu-24.04
-          - name: macOS ARM64
-            runner: macos-15
-          - name: macOS x86
-            runner: macos-15-intel
-          - name: Windows
-            runner: windows-2025
     runs-on: ${{ matrix.runner }}
     name: Runner — ${{ matrix.name }}
     steps:
