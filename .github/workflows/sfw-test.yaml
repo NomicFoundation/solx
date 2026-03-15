@@ -71,7 +71,15 @@ jobs:
           sfw node -e "Object.entries(process.env).filter(([k]) => /cert|ca|proxy|ssl|tls|sfw/i.test(k)).forEach(([k,v]) => console.log(k + '=' + v))" || true
 
           echo "=== Check NODE_EXTRA_CA_CERTS ==="
-          SFW_CA=$(sfw node -e "console.log(process.env.NODE_EXTRA_CA_CERTS || '')" 2>/dev/null)
+          cat > "${RUNNER_TEMP}/sfw-get-cert.js" << 'SCRIPT'
+          const fs = require("fs");
+          const p = process.env.NODE_EXTRA_CA_CERTS || "";
+          fs.writeFileSync(process.env.RUNNER_TEMP + "/sfw-cert-path.txt", p);
+          SCRIPT
+          sfw node "${RUNNER_TEMP}/sfw-get-cert.js" > /dev/null 2>&1 || true
+          SFW_CA=""
+          [ -f "${RUNNER_TEMP}/sfw-cert-path.txt" ] && SFW_CA=$(cat "${RUNNER_TEMP}/sfw-cert-path.txt")
+          rm -f "${RUNNER_TEMP}/sfw-get-cert.js" "${RUNNER_TEMP}/sfw-cert-path.txt"
           echo "SFW CA cert path: $SFW_CA"
           if [ -n "$SFW_CA" ] && [ -f "$SFW_CA" ]; then
             ls -la "$SFW_CA"
@@ -88,8 +96,16 @@ jobs:
           # Trigger SFW cert generation
           sfw npm ping || true
 
-          # Discover SFW CA cert path
-          SFW_CA=$(sfw node -e "console.log(process.env.NODE_EXTRA_CA_CERTS || '')" 2>/dev/null)
+          # Discover SFW CA cert path via temp file (avoids stdout pollution + Windows quoting)
+          cat > "${RUNNER_TEMP}/sfw-get-cert.js" << 'SCRIPT'
+          const fs = require("fs");
+          const p = process.env.NODE_EXTRA_CA_CERTS || "";
+          fs.writeFileSync(process.env.RUNNER_TEMP + "/sfw-cert-path.txt", p);
+          SCRIPT
+          sfw node "${RUNNER_TEMP}/sfw-get-cert.js" > /dev/null 2>&1 || true
+          SFW_CA=""
+          [ -f "${RUNNER_TEMP}/sfw-cert-path.txt" ] && SFW_CA=$(cat "${RUNNER_TEMP}/sfw-cert-path.txt")
+          rm -f "${RUNNER_TEMP}/sfw-get-cert.js" "${RUNNER_TEMP}/sfw-cert-path.txt"
           echo "SFW CA: $SFW_CA"
 
           if [ -n "$SFW_CA" ] && [ -f "$SFW_CA" ]; then
