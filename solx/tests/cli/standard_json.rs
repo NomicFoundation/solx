@@ -317,6 +317,7 @@ fn metadata_hash_none_and_metadata() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn metadata_hash_none_no_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;

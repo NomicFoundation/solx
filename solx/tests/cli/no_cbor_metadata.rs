@@ -5,6 +5,7 @@
 use predicates::prelude::*;
 use solx_utils::MetadataHashType;
 
+#[cfg(feature = "solc")]
 #[test]
 fn none() -> anyhow::Result<()> {
     let _ = crate::common::setup();

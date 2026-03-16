@@ -18,19 +18,13 @@ impl LlvmModule {
     /// Create from raw LLVM pointers.
     ///
     /// # Safety
+    ///
     /// Caller must ensure both pointers are valid, owned, and not aliased.
-    pub fn new(
+    pub unsafe fn new(
         module: inkwell::llvm_sys::prelude::LLVMModuleRef,
         context: inkwell::llvm_sys::prelude::LLVMContextRef,
     ) -> Self {
         Self { module, context }
-    }
-
-    /// Raw `LLVMModuleRef` for passing to the EVM backend.
-    ///
-    /// The pointer is valid for the lifetime of this `LlvmModule`.
-    pub fn as_raw(&self) -> inkwell::llvm_sys::prelude::LLVMModuleRef {
-        self.module
     }
 
     /// Consume self and return raw pointers without disposing.
@@ -46,10 +40,19 @@ impl LlvmModule {
         std::mem::forget(self);
         (module, context)
     }
+
+    /// Raw `LLVMModuleRef` for passing to the EVM backend.
+    ///
+    /// The pointer is valid for the lifetime of this `LlvmModule`.
+    pub fn as_raw(&self) -> inkwell::llvm_sys::prelude::LLVMModuleRef {
+        self.module
+    }
 }
 
 impl Drop for LlvmModule {
     fn drop(&mut self) {
+        // SAFETY: `module` and `context` are owned raw pointers created in
+        // `new()` and never aliased. Disposing them once on drop is sound.
         unsafe {
             inkwell::llvm_sys::core::LLVMDisposeModule(self.module);
             inkwell::llvm_sys::core::LLVMContextDispose(self.context);

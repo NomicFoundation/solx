@@ -11,6 +11,15 @@ use std::sync::Mutex;
 use clap::Parser;
 use path_slash::PathExt;
 
+/// Expected argument count for `--recursive-process` (binary name + flag + value).
+const RECURSIVE_PROCESS_MAX_ARGS: usize = 3;
+
+/// Expected argument count for `--version` (binary name + flag).
+const VERSION_MAX_ARGS: usize = 2;
+
+/// Expected number of parts in a remapping (key=value).
+const REMAPPING_PART_COUNT: usize = 2;
+
 ///
 /// Solidity compiler arguments.
 ///
@@ -236,6 +245,58 @@ pub struct Arguments {
 }
 
 impl Arguments {
+    /// Creates a minimal `Arguments` for use as a `Compiler` anchor when
+    /// calling methods that do not read any argument fields (e.g.
+    /// `standard_json_evm`). Not intended for general use.
+    #[doc(hidden)]
+    pub fn default_for_json_wrapper() -> Self {
+        Self {
+            version: false,
+            inputs: vec![],
+            base_path: None,
+            include_path: vec![],
+            allow_paths: None,
+            yul: false,
+            llvm_ir: false,
+            standard_json: None,
+            libraries: vec![],
+            output_dir: None,
+            overwrite: false,
+            output_bytecode: false,
+            output_bytecode_runtime: false,
+            output_assembly: false,
+            output_debug_info: false,
+            output_debug_info_runtime: false,
+            output_metadata: false,
+            output_abi: false,
+            output_hashes: false,
+            output_userdoc: false,
+            output_devdoc: false,
+            output_storage_layout: false,
+            output_transient_storage_layout: false,
+            output_ast_json: false,
+            output_asm_solc_json: false,
+            output_ir: false,
+            output_benchmarks: false,
+            output_evmla: false,
+            output_ethir: false,
+            output_llvm_ir: false,
+            evm_version: None,
+            via_ir: false,
+            threads: None,
+            optimization: None,
+            size_fallback: false,
+            llvm_options: None,
+            metadata_hash: None,
+            metadata_literal: false,
+            no_cbor_metadata: false,
+            no_import_callback: false,
+            llvm_verify_each: false,
+            llvm_debug_logging: false,
+            recursive_process: false,
+        }
+    }
+
     ///
     /// Validates the arguments.
     ///
@@ -243,7 +304,7 @@ impl Arguments {
         let mut messages = vec![];
 
         if self.recursive_process {
-            if std::env::args().count() > 3 {
+            if std::env::args().count() > RECURSIVE_PROCESS_MAX_ARGS {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "No other options are allowed while running in the recursive process mode.",
                 ));
@@ -252,7 +313,7 @@ impl Arguments {
         }
 
         if self.version {
-            if std::env::args().count() > 2 {
+            if std::env::args().count() > VERSION_MAX_ARGS {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "No other options are allowed while getting the compiler version.",
                 ));
@@ -432,7 +493,7 @@ impl Arguments {
                             .to_string(),
                     );
                 }
-                if parts.len() != 2 {
+                if parts.len() != REMAPPING_PART_COUNT {
                     anyhow::bail!(
                         "Invalid remapping `{input}`: expected two parts separated by '='."
                     );
@@ -579,7 +640,7 @@ impl Arguments {
             return;
         }
 
-        messages.lock().expect("Sync").push(
+        messages.lock().expect("lock is never poisoned because worker threads do not panic").push(
             solx_standard_json::OutputError::new_warning(format!(
                 "The following output flags are not supported by the current frontend and will be ignored: {}",
                 unsupported.join(", ")
@@ -595,7 +656,9 @@ impl Arguments {
             Some(mode) => solx_codegen_evm::OptimizerSettings::try_from_cli(mode)?,
             None => self.optimizer_settings_from_env()?,
         };
-        if self.size_fallback || std::env::var(crate::SOLX_OPTIMIZATION_SIZE_FALLBACK_ENV).is_ok() {
+        if self.size_fallback
+            || std::env::var(solx_codegen_evm::OptimizerSettings::SIZE_FALLBACK_ENV).is_ok()
+        {
             settings.enable_fallback_to_size();
         }
         settings.is_verify_each_enabled = self.llvm_verify_each;
@@ -608,19 +671,23 @@ impl Arguments {
     /// variable, falling back to the default (cycles) when unset.
     ///
     fn optimizer_settings_from_env(&self) -> anyhow::Result<solx_codegen_evm::OptimizerSettings> {
-        let Ok(optimization) = std::env::var(crate::SOLX_OPTIMIZATION_ENV) else {
+        let Ok(optimization) = std::env::var(solx_codegen_evm::OptimizerSettings::OPTIMIZATION_ENV)
+        else {
             return Ok(solx_codegen_evm::OptimizerSettings::cycles());
         };
         if !solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.contains(&optimization.as_str())
         {
             anyhow::bail!(
                 "Invalid value `{optimization}` for environment variable '{}': only values {} are supported.",
-                crate::SOLX_OPTIMIZATION_ENV,
+                solx_codegen_evm::OptimizerSettings::OPTIMIZATION_ENV,
                 solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.join(", ")
             );
         }
         solx_codegen_evm::OptimizerSettings::try_from_cli(
-            optimization.chars().next().expect("Always exists"),
+            optimization
+                .chars()
+                .next()
+                .expect("validated string is non-empty"),
         )
     }
 

@@ -2,6 +2,7 @@
 //! Compiler common library.
 //!
 
+pub(crate) mod address_space;
 pub(crate) mod base;
 pub(crate) mod bit_length;
 pub(crate) mod byte_length;
@@ -22,6 +23,7 @@ pub(crate) mod metadata_hash_type;
 pub(crate) mod sync_lock;
 pub(crate) mod target;
 
+pub use self::address_space::*;
 pub use self::base::*;
 pub use self::bit_length::*;
 pub use self::byte_length::*;
