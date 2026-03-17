@@ -74,6 +74,16 @@ jobs:
         run: |
           git submodule update --init --force --recursive --depth 1 --checkout
 
+      - name: Install SFW (container)
+        run: npm install -g sfw
+
+      - name: Set SFW prefix
+        shell: bash
+        run: |
+          if command -v sfw &>/dev/null; then
+            echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
+          fi
+
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
@@ -130,7 +140,7 @@ jobs:
       - name: Fetch dependencies (main)
         working-directory: temp-solx-main
         continue-on-error: true
-        run: cargo fetch --locked
+        run: ${SFW_PREFIX:-} cargo fetch --locked
 
       - name: Build solx (main)
         working-directory: temp-solx-main
@@ -146,6 +156,33 @@ jobs:
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
+        run: cargo build --frozen --release --bin solx-dev --bin solx-tester
+
+      - name: Build LLVM (PR)
+        uses: ./.github/actions/build-llvm
+        with:
+          build-type: Release
+          enable-assertions: 'false'
+
+      - name: Build solc (PR)
+        uses: ./.github/actions/build-solc
+        with:
+          cmake-build-type: Release
+          working-dir: 'solx-solidity'
+
+      - name: Fetch dependencies (PR)
+        run: ${SFW_PREFIX:-} cargo fetch --locked
+
+      - name: Build solx (PR)
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
+        run: cargo build --frozen --release --bin solx
+
+      - name: Build solx-dev and solx-tester (PR)
+        env:
+          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
+          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
         run: cargo build --frozen --release --bin solx-dev --bin solx-tester
 
       - name: Run solx-tester tests (PR)

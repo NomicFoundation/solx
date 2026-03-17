@@ -63,6 +63,16 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --init --force --depth=1 --recursive --checkout
 
+      - name: Install SFW (container)
+        run: npm install -g sfw
+
+      - name: Set SFW prefix
+        shell: bash
+        run: |
+          if command -v sfw &>/dev/null; then
+            echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
+          fi
+
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
@@ -121,7 +131,7 @@ jobs:
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: '-C target-feature=+crt-static -C instrument-coverage -C link-arg=-fuse-ld=lld'
           LLVM_PROFILE_FILE: 'unit-tests-%p-%m.profraw'
-        run: cargo fetch --locked && cargo test --frozen --release --target x86_64-unknown-linux-gnu
+        run: ${SFW_PREFIX:-} cargo fetch --locked && cargo test --frozen --release --target x86_64-unknown-linux-gnu
 
       # Inkwell feature poisoning: solc path builds inkwell with LLVM linking,
       # slang path needs no-llvm-linking. cargo clean cannot reliably clear
