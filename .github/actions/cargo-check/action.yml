@@ -21,15 +21,15 @@ runs:
 
     - name: Cargo check
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: ${SFW_PREFIX:-} cargo check --frozen --verbose
+      run: cargo check --frozen --verbose
 
     - name: Cargo format
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: ${SFW_PREFIX:-} cargo fmt --all -- --check --verbose
+      run: cargo fmt --all -- --check --verbose
 
     - name: Cargo clippy
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: ${SFW_PREFIX:-} cargo clippy --frozen
+      run: cargo clippy --frozen
 
     # Version pinned to match .github/docker/Dockerfile — on container
     # jobs this is already installed and `cargo install` is a no-op.
@@ -37,5 +37,5 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
         ${SFW_PREFIX:-} cargo install cargo-udeps@0.1.60 --locked
-        ${SFW_PREFIX:-} cargo +nightly udeps --frozen --all-targets
+        cargo +nightly udeps --frozen --all-targets
 

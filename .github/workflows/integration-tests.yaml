@@ -74,6 +74,16 @@ jobs:
         run: |
           git submodule update --init --force --recursive --depth 1 --checkout
 
+      - name: Install SFW (container)
+        run: npm install -g sfw
+
+      - name: Set SFW prefix
+        shell: bash
+        run: |
+          if command -v sfw &>/dev/null; then
+            echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
+          fi
+
       - name: Build LLVM (main)
         uses: ./.github/actions/build-llvm
         continue-on-error: true
@@ -92,7 +102,7 @@ jobs:
       - name: Fetch dependencies (main)
         working-directory: temp-solx-main
         continue-on-error: true
-        run: cargo fetch --locked
+        run: ${SFW_PREFIX:-} cargo fetch --locked
 
       - name: Build solx (main)
         working-directory: temp-solx-main
@@ -123,7 +133,7 @@ jobs:
           working-dir: 'solx-solidity'
 
       - name: Fetch dependencies (PR)
-        run: cargo fetch --locked
+        run: ${SFW_PREFIX:-} cargo fetch --locked
 
       - name: Build solx (PR)
         env:

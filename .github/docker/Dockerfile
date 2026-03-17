@@ -5,7 +5,7 @@
 # The custom LLVM 21.1 backend is NOT baked into this image — it is built from
 # source in every CI job via the build-llvm composite action.
 
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:0d39fcc8335d6d74d5502f6df2d30119ff4790ebbb60b364818d5112d9e3e932
 
 LABEL org.opencontainers.image.source="https://github.com/NomicFoundation/solx"
 LABEL org.opencontainers.image.description="CI runner image for solx"
@@ -26,8 +26,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         jq \
         ca-certificates \
         gnupg \
-        lsb-release \
-        software-properties-common \
         libssl-dev \
         openssh-client \
         xz-utils \
@@ -119,10 +117,10 @@ RUN cargo install \
     --locked
 
 # ── Node.js (for SFW and npm-based CI tools) ─────────────────────────────
-ARG NODE_MAJOR=24
-RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
+COPY --from=node:24-slim@sha256:4bd6219054c8bebcd26a66bfd8ca0bd6e1024b4b97474c59bb7ee3bbcbef4fe8 /usr/local/bin/node /usr/local/bin/
+COPY --from=node:24-slim@sha256:4bd6219054c8bebcd26a66bfd8ca0bd6e1024b4b97474c59bb7ee3bbcbef4fe8 /usr/local/lib/node_modules/ /usr/local/lib/node_modules/
+RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 # Smoke-test: ensure key tools are on PATH
 RUN set -eux \

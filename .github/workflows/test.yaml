@@ -62,6 +62,9 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
+      - name: Install SFW (container)
+        run: npm install -g sfw
+
       - name: Set SFW prefix
         shell: bash
         run: |
