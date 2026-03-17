@@ -34,7 +34,7 @@ impl CompilationBuilderConfig for SlangCompilationConfig {
         import_path_cursor: &Cursor,
     ) -> anyhow::Result<Option<String>> {
         let literal = import_path_cursor.node().unparse();
-        let path = literal.trim_matches(|character: char| character == '"' || character == '\'');
+        let path = literal.trim_matches('"').trim_matches('\'');
 
         // Try exact match first.
         if self.sources.contains_key(path) {

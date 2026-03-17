@@ -11,6 +11,7 @@ use melior::ir::RegionLike;
 use melior::ir::Value;
 use melior::ir::operation::OperationBuilder;
 use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
+use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::PositionalArguments;
 
@@ -93,14 +94,38 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Expression::Identifier(identifier) => {
                 let name = identifier.name();
-                if let Some(pointer) = self.environment.variable(&name) {
-                    let value = self.emit_load(pointer, &block)?;
-                    Ok((value, block))
-                } else if let Some(slot) = self.state.state_variable_slot(&name) {
-                    let value = self.emit_storage_load(slot, &block)?;
-                    Ok((value, block))
-                } else {
-                    anyhow::bail!("undefined variable: {name}")
+                match identifier.resolve_to_definition() {
+                    Some(Definition::StateVariable(_)) => {
+                        let slot = self.state.state_variable_slot(&name).ok_or_else(|| {
+                            anyhow::anyhow!("unregistered state variable: {name}")
+                        })?;
+                        let value = self.emit_storage_load(slot, &block)?;
+                        Ok((value, block))
+                    }
+                    Some(
+                        Definition::Variable(_)
+                        | Definition::Parameter(_)
+                        | Definition::TypeParameter(_),
+                    ) => {
+                        let pointer = self.environment.variable(&name).ok_or_else(|| {
+                            anyhow::anyhow!("unregistered local variable: {name}")
+                        })?;
+                        let value = self.emit_load(pointer, &block)?;
+                        Ok((value, block))
+                    }
+                    None => {
+                        // Fallback for identifiers the binder cannot resolve.
+                        if let Some(pointer) = self.environment.variable(&name) {
+                            let value = self.emit_load(pointer, &block)?;
+                            Ok((value, block))
+                        } else if let Some(slot) = self.state.state_variable_slot(&name) {
+                            let value = self.emit_storage_load(slot, &block)?;
+                            Ok((value, block))
+                        } else {
+                            anyhow::bail!("undefined variable: {name}")
+                        }
+                    }
+                    Some(_) => anyhow::bail!("unsupported identifier reference: {name}"),
                 }
             }
             Expression::AssignmentExpression(assign) => self.emit_assignment(assign, block),
@@ -591,6 +616,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         };
 
         // Handle member function calls: recipient.send(1), recipient.transfer(1).
+        // TODO: detect built-in send/transfer via Slang's `Typing::BuiltIn` once
+        // exposed in the semi-public API.
         if let Expression::MemberAccessExpression(member) = callee {
             match callee_name.as_str() {
                 "send" | "transfer" => {
@@ -607,6 +634,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
 
         // Handle type-conversion calls: payable(x), uint256(x), etc.
+        // TODO: detect casts via Slang's binder once exposed in the semi-public
+        // API, instead of matching on a hardcoded set of type names.
         let is_type_conversion = matches!(
             callee_name.as_str(),
             "payable" | "address" | "uint256" | "uint8" | "int256" | "bool"
@@ -651,6 +680,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a member access expression (e.g. `tx.origin`, `msg.sender`).
+    ///
+    // TODO: detect built-in member accesses (e.g. `tx.origin`, `msg.sender`)
+    // via Slang's `Typing::BuiltIn` variants once exposed in the semi-public
+    // API, instead of matching on string names.
     fn emit_member_access(
         &self,
         operand: &Expression,

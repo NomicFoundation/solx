@@ -6,7 +6,6 @@
 pub(crate) mod contract;
 
 use slang_solidity::backend::ir::ast::SourceUnit;
-use slang_solidity::backend::ir::ast::SourceUnitMember;
 
 use crate::slang::codegen::MlirContext;
 
@@ -38,13 +37,11 @@ impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
     /// Returns an error if code generation encounters unsupported constructs.
     /// Returns `Some(contract_name)` if a contract was emitted, `None` otherwise.
     pub(crate) fn emit(&mut self, unit: &SourceUnit) -> anyhow::Result<Option<String>> {
-        for member in unit.members().iter() {
-            if let SourceUnitMember::ContractDefinition(contract) = member {
-                let name = contract.name().name();
-                let mut emitter = ContractEmitter::new(self.state);
-                emitter.emit(&contract)?;
-                return Ok(Some(name));
-            }
+        if let Some(contract) = unit.contracts().first() {
+            let name = contract.name().name();
+            let mut emitter = ContractEmitter::new(self.state);
+            emitter.emit(contract)?;
+            return Ok(Some(name));
         }
 
         Ok(None)

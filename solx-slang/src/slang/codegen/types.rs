@@ -32,14 +32,6 @@ impl TypeMapper {
         Self::ABI_ENCODED_WORD_SIZE
     }
 
-    /// Returns whether a type is a signed integer (`int8`..`int256`).
-    pub(crate) fn is_signed(type_name: &TypeName) -> bool {
-        matches!(
-            type_name,
-            TypeName::ElementaryType(ElementaryType::IntKeyword(_))
-        )
-    }
-
     /// Returns the canonical ABI type string for a Solidity type name.
     ///
     /// Used when computing function selectors.

@@ -574,34 +574,23 @@ impl SlangFrontend {
     fn compute_method_identifiers(
         source_unit: &slang_solidity::backend::ir::ast::SourceUnit,
     ) -> BTreeMap<String, String> {
-        use slang_solidity::backend::ir::ast::ContractMember;
-        use slang_solidity::backend::ir::ast::FunctionVisibility;
-        use slang_solidity::backend::ir::ast::SourceUnitMember;
         let mut identifiers = BTreeMap::new();
 
-        for member in source_unit.members().iter() {
-            let SourceUnitMember::ContractDefinition(contract) = member else {
-                continue;
-            };
-            for contract_member in contract.members().iter() {
-                let ContractMember::FunctionDefinition(function) = contract_member else {
+        for contract in source_unit.contracts() {
+            for function in contract.functions() {
+                let Some(selector) = function.compute_selector() else {
                     continue;
                 };
-                if !matches!(
-                    function.visibility(),
-                    FunctionVisibility::External | FunctionVisibility::Public
-                ) {
-                    continue;
-                }
-                if let Ok((selector, signature)) =
-                    codegen::selector::SelectorComputer::compute(&function)
-                {
-                    let hex_str = selector
-                        .iter()
-                        .map(|b| format!("{b:02x}"))
-                        .collect::<String>();
-                    identifiers.insert(signature, hex_str);
-                }
+                let name = function.name().map(|id| id.name()).unwrap_or_default();
+                let parameter_types: Vec<String> = function
+                    .parameters()
+                    .iter()
+                    .filter_map(|parameter| {
+                        codegen::types::TypeMapper::canonical_type(&parameter.type_name()).ok()
+                    })
+                    .collect();
+                let signature = format!("{name}({})", parameter_types.join(","));
+                identifiers.insert(signature, format!("{selector:08x}"));
             }
         }
 

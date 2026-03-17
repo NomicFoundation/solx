@@ -10,13 +10,14 @@ pub mod state_mutability;
 pub(crate) mod statement;
 
 use melior::ir::BlockLike;
+use slang_solidity::backend::ir::ast::ElementaryType;
 use slang_solidity::backend::ir::ast::FunctionDefinition;
-use slang_solidity::backend::ir::ast::FunctionVisibility;
+use slang_solidity::backend::ir::ast::FunctionKind;
+use slang_solidity::backend::ir::ast::TypeName;
 
 use solx_mlir::Environment;
 
 use crate::slang::codegen::MlirContext;
-use crate::slang::codegen::selector::SelectorComputer;
 use crate::slang::codegen::types::TypeMapper;
 
 use self::expression::ExpressionEmitter;
@@ -51,15 +52,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         function: &FunctionDefinition,
         contract_body: &melior::ir::BlockRef<'context, '_>,
     ) -> anyhow::Result<String> {
-        let name = function
-            .name()
-            .map(|id| id.name())
-            .unwrap_or_else(|| "unnamed".to_owned());
+        let name = Self::mlir_base_name(function);
 
         let parameters = function.parameters();
         let parameter_types: Vec<String> = parameters
             .iter()
-            .map(|p| TypeMapper::canonical_type(&p.type_name()))
+            .map(|parameter| TypeMapper::canonical_type(&parameter.type_name()))
             .collect::<anyhow::Result<_>>()?;
         let mlir_name = format!("solx.fn.{name}({})", parameter_types.join(","));
 
@@ -74,17 +72,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let result_types: Vec<melior::ir::Type<'context>> =
             if has_returns { vec![i256] } else { vec![] };
 
-        // Compute selector for external/public functions.
-        let is_dispatched = matches!(
-            function.visibility(),
-            FunctionVisibility::External | FunctionVisibility::Public
-        );
-        let selector = if is_dispatched {
-            let (selector_bytes, _signature) = SelectorComputer::compute(function)?;
-            Some(u32::from_be_bytes(selector_bytes))
-        } else {
-            None
-        };
+        let selector = function.compute_selector();
 
         let state_mutability = Self::map_state_mutability(function);
 
@@ -115,7 +103,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             let pointer = expression_emitter.emit_alloca(&function_entry_block);
             expression_emitter.emit_store(parameter_value, pointer, &function_entry_block);
 
-            if TypeMapper::is_signed(&parameter.type_name()) {
+            if matches!(
+                parameter.type_name(),
+                TypeName::ElementaryType(ElementaryType::IntKeyword(_))
+            ) {
                 environment.mark_signed(&parameter_name);
             }
             environment.define_variable(parameter_name, pointer);
@@ -146,6 +137,22 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         Ok(mlir_name)
+    }
+
+    /// Returns the base name for a function's MLIR symbol, using its kind to
+    /// generate names for special functions (fallback, receive) that have no
+    /// Solidity-level identifier.
+    pub(crate) fn mlir_base_name(function: &FunctionDefinition) -> String {
+        match function.kind() {
+            FunctionKind::Regular => function
+                .name()
+                .expect("regular functions have a name")
+                .name(),
+            FunctionKind::Fallback | FunctionKind::Unnamed => "fallback".to_owned(),
+            FunctionKind::Receive => "receive".to_owned(),
+            FunctionKind::Constructor => "constructor".to_owned(),
+            FunctionKind::Modifier => unreachable!("modifiers are not emitted as functions"),
+        }
     }
 
     /// Maps Solidity function state mutability to Sol dialect `StateMutability`.

@@ -8,15 +8,16 @@ use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::RegionLike;
 
+use slang_solidity::backend::ir::ast::ElementaryType;
 use slang_solidity::backend::ir::ast::ForStatementCondition;
 use slang_solidity::backend::ir::ast::ForStatementInitialization;
 use slang_solidity::backend::ir::ast::Statement;
 use slang_solidity::backend::ir::ast::Statements;
+use slang_solidity::backend::ir::ast::TypeName;
 use solx_mlir::Environment;
 use solx_mlir::LoopTarget;
 
 use crate::slang::codegen::MlirContext;
-use crate::slang::codegen::types::TypeMapper;
 
 use crate::slang::codegen::source_unit::contract::function::expression::ExpressionEmitter;
 
@@ -107,9 +108,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let name = declaration.name().name();
-        let is_signed = declaration
-            .type_name()
-            .is_some_and(|ref t| TypeMapper::is_signed(t));
+        let is_signed = declaration.type_name().is_some_and(|ref type_name| {
+            matches!(
+                type_name,
+                TypeName::ElementaryType(ElementaryType::IntKeyword(_))
+            )
+        });
 
         let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
         let pointer = emitter.emit_alloca(&block);
