@@ -4,24 +4,22 @@
 
 /// Expression lowering to MLIR SSA values.
 pub(crate) mod expression;
-/// Sol dialect state mutability encoding.
-pub mod state_mutability;
 /// Statement lowering to MLIR operations.
 pub(crate) mod statement;
 
 use melior::ir::BlockLike;
+use slang_solidity::backend::abi::AbiEntry;
 use slang_solidity::backend::ir::ast::ElementaryType;
+use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::FunctionDefinition;
 use slang_solidity::backend::ir::ast::FunctionKind;
 use slang_solidity::backend::ir::ast::TypeName;
 
 use solx_mlir::Environment;
-
-use crate::slang::codegen::MlirContext;
-use crate::slang::codegen::types::TypeMapper;
+use solx_mlir::MlirContext;
+use solx_mlir::StateMutability;
 
 use self::expression::ExpressionEmitter;
-use self::state_mutability::StateMutability;
 use self::statement::StatementEmitter;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
@@ -52,14 +50,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         function: &FunctionDefinition,
         contract_body: &melior::ir::BlockRef<'context, '_>,
     ) -> anyhow::Result<String> {
-        let name = Self::mlir_base_name(function);
-
         let parameters = function.parameters();
-        let parameter_types: Vec<String> = parameters
-            .iter()
-            .map(|parameter| TypeMapper::canonical_type(&parameter.type_name()))
-            .collect::<anyhow::Result<_>>()?;
-        let mlir_name = format!("solx.fn.{name}({})", parameter_types.join(","));
+        let mlir_name = Self::mlir_function_name(function);
 
         let i256 = self.state.i256();
 
@@ -68,7 +60,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .is_some_and(|returns| !returns.is_empty());
 
         let mlir_parameter_types: Vec<melior::ir::Type<'context>> =
-            parameter_types.iter().map(|_| i256).collect();
+            (0..parameters.len()).map(|_| i256).collect();
         let result_types: Vec<melior::ir::Type<'context>> =
             if has_returns { vec![i256] } else { vec![] };
 
@@ -81,7 +73,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             &mlir_parameter_types,
             &result_types,
             selector,
-            state_mutability as u32,
+            state_mutability,
             contract_body,
         );
 
@@ -139,6 +131,26 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         Ok(mlir_name)
     }
 
+    /// Builds the mangled MLIR function name `solx.fn.{name}({types})`.
+    ///
+    /// Uses slang's ABI canonical types when available (external functions),
+    /// falls back to AST-based type names for internal/private functions.
+    pub(crate) fn mlir_function_name(function: &FunctionDefinition) -> String {
+        let name = Self::mlir_base_name(function);
+
+        if let Some(AbiEntry::Function { inputs, .. }) = function.compute_abi_entry() {
+            let types: Vec<&str> = inputs.iter().map(|p| p.r#type.as_str()).collect();
+            return format!("solx.fn.{name}({})", types.join(","));
+        }
+
+        let types: Vec<String> = function
+            .parameters()
+            .iter()
+            .map(|p| Self::type_name_text(&p.type_name()))
+            .collect();
+        format!("solx.fn.{name}({})", types.join(","))
+    }
+
     /// Returns the base name for a function's MLIR symbol, using its kind to
     /// generate names for special functions (fallback, receive) that have no
     /// Solidity-level identifier.
@@ -152,6 +164,44 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             FunctionKind::Receive => "receive".to_owned(),
             FunctionKind::Constructor => "constructor".to_owned(),
             FunctionKind::Modifier => unreachable!("modifiers are not emitted as functions"),
+        }
+    }
+
+    /// Returns a textual representation of a Solidity type name from the AST.
+    fn type_name_text(type_name: &TypeName) -> String {
+        match type_name {
+            TypeName::ElementaryType(elementary) => Self::elementary_type_text(elementary),
+            TypeName::IdentifierPath(path) => path.name(),
+            TypeName::ArrayTypeName(array) => {
+                let base = Self::type_name_text(&array.operand());
+                match array.index() {
+                    Some(Expression::DecimalNumberExpression(decimal)) => {
+                        format!("{base}[{}]", decimal.literal().text)
+                    }
+                    Some(Expression::HexNumberExpression(hex)) => {
+                        format!("{base}[{}]", hex.literal().text)
+                    }
+                    Some(_) => format!("{base}[]"),
+                    None => format!("{base}[]"),
+                }
+            }
+            TypeName::MappingType(_) => "mapping".to_owned(),
+            TypeName::FunctionType(_) => "function".to_owned(),
+        }
+    }
+
+    /// Returns the text for an elementary type from its AST node.
+    fn elementary_type_text(elementary: &ElementaryType) -> String {
+        match elementary {
+            ElementaryType::AddressType(_) => "address".to_owned(),
+            ElementaryType::BoolKeyword => "bool".to_owned(),
+            ElementaryType::ByteKeyword => "byte".to_owned(),
+            ElementaryType::StringKeyword => "string".to_owned(),
+            ElementaryType::UintKeyword(terminal)
+            | ElementaryType::IntKeyword(terminal)
+            | ElementaryType::BytesKeyword(terminal)
+            | ElementaryType::FixedKeyword(terminal)
+            | ElementaryType::UfixedKeyword(terminal) => terminal.text.clone(),
         }
     }
 

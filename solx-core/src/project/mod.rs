@@ -22,6 +22,8 @@ use self::contract::Contract;
 use self::contract::ir::IR as ContractIR;
 use self::contract::ir::evmla::EVMLegacyAssembly as ContractEVMLegacyAssembly;
 use self::contract::ir::llvm_ir::LLVMIR as ContractLLVMIR;
+#[cfg(feature = "mlir")]
+use self::contract::ir::mlir::MLIR as ContractMLIR;
 use self::contract::ir::yul::Yul as ContractYul;
 use self::contract::metadata::Metadata as ContractMetadata;
 
@@ -95,6 +97,7 @@ impl Project {
         debug_info: Option<solx_utils::DebugInfo>,
         output_config: Option<&solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<Self> {
+        #[cfg(not(feature = "mlir"))]
         if !via_ir {
             let legacy_assemblies: BTreeMap<
                 String,
@@ -156,32 +159,41 @@ impl Project {
                     .evm
                     .as_mut()
                     .and_then(|evm| evm.legacy_assembly.take());
-                let extra_metadata = contract
-                    .evm
-                    .as_mut()
-                    .and_then(|evm| evm.extra_metadata.take());
 
-                let result = if via_ir {
-                    contract.ir.as_deref().map(|ir| {
-                        ContractYul::try_from_source(name.full_path.as_str(), ir, output_config)
-                            .map(|yul| yul.map(ContractIR::from))
-                    })
-                } else {
-                    legacy_assembly.as_ref().map(|legacy_assembly| {
-                        Ok(Some(ContractIR::from(
-                            ContractEVMLegacyAssembly::from_contract(
-                                name.full_path.as_str(),
-                                legacy_assembly.to_owned(),
-                                extra_metadata,
-                            )?,
-                        )))
-                    })
-                };
+                #[cfg(feature = "mlir")]
+                let result = contract
+                    .mlir
+                    .take()
+                    .map(|source| Ok(Some(ContractIR::from(ContractMLIR { source }))));
+                #[cfg(not(feature = "mlir"))]
+                {
+                    let result = if via_ir {
+                        contract.ir.as_deref().map(|ir| {
+                            ContractYul::try_from_source(name.full_path.as_str(), ir, output_config)
+                                .map(|yul| yul.map(ContractIR::from))
+                        })
+                    } else {
+                        let extra_metadata = contract
+                            .evm
+                            .as_mut()
+                            .and_then(|evm| evm.extra_metadata.take());
+                        legacy_assembly.as_ref().map(|legacy_assembly| {
+                            Ok(Some(ContractIR::from(
+                                ContractEVMLegacyAssembly::from_contract(
+                                    name.full_path.as_str(),
+                                    legacy_assembly.to_owned(),
+                                    extra_metadata,
+                                )?,
+                            )))
+                        })
+                    };
+                }
                 let ir = match result {
                     Some(Ok(Some(ir))) => Some(ir),
                     Some(Err(error)) => return (name, Err(error)),
                     Some(Ok(None)) | None => None,
                 };
+
                 let contract = Contract::new(
                     name.clone(),
                     ir,

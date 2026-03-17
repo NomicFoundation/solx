@@ -68,17 +68,8 @@ fn main() -> anyhow::Result<()> {
         let compiler = solx_core::Compiler::new(&arguments);
         let result = if arguments.version {
             compiler.print_version(&frontend)
-        } else if arguments.llvm_ir || arguments.yul {
-            compiler.run(frontend, messages.clone())
         } else {
-            #[cfg(feature = "slang")]
-            {
-                solx_slang::SlangFrontend::main(arguments, frontend, messages.clone())
-            }
-            #[cfg(not(feature = "slang"))]
-            {
-                compiler.run(frontend, messages.clone())
-            }
+            compiler.run(frontend, messages.clone())
         };
         if let Err(error) = result {
             messages

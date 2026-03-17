@@ -21,5 +21,5 @@ melior = { version = "0.26", features = ["ods-dialects", "helpers"] }
 solx-codegen-evm = { path = "../solx-codegen-evm" }
 solx-core = { path = "../solx-core", features = ["mlir"] }
 solx-mlir = { path = "../solx-mlir" }
-solx-standard-json = { path = "../solx-standard-json" }
+solx-standard-json = { path = "../solx-standard-json", features = ["mlir"] }
 solx-utils = { path = "../solx-utils" }

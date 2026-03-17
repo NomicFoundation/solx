@@ -7,8 +7,7 @@ pub(crate) mod function;
 
 use slang_solidity::backend::ir::ast::ContractDefinition;
 
-use crate::slang::codegen::MlirContext;
-use crate::slang::codegen::types::TypeMapper;
+use solx_mlir::MlirContext;
 
 use self::function::FunctionEmitter;
 
@@ -37,11 +36,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let contract_name = contract.name().name();
 
         self.register_state_variables(contract);
-        self.pre_register_functions(contract)?;
+        self.pre_register_functions(contract);
 
         // Emit sol.contract and functions.
         let module_body = self.state.body();
-        let contract_body = self.state.emit_sol_contract(&contract_name, &module_body);
+        let contract_body = self.state.emit_sol_contract(
+            &contract_name,
+            solx_mlir::ContractKind::Contract,
+            &module_body,
+        );
 
         for function in contract.functions() {
             let emitter = FunctionEmitter::new(self.state);
@@ -61,26 +64,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
     /// Pre-registers all function signatures for call resolution before bodies
     /// are emitted.
-    fn pre_register_functions(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
+    fn pre_register_functions(&mut self, contract: &ContractDefinition) {
         for function in contract.functions() {
             let name = FunctionEmitter::mlir_base_name(&function);
-
-            let parameter_types: Vec<String> = function
-                .parameters()
-                .iter()
-                .map(|parameter| TypeMapper::canonical_type(&parameter.type_name()))
-                .collect::<anyhow::Result<_>>()?;
-            let mlir_name = format!("solx.fn.{name}({})", parameter_types.join(","));
-
+            let mlir_name = FunctionEmitter::mlir_function_name(&function);
+            let param_count = function.parameters().len();
             let has_returns = function.returns().is_some_and(|r| !r.is_empty());
 
-            self.state.register_function_signature(
-                &name,
-                mlir_name,
-                parameter_types.len(),
-                has_returns,
-            );
+            self.state
+                .register_function_signature(&name, mlir_name, param_count, has_returns);
         }
-        Ok(())
     }
 }

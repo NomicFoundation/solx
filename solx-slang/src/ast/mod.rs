@@ -2,6 +2,9 @@
 //! Slang AST construction from parsed compilation units.
 //!
 
+/// Source unit (top-level file) lowering to MLIR.
+pub(crate) mod source_unit;
+
 use std::collections::BTreeMap;
 use std::rc::Rc;
 

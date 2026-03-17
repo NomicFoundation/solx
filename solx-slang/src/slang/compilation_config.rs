@@ -10,18 +10,18 @@ use slang_solidity::compilation::CompilationBuilderConfig;
 use slang_solidity::cst::Cursor;
 
 /// Provides file reading and import resolution for the Slang compilation builder.
-pub struct SlangCompilationConfig {
+pub struct CompilationConfig {
     sources: BTreeMap<String, String>,
 }
 
-impl SlangCompilationConfig {
+impl CompilationConfig {
     /// Creates a new configuration from a map of file paths to source contents.
     pub fn new(sources: BTreeMap<String, String>) -> Self {
         Self { sources }
     }
 }
 
-impl CompilationBuilderConfig for SlangCompilationConfig {
+impl CompilationBuilderConfig for CompilationConfig {
     type Error = anyhow::Error;
 
     fn read_file(&mut self, file_identifier: &str) -> anyhow::Result<Option<String>> {

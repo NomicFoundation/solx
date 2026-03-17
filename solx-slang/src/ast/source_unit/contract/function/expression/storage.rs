@@ -1,0 +1,41 @@
+//!
+//! Storage load/store expression lowering via `inttoptr`.
+//!
+
+use melior::ir::BlockRef;
+use melior::ir::Value;
+use solx_utils::AddressSpace;
+
+use crate::ast::source_unit::contract::function::expression::ExpressionEmitter;
+
+impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+    /// Emits a storage load (`inttoptr` slot to `ptr addrspace(5)`, then `llvm.load`).
+    pub(super) fn emit_storage_load(
+        &self,
+        slot: u64,
+        block: &BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Value<'context, 'block>> {
+        let i256 = self.state.i256();
+        let storage_pointer_type = self.state.pointer(AddressSpace::Storage);
+        let slot_value = self.state.emit_i256_from_u64(slot, block);
+        let pointer = self
+            .state
+            .emit_inttoptr(slot_value, storage_pointer_type, block);
+        self.state.emit_load(pointer, i256, block)
+    }
+
+    /// Emits a storage store (`inttoptr` slot to `ptr addrspace(5)`, then `llvm.store`).
+    pub(super) fn emit_storage_store(
+        &self,
+        slot: u64,
+        value: Value<'context, 'block>,
+        block: &BlockRef<'context, 'block>,
+    ) {
+        let storage_pointer_type = self.state.pointer(AddressSpace::Storage);
+        let slot_value = self.state.emit_i256_from_u64(slot, block);
+        let pointer = self
+            .state
+            .emit_inttoptr(slot_value, storage_pointer_type, block);
+        self.state.emit_store(value, pointer, block);
+    }
+}

@@ -15,7 +15,6 @@ use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::operation::OperationBuilder;
-use melior::ir::r#type::IntegerType;
 
 use crate::ICmpPredicate;
 use crate::builder::MlirContext;
@@ -229,16 +228,7 @@ impl<'context> MlirContext<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        Ok(block
-            .append_operation(
-                OperationBuilder::new(operation_name, self.unknown_location)
-                    .add_operands(&[lhs, rhs])
-                    .add_results(&[result_type])
-                    .build()?,
-            )
-            .result(0)
-            .expect("operation always produces one result")
-            .into())
+        self.emit_binary_operation(operation_name, lhs, rhs, result_type, block)
     }
 
     /// Emits an `llvm.icmp` comparison returning `i1`.
@@ -257,26 +247,7 @@ impl<'context> MlirContext<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        block
-            .append_operation(
-                OperationBuilder::new(crate::ops::ICMP, self.unknown_location)
-                    .add_operands(&[lhs, rhs])
-                    .add_attributes(&[(
-                        Identifier::new(self.context, "predicate"),
-                        IntegerAttribute::new(
-                            IntegerType::new(self.context, Self::PREDICATE_ATTRIBUTE_BIT_WIDTH)
-                                .into(),
-                            predicate as i64,
-                        )
-                        .into(),
-                    )])
-                    .add_results(&[self.i1_type])
-                    .build()
-                    .expect("llvm.icmp operation is well-formed"),
-            )
-            .result(0)
-            .expect("icmp always produces one result")
-            .into()
+        self.emit_comparison(crate::ops::ICMP, lhs, rhs, predicate as i64, block)
     }
 
     // ---- Calls ----
@@ -330,6 +301,50 @@ impl<'context> MlirContext<'context> {
             Ok(None)
         } else {
             Ok(Some(operation.result(0)?.into()))
+        }
+    }
+
+    // ---- EVM Intrinsics ----
+
+    /// Emits an EVM intrinsic as a direct MLIR operation.
+    ///
+    /// EVM intrinsics (`llvm.evm.caller`, `llvm.evm.call`, etc.) are MLIR
+    /// operations, not function calls — they must be emitted via
+    /// `OperationBuilder`, not `llvm.call`.
+    ///
+    /// Returns `Some(value)` when `has_result` is true, `None` for void
+    /// intrinsics.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the operation cannot be constructed or the result
+    /// cannot be extracted.
+    pub fn emit_evm_intrinsic<'block, B>(
+        &self,
+        name: &str,
+        operands: &[Value<'context, 'block>],
+        has_result: bool,
+        block: &B,
+    ) -> anyhow::Result<Option<Value<'context, 'block>>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let result_types: Vec<Type<'context>> = if has_result {
+            vec![self.i256_type]
+        } else {
+            vec![]
+        };
+        let operation = block.append_operation(
+            OperationBuilder::new(name, self.unknown_location)
+                .add_operands(operands)
+                .add_results(&result_types)
+                .build()?,
+        );
+        if has_result {
+            Ok(Some(operation.result(0)?.into()))
+        } else {
+            Ok(None)
         }
     }
 

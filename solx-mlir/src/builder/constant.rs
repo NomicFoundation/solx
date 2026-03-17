@@ -9,8 +9,11 @@
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::Identifier;
+use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::attribute::IntegerAttribute;
 use melior::ir::operation::OperationBuilder;
+use melior::ir::r#type::IntegerType;
 
 use crate::builder::MlirContext;
 
@@ -73,6 +76,66 @@ impl<'context> MlirContext<'context> {
         'context: 'block,
     {
         self.emit_constant_operation(crate::ops::sol::CONSTANT, attribute, block)
+    }
+
+    /// Shared helper for emitting a two-operand operation with one result.
+    pub(crate) fn emit_binary_operation<'block, B>(
+        &self,
+        operation_name: &str,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        result_type: Type<'context>,
+        block: &B,
+    ) -> anyhow::Result<Value<'context, 'block>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Ok(block
+            .append_operation(
+                OperationBuilder::new(operation_name, self.unknown_location)
+                    .add_operands(&[lhs, rhs])
+                    .add_results(&[result_type])
+                    .build()?,
+            )
+            .result(0)
+            .expect("binary operation always produces one result")
+            .into())
+    }
+
+    /// Shared helper for emitting a comparison operation returning `i1`.
+    pub(crate) fn emit_comparison<'block, B>(
+        &self,
+        operation_name: &str,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        predicate: i64,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                OperationBuilder::new(operation_name, self.unknown_location)
+                    .add_operands(&[lhs, rhs])
+                    .add_attributes(&[(
+                        Identifier::new(self.context, "predicate"),
+                        IntegerAttribute::new(
+                            IntegerType::new(self.context, Self::PREDICATE_ATTRIBUTE_BIT_WIDTH)
+                                .into(),
+                            predicate,
+                        )
+                        .into(),
+                    )])
+                    .add_results(&[self.i1_type])
+                    .build()
+                    .expect("comparison operation is well-formed"),
+            )
+            .result(0)
+            .expect("comparison always produces one result")
+            .into()
     }
 
     /// Shared helper for emitting a constant operation with an attribute.

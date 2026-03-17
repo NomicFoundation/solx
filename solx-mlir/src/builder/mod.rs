@@ -15,13 +15,10 @@ use std::collections::HashMap;
 
 use melior::ir::Attribute;
 use melior::ir::AttributeLike;
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Location;
 use melior::ir::Module;
 use melior::ir::Type;
-use melior::ir::attribute::StringAttribute;
-use melior::ir::operation::OperationLike;
 use melior::ir::r#type::IntegerType;
 
 use solx_utils::AddressSpace;
@@ -51,6 +48,8 @@ pub struct MlirContext<'context> {
     state_variables: HashMap<String, u64>,
     /// All function signatures for call resolution (bare name -> overloads).
     function_signatures: HashMap<String, Vec<FunctionSignature>>,
+    /// Cached `!sol.ptr<i256, Stack>` type for alloca operations.
+    sol_ptr_type: Type<'context>,
 }
 
 impl<'context> MlirContext<'context> {
@@ -62,12 +61,6 @@ impl<'context> MlirContext<'context> {
     /// Bit width of each limb for wide constant decomposition.
     const LIMB_BIT_WIDTH: i64 = solx_utils::BIT_LENGTH_X32 as i64;
 
-    /// Sol dialect `EvmVersion::Cancun` enum value.
-    const EVM_VERSION_CANCUN: u32 = 11;
-
-    /// Sol dialect `ContractKind::Contract` enum value.
-    const CONTRACT_KIND_CONTRACT: u32 = 1;
-
     /// Bit width of a Solidity function selector (4 bytes).
     const SELECTOR_BIT_WIDTH: u32 = 32;
 
@@ -77,18 +70,18 @@ impl<'context> MlirContext<'context> {
     ///
     /// Sets the `sol.evm_version` module attribute required by the
     /// `convert-sol-to-std` pass.
-    pub fn new(context: &'context melior::Context) -> Self {
+    pub fn new(context: &'context melior::Context, evm_version: crate::EvmVersion) -> Self {
         let location = Location::unknown(context);
         let module = Module::new(location);
 
         // Set the EVM version attribute on the module — required by the
-        // Sol-to-standard conversion pass. Default to Cancun.
+        // Sol-to-standard conversion pass.
         // SAFETY: `solxCreateEvmVersionAttr` returns a valid MlirAttribute
         // from the C++ Sol dialect. The context pointer is valid.
         let evm_version_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateEvmVersionAttr(
                 context.to_raw(),
-                Self::EVM_VERSION_CANCUN,
+                evm_version as u32,
             ))
         };
         // SAFETY: Setting a named attribute on the module operation. Both
@@ -111,73 +104,16 @@ impl<'context> MlirContext<'context> {
             functions: Vec::new(),
             state_variables: HashMap::new(),
             function_signatures: HashMap::new(),
+            sol_ptr_type: Type::parse(context, "!sol.ptr<i256, Stack>")
+                .expect("valid sol.ptr type syntax"),
         }
     }
 
     // ---- Public self (consuming) ----
 
-    /// Consumes the state, runs the Sol-to-LLVM pass pipeline, and returns
-    /// the resulting LLVM dialect MLIR as text.
-    ///
-    /// The Sol conversion pass produces a nested module structure:
-    /// ```text
-    /// module @Contract { deploy __entry + module @Contract_deployed { runtime __entry } }
-    /// ```
-    /// `solx-core` provides its own deploy wrapper, so this method extracts
-    /// only the inner `_deployed` module and renames it to
-    /// `runtime_code_identifier` so the LLVM module identifier matches what
-    /// `minimal_deploy_code` references.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if re-parsing fails, the pass pipeline fails, or
-    /// the deployed module is not found.
-    pub fn into_mlir_source(self, runtime_code_identifier: &str) -> anyhow::Result<String> {
-        // Re-parse to promote OperationBuilder dict attributes to properties.
-        let sol_text = self.module.as_operation().to_string();
-        let mut parsed_module =
-            melior::ir::Module::parse(self.context, &sol_text).ok_or_else(|| {
-                anyhow::anyhow!("failed to re-parse generated Sol dialect MLIR:\n{sol_text}")
-            })?;
-
-        // Lower Sol → LLVM dialect.
-        crate::Context::run_sol_passes(self.context, &mut parsed_module)
-            .map_err(|e| anyhow::anyhow!("Sol pass pipeline: {e}"))?;
-
-        // Walk the outer module's body to find the inner `_deployed` module
-        // and extract it as the runtime code. Rename it so the LLVM module
-        // identifier matches what the deploy stub references.
-        let body = parsed_module.body();
-        let mut deployed_operation = None;
-        let mut operation = body.first_operation();
-        while let Some(current) = operation {
-            if current.name().as_string_ref().as_str().unwrap_or("") == "builtin.module"
-                && let Ok(symbol) = current.attribute("sym_name")
-            {
-                let symbol_string = symbol.to_string();
-                if symbol_string.contains("_deployed") {
-                    deployed_operation = Some(current);
-                    break;
-                }
-            }
-            operation = current.next_in_block();
-        }
-
-        let runtime_op = deployed_operation
-            .ok_or_else(|| anyhow::anyhow!("no _deployed module in Sol pass output"))?;
-
-        // SAFETY: Setting `sym_name` on a valid MLIR operation. The
-        // operation, string ref, and attribute are all valid MLIR objects.
-        unsafe {
-            mlir_sys::mlirOperationSetAttributeByName(
-                runtime_op.to_raw(),
-                mlir_sys::mlirStringRefCreateFromCString(c"sym_name".as_ptr()),
-                StringAttribute::new(self.context, runtime_code_identifier).to_raw(),
-            );
-        }
-
-        // Serialize only the deployed module (now with the right name).
-        Ok(runtime_op.to_string())
+    /// Consumes the builder and returns the accumulated MLIR module.
+    pub fn into_module(self) -> Module<'context> {
+        self.module
     }
 
     // ---- Public &mut self ----

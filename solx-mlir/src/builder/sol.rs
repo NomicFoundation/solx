@@ -24,6 +24,8 @@ use melior::ir::operation::OperationLike;
 use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
 
+use crate::StateMutability;
+
 use crate::builder::MlirContext;
 
 impl<'context> MlirContext<'context> {
@@ -40,6 +42,7 @@ impl<'context> MlirContext<'context> {
     pub fn emit_sol_contract<'block>(
         &'block self,
         name: &str,
+        kind: crate::ContractKind,
         block: &BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
         let body_region = Region::new();
@@ -58,7 +61,7 @@ impl<'context> MlirContext<'context> {
                     (Identifier::new(self.context, "kind"), unsafe {
                         Attribute::from_raw(crate::ffi::solxCreateContractKindAttr(
                             self.context.to_raw(),
-                            Self::CONTRACT_KIND_CONTRACT,
+                            kind as u32,
                         ))
                     }),
                 ])
@@ -87,7 +90,7 @@ impl<'context> MlirContext<'context> {
         parameter_types: &[Type<'context>],
         result_types: &[Type<'context>],
         selector: Option<u32>,
-        state_mutability: u32,
+        state_mutability: StateMutability,
         block: &BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
         let function_type = FunctionType::new(self.context, parameter_types, result_types);
@@ -104,7 +107,7 @@ impl<'context> MlirContext<'context> {
         let mutability_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateStateMutabilityAttr(
                 self.context.to_raw(),
-                state_mutability,
+                state_mutability as u32,
             ))
         };
 
@@ -279,16 +282,7 @@ impl<'context> MlirContext<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        Ok(block
-            .append_operation(
-                OperationBuilder::new(operation_name, self.unknown_location)
-                    .add_operands(&[lhs, rhs])
-                    .add_results(&[result_type])
-                    .build()?,
-            )
-            .result(0)
-            .expect("sol binop always produces one result")
-            .into())
+        self.emit_binary_operation(operation_name, lhs, rhs, result_type, block)
     }
 
     /// Emits a `sol.cmp` comparison returning `i1`.
@@ -307,26 +301,87 @@ impl<'context> MlirContext<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
+        self.emit_comparison(crate::ops::sol::CMP, lhs, rhs, predicate as i64, block)
+    }
+
+    // ---- Memory ----
+
+    /// Emits a `sol.alloca` for a local variable, returning the pointer.
+    ///
+    /// Returns a `!sol.ptr<i256, Stack>` pointer type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR type or operation cannot be constructed, indicating
+    /// a bug in the builder.
+    pub fn emit_sol_alloca<'block, B>(&self, block: &B) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
         block
             .append_operation(
-                OperationBuilder::new(crate::ops::sol::CMP, self.unknown_location)
-                    .add_operands(&[lhs, rhs])
+                OperationBuilder::new(crate::ops::sol::ALLOCA, self.unknown_location)
                     .add_attributes(&[(
-                        Identifier::new(self.context, "predicate"),
-                        IntegerAttribute::new(
-                            IntegerType::new(self.context, Self::PREDICATE_ATTRIBUTE_BIT_WIDTH)
-                                .into(),
-                            predicate as i64,
-                        )
-                        .into(),
+                        Identifier::new(self.context, "alloc_type"),
+                        TypeAttribute::new(self.i256_type).into(),
                     )])
-                    .add_results(&[self.i1_type])
+                    .add_results(&[self.sol_ptr_type])
                     .build()
-                    .expect("sol.cmp operation is well-formed"),
+                    .expect("sol.alloca operation is well-formed"),
             )
             .result(0)
-            .expect("sol.cmp always produces one result")
+            .expect("sol.alloca always produces one result")
             .into()
+    }
+
+    /// Emits a `sol.store` to a pointer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a bug
+    /// in the builder.
+    pub fn emit_sol_store<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        pointer: Value<'context, 'block>,
+        block: &B,
+    ) where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block.append_operation(
+            OperationBuilder::new(crate::ops::sol::STORE, self.unknown_location)
+                .add_operands(&[value, pointer])
+                .build()
+                .expect("sol.store operation is well-formed"),
+        );
+    }
+
+    /// Emits a `sol.load` from a pointer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the load operation result cannot be extracted.
+    pub fn emit_sol_load<'block, B>(
+        &self,
+        pointer: Value<'context, 'block>,
+        block: &B,
+    ) -> anyhow::Result<Value<'context, 'block>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Ok(block
+            .append_operation(
+                OperationBuilder::new(crate::ops::sol::LOAD, self.unknown_location)
+                    .add_operands(&[pointer])
+                    .add_results(&[self.i256_type])
+                    .build()
+                    .expect("sol.load operation is well-formed"),
+            )
+            .result(0)?
+            .into())
     }
 
     // ---- Calls ----
