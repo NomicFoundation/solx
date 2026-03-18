@@ -12,8 +12,8 @@ use slang_solidity::backend::ir::ast::Statement;
 use slang_solidity::backend::ir::ast::Statements;
 use slang_solidity::backend::ir::ast::TypeName;
 
+use solx_mlir::Context;
 use solx_mlir::Environment;
-use solx_mlir::MlirContext;
 
 use crate::ast::source_unit::contract::function::expression::ExpressionEmitter;
 
@@ -23,7 +23,7 @@ use crate::ast::source_unit::contract::function::expression::ExpressionEmitter;
 /// flow has been terminated (by `return`, `break`, or `continue`).
 pub(crate) struct StatementEmitter<'state, 'context, 'block> {
     /// The shared MLIR context.
-    state: &'state MlirContext<'context>,
+    state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
     environment: &'state mut Environment<'context, 'block>,
     /// The function region for creating new blocks.
@@ -33,7 +33,7 @@ pub(crate) struct StatementEmitter<'state, 'context, 'block> {
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Creates a new statement emitter.
     pub(crate) fn new(
-        state: &'state MlirContext<'context>,
+        state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
         region: &'state Region<'context>,
     ) -> Self {

@@ -146,22 +146,22 @@ impl Frontend for SlangFrontend {
         }
 
         let semantic_ast = crate::SemanticAst::build(&unit);
-        let mlir_context = solx_mlir::Context::new();
+        let melior_context = solx_mlir::Context::create_mlir_context();
 
         for file_identifier in semantic_ast.file_identifiers() {
             let Some(source_unit) = semantic_ast.file_ast(file_identifier) else {
                 continue;
             };
 
-            let mut builder =
-                solx_mlir::MlirContext::new(mlir_context.mlir(), solx_mlir::EvmVersion::Cancun);
-            let mut emitter = crate::ast::source_unit::SourceUnitEmitter::new(&mut builder);
+            let mut context =
+                solx_mlir::Context::new(&melior_context, solx_mlir::EvmVersion::Cancun);
+            let mut emitter = crate::ast::source_unit::SourceUnitEmitter::new(&mut context);
             let Some((contract_name, method_identifiers)) = emitter.emit(&source_unit)? else {
                 continue;
             };
 
             let runtime_code_id = format!("{contract_name}_deployed");
-            let mlir_source = mlir_context.finalize_module(builder, &runtime_code_id)?;
+            let mlir_source = context.finalize_module(&runtime_code_id)?;
 
             let evm = if method_identifiers.is_empty() {
                 None

@@ -481,10 +481,12 @@ impl Contract {
                     }
                 };
 
-                let mlir_context = solx_mlir::Context::new();
-                let llvm_module = mlir_context
-                    .try_into_llvm_module_from_source(&mlir.source)
-                    .context("MLIR translation")?;
+                let melior_context = solx_mlir::Context::create_mlir_context();
+                let llvm_module = solx_mlir::Context::translate_source_to_llvm_module(
+                    &melior_context,
+                    &mlir.source,
+                )
+                .context("MLIR translation")?;
 
                 let (raw_module, raw_context) = llvm_module.into_raw();
                 let llvm = unsafe { inkwell::context::Context::new(raw_context) };

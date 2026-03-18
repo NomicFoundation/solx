@@ -5,10 +5,10 @@
 use melior::ir::Module as MlirModule;
 use melior::ir::operation::OperationLike;
 
-use crate::context::Context;
+use crate::builder::Context;
 use crate::llvm_module::LlvmModule;
 
-impl Context {
+impl<'context> Context<'context> {
     /// Translate MLIR source text (LLVM dialect) to a binary LLVM module.
     ///
     /// Parses the source, verifies it, and translates to LLVM IR.
@@ -19,11 +19,14 @@ impl Context {
     ///
     /// Returns an error if the source cannot be parsed, fails verification,
     /// or cannot be translated to LLVM IR.
-    pub fn try_into_llvm_module_from_source(&self, source: &str) -> anyhow::Result<LlvmModule> {
-        let module = MlirModule::parse(self.mlir(), source)
+    pub fn translate_source_to_llvm_module(
+        context: &melior::Context,
+        source: &str,
+    ) -> anyhow::Result<LlvmModule> {
+        let module = MlirModule::parse(context, source)
             .ok_or_else(|| anyhow::anyhow!("failed to parse MLIR source text"))?;
 
-        self.try_into_llvm_module(&module)
+        Self::translate_module_to_llvm(&module)
     }
 
     /// Run the Sol dialect conversion pipeline on a module, lowering all Sol
@@ -35,24 +38,26 @@ impl Context {
     ///
     /// Returns an error if the pass pipeline fails or the resulting module
     /// cannot be translated to LLVM IR.
-    pub fn try_into_llvm_module_from_sol(
-        &self,
+    pub fn translate_sol_module_to_llvm(
+        context: &melior::Context,
         module: &mut MlirModule,
     ) -> anyhow::Result<LlvmModule> {
-        Self::run_sol_passes(self.mlir(), module)?;
-        self.try_into_llvm_module(module)
+        Self::run_sol_passes(context, module)?;
+        Self::translate_module_to_llvm(module)
     }
 
     /// Translate an MLIR module (LLVM dialect) to a binary `LLVMModuleRef`.
     ///
     /// No text serialization — returns the in-memory LLVM module directly.
-    /// The context already has `register_all_llvm_translations` applied.
+    /// The caller must ensure the `melior::Context` used to create the module
+    /// has `register_all_llvm_translations` applied (guaranteed by
+    /// [`Self::create_mlir_context`]).
     ///
     /// # Errors
     ///
     /// Returns an error if the module fails verification or the LLVM
     /// translation returns null.
-    pub fn try_into_llvm_module(&self, mlir_module: &MlirModule) -> anyhow::Result<LlvmModule> {
+    pub fn translate_module_to_llvm(mlir_module: &MlirModule) -> anyhow::Result<LlvmModule> {
         if !mlir_module.as_operation().verify() {
             anyhow::bail!("MLIR module verification failed");
         }
@@ -60,7 +65,8 @@ impl Context {
         // SAFETY: `raw_operation` is a valid MlirOperation from a verified
         // module. `LLVMContextCreate` returns a fresh context. The LLVM
         // translation is safe because `register_all_llvm_translations` was
-        // called in `new()`. Null-check guards the module pointer.
+        // called in `create_mlir_context()`. Null-check guards the module
+        // pointer.
         unsafe {
             let raw_operation = mlir_module.as_operation().to_raw();
             let llvm_context = inkwell::llvm_sys::core::LLVMContextCreate();

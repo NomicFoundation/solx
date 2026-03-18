@@ -7,7 +7,7 @@ pub(crate) mod function;
 
 use slang_solidity::backend::ir::ast::ContractDefinition;
 
-use solx_mlir::MlirContext;
+use solx_mlir::Context;
 
 use self::function::FunctionEmitter;
 
@@ -18,12 +18,12 @@ use self::function::FunctionEmitter;
 /// from the function selectors.
 pub(crate) struct ContractEmitter<'state, 'context> {
     /// The shared MLIR context.
-    state: &'state mut MlirContext<'context>,
+    state: &'state mut Context<'context>,
 }
 
 impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// Creates a new contract emitter.
-    pub(crate) fn new(state: &'state mut MlirContext<'context>) -> Self {
+    pub(crate) fn new(state: &'state mut Context<'context>) -> Self {
         Self { state }
     }
 

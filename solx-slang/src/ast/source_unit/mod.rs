@@ -11,19 +11,19 @@ use slang_solidity::backend::abi::AbiEntry;
 use slang_solidity::backend::ir::ast::ContractMember;
 use slang_solidity::backend::ir::ast::SourceUnit;
 
-use solx_mlir::MlirContext;
+use solx_mlir::Context;
 
 use self::contract::ContractEmitter;
 
 /// Walks a `SourceUnit` and lowers its contract definitions to MLIR.
 pub(crate) struct SourceUnitEmitter<'state, 'context> {
     /// The shared MLIR context.
-    state: &'state mut MlirContext<'context>,
+    state: &'state mut Context<'context>,
 }
 
 impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
     /// Creates a new source unit emitter.
-    pub(crate) fn new(state: &'state mut MlirContext<'context>) -> Self {
+    pub(crate) fn new(state: &'state mut Context<'context>) -> Self {
         Self { state }
     }
 

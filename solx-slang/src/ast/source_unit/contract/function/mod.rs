@@ -15,8 +15,8 @@ use slang_solidity::backend::ir::ast::FunctionDefinition;
 use slang_solidity::backend::ir::ast::FunctionKind;
 use slang_solidity::backend::ir::ast::TypeName;
 
+use solx_mlir::Context;
 use solx_mlir::Environment;
-use solx_mlir::MlirContext;
 use solx_mlir::StateMutability;
 
 use self::expression::ExpressionEmitter;
@@ -25,12 +25,12 @@ use self::statement::StatementEmitter;
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub(crate) struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
-    state: &'state MlirContext<'context>,
+    state: &'state Context<'context>,
 }
 
 impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
-    pub(crate) fn new(state: &'state MlirContext<'context>) -> Self {
+    pub(crate) fn new(state: &'state Context<'context>) -> Self {
         Self { state }
     }
 

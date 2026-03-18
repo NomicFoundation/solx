@@ -1,7 +1,7 @@
 //!
 //! Sol dialect operations for the MLIR builder.
 //!
-//! Contains methods on [`MlirContext`] that emit Sol dialect MLIR
+//! Contains methods on [`Context`] that emit Sol dialect MLIR
 //! operations: contracts, functions, constants, returns, and calls.
 //!
 
@@ -25,9 +25,9 @@ use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
 
 use crate::StateMutability;
-use crate::builder::MlirContext;
+use crate::builder::Context;
 
-impl<'context> MlirContext<'context> {
+impl<'context> Context<'context> {
     // ---- Structure ----
 
     /// Emits a `sol.contract` operation with a body region.

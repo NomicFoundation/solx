@@ -8,12 +8,12 @@ use melior::ir::Module as MlirModule;
 use melior::ir::operation::OperationLike;
 use melior::pass::PassManager;
 
-use crate::context::Context;
+use crate::builder::Context;
 
 /// MLIR `builtin.module` operation name used to locate nested modules.
 const BUILTIN_MODULE: &str = "builtin.module";
 
-impl Context {
+impl<'context> Context<'context> {
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
     ///
     /// The pass pipeline is:
@@ -82,21 +82,15 @@ impl Context {
     ///
     /// Returns an error if re-parsing fails, the pass pipeline fails, or
     /// the deployed module is not found.
-    pub fn finalize_module(
-        &self,
-        builder: crate::MlirContext<'_>,
-        runtime_code_identifier: &str,
-    ) -> anyhow::Result<String> {
-        let module = builder.into_module();
-
+    pub fn finalize_module(self, runtime_code_identifier: &str) -> anyhow::Result<String> {
         // Re-parse to promote OperationBuilder dict attributes to properties.
-        let sol_text = module.as_operation().to_string();
-        let mut parsed_module = MlirModule::parse(self.mlir(), &sol_text).ok_or_else(|| {
+        let sol_text = self.module.as_operation().to_string();
+        let mut parsed_module = MlirModule::parse(self.context, &sol_text).ok_or_else(|| {
             anyhow::anyhow!("failed to re-parse generated Sol dialect MLIR:\n{sol_text}")
         })?;
 
         // Lower Sol → LLVM dialect.
-        Self::run_sol_passes(self.mlir(), &mut parsed_module)?;
+        Self::run_sol_passes(self.context, &mut parsed_module)?;
 
         // Walk the outer module's body to find the inner `_deployed` module
         // and extract it as the runtime code. Rename it so the LLVM module
@@ -126,7 +120,7 @@ impl Context {
             mlir_sys::mlirOperationSetAttributeByName(
                 runtime_op.to_raw(),
                 mlir_sys::mlirStringRefCreateFromCString(c"sym_name".as_ptr()),
-                melior::ir::attribute::StringAttribute::new(self.mlir(), runtime_code_identifier)
+                melior::ir::attribute::StringAttribute::new(self.context, runtime_code_identifier)
                     .to_raw(),
             );
         }

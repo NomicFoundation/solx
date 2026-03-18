@@ -13,14 +13,14 @@ use melior::ir::Value;
 use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
 
+use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::ICmpPredicate;
-use solx_mlir::MlirContext;
 
 /// Lowers Solidity expressions to MLIR SSA values.
 pub(crate) struct ExpressionEmitter<'state, 'context, 'block> {
     /// The shared MLIR context.
-    state: &'state MlirContext<'context>,
+    state: &'state Context<'context>,
     /// Variable environment.
     environment: &'state Environment<'context, 'block>,
     /// The function region for creating new blocks.
@@ -33,7 +33,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Creates a new expression emitter.
     pub(crate) fn new(
-        state: &'state MlirContext<'context>,
+        state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
         region: &'state Region<'context>,
     ) -> Self {

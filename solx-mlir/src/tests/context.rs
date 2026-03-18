@@ -6,31 +6,31 @@ use crate::Context;
 
 #[test]
 fn new_empty_module_verifies() {
-    let context = Context::new();
-    let module = melior::ir::Module::parse(context.mlir(), "module {}").expect("MLIR should parse");
+    let context = Context::create_mlir_context();
+    let module = melior::ir::Module::parse(&context, "module {}").expect("MLIR should parse");
     assert!(module.as_operation().verify());
 }
 
 #[test]
 fn run_sol_passes_empty_contract_succeeds() {
-    let context = Context::new();
+    let context = Context::create_mlir_context();
     let mlir_text = r#"
 module {
   sol.contract @Test {
   } {kind = #sol<ContractKind Contract>}
 }
 "#;
-    let mut module = melior::ir::Module::parse(context.mlir(), mlir_text).expect("parse failed");
+    let mut module = melior::ir::Module::parse(&context, mlir_text).expect("parse failed");
     assert!(
         module.as_operation().verify(),
         "pre-pass verification failed"
     );
-    Context::run_sol_passes(context.mlir(), &mut module).expect("sol passes should succeed");
+    Context::run_sol_passes(&context, &mut module).expect("sol passes should succeed");
 }
 
 #[test]
 fn run_sol_passes_with_function_succeeds() {
-    let context = Context::new();
+    let context = Context::create_mlir_context();
     let mlir_text = r#"
 module attributes {sol.evm_version = #sol<EvmVersion Cancun>} {
   sol.contract @Test {
@@ -48,12 +48,12 @@ module attributes {sol.evm_version = #sol<EvmVersion Cancun>} {
   } {kind = #sol<ContractKind Contract>}
 }
 "#;
-    let mut module = melior::ir::Module::parse(context.mlir(), mlir_text).expect("parse failed");
+    let mut module = melior::ir::Module::parse(&context, mlir_text).expect("parse failed");
     assert!(
         module.as_operation().verify(),
         "pre-pass verification failed"
     );
-    Context::run_sol_passes(context.mlir(), &mut module).expect("sol passes should succeed");
+    Context::run_sol_passes(&context, &mut module).expect("sol passes should succeed");
 }
 
 #[test]
@@ -75,8 +75,8 @@ fn translate_llvm_dialect_to_llvm_module() {
     }
     "#;
 
-    let llvm_module = Context::new()
-        .try_into_llvm_module_from_source(MLIR_SOURCE)
+    let context = Context::create_mlir_context();
+    let llvm_module = Context::translate_source_to_llvm_module(&context, MLIR_SOURCE)
         .expect("MLIR to LLVM translation failed");
     assert!(
         !llvm_module.as_raw().is_null(),

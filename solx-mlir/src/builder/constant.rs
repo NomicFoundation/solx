@@ -15,9 +15,9 @@ use melior::ir::attribute::IntegerAttribute;
 use melior::ir::operation::OperationBuilder;
 use melior::ir::r#type::IntegerType;
 
-use crate::builder::MlirContext;
+use crate::builder::Context;
 
-impl<'context> MlirContext<'context> {
+impl<'context> Context<'context> {
     /// Maximum number of 32-bit limbs in a 256-bit integer (256 / 32).
     const MAX_LIMB_COUNT: usize = 8;
 

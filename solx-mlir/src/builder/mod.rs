@@ -1,7 +1,7 @@
 //!
 //! MLIR module builder for EVM code generation.
 //!
-//! Provides the [`MlirContext`] type that accumulates MLIR operations into a
+//! Provides the [`Context`] type that accumulates MLIR operations into a
 //! module. Frontends (e.g. `solx-slang`) use this to emit LLVM dialect
 //! operations without dealing with raw `melior` API details.
 //!
@@ -9,10 +9,14 @@
 pub(crate) mod constant;
 pub(crate) mod function_signature;
 pub(crate) mod llvm;
+pub(crate) mod passes;
 pub(crate) mod sol;
+pub(crate) mod translation;
 
 use std::collections::HashMap;
+use std::sync::Once;
 
+use melior::dialect::DialectRegistry;
 use melior::ir::Attribute;
 use melior::ir::AttributeLike;
 use melior::ir::BlockRef;
@@ -31,7 +35,10 @@ use self::function_signature::FunctionSignature;
 ///
 /// Owns a `melior::ir::Module` being populated and provides helpers for
 /// creating common MLIR types, SSA naming, and function registration.
-pub struct MlirContext<'context> {
+/// Also provides pass pipeline execution and LLVM translation.
+///
+/// Mirrors the single-context pattern used by `solx-codegen-evm`.
+pub struct Context<'context> {
     /// The MLIR context with all dialects and translations registered.
     context: &'context melior::Context,
     /// The MLIR module being built.
@@ -52,7 +59,7 @@ pub struct MlirContext<'context> {
     sol_ptr_type: Type<'context>,
 }
 
-impl<'context> MlirContext<'context> {
+impl<'context> Context<'context> {
     // ---- Private constants ----
 
     /// Bit width for ICmp predicate attributes.
@@ -63,6 +70,51 @@ impl<'context> MlirContext<'context> {
 
     /// Bit width of a Solidity function selector (4 bytes).
     const SELECTOR_BIT_WIDTH: u32 = 32;
+
+    // ---- Public static ----
+
+    /// Creates a fully-initialized `melior::Context` with all upstream
+    /// dialects, Sol dialect, Yul dialect, and LLVM translation interfaces
+    /// registered.
+    ///
+    /// `register_all_llvm_translations` MUST be called before any
+    /// MLIR-to-LLVM translation. Without it, `mlirTranslateModuleToLLVMIR`
+    /// returns null. This function enforces that invariant.
+    pub fn create_mlir_context() -> melior::Context {
+        let registry = DialectRegistry::new();
+        melior::utility::register_all_dialects(&registry);
+
+        // SAFETY: FFI calls to register Sol and Yul dialects into the
+        // registry. The registry and dialect handles are valid C objects
+        // produced by the MLIR C API; no aliasing or lifetime issues.
+        unsafe {
+            crate::ffi::mlirDialectHandleInsertDialect(
+                crate::ffi::mlirGetDialectHandle__sol__(),
+                registry.to_raw(),
+            );
+            crate::ffi::mlirDialectHandleInsertDialect(
+                crate::ffi::mlirGetDialectHandle__yul__(),
+                registry.to_raw(),
+            );
+        }
+
+        let context = melior::Context::new();
+        context.append_dialect_registry(&registry);
+        context.load_all_available_dialects();
+        melior::utility::register_all_llvm_translations(&context);
+
+        // Register Sol dialect passes so they can be added to a PassManager.
+        // Only call once — double-registration may crash.
+        static REGISTER_PASSES: Once = Once::new();
+        // SAFETY: `mlirRegisterSolPasses` is idempotent within a single
+        // call but must not be called concurrently. `Once` guarantees
+        // single-threaded, one-time execution.
+        REGISTER_PASSES.call_once(|| unsafe {
+            crate::ffi::mlirRegisterSolPasses();
+        });
+
+        context
+    }
 
     // ---- Constructor ----
 

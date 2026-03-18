@@ -1,7 +1,7 @@
 //!
 //! LLVM dialect operations for the MLIR builder.
 //!
-//! Contains methods on [`MlirContext`] that emit LLVM dialect MLIR
+//! Contains methods on [`Context`] that emit LLVM dialect MLIR
 //! operations: constants, loads, stores, casts, branches, and calls.
 //!
 
@@ -17,9 +17,9 @@ use melior::ir::attribute::IntegerAttribute;
 use melior::ir::operation::OperationBuilder;
 
 use crate::ICmpPredicate;
-use crate::builder::MlirContext;
+use crate::builder::Context;
 
-impl<'context> MlirContext<'context> {
+impl<'context> Context<'context> {
     // ---- Constants ----
 
     /// Emits an `llvm.mlir.constant` producing an `i256` value.
