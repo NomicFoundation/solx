@@ -5,7 +5,6 @@
 /// Source unit (top-level file) lowering to MLIR.
 pub(crate) mod source_unit;
 
-use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use slang_solidity::backend::SemanticAnalysis;
@@ -52,37 +51,5 @@ impl SemanticAst {
     /// Returns the file identifiers in this AST.
     pub fn file_identifiers(&self) -> &[String] {
         &self.file_identifiers
-    }
-
-    /// Produces stub AST JSON entries for each file in this AST.
-    ///
-    /// The `ir::ast` types do not implement `Serialize` yet, so this
-    /// is a placeholder until proper AST JSON serialization is available.
-    ///
-    /// TODO: fix when Slang AST implements `Serialize`.
-    pub fn stub_ast_jsons(&self) -> BTreeMap<String, Option<serde_json::Value>> {
-        self.file_identifiers
-            .iter()
-            .map(|path| {
-                // Include contract names so solx-tester can find them.
-                let mut contract_nodes = Vec::new();
-                if let Some(source_unit) = self.file_ast(path) {
-                    for member in source_unit.members().iter() {
-                        if let slang_solidity::backend::ir::ast::SourceUnitMember::ContractDefinition(contract) = member {
-                            contract_nodes.push(serde_json::json!({
-                                "nodeType": "ContractDefinition",
-                                "name": contract.name().name(),
-                            }));
-                        }
-                    }
-                }
-                let stub = serde_json::json!({
-                    "nodeType": "SourceUnit",
-                    "src": path,
-                    "nodes": contract_nodes,
-                });
-                (path.clone(), Some(stub))
-            })
-            .collect()
     }
 }

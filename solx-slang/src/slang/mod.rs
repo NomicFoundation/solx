@@ -153,8 +153,8 @@ impl Frontend for SlangFrontend {
                 continue;
             };
 
-            let mut context =
-                solx_mlir::Context::new(&melior_context, solx_mlir::EvmVersion::Cancun);
+            let evm_version = input_json.settings.evm_version.unwrap_or_default();
+            let mut context = solx_mlir::Context::new(&melior_context, evm_version);
             let mut emitter = crate::ast::source_unit::SourceUnitEmitter::new(&mut context);
             let Some((contract_name, method_identifiers)) = emitter.emit(&source_unit)? else {
                 continue;

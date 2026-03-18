@@ -30,6 +30,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             anyhow::bail!("undefined variable: {name}");
         }
 
+        let signed = self.is_signed_expression(&left);
         let operator = assign.operator();
         let operator_text = operator.text.as_str();
         let right = assign.right_operand();
@@ -48,7 +49,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 "+=" => solx_mlir::ops::ADD,
                 "-=" => solx_mlir::ops::SUB,
                 "*=" => solx_mlir::ops::MUL,
+                "/=" if signed => solx_mlir::ops::SDIV,
                 "/=" => solx_mlir::ops::UDIV,
+                "%=" if signed => solx_mlir::ops::SREM,
                 "%=" => solx_mlir::ops::UREM,
                 _ => anyhow::bail!("unsupported assignment operator: {operator_text}"),
             };
@@ -61,12 +64,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         } else {
             // `local_pointer` is `None`, so `storage_slot` is `Some`
             // (the `None`/`None` case bailed above).
-            self.emit_storage_store(storage_slot.unwrap(), value, &block);
+            self.emit_storage_store(storage_slot.unwrap(), value, &block)?;
         }
         Ok((value, block))
     }
 
     /// Emits a binary arithmetic LLVM operation.
+    ///
+    /// Uses signed LLVM operations (`sdiv`, `srem`, `ashr`) when either
+    /// operand has a signed integer type.
     pub(super) fn emit_binary_op(
         &self,
         left: &Expression,
@@ -74,18 +80,22 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         operator: &str,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let signed = self.is_signed_expression(left) || self.is_signed_expression(right);
         let (lhs, block) = self.emit(left, block)?;
         let (rhs, block) = self.emit(right, block)?;
         let operation_name = match operator {
             "+" => solx_mlir::ops::ADD,
             "-" => solx_mlir::ops::SUB,
             "*" => solx_mlir::ops::MUL,
+            "/" if signed => solx_mlir::ops::SDIV,
             "/" => solx_mlir::ops::UDIV,
+            "%" if signed => solx_mlir::ops::SREM,
             "%" => solx_mlir::ops::UREM,
             "&" => solx_mlir::ops::AND,
             "|" => solx_mlir::ops::OR,
             "^" => solx_mlir::ops::XOR,
             "<<" => solx_mlir::ops::SHL,
+            ">>" if signed => solx_mlir::ops::ASHR,
             ">>" => solx_mlir::ops::LSHR,
             _ => anyhow::bail!("unsupported binary operator: {operator}"),
         };

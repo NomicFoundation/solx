@@ -27,8 +27,6 @@ use melior::ir::r#type::IntegerType;
 
 use solx_utils::AddressSpace;
 
-use crate::function_entry::FunctionEntry;
-
 use self::function_signature::FunctionSignature;
 
 /// Accumulated MLIR state threaded through the AST visitors.
@@ -49,8 +47,6 @@ pub struct Context<'context> {
     i1_type: Type<'context>,
     /// Cached unknown source location.
     unknown_location: Location<'context>,
-    /// Registered external/public functions for selector dispatch.
-    functions: Vec<FunctionEntry>,
     /// State variable name -> storage slot mapping.
     state_variables: HashMap<String, u64>,
     /// All function signatures for call resolution (bare name -> overloads).
@@ -118,11 +114,21 @@ impl<'context> Context<'context> {
 
     // ---- Constructor ----
 
+    /// Maps `solx_utils::EVMVersion` to the Sol dialect `EvmVersionAttr` `u32`
+    /// encoding expected by the C++ backend.
+    fn sol_dialect_evm_version(version: solx_utils::EVMVersion) -> u32 {
+        match version {
+            solx_utils::EVMVersion::Cancun => 11,
+            solx_utils::EVMVersion::Prague => 12,
+            solx_utils::EVMVersion::Osaka => 13,
+        }
+    }
+
     /// Creates a new MLIR state with an empty module.
     ///
     /// Sets the `sol.evm_version` module attribute required by the
     /// `convert-sol-to-std` pass.
-    pub fn new(context: &'context melior::Context, evm_version: crate::EvmVersion) -> Self {
+    pub fn new(context: &'context melior::Context, evm_version: solx_utils::EVMVersion) -> Self {
         let location = Location::unknown(context);
         let module = Module::new(location);
 
@@ -133,7 +139,7 @@ impl<'context> Context<'context> {
         let evm_version_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateEvmVersionAttr(
                 context.to_raw(),
-                evm_version as u32,
+                Self::sol_dialect_evm_version(evm_version),
             ))
         };
         // SAFETY: Setting a named attribute on the module operation. Both
@@ -153,7 +159,6 @@ impl<'context> Context<'context> {
             i256_type: IntegerType::new(context, solx_utils::BIT_LENGTH_FIELD as u32).into(),
             i1_type: IntegerType::new(context, 1).into(),
             unknown_location: location,
-            functions: Vec::new(),
             state_variables: HashMap::new(),
             function_signatures: HashMap::new(),
             sol_ptr_type: Type::parse(context, "!sol.ptr<i256, Stack>")
@@ -170,11 +175,6 @@ impl<'context> Context<'context> {
 
     // ---- Public &mut self ----
 
-    /// Registers a function for entry-point selector dispatch.
-    pub fn register_function(&mut self, entry: FunctionEntry) {
-        self.functions.push(entry);
-    }
-
     /// Registers a state variable with its storage slot.
     pub fn register_state_variable(&mut self, name: String, slot: u64) {
         self.state_variables.insert(name, slot);
@@ -186,7 +186,7 @@ impl<'context> Context<'context> {
         bare_name: &str,
         mlir_name: String,
         parameter_count: usize,
-        has_returns: bool,
+        return_count: usize,
     ) {
         self.function_signatures
             .entry(bare_name.to_owned())
@@ -194,7 +194,7 @@ impl<'context> Context<'context> {
             .push(FunctionSignature::new(
                 mlir_name,
                 parameter_count,
-                has_returns,
+                return_count,
             ));
     }
 
@@ -235,11 +235,6 @@ impl<'context> Context<'context> {
         melior::dialect::llvm::r#type::pointer(self.context, address_space as u32)
     }
 
-    /// Returns the registered functions.
-    pub fn functions(&self) -> &[FunctionEntry] {
-        &self.functions
-    }
-
     /// Returns the storage slot for a state variable, if it exists.
     ///
     /// # Returns None
@@ -251,7 +246,7 @@ impl<'context> Context<'context> {
 
     /// Resolves a function call by bare name and argument count.
     ///
-    /// Returns the mangled MLIR name and whether it has return values.
+    /// Returns the mangled MLIR name and the number of return values.
     ///
     /// # Errors
     ///
@@ -260,7 +255,7 @@ impl<'context> Context<'context> {
         &self,
         bare_name: &str,
         argument_count: usize,
-    ) -> anyhow::Result<(&str, bool)> {
+    ) -> anyhow::Result<(&str, usize)> {
         let signatures = self
             .function_signatures
             .get(bare_name)
@@ -271,8 +266,14 @@ impl<'context> Context<'context> {
             .collect();
         match matches.len() {
             0 => anyhow::bail!("no overload of '{bare_name}' takes {argument_count} arguments"),
-            1 => Ok((matches[0].mlir_name(), matches[0].has_returns())),
-            _ => anyhow::bail!("ambiguous call to overloaded function '{bare_name}'"),
+            1 => Ok((matches[0].mlir_name(), matches[0].return_count())),
+            _ => {
+                let overloads: Vec<&str> = matches.iter().map(|s| s.mlir_name()).collect();
+                anyhow::bail!(
+                    "ambiguous call to '{bare_name}' with {argument_count} arguments: {}",
+                    overloads.join(", ")
+                )
+            }
         }
     }
 }

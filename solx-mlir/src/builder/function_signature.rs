@@ -9,17 +9,17 @@ pub(crate) struct FunctionSignature {
     mlir_name: String,
     /// Number of parameters.
     parameter_count: usize,
-    /// Whether the function returns a value.
-    has_returns: bool,
+    /// Number of return values.
+    return_count: usize,
 }
 
 impl FunctionSignature {
     /// Creates a new function signature.
-    pub(crate) fn new(mlir_name: String, parameter_count: usize, has_returns: bool) -> Self {
+    pub(crate) fn new(mlir_name: String, parameter_count: usize, return_count: usize) -> Self {
         Self {
             mlir_name,
             parameter_count,
-            has_returns,
+            return_count,
         }
     }
 
@@ -33,8 +33,8 @@ impl FunctionSignature {
         self.parameter_count
     }
 
-    /// Returns whether the function returns a value.
-    pub(crate) fn has_returns(&self) -> bool {
-        self.has_returns
+    /// Returns the number of return values.
+    pub(crate) fn return_count(&self) -> usize {
+        self.return_count
     }
 }

@@ -81,19 +81,24 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         }
     }
 
-    /// Emits a sequence of statements.
+    /// Emits a sequence of statements inside a new lexical scope.
     pub(super) fn emit_block(
         &mut self,
         statements: Statements,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        self.environment.enter_scope();
         let mut current = block;
         for statement in statements.iter() {
             match self.emit(&statement, current)? {
                 Some(next) => current = next,
-                None => return Ok(None),
+                None => {
+                    self.environment.exit_scope();
+                    return Ok(None);
+                }
             }
         }
+        self.environment.exit_scope();
         Ok(Some(current))
     }
 

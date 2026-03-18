@@ -16,9 +16,14 @@ pub use self::loop_target::LoopTarget;
 /// Variables are stored as alloca'd pointers on the stack (address space 0).
 /// Each variable name maps to the `llvm.alloca` result pointer. Reads produce
 /// `llvm.load`, writes produce `llvm.store`.
+///
+/// Implements lexical scoping: variable lookups search from the innermost
+/// scope outward. `enter_scope()` / `exit_scope()` bracket blocks that
+/// introduce new variables.
 pub struct Environment<'context, 'block> {
-    /// Variable name -> alloca'd pointer value.
-    variables: HashMap<String, Value<'context, 'block>>,
+    /// Stack of scopes, each mapping variable names to alloca'd pointers.
+    /// The outermost scope (index 0) holds function parameters.
+    scopes: Vec<HashMap<String, Value<'context, 'block>>>,
     /// Names of variables with signed integer types (`int8`..`int256`).
     signed_variables: HashSet<String>,
     /// Stack of (break_block, continue_block) for nested loops.
@@ -32,20 +37,40 @@ impl<'context, 'block> Default for Environment<'context, 'block> {
 }
 
 impl<'context, 'block> Environment<'context, 'block> {
-    /// Creates a new empty environment.
+    /// Creates a new environment with a single root scope.
     pub fn new() -> Self {
         Self {
-            variables: HashMap::new(),
+            scopes: vec![HashMap::new()],
             signed_variables: HashSet::new(),
             loop_targets: Vec::new(),
         }
     }
 
+    // ---- Scope management ----
+
+    /// Pushes a new lexical scope.
+    pub fn enter_scope(&mut self) {
+        self.scopes.push(HashMap::new());
+    }
+
+    /// Pops the innermost lexical scope.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called when only the root scope remains.
+    pub fn exit_scope(&mut self) {
+        assert!(self.scopes.len() > 1, "cannot exit the root scope");
+        self.scopes.pop();
+    }
+
     // ---- Public &mut self ----
 
-    /// Registers a variable with its alloca'd pointer.
+    /// Registers a variable with its alloca'd pointer in the current scope.
     pub fn define_variable(&mut self, name: String, pointer: Value<'context, 'block>) {
-        self.variables.insert(name, pointer);
+        self.scopes
+            .last_mut()
+            .expect("at least one scope exists")
+            .insert(name, pointer);
     }
 
     /// Marks a variable as having a signed integer type.
@@ -72,11 +97,19 @@ impl<'context, 'block> Environment<'context, 'block> {
 
     /// Looks up a variable's alloca'd pointer by name.
     ///
+    /// Searches from the innermost scope outward.
+    ///
     /// # Returns None
     ///
-    /// Returns `None` if no variable with the given name has been defined.
+    /// Returns `None` if no variable with the given name has been defined
+    /// in any enclosing scope.
     pub fn variable(&self, name: &str) -> Option<Value<'context, 'block>> {
-        self.variables.get(name).copied()
+        for scope in self.scopes.iter().rev() {
+            if let Some(value) = scope.get(name) {
+                return Some(*value);
+            }
+        }
+        None
     }
 
     /// Returns the current innermost loop target.

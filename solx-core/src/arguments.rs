@@ -539,64 +539,6 @@ impl Arguments {
     }
 
     ///
-    /// Warn about CLI output flags that require the solc frontend.
-    ///
-    /// These flags are accepted by clap but silently produce no output on
-    /// the MLIR/slang path because the underlying data comes from solc.
-    /// No-op when the `solc` feature is enabled (all flags are supported).
-    ///
-    #[cfg(feature = "solc")]
-    pub fn warn_unsupported_outputs(
-        &self,
-        _messages: &std::sync::Arc<std::sync::Mutex<Vec<solx_standard_json::OutputError>>>,
-    ) {
-    }
-
-    ///
-    /// Warn about CLI output flags that require the solc frontend.
-    ///
-    /// These flags are accepted by clap but silently produce no output on
-    /// the MLIR/slang path because the underlying data comes from solc.
-    ///
-    #[cfg(not(feature = "solc"))]
-    pub fn warn_unsupported_outputs(
-        &self,
-        messages: &std::sync::Arc<std::sync::Mutex<Vec<solx_standard_json::OutputError>>>,
-    ) {
-        let unsupported: Vec<&str> = [
-            (self.output_abi, "--abi"),
-            (self.output_hashes, "--hashes"),
-            (self.output_userdoc, "--userdoc"),
-            (self.output_devdoc, "--devdoc"),
-            (self.output_storage_layout, "--storage-layout"),
-            (
-                self.output_transient_storage_layout,
-                "--transient-storage-layout",
-            ),
-            (self.output_asm_solc_json, "--asm-solc-json"),
-            (self.output_ir, "--ir"),
-            (self.output_evmla, "--evmla"),
-            (self.output_ethir, "--ethir"),
-            (self.output_debug_info, "--debug-info"),
-            (self.output_debug_info_runtime, "--debug-info-runtime"),
-        ]
-        .into_iter()
-        .filter_map(|(flag, name)| flag.then_some(name))
-        .collect();
-
-        if unsupported.is_empty() {
-            return;
-        }
-
-        messages.lock().expect("lock is never poisoned because worker threads do not panic").push(
-            solx_standard_json::OutputError::new_warning(format!(
-                "The following output flags are not supported by the current frontend and will be ignored: {}",
-                unsupported.join(", ")
-            )),
-        );
-    }
-
-    ///
     /// Resolve optimizer settings from CLI arguments and environment variables.
     ///
     pub fn optimizer_settings(&self) -> anyhow::Result<solx_codegen_evm::OptimizerSettings> {

@@ -43,6 +43,12 @@ pub const XOR: &str = "llvm.xor";
 pub const SHL: &str = "llvm.shl";
 /// `llvm.lshr` — logical shift right.
 pub const LSHR: &str = "llvm.lshr";
+/// `llvm.ashr` — arithmetic shift right.
+pub const ASHR: &str = "llvm.ashr";
+/// `llvm.sdiv` — signed integer division.
+pub const SDIV: &str = "llvm.sdiv";
+/// `llvm.srem` — signed integer remainder.
+pub const SREM: &str = "llvm.srem";
 
 // EVM intrinsic MLIR operation names (emitted as direct operations via OperationBuilder).
 

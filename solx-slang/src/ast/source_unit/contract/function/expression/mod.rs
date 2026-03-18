@@ -257,6 +257,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Returns whether an expression has a signed integer type.
+    ///
+    /// Propagates signedness through arithmetic, shift, prefix, postfix,
+    /// and assignment expressions so that operations like `/`, `%`, and
+    /// `>>` select the correct signed LLVM operation.
     fn is_signed_expression(&self, expression: &Expression) -> bool {
         match expression {
             Expression::Identifier(identifier) => self.environment.is_signed(&identifier.name()),
@@ -264,6 +268,22 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 if prefix_expression.operator().text == "-" =>
             {
                 true
+            }
+            Expression::PrefixExpression(prefix_expression) => {
+                self.is_signed_expression(&prefix_expression.operand())
+            }
+            Expression::AdditiveExpression(expr) => {
+                self.is_signed_expression(&expr.left_operand())
+                    || self.is_signed_expression(&expr.right_operand())
+            }
+            Expression::MultiplicativeExpression(expr) => {
+                self.is_signed_expression(&expr.left_operand())
+                    || self.is_signed_expression(&expr.right_operand())
+            }
+            Expression::ShiftExpression(expr) => self.is_signed_expression(&expr.left_operand()),
+            Expression::PostfixExpression(expr) => self.is_signed_expression(&expr.operand()),
+            Expression::AssignmentExpression(expr) => {
+                self.is_signed_expression(&expr.left_operand())
             }
             _ => false,
         }

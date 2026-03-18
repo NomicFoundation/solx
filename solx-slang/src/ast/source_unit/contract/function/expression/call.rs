@@ -72,7 +72,25 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .iter()
                 .next()
                 .expect("len checked to be 1 above");
-            return self.emit(&first, block);
+            let (value, block) = self.emit(&first, block)?;
+            return match callee_name.as_str() {
+                "bool" => {
+                    // bool(x) → x != 0, zero-extended to i256.
+                    let zero = self.state.emit_sol_constant(0, &block);
+                    let cmp = self.state.emit_icmp(value, zero, ICmpPredicate::Ne, &block);
+                    let result = self.state.emit_zext_to_i256(cmp, &block);
+                    Ok((result, block))
+                }
+                "uint8" => {
+                    let mask = self.state.emit_sol_constant(0xFF, &block);
+                    let result =
+                        self.emit_llvm_operation(solx_mlir::ops::AND, value, mask, &block)?;
+                    Ok((result, block))
+                }
+                // Word-sized types need no truncation.
+                "address" | "payable" | "uint256" | "int256" => Ok((value, block)),
+                _ => Ok((value, block)),
+            };
         }
 
         let mut argument_values = Vec::new();
@@ -84,16 +102,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             current_block = next_block;
         }
 
-        let (mlir_name, has_returns) = self
+        let (mlir_name, return_count) = self
             .state
             .resolve_function(&callee_name, argument_values.len())?;
 
-        if has_returns {
+        if return_count > 0 {
             let i256 = self.state.i256();
+            let result_types: Vec<melior::ir::Type<'context>> =
+                (0..return_count).map(|_| i256).collect();
             let result = self
                 .state
-                .emit_sol_call(mlir_name, &argument_values, &[i256], &current_block)?
-                .expect("function call always produces one result");
+                .emit_sol_call(mlir_name, &argument_values, &result_types, &current_block)?
+                .expect("function call always produces at least one result");
             Ok((result, current_block))
         } else {
             self.state

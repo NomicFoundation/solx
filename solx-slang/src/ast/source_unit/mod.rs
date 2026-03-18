@@ -49,6 +49,13 @@ impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
             return Ok(None);
         };
 
+        for skipped in contracts.iter().skip(1) {
+            eprintln!(
+                "warning: skipping contract '{}': only one contract per source file is supported",
+                skipped.name().name()
+            );
+        }
+
         let name = contract.name().name();
         let mut emitter = ContractEmitter::new(self.state);
         emitter.emit(contract)?;

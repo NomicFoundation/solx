@@ -49,13 +49,22 @@ impl<'context> Context<'context> {
     }
 
     /// Emits an `i256` constant from a `u64` value without truncation.
-    pub fn emit_i256_from_u64<'block, B>(&self, value: u64, block: &B) -> Value<'context, 'block>
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if limb decomposition fails (should not happen for
+    /// valid `u64` values).
+    pub fn emit_i256_from_u64<'block, B>(
+        &self,
+        value: u64,
+        block: &B,
+    ) -> anyhow::Result<Value<'context, 'block>>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
         if value <= i64::MAX as u64 {
-            return self.emit_i256_constant(value as i64, block);
+            return Ok(self.emit_i256_constant(value as i64, block));
         }
         let limbs = [value as u32, (value >> 32) as u32];
         self.emit_i256_from_limbs(&limbs, block)
@@ -250,6 +259,19 @@ impl<'context> Context<'context> {
         self.emit_comparison(crate::ops::ICMP, lhs, rhs, predicate as i64, block)
     }
 
+    // ---- Attributes ----
+
+    /// Builds the `operandSegmentSizes` dense `i32` array attribute.
+    fn operand_segment_sizes_attribute(
+        &self,
+        segments: &[i32],
+    ) -> (Identifier<'context>, Attribute<'context>) {
+        (
+            Identifier::new(self.context, "operandSegmentSizes"),
+            DenseI32ArrayAttribute::new(self.context, segments).into(),
+        )
+    }
+
     // ---- Calls ----
 
     /// Emits an `llvm.call` operation.
@@ -283,11 +305,7 @@ impl<'context> Context<'context> {
                         Identifier::new(self.context, "callee"),
                         FlatSymbolRefAttribute::new(self.context, callee).into(),
                     ),
-                    (
-                        Identifier::new(self.context, "operandSegmentSizes"),
-                        DenseI32ArrayAttribute::new(self.context, &[operands.len() as i32, 0])
-                            .into(),
-                    ),
+                    self.operand_segment_sizes_attribute(&[operands.len() as i32, 0]),
                     (
                         Identifier::new(self.context, "op_bundle_sizes"),
                         DenseI32ArrayAttribute::new(self.context, &[]).into(),
@@ -362,11 +380,9 @@ impl<'context> Context<'context> {
     ) -> Operation<'context> {
         OperationBuilder::new(crate::ops::BR, self.unknown_location)
             .add_operands(destination_arguments)
-            .add_attributes(&[(
-                Identifier::new(self.context, "operandSegmentSizes"),
-                DenseI32ArrayAttribute::new(self.context, &[destination_arguments.len() as i32])
-                    .into(),
-            )])
+            .add_attributes(&[
+                self.operand_segment_sizes_attribute(&[destination_arguments.len() as i32])
+            ])
             .add_successors(&[destination])
             .build()
             .expect("llvm.br operation is well-formed")
@@ -390,14 +406,11 @@ impl<'context> Context<'context> {
         operands.extend_from_slice(false_arguments);
         OperationBuilder::new(crate::ops::COND_BR, self.unknown_location)
             .add_operands(&operands)
-            .add_attributes(&[(
-                Identifier::new(self.context, "operandSegmentSizes"),
-                DenseI32ArrayAttribute::new(
-                    self.context,
-                    &[1, true_arguments.len() as i32, false_arguments.len() as i32],
-                )
-                .into(),
-            )])
+            .add_attributes(&[self.operand_segment_sizes_attribute(&[
+                1,
+                true_arguments.len() as i32,
+                false_arguments.len() as i32,
+            ])])
             .add_successors(&[true_destination, false_destination])
             .build()
             .expect("llvm.cond_br operation is well-formed")

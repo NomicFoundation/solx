@@ -6,6 +6,8 @@
 pub(crate) mod function;
 
 use slang_solidity::backend::ir::ast::ContractDefinition;
+use slang_solidity::backend::ir::ast::ElementaryType;
+use slang_solidity::backend::ir::ast::TypeName;
 
 use solx_mlir::Context;
 
@@ -35,7 +37,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     pub(crate) fn emit(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
         let contract_name = contract.name().name();
 
-        self.register_state_variables(contract);
+        self.register_state_variables(contract)?;
         self.pre_register_functions(contract);
 
         // Emit sol.contract and functions.
@@ -55,10 +57,43 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     }
 
     /// Registers state variables with sequential storage slot assignments.
-    fn register_state_variables(&mut self, contract: &ContractDefinition) {
+    ///
+    /// Each variable gets its own 256-bit storage slot. Sub-32-byte types
+    /// (e.g. `uint8`, `bool`, `address`) that would be packed by solc are
+    /// rejected because the sequential layout would produce incorrect
+    /// storage reads/writes.
+    fn register_state_variables(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
         for (slot, variable) in contract.state_variables().iter().enumerate() {
-            self.state
-                .register_state_variable(variable.name().name(), slot as u64);
+            let name = variable.name().name();
+            let type_name = variable.type_name();
+            if !Self::is_full_slot_type(&type_name) {
+                anyhow::bail!(
+                    "state variable '{name}' has sub-32-byte type; \
+                     storage packing is not yet implemented"
+                );
+            }
+            self.state.register_state_variable(name, slot as u64);
+        }
+        Ok(())
+    }
+
+    /// Returns whether a Solidity type occupies a full 256-bit storage slot.
+    fn is_full_slot_type(type_name: &TypeName) -> bool {
+        match type_name {
+            TypeName::ElementaryType(elementary) => {
+                matches!(
+                    elementary,
+                    ElementaryType::UintKeyword(t) if t.text == "uint256"
+                ) || matches!(
+                    elementary,
+                    ElementaryType::IntKeyword(t) if t.text == "int256"
+                ) || matches!(
+                    elementary,
+                    ElementaryType::BytesKeyword(t) if t.text == "bytes32"
+                )
+            }
+            TypeName::MappingType(_) => true,
+            _ => false,
         }
     }
 
@@ -69,12 +104,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             let name = FunctionEmitter::mlir_base_name(&function);
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
             let param_count = function.parameters().len();
-            let has_returns = function
-                .returns()
-                .is_some_and(|returns| !returns.is_empty());
+            let return_count = function.returns().map_or(0, |returns| returns.len());
 
             self.state
-                .register_function_signature(&name, mlir_name, param_count, has_returns);
+                .register_function_signature(&name, mlir_name, param_count, return_count);
         }
     }
 }

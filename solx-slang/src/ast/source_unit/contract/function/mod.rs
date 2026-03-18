@@ -55,14 +55,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         let i256 = self.state.i256();
 
-        let has_returns = function
-            .returns()
-            .is_some_and(|returns| !returns.is_empty());
+        let return_count = function.returns().map_or(0, |returns| returns.len());
 
         let mlir_parameter_types: Vec<melior::ir::Type<'context>> =
             (0..parameters.len()).map(|_| i256).collect();
         let result_types: Vec<melior::ir::Type<'context>> =
-            if has_returns { vec![i256] } else { vec![] };
+            (0..return_count).map(|_| i256).collect();
 
         let selector = function.compute_selector();
 
@@ -122,10 +120,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             }
 
             if !terminated {
-                self.emit_default_return(has_returns, &current_block);
+                self.emit_default_return(return_count, &current_block);
             }
         } else {
-            self.emit_default_return(has_returns, &function_entry_block);
+            self.emit_default_return(return_count, &function_entry_block);
         }
 
         Ok(mlir_name)
@@ -217,15 +215,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     }
 
     /// Emits a default `sol.return` if the block lacks a terminator.
-    fn emit_default_return(&self, has_returns: bool, block: &melior::ir::BlockRef<'context, '_>) {
+    fn emit_default_return(&self, return_count: usize, block: &melior::ir::BlockRef<'context, '_>) {
         if block.terminator().is_some() {
             return;
         }
-        if has_returns {
-            let zero = self.state.emit_sol_constant(0, block);
-            self.state.emit_sol_return(&[zero], block);
-        } else {
-            self.state.emit_sol_return(&[], block);
-        }
+        let zeros: Vec<_> = (0..return_count)
+            .map(|_| self.state.emit_sol_constant(0, block))
+            .collect();
+        self.state.emit_sol_return(&zeros, block);
     }
 }

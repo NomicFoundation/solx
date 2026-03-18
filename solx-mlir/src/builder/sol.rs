@@ -284,25 +284,6 @@ impl<'context> Context<'context> {
         self.emit_binary_operation(operation_name, lhs, rhs, result_type, block)
     }
 
-    /// Emits a `sol.cmp` comparison returning `i1`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    pub fn emit_sol_cmp<'block, B>(
-        &self,
-        lhs: Value<'context, 'block>,
-        rhs: Value<'context, 'block>,
-        predicate: u64,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        self.emit_comparison(crate::ops::sol::CMP, lhs, rhs, predicate as i64, block)
-    }
-
     // ---- Memory ----
 
     /// Emits a `sol.alloca` for a local variable, returning the pointer.

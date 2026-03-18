@@ -38,16 +38,25 @@ impl<'context> Context<'context> {
     ///
     /// Each limb is at most `u32::MAX`, so it fits in a positive `i64` without
     /// sign-extension issues.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `limbs` is empty or exceeds the maximum limb count.
     pub(crate) fn emit_i256_from_limbs<'block, B>(
         &self,
         limbs: &[u32],
         block: &B,
-    ) -> Value<'context, 'block>
+    ) -> anyhow::Result<Value<'context, 'block>>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        debug_assert!(!limbs.is_empty() && limbs.len() <= Self::MAX_LIMB_COUNT);
+        anyhow::ensure!(
+            !limbs.is_empty() && limbs.len() <= Self::MAX_LIMB_COUNT,
+            "limb count {} is out of range 1..={}",
+            limbs.len(),
+            Self::MAX_LIMB_COUNT,
+        );
         let mut result = self.emit_i256_constant(limbs[0] as i64, block);
         for (i, &limb) in limbs.iter().enumerate().skip(1) {
             if limb == 0 {
@@ -62,7 +71,7 @@ impl<'context> Context<'context> {
                 .emit_llvm_operation(crate::ops::OR, result, shifted, self.i256_type, block)
                 .expect("llvm.or operation is well-formed");
         }
-        result
+        Ok(result)
     }
 
     /// Emits a `sol.constant` from a pre-built MLIR attribute.

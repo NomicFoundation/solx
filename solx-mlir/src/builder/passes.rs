@@ -83,7 +83,13 @@ impl<'context> Context<'context> {
     /// Returns an error if re-parsing fails, the pass pipeline fails, or
     /// the deployed module is not found.
     pub fn finalize_module(self, runtime_code_identifier: &str) -> anyhow::Result<String> {
-        // Re-parse to promote OperationBuilder dict attributes to properties.
+        // Re-parse the generated MLIR text to promote OperationBuilder
+        // dictionary attributes to MLIR operation properties. Without this
+        // round-trip, the Sol conversion pass fails because it expects
+        // properties (not dict attrs) on operations like sol.func. This is
+        // a melior limitation: OperationBuilder puts all attributes in the
+        // dictionary, but the Sol C++ dialect defines them as properties.
+        // The text format parser correctly separates them.
         let sol_text = self.module.as_operation().to_string();
         let mut parsed_module = MlirModule::parse(self.context, &sol_text).ok_or_else(|| {
             anyhow::anyhow!("failed to re-parse generated Sol dialect MLIR:\n{sol_text}")
@@ -102,8 +108,9 @@ impl<'context> Context<'context> {
             if current.name().as_string_ref().as_str().unwrap_or("") == BUILTIN_MODULE
                 && let Ok(symbol) = current.attribute("sym_name")
             {
-                let symbol_string = symbol.to_string();
-                if symbol_string.contains(runtime_code_identifier) {
+                let symbol_name = symbol.to_string();
+                let symbol_name = symbol_name.trim_matches('"');
+                if symbol_name == runtime_code_identifier {
                     deployed_operation = Some(current);
                     break;
                 }

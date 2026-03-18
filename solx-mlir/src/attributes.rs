@@ -32,38 +32,6 @@ pub enum ContractKind {
     Library = 2,
 }
 
-/// Sol dialect EVM version.
-///
-/// Maps to the `EvmVersionAttr` values in the C++ Sol dialect.
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EvmVersion {
-    /// Homestead release.
-    Homestead = 0,
-    /// Tangerine Whistle release.
-    TangerineWhistle = 1,
-    /// Spurious Dragon release.
-    SpuriousDragon = 2,
-    /// Byzantium release.
-    Byzantium = 3,
-    /// Constantinople release.
-    Constantinople = 4,
-    /// Petersburg release.
-    Petersburg = 5,
-    /// Istanbul release.
-    Istanbul = 6,
-    /// Berlin release.
-    Berlin = 7,
-    /// London release.
-    London = 8,
-    /// Paris / The Merge release.
-    Paris = 9,
-    /// Shanghai release.
-    Shanghai = 10,
-    /// Cancun release.
-    Cancun = 11,
-}
-
 /// MLIR LLVM dialect `llvm.icmp` predicate values.
 ///
 /// Matches the LLVM `ICmpPredicate` encoding used by the MLIR LLVM dialect.

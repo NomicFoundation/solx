@@ -62,9 +62,6 @@ unsafe extern "C" {
         registry: mlir_sys::MlirDialectRegistry,
     );
 
-    /// Loads a dialect into the context directly.
-    pub fn mlirDialectHandleLoadDialect(handle: MlirDialectHandle, ctx: MlirContext);
-
     // ---- Sol attribute constructors (from sol_attr_stubs.cpp) ----
 
     /// Creates a `ContractKindAttr` (0=Interface, 1=Contract, 2=Library).
