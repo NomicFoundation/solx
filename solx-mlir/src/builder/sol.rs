@@ -25,7 +25,6 @@ use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
 
 use crate::StateMutability;
-
 use crate::builder::MlirContext;
 
 impl<'context> MlirContext<'context> {

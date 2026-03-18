@@ -344,7 +344,7 @@ impl<'arguments> Compiler<'arguments> {
         let debug_info = solc_output.get_debug_info(&solc_input.sources);
 
         let run_solx_project = profiler.start_pipeline_element("solx_Solidity_IR_Analysis");
-        let project = Project::try_from_solc_output(
+        let project = Project::try_from_solidity_output(
             frontend.version(),
             solc_input.settings.libraries.clone(),
             via_ir,
@@ -446,7 +446,7 @@ impl<'arguments> Compiler<'arguments> {
                     .extend(solc_output.errors.drain(..));
 
                 let run_solx_project = profiler.start_pipeline_element("solx_Solidity_IR_Analysis");
-                let project = Project::try_from_solc_output(
+                let project = Project::try_from_solidity_output(
                     frontend.version(),
                     solc_input.settings.libraries.clone(),
                     via_ir,
@@ -574,7 +574,7 @@ impl<'arguments> Compiler<'arguments> {
         writeln!(
             std::io::stdout(),
             "{DEFAULT_EXECUTABLE_NAME} v{}, {DEFAULT_PACKAGE_DESCRIPTION}, Front end: {}, LLVM build: {}",
-            env!("CARGO_PKG_VERSION"),
+            Self::version(),
             frontend.name(),
             inkwell::support::get_commit_id().to_string(),
         )?;
@@ -583,7 +583,7 @@ impl<'arguments> Compiler<'arguments> {
     }
 
     /// Returns the compiler version string from the package metadata.
-    pub fn version() -> String {
-        env!("CARGO_PKG_VERSION").to_owned()
+    pub fn version() -> &'static str {
+        env!("CARGO_PKG_VERSION")
     }
 }

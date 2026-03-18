@@ -11,15 +11,6 @@ use std::sync::Mutex;
 use clap::Parser;
 use path_slash::PathExt;
 
-/// Expected argument count for `--recursive-process` (binary name + flag + value).
-const RECURSIVE_PROCESS_MAX_ARGS: usize = 3;
-
-/// Expected argument count for `--version` (binary name + flag).
-const VERSION_MAX_ARGS: usize = 2;
-
-/// Expected number of parts in a remapping (key=value).
-const REMAPPING_PART_COUNT: usize = 2;
-
 ///
 /// Solidity compiler arguments.
 ///
@@ -245,57 +236,14 @@ pub struct Arguments {
 }
 
 impl Arguments {
-    /// Creates a minimal `Arguments` for use as a `Compiler` anchor when
-    /// calling methods that do not read any argument fields (e.g.
-    /// `standard_json_evm`). Not intended for general use.
-    #[doc(hidden)]
-    pub fn default_for_json_wrapper() -> Self {
-        Self {
-            version: false,
-            inputs: vec![],
-            base_path: None,
-            include_path: vec![],
-            allow_paths: None,
-            yul: false,
-            llvm_ir: false,
-            standard_json: None,
-            libraries: vec![],
-            output_dir: None,
-            overwrite: false,
-            output_bytecode: false,
-            output_bytecode_runtime: false,
-            output_assembly: false,
-            output_debug_info: false,
-            output_debug_info_runtime: false,
-            output_metadata: false,
-            output_abi: false,
-            output_hashes: false,
-            output_userdoc: false,
-            output_devdoc: false,
-            output_storage_layout: false,
-            output_transient_storage_layout: false,
-            output_ast_json: false,
-            output_asm_solc_json: false,
-            output_ir: false,
-            output_benchmarks: false,
-            output_evmla: false,
-            output_ethir: false,
-            output_llvm_ir: false,
-            evm_version: None,
-            via_ir: false,
-            threads: None,
-            optimization: None,
-            size_fallback: false,
-            llvm_options: None,
-            metadata_hash: None,
-            metadata_literal: false,
-            no_cbor_metadata: false,
-            no_import_callback: false,
-            llvm_verify_each: false,
-            llvm_debug_logging: false,
-            recursive_process: false,
-        }
-    }
+    /// Expected argument count for `--recursive-process` (binary name + flag + value).
+    const RECURSIVE_PROCESS_MAX_ARGS: usize = 3;
+
+    /// Expected argument count for `--version` (binary name + flag).
+    const VERSION_MAX_ARGS: usize = 2;
+
+    /// Expected number of parts in a remapping (key=value).
+    const REMAPPING_PART_COUNT: usize = 2;
 
     ///
     /// Validates the arguments.
@@ -304,7 +252,7 @@ impl Arguments {
         let mut messages = vec![];
 
         if self.recursive_process {
-            if std::env::args().count() > RECURSIVE_PROCESS_MAX_ARGS {
+            if std::env::args().count() > Self::RECURSIVE_PROCESS_MAX_ARGS {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "No other options are allowed while running in the recursive process mode.",
                 ));
@@ -313,7 +261,7 @@ impl Arguments {
         }
 
         if self.version {
-            if std::env::args().count() > VERSION_MAX_ARGS {
+            if std::env::args().count() > Self::VERSION_MAX_ARGS {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "No other options are allowed while getting the compiler version.",
                 ));
@@ -493,7 +441,7 @@ impl Arguments {
                             .to_string(),
                     );
                 }
-                if parts.len() != REMAPPING_PART_COUNT {
+                if parts.len() != Self::REMAPPING_PART_COUNT {
                     anyhow::bail!(
                         "Invalid remapping `{input}`: expected two parts separated by '='."
                     );

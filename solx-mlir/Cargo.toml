@@ -21,7 +21,6 @@ mlir-sys = "210.0"
 
 inkwell = { workspace = true, features = ["llvm21-1-no-llvm-linking"] }
 
-solx-codegen-evm = { path = "../solx-codegen-evm" }
 solx-utils = { path = "../solx-utils" }
 
 [dev-dependencies]

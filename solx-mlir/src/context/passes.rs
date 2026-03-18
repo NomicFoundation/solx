@@ -10,6 +10,9 @@ use melior::pass::PassManager;
 
 use crate::context::Context;
 
+/// MLIR `builtin.module` operation name used to locate nested modules.
+const BUILTIN_MODULE: &str = "builtin.module";
+
 impl Context {
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
     ///
@@ -30,7 +33,7 @@ impl Context {
     pub fn run_sol_passes(
         context: &melior::Context,
         module: &mut MlirModule,
-    ) -> Result<(), String> {
+    ) -> anyhow::Result<()> {
         let pass_manager = PassManager::new(context);
         pass_manager.enable_verifier(true);
 
@@ -60,7 +63,7 @@ impl Context {
 
         pass_manager
             .run(module)
-            .map_err(|e| format!("Sol pass pipeline failed: {e}"))
+            .map_err(|e| anyhow::anyhow!("Sol pass pipeline failed: {e}"))
     }
 
     /// Consumes the builder, runs the Sol-to-LLVM pass pipeline, and returns
@@ -93,8 +96,7 @@ impl Context {
         })?;
 
         // Lower Sol → LLVM dialect.
-        Self::run_sol_passes(self.mlir(), &mut parsed_module)
-            .map_err(|e| anyhow::anyhow!("{e}"))?;
+        Self::run_sol_passes(self.mlir(), &mut parsed_module)?;
 
         // Walk the outer module's body to find the inner `_deployed` module
         // and extract it as the runtime code. Rename it so the LLVM module
@@ -103,7 +105,7 @@ impl Context {
         let mut deployed_operation = None;
         let mut operation = body.first_operation();
         while let Some(current) = operation {
-            if current.name().as_string_ref().as_str().unwrap_or("") == "builtin.module"
+            if current.name().as_string_ref().as_str().unwrap_or("") == BUILTIN_MODULE
                 && let Ok(symbol) = current.attribute("sym_name")
             {
                 let symbol_string = symbol.to_string();

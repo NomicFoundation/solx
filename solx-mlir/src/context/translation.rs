@@ -5,9 +5,8 @@
 use melior::ir::Module as MlirModule;
 use melior::ir::operation::OperationLike;
 
-use crate::llvm_module::LlvmModule;
-
 use crate::context::Context;
+use crate::llvm_module::LlvmModule;
 
 impl Context {
     /// Translate MLIR source text (LLVM dialect) to a binary LLVM module.
@@ -20,9 +19,9 @@ impl Context {
     ///
     /// Returns an error if the source cannot be parsed, fails verification,
     /// or cannot be translated to LLVM IR.
-    pub fn try_into_llvm_module_from_source(&self, source: &str) -> Result<LlvmModule, String> {
+    pub fn try_into_llvm_module_from_source(&self, source: &str) -> anyhow::Result<LlvmModule> {
         let module = MlirModule::parse(self.mlir(), source)
-            .ok_or_else(|| "Failed to parse MLIR source text".to_string())?;
+            .ok_or_else(|| anyhow::anyhow!("failed to parse MLIR source text"))?;
 
         self.try_into_llvm_module(&module)
     }
@@ -39,7 +38,7 @@ impl Context {
     pub fn try_into_llvm_module_from_sol(
         &self,
         module: &mut MlirModule,
-    ) -> Result<LlvmModule, String> {
+    ) -> anyhow::Result<LlvmModule> {
         Self::run_sol_passes(self.mlir(), module)?;
         self.try_into_llvm_module(module)
     }
@@ -53,9 +52,9 @@ impl Context {
     ///
     /// Returns an error if the module fails verification or the LLVM
     /// translation returns null.
-    pub fn try_into_llvm_module(&self, mlir_module: &MlirModule) -> Result<LlvmModule, String> {
+    pub fn try_into_llvm_module(&self, mlir_module: &MlirModule) -> anyhow::Result<LlvmModule> {
         if !mlir_module.as_operation().verify() {
-            return Err("MLIR module verification failed".into());
+            anyhow::bail!("MLIR module verification failed");
         }
 
         // SAFETY: `raw_operation` is a valid MlirOperation from a verified
@@ -74,9 +73,10 @@ impl Context {
 
             if (llvm_module as *const std::ffi::c_void).is_null() {
                 inkwell::llvm_sys::core::LLVMContextDispose(llvm_context);
-                return Err("mlirTranslateModuleToLLVMIR returned null — \
+                anyhow::bail!(
+                    "mlirTranslateModuleToLLVMIR returned null — \
                      ensure register_all_llvm_translations was called"
-                    .into());
+                );
             }
 
             Ok(LlvmModule::new(llvm_module as *mut _, llvm_context))

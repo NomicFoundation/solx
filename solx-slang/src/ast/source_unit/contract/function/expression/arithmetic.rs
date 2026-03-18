@@ -39,10 +39,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let old = if let Some(pointer) = local_pointer {
                 self.emit_load(pointer, &block)?
             } else {
-                let slot = storage_slot.ok_or_else(|| {
-                    anyhow::anyhow!("state variable '{name}' has no assigned storage slot")
-                })?;
-                self.emit_storage_load(slot, &block)?
+                // `local_pointer` is `None`, so `storage_slot` is `Some`
+                // (the `None`/`None` case bailed above).
+                self.emit_storage_load(storage_slot.unwrap(), &block)?
             };
             let (rhs, block) = self.emit(&right, block)?;
             let arithmetic_operation = match operator_text {
@@ -60,10 +59,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         if let Some(pointer) = local_pointer {
             self.emit_store(value, pointer, &block);
         } else {
-            let slot = storage_slot.ok_or_else(|| {
-                anyhow::anyhow!("state variable '{name}' has no assigned storage slot")
-            })?;
-            self.emit_storage_store(slot, value, &block);
+            // `local_pointer` is `None`, so `storage_slot` is `Some`
+            // (the `None`/`None` case bailed above).
+            self.emit_storage_store(storage_slot.unwrap(), value, &block);
         }
         Ok((value, block))
     }

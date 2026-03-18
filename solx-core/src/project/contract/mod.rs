@@ -8,6 +8,8 @@ pub mod metadata;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+#[cfg(feature = "mlir")]
+use anyhow::Context as _;
 use solx_codegen_evm::IContext;
 
 use crate::build::contract::object::Object as EVMContractObject;
@@ -482,7 +484,7 @@ impl Contract {
                 let mlir_context = solx_mlir::Context::new();
                 let llvm_module = mlir_context
                     .try_into_llvm_module_from_source(&mlir.source)
-                    .map_err(|error| anyhow::anyhow!("MLIR translation: {error}"))?;
+                    .context("MLIR translation")?;
 
                 let (raw_module, raw_context) = llvm_module.into_raw();
                 let llvm = unsafe { inkwell::context::Context::new(raw_context) };
