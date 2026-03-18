@@ -6,10 +6,10 @@
 //! operations without dealing with raw `melior` API details.
 //!
 
-mod constant;
-mod function_signature;
-mod llvm;
-mod sol;
+pub(crate) mod constant;
+pub(crate) mod function_signature;
+pub(crate) mod llvm;
+pub(crate) mod sol;
 
 use std::collections::HashMap;
 

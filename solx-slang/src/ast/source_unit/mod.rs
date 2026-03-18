@@ -64,7 +64,7 @@ impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
             let Some(selector) = function.compute_selector() else {
                 continue;
             };
-            let param_types: Vec<&str> = inputs.iter().map(|p| p.r#type.as_str()).collect();
+            let param_types: Vec<&str> = inputs.iter().map(|input| input.r#type.as_str()).collect();
             let signature = format!("{name}({})", param_types.join(","));
             method_identifiers.insert(signature, format!("{selector:08x}"));
         }

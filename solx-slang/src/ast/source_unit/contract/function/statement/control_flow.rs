@@ -22,9 +22,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         if_statement: &slang_solidity::backend::ir::ast::IfStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let condition_expr = if_statement.condition();
+        let condition_expression = if_statement.condition();
         let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
-        let (condition_value, block) = emitter.emit(&condition_expr, block)?;
+        let (condition_value, block) = emitter.emit(&condition_expression, block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &block);
 
         let then_block = self.region.append_block(Block::new(&[]));
@@ -120,9 +120,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         // Condition.
         match for_statement.condition() {
             ForStatementCondition::ExpressionStatement(expression_statement) => {
-                let expr = expression_statement.expression();
+                let expression = expression_statement.expression();
                 let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
-                let (condition_value, condition_end) = emitter.emit(&expr, condition_block)?;
+                let (condition_value, condition_end) =
+                    emitter.emit(&expression, condition_block)?;
                 let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
                 condition_end.append_operation(self.state.llvm_cond_br(
                     condition_boolean,
@@ -174,9 +175,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         block.append_operation(self.state.llvm_br(&condition_block, &[]));
 
-        let condition_expr = while_statement.condition();
+        let condition_expression = while_statement.condition();
         let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
-        let (condition_value, condition_end) = emitter.emit(&condition_expr, condition_block)?;
+        let (condition_value, condition_end) =
+            emitter.emit(&condition_expression, condition_block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
         condition_end.append_operation(self.state.llvm_cond_br(
             condition_boolean,
@@ -221,9 +223,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             body_end.append_operation(self.state.llvm_br(&condition_block, &[]));
         }
 
-        let condition_expr = do_while.condition();
+        let condition_expression = do_while.condition();
         let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
-        let (condition_value, condition_end) = emitter.emit(&condition_expr, condition_block)?;
+        let (condition_value, condition_end) =
+            emitter.emit(&condition_expression, condition_block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
         condition_end.append_operation(self.state.llvm_cond_br(
             condition_boolean,

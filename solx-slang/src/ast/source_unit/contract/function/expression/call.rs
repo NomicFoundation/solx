@@ -33,7 +33,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         // Resolve callee name once for all downstream checks.
         let callee_name = match callee {
-            Expression::Identifier(id) => id.name(),
+            Expression::Identifier(identifier) => identifier.name(),
             Expression::MemberAccessExpression(member) => member.member().name(),
             Expression::PayableKeyword => "payable".to_owned(),
             _ => anyhow::bail!("unsupported callee expression"),
@@ -114,8 +114,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         member: &str,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        if let Expression::Identifier(id) = operand {
-            let object = id.name();
+        if let Expression::Identifier(identifier) = operand {
+            let object = identifier.name();
             let intrinsic = match (object.as_str(), member) {
                 ("tx", "origin") => solx_mlir::ops::EVM_ORIGIN,
                 ("tx", "gasprice") => solx_mlir::ops::EVM_GASPRICE,
@@ -144,12 +144,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// to a revert block.
     pub(super) fn emit_address_call(
         &self,
-        address_expr: &Expression,
+        address_expression: &Expression,
         arguments: &PositionalArguments,
         revert_on_fail: bool,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (address, block) = self.emit(address_expr, block)?;
+        let (address, block) = self.emit(address_expression, block)?;
 
         let (value, block) = if arguments.len() == 1 {
             let first = arguments.iter().next().expect("len checked to be 1 above");

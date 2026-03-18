@@ -2,18 +2,17 @@
 //! Statement lowering to MLIR operations.
 //!
 
-mod control_flow;
+pub(crate) mod control_flow;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
-
 use slang_solidity::backend::ir::ast::ElementaryType;
 use slang_solidity::backend::ir::ast::Statement;
 use slang_solidity::backend::ir::ast::Statements;
 use slang_solidity::backend::ir::ast::TypeName;
-use solx_mlir::Environment;
 
+use solx_mlir::Environment;
 use solx_mlir::MlirContext;
 
 use crate::ast::source_unit::contract::function::expression::ExpressionEmitter;
@@ -59,9 +58,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 self.emit_variable_declaration(declaration, block)
             }
             Statement::ExpressionStatement(expression_statement) => {
-                let expr = expression_statement.expression();
+                let expression = expression_statement.expression();
                 let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
-                let (_value, block) = emitter.emit(&expr, block)?;
+                let (_value, block) = emitter.emit(&expression, block)?;
                 Ok(Some(block))
             }
             Statement::ReturnStatement(return_statement) => {
@@ -138,9 +137,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         return_statement: &slang_solidity::backend::ir::ast::ReturnStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        if let Some(ref expr) = return_statement.expression() {
+        if let Some(ref expression) = return_statement.expression() {
             let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
-            let (value, block) = emitter.emit(expr, block)?;
+            let (value, block) = emitter.emit(expression, block)?;
             self.state.emit_sol_return(&[value], &block);
         } else {
             self.state.emit_sol_return(&[], &block);

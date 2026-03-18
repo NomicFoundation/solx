@@ -24,7 +24,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         operator: &str,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let signed = self.is_signed_expr(left) || self.is_signed_expr(right);
+        let signed = self.is_signed_expression(left) || self.is_signed_expression(right);
         let (lhs, block) = self.emit(left, block)?;
         let (rhs, block) = self.emit(right, block)?;
 

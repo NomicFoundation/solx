@@ -69,7 +69,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             let name = FunctionEmitter::mlir_base_name(&function);
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
             let param_count = function.parameters().len();
-            let has_returns = function.returns().is_some_and(|r| !r.is_empty());
+            let has_returns = function
+                .returns()
+                .is_some_and(|returns| !returns.is_empty());
 
             self.state
                 .register_function_signature(&name, mlir_name, param_count, has_returns);

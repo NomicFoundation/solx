@@ -2,8 +2,8 @@
 //! MLIR context with dialect and translation registration.
 //!
 
-mod passes;
-mod translation;
+pub(crate) mod passes;
+pub(crate) mod translation;
 
 use std::sync::Once;
 

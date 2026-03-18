@@ -67,7 +67,7 @@ pub enum EvmVersion {
 /// MLIR LLVM dialect `llvm.icmp` predicate values.
 ///
 /// Matches the LLVM `ICmpPredicate` encoding used by the MLIR LLVM dialect.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i64)]
 pub enum ICmpPredicate {
     /// Equal.

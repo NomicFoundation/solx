@@ -2,10 +2,10 @@
 //! Expression lowering to MLIR SSA values.
 //!
 
-mod arithmetic;
-mod call;
-mod comparison;
-mod storage;
+pub(crate) mod arithmetic;
+pub(crate) mod call;
+pub(crate) mod comparison;
+pub(crate) mod storage;
 
 use melior::ir::BlockRef;
 use melior::ir::Region;
@@ -50,10 +50,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// differ from the input block for short-circuit operators).
     pub(crate) fn emit(
         &self,
-        expr: &Expression,
+        expression: &Expression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        match expr {
+        match expression {
             Expression::DecimalNumberExpression(decimal) => {
                 let literal = decimal.literal();
                 let text = literal.text.as_str();
@@ -125,69 +125,69 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 }
             }
             Expression::AssignmentExpression(assign) => self.emit_assignment(assign, block),
-            Expression::AdditiveExpression(expr) => {
-                let left = expr.left_operand();
-                let right = expr.right_operand();
-                let operator = expr.operator();
+            Expression::AdditiveExpression(expression) => {
+                let left = expression.left_operand();
+                let right = expression.right_operand();
+                let operator = expression.operator();
                 self.emit_binary_op(&left, &right, &operator.text, block)
             }
-            Expression::MultiplicativeExpression(expr) => {
-                let left = expr.left_operand();
-                let right = expr.right_operand();
-                let operator = expr.operator();
+            Expression::MultiplicativeExpression(expression) => {
+                let left = expression.left_operand();
+                let right = expression.right_operand();
+                let operator = expression.operator();
                 self.emit_binary_op(&left, &right, &operator.text, block)
             }
-            Expression::EqualityExpression(expr) => {
-                let left = expr.left_operand();
-                let right = expr.right_operand();
-                let operator = expr.operator();
+            Expression::EqualityExpression(expression) => {
+                let left = expression.left_operand();
+                let right = expression.right_operand();
+                let operator = expression.operator();
                 self.emit_icmp(&left, &right, &operator.text, block)
             }
-            Expression::InequalityExpression(expr) => {
-                let left = expr.left_operand();
-                let right = expr.right_operand();
-                let operator = expr.operator();
+            Expression::InequalityExpression(expression) => {
+                let left = expression.left_operand();
+                let right = expression.right_operand();
+                let operator = expression.operator();
                 self.emit_icmp(&left, &right, &operator.text, block)
             }
-            Expression::AndExpression(expr) => {
-                let left = expr.left_operand();
-                let right = expr.right_operand();
+            Expression::AndExpression(expression) => {
+                let left = expression.left_operand();
+                let right = expression.right_operand();
                 self.emit_and(&left, &right, block)
             }
-            Expression::OrExpression(expr) => {
-                let left = expr.left_operand();
-                let right = expr.right_operand();
+            Expression::OrExpression(expression) => {
+                let left = expression.left_operand();
+                let right = expression.right_operand();
                 self.emit_or(&left, &right, block)
             }
-            Expression::PostfixExpression(expr) => {
-                let operand = expr.operand();
-                let operator = expr.operator();
+            Expression::PostfixExpression(expression) => {
+                let operand = expression.operand();
+                let operator = expression.operator();
                 self.emit_postfix(&operand, &operator.text, block)
             }
-            Expression::PrefixExpression(expr) => {
-                let operator = expr.operator();
-                let operand = expr.operand();
+            Expression::PrefixExpression(expression) => {
+                let operator = expression.operator();
+                let operand = expression.operand();
                 self.emit_prefix(&operator.text, &operand, block)
             }
-            Expression::BitwiseAndExpression(expr) => {
-                let left = expr.left_operand();
-                let right = expr.right_operand();
+            Expression::BitwiseAndExpression(expression) => {
+                let left = expression.left_operand();
+                let right = expression.right_operand();
                 self.emit_binary_op(&left, &right, "&", block)
             }
-            Expression::BitwiseOrExpression(expr) => {
-                let left = expr.left_operand();
-                let right = expr.right_operand();
+            Expression::BitwiseOrExpression(expression) => {
+                let left = expression.left_operand();
+                let right = expression.right_operand();
                 self.emit_binary_op(&left, &right, "|", block)
             }
-            Expression::BitwiseXorExpression(expr) => {
-                let left = expr.left_operand();
-                let right = expr.right_operand();
+            Expression::BitwiseXorExpression(expression) => {
+                let left = expression.left_operand();
+                let right = expression.right_operand();
                 self.emit_binary_op(&left, &right, "^", block)
             }
-            Expression::ShiftExpression(expr) => {
-                let left = expr.left_operand();
-                let right = expr.right_operand();
-                let operator = expr.operator();
+            Expression::ShiftExpression(expression) => {
+                let left = expression.left_operand();
+                let right = expression.right_operand();
+                let operator = expression.operator();
                 self.emit_binary_op(&left, &right, &operator.text, block)
             }
             Expression::FunctionCallExpression(call) => {
@@ -200,7 +200,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let member = access.member().name();
                 self.emit_member_access(&operand, &member, block)
             }
-            _ => anyhow::bail!("unsupported expression: {:?}", std::mem::discriminant(expr)),
+            _ => anyhow::bail!(
+                "unsupported expression: {:?}",
+                std::mem::discriminant(expression)
+            ),
         }
     }
 
@@ -254,10 +257,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Returns whether an expression has a signed integer type.
-    fn is_signed_expr(&self, expr: &Expression) -> bool {
-        match expr {
-            Expression::Identifier(id) => self.environment.is_signed(&id.name()),
-            Expression::PrefixExpression(p) if p.operator().text == "-" => true,
+    fn is_signed_expression(&self, expression: &Expression) -> bool {
+        match expression {
+            Expression::Identifier(identifier) => self.environment.is_signed(&identifier.name()),
+            Expression::PrefixExpression(prefix_expression)
+                if prefix_expression.operator().text == "-" =>
+            {
+                true
+            }
             _ => false,
         }
     }

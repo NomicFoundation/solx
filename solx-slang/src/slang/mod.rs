@@ -172,9 +172,11 @@ impl Frontend for SlangFrontend {
                 })
             };
 
-            let mut contract = solx_standard_json::output::contract::Contract::default();
-            contract.mlir = Some(mlir_source);
-            contract.evm = evm;
+            let contract = solx_standard_json::output::contract::Contract {
+                mlir: Some(mlir_source),
+                evm,
+                ..Default::default()
+            };
 
             output
                 .contracts

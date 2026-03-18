@@ -3,7 +3,7 @@
 //!
 
 /// A registered contract function for entry-point dispatch.
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionEntry {
     /// The mangled MLIR function name (e.g. `solx.fn.get`).
     mlir_name: String,

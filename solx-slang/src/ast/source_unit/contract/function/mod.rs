@@ -139,14 +139,14 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let name = Self::mlir_base_name(function);
 
         if let Some(AbiEntry::Function { inputs, .. }) = function.compute_abi_entry() {
-            let types: Vec<&str> = inputs.iter().map(|p| p.r#type.as_str()).collect();
+            let types: Vec<&str> = inputs.iter().map(|input| input.r#type.as_str()).collect();
             return format!("solx.fn.{name}({})", types.join(","));
         }
 
         let types: Vec<String> = function
             .parameters()
             .iter()
-            .map(|p| Self::type_name_text(&p.type_name()))
+            .map(|parameter| Self::type_name_text(&parameter.type_name()))
             .collect();
         format!("solx.fn.{name}({})", types.join(","))
     }
