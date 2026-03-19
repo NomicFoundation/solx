@@ -17,4 +17,4 @@ thiserror.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 glob.workspace = true
-rust_xlsxwriter = "0.93"
+rust_xlsxwriter = "0.94"
