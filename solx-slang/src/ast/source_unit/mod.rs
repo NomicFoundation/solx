@@ -45,16 +45,10 @@ impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
         unit: &SourceUnit,
     ) -> anyhow::Result<Option<(String, BTreeMap<String, String>)>> {
         let contracts = unit.contracts();
+        // TODO: support multiple contracts
         let Some(contract) = contracts.first() else {
             return Ok(None);
         };
-
-        for skipped in contracts.iter().skip(1) {
-            eprintln!(
-                "warning: skipping contract '{}': only one contract per source file is supported",
-                skipped.name().name()
-            );
-        }
 
         let name = contract.name().name();
         let mut emitter = ContractEmitter::new(self.state);
@@ -71,6 +65,7 @@ impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
             let Some(selector) = function.compute_selector() else {
                 continue;
             };
+            // TODO: can be moved to slang-solidity
             let param_types: Vec<&str> = inputs.iter().map(|input| input.r#type.as_str()).collect();
             let signature = format!("{name}({})", param_types.join(","));
             method_identifiers.insert(signature, format!("{selector:08x}"));

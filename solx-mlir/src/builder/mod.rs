@@ -48,6 +48,7 @@ pub struct Context<'context> {
     /// Cached unknown source location.
     unknown_location: Location<'context>,
     /// State variable name -> storage slot mapping.
+    /// TODO: get storage slots from slang-solidity instead of re-deriving them here
     state_variables: HashMap<String, u64>,
     /// All function signatures for call resolution (bare name -> overloads).
     function_signatures: HashMap<String, Vec<FunctionSignature>>,

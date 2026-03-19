@@ -12,6 +12,8 @@ use crate::ast::source_unit::contract::function::expression::ExpressionEmitter;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits an assignment expression (`=`, `+=`, `-=`, `*=`).
+    ///
+    /// TODO: move to a separate module
     pub(super) fn emit_assignment(
         &self,
         assign: &slang_solidity::backend::ir::ast::AssignmentExpression,
@@ -45,6 +47,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 self.emit_storage_load(storage_slot.unwrap(), &block)?
             };
             let (rhs, block) = self.emit(&right, block)?;
+            // TODO: change to a nice enum with FromStr
             let arithmetic_operation = match operator_text {
                 "+=" => solx_mlir::ops::ADD,
                 "-=" => solx_mlir::ops::SUB,
@@ -64,6 +67,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         } else {
             // `local_pointer` is `None`, so `storage_slot` is `Some`
             // (the `None`/`None` case bailed above).
+            // TODO: compute slot offsets instead of deriving from names
             self.emit_storage_store(storage_slot.unwrap(), value, &block)?;
         }
         Ok((value, block))
@@ -83,6 +87,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let signed = self.is_signed_expression(left) || self.is_signed_expression(right);
         let (lhs, block) = self.emit(left, block)?;
         let (rhs, block) = self.emit(right, block)?;
+        // TODO: change to a nice enum with FromStr
         let operation_name = match operator {
             "+" => solx_mlir::ops::ADD,
             "-" => solx_mlir::ops::SUB,
@@ -120,6 +125,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .ok_or_else(|| anyhow::anyhow!("undefined variable: {name}"))?;
         let old = self.emit_load(pointer, &block)?;
         let one = self.state.emit_sol_constant(1, &block);
+        // TODO: change to a nice enum with FromStr
         let operation_name = match operator {
             "++" => solx_mlir::ops::ADD,
             "--" => solx_mlir::ops::SUB,
@@ -138,6 +144,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (value, block) = self.emit(operand, block)?;
+        // TODO: change to a nice enum with FromStr
         match operator {
             "!" => {
                 let zero = self.state.emit_sol_constant(0, &block);

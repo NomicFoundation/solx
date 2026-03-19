@@ -152,6 +152,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Returns the base name for a function's MLIR symbol, using its kind to
     /// generate names for special functions (fallback, receive) that have no
     /// Solidity-level identifier.
+    ///
+    /// TODO: check if slang-solidity is providing these names
     pub(crate) fn mlir_base_name(function: &FunctionDefinition) -> String {
         match function.kind() {
             FunctionKind::Regular => function
@@ -165,7 +167,20 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
     }
 
+    /// Emits a default `sol.return` if the block lacks a terminator.
+    fn emit_default_return(&self, return_count: usize, block: &melior::ir::BlockRef<'context, '_>) {
+        if block.terminator().is_some() {
+            return;
+        }
+        let zeros: Vec<_> = (0..return_count)
+            .map(|_| self.state.emit_sol_constant(0, block))
+            .collect();
+        self.state.emit_sol_return(&zeros, block);
+    }
+
     /// Returns a textual representation of a Solidity type name from the AST.
+    ///
+    /// TODO: check if slang-solidity can provide these identifiers.
     fn type_name_text(type_name: &TypeName) -> String {
         match type_name {
             TypeName::ElementaryType(elementary) => Self::elementary_type_text(elementary),
@@ -189,6 +204,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     }
 
     /// Returns the text for an elementary type from its AST node.
+    ///
+    /// TODO: check if slang-solidity can provide these identifiers.
     fn elementary_type_text(elementary: &ElementaryType) -> String {
         match elementary {
             ElementaryType::AddressType(_) => "address".to_owned(),
@@ -204,6 +221,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     }
 
     /// Maps Solidity function state mutability to Sol dialect `StateMutability`.
+    ///
+    /// TODO: remove in favor of the slang-solidity structure.
     fn map_state_mutability(function: &FunctionDefinition) -> StateMutability {
         use slang_solidity::backend::ir::ast::FunctionMutability;
         match function.mutability() {
@@ -212,16 +231,5 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             FunctionMutability::Payable => StateMutability::Payable,
             FunctionMutability::NonPayable => StateMutability::NonPayable,
         }
-    }
-
-    /// Emits a default `sol.return` if the block lacks a terminator.
-    fn emit_default_return(&self, return_count: usize, block: &melior::ir::BlockRef<'context, '_>) {
-        if block.terminator().is_some() {
-            return;
-        }
-        let zeros: Vec<_> = (0..return_count)
-            .map(|_| self.state.emit_sol_constant(0, block))
-            .collect();
-        self.state.emit_sol_return(&zeros, block);
     }
 }

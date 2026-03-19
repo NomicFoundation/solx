@@ -2,17 +2,12 @@
 //! Function call and member access expression lowering.
 //!
 
-use melior::ir::Block;
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::RegionLike;
 use melior::ir::Value;
 use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
 use slang_solidity::backend::ir::ast::Expression;
-use slang_solidity::backend::ir::ast::PositionalArguments;
 
 use solx_mlir::ICmpPredicate;
-use solx_utils::AddressSpace;
 
 use crate::ast::source_unit::contract::function::expression::ExpressionEmitter;
 
@@ -34,28 +29,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         // Resolve callee name once for all downstream checks.
         let callee_name = match callee {
             Expression::Identifier(identifier) => identifier.name(),
-            Expression::MemberAccessExpression(member) => member.member().name(),
             Expression::PayableKeyword => "payable".to_owned(),
             _ => anyhow::bail!("unsupported callee expression"),
         };
-
-        // Handle member function calls: recipient.send(1), recipient.transfer(1).
-        // TODO: detect built-in send/transfer via Slang's `Typing::BuiltIn` once
-        // exposed in the semi-public API.
-        if let Expression::MemberAccessExpression(member) = callee {
-            match callee_name.as_str() {
-                "send" | "transfer" => {
-                    let operand = member.operand();
-                    return self.emit_address_call(
-                        &operand,
-                        positional_arguments,
-                        callee_name == "transfer",
-                        block,
-                    );
-                }
-                _ => {}
-            }
-        }
 
         // Handle type-conversion calls: payable(x), uint256(x), etc.
         // TODO: detect casts via Slang's binder once exposed in the semi-public
@@ -155,83 +131,5 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             return Ok((value, block));
         }
         anyhow::bail!("unsupported member access on non-identifier operand")
-    }
-
-    /// Emits `address.send(value)` or `address.transfer(value)` as `llvm.evm.call`.
-    ///
-    /// Both emit an EVM CALL with 2300 gas stipend. Transfer additionally
-    /// reverts when the call fails by checking the return value and branching
-    /// to a revert block.
-    pub(super) fn emit_address_call(
-        &self,
-        address_expression: &Expression,
-        arguments: &PositionalArguments,
-        revert_on_fail: bool,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (address, block) = self.emit(address_expression, block)?;
-
-        let (value, block) = if arguments.len() == 1 {
-            let first = arguments.iter().next().expect("len checked to be 1 above");
-            self.emit(&first, block)?
-        } else {
-            (self.state.emit_sol_constant(0, &block), block)
-        };
-
-        let gas = self
-            .state
-            .emit_sol_constant(Self::TRANSFER_GAS_STIPEND, &block);
-        let zero = self.state.emit_sol_constant(0, &block);
-        let null_pointer =
-            self.state
-                .emit_inttoptr(zero, self.state.pointer(AddressSpace::Heap), &block);
-
-        // call(gas, addr, value, argsOffset, argsLen, retOffset, retLen)
-        let result = self
-            .emit_intrinsic_call(
-                solx_mlir::ops::EVM_CALL,
-                &[gas, address, value, null_pointer, zero, null_pointer, zero],
-                true,
-                &block,
-            )?
-            .expect("evm.call always produces one result");
-
-        if revert_on_fail {
-            // transfer: revert if call failed (result == 0).
-            let is_zero_i1 = self
-                .state
-                .emit_icmp(result, zero, ICmpPredicate::Eq, &block);
-
-            // Insert blocks into region to get BlockRefs (avoids linear walk).
-            let revert_ref = self.region.append_block(Block::new(&[]));
-            let cont_ref = self.region.append_block(Block::new(&[]));
-
-            // Populate revert block.
-            let revert_zero = self.state.emit_sol_constant(0, &revert_ref);
-            let heap_pointer_type = self.state.pointer(AddressSpace::Heap);
-            let revert_pointer =
-                self.state
-                    .emit_inttoptr(revert_zero, heap_pointer_type, &revert_ref);
-            self.emit_intrinsic_call(
-                solx_mlir::ops::EVM_REVERT,
-                &[revert_pointer, revert_zero],
-                false,
-                &revert_ref,
-            )?;
-            revert_ref.append_operation(melior::dialect::llvm::unreachable(self.state.location()));
-
-            block.append_operation(self.state.llvm_cond_br(
-                is_zero_i1,
-                &revert_ref,
-                &cont_ref,
-                &[],
-                &[],
-            ));
-
-            let zero2 = self.state.emit_sol_constant(0, &cont_ref);
-            Ok((zero2, cont_ref))
-        } else {
-            Ok((result, block))
-        }
     }
 }

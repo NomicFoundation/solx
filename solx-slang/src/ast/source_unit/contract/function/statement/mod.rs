@@ -82,6 +82,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a sequence of statements inside a new lexical scope.
+    ///
+    /// TODO: check why these assignments of the next blocks are needed
     pub(super) fn emit_block(
         &mut self,
         statements: Statements,
@@ -109,6 +111,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let name = declaration.name().name();
+        // TODO: check if slang-solidity can provide this information instead of re-deriving it here
         let is_signed = declaration.type_name().is_some_and(|ref type_name| {
             matches!(
                 type_name,
@@ -130,27 +133,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         };
 
         if is_signed {
+            // TODO: check if slang-solidity can provide this information instead of re-deriving it here
             self.environment.mark_signed(&name);
         }
         self.environment.define_variable(name, pointer);
         Ok(Some(block))
-    }
-
-    /// Emits a return statement.
-    fn emit_return(
-        &mut self,
-        return_statement: &slang_solidity::backend::ir::ast::ReturnStatement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        if let Some(ref expression) = return_statement.expression() {
-            let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
-            let (value, block) = emitter.emit(expression, block)?;
-            self.state.emit_sol_return(&[value], &block);
-        } else {
-            self.state.emit_sol_return(&[], &block);
-        }
-
-        Ok(None)
     }
 
     /// Emits a break statement.
@@ -176,6 +163,23 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .current_loop()
             .ok_or_else(|| anyhow::anyhow!("continue outside of loop"))?;
         block.append_operation(self.state.llvm_br(&target.continue_block(), &[]));
+        Ok(None)
+    }
+
+    /// Emits a return statement.
+    fn emit_return(
+        &mut self,
+        return_statement: &slang_solidity::backend::ir::ast::ReturnStatement,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        if let Some(ref expression) = return_statement.expression() {
+            let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
+            let (value, block) = emitter.emit(expression, block)?;
+            self.state.emit_sol_return(&[value], &block);
+        } else {
+            self.state.emit_sol_return(&[], &block);
+        }
+
         Ok(None)
     }
 }

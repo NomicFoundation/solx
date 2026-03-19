@@ -1,6 +1,8 @@
 //!
 //! Comparison and short-circuit logical expression lowering.
 //!
+//! TODO: rename this module to `logical`
+//!
 
 use melior::ir::Block;
 use melior::ir::BlockLike;
@@ -28,6 +30,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (lhs, block) = self.emit(left, block)?;
         let (rhs, block) = self.emit(right, block)?;
 
+        // TODO: change to a nice enum with FromStr
         let predicate = match (operator, signed) {
             ("==", _) => ICmpPredicate::Eq,
             ("!=", _) => ICmpPredicate::Ne,

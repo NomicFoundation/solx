@@ -1,10 +1,14 @@
 //!
 //! Sol dialect attribute enums for MLIR code generation.
 //!
+//! TODO: split into 3 separate modules with each own traits (e.g. FromStr) as code style requires
+//!
 
 /// Sol dialect state mutability.
 ///
 /// Maps to the `StateMutabilityAttr` values in the C++ Sol dialect.
+///
+/// TODO: check if the original slang-solidity type can be used directly
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StateMutability {

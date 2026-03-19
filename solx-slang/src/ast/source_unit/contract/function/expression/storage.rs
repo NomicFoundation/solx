@@ -12,6 +12,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits a storage load (`inttoptr` slot to `ptr addrspace(5)`, then `llvm.load`).
     pub(super) fn emit_storage_load(
         &self,
+        // TODO: change to i256
         slot: u64,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
@@ -31,6 +32,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Returns an error if the slot constant cannot be emitted.
     pub(super) fn emit_storage_store(
         &self,
+        // TODO: change to i256
         slot: u64,
         value: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,

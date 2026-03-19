@@ -28,9 +28,6 @@ pub(crate) struct ExpressionEmitter<'state, 'context, 'block> {
 }
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
-    /// Gas stipend for `address.transfer()` and `address.send()` calls.
-    const TRANSFER_GAS_STIPEND: i64 = 2300;
-
     /// Creates a new expression emitter.
     pub(crate) fn new(
         state: &'state Context<'context>,
@@ -92,17 +89,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let name = identifier.name();
                 match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(_)) => {
+                        // TODO: compute slot offsets instead of deriving from names
                         let slot = self.state.state_variable_slot(&name).ok_or_else(|| {
                             anyhow::anyhow!("unregistered state variable: {name}")
                         })?;
                         let value = self.emit_storage_load(slot, &block)?;
                         Ok((value, block))
                     }
-                    Some(
-                        Definition::Variable(_)
-                        | Definition::Parameter(_)
-                        | Definition::TypeParameter(_),
-                    ) => {
+                    Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let pointer = self.environment.variable(&name).ok_or_else(|| {
                             anyhow::anyhow!("unregistered local variable: {name}")
                         })?;
@@ -111,6 +105,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     }
                     None => {
                         // Fallback for identifiers the binder cannot resolve.
+                        // TODO: check if slang-solidity can resolve all identifier references so that this fallback is not needed
                         if let Some(pointer) = self.environment.variable(&name) {
                             let value = self.emit_load(pointer, &block)?;
                             Ok((value, block))
@@ -208,6 +203,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a `sol.store` to a pointer via the builder.
+    ///
+    /// TODO: remove this thin wrapper and call directly
     pub(crate) fn emit_store(
         &self,
         value: Value<'context, 'block>,
@@ -218,6 +215,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a `sol.alloca` for a local variable via the builder.
+    ///
+    /// TODO: remove this thin wrapper and call directly
     pub(crate) fn emit_alloca(
         &self,
         block: &BlockRef<'context, 'block>,
@@ -226,6 +225,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits an `icmp ne 0` producing `i1` from an `i256`.
+    ///
+    /// TODO: remove this thin wrapper and call directly
     pub(crate) fn emit_is_nonzero(
         &self,
         value: Value<'context, 'block>,
@@ -236,6 +237,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a `sol.load` from a pointer via the builder.
+    ///
+    /// TODO: remove this thin wrapper and call directly
     fn emit_load(
         &self,
         pointer: Value<'context, 'block>,
@@ -245,6 +248,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a generic two-operand LLVM operation.
+    ///
+    /// TODO: remove this thin wrapper and call directly
     fn emit_llvm_operation(
         &self,
         operation_name: &str,
@@ -256,11 +261,27 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .emit_llvm_operation(operation_name, lhs, rhs, self.state.i256(), block)
     }
 
+    /// Emits an EVM intrinsic via the builder.
+    ///
+    /// TODO: remove this thin wrapper and call directly
+    fn emit_intrinsic_call(
+        &self,
+        name: &str,
+        operands: &[Value<'context, 'block>],
+        has_result: bool,
+        block: &BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<Value<'context, 'block>>> {
+        self.state
+            .emit_evm_intrinsic(name, operands, has_result, block)
+    }
+
     /// Returns whether an expression has a signed integer type.
     ///
     /// Propagates signedness through arithmetic, shift, prefix, postfix,
     /// and assignment expressions so that operations like `/`, `%`, and
     /// `>>` select the correct signed LLVM operation.
+    ///
+    /// TODO: check if slang-solidity can provide this information instead of re-deriving it here
     fn is_signed_expression(&self, expression: &Expression) -> bool {
         match expression {
             Expression::Identifier(identifier) => self.environment.is_signed(&identifier.name()),
@@ -287,17 +308,5 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             _ => false,
         }
-    }
-
-    /// Emits an EVM intrinsic via the builder.
-    fn emit_intrinsic_call(
-        &self,
-        name: &str,
-        operands: &[Value<'context, 'block>],
-        has_result: bool,
-        block: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<Value<'context, 'block>>> {
-        self.state
-            .emit_evm_intrinsic(name, operands, has_result, block)
     }
 }

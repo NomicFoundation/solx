@@ -20,7 +20,7 @@ use self::compilation_config::CompilationConfig;
 /// The Slang frontend implementation.
 #[derive(Debug)]
 pub struct SlangFrontend {
-    /// The Slang compiler version.
+    /// The Slang compiler latest supported version.
     version: solx_standard_json::Version,
 }
 
@@ -35,6 +35,9 @@ impl Default for SlangFrontend {
 }
 
 impl SlangFrontend {
+    /// The name of the Slang frontend, used in error messages and output metadata.
+    pub const NAME: &'static str = "Slang";
+
     /// Builds a Slang compilation unit from the given source files.
     ///
     /// Uses the `CompilationBuilder` to parse all sources and resolve imports.
@@ -44,12 +47,12 @@ impl SlangFrontend {
     /// Returns an error if the compilation builder fails to initialize or
     /// if import resolution fails.
     pub fn compile(&self, sources: BTreeMap<String, String>) -> anyhow::Result<CompilationUnit> {
-        let keys: Vec<String> = sources.keys().cloned().collect();
+        let paths: Vec<String> = sources.keys().cloned().collect();
         let configuration = CompilationConfig::new(sources);
         let mut builder = CompilationBuilder::create(self.version.default.clone(), configuration)
             .map_err(|error| anyhow::anyhow!("slang compilation builder: {error}"))?;
 
-        for path in &keys {
+        for path in paths.iter() {
             builder.add_file(path)?;
         }
 
@@ -59,7 +62,7 @@ impl SlangFrontend {
 
 impl Frontend for SlangFrontend {
     fn name(&self) -> &str {
-        "Slang"
+        Self::NAME
     }
 
     fn standard_json(
@@ -145,7 +148,9 @@ impl Frontend for SlangFrontend {
             return Ok(output);
         }
 
+        // TODO: remove the SemanticAst module and use everything directly
         let semantic_ast = crate::SemanticAst::build(&unit);
+        // TODO: create inside the loop
         let melior_context = solx_mlir::Context::create_mlir_context();
 
         for file_identifier in semantic_ast.file_identifiers() {
@@ -163,14 +168,10 @@ impl Frontend for SlangFrontend {
             let runtime_code_id = format!("{contract_name}_deployed");
             let mlir_source = context.finalize_module(&runtime_code_id)?;
 
-            let evm = if method_identifiers.is_empty() {
-                None
-            } else {
-                Some(solx_standard_json::output::contract::evm::EVM {
-                    method_identifiers: Some(method_identifiers),
-                    ..Default::default()
-                })
-            };
+            let evm = Some(solx_standard_json::output::contract::evm::EVM {
+                method_identifiers: Some(method_identifiers),
+                ..Default::default()
+            });
 
             let contract = solx_standard_json::output::contract::Contract {
                 mlir: Some(mlir_source),
