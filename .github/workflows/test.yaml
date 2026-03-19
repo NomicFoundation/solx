@@ -87,6 +87,8 @@ jobs:
   build-and-test:
     needs: changes
     if: needs.changes.outputs.code == 'true'
+    env:
+      CARGO_INCREMENTAL: "0"
     permissions:
       contents: read
       checks: write
@@ -156,7 +158,7 @@ jobs:
         if: ${{ !matrix.image }}
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
         with:
-          prefix-key: build-and-test
+          prefix-key: build-and-test-v2
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
