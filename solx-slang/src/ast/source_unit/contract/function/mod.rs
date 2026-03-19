@@ -93,12 +93,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             let pointer = expression_emitter.emit_alloca(&function_entry_block);
             expression_emitter.emit_store(parameter_value, pointer, &function_entry_block);
 
-            if matches!(
-                parameter.type_name(),
-                TypeName::ElementaryType(ElementaryType::IntKeyword(_))
-            ) {
-                environment.mark_signed(&parameter_name);
-            }
             environment.define_variable(parameter_name, pointer);
         }
 
@@ -152,8 +146,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Returns the base name for a function's MLIR symbol, using its kind to
     /// generate names for special functions (fallback, receive) that have no
     /// Solidity-level identifier.
-    ///
-    /// TODO: check if slang-solidity is providing these names
     pub(crate) fn mlir_base_name(function: &FunctionDefinition) -> String {
         match function.kind() {
             FunctionKind::Regular => function

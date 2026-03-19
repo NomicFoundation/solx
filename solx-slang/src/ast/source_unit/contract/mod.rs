@@ -6,8 +6,6 @@
 pub(crate) mod function;
 
 use slang_solidity::backend::ir::ast::ContractDefinition;
-use slang_solidity::backend::ir::ast::ElementaryType;
-use slang_solidity::backend::ir::ast::TypeName;
 
 use solx_mlir::Context;
 
@@ -34,11 +32,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// # Errors
     ///
     /// Returns an error if any function body contains unsupported constructs.
-    pub(crate) fn emit(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
+    pub(crate) fn emit(
+        &mut self,
+        contract: &ContractDefinition,
+        file_identifier: &str,
+    ) -> anyhow::Result<()> {
         let contract_name = contract.name().name();
 
         self.pre_register_functions(contract);
-        self.register_state_variables(contract)?;
+        self.register_state_variables(contract, file_identifier)?;
 
         // Emit sol.contract and functions.
         let module_body = self.state.body();
@@ -71,47 +73,22 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
     }
 
-    /// Registers state variables with sequential storage slot assignments.
+    /// Registers state variables using slang-solidity's storage layout computation.
     ///
-    /// Each variable gets its own 256-bit storage slot. Sub-32-byte types
-    /// (e.g. `uint8`, `bool`, `address`) that would be packed by solc are
-    /// rejected because the sequential layout would produce incorrect
-    /// storage reads/writes.
-    fn register_state_variables(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
-        // TODO: check if slang-solidity can provide storage layout information
-        for (slot, variable) in contract.state_variables().iter().enumerate() {
-            let name = variable.name().name();
-            let type_name = variable.type_name();
-            // TODO: implement storage packing and remove this restriction
-            if !Self::is_full_slot_type(&type_name) {
-                anyhow::bail!(
-                    "state variable '{name}' has sub-32-byte type; \
-                     storage packing is not yet implemented"
-                );
-            }
-            self.state.register_state_variable(name, slot as u64);
+    /// Delegates slot and offset calculation to `compute_abi_with_file_id`,
+    /// which accounts for type sizes and storage packing rules.
+    fn register_state_variables(
+        &mut self,
+        contract: &ContractDefinition,
+        file_identifier: &str,
+    ) -> anyhow::Result<()> {
+        let abi = contract
+            .compute_abi_with_file_id(file_identifier.to_owned())
+            .ok_or_else(|| anyhow::anyhow!("failed to compute ABI for storage layout"))?;
+        for item in &abi.storage_layout {
+            self.state
+                .register_state_variable(item.label.clone(), item.slot as u64);
         }
         Ok(())
-    }
-
-    /// Returns whether a Solidity type occupies a full 256-bit storage slot.
-    /// TODO: can be moved to slang-solidity
-    fn is_full_slot_type(type_name: &TypeName) -> bool {
-        match type_name {
-            TypeName::ElementaryType(elementary) => {
-                matches!(
-                    elementary,
-                    ElementaryType::UintKeyword(t) if t.text == "uint256"
-                ) || matches!(
-                    elementary,
-                    ElementaryType::IntKeyword(t) if t.text == "int256"
-                ) || matches!(
-                    elementary,
-                    ElementaryType::BytesKeyword(t) if t.text == "bytes32"
-                )
-            }
-            TypeName::MappingType(_) => true,
-            _ => false,
-        }
     }
 }

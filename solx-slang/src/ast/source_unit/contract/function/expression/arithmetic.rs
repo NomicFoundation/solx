@@ -32,7 +32,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             anyhow::bail!("undefined variable: {name}");
         }
 
-        let signed = self.is_signed_expression(&left);
+        let signed = Self::is_signed(&left);
         let operator = assign.operator();
         let operator_text = operator.text.as_str();
         let right = assign.right_operand();
@@ -84,7 +84,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         operator: &str,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let signed = self.is_signed_expression(left) || self.is_signed_expression(right);
+        let signed = Self::is_signed(left) || Self::is_signed(right);
         let (lhs, block) = self.emit(left, block)?;
         let (rhs, block) = self.emit(right, block)?;
         // TODO: change to a nice enum with FromStr

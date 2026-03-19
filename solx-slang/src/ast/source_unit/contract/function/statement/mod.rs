@@ -7,10 +7,8 @@ pub(crate) mod control_flow;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
-use slang_solidity::backend::ir::ast::ElementaryType;
 use slang_solidity::backend::ir::ast::Statement;
 use slang_solidity::backend::ir::ast::Statements;
-use slang_solidity::backend::ir::ast::TypeName;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -111,13 +109,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let name = declaration.name().name();
-        // TODO: check if slang-solidity can provide this information instead of re-deriving it here
-        let is_signed = declaration.type_name().is_some_and(|ref type_name| {
-            matches!(
-                type_name,
-                TypeName::ElementaryType(ElementaryType::IntKeyword(_))
-            )
-        });
 
         let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
         let pointer = emitter.emit_alloca(&block);
@@ -132,10 +123,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             block
         };
 
-        if is_signed {
-            // TODO: check if slang-solidity can provide this information instead of re-deriving it here
-            self.environment.mark_signed(&name);
-        }
         self.environment.define_variable(name, pointer);
         Ok(Some(block))
     }

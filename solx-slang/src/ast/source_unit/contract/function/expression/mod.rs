@@ -12,6 +12,7 @@ use melior::ir::Region;
 use melior::ir::Value;
 use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
+use slang_solidity::backend::ir::ast::Type;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -103,19 +104,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let value = self.emit_load(pointer, &block)?;
                         Ok((value, block))
                     }
-                    None => {
-                        // Fallback for identifiers the binder cannot resolve.
-                        // TODO: check if slang-solidity can resolve all identifier references so that this fallback is not needed
-                        if let Some(pointer) = self.environment.variable(&name) {
-                            let value = self.emit_load(pointer, &block)?;
-                            Ok((value, block))
-                        } else if let Some(slot) = self.state.state_variable_slot(&name) {
-                            let value = self.emit_storage_load(slot, &block)?;
-                            Ok((value, block))
-                        } else {
-                            anyhow::bail!("undefined variable: {name}")
-                        }
-                    }
+                    None => anyhow::bail!("unresolved identifier: {name}"),
                     Some(_) => anyhow::bail!("unsupported identifier reference: {name}"),
                 }
             }
@@ -202,6 +191,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
     }
 
+    /// Returns whether an expression has a signed integer type.
+    ///
+    /// Queries slang-solidity's semantic type information via `get_type()`.
+    pub(crate) fn is_signed(expression: &Expression) -> bool {
+        Self::expression_type(expression)
+            .is_some_and(|t| matches!(t, Type::Integer(ref i) if i.signed()))
+    }
+
     /// Emits a `sol.store` to a pointer via the builder.
     ///
     /// TODO: remove this thin wrapper and call directly
@@ -275,38 +272,45 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .emit_evm_intrinsic(name, operands, has_result, block)
     }
 
-    /// Returns whether an expression has a signed integer type.
+    /// Returns the semantic type of an expression, if available.
     ///
-    /// Propagates signedness through arithmetic, shift, prefix, postfix,
-    /// and assignment expressions so that operations like `/`, `%`, and
-    /// `>>` select the correct signed LLVM operation.
-    ///
-    /// TODO: check if slang-solidity can provide this information instead of re-deriving it here
-    fn is_signed_expression(&self, expression: &Expression) -> bool {
+    /// The `Expression` enum does not expose a uniform `get_type()` method,
+    /// so this dispatches to each variant's inner struct.
+    fn expression_type(expression: &Expression) -> Option<Type> {
         match expression {
-            Expression::Identifier(identifier) => self.environment.is_signed(&identifier.name()),
-            Expression::PrefixExpression(prefix_expression)
-                if prefix_expression.operator().text == "-" =>
-            {
-                true
-            }
-            Expression::PrefixExpression(prefix_expression) => {
-                self.is_signed_expression(&prefix_expression.operand())
-            }
-            Expression::AdditiveExpression(expr) => {
-                self.is_signed_expression(&expr.left_operand())
-                    || self.is_signed_expression(&expr.right_operand())
-            }
-            Expression::MultiplicativeExpression(expr) => {
-                self.is_signed_expression(&expr.left_operand())
-                    || self.is_signed_expression(&expr.right_operand())
-            }
-            Expression::ShiftExpression(expr) => self.is_signed_expression(&expr.left_operand()),
-            Expression::PostfixExpression(expr) => self.is_signed_expression(&expr.operand()),
-            Expression::AssignmentExpression(expr) => {
-                self.is_signed_expression(&expr.left_operand())
-            }
-            _ => false,
+            Expression::AssignmentExpression(inner) => inner.get_type(),
+            Expression::ConditionalExpression(inner) => inner.get_type(),
+            Expression::OrExpression(inner) => inner.get_type(),
+            Expression::AndExpression(inner) => inner.get_type(),
+            Expression::EqualityExpression(inner) => inner.get_type(),
+            Expression::InequalityExpression(inner) => inner.get_type(),
+            Expression::BitwiseOrExpression(inner) => inner.get_type(),
+            Expression::BitwiseXorExpression(inner) => inner.get_type(),
+            Expression::BitwiseAndExpression(inner) => inner.get_type(),
+            Expression::ShiftExpression(inner) => inner.get_type(),
+            Expression::AdditiveExpression(inner) => inner.get_type(),
+            Expression::MultiplicativeExpression(inner) => inner.get_type(),
+            Expression::ExponentiationExpression(inner) => inner.get_type(),
+            Expression::PostfixExpression(inner) => inner.get_type(),
+            Expression::PrefixExpression(inner) => inner.get_type(),
+            Expression::FunctionCallExpression(inner) => inner.get_type(),
+            Expression::MemberAccessExpression(inner) => inner.get_type(),
+            Expression::IndexAccessExpression(inner) => inner.get_type(),
+            Expression::NewExpression(inner) => inner.get_type(),
+            Expression::TupleExpression(inner) => inner.get_type(),
+            Expression::HexNumberExpression(inner) => inner.get_type(),
+            Expression::DecimalNumberExpression(inner) => inner.get_type(),
+            Expression::Identifier(inner) => inner.get_type(),
+            Expression::CallOptionsExpression(inner) => inner.get_type(),
+            Expression::TypeExpression(inner) => inner.get_type(),
+            Expression::ArrayExpression(inner) => inner.get_type(),
+            Expression::StringExpression(_)
+            | Expression::ElementaryType(_)
+            | Expression::PayableKeyword
+            | Expression::ThisKeyword
+            | Expression::SuperKeyword
+            | Expression::TrueKeyword
+            | Expression::FalseKeyword => None,
         }
     }
 }

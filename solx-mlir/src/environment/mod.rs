@@ -5,7 +5,6 @@
 mod loop_target;
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use melior::ir::Value;
 
@@ -24,8 +23,6 @@ pub struct Environment<'context, 'block> {
     /// Stack of scopes, each mapping variable names to alloca'd pointers.
     /// The outermost scope (index 0) holds function parameters.
     scopes: Vec<HashMap<String, Value<'context, 'block>>>,
-    /// Names of variables with signed integer types (`int8`..`int256`).
-    signed_variables: HashSet<String>,
     /// Stack of (break_block, continue_block) for nested loops.
     loop_targets: Vec<LoopTarget<'context, 'block>>,
 }
@@ -41,7 +38,6 @@ impl<'context, 'block> Environment<'context, 'block> {
     pub fn new() -> Self {
         Self {
             scopes: vec![HashMap::new()],
-            signed_variables: HashSet::new(),
             loop_targets: Vec::new(),
         }
     }
@@ -73,11 +69,6 @@ impl<'context, 'block> Environment<'context, 'block> {
             .insert(name, pointer);
     }
 
-    /// Marks a variable as having a signed integer type.
-    pub fn mark_signed(&mut self, name: &str) {
-        self.signed_variables.insert(name.to_owned());
-    }
-
     /// Pushes a new loop context for break/continue resolution.
     pub fn push_loop(&mut self, target: LoopTarget<'context, 'block>) {
         self.loop_targets.push(target);
@@ -89,11 +80,6 @@ impl<'context, 'block> Environment<'context, 'block> {
     }
 
     // ---- Public &self ----
-
-    /// Returns whether a variable has a signed integer type.
-    pub fn is_signed(&self, name: &str) -> bool {
-        self.signed_variables.contains(name)
-    }
 
     /// Looks up a variable's alloca'd pointer by name.
     ///

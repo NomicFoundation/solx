@@ -51,8 +51,9 @@ impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
         };
 
         let name = contract.name().name();
+        let file_identifier = unit.file_id();
         let mut emitter = ContractEmitter::new(self.state);
-        emitter.emit(contract)?;
+        emitter.emit(contract, &file_identifier)?;
 
         let mut method_identifiers = BTreeMap::new();
         for contract_member in contract.members().iter() {
