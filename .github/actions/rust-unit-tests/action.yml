@@ -35,7 +35,7 @@ runs:
   using: "composite"
   steps:
     - name: Install build target
-      if: inputs.target != '' && runner.os != 'Windows'
+      if: inputs.target != ''
       uses: ./.github/actions/setup-rust
       with:
         target: ${{ inputs.target }}
