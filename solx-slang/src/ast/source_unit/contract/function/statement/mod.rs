@@ -4,11 +4,14 @@
 
 pub(crate) mod control_flow;
 
+use std::collections::HashMap;
+
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use slang_solidity::backend::ir::ast::Statement;
 use slang_solidity::backend::ir::ast::Statements;
+use slang_solidity::cst::NodeId;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -26,6 +29,8 @@ pub(crate) struct StatementEmitter<'state, 'context, 'block> {
     environment: &'state mut Environment<'context, 'block>,
     /// The function region for creating new blocks.
     region: &'state Region<'context>,
+    /// State variable node ID to storage slot mapping.
+    storage_layout: &'state HashMap<NodeId, u64>,
 }
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -34,11 +39,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
         region: &'state Region<'context>,
+        storage_layout: &'state HashMap<NodeId, u64>,
     ) -> Self {
         Self {
             state,
             environment,
             region,
+            storage_layout,
         }
     }
 
@@ -57,7 +64,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             Statement::ExpressionStatement(expression_statement) => {
                 let expression = expression_statement.expression();
-                let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
+                let emitter = ExpressionEmitter::new(
+                    self.state,
+                    self.environment,
+                    self.region,
+                    self.storage_layout,
+                );
                 let (_value, block) = emitter.emit(&expression, block)?;
                 Ok(Some(block))
             }
@@ -80,8 +92,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a sequence of statements inside a new lexical scope.
-    ///
-    /// TODO: check why these assignments of the next blocks are needed
     pub(super) fn emit_block(
         &mut self,
         statements: Statements,
@@ -110,7 +120,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let name = declaration.name().name();
 
-        let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
+        let emitter = ExpressionEmitter::new(
+            self.state,
+            self.environment,
+            self.region,
+            self.storage_layout,
+        );
         let pointer = emitter.emit_alloca(&block);
 
         let block = if let Some(ref initializer_expression) = declaration.value() {
@@ -160,7 +175,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         if let Some(ref expression) = return_statement.expression() {
-            let emitter = ExpressionEmitter::new(self.state, self.environment, self.region);
+            let emitter = ExpressionEmitter::new(
+                self.state,
+                self.environment,
+                self.region,
+                self.storage_layout,
+            );
             let (value, block) = emitter.emit(expression, block)?;
             self.state.emit_sol_return(&[value], &block);
         } else {

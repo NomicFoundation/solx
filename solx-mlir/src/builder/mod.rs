@@ -47,9 +47,6 @@ pub struct Context<'context> {
     i1_type: Type<'context>,
     /// Cached unknown source location.
     unknown_location: Location<'context>,
-    /// State variable name -> storage slot mapping.
-    /// TODO: get storage slots from slang-solidity instead of re-deriving them here
-    state_variables: HashMap<String, u64>,
     /// All function signatures for call resolution (bare name -> overloads).
     function_signatures: HashMap<String, Vec<FunctionSignature>>,
     /// Cached `!sol.ptr<i256, Stack>` type for alloca operations.
@@ -160,7 +157,6 @@ impl<'context> Context<'context> {
             i256_type: IntegerType::new(context, solx_utils::BIT_LENGTH_FIELD as u32).into(),
             i1_type: IntegerType::new(context, 1).into(),
             unknown_location: location,
-            state_variables: HashMap::new(),
             function_signatures: HashMap::new(),
             sol_ptr_type: Type::parse(context, "!sol.ptr<i256, Stack>")
                 .expect("valid sol.ptr type syntax"),
@@ -175,11 +171,6 @@ impl<'context> Context<'context> {
     }
 
     // ---- Public &mut self ----
-
-    /// Registers a state variable with its storage slot.
-    pub fn register_state_variable(&mut self, name: String, slot: u64) {
-        self.state_variables.insert(name, slot);
-    }
 
     /// Registers a function signature for call resolution.
     pub fn register_function_signature(
@@ -234,15 +225,6 @@ impl<'context> Context<'context> {
     /// Returns an LLVM pointer type with the given address space.
     pub fn pointer(&self, address_space: AddressSpace) -> Type<'context> {
         melior::dialect::llvm::r#type::pointer(self.context, address_space as u32)
-    }
-
-    /// Returns the storage slot for a state variable, if it exists.
-    ///
-    /// # Returns None
-    ///
-    /// Returns `None` if no state variable with the given name has been registered.
-    pub fn state_variable_slot(&self, name: &str) -> Option<u64> {
-        self.state_variables.get(name).copied()
     }
 
     /// Resolves a function call by bare name and argument count.

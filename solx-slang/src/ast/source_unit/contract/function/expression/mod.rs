@@ -3,9 +3,12 @@
 //!
 
 pub(crate) mod arithmetic;
+pub(crate) mod assignment;
 pub(crate) mod call;
-pub(crate) mod comparison;
+pub(crate) mod logical;
 pub(crate) mod storage;
+
+use std::collections::HashMap;
 
 use melior::ir::BlockRef;
 use melior::ir::Region;
@@ -13,6 +16,7 @@ use melior::ir::Value;
 use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::Type;
+use slang_solidity::cst::NodeId;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -26,6 +30,8 @@ pub(crate) struct ExpressionEmitter<'state, 'context, 'block> {
     environment: &'state Environment<'context, 'block>,
     /// The function region for creating new blocks.
     region: &'state Region<'context>,
+    /// State variable node ID to storage slot mapping.
+    storage_layout: &'state HashMap<NodeId, u64>,
 }
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
@@ -34,11 +40,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
         region: &'state Region<'context>,
+        storage_layout: &'state HashMap<NodeId, u64>,
     ) -> Self {
         Self {
             state,
             environment,
             region,
+            storage_layout,
         }
     }
 
@@ -89,12 +97,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::Identifier(identifier) => {
                 let name = identifier.name();
                 match identifier.resolve_to_definition() {
-                    Some(Definition::StateVariable(_)) => {
-                        // TODO: compute slot offsets instead of deriving from names
-                        let slot = self.state.state_variable_slot(&name).ok_or_else(|| {
-                            anyhow::anyhow!("unregistered state variable: {name}")
-                        })?;
-                        let value = self.emit_storage_load(slot, &block)?;
+                    Some(Definition::StateVariable(state_variable)) => {
+                        let slot = self
+                            .storage_layout
+                            .get(&state_variable.node_id())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("unregistered state variable: {name}")
+                            })?;
+                        let value = self.emit_storage_load(*slot, &block)?;
                         Ok((value, block))
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
@@ -201,7 +211,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Emits a `sol.store` to a pointer via the builder.
     ///
-    /// TODO: remove this thin wrapper and call directly
     pub(crate) fn emit_store(
         &self,
         value: Value<'context, 'block>,
@@ -213,7 +222,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Emits a `sol.alloca` for a local variable via the builder.
     ///
-    /// TODO: remove this thin wrapper and call directly
     pub(crate) fn emit_alloca(
         &self,
         block: &BlockRef<'context, 'block>,
@@ -223,7 +231,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Emits an `icmp ne 0` producing `i1` from an `i256`.
     ///
-    /// TODO: remove this thin wrapper and call directly
     pub(crate) fn emit_is_nonzero(
         &self,
         value: Value<'context, 'block>,
@@ -235,7 +242,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Emits a `sol.load` from a pointer via the builder.
     ///
-    /// TODO: remove this thin wrapper and call directly
     fn emit_load(
         &self,
         pointer: Value<'context, 'block>,
@@ -246,7 +252,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Emits a generic two-operand LLVM operation.
     ///
-    /// TODO: remove this thin wrapper and call directly
     fn emit_llvm_operation(
         &self,
         operation_name: &str,
@@ -260,7 +265,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Emits an EVM intrinsic via the builder.
     ///
-    /// TODO: remove this thin wrapper and call directly
     fn emit_intrinsic_call(
         &self,
         name: &str,
@@ -276,34 +280,48 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ///
     /// The `Expression` enum does not expose a uniform `get_type()` method,
     /// so this dispatches to each variant's inner struct.
+    ///
+    /// Wraps the call in `catch_unwind` because slang-solidity's
+    /// `Binder::node_typing()` panics on nodes without typing info
+    /// instead of returning `None`.
     fn expression_type(expression: &Expression) -> Option<Type> {
+        /// Calls `get_type()` on a slang AST node, returning `None` if the
+        /// binder panics due to missing typing information.
+        /// TODO: remove catch_unwind once slang-solidity's `Binder::node_typing()` returns `Option`
+        fn try_get_type<F>(get_type: F) -> Option<Type>
+        where
+            F: FnOnce() -> Option<Type> + std::panic::UnwindSafe,
+        {
+            std::panic::catch_unwind(get_type).ok().flatten()
+        }
+
         match expression {
-            Expression::AssignmentExpression(inner) => inner.get_type(),
-            Expression::ConditionalExpression(inner) => inner.get_type(),
-            Expression::OrExpression(inner) => inner.get_type(),
-            Expression::AndExpression(inner) => inner.get_type(),
-            Expression::EqualityExpression(inner) => inner.get_type(),
-            Expression::InequalityExpression(inner) => inner.get_type(),
-            Expression::BitwiseOrExpression(inner) => inner.get_type(),
-            Expression::BitwiseXorExpression(inner) => inner.get_type(),
-            Expression::BitwiseAndExpression(inner) => inner.get_type(),
-            Expression::ShiftExpression(inner) => inner.get_type(),
-            Expression::AdditiveExpression(inner) => inner.get_type(),
-            Expression::MultiplicativeExpression(inner) => inner.get_type(),
-            Expression::ExponentiationExpression(inner) => inner.get_type(),
-            Expression::PostfixExpression(inner) => inner.get_type(),
-            Expression::PrefixExpression(inner) => inner.get_type(),
-            Expression::FunctionCallExpression(inner) => inner.get_type(),
-            Expression::MemberAccessExpression(inner) => inner.get_type(),
-            Expression::IndexAccessExpression(inner) => inner.get_type(),
-            Expression::NewExpression(inner) => inner.get_type(),
-            Expression::TupleExpression(inner) => inner.get_type(),
-            Expression::HexNumberExpression(inner) => inner.get_type(),
-            Expression::DecimalNumberExpression(inner) => inner.get_type(),
-            Expression::Identifier(inner) => inner.get_type(),
-            Expression::CallOptionsExpression(inner) => inner.get_type(),
-            Expression::TypeExpression(inner) => inner.get_type(),
-            Expression::ArrayExpression(inner) => inner.get_type(),
+            Expression::AssignmentExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::ConditionalExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::OrExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::AndExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::EqualityExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::InequalityExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::BitwiseOrExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::BitwiseXorExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::BitwiseAndExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::ShiftExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::AdditiveExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::MultiplicativeExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::ExponentiationExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::PostfixExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::PrefixExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::FunctionCallExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::MemberAccessExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::IndexAccessExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::NewExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::TupleExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::HexNumberExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::DecimalNumberExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::Identifier(inner) => try_get_type(|| inner.get_type()),
+            Expression::CallOptionsExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::TypeExpression(inner) => try_get_type(|| inner.get_type()),
+            Expression::ArrayExpression(inner) => try_get_type(|| inner.get_type()),
             Expression::StringExpression(_)
             | Expression::ElementaryType(_)
             | Expression::PayableKeyword

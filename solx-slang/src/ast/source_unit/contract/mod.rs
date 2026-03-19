@@ -5,7 +5,10 @@
 /// Function definition lowering to Sol dialect MLIR.
 pub(crate) mod function;
 
+use std::collections::HashMap;
+
 use slang_solidity::backend::ir::ast::ContractDefinition;
+use slang_solidity::cst::NodeId;
 
 use solx_mlir::Context;
 
@@ -40,7 +43,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let contract_name = contract.name().name();
 
         self.pre_register_functions(contract);
-        self.register_state_variables(contract, file_identifier)?;
+        let storage_layout = Self::compute_storage_layout(contract, file_identifier)?;
 
         // Emit sol.contract and functions.
         let module_body = self.state.body();
@@ -52,7 +55,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         );
 
         for function in contract.functions() {
-            let emitter = FunctionEmitter::new(self.state);
+            let emitter = FunctionEmitter::new(self.state, &storage_layout);
             emitter.emit_sol(&function, &contract_body)?;
         }
 
@@ -73,22 +76,20 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
     }
 
-    /// Registers state variables using slang-solidity's storage layout computation.
+    /// Computes the storage layout using slang-solidity's ABI computation.
     ///
-    /// Delegates slot and offset calculation to `compute_abi_with_file_id`,
-    /// which accounts for type sizes and storage packing rules.
-    fn register_state_variables(
-        &mut self,
+    /// Returns a mapping from state variable node ID to storage slot.
+    fn compute_storage_layout(
         contract: &ContractDefinition,
         file_identifier: &str,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<HashMap<NodeId, u64>> {
         let abi = contract
             .compute_abi_with_file_id(file_identifier.to_owned())
             .ok_or_else(|| anyhow::anyhow!("failed to compute ABI for storage layout"))?;
-        for item in &abi.storage_layout {
-            self.state
-                .register_state_variable(item.label.clone(), item.slot as u64);
-        }
-        Ok(())
+        Ok(abi
+            .storage_layout
+            .iter()
+            .map(|item| (item.node_id, item.slot as u64))
+            .collect())
     }
 }

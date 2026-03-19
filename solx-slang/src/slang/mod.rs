@@ -148,15 +148,18 @@ impl Frontend for SlangFrontend {
             return Ok(output);
         }
 
-        // TODO: remove the SemanticAst module and use everything directly
-        let semantic_ast = crate::SemanticAst::build(&unit);
-        // TODO: create inside the loop
-        let melior_context = solx_mlir::Context::create_mlir_context();
+        let semantic = std::rc::Rc::clone(unit.semantic_analysis());
+        let file_identifiers: Vec<String> = unit
+            .files()
+            .iter()
+            .map(|file| file.id().to_owned())
+            .collect();
 
-        for file_identifier in semantic_ast.file_identifiers() {
-            let Some(source_unit) = semantic_ast.file_ast(file_identifier) else {
+        for file_identifier in &file_identifiers {
+            let Some(source_unit) = semantic.get_file_ast_root(file_identifier) else {
                 continue;
             };
+            let melior_context = solx_mlir::Context::create_mlir_context();
 
             let evm_version = input_json.settings.evm_version.unwrap_or_default();
             let mut context = solx_mlir::Context::new(&melior_context, evm_version);

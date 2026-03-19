@@ -1,5 +1,5 @@
 //!
-//! Arithmetic expression lowering: binary ops, prefix, postfix, assignment.
+//! Arithmetic expression lowering: binary ops, prefix, postfix.
 //!
 
 use melior::ir::BlockRef;
@@ -11,68 +11,6 @@ use solx_mlir::ICmpPredicate;
 use crate::ast::source_unit::contract::function::expression::ExpressionEmitter;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
-    /// Emits an assignment expression (`=`, `+=`, `-=`, `*=`).
-    ///
-    /// TODO: move to a separate module
-    pub(super) fn emit_assignment(
-        &self,
-        assign: &slang_solidity::backend::ir::ast::AssignmentExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let left = assign.left_operand();
-        let Expression::Identifier(identifier) = &left else {
-            anyhow::bail!("unsupported assignment target");
-        };
-        let name = identifier.name();
-
-        // Determine whether this is a local variable or a state variable.
-        let local_pointer = self.environment.variable(&name);
-        let storage_slot = self.state.state_variable_slot(&name);
-        if local_pointer.is_none() && storage_slot.is_none() {
-            anyhow::bail!("undefined variable: {name}");
-        }
-
-        let signed = Self::is_signed(&left);
-        let operator = assign.operator();
-        let operator_text = operator.text.as_str();
-        let right = assign.right_operand();
-        let (value, block) = if operator_text == "=" {
-            self.emit(&right, block)?
-        } else {
-            let old = if let Some(pointer) = local_pointer {
-                self.emit_load(pointer, &block)?
-            } else {
-                // `local_pointer` is `None`, so `storage_slot` is `Some`
-                // (the `None`/`None` case bailed above).
-                self.emit_storage_load(storage_slot.unwrap(), &block)?
-            };
-            let (rhs, block) = self.emit(&right, block)?;
-            // TODO: change to a nice enum with FromStr
-            let arithmetic_operation = match operator_text {
-                "+=" => solx_mlir::ops::ADD,
-                "-=" => solx_mlir::ops::SUB,
-                "*=" => solx_mlir::ops::MUL,
-                "/=" if signed => solx_mlir::ops::SDIV,
-                "/=" => solx_mlir::ops::UDIV,
-                "%=" if signed => solx_mlir::ops::SREM,
-                "%=" => solx_mlir::ops::UREM,
-                _ => anyhow::bail!("unsupported assignment operator: {operator_text}"),
-            };
-            let result = self.emit_llvm_operation(arithmetic_operation, old, rhs, &block)?;
-            (result, block)
-        };
-
-        if let Some(pointer) = local_pointer {
-            self.emit_store(value, pointer, &block);
-        } else {
-            // `local_pointer` is `None`, so `storage_slot` is `Some`
-            // (the `None`/`None` case bailed above).
-            // TODO: compute slot offsets instead of deriving from names
-            self.emit_storage_store(storage_slot.unwrap(), value, &block)?;
-        }
-        Ok((value, block))
-    }
-
     /// Emits a binary arithmetic LLVM operation.
     ///
     /// Uses signed LLVM operations (`sdiv`, `srem`, `ashr`) when either

@@ -7,6 +7,8 @@ pub(crate) mod expression;
 /// Statement lowering to MLIR operations.
 pub(crate) mod statement;
 
+use std::collections::HashMap;
+
 use melior::ir::BlockLike;
 use slang_solidity::backend::abi::AbiEntry;
 use slang_solidity::backend::ir::ast::ElementaryType;
@@ -14,6 +16,7 @@ use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::FunctionDefinition;
 use slang_solidity::backend::ir::ast::FunctionKind;
 use slang_solidity::backend::ir::ast::TypeName;
+use slang_solidity::cst::NodeId;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -26,12 +29,20 @@ use self::statement::StatementEmitter;
 pub(crate) struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
+    /// State variable node ID to storage slot mapping.
+    storage_layout: &'state HashMap<NodeId, u64>,
 }
 
 impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
-    pub(crate) fn new(state: &'state Context<'context>) -> Self {
-        Self { state }
+    pub(crate) fn new(
+        state: &'state Context<'context>,
+        storage_layout: &'state HashMap<NodeId, u64>,
+    ) -> Self {
+        Self {
+            state,
+            storage_layout,
+        }
     }
 
     /// Emits a `sol.func` for the given function definition into the given
@@ -89,7 +100,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             let region = function_entry_block
                 .parent_region()
                 .expect("entry block belongs to a region");
-            let expression_emitter = ExpressionEmitter::new(self.state, &environment, &region);
+            let expression_emitter =
+                ExpressionEmitter::new(self.state, &environment, &region, self.storage_layout);
             let pointer = expression_emitter.emit_alloca(&function_entry_block);
             expression_emitter.emit_store(parameter_value, pointer, &function_entry_block);
 
@@ -103,7 +115,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             let mut current_block = function_entry_block;
             let mut terminated = false;
             for statement in body.statements().iter() {
-                let mut emitter = StatementEmitter::new(self.state, &mut environment, &region);
+                let mut emitter = StatementEmitter::new(
+                    self.state,
+                    &mut environment,
+                    &region,
+                    self.storage_layout,
+                );
                 match emitter.emit(&statement, current_block)? {
                     Some(next) => current_block = next,
                     None => {

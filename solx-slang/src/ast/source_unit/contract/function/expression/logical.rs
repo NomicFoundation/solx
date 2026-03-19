@@ -1,8 +1,6 @@
 //!
 //! Comparison and short-circuit logical expression lowering.
 //!
-//! TODO: rename this module to `logical`
-//!
 
 use melior::ir::Block;
 use melior::ir::BlockLike;
