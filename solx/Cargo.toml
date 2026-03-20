@@ -38,7 +38,7 @@ predicates = "3.1"
 tempfile = "3.27"
 test-case = "3.3"
 object = "0.37"
-gimli = "0.31"
+gimli = "0.33"
 hex = "0.4"
 
 inkwell.workspace = true
