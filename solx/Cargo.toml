@@ -33,7 +33,7 @@ solx-standard-json = { path = "../solx-standard-json" }
 solx-utils = { path = "../solx-utils" }
 
 [dev-dependencies]
-assert_cmd = "2.1"
+assert_cmd = "2.2"
 predicates = "3.1"
 tempfile = "3.27"
 test-case = "3.3"
