@@ -32,20 +32,13 @@ impl LlvmModule {
     pub fn into_raw(
         self,
     ) -> (
-        inkwell::llvm_sys::prelude::LLVMModuleRef,
         inkwell::llvm_sys::prelude::LLVMContextRef,
+        inkwell::llvm_sys::prelude::LLVMModuleRef,
     ) {
-        let module = self.module;
         let context = self.context;
+        let module = self.module;
         std::mem::forget(self);
-        (module, context)
-    }
-
-    /// Raw `LLVMModuleRef` for passing to the EVM backend.
-    ///
-    /// The pointer is valid for the lifetime of this `LlvmModule`.
-    pub fn as_raw(&self) -> inkwell::llvm_sys::prelude::LLVMModuleRef {
-        self.module
+        (context, module)
     }
 }
 

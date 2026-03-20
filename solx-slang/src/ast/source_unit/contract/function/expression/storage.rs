@@ -10,7 +10,7 @@ use crate::ast::source_unit::contract::function::expression::ExpressionEmitter;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits a storage load (`inttoptr` slot to `ptr addrspace(5)`, then `llvm.load`).
-    pub(super) fn emit_storage_load(
+    pub fn emit_storage_load(
         &self,
         // TODO: change to i256
         slot: u64,
@@ -30,7 +30,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// # Errors
     ///
     /// Returns an error if the slot constant cannot be emitted.
-    pub(super) fn emit_storage_store(
+    pub fn emit_storage_store(
         &self,
         // TODO: change to i256
         slot: u64,

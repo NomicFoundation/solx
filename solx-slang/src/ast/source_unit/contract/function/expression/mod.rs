@@ -36,7 +36,7 @@ pub(crate) struct ExpressionEmitter<'state, 'context, 'block> {
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Creates a new expression emitter.
-    pub(crate) fn new(
+    pub fn new(
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
         region: &'state Region<'context>,
@@ -54,7 +54,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ///
     /// Returns the SSA value produced and the continuation block (which may
     /// differ from the input block for short-circuit operators).
-    pub(crate) fn emit(
+    pub fn emit(
         &self,
         expression: &Expression,
         block: BlockRef<'context, 'block>,
@@ -204,14 +204,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Returns whether an expression has a signed integer type.
     ///
     /// Queries slang-solidity's semantic type information via `get_type()`.
-    pub(crate) fn is_signed(expression: &Expression) -> bool {
+    pub fn is_signed(expression: &Expression) -> bool {
         Self::expression_type(expression)
             .is_some_and(|t| matches!(t, Type::Integer(ref i) if i.signed()))
     }
 
     /// Emits a `sol.store` to a pointer via the builder.
     ///
-    pub(crate) fn emit_store(
+    pub fn emit_store(
         &self,
         value: Value<'context, 'block>,
         pointer: Value<'context, 'block>,
@@ -222,7 +222,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Emits a `sol.alloca` for a local variable via the builder.
     ///
-    pub(crate) fn emit_alloca(
+    pub fn emit_alloca(
         &self,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
@@ -231,7 +231,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Emits an `icmp ne 0` producing `i1` from an `i256`.
     ///
-    pub(crate) fn emit_is_nonzero(
+    pub fn emit_is_nonzero(
         &self,
         value: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,

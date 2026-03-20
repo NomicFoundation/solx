@@ -8,6 +8,7 @@ use melior::ir::operation::OperationLike;
 use crate::builder::Context;
 use crate::llvm_module::LlvmModule;
 
+/// TODO: mirror solx-codegen-evm, move to src/context/mod.rs
 impl<'context> Context<'context> {
     /// Translate MLIR source text (LLVM dialect) to a binary LLVM module.
     ///

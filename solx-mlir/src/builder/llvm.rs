@@ -3,6 +3,8 @@
 //!
 //! Contains methods on [`Context`] that emit LLVM dialect MLIR
 //! operations: constants, loads, stores, casts, branches, and calls.
+//! 
+//! TODO: convert to a module directory, consume src/ops.rs/llvm constants as a child module
 //!
 
 use melior::ir::Attribute;
@@ -12,7 +14,6 @@ use melior::ir::Operation;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::attribute::DenseI32ArrayAttribute;
-use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::operation::OperationBuilder;
 
@@ -29,6 +30,8 @@ impl<'context> Context<'context> {
     /// # Panics
     ///
     /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
+    /// 
+    /// TODO: move to builder
     pub fn emit_i256_constant<'block, B>(&self, value: i64, block: &B) -> Value<'context, 'block>
     where
         B: BlockLike<'context, 'block>,
@@ -54,6 +57,7 @@ impl<'context> Context<'context> {
     ///
     /// Returns an error if limb decomposition fails (should not happen for
     /// valid `u64` values).
+    /// TODO: move to builder
     pub fn emit_i256_from_u64<'block, B>(
         &self,
         value: u64,
@@ -75,6 +79,7 @@ impl<'context> Context<'context> {
     /// # Errors
     ///
     /// Returns an error if the string cannot be parsed as an MLIR integer attribute.
+    /// TODO: move to builder
     pub fn emit_i256_from_decimal_str<'block, B>(
         &self,
         value: &str,
@@ -94,6 +99,7 @@ impl<'context> Context<'context> {
     /// # Errors
     ///
     /// Returns an error if the string cannot be parsed as an MLIR integer attribute.
+    /// TODO: move to builder
     pub fn emit_i256_from_hex_str<'block, B>(
         &self,
         hexadecimal: &str,
@@ -245,6 +251,8 @@ impl<'context> Context<'context> {
     /// # Panics
     ///
     /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
+    /// 
+    /// TODO: flatten with emit_icmp or other functions
     pub fn emit_icmp<'block, B>(
         &self,
         lhs: Value<'context, 'block>,
@@ -262,6 +270,7 @@ impl<'context> Context<'context> {
     // ---- Attributes ----
 
     /// Builds the `operandSegmentSizes` dense `i32` array attribute.
+    /// TODO: move to builder
     fn operand_segment_sizes_attribute(
         &self,
         segments: &[i32],
@@ -270,56 +279,6 @@ impl<'context> Context<'context> {
             Identifier::new(self.context, "operandSegmentSizes"),
             DenseI32ArrayAttribute::new(self.context, segments).into(),
         )
-    }
-
-    // ---- Calls ----
-
-    /// Emits an `llvm.call` operation.
-    ///
-    /// Returns `Some(value)` when `result_types` is non-empty, `None` for void calls.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the call operation cannot be constructed or
-    /// the result cannot be extracted.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    pub fn emit_call<'block, B>(
-        &self,
-        callee: &str,
-        operands: &[Value<'context, 'block>],
-        result_types: &[Type<'context>],
-        block: &B,
-    ) -> anyhow::Result<Option<Value<'context, 'block>>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let operation = block.append_operation(
-            OperationBuilder::new(crate::ops::CALL, self.unknown_location)
-                .add_operands(operands)
-                .add_attributes(&[
-                    (
-                        Identifier::new(self.context, "callee"),
-                        FlatSymbolRefAttribute::new(self.context, callee).into(),
-                    ),
-                    self.operand_segment_sizes_attribute(&[operands.len() as i32, 0]),
-                    (
-                        Identifier::new(self.context, "op_bundle_sizes"),
-                        DenseI32ArrayAttribute::new(self.context, &[]).into(),
-                    ),
-                ])
-                .add_results(result_types)
-                .build()
-                .expect("llvm.call operation is well-formed"),
-        );
-        if result_types.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(operation.result(0)?.into()))
-        }
     }
 
     // ---- EVM Intrinsics ----

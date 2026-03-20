@@ -26,7 +26,7 @@ pub(crate) struct ContractEmitter<'state, 'context> {
 
 impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// Creates a new contract emitter.
-    pub(crate) fn new(state: &'state mut Context<'context>) -> Self {
+    pub fn new(state: &'state mut Context<'context>) -> Self {
         Self { state }
     }
 
@@ -35,7 +35,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// # Errors
     ///
     /// Returns an error if any function body contains unsupported constructs.
-    pub(crate) fn emit(
+    pub fn emit(
         &mut self,
         contract: &ContractDefinition,
         file_identifier: &str,

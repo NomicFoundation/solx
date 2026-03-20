@@ -79,7 +79,7 @@ fn translate_llvm_dialect_to_llvm_module() {
     let llvm_module = Context::translate_source_to_llvm_module(&context, MLIR_SOURCE)
         .expect("MLIR to LLVM translation failed");
     assert!(
-        !llvm_module.as_raw().is_null(),
+        !llvm_module.into_raw().1.is_null(),
         "LLVM module pointer must not be null"
     );
 }

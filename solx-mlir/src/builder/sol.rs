@@ -3,6 +3,8 @@
 //!
 //! Contains methods on [`Context`] that emit Sol dialect MLIR
 //! operations: contracts, functions, constants, returns, and calls.
+//! 
+//! TODO: convert to a module directory, consume src/ops.rs/sol as a child module
 //!
 
 use melior::ir::Attribute;

@@ -17,7 +17,7 @@ use crate::ast::source_unit::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Emits an if/else statement with conditional branching.
-    pub(super) fn emit_if(
+    pub fn emit_if(
         &mut self,
         if_statement: &slang_solidity::backend::ir::ast::IfStatement,
         block: BlockRef<'context, 'block>,
@@ -86,7 +86,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a for loop.
-    pub(super) fn emit_for(
+    pub fn emit_for(
         &mut self,
         for_statement: &slang_solidity::backend::ir::ast::ForStatement,
         block: BlockRef<'context, 'block>,
@@ -178,7 +178,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a while loop.
-    pub(super) fn emit_while(
+    pub fn emit_while(
         &mut self,
         while_statement: &slang_solidity::backend::ir::ast::WhileStatement,
         block: BlockRef<'context, 'block>,
@@ -221,7 +221,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a do-while loop.
-    pub(super) fn emit_do_while(
+    pub fn emit_do_while(
         &mut self,
         do_while: &slang_solidity::backend::ir::ast::DoWhileStatement,
         block: BlockRef<'context, 'block>,

@@ -35,4 +35,5 @@ TABLEGEN_210_PREFIX = { value = "./target-llvm/target-final/", relative = true, 
 CARGO_BIN_EXE_SOLX = { value = "./target/debug/solx", relative = true, force = true }
 
 [alias]
-test-slang = "test -p solx-slang -p solx-mlir -p solx --no-default-features --features slang"
+build-slang = "build --no-default-features --features slang --target-dir target-slang"
+test-slang = "test --no-default-features --features slang --target-dir target-slang"

@@ -3,6 +3,8 @@
 //!
 
 /// Function signature info for internal call resolution.
+/// 
+/// TODO: mirror solx-codegen-evm, move to src/context/function.rs
 #[derive(Clone)]
 pub(crate) struct FunctionSignature {
     /// The mangled MLIR function name.
@@ -15,7 +17,7 @@ pub(crate) struct FunctionSignature {
 
 impl FunctionSignature {
     /// Creates a new function signature.
-    pub(crate) fn new(mlir_name: String, parameter_count: usize, return_count: usize) -> Self {
+    pub fn new(mlir_name: String, parameter_count: usize, return_count: usize) -> Self {
         Self {
             mlir_name,
             parameter_count,
@@ -24,17 +26,17 @@ impl FunctionSignature {
     }
 
     /// Returns the mangled MLIR function name.
-    pub(crate) fn mlir_name(&self) -> &str {
+    pub fn mlir_name(&self) -> &str {
         &self.mlir_name
     }
 
     /// Returns the number of parameters.
-    pub(crate) fn parameter_count(&self) -> usize {
+    pub fn parameter_count(&self) -> usize {
         self.parameter_count
     }
 
     /// Returns the number of return values.
-    pub(crate) fn return_count(&self) -> usize {
+    pub fn return_count(&self) -> usize {
         self.return_count
     }
 }

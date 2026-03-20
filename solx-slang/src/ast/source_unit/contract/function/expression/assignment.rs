@@ -19,7 +19,7 @@ enum AssignmentTarget<'context, 'block> {
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits an assignment expression (`=`, `+=`, `-=`, `*=`).
-    pub(super) fn emit_assignment(
+    pub fn emit_assignment(
         &self,
         assign: &slang_solidity::backend::ir::ast::AssignmentExpression,
         block: BlockRef<'context, 'block>,

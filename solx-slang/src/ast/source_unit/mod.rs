@@ -23,7 +23,7 @@ pub(crate) struct SourceUnitEmitter<'state, 'context> {
 
 impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
     /// Creates a new source unit emitter.
-    pub(crate) fn new(state: &'state mut Context<'context>) -> Self {
+    pub fn new(state: &'state mut Context<'context>) -> Self {
         Self { state }
     }
 
@@ -40,7 +40,7 @@ impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
     ///
     /// Returns an error if code generation encounters unsupported constructs.
     /// Returns `Some(contract_name)` if a contract was emitted, `None` otherwise.
-    pub(crate) fn emit(
+    pub fn emit(
         &mut self,
         unit: &SourceUnit,
     ) -> anyhow::Result<Option<(String, BTreeMap<String, String>)>> {

@@ -16,7 +16,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ///
     /// Resolves the callee by name and argument count, handling void and
     /// value-returning functions correctly.
-    pub(super) fn emit_function_call(
+    pub fn emit_function_call(
         &self,
         callee: &Expression,
         arguments: &ArgumentsDeclaration,
@@ -104,7 +104,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     // TODO: detect built-in member accesses (e.g. `tx.origin`, `msg.sender`)
     // via Slang's `Typing::BuiltIn` variants once exposed in the semi-public
     // API, instead of matching on string names.
-    pub(super) fn emit_member_access(
+    pub fn emit_member_access(
         &self,
         operand: &Expression,
         member: &str,

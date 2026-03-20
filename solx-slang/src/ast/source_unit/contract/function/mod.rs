@@ -35,7 +35,7 @@ pub(crate) struct FunctionEmitter<'state, 'context> {
 
 impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
-    pub(crate) fn new(
+    pub fn new(
         state: &'state Context<'context>,
         storage_layout: &'state HashMap<NodeId, u64>,
     ) -> Self {
@@ -56,7 +56,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     ///
     /// Panics if an entry block is not attached to a region, which is
     /// unreachable because `emit_sol_func` always creates a region.
-    pub(crate) fn emit_sol(
+    pub fn emit_sol(
         &self,
         function: &FunctionDefinition,
         contract_body: &melior::ir::BlockRef<'context, '_>,
@@ -144,7 +144,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     ///
     /// Uses slang's ABI canonical types when available (external functions),
     /// falls back to AST-based type names for internal/private functions.
-    pub(crate) fn mlir_function_name(function: &FunctionDefinition) -> String {
+    pub fn mlir_function_name(function: &FunctionDefinition) -> String {
         let name = Self::mlir_base_name(function);
 
         if let Some(AbiEntry::Function { inputs, .. }) = function.compute_abi_entry() {
@@ -163,7 +163,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Returns the base name for a function's MLIR symbol, using its kind to
     /// generate names for special functions (fallback, receive) that have no
     /// Solidity-level identifier.
-    pub(crate) fn mlir_base_name(function: &FunctionDefinition) -> String {
+    pub fn mlir_base_name(function: &FunctionDefinition) -> String {
         match function.kind() {
             FunctionKind::Regular => function
                 .name()

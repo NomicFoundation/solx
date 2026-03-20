@@ -19,7 +19,7 @@ pub use self::attributes::ICmpPredicate;
 pub use self::attributes::StateMutability;
 pub use self::builder::Context;
 pub use self::environment::Environment;
-pub use self::environment::LoopTarget;
+pub use self::environment::loop_target::LoopTarget;
 pub use self::llvm_module::LlvmModule;
 
 #[cfg(test)]

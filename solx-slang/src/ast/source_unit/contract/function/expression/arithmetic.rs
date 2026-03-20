@@ -15,7 +15,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ///
     /// Uses signed LLVM operations (`sdiv`, `srem`, `ashr`) when either
     /// operand has a signed integer type.
-    pub(super) fn emit_binary_op(
+    pub fn emit_binary_op(
         &self,
         left: &Expression,
         right: &Expression,
@@ -47,7 +47,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits postfix `++` or `--` (returns the old value).
-    pub(super) fn emit_postfix(
+    pub fn emit_postfix(
         &self,
         operand: &Expression,
         operator: &str,
@@ -75,7 +75,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits prefix `!` or `-`.
-    pub(super) fn emit_prefix(
+    pub fn emit_prefix(
         &self,
         operator: &str,
         operand: &Expression,

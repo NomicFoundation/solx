@@ -30,6 +30,8 @@ impl<'context> Context<'context> {
     /// # Errors
     ///
     /// Returns an error if any pass in the pipeline fails.
+    /// 
+    /// TODO: mirror solx-codegen-evm, move to src/context/pass_manager.rs
     pub fn run_sol_passes(
         context: &melior::Context,
         module: &mut MlirModule,

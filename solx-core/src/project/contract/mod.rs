@@ -488,8 +488,8 @@ impl Contract {
                 )
                 .context("MLIR translation")?;
 
-                let (raw_module, raw_context) = llvm_module.into_raw();
-                let llvm = unsafe { inkwell::context::Context::new(raw_context) };
+                let (raw_context, raw_module) = llvm_module.into_raw();
+                let context = unsafe { inkwell::context::Context::new(raw_context) };
                 let module = unsafe { inkwell::module::Module::new(raw_module) };
 
                 let (selector_llvm_ir_unoptimized, selector_llvm_ir, selector_llvm_assembly) =
@@ -507,7 +507,7 @@ impl Contract {
                     };
 
                 let mut context = solx_codegen_evm::Context::new(
-                    &llvm,
+                    &context,
                     module,
                     llvm_options,
                     contract_name.clone(),

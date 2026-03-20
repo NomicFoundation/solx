@@ -36,21 +36,25 @@ use self::function_signature::FunctionSignature;
 /// Also provides pass pipeline execution and LLVM translation.
 ///
 /// Mirrors the single-context pattern used by `solx-codegen-evm`.
+/// 
+/// TODO: mirror solx-codegen-evm, move to src/context/mod.rs
 pub struct Context<'context> {
     /// The MLIR context with all dialects and translations registered.
     context: &'context melior::Context,
     /// The MLIR module being built.
     module: Module<'context>,
+    /// All function signatures for call resolution (bare name -> overloads).
+    function_signatures: HashMap<String, Vec<FunctionSignature>>,
+
+    /// TODO: split into context and builder. The fields below go to builder which is a child module of context.
     /// Cached `i256` type (MLIR interns types, but avoids repeated lookups).
     i256_type: Type<'context>,
     /// Cached `i1` type.
     i1_type: Type<'context>,
-    /// Cached unknown source location.
-    unknown_location: Location<'context>,
-    /// All function signatures for call resolution (bare name -> overloads).
-    function_signatures: HashMap<String, Vec<FunctionSignature>>,
     /// Cached `!sol.ptr<i256, Stack>` type for alloca operations.
     sol_ptr_type: Type<'context>,
+    /// Cached unknown source location.
+    unknown_location: Location<'context>,
 }
 
 impl<'context> Context<'context> {
@@ -65,62 +69,7 @@ impl<'context> Context<'context> {
     /// Bit width of a Solidity function selector (4 bytes).
     const SELECTOR_BIT_WIDTH: u32 = 32;
 
-    // ---- Public static ----
-
-    /// Creates a fully-initialized `melior::Context` with all upstream
-    /// dialects, Sol dialect, Yul dialect, and LLVM translation interfaces
-    /// registered.
-    ///
-    /// `register_all_llvm_translations` MUST be called before any
-    /// MLIR-to-LLVM translation. Without it, `mlirTranslateModuleToLLVMIR`
-    /// returns null. This function enforces that invariant.
-    pub fn create_mlir_context() -> melior::Context {
-        let registry = DialectRegistry::new();
-        melior::utility::register_all_dialects(&registry);
-
-        // SAFETY: FFI calls to register Sol and Yul dialects into the
-        // registry. The registry and dialect handles are valid C objects
-        // produced by the MLIR C API; no aliasing or lifetime issues.
-        unsafe {
-            crate::ffi::mlirDialectHandleInsertDialect(
-                crate::ffi::mlirGetDialectHandle__sol__(),
-                registry.to_raw(),
-            );
-            crate::ffi::mlirDialectHandleInsertDialect(
-                crate::ffi::mlirGetDialectHandle__yul__(),
-                registry.to_raw(),
-            );
-        }
-
-        let context = melior::Context::new();
-        context.append_dialect_registry(&registry);
-        context.load_all_available_dialects();
-        melior::utility::register_all_llvm_translations(&context);
-
-        // Register Sol dialect passes so they can be added to a PassManager.
-        // Only call once — double-registration may crash.
-        static REGISTER_PASSES: Once = Once::new();
-        // SAFETY: `mlirRegisterSolPasses` is idempotent within a single
-        // call but must not be called concurrently. `Once` guarantees
-        // single-threaded, one-time execution.
-        REGISTER_PASSES.call_once(|| unsafe {
-            crate::ffi::mlirRegisterSolPasses();
-        });
-
-        context
-    }
-
     // ---- Constructor ----
-
-    /// Maps `solx_utils::EVMVersion` to the Sol dialect `EvmVersionAttr` `u32`
-    /// encoding expected by the C++ backend.
-    fn sol_dialect_evm_version(version: solx_utils::EVMVersion) -> u32 {
-        match version {
-            solx_utils::EVMVersion::Cancun => 11,
-            solx_utils::EVMVersion::Prague => 12,
-            solx_utils::EVMVersion::Osaka => 13,
-        }
-    }
 
     /// Creates a new MLIR state with an empty module.
     ///
@@ -163,6 +112,52 @@ impl<'context> Context<'context> {
         }
     }
 
+    // ---- Public static ----
+
+    /// Creates a fully-initialized `melior::Context` with all upstream
+    /// dialects, Sol dialect, Yul dialect, and LLVM translation interfaces
+    /// registered.
+    ///
+    /// `register_all_llvm_translations` MUST be called before any
+    /// MLIR-to-LLVM translation. Without it, `mlirTranslateModuleToLLVMIR`
+    /// returns null. This function enforces that invariant.
+    pub fn create_mlir_context() -> melior::Context {
+        let registry = DialectRegistry::new();
+        melior::utility::register_all_dialects(&registry);
+
+        // SAFETY: FFI calls to register Sol and Yul dialects into the
+        // registry. The registry and dialect handles are valid C objects
+        // produced by the MLIR C API; no aliasing or lifetime issues.
+        unsafe {
+            crate::ffi::mlirDialectHandleInsertDialect(
+                crate::ffi::mlirGetDialectHandle__sol__(),
+                registry.to_raw(),
+            );
+            crate::ffi::mlirDialectHandleInsertDialect(
+                crate::ffi::mlirGetDialectHandle__yul__(),
+                registry.to_raw(),
+            );
+        }
+
+        let context = melior::Context::new();
+        context.append_dialect_registry(&registry);
+        context.load_all_available_dialects();
+        melior::utility::register_all_llvm_translations(&context);
+
+        // Register Sol dialect passes so they can be added to a PassManager.
+        // Only call once — double-registration may crash.
+        static REGISTER_PASSES: Once = Once::new();
+        // SAFETY: `mlirRegisterSolPasses` is idempotent within a single
+        // call but must not be called concurrently. `Once` guarantees
+        // single-threaded, one-time execution.
+        // TODO: guarantee multi-threaded and investigate proper ordering
+        REGISTER_PASSES.call_once(|| unsafe {
+            crate::ffi::mlirRegisterSolPasses();
+        });
+
+        context
+    }
+
     // ---- Public self (consuming) ----
 
     /// Consumes the builder and returns the accumulated MLIR module.
@@ -197,6 +192,39 @@ impl<'context> Context<'context> {
 
     // ---- Public &self ----
 
+    /// Resolves a function call by bare name and argument count.
+    ///
+    /// Returns the mangled MLIR name and the number of return values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function is undefined or the call is ambiguous.
+    pub fn resolve_function(
+        &self,
+        bare_name: &str,
+        argument_count: usize,
+    ) -> anyhow::Result<(&str, usize)> {
+        let signatures = self
+            .function_signatures
+            .get(bare_name)
+            .ok_or_else(|| anyhow::anyhow!("undefined function: {bare_name}"))?;
+        let matches: Vec<_> = signatures
+            .iter()
+            .filter(|signature| signature.parameter_count() == argument_count)
+            .collect();
+        match matches.len() {
+            0 => anyhow::bail!("no overload of '{bare_name}' takes {argument_count} arguments"),
+            1 => Ok((matches[0].mlir_name(), matches[0].return_count())),
+            _ => {
+                let overloads: Vec<&str> = matches.iter().map(|signature| signature.mlir_name()).collect();
+                anyhow::bail!(
+                    "ambiguous call to '{bare_name}' with {argument_count} arguments: {}",
+                    overloads.join(", ")
+                )
+            }
+        }
+    }
+
     /// Returns a reference to the melior context.
     pub fn context(&self) -> &'context melior::Context {
         self.context
@@ -227,36 +255,13 @@ impl<'context> Context<'context> {
         melior::dialect::llvm::r#type::pointer(self.context, address_space as u32)
     }
 
-    /// Resolves a function call by bare name and argument count.
-    ///
-    /// Returns the mangled MLIR name and the number of return values.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the function is undefined or the call is ambiguous.
-    pub fn resolve_function(
-        &self,
-        bare_name: &str,
-        argument_count: usize,
-    ) -> anyhow::Result<(&str, usize)> {
-        let signatures = self
-            .function_signatures
-            .get(bare_name)
-            .ok_or_else(|| anyhow::anyhow!("undefined function: {bare_name}"))?;
-        let matches: Vec<_> = signatures
-            .iter()
-            .filter(|s| s.parameter_count() == argument_count)
-            .collect();
-        match matches.len() {
-            0 => anyhow::bail!("no overload of '{bare_name}' takes {argument_count} arguments"),
-            1 => Ok((matches[0].mlir_name(), matches[0].return_count())),
-            _ => {
-                let overloads: Vec<&str> = matches.iter().map(|s| s.mlir_name()).collect();
-                anyhow::bail!(
-                    "ambiguous call to '{bare_name}' with {argument_count} arguments: {}",
-                    overloads.join(", ")
-                )
-            }
+    /// Maps `solx_utils::EVMVersion` to the Sol dialect `EvmVersionAttr` `u32`
+    /// encoding expected by the C++ backend.
+    fn sol_dialect_evm_version(version: solx_utils::EVMVersion) -> u32 {
+        match version {
+            solx_utils::EVMVersion::Cancun => 11,
+            solx_utils::EVMVersion::Prague => 12,
+            solx_utils::EVMVersion::Osaka => 13,
         }
     }
 }

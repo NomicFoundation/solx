@@ -19,10 +19,10 @@ use crate::builder::Context;
 
 impl<'context> Context<'context> {
     /// Maximum number of 32-bit limbs in a 256-bit integer (256 / 32).
-    const MAX_LIMB_COUNT: usize = 8;
+    const MAX_LIMB_COUNT: usize = solx_utils::BIT_LENGTH_FIELD / solx_utils::BIT_LENGTH_X32;
 
     /// Emits an `llvm.mlir.constant` from a pre-built attribute.
-    pub(crate) fn emit_constant_from_attribute<'block, B>(
+    pub fn emit_constant_from_attribute<'block, B>(
         &self,
         attribute: Attribute<'context>,
         block: &B,
@@ -42,7 +42,7 @@ impl<'context> Context<'context> {
     /// # Errors
     ///
     /// Returns an error if `limbs` is empty or exceeds the maximum limb count.
-    pub(crate) fn emit_i256_from_limbs<'block, B>(
+    pub fn emit_i256_from_limbs<'block, B>(
         &self,
         limbs: &[u32],
         block: &B,
@@ -75,7 +75,7 @@ impl<'context> Context<'context> {
     }
 
     /// Emits a `sol.constant` from a pre-built MLIR attribute.
-    pub(crate) fn emit_sol_constant_from_parsed_attribute<'block, B>(
+    pub fn emit_sol_constant_from_parsed_attribute<'block, B>(
         &self,
         attribute: Attribute<'context>,
         block: &B,
@@ -88,7 +88,7 @@ impl<'context> Context<'context> {
     }
 
     /// Shared helper for emitting a two-operand operation with one result.
-    pub(crate) fn emit_binary_operation<'block, B>(
+    pub fn emit_binary_operation<'block, B>(
         &self,
         operation_name: &str,
         lhs: Value<'context, 'block>,
@@ -113,7 +113,7 @@ impl<'context> Context<'context> {
     }
 
     /// Shared helper for emitting a comparison operation returning `i1`.
-    pub(crate) fn emit_comparison<'block, B>(
+    pub fn emit_comparison<'block, B>(
         &self,
         operation_name: &str,
         lhs: Value<'context, 'block>,
@@ -148,7 +148,7 @@ impl<'context> Context<'context> {
     }
 
     /// Shared helper for emitting a constant operation with an attribute.
-    pub(crate) fn emit_constant_operation<'block, B>(
+    pub fn emit_constant_operation<'block, B>(
         &self,
         operation_name: &str,
         attribute: Attribute<'context>,

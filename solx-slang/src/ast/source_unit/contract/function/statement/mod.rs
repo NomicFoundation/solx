@@ -35,7 +35,7 @@ pub(crate) struct StatementEmitter<'state, 'context, 'block> {
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Creates a new statement emitter.
-    pub(crate) fn new(
+    pub fn new(
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
         region: &'state Region<'context>,
@@ -53,7 +53,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ///
     /// Returns `Some(block)` as the continuation block for the next statement,
     /// or `None` if control flow was terminated.
-    pub(crate) fn emit(
+    pub fn emit(
         &mut self,
         statement: &Statement,
         block: BlockRef<'context, 'block>,
@@ -92,7 +92,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a sequence of statements inside a new lexical scope.
-    pub(super) fn emit_block(
+    pub fn emit_block(
         &mut self,
         statements: Statements,
         block: BlockRef<'context, 'block>,

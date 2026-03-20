@@ -2,13 +2,13 @@
 //! Variable environment and loop context for MLIR code generation.
 //!
 
-mod loop_target;
+pub mod loop_target;
 
 use std::collections::HashMap;
 
 use melior::ir::Value;
 
-pub use self::loop_target::LoopTarget;
+use self::loop_target::LoopTarget;
 
 /// Tracks variable bindings (alloca'd pointers) and loop break/continue targets.
 ///

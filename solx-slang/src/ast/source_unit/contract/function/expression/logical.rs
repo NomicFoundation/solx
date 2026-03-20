@@ -17,7 +17,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits an `llvm.icmp` comparison, zero-extended to `i256`.
     ///
     /// Uses signed predicates when either operand is a signed integer type.
-    pub(super) fn emit_icmp(
+    pub fn emit_icmp(
         &self,
         left: &Expression,
         right: &Expression,
@@ -51,7 +51,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits short-circuit `&&` using control flow.
     ///
     /// Result is always a canonical boolean (0 or 1).
-    pub(super) fn emit_and(
+    pub fn emit_and(
         &self,
         left: &Expression,
         right: &Expression,
@@ -87,7 +87,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits short-circuit `||` using control flow.
     ///
     /// Result is always a canonical boolean (0 or 1).
-    pub(super) fn emit_or(
+    pub fn emit_or(
         &self,
         left: &Expression,
         right: &Expression,
