@@ -2495,9 +2495,9 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 
 [[package]]
 name = "metaslang_bindings"
-version = "1.3.2"
+version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5810dba52dac527bc0cdc4ebad76c7d0d422974e434bafbecacc85e34827589"
+checksum = "84b83af3074b9e33cf6f3f92586d60ed1a9302390bafbf681d17252dcac7bff4"
 dependencies = [
  "metaslang_cst",
  "metaslang_graph_builder",
@@ -2508,9 +2508,9 @@ dependencies = [
 
 [[package]]
 name = "metaslang_cst"
-version = "1.3.2"
+version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4f590d634fcddd7f48e7de2ef297c22d10947093c79c64d735e0451fed0da98"
+checksum = "42e69550cffd1df2109642f0ea5563df572c37b1ed27f87fd3b569435ebdfb77"
 dependencies = [
  "nom",
  "serde",
@@ -2519,9 +2519,9 @@ dependencies = [
 
 [[package]]
 name = "metaslang_graph_builder"
-version = "1.3.2"
+version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9f25a2bc2422a985c0048bde313a14474999abccf3fc6cd586dd5a693cf4bf4"
+checksum = "b13b116894dc14e7d5d80024a6585338520b672e0deef9f872be93fc97ff9883"
 dependencies = [
  "log",
  "metaslang_cst",
@@ -2534,9 +2534,9 @@ dependencies = [
 
 [[package]]
 name = "metaslang_stack_graphs"
-version = "1.3.2"
+version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9be27c246386e523b04e85c1141f9628f2ed085632165058c3b511daca9e137"
+checksum = "e3437d352189d14cb1646c0ba18dfa9e636117825d666c1648ffa92394f7011b"
 dependencies = [
  "bitvec",
  "controlled-option",
@@ -4155,9 +4155,9 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slang_solidity"
-version = "1.3.2"
+version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1580e667e0e0076ee692552749dbc639c704030fbbfa738b5ddd2466c0371aff"
+checksum = "e4d8f3691b7eecf4e80e28433ce0f1f9887a9422c02525ef26baa1dd42d329c2"
 dependencies = [
  "metaslang_bindings",
  "metaslang_cst",
