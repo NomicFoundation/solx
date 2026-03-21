@@ -8,12 +8,12 @@
 use predicates::prelude::*;
 use test_case::test_case;
 
-#[test_case(crate::common::standard_json!("optimizer_mode_1.json"), "1")]
-#[test_case(crate::common::standard_json!("optimizer_mode_2.json"), "2")]
-#[test_case(crate::common::standard_json!("optimizer_mode_3.json"), "3")]
-#[test_case(crate::common::standard_json!("optimizer_mode_s.json"), "s")]
-#[test_case(crate::common::standard_json!("optimizer_mode_z.json"), "z")]
-fn mode_produces_bytecode(path: &str, _mode: &str) -> anyhow::Result<()> {
+#[test_case(crate::common::standard_json!("optimizer_mode_1.json") ; "mode_1")]
+#[test_case(crate::common::standard_json!("optimizer_mode_2.json") ; "mode_2")]
+#[test_case(crate::common::standard_json!("optimizer_mode_3.json") ; "mode_3")]
+#[test_case(crate::common::standard_json!("optimizer_mode_s.json") ; "mode_s")]
+#[test_case(crate::common::standard_json!("optimizer_mode_z.json") ; "mode_z")]
+fn mode_produces_bytecode(path: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
     let args = &["--standard-json", path];
@@ -175,7 +175,7 @@ fn cli_size_optimization_with_size_fallback_env(level: char) -> anyhow::Result<(
         "--bin",
     ];
     let env_vars = vec![(
-        solx_core::SOLX_OPTIMIZATION_SIZE_FALLBACK_ENV,
+        solx_codegen_evm::OptimizerSettings::SIZE_FALLBACK_ENV,
         "true".to_owned(),
     )];
 

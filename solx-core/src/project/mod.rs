@@ -22,6 +22,8 @@ use self::contract::Contract;
 use self::contract::ir::IR as ContractIR;
 use self::contract::ir::evmla::EVMLegacyAssembly as ContractEVMLegacyAssembly;
 use self::contract::ir::llvm_ir::LLVMIR as ContractLLVMIR;
+#[cfg(feature = "mlir")]
+use self::contract::ir::mlir::MLIR as ContractMLIR;
 use self::contract::ir::yul::Yul as ContractYul;
 use self::contract::metadata::Metadata as ContractMetadata;
 
@@ -87,7 +89,7 @@ impl Project {
     ///
     /// Parses the Solidity `sources` and returns a Solidity project.
     ///
-    pub fn try_from_solc_output(
+    pub fn try_from_solidity_output(
         solc_version: &solx_standard_json::Version,
         libraries: solx_utils::Libraries,
         via_ir: bool,
@@ -95,6 +97,9 @@ impl Project {
         debug_info: Option<solx_utils::DebugInfo>,
         output_config: Option<&solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<Self> {
+        #[cfg(feature = "mlir")]
+        let _ = (via_ir, output_config);
+        #[cfg(not(feature = "mlir"))]
         if !via_ir {
             let legacy_assemblies: BTreeMap<
                 String,
@@ -156,17 +161,25 @@ impl Project {
                     .evm
                     .as_mut()
                     .and_then(|evm| evm.legacy_assembly.take());
-                let extra_metadata = contract
-                    .evm
-                    .as_mut()
-                    .and_then(|evm| evm.extra_metadata.take());
 
+                #[cfg(feature = "mlir")]
+                let mlir_source = contract.mlir.clone();
+                #[cfg(feature = "mlir")]
+                let result = contract
+                    .mlir
+                    .take()
+                    .map(|source| Ok(Some(ContractIR::from(ContractMLIR { source }))));
+                #[cfg(not(feature = "mlir"))]
                 let result = if via_ir {
                     contract.ir.as_deref().map(|ir| {
                         ContractYul::try_from_source(name.full_path.as_str(), ir, output_config)
                             .map(|yul| yul.map(ContractIR::from))
                     })
                 } else {
+                    let extra_metadata = contract
+                        .evm
+                        .as_mut()
+                        .and_then(|evm| evm.extra_metadata.take());
                     legacy_assembly.as_ref().map(|legacy_assembly| {
                         Ok(Some(ContractIR::from(
                             ContractEVMLegacyAssembly::from_contract(
@@ -182,6 +195,7 @@ impl Project {
                     Some(Err(error)) => return (name, Err(error)),
                     Some(Ok(None)) | None => None,
                 };
+
                 let contract = Contract::new(
                     name.clone(),
                     ir,
@@ -194,6 +208,8 @@ impl Project {
                     contract.transient_storage_layout,
                     legacy_assembly,
                     contract.ir,
+                    #[cfg(feature = "mlir")]
+                    mlir_source,
                 );
                 (name, Ok(contract))
             })
@@ -320,6 +336,8 @@ impl Project {
                     None,
                     None,
                     None,
+                    #[cfg(feature = "mlir")]
+                    None,
                 );
                 (name, Ok(contract))
             })
@@ -435,6 +453,8 @@ impl Project {
                     None,
                     None,
                     None,
+                    #[cfg(feature = "mlir")]
+                    None,
                 );
 
                 (contract_name, Ok(contract))
@@ -492,6 +512,8 @@ impl Project {
                 let transient_storage_layout = contract.transient_storage_layout.take();
                 let legacy_assembly = contract.legacy_assembly.take();
                 let yul = contract.yul.take();
+                #[cfg(feature = "mlir")]
+                let mlir = contract.mlir.take();
 
                 let mut deploy_debug_info = self.debug_info.clone();
                 let mut runtime_debug_info = self.debug_info.clone();
@@ -584,6 +606,8 @@ impl Project {
                             transient_storage_layout,
                             legacy_assembly,
                             yul,
+                            #[cfg(feature = "mlir")]
+                            mlir,
                         );
                         return (path, build);
                     }
@@ -660,6 +684,8 @@ impl Project {
                     transient_storage_layout,
                     legacy_assembly,
                     yul,
+                    #[cfg(feature = "mlir")]
+                    mlir,
                 );
                 (path, build)
             })
@@ -699,7 +725,9 @@ impl Project {
         let mut cbor_version_parts = Vec::with_capacity(2);
         cbor_version_parts.push((
             crate::r#const::DEFAULT_EXECUTABLE_NAME.to_owned(),
-            crate::r#const::version().parse().expect("Always valid"),
+            crate::Compiler::version()
+                .parse()
+                .expect("version string is valid semver"),
         ));
         if let Some(solc_version) = solc_version {
             cbor_version_parts.push((

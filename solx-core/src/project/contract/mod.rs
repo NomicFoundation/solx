@@ -8,6 +8,8 @@ pub mod metadata;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+#[cfg(feature = "mlir")]
+use anyhow::Context as _;
 use solx_codegen_evm::IContext;
 
 use crate::build::contract::object::Object as EVMContractObject;
@@ -42,6 +44,9 @@ pub struct Contract {
     pub legacy_assembly: Option<solx_evm_assembly::Assembly>,
     /// solc Yul IR.
     pub yul: Option<String>,
+    /// solx MLIR IR.
+    #[cfg(feature = "mlir")]
+    pub mlir: Option<String>,
 }
 
 impl Contract {
@@ -60,6 +65,7 @@ impl Contract {
         transient_storage_layout: Option<serde_json::Value>,
         legacy_assembly: Option<solx_evm_assembly::Assembly>,
         yul: Option<String>,
+        #[cfg(feature = "mlir")] mlir: Option<String>,
     ) -> Self {
         Self {
             name,
@@ -73,6 +79,8 @@ impl Contract {
             transient_storage_layout,
             legacy_assembly,
             yul,
+            #[cfg(feature = "mlir")]
+            mlir,
         }
     }
 
@@ -479,14 +487,12 @@ impl Contract {
                     }
                 };
 
-                let mlir_context = solx_mlir::Context::new();
-                let llvm_module = mlir_context
-                    .try_into_llvm_module_from_source(&mlir.source)
-                    .map_err(|error| anyhow::anyhow!("MLIR translation: {error}"))?;
-
-                let (raw_module, raw_context) = llvm_module.into_raw();
-                let llvm = unsafe { inkwell::context::Context::new(raw_context) };
-                let module = unsafe { inkwell::module::Module::new(raw_module) };
+                let melior_context = solx_mlir::Context::create_mlir_context();
+                let raw_llvm =
+                    solx_mlir::Context::translate_source_to_llvm(&melior_context, &mlir.source)
+                        .context("MLIR translation")?;
+                let context = unsafe { inkwell::context::Context::new(raw_llvm.context) };
+                let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
 
                 let (selector_llvm_ir_unoptimized, selector_llvm_ir, selector_llvm_assembly) =
                     match code_segment {
@@ -503,7 +509,7 @@ impl Contract {
                     };
 
                 let mut context = solx_codegen_evm::Context::new(
-                    &llvm,
+                    &context,
                     module,
                     llvm_options,
                     contract_name.clone(),

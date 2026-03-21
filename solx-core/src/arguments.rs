@@ -160,6 +160,12 @@ pub struct Arguments {
     #[arg(long = "emit-llvm-ir", help_heading = "Output Selection")]
     pub output_llvm_ir: bool,
 
+    /// Emit MLIR (LLVM dialect, intermediate representation from Slang frontend).
+    /// Can be used with --output-dir to write .mlir files.
+    #[cfg(feature = "mlir")]
+    #[arg(long = "emit-mlir", help_heading = "Output Selection")]
+    pub output_mlir: bool,
+
     //
     // Compilation Settings
     //
@@ -236,6 +242,15 @@ pub struct Arguments {
 }
 
 impl Arguments {
+    /// Expected argument count for `--recursive-process` (binary name + flag + value).
+    const RECURSIVE_PROCESS_MAX_ARGS: usize = 3;
+
+    /// Expected argument count for `--version` (binary name + flag).
+    const VERSION_MAX_ARGS: usize = 2;
+
+    /// Expected number of parts in a remapping (key=value).
+    const REMAPPING_PART_COUNT: usize = 2;
+
     ///
     /// Validates the arguments.
     ///
@@ -243,7 +258,7 @@ impl Arguments {
         let mut messages = vec![];
 
         if self.recursive_process {
-            if std::env::args().count() > 3 {
+            if std::env::args().count() > Self::RECURSIVE_PROCESS_MAX_ARGS {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "No other options are allowed while running in the recursive process mode.",
                 ));
@@ -252,7 +267,7 @@ impl Arguments {
         }
 
         if self.version {
-            if std::env::args().count() > 2 {
+            if std::env::args().count() > Self::VERSION_MAX_ARGS {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "No other options are allowed while getting the compiler version.",
                 ));
@@ -293,7 +308,7 @@ impl Arguments {
                 ));
             }
 
-            if self.output_abi
+            let mut solidity_only = self.output_abi
                 || self.output_hashes
                 || self.output_userdoc
                 || self.output_devdoc
@@ -304,10 +319,14 @@ impl Arguments {
                 || self.output_ir
                 || self.output_debug_info
                 || self.output_debug_info_runtime
-                || self.output_benchmarks
+                || self.output_benchmarks;
+            #[cfg(feature = "mlir")]
             {
+                solidity_only = solidity_only || self.output_mlir;
+            }
+            if solidity_only {
                 messages.push(solx_standard_json::OutputError::new_error(
-                    "ABI, hashes, userdoc, devdoc, storage layout, transient storage layout, AST, EVM assembly, Yul, debug info, benchmarks can be only emitted for Solidity contracts.",
+                    "ABI, hashes, userdoc, devdoc, storage layout, transient storage layout, AST, EVM assembly, Yul, MLIR, debug info, benchmarks can be only emitted for Solidity contracts.",
                 ));
             }
 
@@ -325,7 +344,7 @@ impl Arguments {
         }
 
         if self.standard_json.is_some() {
-            if self.output_bytecode
+            let mut has_output_flags = self.output_bytecode
                 || self.output_bytecode_runtime
                 || self.output_assembly
                 || self.output_debug_info
@@ -343,8 +362,12 @@ impl Arguments {
                 || self.output_benchmarks
                 || self.output_evmla
                 || self.output_ethir
-                || self.output_llvm_ir
+                || self.output_llvm_ir;
+            #[cfg(feature = "mlir")]
             {
+                has_output_flags = has_output_flags || self.output_mlir;
+            }
+            if has_output_flags {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "Cannot output data outside of JSON in standard JSON mode.",
                 ));
@@ -432,7 +455,7 @@ impl Arguments {
                             .to_string(),
                     );
                 }
-                if parts.len() != 2 {
+                if parts.len() != Self::REMAPPING_PART_COUNT {
                     anyhow::bail!(
                         "Invalid remapping `{input}`: expected two parts separated by '='."
                     );
@@ -475,6 +498,10 @@ impl Arguments {
         }
         if self.output_benchmarks {
             selectors.insert(solx_standard_json::InputSelector::Benchmarks);
+        }
+        #[cfg(feature = "mlir")]
+        if self.output_mlir {
+            selectors.insert(solx_standard_json::InputSelector::MLIR);
         }
         if self.output_ast_json {
             selectors.insert(solx_standard_json::InputSelector::AST);
@@ -530,64 +557,6 @@ impl Arguments {
     }
 
     ///
-    /// Warn about CLI output flags that require the solc frontend.
-    ///
-    /// These flags are accepted by clap but silently produce no output on
-    /// the MLIR/slang path because the underlying data comes from solc.
-    /// No-op when the `solc` feature is enabled (all flags are supported).
-    ///
-    #[cfg(feature = "solc")]
-    pub fn warn_unsupported_outputs(
-        &self,
-        _messages: &std::sync::Arc<std::sync::Mutex<Vec<solx_standard_json::OutputError>>>,
-    ) {
-    }
-
-    ///
-    /// Warn about CLI output flags that require the solc frontend.
-    ///
-    /// These flags are accepted by clap but silently produce no output on
-    /// the MLIR/slang path because the underlying data comes from solc.
-    ///
-    #[cfg(not(feature = "solc"))]
-    pub fn warn_unsupported_outputs(
-        &self,
-        messages: &std::sync::Arc<std::sync::Mutex<Vec<solx_standard_json::OutputError>>>,
-    ) {
-        let unsupported: Vec<&str> = [
-            (self.output_abi, "--abi"),
-            (self.output_hashes, "--hashes"),
-            (self.output_userdoc, "--userdoc"),
-            (self.output_devdoc, "--devdoc"),
-            (self.output_storage_layout, "--storage-layout"),
-            (
-                self.output_transient_storage_layout,
-                "--transient-storage-layout",
-            ),
-            (self.output_asm_solc_json, "--asm-solc-json"),
-            (self.output_ir, "--ir"),
-            (self.output_evmla, "--evmla"),
-            (self.output_ethir, "--ethir"),
-            (self.output_debug_info, "--debug-info"),
-            (self.output_debug_info_runtime, "--debug-info-runtime"),
-        ]
-        .into_iter()
-        .filter_map(|(flag, name)| flag.then_some(name))
-        .collect();
-
-        if unsupported.is_empty() {
-            return;
-        }
-
-        messages.lock().expect("Sync").push(
-            solx_standard_json::OutputError::new_warning(format!(
-                "The following output flags are not supported by the current frontend and will be ignored: {}",
-                unsupported.join(", ")
-            )),
-        );
-    }
-
-    ///
     /// Resolve optimizer settings from CLI arguments and environment variables.
     ///
     pub fn optimizer_settings(&self) -> anyhow::Result<solx_codegen_evm::OptimizerSettings> {
@@ -595,7 +564,9 @@ impl Arguments {
             Some(mode) => solx_codegen_evm::OptimizerSettings::try_from_cli(mode)?,
             None => self.optimizer_settings_from_env()?,
         };
-        if self.size_fallback || std::env::var(crate::SOLX_OPTIMIZATION_SIZE_FALLBACK_ENV).is_ok() {
+        if self.size_fallback
+            || std::env::var(solx_codegen_evm::OptimizerSettings::SIZE_FALLBACK_ENV).is_ok()
+        {
             settings.enable_fallback_to_size();
         }
         settings.is_verify_each_enabled = self.llvm_verify_each;
@@ -608,19 +579,23 @@ impl Arguments {
     /// variable, falling back to the default (cycles) when unset.
     ///
     fn optimizer_settings_from_env(&self) -> anyhow::Result<solx_codegen_evm::OptimizerSettings> {
-        let Ok(optimization) = std::env::var(crate::SOLX_OPTIMIZATION_ENV) else {
+        let Ok(optimization) = std::env::var(solx_codegen_evm::OptimizerSettings::OPTIMIZATION_ENV)
+        else {
             return Ok(solx_codegen_evm::OptimizerSettings::cycles());
         };
         if !solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.contains(&optimization.as_str())
         {
             anyhow::bail!(
                 "Invalid value `{optimization}` for environment variable '{}': only values {} are supported.",
-                crate::SOLX_OPTIMIZATION_ENV,
+                solx_codegen_evm::OptimizerSettings::OPTIMIZATION_ENV,
                 solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.join(", ")
             );
         }
         solx_codegen_evm::OptimizerSettings::try_from_cli(
-            optimization.chars().next().expect("Always exists"),
+            optimization
+                .chars()
+                .next()
+                .expect("validated string is non-empty"),
         )
     }
 
@@ -643,11 +618,15 @@ impl Arguments {
             return Ok(None);
         };
 
-        let has_ir_flags = self.output_ir
+        let mut has_ir_flags = self.output_ir
             || self.output_evmla
             || self.output_ethir
             || self.output_llvm_ir
             || self.output_assembly;
+        #[cfg(feature = "mlir")]
+        {
+            has_ir_flags = has_ir_flags || self.output_mlir;
+        }
         if !has_ir_flags {
             return Ok(None);
         }

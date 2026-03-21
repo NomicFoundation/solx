@@ -33,6 +33,10 @@ pub struct Contract {
     /// The contract Yul IR code.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ir: Option<String>,
+    /// The contract MLIR source code.
+    #[cfg(feature = "mlir")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mlir: Option<String>,
     /// The EVM data of the contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evm: Option<EVM>,
@@ -43,7 +47,7 @@ impl Contract {
     /// Checks if all fields are unset or empty.
     ///
     pub fn is_empty(&self) -> bool {
-        self.abi.is_none()
+        let mut empty = self.abi.is_none()
             && self.storage_layout.is_none()
             && self.transient_storage_layout.is_none()
             && self.metadata.is_none()
@@ -53,6 +57,11 @@ impl Contract {
             && match self.evm.as_ref() {
                 Some(evm) => evm.is_empty(),
                 None => true,
-            }
+            };
+        #[cfg(feature = "mlir")]
+        {
+            empty = empty && self.mlir.is_none();
+        }
+        empty
     }
 }

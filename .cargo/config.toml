@@ -32,7 +32,9 @@ LLVM_SYS_211_PREFIX = { value = "./target-llvm/target-final/", relative = true, 
 MLIR_SYS_210_PREFIX = { value = "./target-llvm/target-final/", relative = true, force = true }
 TABLEGEN_210_PREFIX = { value = "./target-llvm/target-final/", relative = true, force = true }
 
-CARGO_BIN_EXE_SOLX = { value = "./target/debug/solx", relative = true, force = true }
-
 [alias]
-test-slang = "test -p solx-slang -p solx-mlir -p solx --no-default-features --features slang"
+run-tester = "run --release --bin solx-tester -- --solidity-compiler ./target/release/solx"
+
+build-slang = "build --release -p solx-slang -p solx-mlir -p solx --no-default-features --features slang --target-dir target-slang"
+test-slang = "test -p solx-slang -p solx-mlir -p solx --no-default-features --features slang --target-dir target-slang"
+run-tester-slang = "run --release --bin solx-tester --no-default-features --features slang-ast --target-dir target-slang -- --solidity-compiler ./target-slang/release/solx"

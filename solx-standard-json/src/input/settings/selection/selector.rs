@@ -42,6 +42,10 @@ pub enum Selector {
     /// The compilation pipeline benchmarks.
     #[serde(rename = "benchmarks")]
     Benchmarks,
+    /// The MLIR source code (LLVM dialect, Slang frontend intermediate representation).
+    #[cfg(feature = "mlir")]
+    #[serde(rename = "mlir")]
+    MLIR,
 
     /// All EVM data.
     #[serde(rename = "evm")]
@@ -141,6 +145,10 @@ impl Selector {
     /// Whether the data source is `solc`.
     ///
     pub fn is_received_from_solc(&self) -> bool {
+        #[cfg(feature = "mlir")]
+        if matches!(self, Self::MLIR) {
+            return false;
+        }
         !matches!(
             self,
             Self::Benchmarks
@@ -238,48 +246,53 @@ impl Selector {
                 Self::RuntimeBytecodeFunctionDebugData,
                 Self::RuntimeBytecodeGeneratedSources,
             ],
-            Self::Any => vec![
-                Self::AST,
-                Self::ABI,
-                Self::Metadata,
-                Self::DeveloperDocumentation,
-                Self::UserDocumentation,
-                Self::StorageLayout,
-                Self::TransientStorageLayout,
-                Self::MethodIdentifiers,
-                Self::EVMLegacyAssembly,
-                Self::Yul,
-                Self::Benchmarks,
-                Self::EVM,
-                Self::Bytecode,
-                Self::BytecodeObject,
-                Self::BytecodeEVMLA,
-                Self::BytecodeEthIR,
-                Self::BytecodeLLVMIRUnoptimized,
-                Self::BytecodeLLVMIR,
-                Self::BytecodeLLVMAssembly,
-                Self::BytecodeOpcodes,
-                Self::BytecodeLinkReferences,
-                Self::BytecodeSourceMap,
-                Self::BytecodeDebugInfo,
-                Self::BytecodeFunctionDebugData,
-                Self::BytecodeGeneratedSources,
-                Self::RuntimeBytecode,
-                Self::RuntimeBytecodeObject,
-                Self::RuntimeBytecodeEVMLA,
-                Self::RuntimeBytecodeEthIR,
-                Self::RuntimeBytecodeLLVMIRUnoptimized,
-                Self::RuntimeBytecodeLLVMIR,
-                Self::RuntimeBytecodeLLVMAssembly,
-                Self::RuntimeBytecodeOpcodes,
-                Self::RuntimeBytecodeLinkReferences,
-                Self::RuntimeBytecodeImmutableReferences,
-                Self::RuntimeBytecodeSourceMap,
-                Self::RuntimeBytecodeDebugInfo,
-                Self::RuntimeBytecodeFunctionDebugData,
-                Self::RuntimeBytecodeGeneratedSources,
-                Self::GasEstimates,
-            ],
+            Self::Any => {
+                let mut selectors = vec![
+                    Self::AST,
+                    Self::ABI,
+                    Self::Metadata,
+                    Self::DeveloperDocumentation,
+                    Self::UserDocumentation,
+                    Self::StorageLayout,
+                    Self::TransientStorageLayout,
+                    Self::MethodIdentifiers,
+                    Self::EVMLegacyAssembly,
+                    Self::Yul,
+                    Self::Benchmarks,
+                    Self::EVM,
+                    Self::Bytecode,
+                    Self::BytecodeObject,
+                    Self::BytecodeEVMLA,
+                    Self::BytecodeEthIR,
+                    Self::BytecodeLLVMIRUnoptimized,
+                    Self::BytecodeLLVMIR,
+                    Self::BytecodeLLVMAssembly,
+                    Self::BytecodeOpcodes,
+                    Self::BytecodeLinkReferences,
+                    Self::BytecodeSourceMap,
+                    Self::BytecodeDebugInfo,
+                    Self::BytecodeFunctionDebugData,
+                    Self::BytecodeGeneratedSources,
+                    Self::RuntimeBytecode,
+                    Self::RuntimeBytecodeObject,
+                    Self::RuntimeBytecodeEVMLA,
+                    Self::RuntimeBytecodeEthIR,
+                    Self::RuntimeBytecodeLLVMIRUnoptimized,
+                    Self::RuntimeBytecodeLLVMIR,
+                    Self::RuntimeBytecodeLLVMAssembly,
+                    Self::RuntimeBytecodeOpcodes,
+                    Self::RuntimeBytecodeLinkReferences,
+                    Self::RuntimeBytecodeImmutableReferences,
+                    Self::RuntimeBytecodeSourceMap,
+                    Self::RuntimeBytecodeDebugInfo,
+                    Self::RuntimeBytecodeFunctionDebugData,
+                    Self::RuntimeBytecodeGeneratedSources,
+                    Self::GasEstimates,
+                ];
+                #[cfg(feature = "mlir")]
+                selectors.push(Self::MLIR);
+                selectors
+            }
             selector => vec![selector],
         }
     }

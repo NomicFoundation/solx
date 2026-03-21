@@ -17,6 +17,18 @@ fn main() {
     println!("cargo:rustc-link-lib=static=lldCommon");
     println!("cargo:rustc-link-lib=static=lldELF");
 
+    // Sol dialect — custom Solidity MLIR dialect defined in solx-llvm.
+    println!("cargo:rustc-link-lib=static=MLIRSolDialect");
+    println!("cargo:rustc-link-lib=static=MLIRCAPISol");
+    println!("cargo:rustc-link-lib=static=MLIRSolToStandard");
+    println!("cargo:rustc-link-lib=static=MLIRSolTransforms");
+
+    // Yul dialect — dependency of the Sol-to-standard conversion pass.
+    println!("cargo:rustc-link-lib=static=MLIRYulDialect");
+    println!("cargo:rustc-link-lib=static=MLIRCAPIYul");
+
+    let include_path = std::path::PathBuf::from(&prefix).join("include");
+
     // Compile stub definitions for the six MLIR ExecutionEngine C API symbols
     // that melior references unconditionally. See mlir_execution_engine_stubs.c
     // for the full explanation.
@@ -24,4 +36,15 @@ fn main() {
     cc::Build::new()
         .file("mlir_execution_engine_stubs.c")
         .compile("mlir_execution_engine_stubs");
+
+    // Compile C++ wrappers for Sol dialect attribute creation.
+    // The Sol C API does not expose ContractKindAttr/StateMutabilityAttr
+    // constructors, so we provide thin extern "C" wrappers.
+    println!("cargo:rerun-if-changed=sol_attr_stubs.cpp");
+    cc::Build::new()
+        .cpp(true)
+        .file("sol_attr_stubs.cpp")
+        .include(&include_path)
+        .flag("-std=c++17")
+        .compile("sol_attr_stubs");
 }
