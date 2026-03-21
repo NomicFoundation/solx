@@ -173,6 +173,220 @@ fn multiple_outputs_simple_contract() -> anyhow::Result<()> {
 }
 
 #[test]
+fn emit_llvm_ir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_output")?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--emit-llvm-ir",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stderr(predicate::str::contains("Compiler run successful"));
+
+    let entries: Vec<_> = std::fs::read_dir(output_directory.path())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "ll"))
+        .collect();
+
+    assert!(!entries.is_empty(), "Expected .ll files to be created");
+
+    Ok(())
+}
+
+#[cfg(feature = "solc")]
+#[test]
+fn evmla() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_output")?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--evmla",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stderr(predicate::str::contains("Compiler run successful"));
+
+    let entries: Vec<_> = std::fs::read_dir(output_directory.path())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "evmla"))
+        .collect();
+
+    assert!(!entries.is_empty(), "Expected .evmla files to be created");
+
+    Ok(())
+}
+
+#[cfg(feature = "solc")]
+#[test]
+fn ethir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_output")?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--ethir",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stderr(predicate::str::contains("Compiler run successful"));
+
+    let entries: Vec<_> = std::fs::read_dir(output_directory.path())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "ethir"))
+        .collect();
+
+    assert!(!entries.is_empty(), "Expected .ethir files to be created");
+
+    Ok(())
+}
+
+#[cfg(feature = "mlir")]
+#[test]
+fn emit_mlir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_output")?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--emit-mlir",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stderr(predicate::str::contains("Compiler run successful"));
+
+    let entries: Vec<_> = std::fs::read_dir(output_directory.path())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "mlir"))
+        .collect();
+
+    assert!(!entries.is_empty(), "Expected .mlir files to be created");
+
+    Ok(())
+}
+
+#[cfg(feature = "solc")]
+#[test]
+fn multiple_ir_outputs() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_output")?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--emit-llvm-ir",
+        "--evmla",
+        "--ethir",
+        "--asm",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stderr(predicate::str::contains("Compiler run successful"));
+
+    let ll_files: Vec<_> = std::fs::read_dir(output_directory.path())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "ll"))
+        .collect();
+
+    let evmla_files: Vec<_> = std::fs::read_dir(output_directory.path())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "evmla"))
+        .collect();
+
+    let ethir_files: Vec<_> = std::fs::read_dir(output_directory.path())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "ethir"))
+        .collect();
+
+    let asm_files: Vec<_> = std::fs::read_dir(output_directory.path())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "asm"))
+        .collect();
+
+    assert!(!ll_files.is_empty(), "Expected .ll files to be created");
+    assert!(
+        !evmla_files.is_empty(),
+        "Expected .evmla files to be created"
+    );
+    assert!(
+        !ethir_files.is_empty(),
+        "Expected .ethir files to be created"
+    );
+    assert!(!asm_files.is_empty(), "Expected .asm files to be created");
+
+    Ok(())
+}
+
+#[cfg(feature = "mlir")]
+#[test]
+fn emit_mlir_and_llvm_ir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let output_directory = TempDir::with_prefix("solx_output")?;
+
+    let args = &[
+        crate::common::TEST_SOLIDITY_CONTRACT,
+        "--emit-mlir",
+        "--emit-llvm-ir",
+        "--asm",
+        "--output-dir",
+        output_directory.path().to_str().expect("Always valid"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result
+        .success()
+        .stderr(predicate::str::contains("Compiler run successful"));
+
+    let mlir_files: Vec<_> = std::fs::read_dir(output_directory.path())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "mlir"))
+        .collect();
+
+    let ll_files: Vec<_> = std::fs::read_dir(output_directory.path())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "ll"))
+        .collect();
+
+    let asm_files: Vec<_> = std::fs::read_dir(output_directory.path())?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "asm"))
+        .collect();
+
+    assert!(!mlir_files.is_empty(), "Expected .mlir files to be created");
+    assert!(!ll_files.is_empty(), "Expected .ll files to be created");
+    assert!(!asm_files.is_empty(), "Expected .asm files to be created");
+
+    Ok(())
+}
+
+#[test]
 fn env_var() -> anyhow::Result<()> {
     crate::common::setup()?;
 

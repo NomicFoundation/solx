@@ -44,6 +44,9 @@ pub struct Contract {
     pub legacy_assembly: Option<solx_evm_assembly::Assembly>,
     /// solc Yul IR.
     pub yul: Option<String>,
+    /// solx MLIR IR.
+    #[cfg(feature = "mlir")]
+    pub mlir: Option<String>,
 }
 
 impl Contract {
@@ -62,6 +65,7 @@ impl Contract {
         transient_storage_layout: Option<serde_json::Value>,
         legacy_assembly: Option<solx_evm_assembly::Assembly>,
         yul: Option<String>,
+        #[cfg(feature = "mlir")] mlir: Option<String>,
     ) -> Self {
         Self {
             name,
@@ -75,6 +79,8 @@ impl Contract {
             transient_storage_layout,
             legacy_assembly,
             yul,
+            #[cfg(feature = "mlir")]
+            mlir,
         }
     }
 

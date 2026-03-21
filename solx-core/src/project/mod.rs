@@ -97,6 +97,8 @@ impl Project {
         debug_info: Option<solx_utils::DebugInfo>,
         output_config: Option<&solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<Self> {
+        #[cfg(feature = "mlir")]
+        let _ = (via_ir, output_config);
         #[cfg(not(feature = "mlir"))]
         if !via_ir {
             let legacy_assemblies: BTreeMap<
@@ -204,6 +206,8 @@ impl Project {
                     contract.transient_storage_layout,
                     legacy_assembly,
                     contract.ir,
+                    #[cfg(feature = "mlir")]
+                    contract.mlir,
                 );
                 (name, Ok(contract))
             })
@@ -330,6 +334,8 @@ impl Project {
                     None,
                     None,
                     None,
+                    #[cfg(feature = "mlir")]
+                    None,
                 );
                 (name, Ok(contract))
             })
@@ -445,6 +451,8 @@ impl Project {
                     None,
                     None,
                     None,
+                    #[cfg(feature = "mlir")]
+                    None,
                 );
 
                 (contract_name, Ok(contract))
@@ -502,6 +510,8 @@ impl Project {
                 let transient_storage_layout = contract.transient_storage_layout.take();
                 let legacy_assembly = contract.legacy_assembly.take();
                 let yul = contract.yul.take();
+                #[cfg(feature = "mlir")]
+                let mlir = contract.mlir.take();
 
                 let mut deploy_debug_info = self.debug_info.clone();
                 let mut runtime_debug_info = self.debug_info.clone();
@@ -594,6 +604,8 @@ impl Project {
                             transient_storage_layout,
                             legacy_assembly,
                             yul,
+                            #[cfg(feature = "mlir")]
+                            mlir,
                         );
                         return (path, build);
                     }
@@ -670,6 +682,8 @@ impl Project {
                     transient_storage_layout,
                     legacy_assembly,
                     yul,
+                    #[cfg(feature = "mlir")]
+                    mlir,
                 );
                 (path, build)
             })
