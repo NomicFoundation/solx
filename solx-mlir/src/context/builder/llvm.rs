@@ -1,10 +1,9 @@
 //!
-//! LLVM dialect operations for the MLIR builder.
+//! LLVM dialect emission methods and operation name constants.
 //!
-//! Contains methods on [`Context`] that emit LLVM dialect MLIR
-//! operations: constants, loads, stores, casts, branches, and calls.
-//! 
-//! TODO: convert to a module directory, consume src/ops.rs/llvm constants as a child module
+//! Contains methods on [`Context`](crate::context::Context) that emit
+//! LLVM dialect MLIR operations: constants, loads, stores, casts,
+//! branches, and calls.
 //!
 
 use melior::ir::Attribute;
@@ -16,11 +15,91 @@ use melior::ir::Value;
 use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::operation::OperationBuilder;
+use melior::ir::r#type::IntegerType;
 
 use crate::ICmpPredicate;
-use crate::builder::Context;
 
-impl<'context> Context<'context> {
+use super::Builder;
+
+impl<'context> Builder<'context> {
+    /// Bit width for ICmp predicate attributes.
+    const PREDICATE_ATTRIBUTE_BIT_WIDTH: u32 = 64;
+
+    // ---- LLVM dialect operation names ----
+
+    /// `llvm.mlir.constant` — materializes a compile-time constant.
+    pub const MLIR_CONSTANT: &'static str = "llvm.mlir.constant";
+    /// `llvm.return` — returns from a function.
+    pub const RETURN: &'static str = "llvm.return";
+    /// `llvm.br` — unconditional branch.
+    pub const BR: &'static str = "llvm.br";
+    /// `llvm.cond_br` — conditional branch.
+    pub const COND_BR: &'static str = "llvm.cond_br";
+    /// `llvm.icmp` — integer comparison.
+    pub const ICMP: &'static str = "llvm.icmp";
+    /// `llvm.zext` — zero extension.
+    pub const ZEXT: &'static str = "llvm.zext";
+    /// `llvm.alloca` — stack allocation.
+    pub const ALLOCA: &'static str = "llvm.alloca";
+    /// `llvm.inttoptr` — integer to pointer cast.
+    pub const INTTOPTR: &'static str = "llvm.inttoptr";
+    /// `llvm.call` — function call.
+    pub const CALL: &'static str = "llvm.call";
+    /// `llvm.add` — integer addition.
+    pub const ADD: &'static str = "llvm.add";
+    /// `llvm.sub` — integer subtraction.
+    pub const SUB: &'static str = "llvm.sub";
+    /// `llvm.mul` — integer multiplication.
+    pub const MUL: &'static str = "llvm.mul";
+    /// `llvm.udiv` — unsigned integer division.
+    pub const UDIV: &'static str = "llvm.udiv";
+    /// `llvm.urem` — unsigned integer remainder.
+    pub const UREM: &'static str = "llvm.urem";
+    /// `llvm.and` — bitwise AND.
+    pub const AND: &'static str = "llvm.and";
+    /// `llvm.or` — bitwise OR.
+    pub const OR: &'static str = "llvm.or";
+    /// `llvm.xor` — bitwise XOR.
+    pub const XOR: &'static str = "llvm.xor";
+    /// `llvm.shl` — shift left.
+    pub const SHL: &'static str = "llvm.shl";
+    /// `llvm.lshr` — logical shift right.
+    pub const LSHR: &'static str = "llvm.lshr";
+    /// `llvm.ashr` — arithmetic shift right.
+    pub const ASHR: &'static str = "llvm.ashr";
+    /// `llvm.sdiv` — signed integer division.
+    pub const SDIV: &'static str = "llvm.sdiv";
+    /// `llvm.srem` — signed integer remainder.
+    pub const SREM: &'static str = "llvm.srem";
+    /// `llvm.evm.return` — halt execution and return data.
+    pub const EVM_RETURN: &'static str = "llvm.evm.return";
+    /// `llvm.evm.revert` — halt execution and revert state.
+    pub const EVM_REVERT: &'static str = "llvm.evm.revert";
+    /// `llvm.evm.calldataload` — load 32 bytes from calldata.
+    pub const EVM_CALLDATALOAD: &'static str = "llvm.evm.calldataload";
+    /// `llvm.evm.origin` — get execution originator.
+    pub const EVM_ORIGIN: &'static str = "llvm.evm.origin";
+    /// `llvm.evm.gasprice` — get gas price.
+    pub const EVM_GASPRICE: &'static str = "llvm.evm.gasprice";
+    /// `llvm.evm.caller` — get caller address.
+    pub const EVM_CALLER: &'static str = "llvm.evm.caller";
+    /// `llvm.evm.callvalue` — get deposited value.
+    pub const EVM_CALLVALUE: &'static str = "llvm.evm.callvalue";
+    /// `llvm.evm.timestamp` — get block timestamp.
+    pub const EVM_TIMESTAMP: &'static str = "llvm.evm.timestamp";
+    /// `llvm.evm.number` — get block number.
+    pub const EVM_NUMBER: &'static str = "llvm.evm.number";
+    /// `llvm.evm.coinbase` — get block coinbase.
+    pub const EVM_COINBASE: &'static str = "llvm.evm.coinbase";
+    /// `llvm.evm.chainid` — get chain ID.
+    pub const EVM_CHAINID: &'static str = "llvm.evm.chainid";
+    /// `llvm.evm.basefee` — get block base fee.
+    pub const EVM_BASEFEE: &'static str = "llvm.evm.basefee";
+    /// `llvm.evm.gaslimit` — get block gas limit.
+    pub const EVM_GASLIMIT: &'static str = "llvm.evm.gaslimit";
+    /// `llvm.evm.call` — message call into an account.
+    pub const EVM_CALL: &'static str = "llvm.evm.call";
+
     // ---- Constants ----
 
     /// Emits an `llvm.mlir.constant` producing an `i256` value.
@@ -30,8 +109,6 @@ impl<'context> Context<'context> {
     /// # Panics
     ///
     /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    /// 
-    /// TODO: move to builder
     pub fn emit_i256_constant<'block, B>(&self, value: i64, block: &B) -> Value<'context, 'block>
     where
         B: BlockLike<'context, 'block>,
@@ -40,7 +117,7 @@ impl<'context> Context<'context> {
         let attribute = IntegerAttribute::new(self.i256_type, value);
         block
             .append_operation(
-                OperationBuilder::new(crate::ops::MLIR_CONSTANT, self.unknown_location)
+                OperationBuilder::new(Self::MLIR_CONSTANT, self.unknown_location)
                     .add_attributes(&[(Identifier::new(self.context, "value"), attribute.into())])
                     .add_results(&[self.i256_type])
                     .build()
@@ -57,7 +134,6 @@ impl<'context> Context<'context> {
     ///
     /// Returns an error if limb decomposition fails (should not happen for
     /// valid `u64` values).
-    /// TODO: move to builder
     pub fn emit_i256_from_u64<'block, B>(
         &self,
         value: u64,
@@ -79,7 +155,6 @@ impl<'context> Context<'context> {
     /// # Errors
     ///
     /// Returns an error if the string cannot be parsed as an MLIR integer attribute.
-    /// TODO: move to builder
     pub fn emit_i256_from_decimal_str<'block, B>(
         &self,
         value: &str,
@@ -91,7 +166,7 @@ impl<'context> Context<'context> {
     {
         let attribute = Attribute::parse(self.context, &format!("{value} : i256"))
             .ok_or_else(|| anyhow::anyhow!("invalid i256 decimal literal: {value}"))?;
-        self.emit_constant_from_attribute(attribute, block)
+        self.emit_constant_operation(Self::MLIR_CONSTANT, attribute, block)
     }
 
     /// Emits an `i256` constant from a hex string (without `0x` prefix) of arbitrary size.
@@ -99,7 +174,6 @@ impl<'context> Context<'context> {
     /// # Errors
     ///
     /// Returns an error if the string cannot be parsed as an MLIR integer attribute.
-    /// TODO: move to builder
     pub fn emit_i256_from_hex_str<'block, B>(
         &self,
         hexadecimal: &str,
@@ -111,7 +185,7 @@ impl<'context> Context<'context> {
     {
         let attribute = Attribute::parse(self.context, &format!("0x{hexadecimal} : i256"))
             .ok_or_else(|| anyhow::anyhow!("invalid i256 hex literal: 0x{hexadecimal}"))?;
-        self.emit_constant_from_attribute(attribute, block)
+        self.emit_constant_operation(Self::MLIR_CONSTANT, attribute, block)
     }
 
     // ---- Memory ----
@@ -181,7 +255,7 @@ impl<'context> Context<'context> {
     {
         block
             .append_operation(
-                OperationBuilder::new(crate::ops::INTTOPTR, self.unknown_location)
+                OperationBuilder::new(Self::INTTOPTR, self.unknown_location)
                     .add_operands(&[value])
                     .add_results(&[pointer_type])
                     .build()
@@ -208,7 +282,7 @@ impl<'context> Context<'context> {
     {
         block
             .append_operation(
-                OperationBuilder::new(crate::ops::ZEXT, self.unknown_location)
+                OperationBuilder::new(Self::ZEXT, self.unknown_location)
                     .add_operands(&[value])
                     .add_results(&[self.i256_type])
                     .build()
@@ -221,38 +295,11 @@ impl<'context> Context<'context> {
 
     // ---- Arithmetic ----
 
-    /// Emits a generic two-operand LLVM operation (e.g. `add`, `sub`, `lshr`).
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the operation cannot be constructed.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the constructed operation produces no results, indicating a
-    /// bug in the caller's operation name.
-    pub fn emit_llvm_operation<'block, B>(
-        &self,
-        operation_name: &str,
-        lhs: Value<'context, 'block>,
-        rhs: Value<'context, 'block>,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> anyhow::Result<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        self.emit_binary_operation(operation_name, lhs, rhs, result_type, block)
-    }
-
     /// Emits an `llvm.icmp` comparison returning `i1`.
     ///
     /// # Panics
     ///
     /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    /// 
-    /// TODO: flatten with emit_icmp or other functions
     pub fn emit_icmp<'block, B>(
         &self,
         lhs: Value<'context, 'block>,
@@ -264,21 +311,26 @@ impl<'context> Context<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        self.emit_comparison(crate::ops::ICMP, lhs, rhs, predicate as i64, block)
-    }
-
-    // ---- Attributes ----
-
-    /// Builds the `operandSegmentSizes` dense `i32` array attribute.
-    /// TODO: move to builder
-    fn operand_segment_sizes_attribute(
-        &self,
-        segments: &[i32],
-    ) -> (Identifier<'context>, Attribute<'context>) {
-        (
-            Identifier::new(self.context, "operandSegmentSizes"),
-            DenseI32ArrayAttribute::new(self.context, segments).into(),
-        )
+        block
+            .append_operation(
+                OperationBuilder::new(Self::ICMP, self.unknown_location)
+                    .add_operands(&[lhs, rhs])
+                    .add_attributes(&[(
+                        Identifier::new(self.context, "predicate"),
+                        IntegerAttribute::new(
+                            IntegerType::new(self.context, Self::PREDICATE_ATTRIBUTE_BIT_WIDTH)
+                                .into(),
+                            predicate as i64,
+                        )
+                        .into(),
+                    )])
+                    .add_results(&[self.i1_type])
+                    .build()
+                    .expect("llvm.icmp operation is well-formed"),
+            )
+            .result(0)
+            .expect("llvm.icmp always produces one result")
+            .into()
     }
 
     // ---- EVM Intrinsics ----
@@ -337,7 +389,7 @@ impl<'context> Context<'context> {
         destination: &melior::ir::Block<'context>,
         destination_arguments: &[Value<'context, 'block>],
     ) -> Operation<'context> {
-        OperationBuilder::new(crate::ops::BR, self.unknown_location)
+        OperationBuilder::new(Self::BR, self.unknown_location)
             .add_operands(destination_arguments)
             .add_attributes(&[
                 self.operand_segment_sizes_attribute(&[destination_arguments.len() as i32])
@@ -363,7 +415,7 @@ impl<'context> Context<'context> {
         let mut operands = vec![condition];
         operands.extend_from_slice(true_arguments);
         operands.extend_from_slice(false_arguments);
-        OperationBuilder::new(crate::ops::COND_BR, self.unknown_location)
+        OperationBuilder::new(Self::COND_BR, self.unknown_location)
             .add_operands(&operands)
             .add_attributes(&[self.operand_segment_sizes_attribute(&[
                 1,
@@ -373,5 +425,18 @@ impl<'context> Context<'context> {
             .add_successors(&[true_destination, false_destination])
             .build()
             .expect("llvm.cond_br operation is well-formed")
+    }
+
+    // ---- Attributes ----
+
+    /// Builds the `operandSegmentSizes` dense `i32` array attribute.
+    fn operand_segment_sizes_attribute(
+        &self,
+        segments: &[i32],
+    ) -> (Identifier<'context>, Attribute<'context>) {
+        (
+            Identifier::new(self.context, "operandSegmentSizes"),
+            DenseI32ArrayAttribute::new(self.context, segments).into(),
+        )
     }
 }

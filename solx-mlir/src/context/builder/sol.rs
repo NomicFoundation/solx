@@ -1,10 +1,9 @@
 //!
-//! Sol dialect operations for the MLIR builder.
+//! Sol dialect emission methods and operation name constants.
 //!
-//! Contains methods on [`Context`] that emit Sol dialect MLIR
-//! operations: contracts, functions, constants, returns, and calls.
-//! 
-//! TODO: convert to a module directory, consume src/ops.rs/sol as a child module
+//! Contains methods on [`Context`](crate::context::Context) that emit
+//! Sol dialect MLIR operations: contracts, functions, constants,
+//! returns, and calls.
 //!
 
 use melior::ir::Attribute;
@@ -27,9 +26,74 @@ use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
 
 use crate::StateMutability;
-use crate::builder::Context;
 
-impl<'context> Context<'context> {
+use super::Builder;
+
+impl<'context> Builder<'context> {
+    /// Bit width of a Solidity function selector (4 bytes).
+    const SELECTOR_BIT_WIDTH: u32 = 32;
+
+    // ---- Sol dialect operation names ----
+
+    /// `sol.contract` — contract symbol table container.
+    pub const SOL_CONTRACT: &'static str = "sol.contract";
+    /// `sol.func` — function definition with selector and mutability.
+    pub const SOL_FUNC: &'static str = "sol.func";
+    /// `sol.constant` — compile-time constant.
+    pub const SOL_CONSTANT: &'static str = "sol.constant";
+    /// `sol.return` — return from function.
+    pub const SOL_RETURN: &'static str = "sol.return";
+    /// `sol.yield` — region terminator for structured control flow.
+    pub const SOL_YIELD: &'static str = "sol.yield";
+    /// `sol.condition` — loop condition terminator.
+    pub const SOL_CONDITION: &'static str = "sol.condition";
+    /// `sol.alloca` — stack allocation.
+    pub const SOL_ALLOCA: &'static str = "sol.alloca";
+    /// `sol.load` — load from pointer.
+    pub const SOL_LOAD: &'static str = "sol.load";
+    /// `sol.store` — store to pointer.
+    pub const SOL_STORE: &'static str = "sol.store";
+    /// `sol.call` — function call.
+    pub const SOL_CALL: &'static str = "sol.call";
+    /// `sol.if` — structured if/else.
+    pub const SOL_IF: &'static str = "sol.if";
+    /// `sol.while` — structured while loop.
+    pub const SOL_WHILE: &'static str = "sol.while";
+    /// `sol.for` — structured for loop.
+    pub const SOL_FOR: &'static str = "sol.for";
+    /// `sol.add` — unchecked addition.
+    pub const SOL_ADD: &'static str = "sol.add";
+    /// `sol.sub` — unchecked subtraction.
+    pub const SOL_SUB: &'static str = "sol.sub";
+    /// `sol.mul` — unchecked multiplication.
+    pub const SOL_MUL: &'static str = "sol.mul";
+    /// `sol.div` — unchecked division.
+    pub const SOL_DIV: &'static str = "sol.div";
+    /// `sol.mod` — unchecked modulo.
+    pub const SOL_MOD: &'static str = "sol.mod";
+    /// `sol.cadd` — checked addition.
+    pub const SOL_CADD: &'static str = "sol.cadd";
+    /// `sol.csub` — checked subtraction.
+    pub const SOL_CSUB: &'static str = "sol.csub";
+    /// `sol.cmul` — checked multiplication.
+    pub const SOL_CMUL: &'static str = "sol.cmul";
+    /// `sol.cmp` — comparison.
+    pub const SOL_CMP: &'static str = "sol.cmp";
+    /// `sol.cast` — type cast.
+    pub const SOL_CAST: &'static str = "sol.cast";
+    /// `sol.state_var` — state variable declaration.
+    pub const SOL_STATE_VAR: &'static str = "sol.state_var";
+    /// `sol.and` — bitwise AND.
+    pub const SOL_AND: &'static str = "sol.and";
+    /// `sol.or` — bitwise OR.
+    pub const SOL_OR: &'static str = "sol.or";
+    /// `sol.xor` — bitwise XOR.
+    pub const SOL_XOR: &'static str = "sol.xor";
+    /// `sol.shl` — shift left.
+    pub const SOL_SHL: &'static str = "sol.shl";
+    /// `sol.shr` — shift right.
+    pub const SOL_SHR: &'static str = "sol.shr";
+
     // ---- Structure ----
 
     /// Emits a `sol.contract` operation with a body region.
@@ -51,7 +115,7 @@ impl<'context> Context<'context> {
         body_region.append_block(body_block);
 
         let operation = block.append_operation(
-            OperationBuilder::new(crate::ops::sol::CONTRACT, self.unknown_location)
+            OperationBuilder::new(Self::SOL_CONTRACT, self.unknown_location)
                 .add_attributes(&[
                     (
                         Identifier::new(self.context, "sym_name"),
@@ -136,8 +200,6 @@ impl<'context> Context<'context> {
                 )
                 .into(),
             ));
-            // orig_fn_type is required when selector is present — the
-            // conversion pass uses it for ABI encoding/decoding.
             attributes.push((
                 Identifier::new(self.context, "orig_fn_type"),
                 TypeAttribute::new(function_type.into()).into(),
@@ -145,7 +207,7 @@ impl<'context> Context<'context> {
         }
 
         let operation = block.append_operation(
-            OperationBuilder::new(crate::ops::sol::FUNC, self.unknown_location)
+            OperationBuilder::new(Self::SOL_FUNC, self.unknown_location)
                 .add_attributes(&attributes)
                 .add_regions([body_region])
                 .build()
@@ -173,7 +235,7 @@ impl<'context> Context<'context> {
         let attribute = IntegerAttribute::new(self.i256_type, value);
         block
             .append_operation(
-                OperationBuilder::new(crate::ops::sol::CONSTANT, self.unknown_location)
+                OperationBuilder::new(Self::SOL_CONSTANT, self.unknown_location)
                     .add_attributes(&[(Identifier::new(self.context, "value"), attribute.into())])
                     .add_results(&[self.i256_type])
                     .build()
@@ -200,7 +262,7 @@ impl<'context> Context<'context> {
     {
         let attribute = Attribute::parse(self.context, &format!("{value} : i256"))
             .ok_or_else(|| anyhow::anyhow!("invalid i256 decimal literal: {value}"))?;
-        self.emit_sol_constant_from_parsed_attribute(attribute, block)
+        self.emit_constant_operation(Self::SOL_CONSTANT, attribute, block)
     }
 
     /// Emits a `sol.constant` from a hex string (without `0x` prefix).
@@ -219,7 +281,7 @@ impl<'context> Context<'context> {
     {
         let attribute = Attribute::parse(self.context, &format!("0x{hexadecimal} : i256"))
             .ok_or_else(|| anyhow::anyhow!("invalid i256 hex literal: 0x{hexadecimal}"))?;
-        self.emit_sol_constant_from_parsed_attribute(attribute, block)
+        self.emit_constant_operation(Self::SOL_CONSTANT, attribute, block)
     }
 
     // ---- Terminators ----
@@ -235,7 +297,7 @@ impl<'context> Context<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new(crate::ops::sol::RETURN, self.unknown_location)
+            OperationBuilder::new(Self::SOL_RETURN, self.unknown_location)
                 .add_operands(operands)
                 .build()
                 .expect("sol.return operation is well-formed"),
@@ -253,37 +315,10 @@ impl<'context> Context<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new(crate::ops::sol::YIELD, self.unknown_location)
+            OperationBuilder::new(Self::SOL_YIELD, self.unknown_location)
                 .build()
                 .expect("sol.yield operation is well-formed"),
         );
-    }
-
-    // ---- Arithmetic ----
-
-    /// Emits a generic two-operand Sol arithmetic operation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the operation cannot be constructed.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the constructed operation produces no results, indicating a
-    /// bug in the caller's operation name.
-    pub fn emit_sol_binary_operation<'block, B>(
-        &self,
-        operation_name: &str,
-        lhs: Value<'context, 'block>,
-        rhs: Value<'context, 'block>,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> anyhow::Result<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        self.emit_binary_operation(operation_name, lhs, rhs, result_type, block)
     }
 
     // ---- Memory ----
@@ -303,7 +338,7 @@ impl<'context> Context<'context> {
     {
         block
             .append_operation(
-                OperationBuilder::new(crate::ops::sol::ALLOCA, self.unknown_location)
+                OperationBuilder::new(Self::SOL_ALLOCA, self.unknown_location)
                     .add_attributes(&[(
                         Identifier::new(self.context, "alloc_type"),
                         TypeAttribute::new(self.i256_type).into(),
@@ -333,7 +368,7 @@ impl<'context> Context<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new(crate::ops::sol::STORE, self.unknown_location)
+            OperationBuilder::new(Self::SOL_STORE, self.unknown_location)
                 .add_operands(&[value, pointer])
                 .build()
                 .expect("sol.store operation is well-formed"),
@@ -356,7 +391,7 @@ impl<'context> Context<'context> {
     {
         Ok(block
             .append_operation(
-                OperationBuilder::new(crate::ops::sol::LOAD, self.unknown_location)
+                OperationBuilder::new(Self::SOL_LOAD, self.unknown_location)
                     .add_operands(&[pointer])
                     .add_results(&[self.i256_type])
                     .build()
@@ -389,7 +424,7 @@ impl<'context> Context<'context> {
         'context: 'block,
     {
         let operation = block.append_operation(
-            OperationBuilder::new(crate::ops::sol::CALL, self.unknown_location)
+            OperationBuilder::new(Self::SOL_CALL, self.unknown_location)
                 .add_operands(operands)
                 .add_attributes(&[(
                     Identifier::new(self.context, "callee"),

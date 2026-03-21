@@ -133,7 +133,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             emitter.emit_store(initial_value, pointer, &block);
             block
         } else {
-            let zero = self.state.emit_sol_constant(0, &block);
+            let zero = self.state.builder().emit_sol_constant(0, &block);
             emitter.emit_store(zero, pointer, &block);
             block
         };
@@ -151,7 +151,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .environment
             .current_loop()
             .ok_or_else(|| anyhow::anyhow!("break outside of loop"))?;
-        block.append_operation(self.state.llvm_br(&target.break_block(), &[]));
+        block.append_operation(self.state.builder().llvm_br(&target.break_block(), &[]));
         Ok(None)
     }
 
@@ -164,7 +164,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .environment
             .current_loop()
             .ok_or_else(|| anyhow::anyhow!("continue outside of loop"))?;
-        block.append_operation(self.state.llvm_br(&target.continue_block(), &[]));
+        block.append_operation(self.state.builder().llvm_br(&target.continue_block(), &[]));
         Ok(None)
     }
 
@@ -182,9 +182,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 self.storage_layout,
             );
             let (value, block) = emitter.emit(expression, block)?;
-            self.state.emit_sol_return(&[value], &block);
+            self.state.builder().emit_sol_return(&[value], &block);
         } else {
-            self.state.emit_sol_return(&[], &block);
+            self.state.builder().emit_sol_return(&[], &block);
         }
 
         Ok(None)

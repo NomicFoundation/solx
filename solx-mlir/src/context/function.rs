@@ -1,12 +1,10 @@
 //!
-//! Function signature metadata for internal call resolution.
+//! Function call resolution metadata.
 //!
 
-/// Function signature info for internal call resolution.
-/// 
-/// TODO: mirror solx-codegen-evm, move to src/context/function.rs
+/// Function call resolution metadata for the MLIR builder.
 #[derive(Clone)]
-pub(crate) struct FunctionSignature {
+pub struct Function {
     /// The mangled MLIR function name.
     mlir_name: String,
     /// Number of parameters.
@@ -15,8 +13,8 @@ pub(crate) struct FunctionSignature {
     return_count: usize,
 }
 
-impl FunctionSignature {
-    /// Creates a new function signature.
+impl Function {
+    /// Creates a new function metadata entry.
     pub fn new(mlir_name: String, parameter_count: usize, return_count: usize) -> Self {
         Self {
             mlir_name,

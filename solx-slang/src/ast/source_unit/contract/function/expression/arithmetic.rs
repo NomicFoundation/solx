@@ -27,19 +27,19 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (rhs, block) = self.emit(right, block)?;
         // TODO: change to a nice enum with FromStr
         let operation_name = match operator {
-            "+" => solx_mlir::ops::ADD,
-            "-" => solx_mlir::ops::SUB,
-            "*" => solx_mlir::ops::MUL,
-            "/" if signed => solx_mlir::ops::SDIV,
-            "/" => solx_mlir::ops::UDIV,
-            "%" if signed => solx_mlir::ops::SREM,
-            "%" => solx_mlir::ops::UREM,
-            "&" => solx_mlir::ops::AND,
-            "|" => solx_mlir::ops::OR,
-            "^" => solx_mlir::ops::XOR,
-            "<<" => solx_mlir::ops::SHL,
-            ">>" if signed => solx_mlir::ops::ASHR,
-            ">>" => solx_mlir::ops::LSHR,
+            "+" => solx_mlir::Builder::ADD,
+            "-" => solx_mlir::Builder::SUB,
+            "*" => solx_mlir::Builder::MUL,
+            "/" if signed => solx_mlir::Builder::SDIV,
+            "/" => solx_mlir::Builder::UDIV,
+            "%" if signed => solx_mlir::Builder::SREM,
+            "%" => solx_mlir::Builder::UREM,
+            "&" => solx_mlir::Builder::AND,
+            "|" => solx_mlir::Builder::OR,
+            "^" => solx_mlir::Builder::XOR,
+            "<<" => solx_mlir::Builder::SHL,
+            ">>" if signed => solx_mlir::Builder::ASHR,
+            ">>" => solx_mlir::Builder::LSHR,
             _ => anyhow::bail!("unsupported binary operator: {operator}"),
         };
         let value = self.emit_llvm_operation(operation_name, lhs, rhs, &block)?;
@@ -62,11 +62,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .variable(&name)
             .ok_or_else(|| anyhow::anyhow!("undefined variable: {name}"))?;
         let old = self.emit_load(pointer, &block)?;
-        let one = self.state.emit_sol_constant(1, &block);
+        let one = self.state.builder().emit_sol_constant(1, &block);
         // TODO: change to a nice enum with FromStr
         let operation_name = match operator {
-            "++" => solx_mlir::ops::ADD,
-            "--" => solx_mlir::ops::SUB,
+            "++" => solx_mlir::Builder::ADD,
+            "--" => solx_mlir::Builder::SUB,
             _ => anyhow::bail!("unsupported postfix operator: {operator}"),
         };
         let new = self.emit_llvm_operation(operation_name, old, one, &block)?;
@@ -85,14 +85,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         // TODO: change to a nice enum with FromStr
         match operator {
             "!" => {
-                let zero = self.state.emit_sol_constant(0, &block);
-                let cmp = self.state.emit_icmp(value, zero, ICmpPredicate::Eq, &block);
-                let result = self.state.emit_zext_to_i256(cmp, &block);
+                let zero = self.state.builder().emit_sol_constant(0, &block);
+                let cmp = self
+                    .state
+                    .builder()
+                    .emit_icmp(value, zero, ICmpPredicate::Eq, &block);
+                let result = self.state.builder().emit_zext_to_i256(cmp, &block);
                 Ok((result, block))
             }
             "-" => {
-                let zero = self.state.emit_sol_constant(0, &block);
-                let result = self.emit_llvm_operation(solx_mlir::ops::SUB, zero, value, &block)?;
+                let zero = self.state.builder().emit_sol_constant(0, &block);
+                let result =
+                    self.emit_llvm_operation(solx_mlir::Builder::SUB, zero, value, &block)?;
                 Ok((result, block))
             }
             _ => anyhow::bail!("unsupported prefix operator: {operator}"),

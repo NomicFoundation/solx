@@ -19,12 +19,12 @@ use self::compilation_config::CompilationConfig;
 
 /// The Slang frontend implementation.
 #[derive(Debug)]
-pub struct SlangFrontend {
+pub struct Slang {
     /// The Slang compiler latest supported version.
     version: solx_standard_json::Version,
 }
 
-impl Default for SlangFrontend {
+impl Default for Slang {
     fn default() -> Self {
         let default = LanguageFacts::LATEST_VERSION;
 
@@ -34,7 +34,7 @@ impl Default for SlangFrontend {
     }
 }
 
-impl SlangFrontend {
+impl Slang {
     /// The name of the Slang frontend, used in error messages and output metadata.
     pub const NAME: &'static str = "Slang";
 
@@ -60,7 +60,7 @@ impl SlangFrontend {
     }
 }
 
-impl Frontend for SlangFrontend {
+impl Frontend for Slang {
     fn name(&self) -> &str {
         Self::NAME
     }

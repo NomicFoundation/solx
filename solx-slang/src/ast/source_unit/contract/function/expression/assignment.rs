@@ -63,13 +63,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let (rhs, block) = self.emit(&right, block)?;
             // TODO: change to a nice enum with FromStr
             let arithmetic_operation = match operator_text {
-                "+=" => solx_mlir::ops::ADD,
-                "-=" => solx_mlir::ops::SUB,
-                "*=" => solx_mlir::ops::MUL,
-                "/=" if signed => solx_mlir::ops::SDIV,
-                "/=" => solx_mlir::ops::UDIV,
-                "%=" if signed => solx_mlir::ops::SREM,
-                "%=" => solx_mlir::ops::UREM,
+                "+=" => solx_mlir::Builder::ADD,
+                "-=" => solx_mlir::Builder::SUB,
+                "*=" => solx_mlir::Builder::MUL,
+                "/=" if signed => solx_mlir::Builder::SDIV,
+                "/=" => solx_mlir::Builder::UDIV,
+                "%=" if signed => solx_mlir::Builder::SREM,
+                "%=" => solx_mlir::Builder::UREM,
                 _ => anyhow::bail!("unsupported assignment operator: {operator_text}"),
             };
             let result = self.emit_llvm_operation(arithmetic_operation, old, rhs, &block)?;

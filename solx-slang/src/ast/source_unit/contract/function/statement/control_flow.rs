@@ -37,7 +37,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         if let Some(ref else_statement) = if_statement.else_branch() {
             let else_block = self.region.append_block(Block::new(&[]));
-            block.append_operation(self.state.llvm_cond_br(
+            block.append_operation(self.state.builder().llvm_cond_br(
                 condition_boolean,
                 &then_block,
                 &else_block,
@@ -48,12 +48,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             let body = if_statement.body();
             let then_end = self.emit(&body, then_block)?;
             if let Some(then_end) = then_end {
-                then_end.append_operation(self.state.llvm_br(&merge_block, &[]));
+                then_end.append_operation(self.state.builder().llvm_br(&merge_block, &[]));
             }
 
             let else_end = self.emit(else_statement, else_block)?;
             if let Some(else_end) = else_end {
-                else_end.append_operation(self.state.llvm_br(&merge_block, &[]));
+                else_end.append_operation(self.state.builder().llvm_br(&merge_block, &[]));
             }
 
             if then_end.is_some() || else_end.is_some() {
@@ -67,7 +67,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 Ok(None)
             }
         } else {
-            block.append_operation(self.state.llvm_cond_br(
+            block.append_operation(self.state.builder().llvm_cond_br(
                 condition_boolean,
                 &then_block,
                 &merge_block,
@@ -78,7 +78,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             let body = if_statement.body();
             let then_end = self.emit(&body, then_block)?;
             if let Some(then_end) = then_end {
-                then_end.append_operation(self.state.llvm_br(&merge_block, &[]));
+                then_end.append_operation(self.state.builder().llvm_br(&merge_block, &[]));
             }
 
             Ok(Some(merge_block))
@@ -120,7 +120,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let iterator_block = self.region.append_block(Block::new(&[]));
         let exit_block = self.region.append_block(Block::new(&[]));
 
-        block.append_operation(self.state.llvm_br(&condition_block, &[]));
+        block.append_operation(self.state.builder().llvm_br(&condition_block, &[]));
 
         // Condition.
         match for_statement.condition() {
@@ -135,7 +135,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let (condition_value, condition_end) =
                     emitter.emit(&expression, condition_block)?;
                 let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
-                condition_end.append_operation(self.state.llvm_cond_br(
+                condition_end.append_operation(self.state.builder().llvm_cond_br(
                     condition_boolean,
                     &body_block,
                     &exit_block,
@@ -144,7 +144,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 ));
             }
             ForStatementCondition::Semicolon => {
-                condition_block.append_operation(self.state.llvm_br(&body_block, &[]));
+                condition_block.append_operation(self.state.builder().llvm_br(&body_block, &[]));
             }
         }
 
@@ -156,7 +156,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         self.environment.pop_loop();
 
         if let Some(body_end) = body_end {
-            body_end.append_operation(self.state.llvm_br(&iterator_block, &[]));
+            body_end.append_operation(self.state.builder().llvm_br(&iterator_block, &[]));
         }
 
         // Iterator.
@@ -169,9 +169,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             );
             let (_value, iterator_end) =
                 expression_emitter.emit(iterator_expression, iterator_block)?;
-            iterator_end.append_operation(self.state.llvm_br(&condition_block, &[]));
+            iterator_end.append_operation(self.state.builder().llvm_br(&condition_block, &[]));
         } else {
-            iterator_block.append_operation(self.state.llvm_br(&condition_block, &[]));
+            iterator_block.append_operation(self.state.builder().llvm_br(&condition_block, &[]));
         }
 
         Ok(Some(exit_block))
@@ -187,7 +187,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let body_block = self.region.append_block(Block::new(&[]));
         let exit_block = self.region.append_block(Block::new(&[]));
 
-        block.append_operation(self.state.llvm_br(&condition_block, &[]));
+        block.append_operation(self.state.builder().llvm_br(&condition_block, &[]));
 
         let condition_expression = while_statement.condition();
         let emitter = ExpressionEmitter::new(
@@ -199,7 +199,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let (condition_value, condition_end) =
             emitter.emit(&condition_expression, condition_block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
-        condition_end.append_operation(self.state.llvm_cond_br(
+        condition_end.append_operation(self.state.builder().llvm_cond_br(
             condition_boolean,
             &body_block,
             &exit_block,
@@ -214,7 +214,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         self.environment.pop_loop();
 
         if let Some(body_end) = body_end {
-            body_end.append_operation(self.state.llvm_br(&condition_block, &[]));
+            body_end.append_operation(self.state.builder().llvm_br(&condition_block, &[]));
         }
 
         Ok(Some(exit_block))
@@ -230,7 +230,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let condition_block = self.region.append_block(Block::new(&[]));
         let exit_block = self.region.append_block(Block::new(&[]));
 
-        block.append_operation(self.state.llvm_br(&body_block, &[]));
+        block.append_operation(self.state.builder().llvm_br(&body_block, &[]));
 
         self.environment
             .push_loop(LoopTarget::new(exit_block, condition_block));
@@ -239,7 +239,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         self.environment.pop_loop();
 
         if let Some(body_end) = body_end {
-            body_end.append_operation(self.state.llvm_br(&condition_block, &[]));
+            body_end.append_operation(self.state.builder().llvm_br(&condition_block, &[]));
         }
 
         let condition_expression = do_while.condition();
@@ -252,7 +252,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let (condition_value, condition_end) =
             emitter.emit(&condition_expression, condition_block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
-        condition_end.append_operation(self.state.llvm_cond_br(
+        condition_end.append_operation(self.state.builder().llvm_cond_br(
             condition_boolean,
             &body_block,
             &exit_block,

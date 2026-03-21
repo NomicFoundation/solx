@@ -52,15 +52,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             return match callee_name.as_str() {
                 "bool" => {
                     // bool(x) → x != 0, zero-extended to i256.
-                    let zero = self.state.emit_sol_constant(0, &block);
-                    let cmp = self.state.emit_icmp(value, zero, ICmpPredicate::Ne, &block);
-                    let result = self.state.emit_zext_to_i256(cmp, &block);
+                    let zero = self.state.builder().emit_sol_constant(0, &block);
+                    let cmp =
+                        self.state
+                            .builder()
+                            .emit_icmp(value, zero, ICmpPredicate::Ne, &block);
+                    let result = self.state.builder().emit_zext_to_i256(cmp, &block);
                     Ok((result, block))
                 }
                 "uint8" => {
-                    let mask = self.state.emit_sol_constant(0xFF, &block);
+                    let mask = self.state.builder().emit_sol_constant(0xFF, &block);
                     let result =
-                        self.emit_llvm_operation(solx_mlir::ops::AND, value, mask, &block)?;
+                        self.emit_llvm_operation(solx_mlir::Builder::AND, value, mask, &block)?;
                     Ok((result, block))
                 }
                 // Word-sized types need no truncation.
@@ -88,13 +91,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 (0..return_count).map(|_| i256).collect();
             let result = self
                 .state
+                .builder()
                 .emit_sol_call(mlir_name, &argument_values, &result_types, &current_block)?
                 .expect("function call always produces at least one result");
             Ok((result, current_block))
         } else {
             self.state
+                .builder()
                 .emit_sol_call(mlir_name, &argument_values, &[], &current_block)?;
-            let zero = self.state.emit_sol_constant(0, &current_block);
+            let zero = self.state.builder().emit_sol_constant(0, &current_block);
             Ok((zero, current_block))
         }
     }
@@ -113,16 +118,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         if let Expression::Identifier(identifier) = operand {
             let object = identifier.name();
             let intrinsic = match (object.as_str(), member) {
-                ("tx", "origin") => solx_mlir::ops::EVM_ORIGIN,
-                ("tx", "gasprice") => solx_mlir::ops::EVM_GASPRICE,
-                ("msg", "sender") => solx_mlir::ops::EVM_CALLER,
-                ("msg", "value") => solx_mlir::ops::EVM_CALLVALUE,
-                ("block", "timestamp") => solx_mlir::ops::EVM_TIMESTAMP,
-                ("block", "number") => solx_mlir::ops::EVM_NUMBER,
-                ("block", "coinbase") => solx_mlir::ops::EVM_COINBASE,
-                ("block", "chainid") => solx_mlir::ops::EVM_CHAINID,
-                ("block", "basefee") => solx_mlir::ops::EVM_BASEFEE,
-                ("block", "gaslimit") => solx_mlir::ops::EVM_GASLIMIT,
+                ("tx", "origin") => solx_mlir::Builder::EVM_ORIGIN,
+                ("tx", "gasprice") => solx_mlir::Builder::EVM_GASPRICE,
+                ("msg", "sender") => solx_mlir::Builder::EVM_CALLER,
+                ("msg", "value") => solx_mlir::Builder::EVM_CALLVALUE,
+                ("block", "timestamp") => solx_mlir::Builder::EVM_TIMESTAMP,
+                ("block", "number") => solx_mlir::Builder::EVM_NUMBER,
+                ("block", "coinbase") => solx_mlir::Builder::EVM_COINBASE,
+                ("block", "chainid") => solx_mlir::Builder::EVM_CHAINID,
+                ("block", "basefee") => solx_mlir::Builder::EVM_BASEFEE,
+                ("block", "gaslimit") => solx_mlir::Builder::EVM_GASLIMIT,
                 _ => anyhow::bail!("unsupported member access: {object}.{member}"),
             };
             let value = self

@@ -1,37 +1,63 @@
 //!
-//! Shared constant emission helpers for the MLIR builder.
+//! MLIR builder for emission methods.
 //!
-//! These methods are used by both the LLVM and Sol dialect modules
-//! to emit constant operations from pre-built attributes and limb
-//! decompositions.
+//! Contains the [`Builder`] type and shared methods used by both the
+//! LLVM and Sol dialect submodules to emit operations.
 //!
+
+pub mod llvm;
+pub mod sol;
 
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::Identifier;
+use melior::ir::Location;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::attribute::IntegerAttribute;
 use melior::ir::operation::OperationBuilder;
-use melior::ir::r#type::IntegerType;
 
-use crate::builder::Context;
+/// Cached MLIR types and emission methods for building MLIR operations.
+///
+/// Holds interned MLIR objects that are created once during [`Context`](crate::context::Context)
+/// construction and reused across all emission calls.
+pub struct Builder<'context> {
+    /// The MLIR context with all dialects and translations registered.
+    pub(crate) context: &'context melior::Context,
+    /// Cached `i256` type (MLIR interns types, but avoids repeated lookups).
+    pub(crate) i256_type: Type<'context>,
+    /// Cached `i1` type.
+    pub(crate) i1_type: Type<'context>,
+    /// Cached `!sol.ptr<i256, Stack>` type for alloca operations.
+    pub(crate) sol_ptr_type: Type<'context>,
+    /// Cached unknown source location.
+    pub(crate) unknown_location: Location<'context>,
+}
 
-impl<'context> Context<'context> {
+impl<'context> Builder<'context> {
     /// Maximum number of 32-bit limbs in a 256-bit integer (256 / 32).
     const MAX_LIMB_COUNT: usize = solx_utils::BIT_LENGTH_FIELD / solx_utils::BIT_LENGTH_X32;
 
-    /// Emits an `llvm.mlir.constant` from a pre-built attribute.
-    pub fn emit_constant_from_attribute<'block, B>(
-        &self,
-        attribute: Attribute<'context>,
-        block: &B,
-    ) -> anyhow::Result<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        self.emit_constant_operation(crate::ops::MLIR_CONSTANT, attribute, block)
+    /// Bit width of each limb for wide constant decomposition.
+    const LIMB_BIT_WIDTH: i64 = solx_utils::BIT_LENGTH_X32 as i64;
+
+    /// Returns a reference to the melior context.
+    pub fn context(&self) -> &'context melior::Context {
+        self.context
+    }
+
+    /// Returns an unknown source location.
+    pub fn location(&self) -> Location<'context> {
+        self.unknown_location
+    }
+
+    /// Returns the EVM word type (`i256`).
+    pub fn i256(&self) -> Type<'context> {
+        self.i256_type
+    }
+
+    /// Returns the EVM boolean type (`i1`).
+    pub fn i1(&self) -> Type<'context> {
+        self.i1_type
     }
 
     /// Emits an `i256` constant from 32-bit limbs in little-endian order.
@@ -65,29 +91,20 @@ impl<'context> Context<'context> {
             let limb_val = self.emit_i256_constant(limb as i64, block);
             let shift = self.emit_i256_constant(i as i64 * Self::LIMB_BIT_WIDTH, block);
             let shifted = self
-                .emit_llvm_operation(crate::ops::SHL, limb_val, shift, self.i256_type, block)
+                .emit_binary_operation(Self::SHL, limb_val, shift, self.i256_type, block)
                 .expect("llvm.shl operation is well-formed");
             result = self
-                .emit_llvm_operation(crate::ops::OR, result, shifted, self.i256_type, block)
+                .emit_binary_operation(Self::OR, result, shifted, self.i256_type, block)
                 .expect("llvm.or operation is well-formed");
         }
         Ok(result)
     }
 
-    /// Emits a `sol.constant` from a pre-built MLIR attribute.
-    pub fn emit_sol_constant_from_parsed_attribute<'block, B>(
-        &self,
-        attribute: Attribute<'context>,
-        block: &B,
-    ) -> anyhow::Result<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        self.emit_constant_operation(crate::ops::sol::CONSTANT, attribute, block)
-    }
-
     /// Shared helper for emitting a two-operand operation with one result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the MLIR operation cannot be constructed.
     pub fn emit_binary_operation<'block, B>(
         &self,
         operation_name: &str,
@@ -112,42 +129,11 @@ impl<'context> Context<'context> {
             .into())
     }
 
-    /// Shared helper for emitting a comparison operation returning `i1`.
-    pub fn emit_comparison<'block, B>(
-        &self,
-        operation_name: &str,
-        lhs: Value<'context, 'block>,
-        rhs: Value<'context, 'block>,
-        predicate: i64,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                OperationBuilder::new(operation_name, self.unknown_location)
-                    .add_operands(&[lhs, rhs])
-                    .add_attributes(&[(
-                        Identifier::new(self.context, "predicate"),
-                        IntegerAttribute::new(
-                            IntegerType::new(self.context, Self::PREDICATE_ATTRIBUTE_BIT_WIDTH)
-                                .into(),
-                            predicate,
-                        )
-                        .into(),
-                    )])
-                    .add_results(&[self.i1_type])
-                    .build()
-                    .expect("comparison operation is well-formed"),
-            )
-            .result(0)
-            .expect("comparison always produces one result")
-            .into()
-    }
-
     /// Shared helper for emitting a constant operation with an attribute.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the MLIR operation cannot be constructed.
     pub fn emit_constant_operation<'block, B>(
         &self,
         operation_name: &str,

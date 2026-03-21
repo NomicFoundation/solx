@@ -47,7 +47,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         // Emit sol.contract and functions.
         let module_body = self.state.body();
-        let contract_body = self.state.emit_sol_contract(
+        let contract_body = self.state.builder().emit_sol_contract(
             &contract_name,
             // TODO: investigate how other contract kinds (e.g. interface, library) should be represented in MLIR
             solx_mlir::ContractKind::Contract,

@@ -43,8 +43,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             _ => anyhow::bail!("unsupported comparison operator: {operator}"),
         };
 
-        let cmp = self.state.emit_icmp(lhs, rhs, predicate, &block);
-        let value = self.state.emit_zext_to_i256(cmp, &block);
+        let cmp = self.state.builder().emit_icmp(lhs, rhs, predicate, &block);
+        let value = self.state.builder().emit_zext_to_i256(cmp, &block);
         Ok((value, block))
     }
 
@@ -66,8 +66,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let rhs_block = self.region.append_block(Block::new(&[]));
         let merge_block = self.region.append_block(Block::new(&[(i256, location)]));
 
-        let zero = self.state.emit_sol_constant(0, &block);
-        block.append_operation(self.state.llvm_cond_br(
+        let zero = self.state.builder().emit_sol_constant(0, &block);
+        block.append_operation(self.state.builder().llvm_cond_br(
             lhs_bool,
             &rhs_block,
             &merge_block,
@@ -77,8 +77,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         let (rhs, rhs_block) = self.emit(right, rhs_block)?;
         let rhs_bool = self.emit_is_nonzero(rhs, &rhs_block);
-        let rhs_normalized = self.state.emit_zext_to_i256(rhs_bool, &rhs_block);
-        rhs_block.append_operation(self.state.llvm_br(&merge_block, &[rhs_normalized]));
+        let rhs_normalized = self.state.builder().emit_zext_to_i256(rhs_bool, &rhs_block);
+        rhs_block.append_operation(
+            self.state
+                .builder()
+                .llvm_br(&merge_block, &[rhs_normalized]),
+        );
 
         let result = merge_block.argument(0)?.into();
         Ok((result, merge_block))
@@ -98,12 +102,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let location = self.state.location();
 
         let lhs_bool = self.emit_is_nonzero(lhs, &block);
-        let one = self.state.emit_sol_constant(1, &block);
+        let one = self.state.builder().emit_sol_constant(1, &block);
 
         let rhs_block = self.region.append_block(Block::new(&[]));
         let merge_block = self.region.append_block(Block::new(&[(i256, location)]));
 
-        block.append_operation(self.state.llvm_cond_br(
+        block.append_operation(self.state.builder().llvm_cond_br(
             lhs_bool,
             &merge_block,
             &rhs_block,
@@ -113,8 +117,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         let (rhs, rhs_block) = self.emit(right, rhs_block)?;
         let rhs_bool = self.emit_is_nonzero(rhs, &rhs_block);
-        let rhs_normalized = self.state.emit_zext_to_i256(rhs_bool, &rhs_block);
-        rhs_block.append_operation(self.state.llvm_br(&merge_block, &[rhs_normalized]));
+        let rhs_normalized = self.state.builder().emit_zext_to_i256(rhs_bool, &rhs_block);
+        rhs_block.append_operation(
+            self.state
+                .builder()
+                .llvm_br(&merge_block, &[rhs_normalized]),
+        );
 
         let result = merge_block.argument(0)?.into();
         Ok((result, merge_block))

@@ -8,19 +8,13 @@
 //!
 
 pub mod attributes;
-pub mod builder;
-pub mod environment;
-pub mod ffi;
-pub mod llvm_module;
-pub mod ops;
+pub mod context;
+pub(crate) mod ffi;
 
 pub use self::attributes::ContractKind;
 pub use self::attributes::ICmpPredicate;
 pub use self::attributes::StateMutability;
-pub use self::builder::Context;
-pub use self::environment::Environment;
-pub use self::environment::loop_target::LoopTarget;
-pub use self::llvm_module::LlvmModule;
-
-#[cfg(test)]
-mod tests;
+pub use self::context::Context;
+pub use self::context::builder::Builder;
+pub use self::context::environment::Environment;
+pub use self::context::environment::loop_target::LoopTarget;

@@ -26,12 +26,6 @@ unsafe extern "C" {
     /// Registers all Sol dialect passes.
     pub fn mlirRegisterSolPasses();
 
-    /// Creates the Sol modifier op lowering pass.
-    pub fn mlirCreateSolModifierOpLoweringPass() -> MlirPass;
-
-    /// Creates the Sol loop-invariant code motion pass.
-    pub fn mlirCreateSolLoopInvariantCodeMotionPass() -> MlirPass;
-
     // ---- Sol-to-Standard conversion ----
 
     /// Creates the `convert-sol-to-std` pass.
@@ -65,14 +59,14 @@ unsafe extern "C" {
     // ---- Sol attribute constructors (from sol_attr_stubs.cpp) ----
 
     /// Creates a `ContractKindAttr` (0=Interface, 1=Contract, 2=Library).
-    pub fn solxCreateContractKindAttr(ctx: MlirContext, kind: u32) -> mlir_sys::MlirAttribute;
+    pub fn solxCreateContractKindAttr(context: MlirContext, kind: u32) -> mlir_sys::MlirAttribute;
 
     /// Creates a `StateMutabilityAttr` (0=Pure, 1=View, 2=NonPayable, 3=Payable).
     pub fn solxCreateStateMutabilityAttr(
-        ctx: MlirContext,
+        context: MlirContext,
         mutability: u32,
     ) -> mlir_sys::MlirAttribute;
 
     /// Creates an `EvmVersionAttr`.
-    pub fn solxCreateEvmVersionAttr(ctx: MlirContext, version: u32) -> mlir_sys::MlirAttribute;
+    pub fn solxCreateEvmVersionAttr(context: MlirContext, version: u32) -> mlir_sys::MlirAttribute;
 }

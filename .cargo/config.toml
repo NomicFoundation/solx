@@ -37,3 +37,4 @@ CARGO_BIN_EXE_SOLX = { value = "./target/debug/solx", relative = true, force = t
 [alias]
 build-slang = "build --no-default-features --features slang --target-dir target-slang"
 test-slang = "test --no-default-features --features slang --target-dir target-slang"
+run-tester-slang = "run --release --bin solx-tester --no-default-features --features slang-ast -- --solidity-compiler ./target-slang/release/solx"

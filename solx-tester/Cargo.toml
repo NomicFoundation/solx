@@ -44,4 +44,4 @@ solx-compiler-downloader = { path = "../solx-compiler-downloader" }
 solx-dev = { path = "../solx-dev" }
 
 [features]
-mlir = []
+slang-ast = []

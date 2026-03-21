@@ -7,8 +7,5 @@ pub mod ast;
 /// Slang Solidity frontend implementation.
 pub mod slang;
 
-pub use self::slang::SlangFrontend;
+pub use self::slang::Slang;
 pub use self::slang::compilation_config::CompilationConfig;
-
-#[cfg(test)]
-mod tests;

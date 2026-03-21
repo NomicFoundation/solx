@@ -77,7 +77,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         let state_mutability = Self::map_state_mutability(function);
 
-        let function_entry_block = self.state.emit_sol_func(
+        let function_entry_block = self.state.builder().emit_sol_func(
             &mlir_name,
             &mlir_parameter_types,
             &result_types,
@@ -182,9 +182,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             return;
         }
         let zeros: Vec<_> = (0..return_count)
-            .map(|_| self.state.emit_sol_constant(0, block))
+            .map(|_| self.state.builder().emit_sol_constant(0, block))
             .collect();
-        self.state.emit_sol_return(&zeros, block);
+        self.state.builder().emit_sol_return(&zeros, block);
     }
 
     /// Returns a textual representation of a Solidity type name from the AST.

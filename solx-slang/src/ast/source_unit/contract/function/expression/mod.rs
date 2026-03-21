@@ -64,9 +64,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let literal = decimal.literal();
                 let text = literal.text.as_str();
                 let value = if let Ok(value) = text.parse::<i64>() {
-                    self.state.emit_sol_constant(value, &block)
+                    self.state.builder().emit_sol_constant(value, &block)
                 } else {
                     self.state
+                        .builder()
                         .emit_sol_constant_from_decimal_str(text, &block)?
                 };
                 Ok((value, block))
@@ -79,19 +80,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .or(text.strip_prefix("0X"))
                     .unwrap_or(text);
                 let value = if let Ok(parsed) = i64::from_str_radix(stripped, 16) {
-                    self.state.emit_sol_constant(parsed, &block)
+                    self.state.builder().emit_sol_constant(parsed, &block)
                 } else {
                     self.state
+                        .builder()
                         .emit_sol_constant_from_hex_str(stripped, &block)?
                 };
                 Ok((value, block))
             }
             Expression::TrueKeyword => {
-                let value = self.state.emit_sol_constant(1, &block);
+                let value = self.state.builder().emit_sol_constant(1, &block);
                 Ok((value, block))
             }
             Expression::FalseKeyword => {
-                let value = self.state.emit_sol_constant(0, &block);
+                let value = self.state.builder().emit_sol_constant(0, &block);
                 Ok((value, block))
             }
             Expression::Identifier(identifier) => {
@@ -217,16 +219,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         pointer: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) {
-        self.state.emit_sol_store(value, pointer, block);
+        self.state.builder().emit_sol_store(value, pointer, block);
     }
 
     /// Emits a `sol.alloca` for a local variable via the builder.
     ///
-    pub fn emit_alloca(
-        &self,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        self.state.emit_sol_alloca(block)
+    pub fn emit_alloca(&self, block: &BlockRef<'context, 'block>) -> Value<'context, 'block> {
+        self.state.builder().emit_sol_alloca(block)
     }
 
     /// Emits an `icmp ne 0` producing `i1` from an `i256`.
@@ -236,8 +235,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         value: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let zero = self.state.emit_sol_constant(0, block);
-        self.state.emit_icmp(value, zero, ICmpPredicate::Ne, block)
+        let zero = self.state.builder().emit_sol_constant(0, block);
+        self.state
+            .builder()
+            .emit_icmp(value, zero, ICmpPredicate::Ne, block)
     }
 
     /// Emits a `sol.load` from a pointer via the builder.
@@ -247,7 +248,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         pointer: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
-        self.state.emit_sol_load(pointer, block)
+        self.state.builder().emit_sol_load(pointer, block)
     }
 
     /// Emits a generic two-operand LLVM operation.
@@ -259,8 +260,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         rhs: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
-        self.state
-            .emit_llvm_operation(operation_name, lhs, rhs, self.state.i256(), block)
+        self.state.builder().emit_binary_operation(
+            operation_name,
+            lhs,
+            rhs,
+            self.state.i256(),
+            block,
+        )
     }
 
     /// Emits an EVM intrinsic via the builder.
@@ -273,6 +279,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<Value<'context, 'block>>> {
         self.state
+            .builder()
             .emit_evm_intrinsic(name, operands, has_result, block)
     }
 

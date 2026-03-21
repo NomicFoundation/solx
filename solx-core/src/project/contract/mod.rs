@@ -482,15 +482,11 @@ impl Contract {
                 };
 
                 let melior_context = solx_mlir::Context::create_mlir_context();
-                let llvm_module = solx_mlir::Context::translate_source_to_llvm_module(
-                    &melior_context,
-                    &mlir.source,
-                )
-                .context("MLIR translation")?;
-
-                let (raw_context, raw_module) = llvm_module.into_raw();
-                let context = unsafe { inkwell::context::Context::new(raw_context) };
-                let module = unsafe { inkwell::module::Module::new(raw_module) };
+                let raw_llvm =
+                    solx_mlir::Context::translate_source_to_llvm(&melior_context, &mlir.source)
+                        .context("MLIR translation")?;
+                let context = unsafe { inkwell::context::Context::new(raw_llvm.context) };
+                let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
 
                 let (selector_llvm_ir_unoptimized, selector_llvm_ir, selector_llvm_assembly) =
                     match code_segment {

@@ -61,7 +61,7 @@ fn main() -> anyhow::Result<()> {
                 .expect("Stderr writing error");
         }
         #[cfg(feature = "slang")]
-        let frontend = solx_slang::SlangFrontend::default();
+        let frontend = solx_slang::Slang::default();
         #[cfg(not(feature = "slang"))]
         let frontend = solx::Solc::default();
 
