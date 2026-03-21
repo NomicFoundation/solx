@@ -60,39 +60,66 @@ impl Object {
     pub const LIBRARY_PLACEHOLDER_LENGTH: usize = 17;
 
     ///
-    /// A shortcut constructor.
+    /// Creates a passthrough object from pre-assembled bytecode hex.
     ///
-    pub fn new(
+    /// Used when solc produces final bytecode directly (e.g. MLIR passthrough mode).
+    ///
+    pub fn new_passthrough(
         identifier: String,
         contract_name: solx_utils::ContractName,
-        assembly: Option<String>,
-        bytecode: Option<Vec<u8>>,
-        debug_info: Option<Vec<u8>>,
-        evmla: Option<String>,
-        ethir: Option<String>,
-        llvm_ir_unoptimized: Option<String>,
-        llvm_ir: Option<String>,
+        code_segment: solx_utils::CodeSegment,
+        bytecode_hex: String,
+    ) -> Self {
+        Self {
+            identifier: identifier.clone(),
+            contract_name,
+            assembly: None,
+            bytecode: None,
+            bytecode_hex: Some(bytecode_hex),
+            debug_info: None,
+            evmla: None,
+            ethir: None,
+            llvm_ir_unoptimized: None,
+            llvm_ir: None,
+            via_ir: false,
+            code_segment,
+            immutables: None,
+            metadata_bytes: None,
+            dependencies: solx_codegen_evm::Dependencies::new(identifier.as_str()),
+            unlinked_symbols: BTreeMap::new(),
+            is_assembled: true,
+            is_size_fallback: false,
+            warnings: Vec::new(),
+            benchmarks: Vec::new(),
+        }
+    }
+
+    ///
+    /// Creates an object from a codegen build result.
+    ///
+    pub fn from_build(
+        identifier: String,
+        contract_name: solx_utils::ContractName,
+        build: solx_codegen_evm::Build,
         via_ir: bool,
         code_segment: solx_utils::CodeSegment,
         immutables: Option<BTreeMap<String, BTreeSet<u64>>>,
         metadata_bytes: Option<Vec<u8>>,
         dependencies: solx_codegen_evm::Dependencies,
-        is_size_fallback: bool,
-        warnings: Vec<solx_codegen_evm::Warning>,
         benchmarks: Vec<(String, u64)>,
     ) -> Self {
-        let bytecode_hex = bytecode.as_ref().map(hex::encode);
+        let bytecode_hex = build.bytecode.as_ref().map(hex::encode);
         Self {
             identifier,
             contract_name,
-            assembly,
-            bytecode,
+            assembly: build.assembly,
+            bytecode: build.bytecode,
             bytecode_hex,
-            debug_info,
-            evmla,
-            ethir,
-            llvm_ir_unoptimized,
-            llvm_ir,
+            debug_info: build.debug_info,
+            evmla: build.evmla,
+            ethir: build.ethir,
+            llvm_ir_unoptimized: build.llvm_ir_unoptimized,
+            llvm_ir: build.llvm_ir,
             via_ir,
             code_segment,
             immutables,
@@ -100,8 +127,8 @@ impl Object {
             dependencies,
             unlinked_symbols: BTreeMap::new(),
             is_assembled: false,
-            is_size_fallback,
-            warnings,
+            is_size_fallback: build.is_size_fallback,
+            warnings: build.warnings,
             benchmarks,
         }
     }
