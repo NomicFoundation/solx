@@ -60,10 +60,14 @@ impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
             let ContractMember::FunctionDefinition(function) = contract_member else {
                 continue;
             };
-            let Some(AbiEntry::Function { name, inputs, .. }) = function.compute_abi_entry() else {
+            let function_ref = std::panic::AssertUnwindSafe(&function);
+            let abi_entry = std::panic::catch_unwind(|| function_ref.compute_abi_entry());
+            let Some(AbiEntry::Function { name, inputs, .. }) = abi_entry.ok().flatten() else {
                 continue;
             };
-            let Some(selector) = function.compute_selector() else {
+            let function_ref = std::panic::AssertUnwindSafe(&function);
+            let selector = std::panic::catch_unwind(|| function_ref.compute_selector());
+            let Some(selector) = selector.ok().flatten() else {
                 continue;
             };
             // TODO: can be moved to slang-solidity

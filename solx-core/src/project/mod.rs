@@ -163,6 +163,8 @@ impl Project {
                     .and_then(|evm| evm.legacy_assembly.take());
 
                 #[cfg(feature = "mlir")]
+                let mlir_source = contract.mlir.clone();
+                #[cfg(feature = "mlir")]
                 let result = contract
                     .mlir
                     .take()
@@ -207,7 +209,7 @@ impl Project {
                     legacy_assembly,
                     contract.ir,
                     #[cfg(feature = "mlir")]
-                    contract.mlir,
+                    mlir_source,
                 );
                 (name, Ok(contract))
             })
