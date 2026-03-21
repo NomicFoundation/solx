@@ -32,8 +32,6 @@ LLVM_SYS_211_PREFIX = { value = "./target-llvm/target-final/", relative = true, 
 MLIR_SYS_210_PREFIX = { value = "./target-llvm/target-final/", relative = true, force = true }
 TABLEGEN_210_PREFIX = { value = "./target-llvm/target-final/", relative = true, force = true }
 
-CARGO_BIN_EXE_SOLX = { value = "./target/debug/solx", relative = true, force = true }
-
 [alias]
 build-slang = "build --no-default-features --features slang --target-dir target-slang"
 test-slang = "test --no-default-features --features slang --target-dir target-slang"
