@@ -17,7 +17,7 @@ runs:
 
     - name: Fetch dependencies
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo fetch --locked
+      run: ${SFW_PREFIX:-} cargo fetch --locked
 
     - name: Cargo check
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
@@ -36,6 +36,6 @@ runs:
     - name: Cargo udeps
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
-        cargo install cargo-udeps@0.1.60 --locked
+        ${SFW_PREFIX:-} cargo install cargo-udeps@0.1.60 --locked
         cargo +nightly udeps --frozen --all-targets
 

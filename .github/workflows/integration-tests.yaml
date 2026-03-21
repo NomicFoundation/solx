@@ -46,7 +46,7 @@ jobs:
       packages: read
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:1df3890912821b043446539f20af01404650d2ae8f13528ce3d06bd933fb5a08
       options: -m 110g
     steps:
       - name: Checkout PR
@@ -74,6 +74,16 @@ jobs:
         run: |
           git submodule update --init --force --recursive --depth 1 --checkout
 
+      - name: Install SFW (container)
+        run: npm install -g sfw
+
+      - name: Set SFW prefix
+        shell: bash
+        run: |
+          if command -v sfw &>/dev/null; then
+            echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
+          fi
+
       - name: Build LLVM (main)
         uses: ./.github/actions/build-llvm
         continue-on-error: true
@@ -92,7 +102,7 @@ jobs:
       - name: Fetch dependencies (main)
         working-directory: temp-solx-main
         continue-on-error: true
-        run: cargo fetch --locked
+        run: ${SFW_PREFIX:-} cargo fetch --locked
 
       - name: Build solx (main)
         working-directory: temp-solx-main
@@ -123,7 +133,7 @@ jobs:
           working-dir: 'solx-solidity'
 
       - name: Fetch dependencies (PR)
-        run: cargo fetch --locked
+        run: ${SFW_PREFIX:-} cargo fetch --locked
 
       - name: Build solx (PR)
         env:

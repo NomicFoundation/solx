@@ -44,7 +44,7 @@ jobs:
       pull-requests: write
       packages: read
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:1df3890912821b043446539f20af01404650d2ae8f13528ce3d06bd933fb5a08
     env:
       BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
       SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
@@ -62,6 +62,16 @@ jobs:
         run: |
           git config --global --add safe.directory '*'
           git submodule update --init --force --depth=1 --recursive --checkout
+
+      - name: Install SFW (container)
+        run: npm install -g sfw
+
+      - name: Set SFW prefix
+        shell: bash
+        run: |
+          if command -v sfw &>/dev/null; then
+            echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
+          fi
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -116,12 +126,15 @@ jobs:
           cp "./target/x86_64-unknown-linux-gnu/release/solx-tester" "${GITHUB_WORKSPACE}/solx-tester-instrumented"
           cp "./target/x86_64-unknown-linux-gnu/release/solx-dev" "${GITHUB_WORKSPACE}/solx-dev-instrumented"
 
+      - name: Fetch dependencies
+        run: ${SFW_PREFIX:-} cargo fetch --locked
+
       - name: Run unit tests
         env:
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: '-C target-feature=+crt-static -C instrument-coverage -C link-arg=-fuse-ld=lld'
           LLVM_PROFILE_FILE: 'unit-tests-%p-%m.profraw'
-        run: cargo fetch --locked && cargo test --frozen --release --target x86_64-unknown-linux-gnu
+        run: cargo test --frozen --release --target x86_64-unknown-linux-gnu
 
       # Inkwell feature poisoning: solc path builds inkwell with LLVM linking,
       # slang path needs no-llvm-linking. cargo clean cannot reliably clear
