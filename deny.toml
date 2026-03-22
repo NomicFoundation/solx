@@ -91,5 +91,6 @@ allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
     "https://github.com/NomicFoundation/inkwell",
     "https://github.com/NomicFoundation/llvm-sys.rs",
+    "https://github.com/NomicFoundation/slang",
     "https://github.com/tomusdrw/rust-web3",
 ]

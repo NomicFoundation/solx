@@ -38,6 +38,10 @@ pub static EXTENSION_LLVM_SOURCE: &str = "ll";
 /// The LLVM bitcode file extension.
 pub static EXTENSION_LLVM_BINARY: &str = "bc";
 
+/// The MLIR source code file extension.
+#[cfg(feature = "mlir")]
+pub static EXTENSION_MLIR: &str = "mlir";
+
 /// The Solidity AST file extension.
 pub static EXTENSION_SOLIDITY_AST: &str = "ast";
 

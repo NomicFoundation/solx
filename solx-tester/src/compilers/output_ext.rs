@@ -66,6 +66,19 @@ pub fn get_last_contract(
                     Err(_error) => continue,
                 }
             }
+
+            // TODO: Slang frontend produces a CST instead of the solc AST, so
+            // `last_contract_name` cannot extract the name from the AST
+            // `nodes` array. Fall back to the contracts map directly.
+            #[cfg(feature = "slang-ast")]
+            for (path, _source) in sources.iter().rev() {
+                if let Some(contracts) = output.contracts.get(path) {
+                    if let Some((name, _)) = contracts.last_key_value() {
+                        return Ok(format!("{path}:{name}"));
+                    }
+                }
+            }
+
             anyhow::bail!("The last contract not found in the output")
         }
         InputLanguage::Yul => {

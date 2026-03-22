@@ -20,6 +20,10 @@ use test_case::test_case;
 #[cfg_attr(feature = "solc", test_case("--asm-solc-json"))]
 #[cfg_attr(feature = "solc", test_case("--ir"))]
 #[test_case("--benchmarks")]
+#[test_case("--emit-llvm-ir")]
+#[cfg_attr(feature = "solc", test_case("--evmla"))]
+#[cfg_attr(feature = "solc", test_case("--ethir"))]
+#[cfg_attr(feature = "mlir", test_case("--emit-mlir"))]
 fn default(flag: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -57,6 +61,10 @@ fn default(flag: &str) -> anyhow::Result<()> {
 #[cfg_attr(feature = "solc", test_case("--asm-solc-json"))]
 #[cfg_attr(feature = "solc", test_case("--ir"))]
 #[test_case("--benchmarks")]
+#[test_case("--emit-llvm-ir")]
+#[cfg_attr(feature = "solc", test_case("--evmla"))]
+#[cfg_attr(feature = "solc", test_case("--ethir"))]
+#[cfg_attr(feature = "mlir", test_case("--emit-mlir"))]
 fn missing(flag: &str) -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -72,7 +80,7 @@ fn missing(flag: &str) -> anyhow::Result<()> {
     let _ = crate::cli::execute_solx(args)?;
     let result = crate::cli::execute_solx(args)?;
     result.failure().stderr(predicate::str::contains(
-        "Error: Refusing to overwrite an existing file",
+        "Refusing to overwrite an existing file",
     ));
     assert!(output_directory.path().exists());
 
@@ -101,6 +109,9 @@ fn all() -> anyhow::Result<()> {
         "--asm-solc-json",
         "--ir",
         "--benchmarks",
+        "--emit-llvm-ir",
+        "--evmla",
+        "--ethir",
         "--output-dir",
         output_directory.path().to_str().unwrap(),
         "--overwrite",
@@ -139,6 +150,9 @@ fn all_missing() -> anyhow::Result<()> {
         "--asm-solc-json",
         "--ir",
         "--benchmarks",
+        "--emit-llvm-ir",
+        "--evmla",
+        "--ethir",
         "--output-dir",
         output_directory.path().to_str().unwrap(),
     ];
@@ -146,7 +160,7 @@ fn all_missing() -> anyhow::Result<()> {
     let _ = crate::cli::execute_solx(args)?;
     let result = crate::cli::execute_solx(args)?;
     result.failure().stderr(predicate::str::contains(
-        "Error: Refusing to overwrite an existing file",
+        "Refusing to overwrite an existing file",
     ));
     assert!(output_directory.path().exists());
 

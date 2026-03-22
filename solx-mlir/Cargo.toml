@@ -10,6 +10,7 @@ license = "MIT OR Apache-2.0"
 cc = "1.2.56"
 
 [dependencies]
+anyhow.workspace = true
 melior = { version = "0.26", features = ["ods-dialects", "helpers"] }
 # mlir-sys 210 wraps LLVM 21.0 C API; llvm-sys (via inkwell) targets 21.1.
 # Both are built from the same LLVM source tree (LLVM_SYS_211_PREFIX ==
@@ -20,7 +21,6 @@ mlir-sys = "210.0"
 
 inkwell = { workspace = true, features = ["llvm21-1-no-llvm-linking"] }
 
-solx-codegen-evm = { path = "../solx-codegen-evm" }
 solx-utils = { path = "../solx-utils" }
 
 [dev-dependencies]
