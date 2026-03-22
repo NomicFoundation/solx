@@ -86,6 +86,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a for loop.
+    // TODO: wrap for-loop in enter_scope/exit_scope so init vars don't leak
     pub fn emit_for(
         &mut self,
         for_statement: &slang_solidity::backend::ir::ast::ForStatement,

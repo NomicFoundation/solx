@@ -83,6 +83,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Statement::BreakStatement(_) => self.emit_break(block),
             Statement::ContinueStatement(_) => self.emit_continue(block),
             Statement::Block(inner) => self.emit_block(inner.statements(), block),
+            // TODO: thread checked/unchecked flag to use different arithmetic ops
             Statement::UncheckedBlock(inner) => self.emit_block(inner.block().statements(), block),
             _ => anyhow::bail!(
                 "unsupported statement: {:?}",

@@ -25,6 +25,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let signed = Self::is_signed(left) || Self::is_signed(right);
         let (lhs, block) = self.emit(left, block)?;
         let (rhs, block) = self.emit(right, block)?;
+        // TODO: use sol.cadd/csub/cmul for checked arithmetic (Solidity 0.8+ default)
         // TODO: change to a nice enum with FromStr
         let operation_name = match operator {
             "+" => solx_mlir::Builder::ADD,
@@ -53,6 +54,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         operator: &str,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        // TODO: support postfix ++/-- on state variables (storage)
         let Expression::Identifier(identifier) = operand else {
             anyhow::bail!("unsupported postfix operand");
         };
@@ -82,6 +84,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (value, block) = self.emit(operand, block)?;
+        // TODO: support prefix ++, --, and ~ (bitwise NOT)
         // TODO: change to a nice enum with FromStr
         match operator {
             "!" => {

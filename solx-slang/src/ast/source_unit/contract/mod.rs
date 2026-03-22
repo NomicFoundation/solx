@@ -84,6 +84,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         contract: &ContractDefinition,
         file_identifier: &str,
     ) -> HashMap<NodeId, u64> {
+        // TODO: remove catch_unwind once slang binder no longer panics on missing typing info
         let contract = std::panic::AssertUnwindSafe(contract);
         let file_identifier = file_identifier.to_owned();
         let abi =

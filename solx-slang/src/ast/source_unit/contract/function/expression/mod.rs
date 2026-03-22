@@ -196,6 +196,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let member = access.member().name();
                 self.emit_member_access(&operand, &member, block)
             }
+            // TODO: support ExponentiationExpression and ConditionalExpression
             _ => anyhow::bail!(
                 "unsupported expression: {:?}",
                 std::mem::discriminant(expression)
@@ -206,6 +207,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Returns whether an expression has a signed integer type.
     ///
     /// Queries slang-solidity's semantic type information via `get_type()`.
+    /// TODO: handle unknown type (binder panic) more precisely than defaulting to unsigned
     pub fn is_signed(expression: &Expression) -> bool {
         Self::expression_type(expression)
             .is_some_and(|t| matches!(t, Type::Integer(ref i) if i.signed()))

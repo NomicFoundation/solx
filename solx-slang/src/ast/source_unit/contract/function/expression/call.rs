@@ -66,6 +66,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         self.emit_llvm_operation(solx_mlir::Builder::AND, value, mask, &block)?;
                     Ok((result, block))
                 }
+                // TODO: truncate to 160 bits for address/payable casts
                 // Word-sized types need no truncation.
                 "address" | "payable" | "uint256" | "int256" => Ok((value, block)),
                 _ => Ok((value, block)),
@@ -96,6 +97,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .expect("function call always produces at least one result");
             Ok((result, current_block))
         } else {
+            // TODO: return None for void calls instead of fabricating zero
             self.state
                 .builder()
                 .emit_sol_call(mlir_name, &argument_values, &[], &current_block)?;

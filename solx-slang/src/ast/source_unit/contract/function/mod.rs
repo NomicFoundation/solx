@@ -73,6 +73,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let result_types: Vec<melior::ir::Type<'context>> =
             (0..return_count).map(|_| i256).collect();
 
+        // TODO: remove catch_unwind once slang binder no longer panics on missing typing info
         let function_ref = std::panic::AssertUnwindSafe(function);
         let selector = std::panic::catch_unwind(|| function_ref.compute_selector())
             .ok()
@@ -137,6 +138,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 self.emit_default_return(return_count, &current_block);
             }
         } else {
+            // TODO: skip abstract/interface functions instead of emitting concrete zero returns
             self.emit_default_return(return_count, &function_entry_block);
         }
 

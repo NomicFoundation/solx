@@ -437,6 +437,7 @@ impl<'context> Builder<'context> {
         if result_types.is_empty() {
             Ok(None)
         } else {
+            // TODO: return all results for multi-return functions
             Ok(Some(operation.result(0)?.into()))
         }
     }

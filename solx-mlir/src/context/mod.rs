@@ -183,6 +183,7 @@ impl<'context> Context<'context> {
             .function_signatures
             .get(bare_name)
             .ok_or_else(|| anyhow::anyhow!("undefined function: {bare_name}"))?;
+        // TODO: resolve overloads by parameter types, not just arity
         let matches: Vec<_> = signatures
             .iter()
             .filter(|signature| signature.parameter_count() == argument_count)
