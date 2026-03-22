@@ -126,7 +126,7 @@ impl<'context> Context<'context> {
         let evm_version_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateEvmVersionAttr(
                 context.to_raw(),
-                Self::sol_dialect_evm_version(evm_version),
+                evm_version.into_sol_dialect_identifier(),
             ))
         };
         // SAFETY: Setting a named attribute on the module operation. Both
@@ -415,15 +415,4 @@ impl<'context> Context<'context> {
 
     // ---- Private ----
 
-    /// Maps `solx_utils::EVMVersion` to the Sol dialect `EvmVersionAttr` `u32`
-    /// encoding expected by the C++ backend.
-    ///
-    /// TODO: unify the MLIR constants with the existing enum
-    fn sol_dialect_evm_version(version: solx_utils::EVMVersion) -> u32 {
-        match version {
-            solx_utils::EVMVersion::Cancun => 11,
-            solx_utils::EVMVersion::Prague => 12,
-            solx_utils::EVMVersion::Osaka => 13,
-        }
-    }
 }

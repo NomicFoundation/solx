@@ -69,7 +69,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 "address" | "payable" => {
                     // Truncate to 160 bits: value & ((1 << 160) - 1).
                     let one = self.state.builder().emit_sol_constant(1, &block);
-                    let bit_width = self.state.builder().emit_sol_constant(160, &block);
+                    let bit_width = self.state.builder().emit_sol_constant(
+                        solx_utils::BIT_LENGTH_ETH_ADDRESS as i64,
+                        &block,
+                    );
                     let shifted =
                         self.emit_llvm_operation(solx_mlir::Builder::SHL, one, bit_width, &block)?;
                     let mask =

@@ -54,6 +54,18 @@ impl FromStr for EVMVersion {
     }
 }
 
+#[cfg(feature = "mlir")]
+impl EVMVersion {
+    /// Returns the Sol dialect `EvmVersionAttr` integer encoding.
+    pub fn into_sol_dialect_identifier(self) -> u32 {
+        match self {
+            Self::Cancun => 11,
+            Self::Prague => 12,
+            Self::Osaka => 13,
+        }
+    }
+}
+
 impl std::fmt::Display for EVMVersion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
