@@ -90,12 +90,10 @@ impl<'context> Builder<'context> {
             }
             let limb_val = self.emit_i256_constant(limb as i64, block);
             let shift = self.emit_i256_constant(i as i64 * Self::LIMB_BIT_WIDTH, block);
-            let shifted = self
-                .emit_binary_operation(Self::SHL, limb_val, shift, self.i256_type, block)
-                .expect("llvm.shl operation is well-formed");
-            result = self
-                .emit_binary_operation(Self::OR, result, shifted, self.i256_type, block)
-                .expect("llvm.or operation is well-formed");
+            let shifted =
+                self.emit_binary_operation(Self::SHL, limb_val, shift, self.i256_type, block)?;
+            result =
+                self.emit_binary_operation(Self::OR, result, shifted, self.i256_type, block)?;
         }
         Ok(result)
     }

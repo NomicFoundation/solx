@@ -66,9 +66,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         self.emit_llvm_operation(solx_mlir::Builder::AND, value, mask, &block)?;
                     Ok((result, block))
                 }
-                // TODO: truncate to 160 bits for address/payable casts
+                "address" | "payable" => {
+                    // Truncate to 160 bits: value & ((1 << 160) - 1).
+                    let one = self.state.builder().emit_sol_constant(1, &block);
+                    let bit_width = self.state.builder().emit_sol_constant(160, &block);
+                    let shifted =
+                        self.emit_llvm_operation(solx_mlir::Builder::SHL, one, bit_width, &block)?;
+                    let mask =
+                        self.emit_llvm_operation(solx_mlir::Builder::SUB, shifted, one, &block)?;
+                    let result =
+                        self.emit_llvm_operation(solx_mlir::Builder::AND, value, mask, &block)?;
+                    Ok((result, block))
+                }
                 // Word-sized types need no truncation.
-                "address" | "payable" | "uint256" | "int256" => Ok((value, block)),
+                "uint256" | "int256" => Ok((value, block)),
                 _ => Ok((value, block)),
             };
         }

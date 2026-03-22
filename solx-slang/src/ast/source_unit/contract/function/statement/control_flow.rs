@@ -86,12 +86,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a for loop.
-    // TODO: wrap for-loop in enter_scope/exit_scope so init vars don't leak
     pub fn emit_for(
         &mut self,
         for_statement: &slang_solidity::backend::ir::ast::ForStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        self.environment.enter_scope();
+
         // Emit initialization.
         let block = match for_statement.initialization() {
             ForStatementInitialization::VariableDeclarationStatement(declaration) => match self
@@ -100,7 +101,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     block,
                 )? {
                 Some(b) => b,
-                None => return Ok(None),
+                None => {
+                    self.environment.exit_scope();
+                    return Ok(None);
+                }
             },
             ForStatementInitialization::ExpressionStatement(expression_statement) => match self
                 .emit(
@@ -108,7 +112,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     block,
                 )? {
                 Some(b) => b,
-                None => return Ok(None),
+                None => {
+                    self.environment.exit_scope();
+                    return Ok(None);
+                }
             },
             ForStatementInitialization::TupleDeconstructionStatement(_) => {
                 anyhow::bail!("tuple deconstruction in for-init not yet supported")
@@ -175,6 +182,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             iterator_block.append_operation(self.state.builder().llvm_br(&condition_block, &[]));
         }
 
+        self.environment.exit_scope();
         Ok(Some(exit_block))
     }
 
