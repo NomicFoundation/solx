@@ -47,7 +47,7 @@ impl Contract {
     /// Checks if all fields are unset or empty.
     ///
     pub fn is_empty(&self) -> bool {
-        let mut empty = self.abi.is_none()
+        let empty = self.abi.is_none()
             && self.storage_layout.is_none()
             && self.transient_storage_layout.is_none()
             && self.metadata.is_none()
@@ -59,9 +59,7 @@ impl Contract {
                 None => true,
             };
         #[cfg(feature = "mlir")]
-        {
-            empty = empty && self.mlir.is_none();
-        }
+        let empty = empty && self.mlir.is_none();
         empty
     }
 }

@@ -308,7 +308,7 @@ impl Arguments {
                 ));
             }
 
-            let mut solidity_only = self.output_abi
+            let solidity_only = self.output_abi
                 || self.output_hashes
                 || self.output_userdoc
                 || self.output_devdoc
@@ -321,9 +321,7 @@ impl Arguments {
                 || self.output_debug_info_runtime
                 || self.output_benchmarks;
             #[cfg(feature = "mlir")]
-            {
-                solidity_only = solidity_only || self.output_mlir;
-            }
+            let solidity_only = solidity_only || self.output_mlir;
             if solidity_only {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "ABI, hashes, userdoc, devdoc, storage layout, transient storage layout, AST, EVM assembly, Yul, MLIR, debug info, benchmarks can be only emitted for Solidity contracts.",
@@ -344,7 +342,7 @@ impl Arguments {
         }
 
         if self.standard_json.is_some() {
-            let mut has_output_flags = self.output_bytecode
+            let has_output_flags = self.output_bytecode
                 || self.output_bytecode_runtime
                 || self.output_assembly
                 || self.output_debug_info
@@ -364,9 +362,7 @@ impl Arguments {
                 || self.output_ethir
                 || self.output_llvm_ir;
             #[cfg(feature = "mlir")]
-            {
-                has_output_flags = has_output_flags || self.output_mlir;
-            }
+            let has_output_flags = has_output_flags || self.output_mlir;
             if has_output_flags {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "Cannot output data outside of JSON in standard JSON mode.",
@@ -618,15 +614,13 @@ impl Arguments {
             return Ok(None);
         };
 
-        let mut has_ir_flags = self.output_ir
+        let has_ir_flags = self.output_ir
             || self.output_evmla
             || self.output_ethir
             || self.output_llvm_ir
             || self.output_assembly;
         #[cfg(feature = "mlir")]
-        {
-            has_ir_flags = has_ir_flags || self.output_mlir;
-        }
+        let has_ir_flags = has_ir_flags || self.output_mlir;
         if !has_ir_flags {
             return Ok(None);
         }

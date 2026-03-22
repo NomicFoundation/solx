@@ -247,7 +247,7 @@ impl Selector {
                 Self::RuntimeBytecodeGeneratedSources,
             ],
             Self::Any => {
-                let mut selectors = vec![
+                let selectors = vec![
                     Self::AST,
                     Self::ABI,
                     Self::Metadata,
@@ -290,7 +290,11 @@ impl Selector {
                     Self::GasEstimates,
                 ];
                 #[cfg(feature = "mlir")]
-                selectors.push(Self::MLIR);
+                let selectors = {
+                    let mut selectors = selectors;
+                    selectors.push(Self::MLIR);
+                    selectors
+                };
                 selectors
             }
             selector => vec![selector],
