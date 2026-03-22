@@ -27,9 +27,10 @@ runs:
       working-directory: ${{ inputs.working-dir }}/..
       run: |
         SHA=$(git -C solx-solidity rev-parse HEAD)
+        SCRIPT_HASH=$(find solx-dev/src/solc -type f -print0 | sort -z | xargs -0 cat | sha256sum | cut -d' ' -f1)
         KEY="v1-solc-${{ runner.os }}-${{ runner.arch }}"
         [ '${{ inputs.cmake-build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.cmake-build-type }}"
-        KEY="${KEY}-boost${{ inputs.boost-version }}-${SHA}"
+        KEY="${KEY}-boost${{ inputs.boost-version }}-${SHA}-script${SCRIPT_HASH:0:8}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
     - name: Restore solc artifact cache

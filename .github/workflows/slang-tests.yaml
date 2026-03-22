@@ -36,6 +36,9 @@ jobs:
 
   slang-tests:
     needs: [label-check, cooldown-check]
+    env:
+      CARGO_TARGET_DIR: target-slang
+      CARGO_INCREMENTAL: "0"
     strategy:
       fail-fast: false
       matrix:
@@ -46,11 +49,11 @@ jobs:
             runner: macos-15
           - name: "Linux x86 gnu"
             runner: ubuntu-24.04
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:ba6c017ac68e658c3ba35edf5a1f1030a578737075e952c6c944efa4a7143992
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7
             target: "x86_64-unknown-linux-gnu"
           - name: "Linux ARM64 gnu"
             runner: ubuntu-24.04-arm
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:ba6c017ac68e658c3ba35edf5a1f1030a578737075e952c6c944efa4a7143992
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7
             target: "aarch64-unknown-linux-gnu"
           - name: "Windows"
             runner: windows-2025
@@ -103,14 +106,12 @@ jobs:
         if: ${{ !matrix.image }}
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          prefix-key: slang-tests
+          prefix-key: slang-tests-v2
           cache-on-failure: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run slang tests
         uses: ./.github/actions/rust-unit-tests
-        env:
-          CARGO_TARGET_DIR: target-slang
         with:
           target: ${{ matrix.target || '' }}
           cargo-test-command: 'test-slang'
