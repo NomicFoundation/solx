@@ -196,6 +196,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let member = access.member().name();
                 self.emit_member_access(&operand, &member, block)
             }
+            Expression::TupleExpression(tuple) => {
+                let items = tuple.items();
+                // TODO: support multi-value tuples (e.g. tuple deconstruction)
+                anyhow::ensure!(items.len() == 1, "multi-value tuples not yet supported");
+                let item = items.iter().next().expect("length checked to be 1 above");
+                let inner = item
+                    .expression()
+                    .ok_or_else(|| anyhow::anyhow!("empty tuple element"))?;
+                self.emit(&inner, block)
+            }
             // TODO: support ExponentiationExpression and ConditionalExpression
             _ => anyhow::bail!(
                 "unsupported expression: {:?}",
