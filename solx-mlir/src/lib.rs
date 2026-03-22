@@ -9,7 +9,7 @@
 
 pub mod attributes;
 pub mod context;
-pub(crate) mod ffi;
+pub mod ffi;
 
 pub use self::attributes::ContractKind;
 pub use self::attributes::ICmpPredicate;

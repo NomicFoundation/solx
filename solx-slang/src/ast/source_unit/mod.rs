@@ -3,7 +3,7 @@
 //!
 
 /// Contract definition lowering to Sol dialect MLIR.
-pub(crate) mod contract;
+pub mod contract;
 
 use std::collections::BTreeMap;
 
@@ -16,7 +16,7 @@ use solx_mlir::Context;
 use self::contract::ContractEmitter;
 
 /// Walks a `SourceUnit` and lowers its contract definitions to MLIR.
-pub(crate) struct SourceUnitEmitter<'state, 'context> {
+pub struct SourceUnitEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state mut Context<'context>,
 }
@@ -72,8 +72,8 @@ impl<'state, 'context> SourceUnitEmitter<'state, 'context> {
                 continue;
             };
             // TODO: can be moved to slang-solidity
-            let param_types: Vec<&str> = inputs.iter().map(|input| input.r#type.as_str()).collect();
-            let signature = format!("{name}({})", param_types.join(","));
+            let parameter_types: Vec<&str> = inputs.iter().map(|input| input.r#type.as_str()).collect();
+            let signature = format!("{name}({})", parameter_types.join(","));
             method_identifiers.insert(signature, format!("{selector:08x}"));
         }
 

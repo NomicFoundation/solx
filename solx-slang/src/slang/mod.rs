@@ -92,7 +92,7 @@ impl Frontend for Slang {
         }
 
         let mut sources = BTreeMap::new();
-        for (path, source) in &input_json.sources {
+        for (path, source) in input_json.sources.iter() {
             let Some(source_code) = source.content() else {
                 output
                     .errors
@@ -155,7 +155,7 @@ impl Frontend for Slang {
             .map(|file| file.id().to_owned())
             .collect();
 
-        for file_identifier in &file_identifiers {
+        for file_identifier in file_identifiers.iter() {
             let Some(source_unit) = semantic.get_file_ast_root(file_identifier) else {
                 continue;
             };
@@ -168,8 +168,8 @@ impl Frontend for Slang {
                 continue;
             };
 
-            let runtime_code_id = format!("{contract_name}_deployed");
-            let mlir_source = context.finalize_module(&runtime_code_id)?;
+            let runtime_code_identifier = format!("{contract_name}_deployed");
+            let mlir_source = context.finalize_module(&runtime_code_identifier)?;
 
             let evm = Some(solx_standard_json::output::contract::evm::EVM {
                 method_identifiers: Some(method_identifiers),

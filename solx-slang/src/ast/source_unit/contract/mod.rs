@@ -3,7 +3,7 @@
 //!
 
 /// Function definition lowering to Sol dialect MLIR.
-pub(crate) mod function;
+pub mod function;
 
 use std::collections::HashMap;
 
@@ -19,7 +19,7 @@ use self::function::FunctionEmitter;
 /// Emits `sol.contract` wrapping `sol.func` definitions. The
 /// `convert-sol-to-std` pass generates the entry-point dispatcher
 /// from the function selectors.
-pub(crate) struct ContractEmitter<'state, 'context> {
+pub struct ContractEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state mut Context<'context>,
 }
@@ -68,11 +68,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         for function in contract.functions() {
             let name = FunctionEmitter::mlir_base_name(&function);
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
-            let param_count = function.parameters().len();
+            let parameter_count = function.parameters().len();
             let return_count = function.returns().map_or(0, |returns| returns.len());
 
             self.state
-                .register_function_signature(&name, mlir_name, param_count, return_count);
+                .register_function_signature(&name, mlir_name, parameter_count, return_count);
         }
     }
 

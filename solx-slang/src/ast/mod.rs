@@ -3,4 +3,4 @@
 //!
 
 /// Source unit (top-level file) lowering to MLIR.
-pub(crate) mod source_unit;
+pub mod source_unit;

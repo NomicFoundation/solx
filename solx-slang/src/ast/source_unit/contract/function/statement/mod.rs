@@ -2,7 +2,7 @@
 //! Statement lowering to MLIR operations.
 //!
 
-pub(crate) mod control_flow;
+pub mod control_flow;
 
 use std::collections::HashMap;
 
@@ -22,7 +22,7 @@ use crate::ast::source_unit::contract::function::expression::ExpressionEmitter;
 ///
 /// Returns `Some(block)` as the continuation block, or `None` when control
 /// flow has been terminated (by `return`, `break`, or `continue`).
-pub(crate) struct StatementEmitter<'state, 'context, 'block> {
+pub struct StatementEmitter<'state, 'context, 'block> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).

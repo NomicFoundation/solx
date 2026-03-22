@@ -22,15 +22,15 @@ use melior::ir::operation::OperationBuilder;
 /// construction and reused across all emission calls.
 pub struct Builder<'context> {
     /// The MLIR context with all dialects and translations registered.
-    pub(crate) context: &'context melior::Context,
+    pub context: &'context melior::Context,
     /// Cached `i256` type (MLIR interns types, but avoids repeated lookups).
-    pub(crate) i256_type: Type<'context>,
+    pub i256_type: Type<'context>,
     /// Cached `i1` type.
-    pub(crate) i1_type: Type<'context>,
+    pub i1_type: Type<'context>,
     /// Cached `!sol.ptr<i256, Stack>` type for alloca operations.
-    pub(crate) sol_ptr_type: Type<'context>,
+    pub sol_ptr_type: Type<'context>,
     /// Cached unknown source location.
-    pub(crate) unknown_location: Location<'context>,
+    pub unknown_location: Location<'context>,
 }
 
 impl<'context> Builder<'context> {
@@ -88,10 +88,10 @@ impl<'context> Builder<'context> {
             if limb == 0 {
                 continue;
             }
-            let limb_val = self.emit_i256_constant(limb as i64, block);
+            let limb_value = self.emit_i256_constant(limb as i64, block);
             let shift = self.emit_i256_constant(i as i64 * Self::LIMB_BIT_WIDTH, block);
             let shifted =
-                self.emit_binary_operation(Self::SHL, limb_val, shift, self.i256_type, block)?;
+                self.emit_binary_operation(Self::SHL, limb_value, shift, self.i256_type, block)?;
             result =
                 self.emit_binary_operation(Self::OR, result, shifted, self.i256_type, block)?;
         }

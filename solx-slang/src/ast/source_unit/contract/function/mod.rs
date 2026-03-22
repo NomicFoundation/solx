@@ -3,9 +3,9 @@
 //!
 
 /// Expression lowering to MLIR SSA values.
-pub(crate) mod expression;
+pub mod expression;
 /// Statement lowering to MLIR operations.
-pub(crate) mod statement;
+pub mod statement;
 
 use std::collections::HashMap;
 
@@ -26,7 +26,7 @@ use self::expression::ExpressionEmitter;
 use self::statement::StatementEmitter;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
-pub(crate) struct FunctionEmitter<'state, 'context> {
+pub struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
     /// State variable node ID to storage slot mapping.

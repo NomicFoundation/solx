@@ -2,11 +2,11 @@
 //! Expression lowering to MLIR SSA values.
 //!
 
-pub(crate) mod arithmetic;
-pub(crate) mod assignment;
-pub(crate) mod call;
-pub(crate) mod logical;
-pub(crate) mod storage;
+pub mod arithmetic;
+pub mod assignment;
+pub mod call;
+pub mod logical;
+pub mod storage;
 
 use std::collections::HashMap;
 
@@ -23,7 +23,7 @@ use solx_mlir::Environment;
 use solx_mlir::ICmpPredicate;
 
 /// Lowers Solidity expressions to MLIR SSA values.
-pub(crate) struct ExpressionEmitter<'state, 'context, 'block> {
+pub struct ExpressionEmitter<'state, 'context, 'block> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
     /// Variable environment.
