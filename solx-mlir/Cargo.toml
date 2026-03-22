@@ -7,7 +7,7 @@ description = "MLIR integration for solx via melior"
 license = "MIT OR Apache-2.0"
 
 [build-dependencies]
-cc = "1.2.56"
+cc = "1.2.57"
 
 [dependencies]
 melior = { version = "0.26", features = ["ods-dialects", "helpers"] }
