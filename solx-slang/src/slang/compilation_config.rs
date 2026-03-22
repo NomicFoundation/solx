@@ -48,7 +48,9 @@ impl CompilationBuilderConfig for CompilationConfig {
             for component in resolved.components() {
                 match component {
                     Component::ParentDir => {
-                        normalized.pop();
+                        if normalized.pop().is_none() {
+                            normalized.push(component);
+                        }
                     }
                     Component::CurDir => {}
                     other => normalized.push(other),

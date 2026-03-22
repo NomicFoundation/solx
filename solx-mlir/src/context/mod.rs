@@ -21,6 +21,7 @@ use melior::ir::BlockRef;
 use melior::ir::Location;
 use melior::ir::Module;
 use melior::ir::Type;
+use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::r#type::IntegerType;
 use melior::pass::PassManager;
@@ -308,8 +309,10 @@ impl<'context> Context<'context> {
             if current.name().as_string_ref().as_str().unwrap_or("") == Self::BUILTIN_MODULE
                 && let Ok(symbol) = current.attribute("sym_name")
             {
-                let symbol_name = symbol.to_string();
-                let symbol_name = symbol_name.trim_matches('"');
+                let symbol_name: StringAttribute = symbol
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("sym_name is not a StringAttribute"))?;
+                let symbol_name = symbol_name.value();
                 if symbol_name == runtime_code_identifier {
                     deployed_operation = Some(current);
                     break;
@@ -321,21 +324,6 @@ impl<'context> Context<'context> {
         let runtime_op = deployed_operation
             .ok_or_else(|| anyhow::anyhow!("no _deployed module in Sol pass output"))?;
 
-        // SAFETY: Setting `sym_name` on a valid MLIR operation. The
-        // operation, string ref, and attribute are all valid MLIR objects.
-        unsafe {
-            mlir_sys::mlirOperationSetAttributeByName(
-                runtime_op.to_raw(),
-                mlir_sys::mlirStringRefCreateFromCString(c"sym_name".as_ptr()),
-                melior::ir::attribute::StringAttribute::new(
-                    self.builder.context,
-                    runtime_code_identifier,
-                )
-                .to_raw(),
-            );
-        }
-
-        // Serialize only the deployed module (now with the right name).
         Ok(runtime_op.to_string())
     }
 

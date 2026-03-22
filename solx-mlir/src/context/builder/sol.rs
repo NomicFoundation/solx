@@ -260,6 +260,12 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
+        if !value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || byte == b'-')
+        {
+            anyhow::bail!("invalid i256 decimal literal: {value}");
+        }
         let attribute = Attribute::parse(self.context, &format!("{value} : i256"))
             .ok_or_else(|| anyhow::anyhow!("invalid i256 decimal literal: {value}"))?;
         self.emit_constant_operation(Self::SOL_CONSTANT, attribute, block)
@@ -279,6 +285,9 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
+        if !hexadecimal.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            anyhow::bail!("invalid i256 hex literal: 0x{hexadecimal}");
+        }
         let attribute = Attribute::parse(self.context, &format!("0x{hexadecimal} : i256"))
             .ok_or_else(|| anyhow::anyhow!("invalid i256 hex literal: 0x{hexadecimal}"))?;
         self.emit_constant_operation(Self::SOL_CONSTANT, attribute, block)

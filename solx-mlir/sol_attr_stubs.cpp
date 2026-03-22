@@ -12,9 +12,12 @@
 #include "mlir-c/IR.h"
 #include "mlir/CAPI/IR.h"
 
+#include <cassert>
+
 extern "C" {
 
 MlirAttribute solxCreateContractKindAttr(MlirContext ctx, uint32_t kind) {
+    assert(kind <= 2 && "ContractKind out of range");
     auto *context = unwrap(ctx);
     auto attr = mlir::sol::ContractKindAttr::get(
         context, static_cast<mlir::sol::ContractKind>(kind));
@@ -22,6 +25,7 @@ MlirAttribute solxCreateContractKindAttr(MlirContext ctx, uint32_t kind) {
 }
 
 MlirAttribute solxCreateStateMutabilityAttr(MlirContext ctx, uint32_t mutability) {
+    assert(mutability <= 3 && "StateMutability out of range");
     auto *context = unwrap(ctx);
     auto attr = mlir::sol::StateMutabilityAttr::get(
         context, static_cast<mlir::sol::StateMutability>(mutability));
@@ -29,6 +33,7 @@ MlirAttribute solxCreateStateMutabilityAttr(MlirContext ctx, uint32_t mutability
 }
 
 MlirAttribute solxCreateEvmVersionAttr(MlirContext ctx, uint32_t version) {
+    assert(version >= 11 && version <= 13 && "EvmVersion out of range");
     auto *context = unwrap(ctx);
     auto attr = mlir::sol::EvmVersionAttr::get(
         context, static_cast<mlir::sol::EvmVersion>(version));
