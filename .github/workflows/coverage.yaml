@@ -64,7 +64,7 @@ jobs:
           git submodule update --init --force --depth=1 --recursive --checkout
 
       - name: Install SFW (container)
-        run: npm install -g sfw
+        run: npm install -g sfw@2.0.4
 
       - name: Set SFW prefix
         shell: bash
@@ -131,7 +131,7 @@ jobs:
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: '-C target-feature=+crt-static -C instrument-coverage -C link-arg=-fuse-ld=lld'
           LLVM_PROFILE_FILE: 'unit-tests-%p-%m.profraw'
-        run: ${SFW_PREFIX:-} cargo fetch --locked && cargo test --frozen --release --target x86_64-unknown-linux-gnu
+        run: ${SFW_PREFIX:-} cargo fetch --locked && ${SFW_PREFIX:-} cargo test --frozen --release --target x86_64-unknown-linux-gnu
 
       # Inkwell feature poisoning: solc path builds inkwell with LLVM linking,
       # slang path needs no-llvm-linking. cargo clean cannot reliably clear
@@ -144,7 +144,7 @@ jobs:
           RUSTFLAGS: '-C instrument-coverage -C link-arg=-fuse-ld=lld'
           LLVM_PROFILE_FILE: 'slang-tests-%p-%m.profraw'
           CARGO_TARGET_DIR: target-slang
-        run: cargo test-slang --frozen --release --target x86_64-unknown-linux-gnu
+        run: ${SFW_PREFIX:-} cargo test-slang --frozen --release --target x86_64-unknown-linux-gnu
 
       - name: Preserve slang instrumented binary
         if: contains(github.event.pull_request.labels.*.name, 'ci:slang')

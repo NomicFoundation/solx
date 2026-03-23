@@ -63,7 +63,7 @@ jobs:
           git submodule update --force --depth=1 --recursive --checkout
 
       - name: Install SFW (container)
-        run: npm install -g sfw
+        run: npm install -g sfw@2.0.4
 
       - name: Set SFW prefix
         shell: bash
@@ -149,7 +149,7 @@ jobs:
 
       - name: Install SFW (container)
         if: matrix.image != ''
-        run: npm install -g sfw
+        run: npm install -g sfw@2.0.4
 
       - name: Set SFW prefix
         shell: bash
