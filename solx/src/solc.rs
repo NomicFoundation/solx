@@ -73,7 +73,11 @@ impl solx_core::Frontend for Solc {
             .output_selection
             .is_debug_info_set_for_any();
         let original_output_selection = input_json.settings.output_selection.to_owned();
+        let original_optimizer = input_json.settings.optimizer.to_owned();
         input_json.settings.output_selection.normalize();
+        // In passthrough mode (solc + mlir), solc produces final bytecode.
+        // retain_solc() strips bytecode selectors, which we need to keep.
+        #[cfg(not(feature = "mlir"))]
         input_json.settings.output_selection.retain_solc();
         if is_debug_info_requested
             && input_json.language == solx_standard_json::InputLanguage::Solidity
@@ -87,13 +91,18 @@ impl solx_core::Frontend for Solc {
             .settings
             .output_selection
             .set_selector(solx_standard_json::InputSelector::Metadata);
+        // In passthrough mode (solc + mlir), let the user's output selection and
+        // optimizer settings pass through to solc unchanged.
+        #[cfg(not(feature = "mlir"))]
         input_json
             .settings
             .output_selection
             .set_selector(input_json.settings.via_ir.into());
 
-        let original_optimizer = input_json.settings.optimizer.to_owned();
-        input_json.settings.optimizer.mode = None;
+        #[cfg(not(feature = "mlir"))]
+        {
+            input_json.settings.optimizer.mode = None;
+        }
         input_json.settings.optimizer.size_fallback = None;
 
         let input_string = serde_json::to_string(input_json)
