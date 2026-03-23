@@ -1,7 +1,9 @@
 name: Setup Socket Firewall (SFW)
 description: >
   Installs and configures Socket Firewall to monitor package installations.
-  Gracefully skips inside containers (install via npm instead).
+  On bare-metal Linux runners, installs via socketdev/action with MITM proxy
+  and CA cert trust. Inside containers, installs the sfw CLI via npm.
+  Skips on macOS/Windows where the MITM proxy is incompatible.
 
 inputs:
   mode:
@@ -12,7 +14,7 @@ inputs:
 outputs:
   available:
     description: 'Whether SFW is available for use (true/false)'
-    value: ${{ steps.detect.outputs.available }}
+    value: ${{ steps.set-prefix.outputs.available }}
 
 runs:
   using: composite
@@ -26,28 +28,34 @@ runs:
         # at the crypto level — not a CA trust issue.
         if [[ "$RUNNER_OS" != "Linux" ]]; then
           echo "::notice::SFW skipped: MITM proxy not compatible with $RUNNER_OS TLS stack"
-          echo "available=false" >> "$GITHUB_OUTPUT"
+          echo "method=none" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        # Skip inside containers (GitHub sets 'container' env var for container jobs;
+        # Inside containers, the socketdev/action MITM proxy doesn't work,
+        # but the sfw CLI wrapper can be installed directly via npm.
+        # (GitHub sets 'container' env var for container jobs;
         # /.dockerenv is a fallback heuristic)
         if [[ -n "${container:-}" ]] || [[ -f /.dockerenv ]]; then
-          echo "::notice::SFW skipped: running inside a container (install via npm instead)"
-          echo "available=false" >> "$GITHUB_OUTPUT"
+          echo "method=npm" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        echo "available=true" >> "$GITHUB_OUTPUT"
+        echo "method=action" >> "$GITHUB_OUTPUT"
+
+    - name: Install SFW (container)
+      if: steps.detect.outputs.method == 'npm'
+      shell: bash
+      run: npm install -g sfw@2.0.4
 
     - name: Install SFW
-      if: steps.detect.outputs.available == 'true'
+      if: steps.detect.outputs.method == 'action'
       uses: socketdev/action@4337a545deecc20f19a909e52db7a2f6ba292f42 # v1
       with:
         mode: ${{ inputs.mode }}
 
     - name: Configure cargo TLS trust for SFW
-      if: steps.detect.outputs.available == 'true'
+      if: steps.detect.outputs.method == 'action'
       shell: bash
       run: |
         # Trigger SFW cert generation (may be lazy)
@@ -101,3 +109,16 @@ runs:
         echo "GIT_SSL_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
         echo "SSL_CERT_FILE=$BUNDLE" >> "$GITHUB_ENV"
         echo "CA bundle created at $BUNDLE ($(wc -l < "$BUNDLE") lines)"
+
+    - name: Set SFW prefix
+      id: set-prefix
+      if: steps.detect.outputs.method != 'none'
+      shell: bash
+      run: |
+        if command -v sfw &>/dev/null; then
+          echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
+          echo "available=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::SFW command not found after install"
+          echo "available=false" >> "$GITHUB_OUTPUT"
+        fi

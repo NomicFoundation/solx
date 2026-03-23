@@ -63,15 +63,8 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --init --force --depth=1 --recursive --checkout
 
-      - name: Install SFW (container)
-        run: npm install -g sfw@2.0.4
-
-      - name: Set SFW prefix
-        shell: bash
-        run: |
-          if command -v sfw &>/dev/null; then
-            echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
-          fi
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
