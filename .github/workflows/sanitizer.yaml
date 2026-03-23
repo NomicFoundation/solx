@@ -38,7 +38,7 @@ jobs:
     needs: [label-check, cooldown-check]
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
       options: -m 110g
     env:
       TARGET: x86_64-unknown-linux-gnu
