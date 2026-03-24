@@ -317,6 +317,7 @@ fn metadata_hash_none_and_metadata() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "solc")]
 #[test]
 fn metadata_hash_none_no_metadata() -> anyhow::Result<()> {
     crate::common::setup()?;
@@ -571,6 +572,42 @@ fn select_evmla_ethir() -> anyhow::Result<()> {
             .and(predicate::str::contains("ethir"))
             .and(predicate::str::contains("object")),
     );
+
+    Ok(())
+}
+
+#[cfg(feature = "mlir")]
+#[test]
+fn select_mlir_and_llvm_ir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let result = crate::cli::execute_solx_with_stdin(
+        &["--standard-json"],
+        crate::common::standard_json!("select_mlir_and_llvm_ir.json"),
+    )?;
+
+    result.success().stdout(
+        predicate::str::contains("mlir")
+            .and(predicate::str::contains("llvmIr"))
+            .and(predicate::str::contains("llvmIrUnoptimized")),
+    );
+
+    Ok(())
+}
+
+#[cfg(feature = "mlir")]
+#[test]
+fn select_mlir() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let result = crate::cli::execute_solx_with_stdin(
+        &["--standard-json"],
+        crate::common::standard_json!("select_mlir.json"),
+    )?;
+
+    result
+        .success()
+        .stdout(predicate::str::contains("mlir").and(predicate::str::contains("object")));
 
     Ok(())
 }
