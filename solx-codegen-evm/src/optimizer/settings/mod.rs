@@ -38,6 +38,15 @@ impl Settings {
     /// The list of supported middle-end optimization levels.
     pub const MIDDLE_END_LEVELS: [&str; 5] = ["1", "2", "3", "s", "z"];
 
+    /// The default optimization mode when none is specified.
+    pub const DEFAULT_OPTIMIZATION_MODE: char = '3';
+
+    /// Environment variable name for the optimization level override.
+    pub const OPTIMIZATION_ENV: &str = "SOLX_OPTIMIZATION";
+
+    /// Environment variable name for the size fallback flag.
+    pub const SIZE_FALLBACK_ENV: &str = "SOLX_OPTIMIZATION_SIZE_FALLBACK";
+
     ///
     /// A shortcut constructor.
     ///
@@ -78,6 +87,33 @@ impl Settings {
             is_verify_each_enabled,
             is_debug_logging_enabled,
         }
+    }
+
+    /// Creates settings from standard JSON optimizer fields with env var overrides.
+    ///
+    /// The `SOLX_OPTIMIZATION` env var takes precedence over `mode`.
+    /// The `SOLX_OPTIMIZATION_SIZE_FALLBACK` env var takes precedence over `size_fallback`.
+    pub fn try_from_standard_json(
+        mode: Option<char>,
+        size_fallback: Option<bool>,
+    ) -> anyhow::Result<Self> {
+        let optimization_mode = if let Ok(optimization) = std::env::var(Self::OPTIMIZATION_ENV) {
+            if !Self::MIDDLE_END_LEVELS.contains(&optimization.as_str()) {
+                anyhow::bail!(
+                    "Invalid value `{optimization}` for environment variable '{}': only values {} are supported.",
+                    Self::OPTIMIZATION_ENV,
+                    Self::MIDDLE_END_LEVELS.join(", ")
+                );
+            }
+            optimization.chars().next().expect("Always exists")
+        } else {
+            mode.unwrap_or(Self::DEFAULT_OPTIMIZATION_MODE)
+        };
+        let mut settings = Self::try_from_cli(optimization_mode)?;
+        if size_fallback.unwrap_or_default() || std::env::var(Self::SIZE_FALLBACK_ENV).is_ok() {
+            settings.enable_fallback_to_size();
+        }
+        Ok(settings)
     }
 
     ///

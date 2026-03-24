@@ -297,26 +297,6 @@ fn output_dir() -> anyhow::Result<()> {
 }
 
 #[test]
-fn emit_llvm_ir() -> anyhow::Result<()> {
-    crate::common::setup()?;
-
-    let args = &[
-        crate::common::TEST_LLVM_IR_CONTRACT,
-        "--llvm-ir",
-        "--emit-llvm-ir",
-        "--bin",
-    ];
-
-    let result = crate::cli::execute_solx(args)?;
-    result
-        .success()
-        .stdout(predicate::str::contains("LLVM IR:"))
-        .stdout(predicate::str::contains("target datalayout"));
-
-    Ok(())
-}
-
-#[test]
 fn debug_info_error() -> anyhow::Result<()> {
     crate::common::setup()?;
 

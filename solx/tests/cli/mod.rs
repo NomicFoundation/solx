@@ -27,8 +27,15 @@ mod debug_info;
 mod debug_info_runtime;
 #[cfg(feature = "solc")]
 mod devdoc;
+mod emit_llvm_ir;
+#[cfg(feature = "mlir")]
+mod emit_mlir;
 mod empty;
+#[cfg(feature = "solc")]
+mod ethir;
 mod evm_version;
+#[cfg(feature = "solc")]
+mod evmla;
 #[cfg(feature = "solc")]
 mod hashes;
 mod help;
@@ -36,7 +43,6 @@ mod help;
 mod include_path;
 #[cfg(feature = "solc")]
 mod ir;
-mod ir_output;
 #[cfg(feature = "solc")]
 mod libraries;
 mod llvm_ir;
