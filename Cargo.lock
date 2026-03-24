@@ -639,7 +639,7 @@ dependencies = [
  "bitflags",
  "cexpr",
  "clang-sys",
- "itertools 0.10.5",
+ "itertools 0.13.0",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -2570,9 +2570,9 @@ dependencies = [
 
 [[package]]
 name = "mlir-sys"
-version = "210.0.1"
+version = "210.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "841d24c8c35df089fa46fff72a9e4d90beed3f8a4e7d07af633a2e5f5b0d11b7"
+checksum = "f376ddc92bf2bad0eba47e20f75923f76306e429273379cedb70eb7e664aab90"
 dependencies = [
  "bindgen",
 ]
