@@ -24,7 +24,7 @@
 
 /* Opaque stand-ins — the real types live in mlir-c/ExecutionEngine.h,
    but we only need ABI-compatible signatures for the linker. */
-struct MlirExecutionEngine { void *ptr; };
+struct MlirExecutionEngine  { void *ptr; };
 struct MlirStringRef        { const char *data; size_t length; };
 struct MlirLogicalResult    { int8_t value; };
 struct MlirModule           { void *ptr; };

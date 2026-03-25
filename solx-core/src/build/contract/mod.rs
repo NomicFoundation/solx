@@ -42,6 +42,9 @@ pub struct Contract {
     pub legacy_assembly: Option<solx_evm_assembly::Assembly>,
     /// solc Yul IR.
     pub yul: Option<String>,
+    /// MLIR source code (LLVM dialect, from Slang frontend).
+    #[cfg(feature = "mlir")]
+    pub mlir: Option<String>,
 }
 
 impl Contract {
@@ -61,6 +64,7 @@ impl Contract {
         transient_storage_layout: Option<serde_json::Value>,
         legacy_assembly: Option<solx_evm_assembly::Assembly>,
         yul: Option<String>,
+        #[cfg(feature = "mlir")] mlir: Option<String>,
     ) -> Self {
         Self {
             name,
@@ -75,6 +79,8 @@ impl Contract {
             transient_storage_layout,
             legacy_assembly,
             yul,
+            #[cfg(feature = "mlir")]
+            mlir,
         }
     }
 
@@ -214,6 +220,16 @@ impl Contract {
         ) && let Some(yul) = self.yul.take()
         {
             writeln!(std::io::stdout(), "IR:\n{yul}")?;
+        }
+
+        #[cfg(feature = "mlir")]
+        if output_selection.check_selection(
+            self.name.path.as_str(),
+            self.name.name.as_deref(),
+            solx_standard_json::InputSelector::MLIR,
+        ) && let Some(mlir) = self.mlir.take()
+        {
+            writeln!(std::io::stdout(), "MLIR:\n{mlir}")?;
         }
 
         if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
@@ -767,6 +783,22 @@ impl Contract {
             let yul = self.yul.expect("Always exists").to_string();
             Self::write_to_file(output_path.as_path(), yul, overwrite)?;
         }
+        #[cfg(feature = "mlir")]
+        if output_selection.check_selection(
+            self.name.path.as_str(),
+            self.name.name.as_deref(),
+            solx_standard_json::InputSelector::MLIR,
+        ) && let Some(mlir) = self.mlir.take()
+        {
+            let output_name = format!(
+                "{contract_path}_{}.{}",
+                self.name.name.as_deref().unwrap_or(contract_name),
+                solx_utils::EXTENSION_MLIR,
+            );
+            let mut output_path = output_directory.to_owned();
+            output_path.push(output_name.as_str());
+            Self::write_to_file(output_path.as_path(), mlir, overwrite)?;
+        }
         if let (Some(deploy_object_result), Some(runtime_object_result)) =
             (self.deploy_object_result, self.runtime_object_result)
             && output_selection.check_selection(
@@ -874,6 +906,16 @@ impl Contract {
             )
         }) {
             standard_json_contract.ir = Some(value);
+        }
+        #[cfg(feature = "mlir")]
+        if let Some(value) = self.mlir.take().filter(|_| {
+            output_selection.check_selection(
+                self.name.path.as_str(),
+                self.name.name.as_deref(),
+                solx_standard_json::InputSelector::MLIR,
+            )
+        }) {
+            standard_json_contract.mlir = Some(value);
         }
 
         let evm = standard_json_contract
