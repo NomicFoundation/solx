@@ -80,10 +80,10 @@ runs:
       id: build-book
       run: |
         echo "::group::Building the book"
-        if [ ${{ inputs.version }} == ${{ github.event.repository.default_branch }} ] || [ ${{ inputs.version }} == 'latest' ]; then
+        if [ "${{ inputs.version }}" == "${{ github.event.repository.default_branch }}" ] || [ "${{ inputs.version }}" == 'latest' ]; then
           VERSION=latest
         else
-          VERSION=${{ inputs.version }}
+          VERSION="${{ inputs.version }}"
         fi
         mdbook build --dest-dir=${VERSION}
         if [ -d "${VERSION}/html" ]; then
@@ -116,12 +116,12 @@ runs:
         git config user.email ""
         # Check if the deploy branch exists
         if [ $(gh api "/repos/${GITHUB_REPOSITORY}/branches/${{ inputs.publish-branch }}" > /dev/null 2>&1; echo $?) -eq 1 ]; then
-          git checkout --orphan ${{ inputs.publish-branch }}
+          git checkout --orphan "${{ inputs.publish-branch }}"
           git rm -rf .
           git commit --allow-empty -m "Initialize ${{ inputs.publish-branch }} branch"
         else
-          git fetch origin ${{ inputs.publish-branch }}
-          git checkout ${{ inputs.publish-branch }}
+          git fetch origin "${{ inputs.publish-branch }}"
+          git checkout "${{ inputs.publish-branch }}"
         fi
         echo "::endgroup::"
 
@@ -172,11 +172,11 @@ runs:
         mv "${BOOK_DIR}" "${VERSION}"
         # Add the new version of the book
         git add "${VERSION}" versions.json
-        if [ ${{ inputs.create-latest-symlink }} == 'true' ]; then
+        if [ "${{ inputs.create-latest-symlink }}" == 'true' ]; then
           rm -f latest
           ln -sfn "${VERSION}" latest
           git add latest
         fi
         git commit --amend -m "Deploy ${GITHUB_SHA::7}"
-        git push --force --set-upstream origin ${{ inputs.publish-branch }}
+        git push --force --set-upstream origin "${{ inputs.publish-branch }}"
         echo "::endgroup::"

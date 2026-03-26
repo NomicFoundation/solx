@@ -118,12 +118,12 @@ jobs:
           LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"ubuntu-24.04","image":"ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
           LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"ubuntu-24.04-arm","image":"ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
           # Disable platforms for non-tag builds if user requested
-          if [ '${{ github.event_name }}' = 'workflow_dispatch' ] && [ ${GITHUB_REF_TYPE} != tag ]; then
-            [ ${{ github.event.inputs.release_windows_amd64 }} != true ] && WINDOWS=
-            [ ${{ github.event.inputs.release_macos_amd64 }} != true ] && MACOS_AMD64=
-            [ ${{ github.event.inputs.release_macos_arm64 }} != true ] && MACOS_ARM64=
-            [ ${{ github.event.inputs.release_linux_amd64_gnu }} != true ] && LINUX_AMD64_GNU=
-            [ ${{ github.event.inputs.release_linux_arm64_gnu }} != true ] && LINUX_ARM64_GNU=
+          if [ '${{ github.event_name }}' = 'workflow_dispatch' ] && [ "${GITHUB_REF_TYPE}" != tag ]; then
+            [ "${{ github.event.inputs.release_windows_amd64 }}" != true ] && WINDOWS=
+            [ "${{ github.event.inputs.release_macos_amd64 }}" != true ] && MACOS_AMD64=
+            [ "${{ github.event.inputs.release_macos_arm64 }}" != true ] && MACOS_ARM64=
+            [ "${{ github.event.inputs.release_linux_amd64_gnu }}" != true ] && LINUX_AMD64_GNU=
+            [ "${{ github.event.inputs.release_linux_arm64_gnu }}" != true ] && LINUX_ARM64_GNU=
           fi
           PLATFORMS=(${WINDOWS} ${MACOS_AMD64} ${MACOS_ARM64} ${LINUX_AMD64_GNU} ${LINUX_ARM64_GNU})
           echo "matrix={ \"include\": [ $(IFS=, ; echo "${PLATFORMS[*]}") ] }" | tee -a "${GITHUB_OUTPUT}"
@@ -650,7 +650,6 @@ jobs:
     uses: ./.github/workflows/deploy-docs.yaml
     with:
       deploy: true
-    secrets: inherit
     permissions:
       contents: write
 
@@ -673,10 +672,10 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     name: ${{ matrix.name }}
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Download and run installation script
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           curl -fsSL -o "${{ runner.temp }}/install-solx" \
             "https://raw.githubusercontent.com/NomicFoundation/solx/${{ github.ref_name }}/install-solx"
