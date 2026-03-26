@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelBridge;
 use rayon::iter::ParallelIterator;
 
 use crate::build::Build as EVMBuild;
@@ -344,7 +345,7 @@ impl Project {
                     None,
                     None,
                     None,
-                    None,
+                    Some(source_code),
                     #[cfg(feature = "mlir")]
                     None,
                 );
@@ -506,9 +507,15 @@ impl Project {
         llvm_options: Vec<String>,
         output_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<EVMBuild> {
-        let results = self
-            .contracts
-            .into_par_iter()
+        let mut contracts: Vec<(String, Contract)> = self.contracts.into_iter().collect();
+        contracts.sort_unstable_by(|(_, left), (_, right)| {
+            right
+                .estimated_compilation_cost()
+                .cmp(&left.estimated_compilation_cost())
+        });
+        let results = contracts
+            .into_iter()
+            .par_bridge()
             .map(|(path, mut contract)| {
                 let contract_name = contract.name.clone();
 

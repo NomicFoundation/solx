@@ -87,6 +87,31 @@ impl Contract {
     }
 
     ///
+    /// Returns an estimated compilation cost for LPT scheduling.
+    ///
+    /// Used to sort contracts by descending cost before parallel dispatch,
+    /// so that large contracts begin compiling first.
+    ///
+    pub fn estimated_compilation_cost(&self) -> usize {
+        match &self.ir {
+            Some(IR::Yul(_)) => self.yul.as_ref().map_or(0, String::len),
+            Some(IR::EVMLegacyAssembly(evmla)) => {
+                let deploy = evmla.assembly.code.as_ref().map_or(0, Vec::len);
+                let runtime = evmla
+                    .runtime_code
+                    .as_ref()
+                    .and_then(|runtime| runtime.assembly.code.as_ref())
+                    .map_or(0, Vec::len);
+                deploy + runtime
+            }
+            Some(IR::LLVMIR(llvm_ir)) => llvm_ir.source.len(),
+            #[cfg(feature = "mlir")]
+            Some(IR::MLIR(mlir)) => mlir.source.len(),
+            None => 0,
+        }
+    }
+
+    ///
     /// Returns the contract identifier, which is:
     /// - the Yul object identifier for Yul
     /// - the full contract path for all other IR types
