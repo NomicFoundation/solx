@@ -15,7 +15,12 @@ fn default() -> anyhow::Result<()> {
     ];
 
     let result = crate::cli::execute_solx(args)?;
-    result.success().stdout(predicate::str::contains("MLIR:"));
+    result
+        .success()
+        .stdout(predicate::str::contains("MLIR Dialect sol:"))
+        .stdout(predicate::str::contains("MLIR Dialect llvm:"))
+        .stdout(predicate::str::contains("sol.contract"))
+        .stdout(predicate::str::contains("llvm.func"));
 
     Ok(())
 }

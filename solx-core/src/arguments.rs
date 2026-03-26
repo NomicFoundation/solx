@@ -160,7 +160,7 @@ pub struct Arguments {
     #[arg(long = "emit-llvm-ir", help_heading = "Output Selection")]
     pub output_llvm_ir: bool,
 
-    /// Emit MLIR (LLVM dialect, intermediate representation from Slang frontend).
+    /// Emit MLIR at each pipeline stage.
     /// Can be used with --output-dir to write .mlir files.
     #[cfg(feature = "mlir")]
     #[arg(long = "emit-mlir", help_heading = "Output Selection")]
