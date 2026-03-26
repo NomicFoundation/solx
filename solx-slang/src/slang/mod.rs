@@ -171,7 +171,12 @@ impl Frontend for Slang {
             };
 
             let runtime_code_identifier = format!("{contract_name}_deployed");
-            let mlir_source = context.finalize_module(&runtime_code_identifier)?;
+            let emit_mlir = input_json.settings.output_selection.check_selection(
+                file_identifier,
+                Some(contract_name.as_str()),
+                solx_standard_json::InputSelector::MLIR,
+            );
+            let mlir_stages = context.finalize_module(&runtime_code_identifier, emit_mlir)?;
 
             let evm = Some(solx_standard_json::output::contract::evm::EVM {
                 method_identifiers: Some(method_identifiers),
@@ -179,7 +184,7 @@ impl Frontend for Slang {
             });
 
             let contract = solx_standard_json::output::contract::Contract {
-                mlir: Some(mlir_source),
+                mlir: Some(mlir_stages),
                 evm,
                 ..Default::default()
             };

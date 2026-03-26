@@ -45,6 +45,14 @@ pub struct Context<'context> {
 }
 
 impl<'context> Context<'context> {
+    // ---- Public constants ----
+
+    /// Dialect key for the Sol dialect MLIR stage.
+    pub const DIALECT_SOL: &'static str = "sol";
+
+    /// Dialect key for the LLVM dialect MLIR stage.
+    pub const DIALECT_LLVM: &'static str = "llvm";
+
     // ---- Private constants ----
 
     /// MLIR `builtin.module` operation name used to locate nested modules.
@@ -236,22 +244,30 @@ impl<'context> Context<'context> {
     }
 
     /// Consumes the context, runs the Sol-to-LLVM pass pipeline, and returns
-    /// the resulting LLVM dialect MLIR as text.
+    /// labeled MLIR representations captured at each pipeline stage.
+    ///
+    /// Returns `HashMap<dialect_name, mlir_text>` with entries for:
+    /// - `"sol"` — Full module in Sol dialect (only when `emit_mlir` is true)
+    /// - `"llvm"` — Runtime module only in LLVM dialect (always present)
     ///
     /// The Sol conversion pass produces a nested module structure:
     /// ```text
     /// module @Contract { deploy __entry + module @Contract_deployed { runtime __entry } }
     /// ```
     /// `solx-core` provides its own deploy wrapper, so this method extracts
-    /// only the inner `_deployed` module and renames it to
-    /// `runtime_code_identifier` so the LLVM module identifier matches what
-    /// `minimal_deploy_code` references.
+    /// only the inner module whose `sym_name` matches
+    /// `runtime_code_identifier` (the LLVM module identifier that
+    /// `minimal_deploy_code` references).
     ///
     /// # Errors
     ///
     /// Returns an error if re-parsing fails, the pass pipeline fails, or
     /// the deployed module is not found.
-    pub fn finalize_module(self, runtime_code_identifier: &str) -> anyhow::Result<String> {
+    pub fn finalize_module(
+        self,
+        runtime_code_identifier: &str,
+        emit_mlir: bool,
+    ) -> anyhow::Result<HashMap<String, String>> {
         // Re-parse the generated MLIR text to promote OperationBuilder
         // dictionary attributes to MLIR operation properties. Without this
         // round-trip, the Sol conversion pass fails because it expects
@@ -265,12 +281,22 @@ impl<'context> Context<'context> {
                 anyhow::anyhow!("failed to re-parse generated Sol dialect MLIR:\n{sol_text}")
             })?;
 
+        let mut stages = HashMap::new();
+
+        // Capture the Sol dialect MLIR before lowering (only when requested).
+        if emit_mlir {
+            stages.insert(
+                Self::DIALECT_SOL.to_owned(),
+                parsed_module.as_operation().to_string(),
+            );
+        }
+
         // Lower Sol → LLVM dialect.
         Self::run_sol_passes(self.builder.context, &mut parsed_module)?;
 
-        // Walk the outer module's body to find the inner `_deployed` module
-        // and extract it as the runtime code. Rename it so the LLVM module
-        // identifier matches what the deploy stub references.
+        // Walk the outer module's body to find the inner module whose
+        // `sym_name` matches `runtime_code_identifier` and extract it as
+        // the runtime code.
         let body = parsed_module.body();
         let mut deployed_operation = None;
         let mut operation = body.first_operation();
@@ -290,10 +316,15 @@ impl<'context> Context<'context> {
             operation = current.next_in_block();
         }
 
-        let runtime_op = deployed_operation
-            .ok_or_else(|| anyhow::anyhow!("no _deployed module in Sol pass output"))?;
+        let runtime_operation = deployed_operation.ok_or_else(|| {
+            anyhow::anyhow!(
+                "no module with sym_name `{runtime_code_identifier}` in Sol pass output"
+            )
+        })?;
 
-        Ok(runtime_op.to_string())
+        stages.insert(Self::DIALECT_LLVM.to_owned(), runtime_operation.to_string());
+
+        Ok(stages)
     }
 
     // ==== Phase 4: LLVM translation ====

@@ -7,6 +7,8 @@ pub mod metadata;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+#[cfg(feature = "mlir")]
+use std::collections::HashMap;
 
 #[cfg(feature = "mlir")]
 use anyhow::Context as _;
@@ -44,9 +46,9 @@ pub struct Contract {
     pub legacy_assembly: Option<solx_evm_assembly::Assembly>,
     /// solc Yul IR.
     pub yul: Option<String>,
-    /// solx MLIR IR.
+    /// Labeled MLIR representations from each pipeline stage.
     #[cfg(feature = "mlir")]
-    pub mlir: Option<String>,
+    pub mlir: Option<HashMap<String, String>>,
 }
 
 impl Contract {
@@ -65,7 +67,7 @@ impl Contract {
         transient_storage_layout: Option<serde_json::Value>,
         legacy_assembly: Option<solx_evm_assembly::Assembly>,
         yul: Option<String>,
-        #[cfg(feature = "mlir")] mlir: Option<String>,
+        #[cfg(feature = "mlir")] mlir: Option<HashMap<String, String>>,
     ) -> Self {
         Self {
             name,
