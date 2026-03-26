@@ -85,14 +85,14 @@ runs:
         else
           VERSION="${{ inputs.version }}"
         fi
-        mdbook build --dest-dir=${VERSION}
+        mdbook build --dest-dir="${VERSION}"
         if [ -d "${VERSION}/html" ]; then
           echo "Book is using multiple outputs."
           echo "Copying the HTML output to the book root directory."
-          mv ./${VERSION}/html/* ./${VERSION}
-          mv ./${VERSION}/html/.[!.]* ./${VERSION}
+          mv "./${VERSION}/html"/* "./${VERSION}/"
+          mv "./${VERSION}/html"/.[!.]* "./${VERSION}/"
         fi
-        echo version=${VERSION} >> "${GITHUB_OUTPUT}"
+        echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
         echo "::endgroup::"
 
     - name: Test Book
@@ -167,7 +167,7 @@ runs:
         BOOK_DIR=$(readlink -f "${{ inputs.docs-dir }}/${VERSION}")
         [ ! -z "${{ inputs.project }}" ] && cd "${{ inputs.project }}"
         # Remove the previous version of the book
-        rm -rf ${VERSION}
+        rm -rf "${VERSION}"
         # Move the new version of the book
         mv "${BOOK_DIR}" "${VERSION}"
         # Add the new version of the book
