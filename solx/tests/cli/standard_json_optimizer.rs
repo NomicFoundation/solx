@@ -28,6 +28,23 @@ fn mode_produces_bytecode(path: &str) -> anyhow::Result<()> {
 }
 
 #[test]
+fn unsupported_mode_0() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[
+        "--standard-json",
+        crate::common::standard_json!("optimizer_mode_0.json"),
+    ];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.success().stdout(predicate::str::contains(
+        "unexpected optimization option '0'",
+    ));
+
+    Ok(())
+}
+
+#[test]
 fn default_optimizer_produces_bytecode() -> anyhow::Result<()> {
     crate::common::setup()?;
 

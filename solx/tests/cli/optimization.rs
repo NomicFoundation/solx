@@ -48,6 +48,20 @@ fn all_with_env_var(level: char) -> anyhow::Result<()> {
 }
 
 #[test]
+fn unsupported_o0() -> anyhow::Result<()> {
+    crate::common::setup()?;
+
+    let args = &[crate::common::TEST_SOLIDITY_CONTRACT, "-O0", "--bin"];
+
+    let result = crate::cli::execute_solx(args)?;
+    result.failure().stderr(predicate::str::contains(
+        "unexpected optimization option '0'",
+    ));
+
+    Ok(())
+}
+
+#[test]
 fn invalid() -> anyhow::Result<()> {
     crate::common::setup()?;
 
@@ -73,9 +87,9 @@ fn invalid_with_env_var() -> anyhow::Result<()> {
     )];
 
     let result = crate::cli::execute_solx_with_env_vars(args, env_vars)?;
-    result.failure().stderr(
-        predicate::str::contains("Error: Invalid value `99` for environment variable \'SOLX_OPTIMIZATION\': only values 1, 2, 3, s, z are supported.")
-    );
+    result.failure().stderr(predicate::str::contains(
+        "only values 1, 2, 3, s, z are supported",
+    ));
 
     Ok(())
 }
@@ -113,9 +127,9 @@ fn standard_json_invalid_env_var() -> anyhow::Result<()> {
     )];
 
     let result = crate::cli::execute_solx_with_env_vars(args, env_vars)?;
-    result.success().stdout(
-    predicate::str::contains("Error: Invalid value `99` for environment variable \'SOLX_OPTIMIZATION\': only values 1, 2, 3, s, z are supported.")
-    );
+    result.success().stdout(predicate::str::contains(
+        "only values 1, 2, 3, s, z are supported",
+    ));
 
     Ok(())
 }

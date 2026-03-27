@@ -89,26 +89,32 @@ impl Settings {
         }
     }
 
-    /// Creates settings from standard JSON optimizer fields with env var overrides.
+    /// Creates settings from an optimization mode with env var overrides.
     ///
     /// The `SOLX_OPTIMIZATION` env var takes precedence over `mode`.
     /// The `SOLX_OPTIMIZATION_SIZE_FALLBACK` env var takes precedence over `size_fallback`.
-    pub fn try_from_standard_json(
-        mode: Option<char>,
-        size_fallback: Option<bool>,
-    ) -> anyhow::Result<Self> {
+    pub fn try_from_mode(mode: Option<char>, size_fallback: Option<bool>) -> anyhow::Result<Self> {
         let optimization_mode = if let Ok(optimization) = std::env::var(Self::OPTIMIZATION_ENV) {
             if !Self::MIDDLE_END_LEVELS.contains(&optimization.as_str()) {
                 anyhow::bail!(
-                    "Invalid value `{optimization}` for environment variable '{}': only values {} are supported.",
-                    Self::OPTIMIZATION_ENV,
+                    "unexpected optimization option '{optimization}': only values {} are supported",
                     Self::MIDDLE_END_LEVELS.join(", ")
                 );
             }
-            optimization.chars().next().expect("Always exists")
+            optimization
+                .chars()
+                .next()
+                .expect("validated string is non-empty")
         } else {
             mode.unwrap_or(Self::DEFAULT_OPTIMIZATION_MODE)
         };
+        let mode_str = optimization_mode.to_string();
+        if !Self::MIDDLE_END_LEVELS.contains(&mode_str.as_str()) {
+            anyhow::bail!(
+                "unexpected optimization option '{optimization_mode}': only values {} are supported",
+                Self::MIDDLE_END_LEVELS.join(", ")
+            );
+        }
         let mut settings = Self::try_from_cli(optimization_mode)?;
         if size_fallback.unwrap_or_default() || std::env::var(Self::SIZE_FALLBACK_ENV).is_ok() {
             settings.enable_fallback_to_size();
@@ -122,11 +128,8 @@ impl Settings {
     pub fn try_from_cli(value: char) -> anyhow::Result<Self> {
         Ok(match value {
             '0' => Self::new(
-                // The middle-end optimization level.
                 inkwell::OptimizationLevel::None,
-                // The middle-end size optimization level.
                 SizeLevel::Zero,
-                // The back-end optimization level.
                 inkwell::OptimizationLevel::None,
             ),
             '1' => Self::new(
