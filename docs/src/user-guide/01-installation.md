@@ -101,7 +101,7 @@ This repository maintains intuitive and stable naming for the executables and pr
 
    The easiest way to do it is following the latest [official instructions](https://www.rust-lang.org/tools/install).
 
-> The Rust version used for building is pinned in the [rust-toolchain.toml](../rust-toolchain.toml) file at the repository root.
+> The Rust version used for building is pinned in the `rust-toolchain.toml` file at the repository root.
 > **cargo** will automatically download the pinned version of *rustc* when you start building the project.
 
 3. Clone and checkout this repository with submodules.
