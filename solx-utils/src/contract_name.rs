@@ -22,6 +22,9 @@ pub struct ContractName {
 }
 
 impl ContractName {
+    /// Characters replaced with underscores when sanitizing paths for filenames.
+    const FILENAME_SANITIZE_CHARS: [char; 5] = ['\\', '/', '.', ':', ' '];
+
     ///
     /// A shortcut constructor.
     ///
@@ -36,5 +39,12 @@ impl ContractName {
             name,
             full_path,
         }
+    }
+
+    ///
+    /// Replaces characters that are problematic in filenames with underscores.
+    ///
+    pub fn sanitize_path(path: &str) -> String {
+        path.replace(Self::FILENAME_SANITIZE_CHARS, "_")
     }
 }
