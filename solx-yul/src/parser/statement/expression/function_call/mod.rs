@@ -856,8 +856,14 @@ impl FunctionCall {
                 let _arguments = self.pop_arguments_llvm::<1>(context)?;
                 anyhow::bail!("{location} The `SELFDESTRUCT` instruction is not supported")
             }
-
-            _ => Ok(None),
+            Name::BlobHash => {
+                let _arguments = self.pop_arguments_llvm::<1>(context)?;
+                anyhow::bail!("{location} The `BLOBHASH` instruction is not supported")
+            }
+            Name::BlobBaseFee => {
+                let _arguments = self.pop_arguments_llvm::<0>(context)?;
+                anyhow::bail!("{location} The `BLOBBASEFEE` instruction is not supported")
+            }
         }
     }
 
