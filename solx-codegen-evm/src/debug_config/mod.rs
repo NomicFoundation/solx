@@ -92,7 +92,7 @@ impl OutputConfig {
     /// Create a subdirectory and return a copy of `OutputConfig` pointing there.
     ///
     pub fn create_subdirectory(&self, directory_name: &str) -> anyhow::Result<Self> {
-        let sanitized_name = Self::sanitize_filename_fragment(directory_name);
+        let sanitized_name = solx_utils::ContractName::sanitize_path(directory_name);
         let subdirectory_path = self.output_directory.join(sanitized_name.as_str());
         std::fs::create_dir_all(subdirectory_path.as_path())?;
         Ok(Self {
@@ -298,17 +298,10 @@ impl OutputConfig {
     }
 
     ///
-    /// Rules to encode a string into a valid filename.
-    ///
-    fn sanitize_filename_fragment(string: &str) -> String {
-        string.replace([' ', ':', '/', '\\'], "_")
-    }
-
-    ///
     /// Creates a full file name, given the contract full path, suffix, and extension.
     ///
     fn full_file_name(contract_path: &str, suffix: Option<&str>, ir_type: IRType) -> String {
-        let mut full_file_name = Self::sanitize_filename_fragment(contract_path);
+        let mut full_file_name = solx_utils::ContractName::sanitize_path(contract_path);
 
         if let Some(suffix) = suffix {
             full_file_name.push('.');

@@ -491,8 +491,8 @@ impl Contract {
         } else {
             contract_path.as_path()
         }
-        .to_string_lossy()
-        .replace(['\\', '/', '.'], "_");
+        .to_string_lossy();
+        let contract_path = solx_utils::ContractName::sanitize_path(contract_path.as_ref());
 
         if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
             && output_selection.check_selection(
