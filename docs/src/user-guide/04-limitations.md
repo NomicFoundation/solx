@@ -34,7 +34,7 @@ The **solx-solidity** fork includes the following changes relative to upstream *
 - `CALLCODE` is rejected at compile time. Use `DELEGATECALL` instead.
 - `SELFDESTRUCT` is rejected at compile time (deprecated by EIP-6049).
 - `PC` (program counter) is not supported.
-- `BLOBHASH` and `BLOBBASEFEE` (EIP-4844/EIP-7516) are not yet implemented.
+- `BLOBHASH` and `BLOBBASEFEE` (EIP-4844/EIP-7516) are rejected at compile time.
 - Inline assembly marked `memory-safe` can cause errors when spill-area-based lowering is active.
 - Some `solc` optimizer settings are ignored since the solc optimizer is disabled.
 
