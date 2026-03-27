@@ -90,7 +90,7 @@ cargo test --test cli -- cli::bin::default  # specific test
 
 ```bash
 cargo test-slang
-# expands to: cargo test -p solx-slang -p solx-mlir -p solx --no-default-features --features slang
+# expands to: cargo test -p solx-slang -p solx-mlir -p solx --no-default-features --features slang --target-dir target-slang
 ```
 
 ### Integration tests with solx-tester

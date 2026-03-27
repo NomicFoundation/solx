@@ -28,7 +28,7 @@ Sets the metadata size hint used by the backend for gas and code size tradeoff d
 
 ## Standard LLVM Diagnostic Options
 
-Standard LLVM diagnostic options can be passed through `--llvm-options` and their output is printed to stderr. Some options (such as `-debug` and `-debug-only`) require LLVM built with assertions enabled (`-DLLVM_ENABLE_ASSERTIONS=ON`). When building from source, pass `--enable-assertions` to `solx-dev llvm --build`.
+Standard LLVM diagnostic options can be passed through `--llvm-options` and their output is printed to stderr. Some options (such as `-debug` and `-debug-only`) require LLVM built with assertions enabled (`-DLLVM_ENABLE_ASSERTIONS=ON`). When building from source, pass `--enable-assertions` to `solx-dev llvm build`.
 
 ### `-time-passes`
 

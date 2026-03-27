@@ -157,13 +157,15 @@ On the other hand, parameters that are not mentioned here but are parts of **sol
           "evm.bytecode.llvmIr",
           // ELF-wrapped DWARF debug info produced by solx/LLVM. Only available for Solidity source code input.
           "evm.bytecode.debugInfo",
-          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          // Link references for linkers that are to resolve library addresses at deploy time.
+          "evm.bytecode.linkReferences",
+          // Unsupported, but emitted as an empty string to preserve compatibility with some toolkits.
           "evm.bytecode.opcodes",
-          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          // Unsupported, but emitted as an empty string to preserve compatibility with some toolkits.
           "evm.bytecode.sourceMap",
           // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
           "evm.bytecode.functionDebugData",
-          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          // Unsupported, but emitted as an empty array to preserve compatibility with some toolkits.
           "evm.bytecode.generatedSources",
           // Everything that starts with "evm.deployedBytecode".
           "evm.deployedBytecode",
@@ -186,13 +188,13 @@ On the other hand, parameters that are not mentioned here but are parts of **sol
           "evm.deployedBytecode.immutableReferences",
           // ELF-wrapped DWARF debug info produced by solx/LLVM. Only available for Solidity source code input.
           "evm.deployedBytecode.debugInfo",
-          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          // Unsupported, but emitted as an empty string to preserve compatibility with some toolkits.
           "evm.deployedBytecode.opcodes",
-          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          // Unsupported, but emitted as an empty string to preserve compatibility with some toolkits.
           "evm.deployedBytecode.sourceMap",
           // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
           "evm.deployedBytecode.functionDebugData",
-          // Unsupported, but emitted as an empty object to preserve compatibility with some toolkits.
+          // Unsupported, but emitted as an empty array to preserve compatibility with some toolkits.
           "evm.deployedBytecode.generatedSources"
         ]
       }
@@ -213,7 +215,7 @@ On the other hand, parameters that are not mentioned here but are parts of **sol
     // Optional: Enables the IR codegen in solc.
     "viaIR": true,
 
-    // Optional, solx: Extra LLVM settings.
+    // Optional, solx-only: Extra LLVM settings.
     "llvmOptions": [
       "-key", "value"
     ]
@@ -311,21 +313,21 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
             // Optional: Link references for linkers that are to resolve library addresses at deploy time (object).
             // Corresponds to "evm.bytecode.linkReferences" in the outputSelection settings.
             "linkReferences": {/* ... */},
-            // Optional: Benchmarks of each stage of the compilation on a per-translation unit basis.
+            // Optional: Benchmarks of each stage of the compilation on a per-translation unit basis (array).
             // Corresponds to "benchmarks" in the outputSelection settings.
-            "benchmarks": {/* ... */},
-            // Optional: Always empty, included only to preserve compatibility with some toolkits (string).
-            // Corresponds to "evm.bytecode.immutableReferences" in the outputSelection settings.
-            "opcodes": {},
-            // Optional: Always empty, Included only to preserve compatibility with some toolkits (string).
+            "benchmarks": [/* ... */],
+            // Optional: Always empty string, included only to preserve compatibility with some toolkits (string).
+            // Corresponds to "evm.bytecode.opcodes" in the outputSelection settings.
+            "opcodes": "",
+            // Optional: Always empty string, included only to preserve compatibility with some toolkits (string).
             // Corresponds to "evm.bytecode.sourceMap" in the outputSelection settings.
-            "sourceMap": {},
-            // Optional: Always empty, Included only to preserve compatibility with some toolkits (array).
+            "sourceMap": "",
+            // Optional: Always empty object, included only to preserve compatibility with some toolkits (object).
             // Corresponds to "evm.bytecode.functionDebugData" in the outputSelection settings.
             "functionDebugData": {},
-            // Optional: Always empty, Included only to preserve compatibility with some toolkits (object).
+            // Optional: Always empty array, included only to preserve compatibility with some toolkits (array).
             // Corresponds to "evm.bytecode.generatedSources" in the outputSelection settings.
-            "generatedSources": {}
+            "generatedSources": []
           },
           // Optional: Runtime EVM bytecode.
           // Corresponds to "evm.deployedBytecode" in the outputSelection settings.
@@ -354,33 +356,34 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
             // Optional: Link references for linkers that are to resolve library addresses at deploy time (object).
             // Corresponds to "evm.deployedBytecode.linkReferences" in the outputSelection settings.
             "linkReferences": {/* ... */},
-            // Optional: Benchmarks of each stage of the compilation on a per-translation unit basis.
+            // Optional: Benchmarks of each stage of the compilation on a per-translation unit basis (array).
             // Corresponds to "benchmarks" in the outputSelection settings.
-            "benchmarks": {/* ... */},
+            "benchmarks": [/* ... */],
             // Optional: Resolved by LLVM automatically, so always returned as an empty object (object).
             // Included only to preserve compatibility with some toolkits.
             // Corresponds to "evm.deployedBytecode.immutableReferences" in the outputSelection settings.
             "immutableReferences": {},
-            // Optional: Always empty, included only to preserve compatibility with some toolkits (string).
+            // Optional: Always empty string, included only to preserve compatibility with some toolkits (string).
             // Corresponds to "evm.deployedBytecode.opcodes" in the outputSelection settings.
-            "opcodes": {},
-            // Optional: Always empty, Included only to preserve compatibility with some toolkits (string).
+            "opcodes": "",
+            // Optional: Always empty string, included only to preserve compatibility with some toolkits (string).
             // Corresponds to "evm.deployedBytecode.sourceMap" in the outputSelection settings.
-            "sourceMap": {},
-            // Optional: Always empty, Included only to preserve compatibility with some toolkits (array).
+            "sourceMap": "",
+            // Optional: Always empty object, included only to preserve compatibility with some toolkits (object).
             // Corresponds to "evm.deployedBytecode.functionDebugData" in the outputSelection settings.
             "functionDebugData": {},
-            // Optional: Always empty, Included only to preserve compatibility with some toolkits (object).
+            // Optional: Always empty array, included only to preserve compatibility with some toolkits (array).
             // Corresponds to "evm.deployedBytecode.generatedSources" in the outputSelection settings.
-            "generatedSources": {}
+            "generatedSources": []
           }
-        },
-        // Optional: Benchmarks of the solx LLVM-based compilation pipeline and its underlying call to solc (object).
-        // Corresponds to "benchmarks" in the outputSelection settings.
-        "benchmarks": {/* ... */}
+        }
       }
     }
   },
+
+  // Optional: Benchmarks of the solx LLVM-based compilation pipeline and its underlying call to solc (array).
+  // Corresponds to "benchmarks" in the outputSelection settings.
+  "benchmarks": [/* ... */],
 
   // Optional: Unset if no messages were emitted.
   "errors": [
@@ -388,11 +391,11 @@ The output JSON contains all artifacts produced by **solx** and **solc** togethe
       // Optional: Location within the source file.
       // Unset if the error is unrelated to input sources.
       "sourceLocation": {
-        /// Required: The source path.
+        // Required: The source path.
         "file": "sourceFile.sol",
-        /// Required: The source location start. Equals -1 if unknown.
+        // Required: The source location start. Equals -1 if unknown.
         "start": 0,
-        /// Required: The source location end. Equals -1 if unknown.
+        // Required: The source location end. Equals -1 if unknown.
         "end": 100
       },
       // Required: Message type.
