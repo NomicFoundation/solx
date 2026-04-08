@@ -24,7 +24,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let condition_expression = if_statement.condition();
-        let emitter = ExpressionEmitter::new(self.state, self.environment, self.storage_layout);
+        let emitter = ExpressionEmitter::new(
+            &self.semantic,
+            self.state,
+            self.environment,
+            self.storage_layout,
+        );
         let (condition_value, block) = emitter.emit(&condition_expression, block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &block);
 
@@ -119,8 +124,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         match for_statement.condition() {
             ForStatementCondition::ExpressionStatement(expression_statement) => {
                 let expression = expression_statement.expression();
-                let emitter =
-                    ExpressionEmitter::new(self.state, self.environment, self.storage_layout);
+                let emitter = ExpressionEmitter::new(
+                    &self.semantic,
+                    self.state,
+                    self.environment,
+                    self.storage_layout,
+                );
                 let (condition_value, cond_end) = emitter.emit(&expression, cond_block)?;
                 let condition_boolean = emitter.emit_is_nonzero(condition_value, &cond_end);
                 self.state
@@ -149,7 +158,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         // Step region.
         if let Some(ref iterator_expression) = for_statement.iterator() {
-            let emitter = ExpressionEmitter::new(self.state, self.environment, self.storage_layout);
+            let emitter = ExpressionEmitter::new(
+                &self.semantic,
+                self.state,
+                self.environment,
+                self.storage_layout,
+            );
             let (_value, step_end) = emitter.emit(iterator_expression, step_block)?;
             self.state.builder.emit_sol_yield(&step_end);
         } else {
@@ -177,7 +191,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         // Condition region.
         let condition_expression = while_statement.condition();
-        let emitter = ExpressionEmitter::new(self.state, self.environment, self.storage_layout);
+        let emitter = ExpressionEmitter::new(
+            &self.semantic,
+            self.state,
+            self.environment,
+            self.storage_layout,
+        );
         let (condition_value, cond_end) = emitter.emit(&condition_expression, cond_block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &cond_end);
         self.state
@@ -218,7 +237,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         // Condition region.
         let condition_expression = do_while.condition();
-        let emitter = ExpressionEmitter::new(self.state, self.environment, self.storage_layout);
+        let emitter = ExpressionEmitter::new(
+            &self.semantic,
+            self.state,
+            self.environment,
+            self.storage_layout,
+        );
         let (condition_value, cond_end) = emitter.emit(&condition_expression, cond_block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &cond_end);
         self.state

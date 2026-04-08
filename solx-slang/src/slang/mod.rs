@@ -165,7 +165,7 @@ impl Frontend for Slang {
 
             let evm_version = input_json.settings.evm_version.unwrap_or_default();
             let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-            let mut emitter = AstEmitter::new(&mut context);
+            let mut emitter = AstEmitter::new(&semantic, &mut context);
             let Some((contract_name, method_identifiers)) = emitter.emit(&source_unit)? else {
                 continue;
             };

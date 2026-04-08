@@ -10,9 +10,11 @@ pub mod operator;
 pub mod storage;
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::cst::NodeId;
@@ -23,6 +25,8 @@ use solx_mlir::Environment;
 
 /// Lowers Solidity expressions to MLIR SSA values.
 pub struct ExpressionEmitter<'state, 'context, 'block> {
+    /// Slang semantic analysis for resolving expression types.
+    pub semantic: Rc<SemanticAnalysis>,
     /// The shared MLIR context.
     pub state: &'state Context<'context>,
     /// Variable environment.
@@ -34,11 +38,13 @@ pub struct ExpressionEmitter<'state, 'context, 'block> {
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Creates a new expression emitter.
     pub fn new(
+        semantic: &Rc<SemanticAnalysis>,
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
         storage_layout: &'state HashMap<NodeId, u64>,
     ) -> Self {
         Self {
+            semantic: Rc::clone(semantic),
             state,
             environment,
             storage_layout,
