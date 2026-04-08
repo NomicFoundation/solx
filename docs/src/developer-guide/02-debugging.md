@@ -10,7 +10,7 @@ Each flag writes files to the output directory (`-o`):
 |---|---|---|
 | `--evmla` | `.evmla` | EVM legacy assembly from solc (legacy pipeline only) |
 | `--ethir` | `.ethir` | EthIR (translated from EVM assembly, legacy pipeline only) |
-| `--ir` / `--ir-optimized` | `.yul` | Yul IR from solc (via-ir pipeline only) |
+| `--ir` / `--ir-optimized` | `.yul` | Yul IR from solc |
 | `--emit-llvm-ir` | `.unoptimized.ll`, `.optimized.ll` | LLVM IR before and after optimization |
 | `--asm` | `.asm` | Final EVM assembly |
 

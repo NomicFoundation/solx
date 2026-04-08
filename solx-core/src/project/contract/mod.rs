@@ -7,6 +7,8 @@ pub mod metadata;
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+#[cfg(feature = "mlir")]
+use std::collections::HashMap;
 
 #[cfg(feature = "mlir")]
 use anyhow::Context as _;
@@ -44,9 +46,9 @@ pub struct Contract {
     pub legacy_assembly: Option<solx_evm_assembly::Assembly>,
     /// solc Yul IR.
     pub yul: Option<String>,
-    /// solx MLIR IR.
+    /// Labeled MLIR representations from each pipeline stage.
     #[cfg(feature = "mlir")]
-    pub mlir: Option<String>,
+    pub mlir: Option<HashMap<String, String>>,
 }
 
 impl Contract {
@@ -65,7 +67,7 @@ impl Contract {
         transient_storage_layout: Option<serde_json::Value>,
         legacy_assembly: Option<solx_evm_assembly::Assembly>,
         yul: Option<String>,
-        #[cfg(feature = "mlir")] mlir: Option<String>,
+        #[cfg(feature = "mlir")] mlir: Option<HashMap<String, String>>,
     ) -> Self {
         Self {
             name,
@@ -81,6 +83,31 @@ impl Contract {
             yul,
             #[cfg(feature = "mlir")]
             mlir,
+        }
+    }
+
+    ///
+    /// Returns an estimated compilation cost for LPT scheduling.
+    ///
+    /// Used to sort contracts by descending cost before parallel dispatch,
+    /// so that large contracts begin compiling first.
+    ///
+    pub fn estimated_compilation_cost(&self) -> usize {
+        match &self.ir {
+            Some(IR::Yul(_)) => self.yul.as_ref().map_or(0, String::len),
+            Some(IR::EVMLegacyAssembly(evmla)) => {
+                let deploy = evmla.assembly.code.as_ref().map_or(0, Vec::len);
+                let runtime = evmla
+                    .runtime_code
+                    .as_ref()
+                    .and_then(|runtime| runtime.assembly.code.as_ref())
+                    .map_or(0, Vec::len);
+                deploy + runtime
+            }
+            Some(IR::LLVMIR(llvm_ir)) => llvm_ir.source.len(),
+            #[cfg(feature = "mlir")]
+            Some(IR::MLIR(mlir)) => mlir.source.len(),
+            None => 0,
         }
     }
 

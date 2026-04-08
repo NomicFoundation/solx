@@ -5,6 +5,8 @@
 pub mod object;
 
 use std::collections::BTreeMap;
+#[cfg(feature = "mlir")]
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -42,9 +44,9 @@ pub struct Contract {
     pub legacy_assembly: Option<solx_evm_assembly::Assembly>,
     /// solc Yul IR.
     pub yul: Option<String>,
-    /// MLIR source code (LLVM dialect, from Slang frontend).
+    /// Labeled MLIR representations from each pipeline stage.
     #[cfg(feature = "mlir")]
-    pub mlir: Option<String>,
+    pub mlir: Option<HashMap<String, String>>,
 }
 
 impl Contract {
@@ -64,7 +66,7 @@ impl Contract {
         transient_storage_layout: Option<serde_json::Value>,
         legacy_assembly: Option<solx_evm_assembly::Assembly>,
         yul: Option<String>,
-        #[cfg(feature = "mlir")] mlir: Option<String>,
+        #[cfg(feature = "mlir")] mlir: Option<HashMap<String, String>>,
     ) -> Self {
         Self {
             name,
@@ -227,9 +229,11 @@ impl Contract {
             self.name.path.as_str(),
             self.name.name.as_deref(),
             solx_standard_json::InputSelector::MLIR,
-        ) && let Some(mlir) = self.mlir.take()
+        ) && let Some(stages) = self.mlir.take()
         {
-            writeln!(std::io::stdout(), "MLIR:\n{mlir}")?;
+            for (dialect, mlir_text) in stages.iter() {
+                writeln!(std::io::stdout(), "MLIR Dialect {dialect}:\n{mlir_text}")?;
+            }
         }
 
         if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
@@ -487,8 +491,8 @@ impl Contract {
         } else {
             contract_path.as_path()
         }
-        .to_string_lossy()
-        .replace(['\\', '/', '.'], "_");
+        .to_string_lossy();
+        let contract_path = solx_utils::ContractName::sanitize_path(contract_path.as_ref());
 
         if let Some(deploy_object_result) = self.deploy_object_result.as_mut()
             && output_selection.check_selection(
@@ -788,16 +792,18 @@ impl Contract {
             self.name.path.as_str(),
             self.name.name.as_deref(),
             solx_standard_json::InputSelector::MLIR,
-        ) && let Some(mlir) = self.mlir.take()
+        ) && let Some(stages) = self.mlir.take()
         {
-            let output_name = format!(
-                "{contract_path}_{}.{}",
-                self.name.name.as_deref().unwrap_or(contract_name),
-                solx_utils::EXTENSION_MLIR,
-            );
-            let mut output_path = output_directory.to_owned();
-            output_path.push(output_name.as_str());
-            Self::write_to_file(output_path.as_path(), mlir, overwrite)?;
+            for (dialect, mlir_text) in stages.into_iter() {
+                let output_name = format!(
+                    "{contract_path}_{}.{dialect}.{}",
+                    self.name.name.as_deref().unwrap_or(contract_name),
+                    solx_utils::EXTENSION_MLIR,
+                );
+                let mut output_path = output_directory.to_owned();
+                output_path.push(output_name.as_str());
+                Self::write_to_file(output_path.as_path(), mlir_text, overwrite)?;
+            }
         }
         if let (Some(deploy_object_result), Some(runtime_object_result)) =
             (self.deploy_object_result, self.runtime_object_result)

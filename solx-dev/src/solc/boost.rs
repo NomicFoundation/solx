@@ -2,6 +2,7 @@
 //! Boost library download and build utilities for solc.
 //!
 
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -221,7 +222,9 @@ fn verify_checksum(file_path: &Path, expected_hex: &str) -> anyhow::Result<()> {
     let file = std::fs::File::open(file_path)?;
     let mut reader = std::io::BufReader::new(file);
     let mut hasher = sha2::Sha256::new();
-    std::io::copy(&mut reader, &mut hasher)?;
+    let mut file_contents = Vec::new();
+    reader.read_to_end(&mut file_contents)?;
+    hasher.update(file_contents.as_slice());
     let actual_hex = hex::encode(hasher.finalize());
     if actual_hex != expected_hex {
         // Remove the corrupted download so it isn't reused on retry

@@ -160,7 +160,7 @@ pub struct Arguments {
     #[arg(long = "emit-llvm-ir", help_heading = "Output Selection")]
     pub output_llvm_ir: bool,
 
-    /// Emit MLIR (LLVM dialect, intermediate representation from Slang frontend).
+    /// Emit MLIR at each pipeline stage.
     /// Can be used with --output-dir to write .mlir files.
     #[cfg(feature = "mlir")]
     #[arg(long = "emit-mlir", help_heading = "Output Selection")]
@@ -185,7 +185,7 @@ pub struct Arguments {
     //
     // Optimization
     //
-    /// Set the optimization parameter -O[0 | 1 | 2 | 3 | s | z].
+    /// Set the optimization parameter -O[1 | 2 | 3 | s | z].
     /// Use `3` for best performance and `z` for minimal size.
     #[arg(short = 'O', long, help_heading = "Optimization")]
     pub optimization: Option<char>,
@@ -556,43 +556,13 @@ impl Arguments {
     /// Resolve optimizer settings from CLI arguments and environment variables.
     ///
     pub fn optimizer_settings(&self) -> anyhow::Result<solx_codegen_evm::OptimizerSettings> {
-        let mut settings = match self.optimization {
-            Some(mode) => solx_codegen_evm::OptimizerSettings::try_from_cli(mode)?,
-            None => self.optimizer_settings_from_env()?,
-        };
-        if self.size_fallback
-            || std::env::var(solx_codegen_evm::OptimizerSettings::SIZE_FALLBACK_ENV).is_ok()
-        {
-            settings.enable_fallback_to_size();
-        }
+        let mut settings = solx_codegen_evm::OptimizerSettings::try_from_mode(
+            self.optimization,
+            Some(self.size_fallback),
+        )?;
         settings.is_verify_each_enabled = self.llvm_verify_each;
         settings.is_debug_logging_enabled = self.llvm_debug_logging;
         Ok(settings)
-    }
-
-    ///
-    /// Resolve optimizer settings from the `SOLX_OPTIMIZATION` environment
-    /// variable, falling back to the default (cycles) when unset.
-    ///
-    fn optimizer_settings_from_env(&self) -> anyhow::Result<solx_codegen_evm::OptimizerSettings> {
-        let Ok(optimization) = std::env::var(solx_codegen_evm::OptimizerSettings::OPTIMIZATION_ENV)
-        else {
-            return Ok(solx_codegen_evm::OptimizerSettings::cycles());
-        };
-        if !solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.contains(&optimization.as_str())
-        {
-            anyhow::bail!(
-                "Invalid value `{optimization}` for environment variable '{}': only values {} are supported.",
-                solx_codegen_evm::OptimizerSettings::OPTIMIZATION_ENV,
-                solx_codegen_evm::OptimizerSettings::MIDDLE_END_LEVELS.join(", ")
-            );
-        }
-        solx_codegen_evm::OptimizerSettings::try_from_cli(
-            optimization
-                .chars()
-                .next()
-                .expect("validated string is non-empty"),
-        )
     }
 
     ///

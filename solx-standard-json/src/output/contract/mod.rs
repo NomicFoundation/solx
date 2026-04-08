@@ -4,6 +4,9 @@
 
 pub mod evm;
 
+#[cfg(feature = "mlir")]
+use std::collections::HashMap;
+
 use self::evm::EVM;
 
 ///
@@ -33,10 +36,10 @@ pub struct Contract {
     /// The contract Yul IR code.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ir: Option<String>,
-    /// The contract MLIR source code.
+    /// Labeled MLIR representations from each pipeline stage.
     #[cfg(feature = "mlir")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mlir: Option<String>,
+    pub mlir: Option<HashMap<String, String>>,
     /// The EVM data of the contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evm: Option<EVM>,

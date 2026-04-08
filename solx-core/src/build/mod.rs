@@ -220,8 +220,8 @@ impl Build {
                 } else {
                     path.as_path()
                 }
-                .to_string_lossy()
-                .replace(['\\', '/'], "_");
+                .to_string_lossy();
+                let path = solx_utils::ContractName::sanitize_path(path.as_ref());
 
                 let output_name = format!(
                     "{path}_{}.{}",

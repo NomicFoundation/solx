@@ -177,8 +177,10 @@ Note: `selfdestruct` is rejected at compile time (deprecated by EIP-6049).
 | `gaslimit` | Intrinsic `llvm.evm.gaslimit` | Block gas limit |
 | `chainid` | Intrinsic `llvm.evm.chainid` | Chain ID (EIP-1344) |
 | `basefee` | Intrinsic `llvm.evm.basefee` | Base fee per gas (EIP-1559) |
+| `blobhash` | Rejected at compile time | Versioned hash of transaction's i-th blob (EIP-4844) |
+| `blobbasefee` | Rejected at compile time | Current block's blob base fee (EIP-7516/EIP-4844) |
 
-Note: `blobhash` and `blobbasefee` (EIP-4844/EIP-7516) are not yet supported.
+Note: `blobhash` and `blobbasefee` are not yet supported and will produce a compile error.
 
 ## Special and Meta
 

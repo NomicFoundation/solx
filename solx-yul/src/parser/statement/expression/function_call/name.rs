@@ -214,15 +214,6 @@ pub enum Name {
     /// Special solx-specific instruction that detects unsafe assembly blocks.
     UnsafeAsm,
 
-    /// verbatim instruction with 0 inputs and 0 outputs
-    /// only works in the Yul mode, so it is mostly used as a tool for extending Yul
-    Verbatim {
-        /// the number of input arguments
-        input_size: usize,
-        /// the number of output arguments
-        output_size: usize,
-    },
-
     /// current position in code
     Pc,
     /// like `codecopy(t, f, s)` but take code at address `a`
@@ -461,11 +452,6 @@ impl std::fmt::Display for Name {
             Self::CallCode => write!(f, "callcode"),
             Self::Pc => write!(f, "pc"),
             Self::SelfDestruct => write!(f, "selfdestruct"),
-
-            Self::Verbatim {
-                input_size,
-                output_size,
-            } => write!(f, "verbatim({input_size}, {output_size})"),
         }
     }
 }

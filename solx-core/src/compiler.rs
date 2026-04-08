@@ -411,7 +411,7 @@ impl<'arguments> Compiler<'arguments> {
         let via_ir = solc_input.settings.via_ir;
         let linker_symbols = solc_input.settings.libraries.as_linker_symbols()?;
 
-        let optimizer_settings = solx_codegen_evm::OptimizerSettings::try_from_standard_json(
+        let optimizer_settings = solx_codegen_evm::OptimizerSettings::try_from_mode(
             solc_input.settings.optimizer.mode,
             solc_input.settings.optimizer.size_fallback,
         )?;

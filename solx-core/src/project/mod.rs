@@ -10,6 +10,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelBridge;
 use rayon::iter::ParallelIterator;
 
 use crate::build::Build as EVMBuild;
@@ -163,12 +164,21 @@ impl Project {
                     .and_then(|evm| evm.legacy_assembly.take());
 
                 #[cfg(feature = "mlir")]
-                let mlir_source = contract.mlir.clone();
+                let result = contract.mlir.as_ref().map(|stages| {
+                    stages
+                        .get(solx_mlir::Context::DIALECT_LLVM)
+                        .map(|source| {
+                            ContractIR::from(ContractMLIR {
+                                source: source.to_owned(),
+                            })
+                        })
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("MLIR stages present but no LLVM dialect entry")
+                        })
+                        .map(Some)
+                });
                 #[cfg(feature = "mlir")]
-                let result = contract
-                    .mlir
-                    .take()
-                    .map(|source| Ok(Some(ContractIR::from(ContractMLIR { source }))));
+                let mlir_stages = contract.mlir.take();
                 #[cfg(not(feature = "mlir"))]
                 let result = if via_ir {
                     contract.ir.as_deref().map(|ir| {
@@ -209,7 +219,7 @@ impl Project {
                     legacy_assembly,
                     contract.ir,
                     #[cfg(feature = "mlir")]
-                    mlir_source,
+                    mlir_stages,
                 );
                 (name, Ok(contract))
             })
@@ -335,7 +345,7 @@ impl Project {
                     None,
                     None,
                     None,
-                    None,
+                    Some(source_code),
                     #[cfg(feature = "mlir")]
                     None,
                 );
@@ -497,9 +507,15 @@ impl Project {
         llvm_options: Vec<String>,
         output_config: Option<solx_codegen_evm::OutputConfig>,
     ) -> anyhow::Result<EVMBuild> {
-        let results = self
-            .contracts
-            .into_par_iter()
+        let mut contracts: Vec<(String, Contract)> = self.contracts.into_iter().collect();
+        contracts.sort_unstable_by(|(_, left), (_, right)| {
+            right
+                .estimated_compilation_cost()
+                .cmp(&left.estimated_compilation_cost())
+        });
+        let results = contracts
+            .into_iter()
+            .par_bridge()
             .map(|(path, mut contract)| {
                 let contract_name = contract.name.clone();
 

@@ -282,7 +282,23 @@ fn emit_mlir() -> anyhow::Result<()> {
         .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "mlir"))
         .collect();
 
-    assert!(!entries.is_empty(), "Expected .mlir files to be created");
+    assert!(
+        entries.len() >= 2,
+        "Expected at least 2 .mlir files (one per dialect stage)"
+    );
+
+    let filenames: Vec<_> = entries
+        .iter()
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+    assert!(
+        filenames.iter().any(|name| name.contains(".sol.mlir")),
+        "Expected a .sol.mlir file, found: {filenames:?}"
+    );
+    assert!(
+        filenames.iter().any(|name| name.contains(".llvm.mlir")),
+        "Expected a .llvm.mlir file, found: {filenames:?}"
+    );
 
     Ok(())
 }

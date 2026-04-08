@@ -35,7 +35,7 @@ runs:
 
     - name: Restore solc artifact cache
       id: solc-artifact-cache
-      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: |
           ${{ inputs.working-dir }}/build
@@ -65,7 +65,7 @@ runs:
 
     - name: Save solc artifact cache
       if: steps.solc-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
-      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: |
           ${{ inputs.working-dir }}/build

@@ -76,12 +76,12 @@ runs:
         if [[ ${RUNNER_OS} = Windows ]] || [[ ${RUNNER_OS} = Linux ]]; then
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
+        set -o pipefail
         if [ "${TEST_COMMAND}" = "test" ]; then ${SFW_PREFIX:-} cargo build --frozen; fi
         ${SFW_PREFIX:-} cargo ${TEST_COMMAND} --frozen --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
-          --format json | tee -a release-results.json | grep 'failed'
-        if [ $? -eq 0 ]; then
-          cargo2junit < release-results.json > "release-${{ inputs.results-xml }}"
-        fi
+          --format json | tee -a release-results.json || CARGO_EXIT=$?
+        cargo2junit < release-results.json > "release-${{ inputs.results-xml }}" || true
+        if [ -n "${CARGO_EXIT}" ]; then exit "${CARGO_EXIT}"; fi
 
     - name: Install sanitizer components
       if: inputs.sanitizer != '' && runner.os != 'Windows'
@@ -125,12 +125,12 @@ runs:
         if [ '${{ inputs.target }}' != '' ]; then
           export CARGO_BIN_EXE_SOLX="./target/${{ inputs.target }}/debug/solx"
         fi
+        set -o pipefail
         if [ "${{ inputs.cargo-test-command }}" = "test" ]; then ${SFW_PREFIX:-} cargo build --frozen ${{ steps.build-target.outputs.target }}; fi
         ${SFW_PREFIX:-} cargo ${{ inputs.cargo-test-command }} --frozen ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
-          --format json | tee -a debug-results.json | grep 'failed'
-        if [ $? -eq 0 ]; then
-          cargo2junit < debug-results.json > "debug-${{ inputs.results-xml }}"
-        fi
+          --format json | tee -a debug-results.json || CARGO_EXIT=$?
+        cargo2junit < debug-results.json > "debug-${{ inputs.results-xml }}" || true
+        if [ -n "${CARGO_EXIT}" ]; then exit "${CARGO_EXIT}"; fi
 
     - name: Upload results Linux
       if: (success() || failure()) && runner.os == 'Linux' && inputs.upload-results == 'true'
