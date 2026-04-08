@@ -184,28 +184,33 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.environment,
             self.storage_layout,
         );
-        let pointer = emitter.state.builder.emit_sol_alloca(declared_type, &block);
 
-        let block = if let Some(ref initializer_expression) = declaration.value() {
+        // For explicit initializers, evaluate and cast before alloca to match
+        // solc's emission order (constant → cast → alloca → store).
+        // For implicit zero-initialization, alloca is emitted first.
+        let (block, initial_value) = if let Some(ref initializer_expression) = declaration.value() {
             let (initial_value, block) = emitter.emit_value(initializer_expression, block)?;
             let cast_value =
                 emitter
                     .state
                     .builder
                     .emit_sol_cast(initial_value, declared_type, &block);
-            emitter
-                .state
-                .builder
-                .emit_sol_store(cast_value, pointer, &block);
-            block
+            (block, Some(cast_value))
         } else {
-            let zero = self
-                .state
-                .builder
-                .emit_sol_constant(0, declared_type, &block);
-            emitter.state.builder.emit_sol_store(zero, pointer, &block);
-            block
+            (block, None)
         };
+
+        let pointer = emitter.state.builder.emit_sol_alloca(declared_type, &block);
+
+        let stored_value = initial_value.unwrap_or_else(|| {
+            self.state
+                .builder
+                .emit_sol_constant(0, declared_type, &block)
+        });
+        emitter
+            .state
+            .builder
+            .emit_sol_store(stored_value, pointer, &block);
 
         self.environment
             .define_variable(name, pointer, declared_type);
