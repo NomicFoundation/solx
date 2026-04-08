@@ -67,7 +67,7 @@ runs:
       shell: 'bash -ex {0}'
       run: |
         echo "::group::Install mdbook and addons"
-        cargo binstall --no-confirm --no-symlinks \
+        ${SFW_PREFIX:-} cargo binstall --no-confirm --no-symlinks \
           mdbook@0.4.47 \
           mdbook-mermaid@0.14.0 \
           mdbook-admonish@1.19.0 \

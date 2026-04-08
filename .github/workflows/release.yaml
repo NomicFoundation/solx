@@ -269,7 +269,7 @@ jobs:
         if: github.ref_type == 'tag'
         run: |
           TAG="${{ steps.release.outputs.version_or_sha }}"
-          CARGO_PACKAGE_VERSION="$(cargo pkgid --manifest-path solx/Cargo.toml | cut -d "#" -f2)"
+          CARGO_PACKAGE_VERSION="$(${SFW_PREFIX:-} cargo pkgid --manifest-path solx/Cargo.toml | cut -d "#" -f2)"
           # All versions must be equal
           if [ "${CARGO_PACKAGE_VERSION}" != "${TAG}" ]; then
             echo "Version mismatch: TAG=${TAG}, CARGO_PACKAGE_VERSION=${CARGO_PACKAGE_VERSION}"
