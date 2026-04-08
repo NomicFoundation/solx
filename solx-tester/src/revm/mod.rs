@@ -395,16 +395,18 @@ impl REVM {
         );
 
         let mut block_hashes = BlockHashCache::new();
-        block_hashes.extend((0..0xffff - 0x3737).enumerate().map(|(index, value)| {
-            let hash = format!(
-                "0x373737373737373737373737373737373737373737373737373737373737{:04x}",
-                0x3737 + value
-            );
-            (
-                index as u64,
-                revm::primitives::B256::from_str(hash.as_str()).expect("Always valid"),
-            )
-        }));
+        block_hashes.extend(
+            (0..revm::primitives::BLOCK_HASH_HISTORY).map(|block_number| {
+                let hash = format!(
+                    "0x373737373737373737373737373737373737373737373737373737373737{:04x}",
+                    0x3737 + block_number
+                );
+                (
+                    block_number,
+                    revm::primitives::B256::from_str(hash.as_str()).expect("Always valid"),
+                )
+            }),
+        );
 
         let state = revm::database::State::builder()
             .with_cached_prestate(cache)
