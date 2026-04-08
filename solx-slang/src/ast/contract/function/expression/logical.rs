@@ -14,7 +14,7 @@ use crate::ast::contract::function::expression::call::type_conversion::TypeConve
 use crate::ast::contract::function::expression::operator::Operator;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
-    /// Emits a `sol.cmp` comparison, cast to `ui256` via `sol.cast`.
+    /// Emits a `sol.cmp` comparison.
     ///
     /// # Errors
     ///
@@ -28,7 +28,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (lhs, block) = self.emit_value(left, block)?;
         let (rhs, block) = self.emit_value(right, block)?;
-        // Cast both operands to a common type for comparison.
         let common_type = if lhs.r#type() == rhs.r#type() {
             lhs.r#type()
         } else {
@@ -46,18 +45,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         );
         let predicate = Operator::from_str(operator)?.cmp_predicate();
         let comparison = self.state.builder.emit_sol_cmp(lhs, rhs, predicate, &block);
-        let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
-        let value = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
-            comparison,
-            &self.state.builder,
-            &block,
-        );
-        Ok((value, block))
+        Ok((comparison, block))
     }
 
-    /// Emits short-circuit `&&` using value-producing `scf.if`.
+    /// Emits short-circuit `&&` using `sol.if` with an `i1` alloca.
     ///
-    /// Result is always a canonical boolean (0 or 1).
+    /// Matches solc's pattern: allocate a boolean result variable, default to
+    /// `false`, and only evaluate the RHS when the LHS is true.
     ///
     /// # Errors
     ///
@@ -71,32 +65,39 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (lhs, block) = self.emit_value(left, block)?;
         let lhs_bool = self.emit_is_nonzero(lhs, &block);
 
-        let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
-        let (then_block, else_block, result) =
-            self.state.builder.emit_scf_if(lhs_bool, ui256, &block)?;
-
-        // Then: LHS was true — evaluate RHS and yield normalized result.
-        let (rhs, then_end) = self.emit_value(right, then_block)?;
-        let rhs_bool = self.emit_is_nonzero(rhs, &then_end);
-        let rhs_normalized = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
-            rhs_bool,
-            &self.state.builder,
-            &then_end,
-        );
+        let i1_type = self.state.builder.get_type(solx_mlir::Builder::I1);
+        let result_ptr = self.state.builder.emit_sol_alloca(i1_type, &block);
+        // TODO: solc uses `arith.constant false` here; consider switching to
+        // arith dialect for i1 constants to match solc output exactly.
+        let false_val = self.state.builder.emit_sol_constant(0, i1_type, &block);
         self.state
             .builder
-            .emit_scf_yield(&[rhs_normalized], &then_end);
+            .emit_sol_store(false_val, result_ptr, &block);
 
-        // Else: LHS was false — yield 0.
-        let zero = self.state.builder.emit_sol_constant(0, ui256, &else_block);
-        self.state.builder.emit_scf_yield(&[zero], &else_block);
+        let (then_block, else_block) = self.state.builder.emit_sol_if(lhs_bool, &block);
 
+        // Then: LHS was true — evaluate RHS and store result.
+        let (rhs, then_end) = self.emit_value(right, then_block)?;
+        let rhs_bool = self.emit_is_nonzero(rhs, &then_end);
+        self.state
+            .builder
+            .emit_sol_store(rhs_bool, result_ptr, &then_end);
+        self.state.builder.emit_sol_yield(&then_end);
+
+        // Else: LHS was false — result stays false.
+        self.state.builder.emit_sol_yield(&else_block);
+
+        let result = self
+            .state
+            .builder
+            .emit_sol_load(result_ptr, i1_type, &block)?;
         Ok((result, block))
     }
 
-    /// Emits short-circuit `||` using value-producing `scf.if`.
+    /// Emits short-circuit `||` using `sol.if` with an `i1` alloca.
     ///
-    /// Result is always a canonical boolean (0 or 1).
+    /// Matches solc's pattern: allocate a boolean result variable, default to
+    /// `true`, and only evaluate the RHS when the LHS is false.
     ///
     /// # Errors
     ///
@@ -110,26 +111,30 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (lhs, block) = self.emit_value(left, block)?;
         let lhs_bool = self.emit_is_nonzero(lhs, &block);
 
-        let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
-        let (then_block, else_block, result) =
-            self.state.builder.emit_scf_if(lhs_bool, ui256, &block)?;
-
-        // Then: LHS was true — yield 1.
-        let one = self.state.builder.emit_sol_constant(1, ui256, &then_block);
-        self.state.builder.emit_scf_yield(&[one], &then_block);
-
-        // Else: LHS was false — evaluate RHS and yield normalized result.
-        let (rhs, else_end) = self.emit_value(right, else_block)?;
-        let rhs_bool = self.emit_is_nonzero(rhs, &else_end);
-        let rhs_normalized = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
-            rhs_bool,
-            &self.state.builder,
-            &else_end,
-        );
+        let i1_type = self.state.builder.get_type(solx_mlir::Builder::I1);
+        let result_ptr = self.state.builder.emit_sol_alloca(i1_type, &block);
+        let true_val = self.state.builder.emit_sol_constant(1, i1_type, &block);
         self.state
             .builder
-            .emit_scf_yield(&[rhs_normalized], &else_end);
+            .emit_sol_store(true_val, result_ptr, &block);
 
+        let (then_block, else_block) = self.state.builder.emit_sol_if(lhs_bool, &block);
+
+        // Then: LHS was true — result stays true.
+        self.state.builder.emit_sol_yield(&then_block);
+
+        // Else: LHS was false — evaluate RHS and store result.
+        let (rhs, else_end) = self.emit_value(right, else_block)?;
+        let rhs_bool = self.emit_is_nonzero(rhs, &else_end);
+        self.state
+            .builder
+            .emit_sol_store(rhs_bool, result_ptr, &else_end);
+        self.state.builder.emit_sol_yield(&else_end);
+
+        let result = self
+            .state
+            .builder
+            .emit_sol_load(result_ptr, i1_type, &block)?;
         Ok((result, block))
     }
 }
