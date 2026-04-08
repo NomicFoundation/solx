@@ -106,13 +106,23 @@ impl Deploy {
                 logs,
                 output,
             } => ((output, logs).into(), gas.used(), None),
-            ExecutionResult::Revert { gas, logs: _, output } => {
+            ExecutionResult::Revert {
+                gas,
+                logs: _,
+                output,
+            } => {
                 let return_data_value = revm_bytes_to_vec_value(output);
-                (Output::new(return_data_value, true, vec![]), gas.used(), None)
+                (
+                    Output::new(return_data_value, true, vec![]),
+                    gas.used(),
+                    None,
+                )
             }
-            ExecutionResult::Halt { reason, gas, logs: _ } => {
-                (Output::new(vec![], true, vec![]), gas.used(), Some(reason))
-            }
+            ExecutionResult::Halt {
+                reason,
+                gas,
+                logs: _,
+            } => (Output::new(vec![], true, vec![]), gas.used(), Some(reason)),
         };
 
         let gas = REVM::deploy_bytecode_execution_gas(
