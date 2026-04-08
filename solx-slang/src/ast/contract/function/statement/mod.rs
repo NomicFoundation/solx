@@ -5,10 +5,12 @@
 pub mod control_flow;
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
+use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::ir::ast::Statement;
 use slang_solidity::backend::ir::ast::Statements;
 use slang_solidity::cst::NodeId;
@@ -23,27 +25,31 @@ use crate::ast::contract::function::expression::ExpressionEmitter;
 /// Returns `Some(block)` as the continuation block, or `None` when control
 /// flow has been terminated (by `return`, `break`, or `continue`).
 pub struct StatementEmitter<'state, 'context, 'block> {
+    /// Slang semantic analysis for resolving expression types.
+    semantic: Rc<SemanticAnalysis>,
     /// The shared MLIR context.
-    pub state: &'state Context<'context>,
+    state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
-    pub environment: &'state mut Environment<'context, 'block>,
+    environment: &'state mut Environment<'context, 'block>,
     /// The current region for creating new blocks.
     /// Stored as a raw pointer to allow switching between Sol op regions
     /// without lifetime conflicts.
     region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
-    pub storage_layout: &'state HashMap<NodeId, u64>,
+    storage_layout: &'state HashMap<NodeId, u64>,
 }
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Creates a new statement emitter.
     pub fn new(
+        semantic: &Rc<SemanticAnalysis>,
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
         region: &Region<'context>,
         storage_layout: &'state HashMap<NodeId, u64>,
     ) -> Self {
         Self {
+            semantic: Rc::clone(semantic),
             state,
             environment,
             region_pointer: region as *const Region<'context>,
@@ -86,8 +92,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             Statement::ExpressionStatement(expression_statement) => {
                 let expression = expression_statement.expression();
-                let emitter =
-                    ExpressionEmitter::new(self.state, self.environment, self.storage_layout);
+                let emitter = ExpressionEmitter::new(
+                    &self.semantic,
+                    self.state,
+                    self.environment,
+                    self.storage_layout,
+                );
                 let (_value, block) = emitter.emit(&expression, block)?;
                 Ok(Some(block))
             }
@@ -152,7 +162,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let name = declaration.name().name();
 
-        let emitter = ExpressionEmitter::new(self.state, self.environment, self.storage_layout);
+        let emitter = ExpressionEmitter::new(
+            &self.semantic,
+            self.state,
+            self.environment,
+            self.storage_layout,
+        );
         let pointer = emitter.state.builder.emit_sol_alloca(&block);
 
         let block = if let Some(ref initializer_expression) = declaration.value() {
@@ -197,7 +212,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         if let Some(ref expression) = return_statement.expression() {
-            let emitter = ExpressionEmitter::new(self.state, self.environment, self.storage_layout);
+            let emitter = ExpressionEmitter::new(
+                &self.semantic,
+                self.state,
+                self.environment,
+                self.storage_layout,
+            );
             let (value, block) = emitter.emit(expression, block)?;
             self.state.builder.emit_sol_return(&[value], &block);
         } else {
