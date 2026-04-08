@@ -171,7 +171,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let pointer = emitter.state.builder.emit_sol_alloca(&block);
 
         let block = if let Some(ref initializer_expression) = declaration.value() {
-            let (initial_value, block) = emitter.emit(initializer_expression, block)?;
+            let (initial_value, block) = emitter.emit_value(initializer_expression, block)?;
             emitter
                 .state
                 .builder
@@ -218,7 +218,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 self.environment,
                 self.storage_layout,
             );
-            let (value, block) = emitter.emit(expression, block)?;
+            let (value, block) = emitter.emit_value(expression, block)?;
             self.state.builder.emit_sol_return(&[value], &block);
         } else {
             self.state.builder.emit_sol_return(&[], &block);
