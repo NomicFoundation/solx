@@ -2,8 +2,8 @@
 //! Control flow statement lowering: if/else, for, while, do-while.
 //!
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::RegionLike;
 
 use slang_solidity::backend::ir::ast::ForStatementCondition;
 use slang_solidity::backend::ir::ast::ForStatementInitialization;
@@ -29,6 +29,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.state,
             self.environment,
             self.storage_layout,
+            self.checked,
         );
         let (condition_value, block) = emitter.emit_value(&condition_expression, block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &block);
@@ -43,9 +44,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let saved_region = self.region_pointer;
         self.set_region(&then_region);
         let then_end = self.emit(&if_statement.body(), then_block)?;
-        let then_terminated = then_end.is_none();
         if let Some(then_end) = then_end {
             self.state.builder.emit_sol_yield(&then_end);
+        } else {
+            self.emit_dead_yield(&then_region);
         }
 
         // Emit else body (or empty yield).
@@ -54,17 +56,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             let else_end = self.emit(else_statement, else_block)?;
             if let Some(else_end) = else_end {
                 self.state.builder.emit_sol_yield(&else_end);
+            } else {
+                self.emit_dead_yield(&else_region);
             }
             self.region_pointer = saved_region;
-            if then_terminated && else_end.is_none() {
-                // Both branches terminated (e.g. both return). The parent
-                // block needs a terminator after sol.if since sol.if is not
-                // a terminator itself.
-                block.append_operation(melior::dialect::llvm::unreachable(
-                    self.state.builder.unknown_location,
-                ));
-                return Ok(None);
-            }
         } else {
             self.state.builder.emit_sol_yield(&else_block);
             self.region_pointer = saved_region;
@@ -116,7 +111,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             ForStatementInitialization::Semicolon => block,
         };
 
-        let (cond_block, body_block, step_block) = self.state.builder.emit_sol_for(&block);
+        let (condition_block, body_block, step_block) = self.state.builder.emit_sol_for(&block);
         let body_region = solx_mlir::ffi::block_parent_region(&body_block);
         let saved_region = self.region_pointer;
 
@@ -129,24 +124,24 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     self.state,
                     self.environment,
                     self.storage_layout,
+                    self.checked,
                 );
-                let (condition_value, cond_end) = emitter.emit_value(&expression, cond_block)?;
-                let condition_boolean = emitter.emit_is_nonzero(condition_value, &cond_end);
+                let (condition_value, condition_end) =
+                    emitter.emit_value(&expression, condition_block)?;
+                let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
                 self.state
                     .builder
-                    .emit_sol_condition(condition_boolean, &cond_end);
+                    .emit_sol_condition(condition_boolean, &condition_end);
             }
             ForStatementCondition::Semicolon => {
-                let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
-                let one = self.state.builder.emit_sol_constant(1, ui256, &cond_block);
-                let zero = self.state.builder.emit_sol_constant(0, ui256, &cond_block);
-                let true_val = self.state.builder.emit_sol_cmp(
-                    one,
-                    zero,
-                    solx_mlir::CmpPredicate::Ne,
-                    &cond_block,
-                );
-                self.state.builder.emit_sol_condition(true_val, &cond_block);
+                let i1_type = self.state.builder.get_type(solx_mlir::Builder::I1);
+                let true_val = self
+                    .state
+                    .builder
+                    .emit_sol_constant(1, i1_type, &condition_block);
+                self.state
+                    .builder
+                    .emit_sol_condition(true_val, &condition_block);
             }
         }
 
@@ -157,15 +152,16 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.state.builder.emit_sol_yield(&body_end);
         }
 
-        // Step region.
+        // Step region — always unchecked (matches solc: loop step i++ uses sol.add).
         if let Some(ref iterator_expression) = for_statement.iterator() {
             let emitter = ExpressionEmitter::new(
                 &self.semantic,
                 self.state,
                 self.environment,
                 self.storage_layout,
+                false, // unchecked
             );
-            let (_value, step_end) = emitter.emit_value(iterator_expression, step_block)?;
+            let (_, step_end) = emitter.emit(iterator_expression, step_block)?;
             self.state.builder.emit_sol_yield(&step_end);
         } else {
             self.state.builder.emit_sol_yield(&step_block);
@@ -186,7 +182,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         while_statement: &slang_solidity::backend::ir::ast::WhileStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let (cond_block, body_block) = self.state.builder.emit_sol_while(&block);
+        let (condition_block, body_block) = self.state.builder.emit_sol_while(&block);
         let body_region = solx_mlir::ffi::block_parent_region(&body_block);
         let saved_region = self.region_pointer;
 
@@ -197,12 +193,14 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.state,
             self.environment,
             self.storage_layout,
+            self.checked,
         );
-        let (condition_value, cond_end) = emitter.emit_value(&condition_expression, cond_block)?;
-        let condition_boolean = emitter.emit_is_nonzero(condition_value, &cond_end);
+        let (condition_value, condition_end) =
+            emitter.emit_value(&condition_expression, condition_block)?;
+        let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
         self.state
             .builder
-            .emit_sol_condition(condition_boolean, &cond_end);
+            .emit_sol_condition(condition_boolean, &condition_end);
 
         // Body region.
         self.set_region(&body_region);
@@ -225,7 +223,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         do_while: &slang_solidity::backend::ir::ast::DoWhileStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let (body_block, cond_block) = self.state.builder.emit_sol_do_while(&block);
+        let (body_block, condition_block) = self.state.builder.emit_sol_do_while(&block);
         let body_region = solx_mlir::ffi::block_parent_region(&body_block);
         let saved_region = self.region_pointer;
 
@@ -243,14 +241,25 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.state,
             self.environment,
             self.storage_layout,
+            self.checked,
         );
-        let (condition_value, cond_end) = emitter.emit_value(&condition_expression, cond_block)?;
-        let condition_boolean = emitter.emit_is_nonzero(condition_value, &cond_end);
+        let (condition_value, condition_end) =
+            emitter.emit_value(&condition_expression, condition_block)?;
+        let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
         self.state
             .builder
-            .emit_sol_condition(condition_boolean, &cond_end);
+            .emit_sol_condition(condition_boolean, &condition_end);
 
         self.region_pointer = saved_region;
         Ok(Some(block))
+    }
+
+    /// Appends a dead block with `sol.yield` to a region whose live block
+    /// already terminated (e.g. with `sol.return`). Matches the solc pattern
+    /// where each `sol.if` region always ends with a `sol.yield` block.
+    fn emit_dead_yield(&self, region: &melior::ir::Region<'context>) {
+        let dead_block = melior::ir::Block::new(&[]);
+        self.state.builder.emit_sol_yield(&dead_block);
+        region.append_block(dead_block);
     }
 }
