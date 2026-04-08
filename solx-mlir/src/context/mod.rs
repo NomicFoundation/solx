@@ -134,6 +134,28 @@ impl<'context> Context<'context> {
             );
         }
 
+        let target = solx_utils::Target::EVM;
+        let data_layout_attr: Attribute<'_> =
+            StringAttribute::new(context, target.data_layout()).into();
+        let target_triple_attr: Attribute<'_> =
+            StringAttribute::new(context, target.triple()).into();
+        // SAFETY: Setting llvm.data_layout and llvm.target_triple on the
+        // module. Both are string attributes required by the LLVM translation
+        // layer. The module operation and attribute values are valid MLIR
+        // objects owned by this context.
+        unsafe {
+            mlir_sys::mlirOperationSetAttributeByName(
+                module.as_operation().to_raw(),
+                mlir_sys::mlirStringRefCreateFromCString(c"llvm.data_layout".as_ptr()),
+                data_layout_attr.to_raw(),
+            );
+            mlir_sys::mlirOperationSetAttributeByName(
+                module.as_operation().to_raw(),
+                mlir_sys::mlirStringRefCreateFromCString(c"llvm.target_triple".as_ptr()),
+                target_triple_attr.to_raw(),
+            );
+        }
+
         Self {
             module,
             function_signatures: HashMap::new(),
