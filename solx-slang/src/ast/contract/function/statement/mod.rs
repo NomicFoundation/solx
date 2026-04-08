@@ -41,6 +41,10 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     storage_layout: &'state HashMap<NodeId, u64>,
     /// The function's declared return types, for `emit_return` to cast to.
     return_types: &'state [Type<'context>],
+    /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
+    ///
+    /// `true` by default. Set to `false` inside `unchecked {}` blocks.
+    checked: bool,
 }
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -60,6 +64,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             region_pointer: region as *const Region<'context>,
             storage_layout,
             return_types,
+            checked: true,
         }
     }
 
@@ -103,6 +108,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     self.state,
                     self.environment,
                     self.storage_layout,
+                    self.checked,
                 );
                 let (_, block) = emitter.emit(&expression, block)?;
                 Ok(Some(block))
@@ -117,8 +123,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Statement::BreakStatement(_) => self.emit_break(block),
             Statement::ContinueStatement(_) => self.emit_continue(block),
             Statement::Block(inner) => self.emit_block(inner.statements(), block),
-            // TODO: thread checked/unchecked flag to use different arithmetic ops
-            Statement::UncheckedBlock(inner) => self.emit_block(inner.block().statements(), block),
+            Statement::UncheckedBlock(inner) => {
+                let saved_checked = self.checked;
+                self.checked = false;
+                let result = self.emit_block(inner.block().statements(), block);
+                self.checked = saved_checked;
+                result
+            }
             Statement::RevertStatement(_revert) => {
                 // TODO: encode custom error data from revert arguments
                 self.state.builder.emit_sol_revert(&block);
@@ -183,6 +194,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.state,
             self.environment,
             self.storage_layout,
+            self.checked,
         );
 
         // For explicit initializers, evaluate and cast before alloca to match
@@ -252,6 +264,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 self.state,
                 self.environment,
                 self.storage_layout,
+                self.checked,
             );
             let (value, block) = emitter.emit_value(expression, block)?;
             let return_type = self

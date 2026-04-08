@@ -86,7 +86,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             );
             let operator = Operator::from_str(operator_text)?.arithmetic_operator();
             let result = self.state.builder.emit_binary_operation(
-                operator.sol_operation_name(),
+                operator.sol_operation_name(self.checked),
                 old,
                 rhs,
                 target_type,

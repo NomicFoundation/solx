@@ -38,6 +38,11 @@ pub struct ExpressionEmitter<'state, 'context, 'block> {
     pub environment: &'state Environment<'context, 'block>,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'state HashMap<NodeId, u64>,
+    /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
+    ///
+    /// `true` by default (Solidity 0.8+). Set to `false` inside `unchecked {}`
+    /// blocks and for-loop step expressions.
+    pub checked: bool,
 }
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
@@ -47,12 +52,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
         storage_layout: &'state HashMap<NodeId, u64>,
+        checked: bool,
     ) -> Self {
         Self {
             semantic: Rc::clone(semantic),
             state,
             environment,
             storage_layout,
+            checked,
         }
     }
 
@@ -161,17 +168,19 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .emit_assignment(assign, block)
                 .map(|(value, block)| (Some(value), block)),
             Expression::AdditiveExpression(expression) => {
+                let result_type = self.resolve_expression_type(expression.node_id());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = expression.operator();
-                self.emit_binary_op(&left, &right, &operator.text, block)
+                self.emit_binary_op(&left, &right, &operator.text, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::MultiplicativeExpression(expression) => {
+                let result_type = self.resolve_expression_type(expression.node_id());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = expression.operator();
-                self.emit_binary_op(&left, &right, &operator.text, block)
+                self.emit_binary_op(&left, &right, &operator.text, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::EqualityExpression(expression) => {
@@ -207,34 +216,39 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::PrefixExpression(expression) => {
+                let result_type = self.resolve_expression_type(expression.node_id());
                 let operator = expression.operator();
                 let operand = expression.operand();
-                self.emit_prefix(&operator.text, &operand, block)
+                self.emit_prefix(&operator.text, &operand, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::BitwiseAndExpression(expression) => {
+                let result_type = self.resolve_expression_type(expression.node_id());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, "&", block)
+                self.emit_binary_op(&left, &right, "&", result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::BitwiseOrExpression(expression) => {
+                let result_type = self.resolve_expression_type(expression.node_id());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, "|", block)
+                self.emit_binary_op(&left, &right, "|", result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::BitwiseXorExpression(expression) => {
+                let result_type = self.resolve_expression_type(expression.node_id());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, "^", block)
+                self.emit_binary_op(&left, &right, "^", result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::ShiftExpression(expression) => {
+                let result_type = self.resolve_expression_type(expression.node_id());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = expression.operator();
-                self.emit_binary_op(&left, &right, &operator.text, block)
+                self.emit_binary_op(&left, &right, &operator.text, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::FunctionCallExpression(call) => {
@@ -328,8 +342,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         value: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        if IntegerType::try_from(value.r#type()).is_ok_and(|integer_type| integer_type.width() == 1)
-        {
+        if solx_mlir::Builder::integer_bit_width(value.r#type()) == 1 {
             return value;
         }
         let zero = self

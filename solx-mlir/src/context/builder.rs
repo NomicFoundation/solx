@@ -203,6 +203,13 @@ impl<'context> Builder<'context> {
         self.types[key]
     }
 
+    /// Returns the bit width of an MLIR integer type, or 256 for non-integer types.
+    pub fn integer_bit_width(r#type: Type<'_>) -> u32 {
+        IntegerType::try_from(r#type).map_or(solx_utils::BIT_LENGTH_FIELD as u32, |integer_type| {
+            integer_type.width()
+        })
+    }
+
     /// Creates a `sol::AddressType` with the given payability.
     pub fn create_address_type(&self, payable: bool) -> Type<'context> {
         // SAFETY: `solxCreateAddressType` returns a valid MlirType from the
