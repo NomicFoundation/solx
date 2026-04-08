@@ -13,12 +13,17 @@ pub enum Target {
 }
 
 impl Target {
-    ///
     /// Returns the LLVM target triple.
-    ///
     pub fn triple(&self) -> &str {
         match self {
             Self::EVM => "evm-unknown-unknown",
+        }
+    }
+
+    /// Returns the LLVM data layout string for the target.
+    pub fn data_layout(&self) -> &str {
+        match self {
+            Self::EVM => "E-p:256:256-i256:256:256-S256-a:256:256",
         }
     }
 }
