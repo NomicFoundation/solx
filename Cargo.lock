@@ -2563,7 +2563,7 @@ checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
 [[package]]
 name = "metaslang_bindings"
 version = "1.3.4"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=5a24a05410fb30e0f4154d6964809c85e7cf3f33#5a24a05410fb30e0f4154d6964809c85e7cf3f33"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=a01bc76b742173941cea1aff0b3b68a9006b38b8#a01bc76b742173941cea1aff0b3b68a9006b38b8"
 dependencies = [
  "metaslang_cst",
  "metaslang_graph_builder",
@@ -2575,7 +2575,7 @@ dependencies = [
 [[package]]
 name = "metaslang_cst"
 version = "1.3.4"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=5a24a05410fb30e0f4154d6964809c85e7cf3f33#5a24a05410fb30e0f4154d6964809c85e7cf3f33"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=a01bc76b742173941cea1aff0b3b68a9006b38b8#a01bc76b742173941cea1aff0b3b68a9006b38b8"
 dependencies = [
  "nom",
  "serde",
@@ -2585,7 +2585,7 @@ dependencies = [
 [[package]]
 name = "metaslang_graph_builder"
 version = "1.3.4"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=5a24a05410fb30e0f4154d6964809c85e7cf3f33#5a24a05410fb30e0f4154d6964809c85e7cf3f33"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=a01bc76b742173941cea1aff0b3b68a9006b38b8#a01bc76b742173941cea1aff0b3b68a9006b38b8"
 dependencies = [
  "log",
  "metaslang_cst",
@@ -2599,7 +2599,7 @@ dependencies = [
 [[package]]
 name = "metaslang_stack_graphs"
 version = "1.3.4"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=5a24a05410fb30e0f4154d6964809c85e7cf3f33#5a24a05410fb30e0f4154d6964809c85e7cf3f33"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=a01bc76b742173941cea1aff0b3b68a9006b38b8#a01bc76b742173941cea1aff0b3b68a9006b38b8"
 dependencies = [
  "bitvec",
  "controlled-option",
@@ -4249,7 +4249,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 [[package]]
 name = "slang_solidity"
 version = "1.3.4"
-source = "git+https://github.com/NomicFoundation/slang.git?rev=5a24a05410fb30e0f4154d6964809c85e7cf3f33#5a24a05410fb30e0f4154d6964809c85e7cf3f33"
+source = "git+https://github.com/NomicFoundation/slang.git?rev=a01bc76b742173941cea1aff0b3b68a9006b38b8#a01bc76b742173941cea1aff0b3b68a9006b38b8"
 dependencies = [
  "indexmap 2.13.0",
  "metaslang_bindings",
