@@ -165,7 +165,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         Ok(mlir_name)
     }
 
-    /// Builds the mangled MLIR function name `solx.fn.{name}({types})`.
+    /// Builds the MLIR function name as `{name}({types})`.
     ///
     /// Uses slang's ABI canonical types when available (external functions),
     /// falls back to AST-based type names for internal/private functions.
@@ -174,15 +174,18 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         if let Some(AbiEntry::Function { inputs, .. }) = function.compute_abi_entry() {
             let types: Vec<&str> = inputs.iter().map(|input| input.r#type.as_str()).collect();
-            return format!("solx.fn.{name}({})", types.join(","));
+            return format!("{name}({})", types.join(","));
         }
 
         let types: Vec<String> = function
             .parameters()
             .iter()
-            .map(|parameter| Self::type_name_text(&parameter.type_name()))
+            .map(|parameter| {
+                let type_name = parameter.type_name();
+                Self::type_name_text(&type_name)
+            })
             .collect();
-        format!("solx.fn.{name}({})", types.join(","))
+        format!("{name}({})", types.join(","))
     }
 
     /// Returns a textual representation of a Solidity type name from the AST.
