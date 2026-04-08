@@ -30,7 +30,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.environment,
             self.storage_layout,
         );
-        let (condition_value, block) = emitter.emit(&condition_expression, block)?;
+        let (condition_value, block) = emitter.emit_value(&condition_expression, block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &block);
 
         let (then_block, else_block) = self.state.builder.emit_sol_if(condition_boolean, &block);
@@ -130,7 +130,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     self.environment,
                     self.storage_layout,
                 );
-                let (condition_value, cond_end) = emitter.emit(&expression, cond_block)?;
+                let (condition_value, cond_end) = emitter.emit_value(&expression, cond_block)?;
                 let condition_boolean = emitter.emit_is_nonzero(condition_value, &cond_end);
                 self.state
                     .builder
@@ -164,7 +164,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 self.environment,
                 self.storage_layout,
             );
-            let (_value, step_end) = emitter.emit(iterator_expression, step_block)?;
+            let (_value, step_end) = emitter.emit_value(iterator_expression, step_block)?;
             self.state.builder.emit_sol_yield(&step_end);
         } else {
             self.state.builder.emit_sol_yield(&step_block);
@@ -197,7 +197,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.environment,
             self.storage_layout,
         );
-        let (condition_value, cond_end) = emitter.emit(&condition_expression, cond_block)?;
+        let (condition_value, cond_end) = emitter.emit_value(&condition_expression, cond_block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &cond_end);
         self.state
             .builder
@@ -243,7 +243,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.environment,
             self.storage_layout,
         );
-        let (condition_value, cond_end) = emitter.emit(&condition_expression, cond_block)?;
+        let (condition_value, cond_end) = emitter.emit_value(&condition_expression, cond_block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &cond_end);
         self.state
             .builder
