@@ -75,11 +75,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let result_types: Vec<melior::ir::Type<'context>> =
             (0..return_count).map(|_| i256).collect();
 
-        // TODO: remove catch_unwind once slang binder no longer panics on missing typing info
-        let function_ref = std::panic::AssertUnwindSafe(function);
-        let selector = std::panic::catch_unwind(|| function_ref.compute_selector())
-            .ok()
-            .flatten();
+        let selector = function.compute_selector();
 
         let state_mutability = Self::map_state_mutability(function);
 
@@ -142,11 +138,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     pub fn mlir_function_name(function: &FunctionDefinition) -> String {
         let name = Self::mlir_base_name(function);
 
-        let function_ref = std::panic::AssertUnwindSafe(function);
-        let abi_entry = std::panic::catch_unwind(|| function_ref.compute_abi_entry())
-            .ok()
-            .flatten();
-        if let Some(AbiEntry::Function { inputs, .. }) = abi_entry {
+        if let Some(AbiEntry::Function { inputs, .. }) = function.compute_abi_entry() {
             let types: Vec<&str> = inputs.iter().map(|input| input.r#type.as_str()).collect();
             return format!("solx.fn.{name}({})", types.join(","));
         }

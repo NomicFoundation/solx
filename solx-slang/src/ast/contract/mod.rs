@@ -86,17 +86,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// Computes the storage layout using slang-solidity's ABI computation.
     ///
     /// Returns a mapping from state variable node ID to storage slot.
-    /// Returns an empty map if the binder panics or the ABI is unavailable.
+    /// Returns an empty map if the ABI is unavailable.
     fn compute_storage_layout(
         contract: &ContractDefinition,
         file_identifier: &str,
     ) -> HashMap<NodeId, u64> {
-        // TODO: remove catch_unwind once slang binder no longer panics on missing typing info
-        let contract = std::panic::AssertUnwindSafe(contract);
-        let file_identifier = file_identifier.to_owned();
-        let abi =
-            std::panic::catch_unwind(move || contract.compute_abi_with_file_id(file_identifier));
-        let Ok(Some(abi)) = abi else {
+        let Some(abi) = contract.compute_abi_with_file_id(file_identifier.to_owned()) else {
             return HashMap::new();
         };
         abi.storage_layout
