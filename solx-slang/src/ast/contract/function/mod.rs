@@ -6,8 +6,12 @@ pub mod expression;
 pub mod statement;
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use melior::ir::BlockLike;
+use melior::ir::Type;
+use melior::ir::r#type::IntegerType;
+use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::abi::AbiEntry;
 use slang_solidity::backend::ir::ast::ElementaryType;
 use slang_solidity::backend::ir::ast::Expression;
@@ -24,6 +28,8 @@ use self::statement::StatementEmitter;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub struct FunctionEmitter<'state, 'context> {
+    /// Slang semantic analysis for resolving expression types.
+    semantic: Rc<SemanticAnalysis>,
     /// The shared MLIR context.
     state: &'state Context<'context>,
     /// State variable node ID to storage slot mapping.
@@ -33,10 +39,12 @@ pub struct FunctionEmitter<'state, 'context> {
 impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
     pub fn new(
+        semantic: &Rc<SemanticAnalysis>,
         state: &'state Context<'context>,
         storage_layout: &'state HashMap<NodeId, u64>,
     ) -> Self {
         Self {
+            semantic: Rc::clone(semantic),
             state,
             storage_layout,
         }
@@ -113,8 +121,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut current_block = function_entry_block;
         let mut terminated = false;
         for statement in body.statements().iter() {
-            let mut emitter =
-                StatementEmitter::new(self.state, &mut environment, &region, self.storage_layout);
+            let mut emitter = StatementEmitter::new(
+                &self.semantic,
+                self.state,
+                &mut environment,
+                &region,
+                self.storage_layout,
+            );
             match emitter.emit(&statement, current_block)? {
                 Some(next) => current_block = next,
                 None => {
@@ -218,6 +231,59 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             | ElementaryType::FixedKeyword(terminal)
             | ElementaryType::UfixedKeyword(terminal) => terminal.text.clone(),
         }
+    }
+
+    /// Maps a Solidity `TypeName` to an MLIR type.
+    ///
+    /// Elementary integer types map to their exact bit width (`uint8` → `ui8`,
+    /// `int128` → `si128`). Bool maps to `i1`. All other types (address, bytes,
+    /// string, arrays, mappings) map to `ui256`.
+    pub fn type_name_to_mlir_type(
+        type_name: &TypeName,
+        context: &'context melior::Context,
+        builder: &solx_mlir::Builder<'context>,
+    ) -> Type<'context> {
+        match type_name {
+            TypeName::ElementaryType(elementary) => {
+                Self::elementary_to_mlir_type(elementary, context, builder)
+            }
+            _ => builder.get_type(solx_mlir::Builder::UI256),
+        }
+    }
+
+    /// Maps an elementary Solidity type to an MLIR type.
+    pub fn elementary_to_mlir_type(
+        elementary: &ElementaryType,
+        context: &'context melior::Context,
+        builder: &solx_mlir::Builder<'context>,
+    ) -> Type<'context> {
+        match elementary {
+            ElementaryType::BoolKeyword => Type::from(IntegerType::new(
+                context,
+                solx_utils::BIT_LENGTH_BOOLEAN as u32,
+            )),
+            ElementaryType::UintKeyword(terminal) => {
+                let bits = Self::parse_integer_bits(&terminal.text, "uint");
+                Type::from(IntegerType::unsigned(context, bits))
+            }
+            ElementaryType::IntKeyword(terminal) => {
+                let bits = Self::parse_integer_bits(&terminal.text, "int");
+                Type::from(IntegerType::signed(context, bits))
+            }
+            ElementaryType::AddressType(_)
+            | ElementaryType::ByteKeyword
+            | ElementaryType::StringKeyword
+            | ElementaryType::BytesKeyword(_)
+            | ElementaryType::FixedKeyword(_)
+            | ElementaryType::UfixedKeyword(_) => builder.get_type(solx_mlir::Builder::UI256),
+        }
+    }
+
+    /// Parses the bit width from a Solidity integer type name (e.g. "uint64" → 64).
+    fn parse_integer_bits(text: &str, prefix: &str) -> u32 {
+        text.strip_prefix(prefix)
+            .and_then(|suffix| suffix.parse::<u32>().ok())
+            .unwrap_or(solx_utils::BIT_LENGTH_FIELD as u32)
     }
 
     /// Maps Solidity function state mutability to Sol dialect `StateMutability`.

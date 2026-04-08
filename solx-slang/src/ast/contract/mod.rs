@@ -6,7 +6,9 @@
 pub mod function;
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
+use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::ir::ast::ContractDefinition;
 use slang_solidity::cst::NodeId;
 
@@ -20,14 +22,19 @@ use self::function::FunctionEmitter;
 /// `convert-sol-to-std` pass generates the entry-point dispatcher
 /// from the function selectors.
 pub struct ContractEmitter<'state, 'context> {
+    /// Slang semantic analysis for resolving expression types.
+    semantic: Rc<SemanticAnalysis>,
     /// The shared MLIR context.
     state: &'state mut Context<'context>,
 }
 
 impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// Creates a new contract emitter.
-    pub fn new(state: &'state mut Context<'context>) -> Self {
-        Self { state }
+    pub fn new(semantic: &Rc<SemanticAnalysis>, state: &'state mut Context<'context>) -> Self {
+        Self {
+            semantic: Rc::clone(semantic),
+            state,
+        }
     }
 
     /// Emits a `sol.contract` containing all function definitions.
@@ -62,7 +69,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
 
         for function in contract.functions() {
-            let emitter = FunctionEmitter::new(self.state, &storage_layout);
+            let emitter = FunctionEmitter::new(&self.semantic, self.state, &storage_layout);
             emitter.emit_sol(&function, &contract_body)?;
         }
 
