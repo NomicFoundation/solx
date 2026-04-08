@@ -47,7 +47,7 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:7b79409e7b4aff8356c97f7c097f8e2871460bd6c6262da68554616386f80bc5
     steps:
 
       - name: Checkout source
@@ -106,11 +106,11 @@ jobs:
             runner: macos-15
           - name: "Linux x86 gnu"
             runner: ubuntu-24.04
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:7b79409e7b4aff8356c97f7c097f8e2871460bd6c6262da68554616386f80bc5
             target: "x86_64-unknown-linux-gnu"
           - name: "Linux ARM64 gnu"
             runner: ubuntu-24.04-arm
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:7b79409e7b4aff8356c97f7c097f8e2871460bd6c6262da68554616386f80bc5
             target: "aarch64-unknown-linux-gnu"
           - name: "Windows"
             runner: windows-2025
