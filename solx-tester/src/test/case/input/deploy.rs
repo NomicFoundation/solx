@@ -102,17 +102,16 @@ impl Deploy {
         let (output, total_gas_used, halt_reason) = match result {
             ExecutionResult::Success {
                 reason: _,
-                gas_used,
-                gas_refunded: _,
+                gas,
                 logs,
                 output,
-            } => ((output, logs).into(), gas_used, None),
-            ExecutionResult::Revert { gas_used, output } => {
+            } => ((output, logs).into(), gas.used(), None),
+            ExecutionResult::Revert { gas, logs: _, output } => {
                 let return_data_value = revm_bytes_to_vec_value(output);
-                (Output::new(return_data_value, true, vec![]), gas_used, None)
+                (Output::new(return_data_value, true, vec![]), gas.used(), None)
             }
-            ExecutionResult::Halt { reason, gas_used } => {
-                (Output::new(vec![], true, vec![]), gas_used, Some(reason))
+            ExecutionResult::Halt { reason, gas, logs: _ } => {
+                (Output::new(vec![], true, vec![]), gas.used(), Some(reason))
             }
         };
 

@@ -17,6 +17,7 @@ use revm::{
     context::ContextTr,
     context::Evm,
     database::{CacheState, Database, states::plain_account::PlainStorage},
+    database::states::block_hash_cache::BlockHashCache,
     handler::{EthFrame, EthPrecompiles, instructions::EthInstructions},
     inspector::inspectors::TracerEip3155,
     interpreter::interpreter::EthInterpreter,
@@ -105,14 +106,14 @@ impl REVM {
             REVM::Tracing(Evm::new_with_inspector(
                 Self::context(),
                 TracerEip3155::new_stdout(),
-                EthInstructions::new_mainnet(),
-                EthPrecompiles::default(),
+                EthInstructions::new_mainnet_with_spec(revm::primitives::hardfork::OSAKA),
+                EthPrecompiles::new(revm::primitives::hardfork::OSAKA),
             ))
         } else {
             REVM::Default(Evm::new(
                 Self::context(),
-                EthInstructions::new_mainnet(),
-                EthPrecompiles::default(),
+                EthInstructions::new_mainnet_with_spec(revm::primitives::hardfork::OSAKA),
+                EthPrecompiles::new(revm::primitives::hardfork::OSAKA),
             ))
         };
         match &mut evm {
@@ -364,7 +365,7 @@ impl REVM {
     /// Builds the default context for REVM.
     ///
     fn context() -> Context {
-        let mut cache = CacheState::new(false);
+        let mut cache = CacheState::new();
         // Account 0x00 needs to have its code hash on 0.
         cache.insert_account_with_storage(
             Address::from_word(FixedBytes::from(U256::ZERO)),
@@ -393,19 +394,17 @@ impl REVM {
             PlainStorage::default(),
         );
 
-        let block_hashes = (0..0xffff - 0x3737)
-            .enumerate()
-            .map(|(index, value)| {
-                let hash = format!(
-                    "0x373737373737373737373737373737373737373737373737373737373737{:04x}",
-                    0x3737 + value
-                );
-                (
-                    index as u64,
-                    revm::primitives::B256::from_str(hash.as_str()).expect("Always valid"),
-                )
-            })
-            .collect();
+        let mut block_hashes = BlockHashCache::new();
+        block_hashes.extend((0..0xffff - 0x3737).enumerate().map(|(index, value)| {
+            let hash = format!(
+                "0x373737373737373737373737373737373737373737373737373737373737{:04x}",
+                0x3737 + value
+            );
+            (
+                index as u64,
+                revm::primitives::B256::from_str(hash.as_str()).expect("Always valid"),
+            )
+        }));
 
         let state = revm::database::State::builder()
             .with_cached_prestate(cache)
