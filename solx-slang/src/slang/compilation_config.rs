@@ -65,8 +65,7 @@ impl CompilationBuilderConfig for CompilationConfig {
                 }
             }
             let clean: std::path::PathBuf = normalized.into_iter().collect();
-            // TODO: to_string_lossy produces `\` on Windows, mismatching `/`-separated source keys
-            let key = clean.to_string_lossy().to_string();
+            let key = clean.to_string_lossy().replace('\\', "/");
             if self.sources.contains_key(&key) {
                 return Ok(Some(key));
             }
