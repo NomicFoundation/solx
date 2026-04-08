@@ -28,4 +28,4 @@
 # AI
 .mcp.json
 opencode.json
-.claude/settings.local.json
+.claude/
