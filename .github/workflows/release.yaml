@@ -158,6 +158,9 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
 
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
+
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:

@@ -34,9 +34,9 @@ runs:
 
         # Inside containers, the socketdev/action MITM proxy doesn't work,
         # but the sfw CLI wrapper can be installed directly via npm.
-        # (GitHub sets 'container' env var for container jobs;
-        # /.dockerenv is a fallback heuristic)
-        if [[ -n "${container:-}" ]] || [[ -f /.dockerenv ]]; then
+        # /.dockerenv is the primary heuristic for detecting Docker containers.
+        # ${container:-} is a defensive fallback (not set by GitHub Actions itself).
+        if [[ -f /.dockerenv ]] || [[ -n "${container:-}" ]]; then
           echo "method=npm" >> "$GITHUB_OUTPUT"
           exit 0
         fi
@@ -55,6 +55,7 @@ runs:
         mode: ${{ inputs.mode }}
 
     - name: Configure cargo TLS trust for SFW
+      id: ca-cert
       if: steps.detect.outputs.method == 'action'
       shell: bash
       run: |
@@ -74,7 +75,8 @@ runs:
         rm -f "${RUNNER_TEMP}/sfw-get-cert.js" "${RUNNER_TEMP}/sfw-cert-path.txt"
 
         if [ -z "$SFW_CA" ] || [ ! -f "$SFW_CA" ]; then
-          echo "::warning::SFW CA cert not found — cargo may fail with SSL errors under sfw"
+          echo "::warning::SFW CA cert not found — skipping SFW to avoid opaque SSL errors"
+          echo "ca-failed=true" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
@@ -112,9 +114,17 @@ runs:
 
     - name: Set SFW prefix
       id: set-prefix
-      if: steps.detect.outputs.method != 'none'
       shell: bash
       run: |
+        if [[ "${{ steps.detect.outputs.method }}" == "none" ]]; then
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if [[ "${{ steps.ca-cert.outputs.ca-failed }}" == "true" ]]; then
+          echo "::notice::SFW available but CA cert missing — disabling to prevent SSL errors"
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
         if command -v sfw &>/dev/null; then
           echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
           echo "available=true" >> "$GITHUB_OUTPUT"

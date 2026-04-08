@@ -63,6 +63,9 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
 
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
+
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
@@ -107,6 +110,9 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
 
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
+
       - name: Build solc
         uses: ./.github/actions/build-solc
         with:
@@ -130,6 +136,9 @@ jobs:
         run: |
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
+
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -155,6 +164,9 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
+
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
@@ -179,6 +191,9 @@ jobs:
         run: |
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
+
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm

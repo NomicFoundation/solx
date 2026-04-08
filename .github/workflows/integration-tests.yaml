@@ -151,33 +151,6 @@ jobs:
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
         run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev --bin solx-tester
 
-      - name: Build LLVM (PR)
-        uses: ./.github/actions/build-llvm
-        with:
-          build-type: Release
-          enable-assertions: 'false'
-
-      - name: Build solc (PR)
-        uses: ./.github/actions/build-solc
-        with:
-          cmake-build-type: Release
-          working-dir: 'solx-solidity'
-
-      - name: Fetch dependencies (PR)
-        run: ${SFW_PREFIX:-} cargo fetch --locked
-
-      - name: Build solx (PR)
-        env:
-          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
-          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx
-
-      - name: Build solx-dev and solx-tester (PR)
-        env:
-          BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
-          SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev --bin solx-tester
-
       - name: Run solx-tester tests (PR)
         id: solx_tester_tests
         continue-on-error: true

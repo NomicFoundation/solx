@@ -76,6 +76,9 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --force --depth=1 --recursive --checkout
 
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
+
       - name: Prepare Windows env
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
