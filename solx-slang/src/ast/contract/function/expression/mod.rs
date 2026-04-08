@@ -320,11 +320,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a `sol.cmp ne 0` producing `i1` from a value.
+    ///
+    /// Short-circuits when the value is already `i1` (e.g. from `sol.cmp`),
+    /// avoiding the redundant `sol.cmp ne, %i1, %zero_i1 : i1` pattern.
     pub fn emit_is_nonzero(
         &self,
         value: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
+        if IntegerType::try_from(value.r#type()).is_ok_and(|integer_type| integer_type.width() == 1)
+        {
+            return value;
+        }
         let zero = self
             .state
             .builder
