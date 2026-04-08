@@ -5,6 +5,7 @@
 use std::str::FromStr;
 
 use melior::ir::BlockRef;
+use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use slang_solidity::backend::ir::ast::Definition;
@@ -17,37 +18,46 @@ use crate::ast::contract::function::expression::call::type_conversion::TypeConve
 use crate::ast::contract::function::expression::operator::Operator;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
-    /// All-ones `ui256` value (`2^256 - 1`) for bitwise NOT.
-    const UI256_ALL_ONES: &'static str =
-        "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-
     /// Emits a binary arithmetic Sol dialect operation.
+    ///
+    /// When `target_type` is `Some`, both operands are cast to that type and
+    /// the result has that type (matching solc's type-annotated MLIR output).
+    /// When `None`, selects the wider operand type by bit width.
     pub fn emit_binary_op(
         &self,
         left: &Expression,
         right: &Expression,
         operator: &str,
+        target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (lhs, block) = self.emit_value(left, block)?;
         let (rhs, block) = self.emit_value(right, block)?;
-        let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
-        let lhs = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
+        let result_type = target_type.unwrap_or_else(|| {
+            let lhs_width = solx_mlir::Builder::integer_bit_width(lhs.r#type());
+            let rhs_width = solx_mlir::Builder::integer_bit_width(rhs.r#type());
+            if lhs_width >= rhs_width {
+                lhs.r#type()
+            } else {
+                rhs.r#type()
+            }
+        });
+        let lhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
             lhs,
             &self.state.builder,
             &block,
         );
-        let rhs = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
+        let rhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
             rhs,
             &self.state.builder,
             &block,
         );
         let operator = Operator::from_str(operator)?;
         let value = self.state.builder.emit_binary_operation(
-            operator.sol_operation_name(),
+            operator.sol_operation_name(self.checked),
             lhs,
             rhs,
-            ui256,
+            result_type,
             &block,
         )?;
         Ok((value, block))
@@ -65,10 +75,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits prefix operators: `!`, `-`, `~`, `++`, `--`.
+    ///
+    /// When `target_type` is `Some`, unary operations use that type (matching
+    /// solc's typed MLIR). When `None`, falls back to ui256 semantics.
     pub fn emit_prefix(
         &self,
         operator: &str,
         operand: &Expression,
+        target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         match operator {
@@ -78,22 +92,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             "~" => {
                 let (value, block) = self.emit_value(operand, block)?;
-                let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
-                let value = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
-                    value,
-                    &self.state.builder,
-                    &block,
-                );
-                let all_ones = self.state.builder.emit_sol_constant_from_hex_str(
-                    Self::UI256_ALL_ONES,
-                    ui256,
-                    &block,
-                )?;
+                let operand_type = target_type.unwrap_or_else(|| value.r#type());
+                let value = TypeConversion::from_target_type(operand_type, &self.state.builder)
+                    .emit(value, &self.state.builder, &block);
+                let all_ones = self
+                    .state
+                    .builder
+                    .emit_sol_constant_all_ones(operand_type, &block)?;
                 let result = self.state.builder.emit_binary_operation(
                     solx_mlir::Builder::SOL_XOR,
                     value,
                     all_ones,
-                    ui256,
+                    operand_type,
                     &block,
                 )?;
                 Ok((result, block))
@@ -108,28 +118,30 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .state
                     .builder
                     .emit_sol_cmp(value, zero, CmpPredicate::Eq, &block);
-                let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
-                let result = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
-                    cmp,
-                    &self.state.builder,
-                    &block,
-                );
+                let result_type = target_type
+                    .unwrap_or_else(|| self.state.builder.get_type(solx_mlir::Builder::UI256));
+                let result = TypeConversion::from_target_type(result_type, &self.state.builder)
+                    .emit(cmp, &self.state.builder, &block);
                 Ok((result, block))
             }
             "-" => {
+                // Unary negation uses unchecked subtraction. Checked negation
+                // requires signed-type awareness (e.g. -INT_MIN should revert
+                // in checked mode) which needs a dedicated op — not sol.csub,
+                // since the operand may be in an unsigned literal type.
                 let (value, block) = self.emit_value(operand, block)?;
-                let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
-                let value = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
-                    value,
-                    &self.state.builder,
-                    &block,
-                );
-                let zero = self.state.builder.emit_sol_constant(0, ui256, &block);
+                let operand_type = target_type.unwrap_or_else(|| value.r#type());
+                let value = TypeConversion::from_target_type(operand_type, &self.state.builder)
+                    .emit(value, &self.state.builder, &block);
+                let zero = self
+                    .state
+                    .builder
+                    .emit_sol_constant(0, operand_type, &block);
                 let result = self.state.builder.emit_binary_operation(
                     solx_mlir::Builder::SOL_SUB,
                     zero,
                     value,
-                    ui256,
+                    operand_type,
                     &block,
                 )?;
                 Ok((result, block))
@@ -161,10 +173,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .get(&state_variable.node_id())
                     .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?;
                 let old = self.emit_storage_load(slot, block)?;
+                // TODO: use declared element type once state variable types are tracked.
+                // Currently hardcodes ui256, so `uint8 x = 255; x++` won't revert
+                // in checked mode because overflow is checked at 256-bit width.
                 let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
                 let one = self.state.builder.emit_sol_constant(1, ui256, block);
                 let new_value = self.state.builder.emit_binary_operation(
-                    operator.sol_operation_name(),
+                    operator.sol_operation_name(self.checked),
                     old,
                     one,
                     ui256,
@@ -182,11 +197,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .state
                     .builder
                     .emit_sol_load(pointer, element_type, block)?;
-                let one = self.state.builder.emit_sol_constant(1, element_type, block);
+                let typed_one = self.state.builder.emit_sol_constant(1, element_type, block);
                 let new_value = self.state.builder.emit_binary_operation(
-                    operator.sol_operation_name(),
+                    operator.sol_operation_name(self.checked),
                     old,
-                    one,
+                    typed_one,
                     element_type,
                     block,
                 )?;

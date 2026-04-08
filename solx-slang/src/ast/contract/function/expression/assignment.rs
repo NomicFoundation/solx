@@ -86,7 +86,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             );
             let operator = Operator::from_str(operator_text)?.arithmetic_operator();
             let result = self.state.builder.emit_binary_operation(
-                operator.sol_operation_name(),
+                operator.sol_operation_name(self.checked),
                 old,
                 rhs,
                 target_type,
@@ -108,7 +108,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 stored_value
             }
             AssignmentTarget::Storage(slot) => {
-                self.emit_storage_store(slot, value, &block);
+                let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
+                let stored_value = self.state.builder.emit_sol_cast(value, ui256, &block);
+                self.emit_storage_store(slot, stored_value, &block);
                 value
             }
         };

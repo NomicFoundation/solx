@@ -97,6 +97,8 @@ impl<'context> Builder<'context> {
     pub const SOL_CSUB: &'static str = "sol.csub";
     /// `sol.cmul` — checked multiplication (reverts on overflow).
     pub const SOL_CMUL: &'static str = "sol.cmul";
+    /// `sol.cdiv` — checked division (reverts on `int.min / -1` overflow).
+    pub const SOL_CDIV: &'static str = "sol.cdiv";
     /// `sol.div` — unchecked division.
     pub const SOL_DIV: &'static str = "sol.div";
     /// `sol.mod` — unchecked modulo.
@@ -201,6 +203,13 @@ impl<'context> Builder<'context> {
     /// Panics if the key is not in the cache.
     pub fn get_type(&self, key: &str) -> Type<'context> {
         self.types[key]
+    }
+
+    /// Returns the bit width of an MLIR integer type, or 256 for non-integer types.
+    pub fn integer_bit_width(r#type: Type<'_>) -> u32 {
+        IntegerType::try_from(r#type).map_or(solx_utils::BIT_LENGTH_FIELD as u32, |integer_type| {
+            integer_type.width()
+        })
     }
 
     /// Creates a `sol::AddressType` with the given payability.
@@ -430,6 +439,25 @@ impl<'context> Builder<'context> {
         let attribute = Attribute::parse(self.context, &format!("0x{hexadecimal} : {ty}"))
             .ok_or_else(|| anyhow::anyhow!("invalid {ty} hex literal: 0x{hexadecimal}"))?;
         self.emit_constant_operation(Self::SOL_CONSTANT, attribute, ty, block)
+    }
+
+    /// Emits an all-ones `sol.constant` for the given integer type.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the constant cannot be parsed as an MLIR integer attribute.
+    pub fn emit_sol_constant_all_ones<'block, B>(
+        &self,
+        integer_type: Type<'context>,
+        block: &B,
+    ) -> anyhow::Result<Value<'context, 'block>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let bit_width = Self::integer_bit_width(integer_type);
+        let all_ones_hex = "f".repeat(bit_width as usize / 4);
+        self.emit_sol_constant_from_hex_str(&all_ones_hex, integer_type, block)
     }
 
     // ==== Terminators ====
