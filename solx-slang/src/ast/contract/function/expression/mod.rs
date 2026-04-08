@@ -51,10 +51,27 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
     }
 
-    /// Emits MLIR for an expression, appending operations to `block`.
+    /// Emits an expression and unwraps the value, failing for void calls.
     ///
-    /// Returns the SSA value produced and the continuation block (which may
-    /// differ from the input block for short-circuit operators).
+    /// # Errors
+    ///
+    /// Returns an error if the expression is void or contains unsupported constructs.
+    pub fn emit_value(
+        &self,
+        expression: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let (value, block) = self.emit(expression, block)?;
+        let value =
+            value.ok_or_else(|| anyhow::anyhow!("expected a value-producing expression"))?;
+        Ok((value, block))
+    }
+
+    /// Emits MLIR for an expression, returning its value and continuation block.
+    ///
+    /// Returns `(Some(value), block)` for value-producing expressions, or
+    /// `(None, block)` for void calls.
+    ///
     /// # Errors
     ///
     /// Returns an error if the expression contains unsupported constructs.
@@ -62,7 +79,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         &self,
         expression: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         match expression {
             Expression::DecimalNumberExpression(decimal) => {
                 let literal = decimal.literal();
@@ -74,7 +91,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         .builder
                         .emit_sol_constant_from_decimal_str(text, &block)?
                 };
-                Ok((value, block))
+                Ok((Some(value), block))
             }
             Expression::HexNumberExpression(hex) => {
                 let literal = hex.literal();
@@ -90,15 +107,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         .builder
                         .emit_sol_constant_from_hex_str(stripped, &block)?
                 };
-                Ok((value, block))
+                Ok((Some(value), block))
             }
             Expression::TrueKeyword => {
                 let value = self.state.builder.emit_sol_constant(1, &block);
-                Ok((value, block))
+                Ok((Some(value), block))
             }
             Expression::FalseKeyword => {
                 let value = self.state.builder.emit_sol_constant(0, &block);
-                Ok((value, block))
+                Ok((Some(value), block))
             }
             Expression::Identifier(identifier) => {
                 let name = identifier.name();
@@ -111,94 +128,113 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                                 anyhow::anyhow!("unregistered state variable: {name}")
                             })?;
                         let value = self.emit_storage_load(*slot, &block)?;
-                        Ok((value, block))
+                        Ok((Some(value), block))
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let pointer = self.environment.variable(&name).ok_or_else(|| {
                             anyhow::anyhow!("unregistered local variable: {name}")
                         })?;
                         let value = self.state.builder.emit_sol_load(pointer, &block)?;
-                        Ok((value, block))
+                        Ok((Some(value), block))
                     }
                     None => anyhow::bail!("unresolved identifier: {name}"),
                     Some(_) => anyhow::bail!("unsupported identifier reference: {name}"),
                 }
             }
-            Expression::AssignmentExpression(assign) => self.emit_assignment(assign, block),
+            Expression::AssignmentExpression(assign) => {
+                let (value, block) = self.emit_assignment(assign, block)?;
+                Ok((Some(value), block))
+            }
             Expression::AdditiveExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = expression.operator();
-                self.emit_binary_op(&left, &right, &operator.text, block)
+                let (value, block) = self.emit_binary_op(&left, &right, &operator.text, block)?;
+                Ok((Some(value), block))
             }
             Expression::MultiplicativeExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = expression.operator();
-                self.emit_binary_op(&left, &right, &operator.text, block)
+                let (value, block) = self.emit_binary_op(&left, &right, &operator.text, block)?;
+                Ok((Some(value), block))
             }
             Expression::EqualityExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = expression.operator();
-                self.emit_comparison(&left, &right, &operator.text, block)
+                let (value, block) = self.emit_comparison(&left, &right, &operator.text, block)?;
+                Ok((Some(value), block))
             }
             Expression::InequalityExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = expression.operator();
-                self.emit_comparison(&left, &right, &operator.text, block)
+                let (value, block) = self.emit_comparison(&left, &right, &operator.text, block)?;
+                Ok((Some(value), block))
             }
             Expression::AndExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                self.emit_and(&left, &right, block)
+                let (value, block) = self.emit_and(&left, &right, block)?;
+                Ok((Some(value), block))
             }
             Expression::OrExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                self.emit_or(&left, &right, block)
+                let (value, block) = self.emit_or(&left, &right, block)?;
+                Ok((Some(value), block))
             }
             Expression::PostfixExpression(expression) => {
                 let operand = expression.operand();
                 let operator = expression.operator();
-                self.emit_postfix(&operand, &operator.text, block)
+                let (value, block) = self.emit_postfix(&operand, &operator.text, block)?;
+                Ok((Some(value), block))
             }
             Expression::PrefixExpression(expression) => {
                 let operator = expression.operator();
                 let operand = expression.operand();
-                self.emit_prefix(&operator.text, &operand, block)
+                let (value, block) = self.emit_prefix(&operator.text, &operand, block)?;
+                Ok((Some(value), block))
             }
             Expression::BitwiseAndExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, "&", block)
+                let (value, block) = self.emit_binary_op(&left, &right, "&", block)?;
+                Ok((Some(value), block))
             }
             Expression::BitwiseOrExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, "|", block)
+                let (value, block) = self.emit_binary_op(&left, &right, "|", block)?;
+                Ok((Some(value), block))
             }
             Expression::BitwiseXorExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, "^", block)
+                let (value, block) = self.emit_binary_op(&left, &right, "^", block)?;
+                Ok((Some(value), block))
             }
             Expression::ShiftExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = expression.operator();
-                self.emit_binary_op(&left, &right, &operator.text, block)
+                let (value, block) = self.emit_binary_op(&left, &right, &operator.text, block)?;
+                Ok((Some(value), block))
             }
             Expression::FunctionCallExpression(call) => {
                 let callee = call.operand();
                 let arguments = call.arguments();
-                self::call::CallEmitter::new(self).emit_function_call(&callee, &arguments, block)
+                let (value, block) = self::call::CallEmitter::new(self)
+                    .emit_function_call(&callee, &arguments, block)?;
+                Ok((Some(value), block))
             }
             Expression::MemberAccessExpression(access) => {
                 let operand = access.operand();
                 let member = access.member().name();
-                self::call::CallEmitter::new(self).emit_member_access(&operand, &member, block)
+                let (value, block) = self::call::CallEmitter::new(self)
+                    .emit_member_access(&operand, &member, block)?;
+                Ok((Some(value), block))
             }
             Expression::TupleExpression(tuple) => {
                 let items = tuple.items();
@@ -213,8 +249,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::ExponentiationExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                let (lhs, block) = self.emit(&left, block)?;
-                let (rhs, block) = self.emit(&right, block)?;
+                let (lhs, block) = self.emit_value(&left, block)?;
+                let (rhs, block) = self.emit_value(&right, block)?;
                 let result = self.state.builder.emit_binary_operation(
                     solx_mlir::Builder::SOL_EXP,
                     lhs,
@@ -222,11 +258,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     self.state.builder.get_type(solx_mlir::Builder::UI256),
                     &block,
                 )?;
-                Ok((result, block))
+                Ok((Some(result), block))
             }
             Expression::ConditionalExpression(conditional) => {
                 let condition = conditional.operand();
-                let (condition_value, block) = self.emit(&condition, block)?;
+                let (condition_value, block) = self.emit_value(&condition, block)?;
                 let condition_boolean = self.emit_is_nonzero(condition_value, &block);
 
                 let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
@@ -236,14 +272,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         .emit_scf_if(condition_boolean, ui256, &block)?;
 
                 let true_expression = conditional.true_expression();
-                let (then_value, then_end) = self.emit(&true_expression, then_block)?;
+                let (then_value, then_end) = self.emit_value(&true_expression, then_block)?;
                 self.state.builder.emit_scf_yield(&[then_value], &then_end);
 
                 let false_expression = conditional.false_expression();
-                let (else_value, else_end) = self.emit(&false_expression, else_block)?;
+                let (else_value, else_end) = self.emit_value(&false_expression, else_block)?;
                 self.state.builder.emit_scf_yield(&[else_value], &else_end);
 
-                Ok((result, block))
+                Ok((Some(result), block))
             }
             _ => anyhow::bail!(
                 "unsupported expression: {:?}",
