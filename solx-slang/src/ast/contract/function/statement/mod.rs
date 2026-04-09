@@ -10,6 +10,7 @@ use std::rc::Rc;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
+use melior::ir::Type;
 use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::ir::ast::Statement;
 use slang_solidity::backend::ir::ast::Statements;
@@ -19,6 +20,7 @@ use solx_mlir::Context;
 use solx_mlir::Environment;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 /// Lowers Solidity statements to MLIR operations with control flow.
 ///
@@ -37,6 +39,8 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
     storage_layout: &'state HashMap<NodeId, u64>,
+    /// The function's declared return types, for `emit_return` to cast to.
+    return_types: &'state [Type<'context>],
 }
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -47,6 +51,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         environment: &'state mut Environment<'context, 'block>,
         region: &Region<'context>,
         storage_layout: &'state HashMap<NodeId, u64>,
+        return_types: &'state [Type<'context>],
     ) -> Self {
         Self {
             semantic: Rc::clone(semantic),
@@ -54,6 +59,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             environment,
             region_pointer: region as *const Region<'context>,
             storage_layout,
+            return_types,
         }
     }
 
@@ -98,7 +104,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     self.environment,
                     self.storage_layout,
                 );
-                let (_value, block) = emitter.emit(&expression, block)?;
+                let (_, block) = emitter.emit(&expression, block)?;
                 Ok(Some(block))
             }
             Statement::ReturnStatement(return_statement) => {
@@ -161,6 +167,16 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let name = declaration.name().name();
+        let declared_type = declaration
+            .get_type()
+            .map(|slang_type| {
+                TypeConversion::resolve_slang_type(
+                    &slang_type,
+                    self.state.builder.context,
+                    &self.state.builder,
+                )
+            })
+            .unwrap_or_else(|| self.state.builder.get_type(solx_mlir::Builder::UI256));
 
         let emitter = ExpressionEmitter::new(
             &self.semantic,
@@ -168,22 +184,31 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.environment,
             self.storage_layout,
         );
-        let pointer = emitter.state.builder.emit_sol_alloca(&block);
+        let pointer = emitter.state.builder.emit_sol_alloca(declared_type, &block);
 
         let block = if let Some(ref initializer_expression) = declaration.value() {
             let (initial_value, block) = emitter.emit_value(initializer_expression, block)?;
+            let cast_value =
+                emitter
+                    .state
+                    .builder
+                    .emit_sol_cast(initial_value, declared_type, &block);
             emitter
                 .state
                 .builder
-                .emit_sol_store(initial_value, pointer, &block);
+                .emit_sol_store(cast_value, pointer, &block);
             block
         } else {
-            let zero = self.state.builder.emit_sol_constant(0, &block);
+            let zero = self
+                .state
+                .builder
+                .emit_sol_constant(0, declared_type, &block);
             emitter.state.builder.emit_sol_store(zero, pointer, &block);
             block
         };
 
-        self.environment.define_variable(name, pointer);
+        self.environment
+            .define_variable(name, pointer, declared_type);
         Ok(Some(block))
     }
 
@@ -212,6 +237,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         if let Some(ref expression) = return_statement.expression() {
+            // TODO: support multi-return functions (tuple deconstruction).
+            anyhow::ensure!(
+                self.return_types.len() <= 1,
+                "multi-return functions are not yet supported"
+            );
             let emitter = ExpressionEmitter::new(
                 &self.semantic,
                 self.state,
@@ -219,7 +249,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 self.storage_layout,
             );
             let (value, block) = emitter.emit_value(expression, block)?;
-            self.state.builder.emit_sol_return(&[value], &block);
+            let return_type = self
+                .return_types
+                .first()
+                .copied()
+                .unwrap_or_else(|| self.state.builder.get_type(solx_mlir::Builder::UI256));
+            let return_value = self.state.builder.emit_sol_cast(value, return_type, &block);
+            self.state.builder.emit_sol_return(&[return_value], &block);
         } else {
             self.state.builder.emit_sol_return(&[], &block);
         }

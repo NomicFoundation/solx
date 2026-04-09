@@ -19,6 +19,7 @@ use melior::ir::AttributeLike;
 use melior::ir::BlockLike;
 use melior::ir::Location;
 use melior::ir::Module;
+use melior::ir::Type;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::pass::PassManager;
@@ -41,7 +42,7 @@ pub struct Context<'context> {
     /// Cached MLIR types and emission methods.
     pub builder: Builder<'context>,
     /// All function signatures for call resolution (bare name -> overloads).
-    pub function_signatures: HashMap<String, Vec<Function>>,
+    pub function_signatures: HashMap<String, Vec<Function<'context>>>,
 }
 
 impl<'context> Context<'context> {
@@ -169,17 +170,17 @@ impl<'context> Context<'context> {
         bare_name: &str,
         mlir_name: String,
         parameter_count: usize,
-        return_count: usize,
+        return_types: Vec<Type<'context>>,
     ) {
         self.function_signatures
             .entry(bare_name.to_owned())
             .or_default()
-            .push(Function::new(mlir_name, parameter_count, return_count));
+            .push(Function::new(mlir_name, parameter_count, return_types));
     }
 
     /// Resolves a function call by bare name and argument count.
     ///
-    /// Returns the mangled MLIR name and the number of return values.
+    /// Returns the mangled MLIR name and the declared return types.
     ///
     /// # Errors
     ///
@@ -188,7 +189,7 @@ impl<'context> Context<'context> {
         &self,
         bare_name: &str,
         argument_count: usize,
-    ) -> anyhow::Result<(&str, usize)> {
+    ) -> anyhow::Result<(&str, &[Type<'context>])> {
         let signatures = self
             .function_signatures
             .get(bare_name)
@@ -200,7 +201,7 @@ impl<'context> Context<'context> {
             .collect();
         match matches.len() {
             0 => anyhow::bail!("no overload of '{bare_name}' takes {argument_count} arguments"),
-            1 => Ok((matches[0].mlir_name.as_str(), matches[0].return_count)),
+            1 => Ok((matches[0].mlir_name.as_str(), &matches[0].return_types)),
             _ => {
                 let overloads: Vec<&str> = matches
                     .iter()

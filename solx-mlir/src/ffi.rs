@@ -70,6 +70,21 @@ unsafe extern "C" {
     /// Creates an `EvmVersionAttr`.
     pub fn solxCreateEvmVersionAttr(context: MlirContext, version: u32) -> mlir_sys::MlirAttribute;
 
+    // ---- Sol type constructors (from sol_attr_stubs.cpp) ----
+
+    /// Creates a `sol::PointerType` with the given element type and data location.
+    ///
+    /// `data_location` maps to `mlir::sol::DataLocation` (0=Storage, 1=CallData,
+    /// 2=Memory, 3=Stack, 4=Immutable, 5=Transient).
+    pub fn solxCreatePointerType(
+        context: MlirContext,
+        element_type: mlir_sys::MlirType,
+        data_location: u32,
+    ) -> mlir_sys::MlirType;
+
+    /// Creates a `sol::AddressType` with the given payability.
+    pub fn solxCreateAddressType(context: MlirContext, payable: bool) -> mlir_sys::MlirType;
+
     // ---- MLIR core (not in mlir-sys) ----
 
     /// Returns the region that owns the given block.

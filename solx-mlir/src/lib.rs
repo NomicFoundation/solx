@@ -7,6 +7,8 @@
 //! details, analogous to how `solx-yul` uses `solx-codegen-evm`.
 //!
 
+#![allow(clippy::too_many_arguments)]
+
 pub mod attributes;
 pub mod context;
 pub mod ffi;

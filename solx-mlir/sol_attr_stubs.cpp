@@ -40,4 +40,17 @@ MlirAttribute solxCreateEvmVersionAttr(MlirContext ctx, uint32_t version) {
     return wrap(attr);
 }
 
+MlirType solxCreatePointerType(MlirContext ctx, MlirType elementType, uint32_t dataLocation) {
+    if (dataLocation > 5) abort();
+    auto *context = unwrap(ctx);
+    auto elemType = unwrap(elementType);
+    auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
+    return wrap(mlir::sol::PointerType::get(context, elemType, location));
+}
+
+MlirType solxCreateAddressType(MlirContext ctx, bool payable) {
+    auto *context = unwrap(ctx);
+    return wrap(mlir::sol::AddressType::get(context, payable));
+}
+
 } /* extern "C" */
