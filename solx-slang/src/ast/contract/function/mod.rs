@@ -10,7 +10,6 @@ use std::rc::Rc;
 
 use melior::ir::BlockLike;
 use melior::ir::Type;
-use melior::ir::r#type::IntegerType;
 use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::abi::AbiEntry;
 use slang_solidity::backend::ir::ast::ElementaryType;
@@ -24,6 +23,7 @@ use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::StateMutability;
 
+use self::expression::call::type_conversion::TypeConversion;
 use self::statement::StatementEmitter;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
@@ -74,14 +74,31 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let parameters = function.parameters();
         let mlir_name = Self::mlir_function_name(function);
 
-        let i256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
-
-        let return_count = function.returns().map_or(0, |returns| returns.len());
-
-        let mlir_parameter_types: Vec<melior::ir::Type<'context>> =
-            (0..parameters.len()).map(|_| i256).collect();
-        let result_types: Vec<melior::ir::Type<'context>> =
-            (0..return_count).map(|_| i256).collect();
+        let mlir_parameter_types: Vec<Type<'context>> = parameters
+            .iter()
+            .map(|param| {
+                TypeConversion::resolve_slang_type(
+                    &param.get_type().expect("parameter type binding resolved"),
+                    self.state.builder.context,
+                    &self.state.builder,
+                )
+            })
+            .collect();
+        let result_types: Vec<Type<'context>> = function
+            .returns()
+            .map(|returns| {
+                returns
+                    .iter()
+                    .map(|param| {
+                        TypeConversion::resolve_slang_type(
+                            &param.get_type().expect("return type binding resolved"),
+                            self.state.builder.context,
+                            &self.state.builder,
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
 
         let selector = function.compute_selector();
 
@@ -99,20 +116,23 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut environment = Environment::new();
 
         // Create allocas for parameters and bind to environment.
-        for (i, parameter) in parameters.iter().enumerate() {
+        for (index, parameter) in parameters.iter().enumerate() {
             let parameter_name = parameter
                 .name()
                 .map(|id| id.name())
                 .unwrap_or_else(|| "_".to_owned());
+            let parameter_type = mlir_parameter_types[index];
             let parameter_value: melior::ir::Value<'context, '_> =
-                function_entry_block.argument(i)?.into();
-
-            let pointer = self.state.builder.emit_sol_alloca(&function_entry_block);
+                function_entry_block.argument(index)?.into();
+            let pointer = self
+                .state
+                .builder
+                .emit_sol_alloca(parameter_type, &function_entry_block);
             self.state
                 .builder
                 .emit_sol_store(parameter_value, pointer, &function_entry_block);
 
-            environment.define_variable(parameter_name, pointer);
+            environment.define_variable(parameter_name, pointer, parameter_type);
         }
 
         let region = function_entry_block
@@ -127,6 +147,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 &mut environment,
                 &region,
                 self.storage_layout,
+                &result_types,
             );
             match emitter.emit(&statement, current_block)? {
                 Some(next) => current_block = next,
@@ -138,7 +159,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         if !terminated {
-            self.emit_default_return(return_count, &current_block);
+            self.emit_default_return(&result_types, &current_block);
         }
 
         Ok(mlir_name)
@@ -164,36 +185,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         format!("solx.fn.{name}({})", types.join(","))
     }
 
-    /// Returns the base name for a function's MLIR symbol, using its kind to
-    /// generate names for special functions (fallback, receive) that have no
-    /// Solidity-level identifier.
-    pub fn mlir_base_name(function: &FunctionDefinition) -> String {
-        match function.kind() {
-            FunctionKind::Regular => function
-                .name()
-                .expect("regular functions have a name")
-                .name(),
-            FunctionKind::Fallback | FunctionKind::Unnamed => "fallback".to_owned(),
-            FunctionKind::Receive => "receive".to_owned(),
-            FunctionKind::Constructor => "constructor".to_owned(),
-            FunctionKind::Modifier => unreachable!("modifiers are not emitted as functions"),
-        }
-    }
-
-    /// Emits a default `sol.return` if the block lacks a terminator.
-    fn emit_default_return(&self, return_count: usize, block: &melior::ir::BlockRef<'context, '_>) {
-        if block.terminator().is_some() {
-            return;
-        }
-        let zeros: Vec<_> = (0..return_count)
-            .map(|_| self.state.builder.emit_sol_constant(0, block))
-            .collect();
-        self.state.builder.emit_sol_return(&zeros, block);
-    }
-
     /// Returns a textual representation of a Solidity type name from the AST.
-    ///
-    /// TODO: check if slang-solidity can provide these identifiers.
     fn type_name_text(type_name: &TypeName) -> String {
         match type_name {
             TypeName::ElementaryType(elementary) => Self::elementary_type_text(elementary),
@@ -217,8 +209,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     }
 
     /// Returns the text for an elementary type from its AST node.
-    ///
-    /// TODO: check if slang-solidity can provide these identifiers.
     fn elementary_type_text(elementary: &ElementaryType) -> String {
         match elementary {
             ElementaryType::AddressType(_) => "address".to_owned(),
@@ -233,62 +223,44 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
     }
 
-    /// Maps a Solidity `TypeName` to an MLIR type.
-    ///
-    /// Elementary integer types map to their exact bit width (`uint8` → `ui8`,
-    /// `int128` → `si128`). Bool maps to `i1`. All other types (address, bytes,
-    /// string, arrays, mappings) map to `ui256`.
-    pub fn type_name_to_mlir_type(
-        type_name: &TypeName,
-        context: &'context melior::Context,
-        builder: &solx_mlir::Builder<'context>,
-    ) -> Type<'context> {
-        match type_name {
-            TypeName::ElementaryType(elementary) => {
-                Self::elementary_to_mlir_type(elementary, context, builder)
-            }
-            _ => builder.get_type(solx_mlir::Builder::UI256),
+    /// Returns the base name for a function's MLIR symbol, using its kind to
+    /// generate names for special functions (fallback, receive) that have no
+    /// Solidity-level identifier.
+    pub fn mlir_base_name(function: &FunctionDefinition) -> String {
+        match function.kind() {
+            FunctionKind::Regular => function
+                .name()
+                .expect("regular functions have a name")
+                .name(),
+            FunctionKind::Fallback | FunctionKind::Unnamed => "fallback".to_owned(),
+            FunctionKind::Receive => "receive".to_owned(),
+            FunctionKind::Constructor => "constructor".to_owned(),
+            FunctionKind::Modifier => unreachable!("modifiers are not emitted as functions"),
         }
     }
 
-    /// Maps an elementary Solidity type to an MLIR type.
-    pub fn elementary_to_mlir_type(
-        elementary: &ElementaryType,
-        context: &'context melior::Context,
-        builder: &solx_mlir::Builder<'context>,
-    ) -> Type<'context> {
-        match elementary {
-            ElementaryType::BoolKeyword => Type::from(IntegerType::new(
-                context,
-                solx_utils::BIT_LENGTH_BOOLEAN as u32,
-            )),
-            ElementaryType::UintKeyword(terminal) => {
-                let bits = Self::parse_integer_bits(&terminal.text, "uint");
-                Type::from(IntegerType::unsigned(context, bits))
-            }
-            ElementaryType::IntKeyword(terminal) => {
-                let bits = Self::parse_integer_bits(&terminal.text, "int");
-                Type::from(IntegerType::signed(context, bits))
-            }
-            ElementaryType::AddressType(_)
-            | ElementaryType::ByteKeyword
-            | ElementaryType::StringKeyword
-            | ElementaryType::BytesKeyword(_)
-            | ElementaryType::FixedKeyword(_)
-            | ElementaryType::UfixedKeyword(_) => builder.get_type(solx_mlir::Builder::UI256),
-        }
-    }
-
-    /// Parses the bit width from a Solidity integer type name (e.g. "uint64" → 64).
-    fn parse_integer_bits(text: &str, prefix: &str) -> u32 {
-        text.strip_prefix(prefix)
-            .and_then(|suffix| suffix.parse::<u32>().ok())
-            .unwrap_or(solx_utils::BIT_LENGTH_FIELD as u32)
-    }
-
-    /// Maps Solidity function state mutability to Sol dialect `StateMutability`.
+    /// Emits a default `sol.return` if the block lacks a terminator.
     ///
-    /// TODO: remove in favor of the slang-solidity structure.
+    /// Emits one typed zero constant per return type and terminates the block.
+    fn emit_default_return(
+        &self,
+        result_types: &[Type<'context>],
+        block: &melior::ir::BlockRef<'context, '_>,
+    ) {
+        if block.terminator().is_some() {
+            return;
+        }
+        let zeros: Vec<_> = result_types
+            .iter()
+            .map(|ty| self.state.builder.emit_sol_constant(0, *ty, block))
+            .collect();
+        self.state.builder.emit_sol_return(&zeros, block);
+    }
+
+    /// Maps Slang's `FunctionMutability` to the Sol dialect's `StateMutability`.
+    ///
+    /// Required because the Sol dialect defines its own mutability enum
+    /// independently of the Slang AST representation.
     fn map_state_mutability(function: &FunctionDefinition) -> StateMutability {
         use slang_solidity::backend::ir::ast::FunctionMutability;
         match function.mutability() {

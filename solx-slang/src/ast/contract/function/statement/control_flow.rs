@@ -137,8 +137,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     .emit_sol_condition(condition_boolean, &cond_end);
             }
             ForStatementCondition::Semicolon => {
-                let one = self.state.builder.emit_sol_constant(1, &cond_block);
-                let zero = self.state.builder.emit_sol_constant(0, &cond_block);
+                let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
+                let one = self.state.builder.emit_sol_constant(1, ui256, &cond_block);
+                let zero = self.state.builder.emit_sol_constant(0, ui256, &cond_block);
                 let true_val = self.state.builder.emit_sol_cmp(
                     one,
                     zero,
