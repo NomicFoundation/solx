@@ -15,23 +15,19 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
         let pointer = self.emit_storage_addr_of(slot, block);
-        self.state.builder.emit_sol_load(pointer, block)
+        let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
+        self.state.builder.emit_sol_load(pointer, ui256, block)
     }
 
     /// Emits a storage store via `sol.addr_of` + `sol.store`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the slot constant cannot be emitted.
     pub fn emit_storage_store(
         &self,
         slot: u64,
         value: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<()> {
+    ) {
         let pointer = self.emit_storage_addr_of(slot, block);
         self.state.builder.emit_sol_store(value, pointer, block);
-        Ok(())
     }
 
     /// Returns a `!sol.ptr<ui256, Storage>` pointer via `sol.addr_of`.

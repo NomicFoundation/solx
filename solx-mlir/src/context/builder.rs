@@ -17,7 +17,9 @@ use melior::ir::Location;
 use melior::ir::Region;
 use melior::ir::RegionLike;
 use melior::ir::Type;
+use melior::ir::TypeLike;
 use melior::ir::Value;
+use melior::ir::ValueLike;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
@@ -46,12 +48,14 @@ pub struct Builder<'context> {
 impl<'context> Builder<'context> {
     // ---- Type cache keys ----
 
-    /// Unsigned 256-bit integer type key.
-    pub const UI256: &'static str = "ui256";
     /// 1-bit boolean type key.
     pub const I1: &'static str = "i1";
-    /// Sol stack pointer type key.
-    pub const SOL_PTR_STACK: &'static str = "!sol.ptr<ui256, Stack>";
+    /// Unsigned 160-bit integer type key (address width).
+    pub const UI160: &'static str = "ui160";
+    /// Unsigned 256-bit integer type key.
+    pub const UI256: &'static str = "ui256";
+    /// Sol address type key.
+    pub const SOL_ADDRESS: &'static str = "!sol.address";
     /// Sol storage pointer type key.
     pub const SOL_PTR_STORAGE: &'static str = "!sol.ptr<ui256, Storage>";
 
@@ -87,6 +91,12 @@ impl<'context> Builder<'context> {
     pub const SOL_SUB: &'static str = "sol.sub";
     /// `sol.mul` — unchecked multiplication.
     pub const SOL_MUL: &'static str = "sol.mul";
+    /// `sol.cadd` — checked addition (reverts on overflow).
+    pub const SOL_CADD: &'static str = "sol.cadd";
+    /// `sol.csub` — checked subtraction (reverts on underflow).
+    pub const SOL_CSUB: &'static str = "sol.csub";
+    /// `sol.cmul` — checked multiplication (reverts on overflow).
+    pub const SOL_CMUL: &'static str = "sol.cmul";
     /// `sol.div` — unchecked division.
     pub const SOL_DIV: &'static str = "sol.div";
     /// `sol.mod` — unchecked modulo.
@@ -95,6 +105,8 @@ impl<'context> Builder<'context> {
     pub const SOL_CMP: &'static str = "sol.cmp";
     /// `sol.cast` — type cast.
     pub const SOL_CAST: &'static str = "sol.cast";
+    /// `sol.address_cast` — address type cast.
+    pub const SOL_ADDRESS_CAST: &'static str = "sol.address_cast";
     /// `sol.state_var` — state variable declaration.
     pub const SOL_STATE_VAR: &'static str = "sol.state_var";
     /// `sol.and` — bitwise AND.
@@ -136,7 +148,7 @@ impl<'context> Builder<'context> {
     // ---- Private constants ----
 
     /// Bit width of a Solidity function selector (4 bytes).
-    const SELECTOR_BIT_WIDTH: u32 = 32;
+    const SELECTOR_BIT_WIDTH: u32 = solx_utils::BIT_LENGTH_X32 as u32;
 
     // ==== Constructor ====
 
@@ -145,17 +157,31 @@ impl<'context> Builder<'context> {
         let unknown_location = Location::unknown(context);
         let types = HashMap::from([
             (
+                Self::I1,
+                Type::from(IntegerType::new(
+                    context,
+                    solx_utils::BIT_LENGTH_BOOLEAN as u32,
+                )),
+            ),
+            (
+                Self::UI160,
+                Type::from(IntegerType::unsigned(
+                    context,
+                    solx_utils::BIT_LENGTH_ETH_ADDRESS as u32,
+                )),
+            ),
+            (
                 Self::UI256,
                 Type::from(IntegerType::unsigned(
                     context,
                     solx_utils::BIT_LENGTH_FIELD as u32,
                 )),
             ),
-            (Self::I1, Type::from(IntegerType::new(context, 1))),
-            (
-                Self::SOL_PTR_STACK,
-                Type::parse(context, Self::SOL_PTR_STACK).expect("valid sol.ptr type syntax"),
-            ),
+            // SAFETY: `solxCreateAddressType` returns a valid MlirType from
+            // the C++ Sol dialect. The context pointer is valid.
+            (Self::SOL_ADDRESS, unsafe {
+                Type::from_raw(crate::ffi::solxCreateAddressType(context.to_raw(), false))
+            }),
             (
                 Self::SOL_PTR_STORAGE,
                 Type::parse(context, Self::SOL_PTR_STORAGE).expect("valid sol.ptr type syntax"),
@@ -175,6 +201,33 @@ impl<'context> Builder<'context> {
     /// Panics if the key is not in the cache.
     pub fn get_type(&self, key: &str) -> Type<'context> {
         self.types[key]
+    }
+
+    /// Creates a `sol::AddressType` with the given payability.
+    pub fn create_address_type(&self, payable: bool) -> Type<'context> {
+        // SAFETY: `solxCreateAddressType` returns a valid MlirType from the
+        // C++ Sol dialect. The context pointer is valid.
+        unsafe {
+            Type::from_raw(crate::ffi::solxCreateAddressType(
+                self.context.to_raw(),
+                payable,
+            ))
+        }
+    }
+
+    /// Creates a `sol::PointerType` with the given element type and data location.
+    pub fn create_pointer_type(
+        &self,
+        element_type: Type<'context>,
+        location: solx_utils::DataLocation,
+    ) -> Type<'context> {
+        unsafe {
+            Type::from_raw(crate::ffi::solxCreatePointerType(
+                self.context.to_raw(),
+                element_type.to_raw(),
+                location as u32,
+            ))
+        }
     }
 
     // ==== Structure ====
@@ -283,6 +336,9 @@ impl<'context> Builder<'context> {
                 )
                 .into(),
             ));
+        }
+
+        if selector.is_some() || matches!(kind, Some(crate::FunctionKind::Constructor)) {
             attributes.push((
                 Identifier::new(self.context, "orig_fn_type"),
                 TypeAttribute::new(function_type.into()).into(),
@@ -305,22 +361,29 @@ impl<'context> Builder<'context> {
 
     // ==== Constants ====
 
-    /// Emits a `sol.constant` producing a `ui256` value.
+    /// Emits a `sol.constant` of the given type.
+    ///
+    /// Use this variant when the constant type is known at emission time.
     ///
     /// # Panics
     ///
     /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    pub fn emit_sol_constant<'block, B>(&self, value: i64, block: &B) -> Value<'context, 'block>
+    pub fn emit_sol_constant<'block, B>(
+        &self,
+        value: i64,
+        ty: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let attribute = IntegerAttribute::new(self.get_type(Self::UI256), value);
+        let attribute = IntegerAttribute::new(ty, value);
         block
             .append_operation(
                 OperationBuilder::new(Self::SOL_CONSTANT, self.unknown_location)
                     .add_attributes(&[(Identifier::new(self.context, "value"), attribute.into())])
-                    .add_results(&[self.get_type(Self::UI256)])
+                    .add_results(&[ty])
                     .build()
                     .expect("sol.constant operation is well-formed"),
             )
@@ -329,7 +392,7 @@ impl<'context> Builder<'context> {
             .into()
     }
 
-    /// Emits a `sol.constant` from a decimal string.
+    /// Emits a `sol.constant` of the given type from a decimal string.
     ///
     /// # Errors
     ///
@@ -337,23 +400,19 @@ impl<'context> Builder<'context> {
     pub fn emit_sol_constant_from_decimal_str<'block, B>(
         &self,
         value: &str,
+        ty: Type<'context>,
         block: &B,
     ) -> anyhow::Result<Value<'context, 'block>>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let attribute = Attribute::parse(self.context, &format!("{value} : ui256"))
-            .ok_or_else(|| anyhow::anyhow!("invalid ui256 decimal literal: {value}"))?;
-        self.emit_constant_operation(
-            Self::SOL_CONSTANT,
-            attribute,
-            self.get_type(Self::UI256),
-            block,
-        )
+        let attribute = Attribute::parse(self.context, &format!("{value} : {ty}"))
+            .ok_or_else(|| anyhow::anyhow!("invalid {ty} decimal literal: {value}"))?;
+        self.emit_constant_operation(Self::SOL_CONSTANT, attribute, ty, block)
     }
 
-    /// Emits a `sol.constant` from a hex string (without `0x` prefix).
+    /// Emits a `sol.constant` of the given type from a hex string (without `0x` prefix).
     ///
     /// # Errors
     ///
@@ -361,20 +420,16 @@ impl<'context> Builder<'context> {
     pub fn emit_sol_constant_from_hex_str<'block, B>(
         &self,
         hexadecimal: &str,
+        ty: Type<'context>,
         block: &B,
     ) -> anyhow::Result<Value<'context, 'block>>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let attribute = Attribute::parse(self.context, &format!("0x{hexadecimal} : ui256"))
-            .ok_or_else(|| anyhow::anyhow!("invalid ui256 hex literal: 0x{hexadecimal}"))?;
-        self.emit_constant_operation(
-            Self::SOL_CONSTANT,
-            attribute,
-            self.get_type(Self::UI256),
-            block,
-        )
+        let attribute = Attribute::parse(self.context, &format!("0x{hexadecimal} : {ty}"))
+            .ok_or_else(|| anyhow::anyhow!("invalid {ty} hex literal: 0x{hexadecimal}"))?;
+        self.emit_constant_operation(Self::SOL_CONSTANT, attribute, ty, block)
     }
 
     // ==== Terminators ====
@@ -773,31 +828,68 @@ impl<'context> Builder<'context> {
 
     /// Emits a `sol.alloca` for a local variable, returning the pointer.
     ///
-    /// Returns a `!sol.ptr<ui256, Stack>` pointer type.
+    /// Emits a `sol.alloca` for a local variable of the given element type.
+    ///
+    /// Returns a `!sol.ptr<{element_type}, Stack>` pointer. Use this when
+    /// the declared Solidity type is known (e.g. `uint64` → `ui64`).
     ///
     /// # Panics
     ///
     /// Panics if the MLIR type or operation cannot be constructed, indicating
     /// a bug in the builder.
-    pub fn emit_sol_alloca<'block, B>(&self, block: &B) -> Value<'context, 'block>
+    pub fn emit_sol_alloca<'block, B>(
+        &self,
+        element_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
+        let ptr_type = self.create_pointer_type(element_type, solx_utils::DataLocation::Stack);
         block
             .append_operation(
                 OperationBuilder::new(Self::SOL_ALLOCA, self.unknown_location)
                     .add_attributes(&[(
                         Identifier::new(self.context, "alloc_type"),
-                        TypeAttribute::new(self.get_type(Self::UI256)).into(),
+                        TypeAttribute::new(element_type).into(),
                     )])
-                    .add_results(&[self.get_type(Self::SOL_PTR_STACK)])
+                    .add_results(&[ptr_type])
                     .build()
                     .expect("sol.alloca operation is well-formed"),
             )
             .result(0)
             .expect("sol.alloca always produces one result")
             .into()
+    }
+
+    /// Emits a `sol.load` from a pointer with an explicit result type.
+    ///
+    /// Use this when the pointer element type is known at emission time.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the load operation result cannot be extracted.
+    pub fn emit_sol_load<'block, B>(
+        &self,
+        pointer: Value<'context, 'block>,
+        result_type: Type<'context>,
+        block: &B,
+    ) -> anyhow::Result<Value<'context, 'block>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Ok(block
+            .append_operation(
+                OperationBuilder::new(Self::SOL_LOAD, self.unknown_location)
+                    .add_operands(&[pointer])
+                    .add_results(&[result_type])
+                    .build()
+                    .expect("sol.load operation is well-formed"),
+            )
+            .result(0)?
+            .into())
     }
 
     /// Emits a `sol.store` to a pointer.
@@ -821,32 +913,6 @@ impl<'context> Builder<'context> {
                 .build()
                 .expect("sol.store operation is well-formed"),
         );
-    }
-
-    /// Emits a `sol.load` from a pointer.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the load operation result cannot be extracted.
-    pub fn emit_sol_load<'block, B>(
-        &self,
-        pointer: Value<'context, 'block>,
-        block: &B,
-    ) -> anyhow::Result<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        Ok(block
-            .append_operation(
-                OperationBuilder::new(Self::SOL_LOAD, self.unknown_location)
-                    .add_operands(&[pointer])
-                    .add_results(&[self.get_type(Self::UI256)])
-                    .build()
-                    .expect("sol.load operation is well-formed"),
-            )
-            .result(0)?
-            .into())
     }
 
     // ==== Calls ====
@@ -915,7 +981,8 @@ impl<'context> Builder<'context> {
                     .add_attributes(&[(
                         Identifier::new(self.context, "predicate"),
                         IntegerAttribute::new(
-                            IntegerType::new(self.context, 64).into(),
+                            IntegerType::new(self.context, solx_utils::BIT_LENGTH_X64 as u32)
+                                .into(),
                             predicate as i64,
                         )
                         .into(),
@@ -929,14 +996,46 @@ impl<'context> Builder<'context> {
             .into()
     }
 
-    /// Emits a `sol.cast` from `i1` to `ui256`.
+    /// Emits a `sol.cast` to an arbitrary target type.
     ///
     /// # Panics
     ///
     /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    pub fn emit_sol_cast_to_ui256<'block, B>(
+    pub fn emit_sol_cast<'block, B>(
         &self,
         value: Value<'context, 'block>,
+        to_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        if value.r#type() == to_type {
+            return value;
+        }
+        block
+            .append_operation(
+                OperationBuilder::new(Self::SOL_CAST, self.unknown_location)
+                    .add_operands(&[value])
+                    .add_results(&[to_type])
+                    .build()
+                    .expect("sol.cast operation is well-formed"),
+            )
+            .result(0)
+            .expect("sol.cast always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.address_cast` to convert between address and integer types.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
+    pub fn emit_sol_address_cast<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        to_type: Type<'context>,
         block: &B,
     ) -> Value<'context, 'block>
     where
@@ -945,14 +1044,14 @@ impl<'context> Builder<'context> {
     {
         block
             .append_operation(
-                OperationBuilder::new(Self::SOL_CAST, self.unknown_location)
+                OperationBuilder::new(Self::SOL_ADDRESS_CAST, self.unknown_location)
                     .add_operands(&[value])
-                    .add_results(&[self.get_type(Self::UI256)])
+                    .add_results(&[to_type])
                     .build()
-                    .expect("sol.cast operation is well-formed"),
+                    .expect("sol.address_cast operation is well-formed"),
             )
             .result(0)
-            .expect("sol.cast always produces one result")
+            .expect("sol.address_cast always produces one result")
             .into()
     }
 
@@ -986,7 +1085,12 @@ impl<'context> Builder<'context> {
                     ),
                     (
                         Identifier::new(self.context, "byte_offset"),
-                        IntegerAttribute::new(IntegerType::new(self.context, 32).into(), 0).into(),
+                        IntegerAttribute::new(
+                            IntegerType::new(self.context, solx_utils::BIT_LENGTH_X32 as u32)
+                                .into(),
+                            0,
+                        )
+                        .into(),
                     ),
                 ])
                 .build()
@@ -1029,12 +1133,19 @@ impl<'context> Builder<'context> {
 
     /// Emits a Sol dialect EVM context intrinsic (e.g. `sol.caller`, `sol.timestamp`).
     ///
-    /// These are zero-operand operations that return a single `ui256` value.
+    /// These are zero-operand operations that return a single value of
+    /// `result_type` (e.g. `ui256` for numeric intrinsics, `!sol.address`
+    /// for address-returning intrinsics like `sol.caller`).
     ///
     /// # Panics
     ///
     /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_intrinsic<'block, B>(&self, name: &str, block: &B) -> Value<'context, 'block>
+    pub fn emit_sol_intrinsic<'block, B>(
+        &self,
+        name: &str,
+        result_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
@@ -1042,7 +1153,7 @@ impl<'context> Builder<'context> {
         block
             .append_operation(
                 OperationBuilder::new(name, self.unknown_location)
-                    .add_results(&[self.get_type(Self::UI256)])
+                    .add_results(&[result_type])
                     .build()
                     .expect("sol intrinsic operation is well-formed"),
             )
