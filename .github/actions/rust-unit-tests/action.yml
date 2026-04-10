@@ -83,6 +83,14 @@ runs:
         cargo2junit < release-results.json > "release-${{ inputs.results-xml }}" || true
         if [ -n "${CARGO_EXIT}" ]; then exit "${CARGO_EXIT}"; fi
 
+    - name: Clean release artifacts before debug build
+      if: inputs.sanitizer == ''
+      shell: bash
+      run: |
+        echo "Before release cleanup:" && df -h .
+        rm -rf target/release
+        echo "After release cleanup:" && df -h .
+
     - name: Install sanitizer components
       if: inputs.sanitizer != '' && runner.os != 'Windows'
       uses: ./.github/actions/setup-rust

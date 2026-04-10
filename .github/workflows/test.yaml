@@ -134,6 +134,20 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
 
+      - name: Free disk space (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          echo "Before macOS cleanup:" && df -h .
+          # Remove simulator runtimes, extra Xcode versions, Android SDK, tool cache
+          xcrun simctl delete all 2>/dev/null || true
+          sudo rm -rf \
+            /Library/Developer/CoreSimulator \
+            /Applications/Xcode_*.app \
+            /usr/local/lib/android \
+            /opt/hostedtoolcache
+          echo "After macOS cleanup:" && df -h .
+
       - name: Cache cargo artifacts
         if: ${{ !matrix.image }}
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
@@ -160,6 +174,9 @@ jobs:
         run: |
           echo "Before cleanup:" && df -h .
           rm -rf solx-llvm target-llvm/build-final
+          # Remove solx-solidity source, keeping build/ and boost/ for tests
+          find solx-solidity -mindepth 1 -maxdepth 1 ! -name build ! -name boost -exec rm -rf {} +
+          rm -rf .git/modules
           echo "After cleanup:" && df -h .
 
       - name: Run tests
