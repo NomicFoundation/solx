@@ -139,13 +139,16 @@ jobs:
         shell: bash
         run: |
           echo "Before macOS cleanup:" && df -h .
-          # Remove simulator runtimes, extra Xcode versions, Android SDK, tool cache
+          # Simulator runtimes are on read-only APFS volumes; must use simctl to unmount them
+          xcrun simctl runtime delete all 2>/dev/null || true
           xcrun simctl delete all 2>/dev/null || true
+          # Remove extra Xcode versions, Android SDK, tool cache
           sudo rm -rf \
             /Library/Developer/CoreSimulator \
             /Applications/Xcode_*.app \
             /usr/local/lib/android \
-            /opt/hostedtoolcache
+            /opt/hostedtoolcache \
+            || true
           echo "After macOS cleanup:" && df -h .
 
       - name: Cache cargo artifacts
