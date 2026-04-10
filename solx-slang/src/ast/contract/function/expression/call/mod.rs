@@ -6,8 +6,8 @@ pub mod type_conversion;
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use slang_solidity::backend::built_ins::BuiltIn;
 use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
-use slang_solidity::backend::ir::ast::ElementaryType;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::FunctionCallExpression;
 
@@ -133,37 +133,35 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
     /// Emits a member access expression (e.g. `tx.origin`, `msg.sender`).
     ///
+    /// Resolves the member via slang's binder to a specific `BuiltIn` variant
+    /// rather than string-matching the member name.
+    ///
     /// # Errors
     ///
     /// Returns an error if the member access is not a recognized EVM intrinsic.
     pub fn emit_member_access(
         &self,
-        operand: &Expression,
-        member: &str,
+        member_identifier: &slang_solidity::backend::ir::ast::Identifier,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        if let Expression::Identifier(identifier) = operand {
-            let object = identifier.name();
-            let builder = &self.expression_emitter.state.builder;
-            let address_type = builder.get_type(solx_mlir::Builder::SOL_ADDRESS);
-            let ui256_type = builder.get_type(solx_mlir::Builder::UI256);
-            let (intrinsic, result_type) = match (object.as_str(), member) {
-                ("tx", "origin") => (solx_mlir::Builder::SOL_ORIGIN, address_type),
-                ("tx", "gasprice") => (solx_mlir::Builder::SOL_GASPRICE, ui256_type),
-                ("msg", "sender") => (solx_mlir::Builder::SOL_CALLER, address_type),
-                ("msg", "value") => (solx_mlir::Builder::SOL_CALLVALUE, ui256_type),
-                ("block", "timestamp") => (solx_mlir::Builder::SOL_TIMESTAMP, ui256_type),
-                ("block", "number") => (solx_mlir::Builder::SOL_BLOCKNUMBER, ui256_type),
-                ("block", "coinbase") => (solx_mlir::Builder::SOL_COINBASE, address_type),
-                ("block", "chainid") => (solx_mlir::Builder::SOL_CHAINID, ui256_type),
-                ("block", "basefee") => (solx_mlir::Builder::SOL_BASEFEE, ui256_type),
-                ("block", "gaslimit") => (solx_mlir::Builder::SOL_GASLIMIT, ui256_type),
-                _ => anyhow::bail!("unsupported member access: {object}.{member}"),
-            };
-            let value = builder.emit_sol_intrinsic(intrinsic, result_type, &block);
-            return Ok((value, block));
-        }
-        anyhow::bail!("unsupported member access on non-identifier operand")
+        let builder = &self.expression_emitter.state.builder;
+        let address_type = builder.get_type(solx_mlir::Builder::SOL_ADDRESS);
+        let ui256_type = builder.get_type(solx_mlir::Builder::UI256);
+        let (intrinsic, result_type) = match member_identifier.resolved_built_in() {
+            Some(BuiltIn::TxOrigin) => (solx_mlir::Builder::SOL_ORIGIN, address_type),
+            Some(BuiltIn::TxGasPrice) => (solx_mlir::Builder::SOL_GASPRICE, ui256_type),
+            Some(BuiltIn::MsgSender) => (solx_mlir::Builder::SOL_CALLER, address_type),
+            Some(BuiltIn::MsgValue) => (solx_mlir::Builder::SOL_CALLVALUE, ui256_type),
+            Some(BuiltIn::BlockTimestamp) => (solx_mlir::Builder::SOL_TIMESTAMP, ui256_type),
+            Some(BuiltIn::BlockNumber) => (solx_mlir::Builder::SOL_BLOCKNUMBER, ui256_type),
+            Some(BuiltIn::BlockCoinbase) => (solx_mlir::Builder::SOL_COINBASE, address_type),
+            Some(BuiltIn::BlockChainid) => (solx_mlir::Builder::SOL_CHAINID, ui256_type),
+            Some(BuiltIn::BlockBasefee) => (solx_mlir::Builder::SOL_BASEFEE, ui256_type),
+            Some(BuiltIn::BlockGaslimit) => (solx_mlir::Builder::SOL_GASLIMIT, ui256_type),
+            _ => anyhow::bail!("unsupported member access: {}", member_identifier.name()),
+        };
+        let value = builder.emit_sol_intrinsic(intrinsic, result_type, &block);
+        Ok((value, block))
     }
 
     /// Emits a `require(condition)` built-in via `sol.require`.

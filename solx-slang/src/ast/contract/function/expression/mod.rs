@@ -255,10 +255,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 self::call::CallEmitter::new(self).emit_function_call(call, block)
             }
             Expression::MemberAccessExpression(access) => {
-                let operand = access.operand();
-                let member = access.member().name();
+                let member = access.member();
                 self::call::CallEmitter::new(self)
-                    .emit_member_access(&operand, &member, block)
+                    .emit_member_access(&member, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::TupleExpression(tuple) => {
