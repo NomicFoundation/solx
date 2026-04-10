@@ -29,6 +29,14 @@ unsafe extern "C" {
     /// Registers all Sol dialect passes.
     pub fn mlirRegisterSolPasses();
 
+    // ---- Canonicalization ----
+
+    /// Creates the `canonicalize` pass.
+    pub fn mlirCreateTransformsCanonicalizer() -> MlirPass;
+
+    /// Creates the `sol-modifier-op-lowering` pass.
+    pub fn mlirCreateSolModifierOpLoweringPass() -> MlirPass;
+
     // ---- Sol-to-Standard conversion ----
 
     /// Creates the `convert-sol-to-std` pass.
