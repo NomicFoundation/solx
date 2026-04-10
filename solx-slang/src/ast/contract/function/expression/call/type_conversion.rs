@@ -3,7 +3,7 @@
 //!
 
 use melior::ir::Type;
-use melior::ir::TypeLike;
+use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
 use slang_solidity::backend::ir::ast::Type as SlangType;
 
@@ -61,12 +61,15 @@ impl<'context> TypeConversion<'context> {
     }
 
     /// Emits the conversion, returning the cast value.
-    pub fn emit(
+    pub fn emit<'block>(
         self,
-        value: melior::ir::Value<'context, '_>,
+        value: melior::ir::Value<'context, 'block>,
         builder: &solx_mlir::Builder<'context>,
-        block: &melior::ir::BlockRef<'context, '_>,
-    ) -> melior::ir::Value<'context, '_> {
+        block: &melior::ir::BlockRef<'context, 'block>,
+    ) -> melior::ir::Value<'context, 'block>
+    where
+        'context: 'block,
+    {
         match self {
             Self::Bool => {
                 let zero = builder.emit_sol_constant(0, value.r#type(), block);
