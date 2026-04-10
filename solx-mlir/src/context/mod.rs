@@ -237,24 +237,36 @@ impl<'context> Context<'context> {
         let pass_manager = PassManager::new(context);
         pass_manager.enable_verifier(true);
 
+        // TODO: the canonicalizer pass causes an infinite loop on complex
+        // loop tests (e.g. loop/complex/1.sol) at the -Oz optimization level.
+        //
         // SAFETY: Each `mlirCreate*Pass` returns a freshly allocated pass
         // object. `Pass::from_raw` takes ownership. The pass manager runs
         // them sequentially on the module. No aliasing or use-after-free.
         unsafe {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
+                crate::ffi::mlirCreateTransformsCanonicalizer(),
+            ));
+            pass_manager.add_pass(melior::pass::Pass::from_raw(
+                crate::ffi::mlirCreateSolModifierOpLoweringPass(),
+            ));
+            pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertSolToStandardPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertFuncToLLVMPass(),
+                crate::ffi::mlirCreateTransformsCanonicalizer(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionSCFToControlFlowPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertControlFlowToLLVMPass(),
+                crate::ffi::mlirCreateConversionConvertFuncToLLVMPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionArithToLLVMConversionPass(),
+            ));
+            pass_manager.add_pass(melior::pass::Pass::from_raw(
+                crate::ffi::mlirCreateConversionConvertControlFlowToLLVMPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionReconcileUnrealizedCastsPass(),
