@@ -287,7 +287,7 @@ impl<'context> Builder<'context> {
     }
 
     /// Emits a `sol.func` operation with the given name, parameter types,
-    /// result types, selector, and state mutability.
+    /// result types, selector, state mutability, and optional function kind.
     ///
     /// Returns the entry block of the function body for appending operations.
     ///
@@ -301,6 +301,7 @@ impl<'context> Builder<'context> {
         result_types: &[Type<'context>],
         selector: Option<u32>,
         state_mutability: StateMutability,
+        kind: Option<crate::FunctionKind>,
         block: &BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
         let function_type = FunctionType::new(self.context, parameter_types, result_types);
@@ -335,6 +336,17 @@ impl<'context> Builder<'context> {
                 mutability_attribute,
             ),
         ];
+
+        if let Some(function_kind) = kind {
+            // SAFETY: `solxCreateFunctionKindAttr` returns a valid MlirAttribute.
+            let kind_attribute = unsafe {
+                Attribute::from_raw(crate::ffi::solxCreateFunctionKindAttr(
+                    self.context.to_raw(),
+                    function_kind as u32,
+                ))
+            };
+            attributes.push((Identifier::new(self.context, "kind"), kind_attribute));
+        }
 
         if let Some(selector_value) = selector {
             attributes.push((
