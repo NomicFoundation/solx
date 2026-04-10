@@ -10,6 +10,7 @@ use std::rc::Rc;
 
 use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::ir::ast::ContractDefinition;
+use slang_solidity::backend::ir::ast::FunctionKind;
 use slang_solidity::cst::NodeId;
 
 use solx_mlir::Context;
@@ -69,9 +70,29 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .emit_sol_state_var(&format!("slot_{slot}"), *slot, &contract_body);
         }
 
+        let mut has_constructor = false;
         for function in contract.functions() {
+            match function.kind() {
+                FunctionKind::Modifier => continue,
+                FunctionKind::Constructor => has_constructor = true,
+                _ => {}
+            }
             let emitter = FunctionEmitter::new(&self.semantic, self.state, &storage_layout);
             emitter.emit_sol(&function, &contract_body)?;
+        }
+
+        // Emit a default constructor if the contract doesn't define one.
+        if !has_constructor {
+            let entry = self.state.builder.emit_sol_func(
+                "constructor()",
+                &[],
+                &[],
+                None,
+                solx_mlir::StateMutability::NonPayable,
+                Some(solx_mlir::FunctionKind::Constructor),
+                &contract_body,
+            );
+            self.state.builder.emit_sol_return(&[], &entry);
         }
 
         Ok(())
@@ -81,6 +102,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// are emitted.
     fn pre_register_functions(&mut self, contract: &ContractDefinition) {
         for function in contract.functions() {
+            if matches!(function.kind(), FunctionKind::Modifier) {
+                continue;
+            }
             let name = FunctionEmitter::mlir_base_name(&function);
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
             let parameter_count = function.parameters().len();

@@ -16,6 +16,7 @@ pub mod llvm_module;
 
 pub use self::attributes::cmp_predicate::CmpPredicate;
 pub use self::attributes::contract_kind::ContractKind;
+pub use self::attributes::function_kind::FunctionKind;
 pub use self::attributes::state_mutability::StateMutability;
 pub use self::context::Context;
 pub use self::context::builder::Builder;

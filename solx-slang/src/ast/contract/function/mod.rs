@@ -104,12 +104,23 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         let state_mutability = Self::map_state_mutability(function);
 
+        let mlir_kind = match function.kind() {
+            FunctionKind::Constructor => Some(solx_mlir::FunctionKind::Constructor),
+            FunctionKind::Fallback | FunctionKind::Unnamed => {
+                Some(solx_mlir::FunctionKind::Fallback)
+            }
+            FunctionKind::Receive => Some(solx_mlir::FunctionKind::Receive),
+            FunctionKind::Regular => None,
+            FunctionKind::Modifier => unreachable!("modifiers are filtered before emission"),
+        };
+
         let function_entry_block = self.state.builder.emit_sol_func(
             &mlir_name,
             &mlir_parameter_types,
             &result_types,
             selector,
             state_mutability,
+            mlir_kind,
             contract_body,
         );
 
