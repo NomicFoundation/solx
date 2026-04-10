@@ -138,18 +138,52 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          echo "Before macOS cleanup:" && df -h .
-          # Simulator runtimes are on read-only APFS volumes; must use simctl to unmount them
-          xcrun simctl runtime delete all 2>/dev/null || true
-          xcrun simctl delete all 2>/dev/null || true
-          # Remove extra Xcode versions, Android SDK, tool cache
-          sudo rm -rf \
+          set -euo pipefail
+          echo "=== Before macOS cleanup ===" && df -h .
+
+          # 1. Simulator runtimes — stored on read-only APFS snapshot volumes,
+          #    so plain `rm` fails.  `simctl runtime delete all` unmounts them.
+          #    May warn on already-deleted runtimes; that is harmless.
+          echo "--- Removing simulator runtimes ---"
+          xcrun simctl runtime delete all 2>&1 || true
+          xcrun simctl delete all 2>&1 || true
+
+          # 2. Xcode — remove every versioned copy EXCEPT the one that
+          #    xcode-select points to (we need its toolchain for C/C++ builds).
+          #    Active Xcode path looks like /Applications/Xcode_16.2.app/Contents/Developer.
+          echo "--- Removing inactive Xcode versions ---"
+          ACTIVE_XCODE="$(xcode-select -p | sed 's|/Contents/Developer||')"
+          echo "Active Xcode (keeping): ${ACTIVE_XCODE}"
+          removed=0
+          for app in /Applications/Xcode_*.app; do
+            [ -d "$app" ] || continue
+            if [ "$app" = "$ACTIVE_XCODE" ]; then
+              echo "  skip (active): $app"
+            else
+              echo "  removing: $app"
+              sudo rm -rf "$app"
+              removed=$((removed + 1))
+            fi
+          done
+          echo "Removed ${removed} inactive Xcode version(s)"
+
+          # 3. Remaining large packages that this project never uses.
+          #    Each path is removed individually so a missing path doesn't
+          #    mask a real permission error on another.
+          echo "--- Removing unused SDKs and caches ---"
+          for dir in \
             /Library/Developer/CoreSimulator \
-            /Applications/Xcode_*.app \
             /usr/local/lib/android \
-            /opt/hostedtoolcache \
-            || true
-          echo "After macOS cleanup:" && df -h .
+            /opt/hostedtoolcache; do
+            if [ -d "$dir" ]; then
+              echo "  removing: $dir"
+              sudo rm -rf "$dir"
+            else
+              echo "  not found (skipped): $dir"
+            fi
+          done
+
+          echo "=== After macOS cleanup ===" && df -h .
 
       - name: Cache cargo artifacts
         if: ${{ !matrix.image }}
