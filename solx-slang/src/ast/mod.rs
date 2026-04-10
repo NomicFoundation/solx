@@ -46,7 +46,8 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
     /// # Errors
     ///
     /// Returns an error if code generation encounters unsupported constructs.
-    /// Returns `Some(contract_name)` if a contract was emitted, `None` otherwise.
+    /// Returns `Some((contract_name, method_identifiers))` if a contract was
+    /// emitted, `None` otherwise.
     pub fn emit(
         &mut self,
         unit: &SourceUnit,

@@ -32,6 +32,14 @@ MlirAttribute solxCreateStateMutabilityAttr(MlirContext ctx, uint32_t mutability
     return wrap(attr);
 }
 
+MlirAttribute solxCreateFunctionKindAttr(MlirContext ctx, uint32_t kind) {
+    if (kind > 2) abort();
+    auto *context = unwrap(ctx);
+    auto attr = mlir::sol::FunctionKindAttr::get(
+        context, static_cast<mlir::sol::FunctionKind>(kind));
+    return wrap(attr);
+}
+
 MlirAttribute solxCreateEvmVersionAttr(MlirContext ctx, uint32_t version) {
     if (version < 11 || version > 13) abort();
     auto *context = unwrap(ctx);

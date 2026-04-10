@@ -75,6 +75,9 @@ unsafe extern "C" {
         mutability: u32,
     ) -> mlir_sys::MlirAttribute;
 
+    /// Creates a `FunctionKindAttr` (0=Constructor, 1=Fallback, 2=Receive).
+    pub fn solxCreateFunctionKindAttr(context: MlirContext, kind: u32) -> mlir_sys::MlirAttribute;
+
     /// Creates an `EvmVersionAttr`.
     pub fn solxCreateEvmVersionAttr(context: MlirContext, version: u32) -> mlir_sys::MlirAttribute;
 
@@ -107,8 +110,6 @@ unsafe extern "C" {
 pub fn block_parent_region<'context, 'block>(
     block: &melior::ir::BlockRef<'context, 'block>,
 ) -> melior::ir::RegionRef<'context, 'block> {
-    // SAFETY: The block is attached (guaranteed by melior's ownership model).
-    // `mlirBlockGetParentRegion` returns a non-owning handle to the parent.
     // SAFETY: The block is attached (guaranteed by melior's ownership model).
     // `mlirBlockGetParentRegion` returns a non-owning handle to the parent.
     unsafe {
