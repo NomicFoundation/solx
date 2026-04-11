@@ -122,6 +122,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+          persist-credentials: false
 
       # This step is required to checkout submodules
       # that are disabled in .gitmodules config
@@ -145,26 +146,31 @@ jobs:
           #    so plain `rm` fails.  `simctl runtime delete all` unmounts them.
           #    May warn on already-deleted runtimes; that is harmless.
           echo "--- Removing simulator runtimes ---"
-          xcrun simctl runtime delete all 2>&1 || true
           xcrun simctl delete all 2>&1 || true
+          xcrun simctl runtime delete all 2>&1 || true
 
           # 2. Xcode — remove every versioned copy EXCEPT the one that
           #    xcode-select points to (we need its toolchain for C/C++ builds).
           #    Active Xcode path looks like /Applications/Xcode_16.2.app/Contents/Developer.
           echo "--- Removing inactive Xcode versions ---"
-          ACTIVE_XCODE="$(xcode-select -p | sed 's|/Contents/Developer||')"
-          echo "Active Xcode (keeping): ${ACTIVE_XCODE}"
+          ACTIVE_XCODE="$(xcode-select -p 2>/dev/null | sed 's|/Contents/Developer/*$||' || true)"
+          ACTIVE_XCODE="${ACTIVE_XCODE%/}"
           removed=0
-          for app in /Applications/Xcode_*.app; do
-            [ -d "$app" ] || continue
-            if [ "$app" = "$ACTIVE_XCODE" ]; then
-              echo "  skip (active): $app"
-            else
-              echo "  removing: $app"
-              sudo rm -rf "$app"
-              removed=$((removed + 1))
-            fi
-          done
+          if [ -z "${ACTIVE_XCODE}" ] || [[ "${ACTIVE_XCODE}" != /Applications/Xcode*.app ]]; then
+            echo "  warning: active Xcode path '${ACTIVE_XCODE}' is not an Xcode app; skipping Xcode removal"
+          else
+            echo "Active Xcode (keeping): ${ACTIVE_XCODE}"
+            for app in /Applications/Xcode_*.app; do
+              [ -d "$app" ] || continue
+              if [ "$app" = "$ACTIVE_XCODE" ]; then
+                echo "  skip (active): $app"
+              else
+                echo "  removing: $app"
+                sudo rm -rfv "$app" || echo "  warning: failed to remove $app"
+                removed=$((removed + 1))
+              fi
+            done
+          fi
           echo "Removed ${removed} inactive Xcode version(s)"
 
           # 3. Remaining large packages that this project never uses.
@@ -174,10 +180,10 @@ jobs:
           for dir in \
             /Library/Developer/CoreSimulator \
             /usr/local/lib/android \
-            /opt/hostedtoolcache; do
+            "${RUNNER_TOOL_CACHE:-/Users/runner/hostedtoolcache}"; do
             if [ -d "$dir" ]; then
               echo "  removing: $dir"
-              sudo rm -rf "$dir"
+              sudo rm -rfv "$dir" || echo "  warning: failed to remove $dir"
             else
               echo "  not found (skipped): $dir"
             fi

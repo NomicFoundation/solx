@@ -85,7 +85,7 @@ runs:
 
     - name: Clean release artifacts before debug build
       if: inputs.sanitizer == ''
-      shell: bash
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
         echo "Before release cleanup:" && df -h .
         rm -rf target/release
