@@ -166,8 +166,11 @@ jobs:
                 echo "  skip (active): $app"
               else
                 echo "  removing: $app"
-                sudo rm -rfv "$app" || echo "  warning: failed to remove $app"
-                removed=$((removed + 1))
+                if sudo rm -rf "$app"; then
+                  removed=$((removed + 1))
+                else
+                  echo "  warning: failed to remove $app"
+                fi
               fi
             done
           fi
@@ -183,7 +186,7 @@ jobs:
             "${RUNNER_TOOL_CACHE:-/Users/runner/hostedtoolcache}"; do
             if [ -d "$dir" ]; then
               echo "  removing: $dir"
-              sudo rm -rfv "$dir" || echo "  warning: failed to remove $dir"
+              sudo rm -rf "$dir" || echo "  warning: failed to remove $dir"
             else
               echo "  not found (skipped): $dir"
             fi
