@@ -63,6 +63,9 @@ pub fn boost_cmake_args(
 /// MLIR cmake arguments (when MLIR is enabled).
 ///
 pub fn mlir_cmake_args(llvm_build_dir: &Path) -> Vec<String> {
+    let llvm_build_dir = llvm_build_dir
+        .canonicalize()
+        .unwrap_or_else(|_| llvm_build_dir.to_path_buf());
     let mlir_dir = llvm_build_dir.join("lib/cmake/mlir");
     let lld_dir = llvm_build_dir.join("lib/cmake/lld");
 
