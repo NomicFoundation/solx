@@ -4,6 +4,7 @@ name: Tests
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  merge_group:
   push:
     branches:
       - main
@@ -125,6 +126,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+          persist-credentials: false
 
       # This step is required to checkout submodules
       # that are disabled in .gitmodules config
@@ -139,6 +141,65 @@ jobs:
       - name: Prepare Windows env
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
+
+      - name: Free disk space (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Before macOS cleanup ===" && df -h .
+
+          # 1. Simulator runtimes — stored on read-only APFS snapshot volumes,
+          #    so plain `rm` fails.  `simctl runtime delete all` unmounts them.
+          #    May warn on already-deleted runtimes; that is harmless.
+          echo "--- Removing simulator runtimes ---"
+          xcrun simctl delete all 2>&1 || true
+          xcrun simctl runtime delete all 2>&1 || true
+
+          # 2. Xcode — remove every versioned copy EXCEPT the one that
+          #    xcode-select points to (we need its toolchain for C/C++ builds).
+          #    Active Xcode path looks like /Applications/Xcode_16.2.app/Contents/Developer.
+          echo "--- Removing inactive Xcode versions ---"
+          ACTIVE_XCODE="$(xcode-select -p 2>/dev/null | sed 's|/Contents/Developer/*$||' || true)"
+          ACTIVE_XCODE="${ACTIVE_XCODE%/}"
+          removed=0
+          if [ -z "${ACTIVE_XCODE}" ] || [[ "${ACTIVE_XCODE}" != /Applications/Xcode*.app ]]; then
+            echo "  warning: active Xcode path '${ACTIVE_XCODE}' is not an Xcode app; skipping Xcode removal"
+          else
+            echo "Active Xcode (keeping): ${ACTIVE_XCODE}"
+            for app in /Applications/Xcode_*.app; do
+              [ -d "$app" ] || continue
+              if [ "$app" = "$ACTIVE_XCODE" ]; then
+                echo "  skip (active): $app"
+              else
+                echo "  removing: $app"
+                if sudo rm -rf "$app"; then
+                  removed=$((removed + 1))
+                else
+                  echo "  warning: failed to remove $app"
+                fi
+              fi
+            done
+          fi
+          echo "Removed ${removed} inactive Xcode version(s)"
+
+          # 3. Remaining large packages that this project never uses.
+          #    Each path is removed individually so a missing path doesn't
+          #    mask a real permission error on another.
+          echo "--- Removing unused SDKs and caches ---"
+          for dir in \
+            /Library/Developer/CoreSimulator \
+            /usr/local/lib/android \
+            "${RUNNER_TOOL_CACHE:-/Users/runner/hostedtoolcache}"; do
+            if [ -d "$dir" ]; then
+              echo "  removing: $dir"
+              sudo rm -rf "$dir" || echo "  warning: failed to remove $dir"
+            else
+              echo "  not found (skipped): $dir"
+            fi
+          done
+
+          echo "=== After macOS cleanup ===" && df -h .
 
       - name: Cache cargo artifacts
         if: ${{ !matrix.image }}
@@ -166,6 +227,9 @@ jobs:
         run: |
           echo "Before cleanup:" && df -h .
           rm -rf solx-llvm target-llvm/build-final
+          # Remove solx-solidity source, keeping build/ and boost/ for tests
+          find solx-solidity -mindepth 1 -maxdepth 1 ! -name build ! -name boost -exec rm -rf {} +
+          rm -rf .git/modules
           echo "After cleanup:" && df -h .
 
       - name: Run tests
