@@ -1,0 +1,134 @@
+name: Setup Socket Firewall (SFW)
+description: >
+  Installs and configures Socket Firewall to monitor package installations.
+  On bare-metal Linux runners, installs via socketdev/action with MITM proxy
+  and CA cert trust. Inside containers, installs the sfw CLI via npm.
+  Skips on macOS/Windows where the MITM proxy is incompatible.
+
+inputs:
+  mode:
+    description: 'SFW mode: "firewall" blocks risky packages, "audit" only warns'
+    required: false
+    default: 'firewall'
+
+outputs:
+  available:
+    description: 'Whether SFW is available for use (true/false)'
+    value: ${{ steps.set-prefix.outputs.available }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect platform support
+      id: detect
+      shell: bash
+      run: |
+        # SFW's MITM proxy is only compatible with Linux TLS stacks.
+        # macOS (LibreSSL) and Windows (Schannel) reject the SFW cert
+        # at the crypto level — not a CA trust issue.
+        if [[ "$RUNNER_OS" != "Linux" ]]; then
+          echo "::notice::SFW skipped: MITM proxy not compatible with $RUNNER_OS TLS stack"
+          echo "method=none" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Inside containers, the socketdev/action MITM proxy doesn't work,
+        # but the sfw CLI wrapper can be installed directly via npm.
+        # /.dockerenv is the primary heuristic for detecting Docker containers.
+        # ${container:-} is a defensive fallback (not set by GitHub Actions itself).
+        if [[ -f /.dockerenv ]] || [[ -n "${container:-}" ]]; then
+          echo "method=npm" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "method=action" >> "$GITHUB_OUTPUT"
+
+    - name: Install SFW (container)
+      if: steps.detect.outputs.method == 'npm'
+      shell: bash
+      run: npm install -g sfw@2.0.4
+
+    - name: Install SFW
+      if: steps.detect.outputs.method == 'action'
+      uses: socketdev/action@4337a545deecc20f19a909e52db7a2f6ba292f42 # v1
+      with:
+        mode: ${{ inputs.mode }}
+
+    - name: Configure cargo TLS trust for SFW
+      id: ca-cert
+      if: steps.detect.outputs.method == 'action'
+      shell: bash
+      run: |
+        # Trigger SFW cert generation (may be lazy)
+        sfw npm ping > /dev/null 2>&1 || true
+
+        # Discover SFW CA cert path via temp file to avoid
+        # stdout pollution (sfw prepends/appends banner lines)
+        cat > "${RUNNER_TEMP}/sfw-get-cert.js" << 'SCRIPT'
+        const fs = require("fs");
+        const p = process.env.NODE_EXTRA_CA_CERTS || "";
+        fs.writeFileSync(process.env.RUNNER_TEMP + "/sfw-cert-path.txt", p);
+        SCRIPT
+        sfw node "${RUNNER_TEMP}/sfw-get-cert.js" > /dev/null 2>&1 || true
+        SFW_CA=""
+        [ -f "${RUNNER_TEMP}/sfw-cert-path.txt" ] && SFW_CA=$(cat "${RUNNER_TEMP}/sfw-cert-path.txt")
+        rm -f "${RUNNER_TEMP}/sfw-get-cert.js" "${RUNNER_TEMP}/sfw-cert-path.txt"
+
+        if [ -z "$SFW_CA" ] || [ ! -f "$SFW_CA" ]; then
+          echo "::warning::SFW CA cert not found — skipping SFW to avoid opaque SSL errors"
+          echo "ca-failed=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "SFW CA cert: $SFW_CA"
+        BUNDLE="${RUNNER_TEMP}/sfw-ca-bundle.pem"
+
+        # Find system CA bundle (Linux paths only — macOS/Windows are skipped above)
+        FOUND_SYSTEM=false
+        for f in \
+          /etc/ssl/certs/ca-certificates.crt \
+          /etc/ssl/certs/ca-bundle.crt \
+          /etc/pki/tls/certs/ca-bundle.crt; do
+          if [ -f "$f" ]; then
+            cp "$f" "$BUNDLE"
+            echo "System CA bundle: $f"
+            FOUND_SYSTEM=true
+            break
+          fi
+        done
+
+        if [ "$FOUND_SYSTEM" = false ]; then
+          echo "::warning::Could not find system CA bundle — using SFW cert only"
+          cp "$SFW_CA" "$BUNDLE"
+        else
+          # Append SFW CA cert to system bundle
+          echo "" >> "$BUNDLE"
+          cat "$SFW_CA" >> "$BUNDLE"
+        fi
+
+        # Export for cargo, git, and rustup (SSL_CERT_FILE is needed by rustls-native-certs)
+        echo "CARGO_HTTP_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
+        echo "GIT_SSL_CAINFO=$BUNDLE" >> "$GITHUB_ENV"
+        echo "SSL_CERT_FILE=$BUNDLE" >> "$GITHUB_ENV"
+        echo "CA bundle created at $BUNDLE ($(wc -l < "$BUNDLE") lines)"
+
+    - name: Set SFW prefix
+      id: set-prefix
+      shell: bash
+      run: |
+        if [[ "${{ steps.detect.outputs.method }}" == "none" ]]; then
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if [[ "${{ steps.ca-cert.outputs.ca-failed }}" == "true" ]]; then
+          echo "::notice::SFW available but CA cert missing — disabling to prevent SSL errors"
+          echo "available=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        if command -v sfw &>/dev/null; then
+          echo "SFW_PREFIX=sfw" >> "$GITHUB_ENV"
+          echo "available=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "::warning::SFW command not found after install"
+          echo "available=false" >> "$GITHUB_OUTPUT"
+        fi

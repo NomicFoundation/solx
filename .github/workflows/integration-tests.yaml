@@ -46,7 +46,7 @@ jobs:
       packages: read
     runs-on: solx-linux-amd64
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
       options: -m 110g
     steps:
       - name: Checkout PR
@@ -74,6 +74,9 @@ jobs:
         run: |
           git submodule update --init --force --recursive --depth 1 --checkout
 
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
+
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
         with:
@@ -93,8 +96,8 @@ jobs:
           else
             echo "::notice::LLVM SHAs differ (main=$MAIN_SHA PR=$PR_SHA), building main separately"
             pushd temp-solx-main
-            cargo fetch --locked
-            cargo build --frozen --release --bin solx-dev
+            ${SFW_PREFIX:-} cargo fetch --locked
+            ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev
             ./target/release/solx-dev llvm build --build-type Release
             popd
           fi
@@ -113,24 +116,24 @@ jobs:
           working-dir: 'temp-solx-main/solx-solidity'
 
       - name: Fetch dependencies (PR)
-        run: cargo fetch --locked
+        run: ${SFW_PREFIX:-} cargo fetch --locked
 
       - name: Build solx (PR)
         env:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-        run: cargo build --frozen --release --bin solx
+        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx
 
       - name: Build solx-dev and solx-tester (PR)
         env:
           BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
-        run: cargo build --frozen --release --bin solx-dev --bin solx-tester
+        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev --bin solx-tester
 
       - name: Fetch dependencies (main)
         working-directory: temp-solx-main
         continue-on-error: true
-        run: cargo fetch --locked
+        run: ${SFW_PREFIX:-} cargo fetch --locked
 
       - name: Build solx (main)
         working-directory: temp-solx-main
@@ -138,7 +141,7 @@ jobs:
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
-        run: cargo build --frozen --release --bin solx
+        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx
 
       - name: Build solx-dev and solx-tester (main)
         working-directory: temp-solx-main
@@ -146,7 +149,7 @@ jobs:
         env:
           BOOST_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/boost/lib
           SOLC_PREFIX: ${{ github.workspace }}/temp-solx-main/solx-solidity/build
-        run: cargo build --frozen --release --bin solx-dev --bin solx-tester
+        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev --bin solx-tester
 
       - name: Run solx-tester tests (PR)
         id: solx_tester_tests
@@ -182,7 +185,7 @@ jobs:
             --benchmark=candidate-benchmark.json
 
       - name: Build benchmark converter
-        run: cargo build --frozen --release --bin solx-benchmark-converter
+        run: ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-benchmark-converter
 
       - name: Run benchmark converter
         if: hashFiles('reference-benchmark.json') != '' && hashFiles('candidate-benchmark.json') != ''
@@ -226,7 +229,7 @@ jobs:
         uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
 
       - name: Install Yarn
-        run: npm install -g yarn bun pnpm
+        run: ${SFW_PREFIX:-} npm install -g yarn bun pnpm
 
       # Some projects might use hardcoded ssh URLs: force git to use https instead.
       - name: Git https settings

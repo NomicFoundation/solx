@@ -115,8 +115,8 @@ jobs:
           WINDOWS='{"name":"Windows","runner":"windows-2025","release-suffix":"windows-amd64-gnu"}'
           MACOS_AMD64='{"name":"MacOS-x86","runner":"macos-15-intel","release-suffix":"macosx-amd64"}'
           MACOS_ARM64='{"name":"MacOS-arm64","runner":"macos-15","release-suffix":"macosx-arm64"}'
-          LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"ubuntu-24.04","image":"ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
-          LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"ubuntu-24.04-arm","image":"ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
+          LINUX_AMD64_GNU='{"name":"Linux-AMD64-gnu","runner":"ubuntu-24.04","image":"ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e","target":"x86_64-unknown-linux-gnu","release-suffix":"linux-amd64-gnu"}'
+          LINUX_ARM64_GNU='{"name":"Linux-ARM64-gnu","runner":"ubuntu-24.04-arm","image":"ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e","target":"aarch64-unknown-linux-gnu","release-suffix":"linux-arm64-gnu"}'
           # Disable platforms for non-tag builds if user requested
           if [ '${{ github.event_name }}' = 'workflow_dispatch' ] && [ "${GITHUB_REF_TYPE}" != tag ]; then
             [ "${{ github.event.inputs.release_windows_amd64 }}" != true ] && WINDOWS=
@@ -157,6 +157,9 @@ jobs:
       - name: Prepare Windows env
         if: runner.os == 'Windows'
         uses: ./.github/actions/prepare-msys
+
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -224,7 +227,7 @@ jobs:
     name: Prepare release bundle
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
     needs: [build]
     outputs:
       release_title: ${{ steps.release.outputs.release_title }}
@@ -266,7 +269,7 @@ jobs:
         if: github.ref_type == 'tag'
         run: |
           TAG="${{ steps.release.outputs.version_or_sha }}"
-          CARGO_PACKAGE_VERSION="$(cargo pkgid --manifest-path solx/Cargo.toml | cut -d "#" -f2)"
+          CARGO_PACKAGE_VERSION="$(${SFW_PREFIX:-} cargo pkgid --manifest-path solx/Cargo.toml | cut -d "#" -f2)"
           # All versions must be equal
           if [ "${CARGO_PACKAGE_VERSION}" != "${TAG}" ]; then
             echo "Version mismatch: TAG=${TAG}, CARGO_PACKAGE_VERSION=${CARGO_PACKAGE_VERSION}"

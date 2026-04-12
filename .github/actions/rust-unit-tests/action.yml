@@ -48,16 +48,16 @@ runs:
 
     - name: Fetch dependencies
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      run: cargo fetch --locked
+      run: ${SFW_PREFIX:-} cargo fetch --locked
 
     # Versions pinned to match .github/docker/Dockerfile — on container
     # jobs these are already installed and `cargo install` is a no-op.
     - name: Prepare test env
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: |
-        cargo install cargo2junit@0.1.15 --locked
+        ${SFW_PREFIX:-} cargo install cargo2junit@0.1.15 --locked
         if [ '${{ inputs.enable-coverage }}' = 'true' ]; then
-          cargo install cargo-llvm-cov@0.8.4 --locked
+          ${SFW_PREFIX:-} cargo install cargo-llvm-cov@0.8.4 --locked
         fi
 
     - name: Run unit tests (release)
@@ -77,8 +77,8 @@ runs:
           export RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=lld"
         fi
         set -o pipefail
-        if [ "${TEST_COMMAND}" = "test" ]; then cargo build --frozen; fi
-        cargo ${TEST_COMMAND} --frozen --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
+        if [ "${TEST_COMMAND}" = "test" ]; then ${SFW_PREFIX:-} cargo build --frozen; fi
+        ${SFW_PREFIX:-} cargo ${TEST_COMMAND} --frozen --release ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a release-results.json || CARGO_EXIT=$?
         cargo2junit < release-results.json > "release-${{ inputs.results-xml }}" || true
         if [ -n "${CARGO_EXIT}" ]; then exit "${CARGO_EXIT}"; fi
@@ -134,8 +134,8 @@ runs:
           export CARGO_BIN_EXE_SOLX="./target/${{ inputs.target }}/debug/solx"
         fi
         set -o pipefail
-        if [ "${{ inputs.cargo-test-command }}" = "test" ]; then cargo build --frozen ${{ steps.build-target.outputs.target }}; fi
-        cargo ${{ inputs.cargo-test-command }} --frozen ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
+        if [ "${{ inputs.cargo-test-command }}" = "test" ]; then ${SFW_PREFIX:-} cargo build --frozen ${{ steps.build-target.outputs.target }}; fi
+        ${SFW_PREFIX:-} cargo ${{ inputs.cargo-test-command }} --frozen ${{ steps.build-target.outputs.target }} -- -Z unstable-options \
           --format json | tee -a debug-results.json || CARGO_EXIT=$?
         cargo2junit < debug-results.json > "debug-${{ inputs.results-xml }}" || true
         if [ -n "${CARGO_EXIT}" ]; then exit "${CARGO_EXIT}"; fi

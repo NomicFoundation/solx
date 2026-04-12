@@ -44,7 +44,7 @@ jobs:
       pull-requests: write
       packages: read
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c0866d146261cd0a51dc7d9077444b8ac3dde12c53d2151137834e6be149dbc7
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
     env:
       BOOST_PREFIX: ${{ github.workspace }}/solx-solidity/boost/lib
       SOLC_PREFIX: ${{ github.workspace }}/solx-solidity/build
@@ -62,6 +62,9 @@ jobs:
         run: |
           git config --global --add safe.directory '*'
           git submodule update --init --force --depth=1 --recursive --checkout
+
+      - name: Setup SFW
+        uses: ./.github/actions/setup-sfw
 
       - name: Build LLVM
         uses: ./.github/actions/build-llvm
@@ -121,7 +124,7 @@ jobs:
           RUSTC_BOOTSTRAP: 1
           RUSTFLAGS: '-C target-feature=+crt-static -C instrument-coverage -C link-arg=-fuse-ld=lld'
           LLVM_PROFILE_FILE: 'unit-tests-%p-%m.profraw'
-        run: cargo fetch --locked && cargo test --frozen --release --target x86_64-unknown-linux-gnu
+        run: ${SFW_PREFIX:-} cargo fetch --locked && ${SFW_PREFIX:-} cargo test --frozen --release --target x86_64-unknown-linux-gnu
 
       # Inkwell feature poisoning: solc path builds inkwell with LLVM linking,
       # slang path needs no-llvm-linking. cargo clean cannot reliably clear
@@ -134,7 +137,7 @@ jobs:
           RUSTFLAGS: '-C instrument-coverage -C link-arg=-fuse-ld=lld'
           LLVM_PROFILE_FILE: 'slang-tests-%p-%m.profraw'
           CARGO_TARGET_DIR: target-slang
-        run: cargo test-slang --frozen --release --target x86_64-unknown-linux-gnu
+        run: ${SFW_PREFIX:-} cargo test-slang --frozen --release --target x86_64-unknown-linux-gnu
 
       - name: Preserve slang instrumented binary
         if: contains(github.event.pull_request.labels.*.name, 'ci:slang')

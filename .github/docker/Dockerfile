@@ -5,7 +5,7 @@
 # The custom LLVM 21.1 backend is NOT baked into this image — it is built from
 # source in every CI job via the build-llvm composite action.
 
-FROM ubuntu:24.04
+FROM ubuntu:24.04@sha256:0d39fcc8335d6d74d5502f6df2d30119ff4790ebbb60b364818d5112d9e3e932
 
 LABEL org.opencontainers.image.source="https://github.com/NomicFoundation/solx"
 LABEL org.opencontainers.image.description="CI runner image for solx"
@@ -118,6 +118,16 @@ RUN cargo install \
     cargo-udeps@0.1.60 \
     --locked
 
+# ── Node.js (for SFW and npm-based CI tools) ─────────────────────────────
+ARG NODE_MAJOR=24
+RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+        | gpg --dearmor -o /usr/share/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/nodesource.gpg] \
+        https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" \
+        > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
 # Smoke-test: ensure key tools are on PATH
 RUN set -eux \
     && rustc --version \
@@ -130,6 +140,8 @@ RUN set -eux \
     && command -v llvm-profdata \
     && command -v llvm-lipo \
     && command -v llvm-symbolizer \
+    && node --version \
+    && npm --version \
     && valgrind --version \
     && case "${TARGETPLATFORM}" in \
         linux/amd64) test -f /usr/lib/x86_64-linux-gnu/libstdc++.a ;; \
