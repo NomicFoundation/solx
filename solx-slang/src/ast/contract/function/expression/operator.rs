@@ -101,13 +101,20 @@ impl Operator {
 
     /// Returns the Sol dialect operation name for arithmetic, bitwise, and step operators.
     ///
+    /// When `checked` is true, uses `sol.cadd`/`sol.csub`/`sol.cmul` for
+    /// add/subtract/multiply (Solidity 0.8+ default). Division, modulo,
+    /// bitwise, and shift operators are always unchecked.
+    ///
     /// # Panics
     ///
     /// Panics if called on a comparison or assignment operator.
-    pub fn sol_operation_name(self) -> &'static str {
+    pub fn sol_operation_name(self, checked: bool) -> &'static str {
         match self {
+            Self::Add | Self::Increment if checked => solx_mlir::Builder::SOL_CADD,
             Self::Add | Self::Increment => solx_mlir::Builder::SOL_ADD,
+            Self::Subtract | Self::Decrement if checked => solx_mlir::Builder::SOL_CSUB,
             Self::Subtract | Self::Decrement => solx_mlir::Builder::SOL_SUB,
+            Self::Multiply if checked => solx_mlir::Builder::SOL_CMUL,
             Self::Multiply => solx_mlir::Builder::SOL_MUL,
             Self::Divide => solx_mlir::Builder::SOL_DIV,
             Self::Remainder => solx_mlir::Builder::SOL_MOD,

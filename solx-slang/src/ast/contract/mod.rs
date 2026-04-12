@@ -6,13 +6,17 @@
 pub mod function;
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
+use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::ir::ast::ContractDefinition;
+use slang_solidity::backend::ir::ast::FunctionKind;
 use slang_solidity::cst::NodeId;
 
 use solx_mlir::Context;
 
 use self::function::FunctionEmitter;
+use self::function::expression::call::type_conversion::TypeConversion;
 
 /// Lowers a Solidity contract to Sol dialect MLIR.
 ///
@@ -20,14 +24,19 @@ use self::function::FunctionEmitter;
 /// `convert-sol-to-std` pass generates the entry-point dispatcher
 /// from the function selectors.
 pub struct ContractEmitter<'state, 'context> {
+    /// Slang semantic analysis for resolving expression types.
+    semantic: Rc<SemanticAnalysis>,
     /// The shared MLIR context.
     state: &'state mut Context<'context>,
 }
 
 impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// Creates a new contract emitter.
-    pub fn new(state: &'state mut Context<'context>) -> Self {
-        Self { state }
+    pub fn new(semantic: &Rc<SemanticAnalysis>, state: &'state mut Context<'context>) -> Self {
+        Self {
+            semantic: Rc::clone(semantic),
+            state,
+        }
     }
 
     /// Emits a `sol.contract` containing all function definitions.
@@ -61,9 +70,29 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .emit_sol_state_var(&format!("slot_{slot}"), *slot, &contract_body);
         }
 
+        let mut has_constructor = false;
         for function in contract.functions() {
-            let emitter = FunctionEmitter::new(self.state, &storage_layout);
+            match function.kind() {
+                FunctionKind::Modifier => continue,
+                FunctionKind::Constructor => has_constructor = true,
+                _ => {}
+            }
+            let emitter = FunctionEmitter::new(&self.semantic, self.state, &storage_layout);
             emitter.emit_sol(&function, &contract_body)?;
+        }
+
+        // Emit a default constructor if the contract doesn't define one.
+        if !has_constructor {
+            let entry = self.state.builder.emit_sol_func(
+                "constructor()",
+                &[],
+                &[],
+                None,
+                solx_mlir::StateMutability::NonPayable,
+                Some(solx_mlir::FunctionKind::Constructor),
+                &contract_body,
+            );
+            self.state.builder.emit_sol_return(&[], &entry);
         }
 
         Ok(())
@@ -73,30 +102,42 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// are emitted.
     fn pre_register_functions(&mut self, contract: &ContractDefinition) {
         for function in contract.functions() {
+            if matches!(function.kind(), FunctionKind::Modifier) {
+                continue;
+            }
             let name = FunctionEmitter::mlir_base_name(&function);
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
             let parameter_count = function.parameters().len();
-            let return_count = function.returns().map_or(0, |returns| returns.len());
+            let return_types: Vec<melior::ir::Type<'_>> = function
+                .returns()
+                .map(|returns| {
+                    returns
+                        .iter()
+                        .map(|param| {
+                            TypeConversion::resolve_slang_type(
+                                &param.get_type().expect("return type binding resolved"),
+                                self.state.builder.context,
+                                &self.state.builder,
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
 
             self.state
-                .register_function_signature(&name, mlir_name, parameter_count, return_count);
+                .register_function_signature(&name, mlir_name, parameter_count, return_types);
         }
     }
 
     /// Computes the storage layout using slang-solidity's ABI computation.
     ///
     /// Returns a mapping from state variable node ID to storage slot.
-    /// Returns an empty map if the binder panics or the ABI is unavailable.
+    /// Returns an empty map if the ABI is unavailable.
     fn compute_storage_layout(
         contract: &ContractDefinition,
         file_identifier: &str,
     ) -> HashMap<NodeId, u64> {
-        // TODO: remove catch_unwind once slang binder no longer panics on missing typing info
-        let contract = std::panic::AssertUnwindSafe(contract);
-        let file_identifier = file_identifier.to_owned();
-        let abi =
-            std::panic::catch_unwind(move || contract.compute_abi_with_file_id(file_identifier));
-        let Ok(Some(abi)) = abi else {
+        let Some(abi) = contract.compute_abi_with_file_id(file_identifier.to_owned()) else {
             return HashMap::new();
         };
         abi.storage_layout

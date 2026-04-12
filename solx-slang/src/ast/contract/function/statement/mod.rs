@@ -5,10 +5,13 @@
 pub mod control_flow;
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
+use melior::ir::Type;
+use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::ir::ast::Statement;
 use slang_solidity::backend::ir::ast::Statements;
 use slang_solidity::cst::NodeId;
@@ -17,37 +20,51 @@ use solx_mlir::Context;
 use solx_mlir::Environment;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 /// Lowers Solidity statements to MLIR operations with control flow.
 ///
 /// Returns `Some(block)` as the continuation block, or `None` when control
 /// flow has been terminated (by `return`, `break`, or `continue`).
 pub struct StatementEmitter<'state, 'context, 'block> {
+    /// Slang semantic analysis for resolving expression types.
+    semantic: Rc<SemanticAnalysis>,
     /// The shared MLIR context.
-    pub state: &'state Context<'context>,
+    state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
-    pub environment: &'state mut Environment<'context, 'block>,
+    environment: &'state mut Environment<'context, 'block>,
     /// The current region for creating new blocks.
     /// Stored as a raw pointer to allow switching between Sol op regions
     /// without lifetime conflicts.
     region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
-    pub storage_layout: &'state HashMap<NodeId, u64>,
+    storage_layout: &'state HashMap<NodeId, u64>,
+    /// The function's declared return types, for `emit_return` to cast to.
+    return_types: &'state [Type<'context>],
+    /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
+    ///
+    /// `true` by default. Set to `false` inside `unchecked {}` blocks.
+    checked: bool,
 }
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Creates a new statement emitter.
     pub fn new(
+        semantic: &Rc<SemanticAnalysis>,
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
         region: &Region<'context>,
         storage_layout: &'state HashMap<NodeId, u64>,
+        return_types: &'state [Type<'context>],
     ) -> Self {
         Self {
+            semantic: Rc::clone(semantic),
             state,
             environment,
             region_pointer: region as *const Region<'context>,
             storage_layout,
+            return_types,
+            checked: true,
         }
     }
 
@@ -86,9 +103,14 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             Statement::ExpressionStatement(expression_statement) => {
                 let expression = expression_statement.expression();
-                let emitter =
-                    ExpressionEmitter::new(self.state, self.environment, self.storage_layout);
-                let (_value, block) = emitter.emit(&expression, block)?;
+                let emitter = ExpressionEmitter::new(
+                    &self.semantic,
+                    self.state,
+                    self.environment,
+                    self.storage_layout,
+                    self.checked,
+                );
+                let (_, block) = emitter.emit(&expression, block)?;
                 Ok(Some(block))
             }
             Statement::ReturnStatement(return_statement) => {
@@ -101,8 +123,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Statement::BreakStatement(_) => self.emit_break(block),
             Statement::ContinueStatement(_) => self.emit_continue(block),
             Statement::Block(inner) => self.emit_block(inner.statements(), block),
-            // TODO: thread checked/unchecked flag to use different arithmetic ops
-            Statement::UncheckedBlock(inner) => self.emit_block(inner.block().statements(), block),
+            Statement::UncheckedBlock(inner) => {
+                let saved_checked = self.checked;
+                self.checked = false;
+                let result = self.emit_block(inner.block().statements(), block);
+                self.checked = saved_checked;
+                result
+            }
             Statement::RevertStatement(_revert) => {
                 // TODO: encode custom error data from revert arguments
                 self.state.builder.emit_sol_revert(&block);
@@ -151,24 +178,54 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let name = declaration.name().name();
+        let declared_type = declaration
+            .get_type()
+            .map(|slang_type| {
+                TypeConversion::resolve_slang_type(
+                    &slang_type,
+                    self.state.builder.context,
+                    &self.state.builder,
+                )
+            })
+            .unwrap_or_else(|| self.state.builder.get_type(solx_mlir::Builder::UI256));
 
-        let emitter = ExpressionEmitter::new(self.state, self.environment, self.storage_layout);
-        let pointer = emitter.state.builder.emit_sol_alloca(&block);
+        let emitter = ExpressionEmitter::new(
+            &self.semantic,
+            self.state,
+            self.environment,
+            self.storage_layout,
+            self.checked,
+        );
 
-        let block = if let Some(ref initializer_expression) = declaration.value() {
-            let (initial_value, block) = emitter.emit(initializer_expression, block)?;
-            emitter
-                .state
-                .builder
-                .emit_sol_store(initial_value, pointer, &block);
-            block
+        // For explicit initializers, evaluate and cast before alloca to match
+        // solc's emission order (constant → cast → alloca → store).
+        // For implicit zero-initialization, alloca is emitted first.
+        let (block, initial_value) = if let Some(ref initializer_expression) = declaration.value() {
+            let (initial_value, block) = emitter.emit_value(initializer_expression, block)?;
+            let cast_value =
+                emitter
+                    .state
+                    .builder
+                    .emit_sol_cast(initial_value, declared_type, &block);
+            (block, Some(cast_value))
         } else {
-            let zero = self.state.builder.emit_sol_constant(0, &block);
-            emitter.state.builder.emit_sol_store(zero, pointer, &block);
-            block
+            (block, None)
         };
 
-        self.environment.define_variable(name, pointer);
+        let pointer = emitter.state.builder.emit_sol_alloca(declared_type, &block);
+
+        let stored_value = initial_value.unwrap_or_else(|| {
+            self.state
+                .builder
+                .emit_sol_constant(0, declared_type, &block)
+        });
+        emitter
+            .state
+            .builder
+            .emit_sol_store(stored_value, pointer, &block);
+
+        self.environment
+            .define_variable(name, pointer, declared_type);
         Ok(Some(block))
     }
 
@@ -197,9 +254,26 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         if let Some(ref expression) = return_statement.expression() {
-            let emitter = ExpressionEmitter::new(self.state, self.environment, self.storage_layout);
-            let (value, block) = emitter.emit(expression, block)?;
-            self.state.builder.emit_sol_return(&[value], &block);
+            // TODO: support multi-return functions (tuple deconstruction).
+            anyhow::ensure!(
+                self.return_types.len() <= 1,
+                "multi-return functions are not yet supported"
+            );
+            let emitter = ExpressionEmitter::new(
+                &self.semantic,
+                self.state,
+                self.environment,
+                self.storage_layout,
+                self.checked,
+            );
+            let (value, block) = emitter.emit_value(expression, block)?;
+            let return_type = self
+                .return_types
+                .first()
+                .copied()
+                .unwrap_or_else(|| self.state.builder.get_type(solx_mlir::Builder::UI256));
+            let return_value = self.state.builder.emit_sol_cast(value, return_type, &block);
+            self.state.builder.emit_sol_return(&[return_value], &block);
         } else {
             self.state.builder.emit_sol_return(&[], &block);
         }

@@ -19,6 +19,7 @@ use melior::ir::AttributeLike;
 use melior::ir::BlockLike;
 use melior::ir::Location;
 use melior::ir::Module;
+use melior::ir::Type;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::pass::PassManager;
@@ -41,7 +42,7 @@ pub struct Context<'context> {
     /// Cached MLIR types and emission methods.
     pub builder: Builder<'context>,
     /// All function signatures for call resolution (bare name -> overloads).
-    pub function_signatures: HashMap<String, Vec<Function>>,
+    pub function_signatures: HashMap<String, Vec<Function<'context>>>,
 }
 
 impl<'context> Context<'context> {
@@ -134,6 +135,28 @@ impl<'context> Context<'context> {
             );
         }
 
+        let target = solx_utils::Target::EVM;
+        let data_layout_attr: Attribute<'_> =
+            StringAttribute::new(context, target.data_layout()).into();
+        let target_triple_attr: Attribute<'_> =
+            StringAttribute::new(context, target.triple()).into();
+        // SAFETY: Setting llvm.data_layout and llvm.target_triple on the
+        // module. Both are string attributes required by the LLVM translation
+        // layer. The module operation and attribute values are valid MLIR
+        // objects owned by this context.
+        unsafe {
+            mlir_sys::mlirOperationSetAttributeByName(
+                module.as_operation().to_raw(),
+                mlir_sys::mlirStringRefCreateFromCString(c"llvm.data_layout".as_ptr()),
+                data_layout_attr.to_raw(),
+            );
+            mlir_sys::mlirOperationSetAttributeByName(
+                module.as_operation().to_raw(),
+                mlir_sys::mlirStringRefCreateFromCString(c"llvm.target_triple".as_ptr()),
+                target_triple_attr.to_raw(),
+            );
+        }
+
         Self {
             module,
             function_signatures: HashMap::new(),
@@ -147,17 +170,17 @@ impl<'context> Context<'context> {
         bare_name: &str,
         mlir_name: String,
         parameter_count: usize,
-        return_count: usize,
+        return_types: Vec<Type<'context>>,
     ) {
         self.function_signatures
             .entry(bare_name.to_owned())
             .or_default()
-            .push(Function::new(mlir_name, parameter_count, return_count));
+            .push(Function::new(mlir_name, parameter_count, return_types));
     }
 
     /// Resolves a function call by bare name and argument count.
     ///
-    /// Returns the mangled MLIR name and the number of return values.
+    /// Returns the mangled MLIR name and the declared return types.
     ///
     /// # Errors
     ///
@@ -166,7 +189,7 @@ impl<'context> Context<'context> {
         &self,
         bare_name: &str,
         argument_count: usize,
-    ) -> anyhow::Result<(&str, usize)> {
+    ) -> anyhow::Result<(&str, &[Type<'context>])> {
         let signatures = self
             .function_signatures
             .get(bare_name)
@@ -178,7 +201,7 @@ impl<'context> Context<'context> {
             .collect();
         match matches.len() {
             0 => anyhow::bail!("no overload of '{bare_name}' takes {argument_count} arguments"),
-            1 => Ok((matches[0].mlir_name.as_str(), matches[0].return_count)),
+            1 => Ok((matches[0].mlir_name.as_str(), &matches[0].return_types)),
             _ => {
                 let overloads: Vec<&str> = matches
                     .iter()
@@ -214,24 +237,36 @@ impl<'context> Context<'context> {
         let pass_manager = PassManager::new(context);
         pass_manager.enable_verifier(true);
 
+        // TODO: the canonicalizer pass causes an infinite loop on complex
+        // loop tests (e.g. loop/complex/1.sol) at the -Oz optimization level.
+        //
         // SAFETY: Each `mlirCreate*Pass` returns a freshly allocated pass
         // object. `Pass::from_raw` takes ownership. The pass manager runs
         // them sequentially on the module. No aliasing or use-after-free.
         unsafe {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
+                crate::ffi::mlirCreateTransformsCanonicalizer(),
+            ));
+            pass_manager.add_pass(melior::pass::Pass::from_raw(
+                crate::ffi::mlirCreateSolModifierOpLoweringPass(),
+            ));
+            pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertSolToStandardPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertFuncToLLVMPass(),
+                crate::ffi::mlirCreateTransformsCanonicalizer(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionSCFToControlFlowPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertControlFlowToLLVMPass(),
+                crate::ffi::mlirCreateConversionConvertFuncToLLVMPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionArithToLLVMConversionPass(),
+            ));
+            pass_manager.add_pass(melior::pass::Pass::from_raw(
+                crate::ffi::mlirCreateConversionConvertControlFlowToLLVMPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionReconcileUnrealizedCastsPass(),
