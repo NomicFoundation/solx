@@ -35,6 +35,7 @@ TABLEGEN_210_PREFIX = { value = "./target-llvm/target-final/", relative = true, 
 [alias]
 run-tester = "run --bin solx-tester -- --solidity-compiler ./target/release/solx"
 
+clippy-slang = "clippy -p solx-slang -p solx-mlir -p solx --no-default-features --features slang --target-dir target-slang"
 build-slang = "build -p solx-slang -p solx-mlir -p solx --no-default-features --features slang --target-dir target-slang"
 test-slang = "test -p solx-slang -p solx-mlir -p solx --no-default-features --features slang --target-dir target-slang"
 run-tester-slang = "run --bin solx-tester --no-default-features --features slang-ast --target-dir target-slang -- --solidity-compiler ./target-slang/release/solx -O M3B3"
