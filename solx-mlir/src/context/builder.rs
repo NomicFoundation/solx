@@ -496,8 +496,6 @@ impl<'context> Builder<'context> {
 
     /// Emits a value-producing `scf.if` with then and else regions.
     ///
-    /// Not migrated to ODS: SCF ops have no inherent properties.
-    ///
     /// Returns `(then_block, else_block)`. Each region must be terminated
     /// with `emit_scf_yield` passing a value matching the result type.
     /// The operation result is the yielded value from the taken branch.
@@ -555,8 +553,6 @@ impl<'context> Builder<'context> {
     }
 
     /// Emits a `scf.yield` region terminator with a value.
-    ///
-    /// Not migrated to ODS: SCF ops have no inherent properties.
     ///
     /// # Panics
     ///
