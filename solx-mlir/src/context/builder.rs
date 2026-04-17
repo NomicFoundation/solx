@@ -8,6 +8,8 @@
 
 use std::collections::HashMap;
 
+use melior::dialect::ods::scf::IfOperation as ScfIfOperation;
+use melior::dialect::ods::scf::YieldOperation as ScfYieldOperation;
 use melior::ir::Attribute;
 use melior::ir::Block;
 use melior::ir::BlockLike;
@@ -23,7 +25,6 @@ use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
-use melior::ir::operation::OperationBuilder;
 use melior::ir::operation::OperationLike;
 use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
@@ -495,8 +496,6 @@ impl<'context> Builder<'context> {
 
     /// Emits a value-producing `scf.if` with then and else regions.
     ///
-    /// Not migrated to ODS: SCF ops have no inherent properties.
-    ///
     /// Returns `(then_block, else_block)`. Each region must be terminated
     /// with `emit_scf_yield` passing a value matching the result type.
     /// The operation result is the yielded value from the taken branch.
@@ -530,12 +529,13 @@ impl<'context> Builder<'context> {
         else_region.append_block(else_block);
 
         let operation = block.append_operation(
-            OperationBuilder::new("scf.if", self.unknown_location)
-                .add_operands(&[condition])
-                .add_results(&[result_type])
-                .add_regions([then_region, else_region])
+            ScfIfOperation::builder(self.context, self.unknown_location)
+                .results(&[result_type])
+                .condition(condition)
+                .then_region(then_region)
+                .else_region(else_region)
                 .build()
-                .expect("scf.if operation is well-formed"),
+                .into(),
         );
 
         let result = operation.result(0)?.into();
@@ -554,8 +554,6 @@ impl<'context> Builder<'context> {
 
     /// Emits a `scf.yield` region terminator with a value.
     ///
-    /// Not migrated to ODS: SCF ops have no inherent properties.
-    ///
     /// # Panics
     ///
     /// Panics if the MLIR operation cannot be constructed.
@@ -565,10 +563,10 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new("scf.yield", self.unknown_location)
-                .add_operands(operands)
+            ScfYieldOperation::builder(self.context, self.unknown_location)
+                .results(operands)
                 .build()
-                .expect("scf.yield operation is well-formed"),
+                .into(),
         );
     }
 
@@ -782,8 +780,6 @@ impl<'context> Builder<'context> {
     // ==== Memory ====
 
     /// Emits a `sol.alloca` for a local variable, returning the pointer.
-    ///
-    /// Emits a `sol.alloca` for a local variable of the given element type.
     ///
     /// Returns a `!sol.ptr<{element_type}, Stack>` pointer. Use this when
     /// the declared Solidity type is known (e.g. `uint64` → `ui64`).
