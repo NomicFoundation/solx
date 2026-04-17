@@ -200,7 +200,7 @@ jobs:
       - name: Upload solx-tester report
         if: always() && hashFiles('solx-tester-report.xlsx') != ''
         id: solx-tester-report
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: solx-tester-report
           path: solx-tester-report.xlsx
@@ -245,7 +245,7 @@ jobs:
       - name: Upload Hardhat report
         if: always() && hashFiles('temp-hardhat-reports/hardhat-report.xlsx') != ''
         id: hardhat-report
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: hardhat-report
           path: ./temp-hardhat-reports/hardhat-report.xlsx
@@ -268,7 +268,7 @@ jobs:
       - name: Upload Foundry report
         if: always() && hashFiles('temp-foundry-reports/foundry-report.xlsx') != ''
         id: foundry-report
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: foundry-report
           path: ./temp-foundry-reports/foundry-report.xlsx
