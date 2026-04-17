@@ -11,17 +11,18 @@ cc = "1.2.59"
 
 [dependencies]
 anyhow.workspace = true
-melior = { version = "0.26", features = ["ods-dialects", "helpers"] }
+melior = { git = "https://github.com/NomicFoundation/melior", rev = "62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2", features = ["ods-dialects", "helpers"] }
 # mlir-sys 210 wraps LLVM 21.0 C API; llvm-sys (via inkwell) targets 21.1.
 # Both are built from the same LLVM source tree (LLVM_SYS_211_PREFIX ==
 # MLIR_SYS_210_PREFIX), so the pointer casts between their types are ABI-
 # compatible. If these crates diverge to different LLVM builds, the
-# transmutes in context.rs become unsound. Track mlir-sys 211 availability.
+# transmutes in context.rs become unsound.
+# TODO: Track mlir-sys 211 availability.
 mlir-sys = "210.0"
 
 inkwell = { workspace = true, features = ["llvm21-1-no-llvm-linking"] }
 
-solx-utils = { path = "../solx-utils" }
+solx-utils = { path = "../solx-utils", features = ["mlir"] }
 
 [dev-dependencies]
 hex.workspace = true

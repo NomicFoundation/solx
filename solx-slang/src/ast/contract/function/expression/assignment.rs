@@ -4,6 +4,7 @@
 
 use std::str::FromStr;
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -85,13 +86,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 &block,
             );
             let operator = Operator::from_str(operator_text)?.arithmetic_operator();
-            let result = self.state.builder.emit_binary_operation(
-                operator.sol_operation_name(self.checked),
-                old,
-                rhs,
-                target_type,
-                &block,
-            )?;
+            let result = block
+                .append_operation(operator.emit_sol_binary_operation(
+                    self.checked,
+                    self.state.builder.context,
+                    self.state.builder.unknown_location,
+                    old,
+                    rhs,
+                ))
+                .result(0)
+                .expect("binary operation always produces one result")
+                .into();
             (result, block)
         };
 

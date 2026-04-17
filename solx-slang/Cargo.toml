@@ -17,7 +17,7 @@ semver.workspace = true
 # (binder/types access in node_extensions). Both are unstable Slang APIs.
 # TODO: pin to a release tag instead of branch = "main"
 slang_solidity = { git = "https://github.com/NomicFoundation/slang.git", rev = "a01bc76b742173941cea1aff0b3b68a9006b38b8", features = ["__private_backend_api", "__private_testing_utils"] }
-melior = { version = "0.26", features = ["ods-dialects", "helpers"] }
+melior = { git = "https://github.com/NomicFoundation/melior", rev = "62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2", features = ["ods-dialects", "helpers"] }
 
 solx-codegen-evm = { path = "../solx-codegen-evm" }
 solx-core = { path = "../solx-core", features = ["mlir"] }

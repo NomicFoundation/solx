@@ -12,7 +12,6 @@ use melior::ir::Attribute;
 use melior::ir::Block;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Identifier;
 use melior::ir::Location;
 use melior::ir::Region;
 use melior::ir::RegionLike;
@@ -31,6 +30,29 @@ use melior::ir::r#type::IntegerType;
 
 use crate::CmpPredicate;
 use crate::StateMutability;
+use crate::ods::sol::AddrOfOperation;
+use crate::ods::sol::AddressCastOperation;
+use crate::ods::sol::AllocaOperation;
+use crate::ods::sol::BreakOperation;
+use crate::ods::sol::CallOperation;
+use crate::ods::sol::CastOperation;
+use crate::ods::sol::CmpOperation;
+use crate::ods::sol::ConditionOperation;
+use crate::ods::sol::ConstantOperation;
+use crate::ods::sol::ContinueOperation;
+use crate::ods::sol::ContractOperation;
+use crate::ods::sol::DoWhileOperation;
+use crate::ods::sol::ForOperation;
+use crate::ods::sol::FuncOperation;
+use crate::ods::sol::IfOperation;
+use crate::ods::sol::LoadOperation;
+use crate::ods::sol::RequireOperation;
+use crate::ods::sol::ReturnOperation;
+use crate::ods::sol::RevertOperation;
+use crate::ods::sol::StateVarOperation;
+use crate::ods::sol::StoreOperation;
+use crate::ods::sol::WhileOperation;
+use crate::ods::sol::YieldOperation;
 
 /// Cached MLIR types and emission methods for building MLIR operations.
 ///
@@ -58,94 +80,6 @@ impl<'context> Builder<'context> {
     pub const SOL_ADDRESS: &'static str = "!sol.address";
     /// Sol storage pointer type key.
     pub const SOL_PTR_STORAGE: &'static str = "!sol.ptr<ui256, Storage>";
-
-    // ---- Sol dialect operation names ----
-
-    /// `sol.contract` — contract symbol table container.
-    pub const SOL_CONTRACT: &'static str = "sol.contract";
-    /// `sol.func` — function definition with selector and mutability.
-    pub const SOL_FUNC: &'static str = "sol.func";
-    /// `sol.constant` — compile-time constant.
-    pub const SOL_CONSTANT: &'static str = "sol.constant";
-    /// `sol.exp` — exponentiation.
-    pub const SOL_EXP: &'static str = "sol.exp";
-    /// `sol.return` — return from function.
-    pub const SOL_RETURN: &'static str = "sol.return";
-    /// `sol.revert` — revert execution.
-    pub const SOL_REVERT: &'static str = "sol.revert";
-    /// `sol.require` — conditional revert.
-    pub const SOL_REQUIRE: &'static str = "sol.require";
-    /// `sol.alloca` — stack allocation.
-    pub const SOL_ALLOCA: &'static str = "sol.alloca";
-    /// `sol.load` — load from pointer.
-    pub const SOL_LOAD: &'static str = "sol.load";
-    /// `sol.store` — store to pointer.
-    pub const SOL_STORE: &'static str = "sol.store";
-    /// `sol.call` — function call.
-    pub const SOL_CALL: &'static str = "sol.call";
-    /// `sol.if` — structured if/else.
-    pub const SOL_IF: &'static str = "sol.if";
-    /// `sol.add` — unchecked addition.
-    pub const SOL_ADD: &'static str = "sol.add";
-    /// `sol.sub` — unchecked subtraction.
-    pub const SOL_SUB: &'static str = "sol.sub";
-    /// `sol.mul` — unchecked multiplication.
-    pub const SOL_MUL: &'static str = "sol.mul";
-    /// `sol.cadd` — checked addition (reverts on overflow).
-    pub const SOL_CADD: &'static str = "sol.cadd";
-    /// `sol.csub` — checked subtraction (reverts on underflow).
-    pub const SOL_CSUB: &'static str = "sol.csub";
-    /// `sol.cmul` — checked multiplication (reverts on overflow).
-    pub const SOL_CMUL: &'static str = "sol.cmul";
-    /// `sol.cdiv` — checked division (reverts on `int.min / -1` overflow).
-    pub const SOL_CDIV: &'static str = "sol.cdiv";
-    /// `sol.div` — unchecked division.
-    pub const SOL_DIV: &'static str = "sol.div";
-    /// `sol.mod` — unchecked modulo.
-    pub const SOL_MOD: &'static str = "sol.mod";
-    /// `sol.cmp` — comparison.
-    pub const SOL_CMP: &'static str = "sol.cmp";
-    /// `sol.cast` — type cast.
-    pub const SOL_CAST: &'static str = "sol.cast";
-    /// `sol.address_cast` — address type cast.
-    pub const SOL_ADDRESS_CAST: &'static str = "sol.address_cast";
-    /// `sol.state_var` — state variable declaration.
-    pub const SOL_STATE_VAR: &'static str = "sol.state_var";
-    /// `sol.and` — bitwise AND.
-    pub const SOL_AND: &'static str = "sol.and";
-    /// `sol.or` — bitwise OR.
-    pub const SOL_OR: &'static str = "sol.or";
-    /// `sol.xor` — bitwise XOR.
-    pub const SOL_XOR: &'static str = "sol.xor";
-    /// `sol.shl` — shift left.
-    pub const SOL_SHL: &'static str = "sol.shl";
-    /// `sol.shr` — shift right.
-    pub const SOL_SHR: &'static str = "sol.shr";
-    /// `sol.addr_of` — address of a declared state variable.
-    pub const SOL_ADDR_OF: &'static str = "sol.addr_of";
-
-    // ---- Sol dialect EVM context operation names ----
-
-    /// `sol.caller` — `msg.sender`.
-    pub const SOL_CALLER: &'static str = "sol.caller";
-    /// `sol.origin` — `tx.origin`.
-    pub const SOL_ORIGIN: &'static str = "sol.origin";
-    /// `sol.gasprice` — `tx.gasprice`.
-    pub const SOL_GASPRICE: &'static str = "sol.gasprice";
-    /// `sol.callvalue` — `msg.value`.
-    pub const SOL_CALLVALUE: &'static str = "sol.callvalue";
-    /// `sol.timestamp` — `block.timestamp`.
-    pub const SOL_TIMESTAMP: &'static str = "sol.timestamp";
-    /// `sol.blocknumber` — `block.number`.
-    pub const SOL_BLOCKNUMBER: &'static str = "sol.blocknumber";
-    /// `sol.coinbase` — `block.coinbase`.
-    pub const SOL_COINBASE: &'static str = "sol.coinbase";
-    /// `sol.chainid` — `block.chainid`.
-    pub const SOL_CHAINID: &'static str = "sol.chainid";
-    /// `sol.basefee` — `block.basefee`.
-    pub const SOL_BASEFEE: &'static str = "sol.basefee";
-    /// `sol.gaslimit` — `block.gaslimit`.
-    pub const SOL_GASLIMIT: &'static str = "sol.gaslimit";
 
     // ---- Private constants ----
 
@@ -230,6 +164,8 @@ impl<'context> Builder<'context> {
         element_type: Type<'context>,
         location: solx_utils::DataLocation,
     ) -> Type<'context> {
+        // SAFETY: `solxCreatePointerType` returns a valid MlirType from the
+        // C++ Sol dialect. The context and element type pointers are valid.
         unsafe {
             Type::from_raw(crate::ffi::solxCreatePointerType(
                 self.context.to_raw(),
@@ -259,27 +195,23 @@ impl<'context> Builder<'context> {
         let body_block = Block::new(&[]);
         body_region.append_block(body_block);
 
-        let operation = block.append_operation(
-            OperationBuilder::new(Self::SOL_CONTRACT, self.unknown_location)
-                .add_attributes(&[
-                    (
-                        Identifier::new(self.context, "sym_name"),
-                        StringAttribute::new(self.context, name).into(),
-                    ),
-                    // SAFETY: `solxCreateContractKindAttr` returns a valid
-                    // MlirAttribute from the C++ Sol dialect.
-                    (Identifier::new(self.context, "kind"), unsafe {
-                        Attribute::from_raw(crate::ffi::solxCreateContractKindAttr(
-                            self.context.to_raw(),
-                            kind as u32,
-                        ))
-                    }),
-                ])
-                .add_regions([body_region])
-                .build()
-                .expect("sol.contract operation is well-formed"),
-        );
-        operation
+        // SAFETY: `solxCreateContractKindAttr` returns a valid MlirAttribute.
+        let kind_attribute = unsafe {
+            Attribute::from_raw(crate::ffi::solxCreateContractKindAttr(
+                self.context.to_raw(),
+                kind as u32,
+            ))
+        };
+
+        block
+            .append_operation(
+                ContractOperation::builder(self.context, self.unknown_location)
+                    .sym_name(StringAttribute::new(self.context, name))
+                    .kind(kind_attribute)
+                    .body_region(body_region)
+                    .build()
+                    .into(),
+            )
             .region(0)
             .expect("contract has one region")
             .first_block()
@@ -306,15 +238,15 @@ impl<'context> Builder<'context> {
     ) -> BlockRef<'context, 'block> {
         let function_type = FunctionType::new(self.context, parameter_types, result_types);
         let body_region = Region::new();
-        let block_argument_types: Vec<(Type<'context>, Location<'context>)> = parameter_types
-            .iter()
-            .map(|t| (*t, self.unknown_location))
-            .collect();
-        let entry_block = Block::new(&block_argument_types);
+        let entry_block = Block::new(
+            &parameter_types
+                .iter()
+                .map(|parameter_type| (*parameter_type, self.unknown_location))
+                .collect::<Vec<_>>(),
+        );
         body_region.append_block(entry_block);
 
-        // SAFETY: `solxCreateStateMutabilityAttr` returns a valid
-        // MlirAttribute from the C++ Sol dialect.
+        // SAFETY: `solxCreateStateMutabilityAttr` returns a valid MlirAttribute.
         let mutability_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateStateMutabilityAttr(
                 self.context.to_raw(),
@@ -322,20 +254,11 @@ impl<'context> Builder<'context> {
             ))
         };
 
-        let mut attributes: Vec<(Identifier<'context>, Attribute<'context>)> = vec![
-            (
-                Identifier::new(self.context, "sym_name"),
-                StringAttribute::new(self.context, name).into(),
-            ),
-            (
-                Identifier::new(self.context, "function_type"),
-                TypeAttribute::new(function_type.into()).into(),
-            ),
-            (
-                Identifier::new(self.context, "state_mutability"),
-                mutability_attribute,
-            ),
-        ];
+        let mut builder = FuncOperation::builder(self.context, self.unknown_location)
+            .sym_name(StringAttribute::new(self.context, name))
+            .function_type(TypeAttribute::new(function_type.into()))
+            .state_mutability(mutability_attribute)
+            .body(body_region);
 
         if let Some(function_kind) = kind {
             // SAFETY: `solxCreateFunctionKindAttr` returns a valid MlirAttribute.
@@ -345,34 +268,21 @@ impl<'context> Builder<'context> {
                     function_kind as u32,
                 ))
             };
-            attributes.push((Identifier::new(self.context, "kind"), kind_attribute));
+            builder = builder.kind(kind_attribute);
         }
 
         if let Some(selector_value) = selector {
-            attributes.push((
-                Identifier::new(self.context, "selector"),
-                IntegerAttribute::new(
-                    IntegerType::new(self.context, Self::SELECTOR_BIT_WIDTH).into(),
-                    selector_value as i64,
-                )
-                .into(),
+            builder = builder.selector(IntegerAttribute::new(
+                IntegerType::new(self.context, Self::SELECTOR_BIT_WIDTH).into(),
+                selector_value as i64,
             ));
         }
 
         if selector.is_some() || matches!(kind, Some(crate::FunctionKind::Constructor)) {
-            attributes.push((
-                Identifier::new(self.context, "orig_fn_type"),
-                TypeAttribute::new(function_type.into()).into(),
-            ));
+            builder = builder.orig_fn_type(TypeAttribute::new(function_type.into()));
         }
 
-        let operation = block.append_operation(
-            OperationBuilder::new(Self::SOL_FUNC, self.unknown_location)
-                .add_attributes(&attributes)
-                .add_regions([body_region])
-                .build()
-                .expect("sol.func operation is well-formed"),
-        );
+        let operation = block.append_operation(builder.build().into());
         operation
             .region(0)
             .expect("func has one region")
@@ -392,21 +302,20 @@ impl<'context> Builder<'context> {
     pub fn emit_sol_constant<'block, B>(
         &self,
         value: i64,
-        ty: Type<'context>,
+        result_type: Type<'context>,
         block: &B,
     ) -> Value<'context, 'block>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let attribute = IntegerAttribute::new(ty, value);
         block
             .append_operation(
-                OperationBuilder::new(Self::SOL_CONSTANT, self.unknown_location)
-                    .add_attributes(&[(Identifier::new(self.context, "value"), attribute.into())])
-                    .add_results(&[ty])
+                ConstantOperation::builder(self.context, self.unknown_location)
+                    .value(IntegerAttribute::new(result_type, value).into())
+                    .result(result_type)
                     .build()
-                    .expect("sol.constant operation is well-formed"),
+                    .into(),
             )
             .result(0)
             .expect("sol.constant always produces one result")
@@ -421,16 +330,16 @@ impl<'context> Builder<'context> {
     pub fn emit_sol_constant_from_decimal_str<'block, B>(
         &self,
         value: &str,
-        ty: Type<'context>,
+        result_type: Type<'context>,
         block: &B,
     ) -> anyhow::Result<Value<'context, 'block>>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let attribute = Attribute::parse(self.context, &format!("{value} : {ty}"))
-            .ok_or_else(|| anyhow::anyhow!("invalid {ty} decimal literal: {value}"))?;
-        self.emit_constant_operation(Self::SOL_CONSTANT, attribute, ty, block)
+        let attribute = Attribute::parse(self.context, &format!("{value} : {result_type}"))
+            .ok_or_else(|| anyhow::anyhow!("invalid {result_type} decimal literal: {value}"))?;
+        self.emit_constant_operation(attribute, result_type, block)
     }
 
     /// Emits a `sol.constant` of the given type from a hex string (without `0x` prefix).
@@ -441,16 +350,16 @@ impl<'context> Builder<'context> {
     pub fn emit_sol_constant_from_hex_str<'block, B>(
         &self,
         hexadecimal: &str,
-        ty: Type<'context>,
+        result_type: Type<'context>,
         block: &B,
     ) -> anyhow::Result<Value<'context, 'block>>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let attribute = Attribute::parse(self.context, &format!("0x{hexadecimal} : {ty}"))
-            .ok_or_else(|| anyhow::anyhow!("invalid {ty} hex literal: 0x{hexadecimal}"))?;
-        self.emit_constant_operation(Self::SOL_CONSTANT, attribute, ty, block)
+        let attribute = Attribute::parse(self.context, &format!("0x{hexadecimal} : {result_type}"))
+            .ok_or_else(|| anyhow::anyhow!("invalid {result_type} hex literal: 0x{hexadecimal}"))?;
+        self.emit_constant_operation(attribute, result_type, block)
     }
 
     /// Emits an all-ones `sol.constant` for the given integer type.
@@ -487,13 +396,11 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new(Self::SOL_REVERT, self.unknown_location)
-                .add_attributes(&[(
-                    Identifier::new(self.context, "signature"),
-                    StringAttribute::new(self.context, "").into(),
-                )])
+            RevertOperation::builder(self.context, self.unknown_location)
+                .signature(StringAttribute::new(self.context, ""))
+                .args(&[])
                 .build()
-                .expect("sol.revert operation is well-formed"),
+                .into(),
         );
     }
 
@@ -511,14 +418,12 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new(Self::SOL_REQUIRE, self.unknown_location)
-                .add_operands(&[condition])
-                .add_attributes(&[(
-                    Identifier::new(self.context, "signature"),
-                    StringAttribute::new(self.context, "").into(),
-                )])
+            RequireOperation::builder(self.context, self.unknown_location)
+                .cond(condition)
+                .msg(StringAttribute::new(self.context, ""))
+                .args(&[])
                 .build()
-                .expect("sol.require operation is well-formed"),
+                .into(),
         );
     }
 
@@ -533,10 +438,10 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new(Self::SOL_RETURN, self.unknown_location)
-                .add_operands(operands)
+            ReturnOperation::builder(self.context, self.unknown_location)
+                .operands(operands)
                 .build()
-                .expect("sol.return operation is well-formed"),
+                .into(),
         );
     }
 
@@ -567,11 +472,12 @@ impl<'context> Builder<'context> {
         else_region.append_block(else_block);
 
         let operation = block.append_operation(
-            OperationBuilder::new("sol.if", self.unknown_location)
-                .add_operands(&[condition])
-                .add_regions([then_region, else_region])
+            IfOperation::builder(self.context, self.unknown_location)
+                .cond(condition)
+                .then_region(then_region)
+                .else_region(else_region)
                 .build()
-                .expect("sol.if operation is well-formed"),
+                .into(),
         );
 
         let then_ref = operation
@@ -588,6 +494,8 @@ impl<'context> Builder<'context> {
     }
 
     /// Emits a value-producing `scf.if` with then and else regions.
+    ///
+    /// Not migrated to ODS: SCF ops have no inherent properties.
     ///
     /// Returns `(then_block, else_block)`. Each region must be terminated
     /// with `emit_scf_yield` passing a value matching the result type.
@@ -646,6 +554,8 @@ impl<'context> Builder<'context> {
 
     /// Emits a `scf.yield` region terminator with a value.
     ///
+    /// Not migrated to ODS: SCF ops have no inherent properties.
+    ///
     /// # Panics
     ///
     /// Panics if the MLIR operation cannot be constructed.
@@ -683,10 +593,11 @@ impl<'context> Builder<'context> {
         body_region.append_block(body_block);
 
         let operation = block.append_operation(
-            OperationBuilder::new("sol.while", self.unknown_location)
-                .add_regions([cond_region, body_region])
+            WhileOperation::builder(self.context, self.unknown_location)
+                .cond(cond_region)
+                .body(body_region)
                 .build()
-                .expect("sol.while operation is well-formed"),
+                .into(),
         );
 
         let cond_ref = operation
@@ -723,10 +634,11 @@ impl<'context> Builder<'context> {
         cond_region.append_block(cond_block);
 
         let operation = block.append_operation(
-            OperationBuilder::new("sol.do", self.unknown_location)
-                .add_regions([body_region, cond_region])
+            DoWhileOperation::builder(self.context, self.unknown_location)
+                .body(body_region)
+                .cond(cond_region)
                 .build()
-                .expect("sol.do operation is well-formed"),
+                .into(),
         );
 
         let body_ref = operation
@@ -771,10 +683,12 @@ impl<'context> Builder<'context> {
         step_region.append_block(step_block);
 
         let operation = block.append_operation(
-            OperationBuilder::new("sol.for", self.unknown_location)
-                .add_regions([cond_region, body_region, step_region])
+            ForOperation::builder(self.context, self.unknown_location)
+                .cond(cond_region)
+                .body(body_region)
+                .step(step_region)
                 .build()
-                .expect("sol.for operation is well-formed"),
+                .into(),
         );
 
         let cond_ref = operation
@@ -806,9 +720,10 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new("sol.yield", self.unknown_location)
+            YieldOperation::builder(self.context, self.unknown_location)
+                .ins(&[])
                 .build()
-                .expect("sol.yield operation is well-formed"),
+                .into(),
         );
     }
 
@@ -823,10 +738,10 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new("sol.condition", self.unknown_location)
-                .add_operands(&[condition])
+            ConditionOperation::builder(self.context, self.unknown_location)
+                .condition(condition)
                 .build()
-                .expect("sol.condition operation is well-formed"),
+                .into(),
         );
     }
 
@@ -841,9 +756,9 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new("sol.break", self.unknown_location)
+            BreakOperation::builder(self.context, self.unknown_location)
                 .build()
-                .expect("sol.break operation is well-formed"),
+                .into(),
         );
     }
 
@@ -858,9 +773,9 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new("sol.continue", self.unknown_location)
+            ContinueOperation::builder(self.context, self.unknown_location)
                 .build()
-                .expect("sol.continue operation is well-formed"),
+                .into(),
         );
     }
 
@@ -889,14 +804,11 @@ impl<'context> Builder<'context> {
         let ptr_type = self.create_pointer_type(element_type, solx_utils::DataLocation::Stack);
         block
             .append_operation(
-                OperationBuilder::new(Self::SOL_ALLOCA, self.unknown_location)
-                    .add_attributes(&[(
-                        Identifier::new(self.context, "alloc_type"),
-                        TypeAttribute::new(element_type).into(),
-                    )])
-                    .add_results(&[ptr_type])
+                AllocaOperation::builder(self.context, self.unknown_location)
+                    .alloc_type(TypeAttribute::new(element_type))
+                    .addr(ptr_type)
                     .build()
-                    .expect("sol.alloca operation is well-formed"),
+                    .into(),
             )
             .result(0)
             .expect("sol.alloca always produces one result")
@@ -922,11 +834,11 @@ impl<'context> Builder<'context> {
     {
         Ok(block
             .append_operation(
-                OperationBuilder::new(Self::SOL_LOAD, self.unknown_location)
-                    .add_operands(&[pointer])
-                    .add_results(&[result_type])
+                LoadOperation::builder(self.context, self.unknown_location)
+                    .addr(pointer)
+                    .out(result_type)
                     .build()
-                    .expect("sol.load operation is well-formed"),
+                    .into(),
             )
             .result(0)?
             .into())
@@ -948,10 +860,11 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new(Self::SOL_STORE, self.unknown_location)
-                .add_operands(&[value, pointer])
+            StoreOperation::builder(self.context, self.unknown_location)
+                .val(value)
+                .addr(pointer)
                 .build()
-                .expect("sol.store operation is well-formed"),
+                .into(),
         );
     }
 
@@ -978,15 +891,12 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         let operation = block.append_operation(
-            OperationBuilder::new(Self::SOL_CALL, self.unknown_location)
-                .add_operands(operands)
-                .add_attributes(&[(
-                    Identifier::new(self.context, "callee"),
-                    FlatSymbolRefAttribute::new(self.context, callee).into(),
-                )])
-                .add_results(result_types)
+            CallOperation::builder(self.context, self.unknown_location)
+                .callee(FlatSymbolRefAttribute::new(self.context, callee))
+                .operands(operands)
+                .results(result_types)
                 .build()
-                .expect("sol.call operation is well-formed"),
+                .into(),
         );
         if result_types.is_empty() {
             Ok(None)
@@ -1014,22 +924,19 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
+        let predicate_attribute = IntegerAttribute::new(
+            IntegerType::new(self.context, solx_utils::BIT_LENGTH_X64 as u32).into(),
+            predicate as i64,
+        );
         block
             .append_operation(
-                OperationBuilder::new(Self::SOL_CMP, self.unknown_location)
-                    .add_operands(&[lhs, rhs])
-                    .add_attributes(&[(
-                        Identifier::new(self.context, "predicate"),
-                        IntegerAttribute::new(
-                            IntegerType::new(self.context, solx_utils::BIT_LENGTH_X64 as u32)
-                                .into(),
-                            predicate as i64,
-                        )
-                        .into(),
-                    )])
-                    .add_results(&[self.get_type(Self::I1)])
+                CmpOperation::builder(self.context, self.unknown_location)
+                    .predicate(predicate_attribute.into())
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .result(self.get_type(Self::I1))
                     .build()
-                    .expect("sol.cmp operation is well-formed"),
+                    .into(),
             )
             .result(0)
             .expect("sol.cmp always produces one result")
@@ -1056,11 +963,11 @@ impl<'context> Builder<'context> {
         }
         block
             .append_operation(
-                OperationBuilder::new(Self::SOL_CAST, self.unknown_location)
-                    .add_operands(&[value])
-                    .add_results(&[to_type])
+                CastOperation::builder(self.context, self.unknown_location)
+                    .inp(value)
+                    .out(to_type)
                     .build()
-                    .expect("sol.cast operation is well-formed"),
+                    .into(),
             )
             .result(0)
             .expect("sol.cast always produces one result")
@@ -1084,11 +991,11 @@ impl<'context> Builder<'context> {
     {
         block
             .append_operation(
-                OperationBuilder::new(Self::SOL_ADDRESS_CAST, self.unknown_location)
-                    .add_operands(&[value])
-                    .add_results(&[to_type])
+                AddressCastOperation::builder(self.context, self.unknown_location)
+                    .inp(value)
+                    .out(to_type)
                     .build()
-                    .expect("sol.address_cast operation is well-formed"),
+                    .into(),
             )
             .result(0)
             .expect("sol.address_cast always produces one result")
@@ -1107,34 +1014,23 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
+        let slot_attribute: IntegerAttribute =
+            Attribute::parse(self.context, &format!("{slot} : i256"))
+                .expect("valid slot literal")
+                .try_into()
+                .expect("slot literal is an integer attribute");
+        let byte_offset_attribute = IntegerAttribute::new(
+            IntegerType::new(self.context, solx_utils::BIT_LENGTH_X32 as u32).into(),
+            0,
+        );
         block.append_operation(
-            OperationBuilder::new(Self::SOL_STATE_VAR, self.unknown_location)
-                .add_attributes(&[
-                    (
-                        Identifier::new(self.context, "sym_name"),
-                        StringAttribute::new(self.context, name).into(),
-                    ),
-                    (
-                        Identifier::new(self.context, "type"),
-                        TypeAttribute::new(self.get_type(Self::UI256)).into(),
-                    ),
-                    (
-                        Identifier::new(self.context, "slot"),
-                        Attribute::parse(self.context, &format!("{slot} : i256"))
-                            .expect("valid slot literal"),
-                    ),
-                    (
-                        Identifier::new(self.context, "byte_offset"),
-                        IntegerAttribute::new(
-                            IntegerType::new(self.context, solx_utils::BIT_LENGTH_X32 as u32)
-                                .into(),
-                            0,
-                        )
-                        .into(),
-                    ),
-                ])
+            StateVarOperation::builder(self.context, self.unknown_location)
+                .sym_name(StringAttribute::new(self.context, name))
+                .r#type(TypeAttribute::new(self.get_type(Self::UI256)))
+                .slot(slot_attribute)
+                .byte_offset(byte_offset_attribute)
                 .build()
-                .expect("sol.state_var operation is well-formed"),
+                .into(),
         );
     }
 
@@ -1155,83 +1051,18 @@ impl<'context> Builder<'context> {
     {
         block
             .append_operation(
-                OperationBuilder::new(Self::SOL_ADDR_OF, self.unknown_location)
-                    .add_attributes(&[(
-                        Identifier::new(self.context, "var"),
-                        FlatSymbolRefAttribute::new(self.context, name).into(),
-                    )])
-                    .add_results(&[result_type])
+                AddrOfOperation::builder(self.context, self.unknown_location)
+                    .var(FlatSymbolRefAttribute::new(self.context, name))
+                    .addr(result_type)
                     .build()
-                    .expect("sol.addr_of operation is well-formed"),
+                    .into(),
             )
             .result(0)
             .expect("sol.addr_of always produces one result")
             .into()
     }
 
-    // ==== EVM context intrinsics ====
-
-    /// Emits a Sol dialect EVM context intrinsic (e.g. `sol.caller`, `sol.timestamp`).
-    ///
-    /// These are zero-operand operations that return a single value of
-    /// `result_type` (e.g. `ui256` for numeric intrinsics, `!sol.address`
-    /// for address-returning intrinsics like `sol.caller`).
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_intrinsic<'block, B>(
-        &self,
-        name: &str,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                OperationBuilder::new(name, self.unknown_location)
-                    .add_results(&[result_type])
-                    .build()
-                    .expect("sol intrinsic operation is well-formed"),
-            )
-            .result(0)
-            .expect("sol intrinsic always produces one result")
-            .into()
-    }
-
     // ==== Shared helpers ====
-
-    /// Shared helper for emitting a two-operand operation with one result.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the MLIR operation cannot be constructed.
-    pub fn emit_binary_operation<'block, B>(
-        &self,
-        operation_name: &str,
-        lhs: Value<'context, 'block>,
-        rhs: Value<'context, 'block>,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> anyhow::Result<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        Ok(block
-            .append_operation(
-                OperationBuilder::new(operation_name, self.unknown_location)
-                    .add_operands(&[lhs, rhs])
-                    .add_results(&[result_type])
-                    .build()?,
-            )
-            .result(0)
-            .expect("binary operation always produces one result")
-            .into())
-    }
 
     /// Shared helper for emitting a constant operation with an attribute.
     ///
@@ -1240,7 +1071,6 @@ impl<'context> Builder<'context> {
     /// Returns an error if the MLIR operation cannot be constructed.
     fn emit_constant_operation<'block, B>(
         &self,
-        operation_name: &str,
         attribute: Attribute<'context>,
         result_type: Type<'context>,
         block: &B,
@@ -1251,11 +1081,11 @@ impl<'context> Builder<'context> {
     {
         Ok(block
             .append_operation(
-                OperationBuilder::new(operation_name, self.unknown_location)
-                    .add_attributes(&[(Identifier::new(self.context, "value"), attribute)])
-                    .add_results(&[result_type])
+                ConstantOperation::builder(self.context, self.unknown_location)
+                    .value(attribute)
+                    .result(result_type)
                     .build()
-                    .expect("constant operation is well-formed"),
+                    .into(),
             )
             .result(0)?
             .into())

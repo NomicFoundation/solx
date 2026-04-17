@@ -12,6 +12,7 @@ pub mod storage;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -25,6 +26,7 @@ use slang_solidity::cst::NodeId;
 use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::ods::sol::ExpOperation;
 
 use self::call::type_conversion::TypeConversion;
 
@@ -289,13 +291,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     &self.state.builder,
                     &block,
                 );
-                let result = self.state.builder.emit_binary_operation(
-                    solx_mlir::Builder::SOL_EXP,
-                    lhs,
-                    rhs,
-                    result_type,
-                    &block,
-                )?;
+                let result = block
+                    .append_operation(
+                        ExpOperation::builder(
+                            self.state.builder.context,
+                            self.state.builder.unknown_location,
+                        )
+                        .lhs(lhs)
+                        .rhs(rhs)
+                        .build()
+                        .into(),
+                    )
+                    .result(0)
+                    .expect("sol.exp always produces one result")
+                    .into();
                 Ok((Some(result), block))
             }
             Expression::ConditionalExpression(conditional) => {
