@@ -29,6 +29,21 @@ fn main() {
 
     let include_path = std::path::PathBuf::from(&prefix).join("include");
 
+    // Track Sol/Yul dialect .td files so that Cargo re-expands the
+    // `melior::dialect!` macros in `src/ods.rs` when any definition changes.
+    for td_file in &[
+        "mlir/Dialect/Sol/SolOps.td",
+        "mlir/Dialect/Sol/SolBase.td",
+        "mlir/Dialect/Sol/SolInterfaces.td",
+        "mlir/Dialect/Yul/YulOps.td",
+        "mlir/Dialect/Yul/YulBase.td",
+    ] {
+        println!(
+            "cargo:rerun-if-changed={}",
+            include_path.join(td_file).display()
+        );
+    }
+
     // Compile stub definitions for the six MLIR ExecutionEngine C API symbols
     // that melior references unconditionally. See mlir_execution_engine_stubs.c
     // for the full explanation.

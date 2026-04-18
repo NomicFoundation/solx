@@ -639,7 +639,7 @@ dependencies = [
  "bitflags",
  "cexpr",
  "clang-sys",
- "itertools 0.13.0",
+ "itertools 0.10.5",
  "log",
  "prettyplease",
  "proc-macro2",
@@ -2541,8 +2541,7 @@ checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
 [[package]]
 name = "melior"
 version = "0.26.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5c38e8ea1f1bb22ebc7fe311b3adac0e9d3591e7c4d02a3b3b9c89d3e66899c"
+source = "git+https://github.com/NomicFoundation/melior?rev=62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2#62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2"
 dependencies = [
  "melior-macro",
  "mlir-sys",
@@ -2551,8 +2550,7 @@ dependencies = [
 [[package]]
 name = "melior-macro"
 version = "0.19.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e156c0973fdaaf2930149766775d85ff451e229739562cf50b0453f08024d2a"
+source = "git+https://github.com/NomicFoundation/melior?rev=62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2#62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2"
 dependencies = [
  "comrak",
  "convert_case 0.11.0",

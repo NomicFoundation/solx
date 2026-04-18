@@ -4,6 +4,7 @@
 
 use std::str::FromStr;
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -12,6 +13,8 @@ use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
 
 use solx_mlir::CmpPredicate;
+use solx_mlir::ods::sol::SubOperation;
+use solx_mlir::ods::sol::XorOperation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -53,13 +56,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             &block,
         );
         let operator = Operator::from_str(operator)?;
-        let value = self.state.builder.emit_binary_operation(
-            operator.sol_operation_name(self.checked),
-            lhs,
-            rhs,
-            result_type,
-            &block,
-        )?;
+        let value = block
+            .append_operation(operator.emit_sol_binary_operation(
+                self.checked,
+                self.state.builder.context,
+                self.state.builder.unknown_location,
+                lhs,
+                rhs,
+            ))
+            .result(0)
+            .expect("binary operation always produces one result")
+            .into();
         Ok((value, block))
     }
 
@@ -99,13 +106,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .state
                     .builder
                     .emit_sol_constant_all_ones(operand_type, &block)?;
-                let result = self.state.builder.emit_binary_operation(
-                    solx_mlir::Builder::SOL_XOR,
-                    value,
-                    all_ones,
-                    operand_type,
-                    &block,
-                )?;
+                let result = block
+                    .append_operation(
+                        XorOperation::builder(
+                            self.state.builder.context,
+                            self.state.builder.unknown_location,
+                        )
+                        .lhs(value)
+                        .rhs(all_ones)
+                        .build()
+                        .into(),
+                    )
+                    .result(0)
+                    .expect("sol.xor always produces one result")
+                    .into();
                 Ok((result, block))
             }
             "!" => {
@@ -137,13 +151,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .state
                     .builder
                     .emit_sol_constant(0, operand_type, &block);
-                let result = self.state.builder.emit_binary_operation(
-                    solx_mlir::Builder::SOL_SUB,
-                    zero,
-                    value,
-                    operand_type,
-                    &block,
-                )?;
+                let result = block
+                    .append_operation(
+                        SubOperation::builder(
+                            self.state.builder.context,
+                            self.state.builder.unknown_location,
+                        )
+                        .lhs(zero)
+                        .rhs(value)
+                        .build()
+                        .into(),
+                    )
+                    .result(0)
+                    .expect("sol.sub always produces one result")
+                    .into();
                 Ok((result, block))
             }
             _ => anyhow::bail!("unsupported prefix operator: {operator}"),
@@ -178,13 +199,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 // in checked mode because overflow is checked at 256-bit width.
                 let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
                 let one = self.state.builder.emit_sol_constant(1, ui256, block);
-                let new_value = self.state.builder.emit_binary_operation(
-                    operator.sol_operation_name(self.checked),
-                    old,
-                    one,
-                    ui256,
-                    block,
-                )?;
+                let new_value = block
+                    .append_operation(operator.emit_sol_binary_operation(
+                        self.checked,
+                        self.state.builder.context,
+                        self.state.builder.unknown_location,
+                        old,
+                        one,
+                    ))
+                    .result(0)
+                    .expect("binary operation always produces one result")
+                    .into();
                 self.emit_storage_store(slot, new_value, block);
                 Ok((old, new_value))
             }
@@ -198,13 +223,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .builder
                     .emit_sol_load(pointer, element_type, block)?;
                 let typed_one = self.state.builder.emit_sol_constant(1, element_type, block);
-                let new_value = self.state.builder.emit_binary_operation(
-                    operator.sol_operation_name(self.checked),
-                    old,
-                    typed_one,
-                    element_type,
-                    block,
-                )?;
+                let new_value = block
+                    .append_operation(operator.emit_sol_binary_operation(
+                        self.checked,
+                        self.state.builder.context,
+                        self.state.builder.unknown_location,
+                        old,
+                        typed_one,
+                    ))
+                    .result(0)
+                    .expect("binary operation always produces one result")
+                    .into();
                 self.state.builder.emit_sol_store(new_value, pointer, block);
                 Ok((old, new_value))
             }

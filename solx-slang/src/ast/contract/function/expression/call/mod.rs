@@ -4,15 +4,27 @@
 
 pub mod type_conversion;
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity::backend::built_ins::BuiltIn;
 use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::FunctionCallExpression;
+use solx_mlir::ods::sol::BaseFeeOperation;
+use solx_mlir::ods::sol::BlockNumberOperation;
+use solx_mlir::ods::sol::CallValueOperation;
+use solx_mlir::ods::sol::CallerOperation;
+use solx_mlir::ods::sol::ChainIdOperation;
+use solx_mlir::ods::sol::CoinbaseOperation;
+use solx_mlir::ods::sol::GasLimitOperation;
+use solx_mlir::ods::sol::GasPriceOperation;
+use solx_mlir::ods::sol::OriginOperation;
+use solx_mlir::ods::sol::TimestampOperation;
+
+use crate::ast::contract::function::expression::ExpressionEmitter;
 
 use self::type_conversion::TypeConversion;
-use crate::ast::contract::function::expression::ExpressionEmitter;
 
 /// Lowers function call and member access expressions to MLIR.
 pub struct CallEmitter<'emitter, 'state, 'context, 'block> {
@@ -145,22 +157,58 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let builder = &self.expression_emitter.state.builder;
+        let context = builder.context;
+        let location = builder.unknown_location;
         let address_type = builder.get_type(solx_mlir::Builder::SOL_ADDRESS);
         let ui256_type = builder.get_type(solx_mlir::Builder::UI256);
-        let (intrinsic, result_type) = match member_identifier.resolved_built_in() {
-            Some(BuiltIn::TxOrigin) => (solx_mlir::Builder::SOL_ORIGIN, address_type),
-            Some(BuiltIn::TxGasPrice) => (solx_mlir::Builder::SOL_GASPRICE, ui256_type),
-            Some(BuiltIn::MsgSender) => (solx_mlir::Builder::SOL_CALLER, address_type),
-            Some(BuiltIn::MsgValue) => (solx_mlir::Builder::SOL_CALLVALUE, ui256_type),
-            Some(BuiltIn::BlockTimestamp) => (solx_mlir::Builder::SOL_TIMESTAMP, ui256_type),
-            Some(BuiltIn::BlockNumber) => (solx_mlir::Builder::SOL_BLOCKNUMBER, ui256_type),
-            Some(BuiltIn::BlockCoinbase) => (solx_mlir::Builder::SOL_COINBASE, address_type),
-            Some(BuiltIn::BlockChainid) => (solx_mlir::Builder::SOL_CHAINID, ui256_type),
-            Some(BuiltIn::BlockBasefee) => (solx_mlir::Builder::SOL_BASEFEE, ui256_type),
-            Some(BuiltIn::BlockGaslimit) => (solx_mlir::Builder::SOL_GASLIMIT, ui256_type),
+        let operation = match member_identifier.resolved_built_in() {
+            Some(BuiltIn::TxOrigin) => OriginOperation::builder(context, location)
+                .addr(address_type)
+                .build()
+                .into(),
+            Some(BuiltIn::TxGasPrice) => GasPriceOperation::builder(context, location)
+                .val(ui256_type)
+                .build()
+                .into(),
+            Some(BuiltIn::MsgSender) => CallerOperation::builder(context, location)
+                .addr(address_type)
+                .build()
+                .into(),
+            Some(BuiltIn::MsgValue) => CallValueOperation::builder(context, location)
+                .val(ui256_type)
+                .build()
+                .into(),
+            Some(BuiltIn::BlockTimestamp) => TimestampOperation::builder(context, location)
+                .val(ui256_type)
+                .build()
+                .into(),
+            Some(BuiltIn::BlockNumber) => BlockNumberOperation::builder(context, location)
+                .val(ui256_type)
+                .build()
+                .into(),
+            Some(BuiltIn::BlockCoinbase) => CoinbaseOperation::builder(context, location)
+                .addr(address_type)
+                .build()
+                .into(),
+            Some(BuiltIn::BlockChainid) => ChainIdOperation::builder(context, location)
+                .val(ui256_type)
+                .build()
+                .into(),
+            Some(BuiltIn::BlockBasefee) => BaseFeeOperation::builder(context, location)
+                .val(ui256_type)
+                .build()
+                .into(),
+            Some(BuiltIn::BlockGaslimit) => GasLimitOperation::builder(context, location)
+                .val(ui256_type)
+                .build()
+                .into(),
             _ => anyhow::bail!("unsupported member access: {}", member_identifier.name()),
         };
-        let value = builder.emit_sol_intrinsic(intrinsic, result_type, &block);
+        let value = block
+            .append_operation(operation)
+            .result(0)
+            .expect("intrinsic always produces one result")
+            .into();
         Ok((value, block))
     }
 

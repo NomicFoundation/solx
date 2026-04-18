@@ -4,7 +4,25 @@
 
 use std::str::FromStr;
 
+use melior::ir::Location;
+use melior::ir::Value;
+use melior::ir::operation::Operation;
+
 use solx_mlir::CmpPredicate;
+use solx_mlir::ods::sol::AddOperation;
+use solx_mlir::ods::sol::AndOperation;
+use solx_mlir::ods::sol::CAddOperation;
+use solx_mlir::ods::sol::CDivOperation;
+use solx_mlir::ods::sol::CMulOperation;
+use solx_mlir::ods::sol::CSubOperation;
+use solx_mlir::ods::sol::DivOperation;
+use solx_mlir::ods::sol::ModOperation;
+use solx_mlir::ods::sol::MulOperation;
+use solx_mlir::ods::sol::OrOperation;
+use solx_mlir::ods::sol::ShlOperation;
+use solx_mlir::ods::sol::ShrOperation;
+use solx_mlir::ods::sol::SubOperation;
+use solx_mlir::ods::sol::XorOperation;
 
 /// Solidity operator parsed from source text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,32 +117,100 @@ impl Operator {
         }
     }
 
-    /// Returns the Sol dialect operation name for arithmetic, bitwise, and step operators.
+    /// Builds a Sol dialect binary operation via ODS-generated builders.
     ///
-    /// When `checked` is true, uses `sol.cadd`/`sol.csub`/`sol.cmul`/`sol.cdiv`
-    /// for add/subtract/multiply/divide (Solidity 0.8+ default). Modulo,
-    /// bitwise, and shift operators are always unchecked.
+    /// When `checked` is true, uses checked variants (`sol.cadd`, `sol.csub`,
+    /// `sol.cmul`, `sol.cdiv`) for arithmetic operators. Modulo, bitwise,
+    /// and shift operators are always unchecked. Result type is inferred
+    /// from `lhs` (`SameOperandsAndResultType`).
     ///
     /// # Panics
     ///
     /// Panics if called on a comparison or assignment operator.
-    pub fn sol_operation_name(self, checked: bool) -> &'static str {
+    pub fn emit_sol_binary_operation<'context>(
+        self,
+        checked: bool,
+        context: &'context melior::Context,
+        location: Location<'context>,
+        lhs: Value<'context, '_>,
+        rhs: Value<'context, '_>,
+    ) -> Operation<'context> {
         match self {
-            Self::Add | Self::Increment if checked => solx_mlir::Builder::SOL_CADD,
-            Self::Add | Self::Increment => solx_mlir::Builder::SOL_ADD,
-            Self::Subtract | Self::Decrement if checked => solx_mlir::Builder::SOL_CSUB,
-            Self::Subtract | Self::Decrement => solx_mlir::Builder::SOL_SUB,
-            Self::Multiply if checked => solx_mlir::Builder::SOL_CMUL,
-            Self::Multiply => solx_mlir::Builder::SOL_MUL,
-            Self::Divide if checked => solx_mlir::Builder::SOL_CDIV,
-            Self::Divide => solx_mlir::Builder::SOL_DIV,
-            Self::Remainder => solx_mlir::Builder::SOL_MOD,
-            Self::BitwiseAnd => solx_mlir::Builder::SOL_AND,
-            Self::BitwiseOr => solx_mlir::Builder::SOL_OR,
-            Self::BitwiseXor => solx_mlir::Builder::SOL_XOR,
-            Self::ShiftLeft => solx_mlir::Builder::SOL_SHL,
-            Self::ShiftRight => solx_mlir::Builder::SOL_SHR,
-            _ => unreachable!("sol_operation_name called on non-arithmetic operator: {self:?}"),
+            Self::Add | Self::Increment if checked => CAddOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::Add | Self::Increment => AddOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::Subtract | Self::Decrement if checked => {
+                CSubOperation::builder(context, location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into()
+            }
+            Self::Subtract | Self::Decrement => SubOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::Multiply if checked => CMulOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::Multiply => MulOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::Divide if checked => CDivOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::Divide => DivOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::Remainder => ModOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::BitwiseAnd => AndOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::BitwiseOr => OrOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::BitwiseXor => XorOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::ShiftLeft => ShlOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::ShiftRight => ShrOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            _ => unreachable!(
+                "emit_sol_binary_operation called on non-arithmetic operator: {self:?}"
+            ),
         }
     }
 

@@ -7,12 +7,16 @@
 //! details, analogous to how `solx-yul` uses `solx-codegen-evm`.
 //!
 
-#![allow(clippy::too_many_arguments)]
+#![expect(
+    clippy::too_many_arguments,
+    reason = "MLIR builder methods require many parameters for operation construction"
+)]
 
 pub mod attributes;
 pub mod context;
 pub mod ffi;
 pub mod llvm_module;
+pub mod ods;
 
 pub use self::attributes::cmp_predicate::CmpPredicate;
 pub use self::attributes::contract_kind::ContractKind;
