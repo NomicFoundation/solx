@@ -801,7 +801,7 @@ impl<'context> Builder<'context> {
         block
             .append_operation(
                 AllocaOperation::builder(self.context, self.unknown_location)
-                    .alloc_type(TypeAttribute::new(element_type))
+                    .alloc_type(TypeAttribute::new(ptr_type))
                     .addr(ptr_type)
                     .build()
                     .into(),
