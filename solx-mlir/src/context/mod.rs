@@ -296,25 +296,14 @@ impl<'context> Context<'context> {
     ///
     /// # Errors
     ///
-    /// Returns an error if re-parsing fails, the pass pipeline fails, or
-    /// the deployed module is not found.
+    /// Returns an error if the pass pipeline fails or the deployed module
+    /// is not found.
     pub fn finalize_module(
         self,
         runtime_code_identifier: &str,
         emit_mlir: bool,
     ) -> anyhow::Result<HashMap<String, String>> {
-        // Re-parse the generated MLIR text to promote OperationBuilder
-        // dictionary attributes to MLIR operation properties. Without this
-        // round-trip, the Sol conversion pass fails because it expects
-        // properties (not dict attrs) on operations like sol.func. This is
-        // a melior limitation: OperationBuilder puts all attributes in the
-        // dictionary, but the Sol C++ dialect defines them as properties.
-        // The text format parser correctly separates them.
-        let sol_text = self.module.as_operation().to_string();
-        let mut parsed_module =
-            Module::parse(self.builder.context, &sol_text).ok_or_else(|| {
-                anyhow::anyhow!("failed to re-parse generated Sol dialect MLIR:\n{sol_text}")
-            })?;
+        let mut module = self.module;
 
         let mut stages = HashMap::new();
 
@@ -322,17 +311,17 @@ impl<'context> Context<'context> {
         if emit_mlir {
             stages.insert(
                 Self::DIALECT_SOL.to_owned(),
-                parsed_module.as_operation().to_string(),
+                module.as_operation().to_string(),
             );
         }
 
         // Lower Sol → LLVM dialect.
-        Self::run_sol_passes(self.builder.context, &mut parsed_module)?;
+        Self::run_sol_passes(self.builder.context, &mut module)?;
 
         // Walk the outer module's body to find the inner module whose
         // `sym_name` matches `runtime_code_identifier` and extract it as
         // the runtime code.
-        let body = parsed_module.body();
+        let body = module.body();
         let mut deployed_operation = None;
         let mut operation = body.first_operation();
         while let Some(current) = operation {
