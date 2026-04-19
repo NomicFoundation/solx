@@ -129,12 +129,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 Ok((Some(value), block))
             }
             Expression::TrueKeyword => {
-                let i1_type = self.state.builder.get_type(solx_mlir::Builder::I1);
+                let i1_type = self.state.builder.types.i1;
                 let value = self.state.builder.emit_sol_constant(1, i1_type, &block);
                 Ok((Some(value), block))
             }
             Expression::FalseKeyword => {
-                let i1_type = self.state.builder.get_type(solx_mlir::Builder::I1);
+                let i1_type = self.state.builder.types.i1;
                 let value = self.state.builder.emit_sol_constant(0, i1_type, &block);
                 Ok((Some(value), block))
             }
@@ -279,8 +279,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let right = expression.right_operand();
                 let (lhs, block) = self.emit_value(&left, block)?;
                 let (rhs, block) = self.emit_value(&right, block)?;
-                let result_type = target_type
-                    .unwrap_or_else(|| self.state.builder.get_type(solx_mlir::Builder::UI256));
+                let result_type = target_type.unwrap_or_else(|| self.state.builder.types.ui256);
                 let lhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
                     lhs,
                     &self.state.builder,
@@ -310,7 +309,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::ConditionalExpression(conditional) => {
                 let result_type = self
                     .resolve_expression_type(conditional.node_id())
-                    .unwrap_or_else(|| self.state.builder.get_type(solx_mlir::Builder::UI256));
+                    .unwrap_or_else(|| self.state.builder.types.ui256);
                 let condition = conditional.operand();
                 let (condition_value, block) = self.emit_value(&condition, block)?;
                 let condition_boolean = self.emit_is_nonzero(condition_value, &block);
@@ -350,7 +349,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         value: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        if solx_mlir::Builder::integer_bit_width(value.r#type()) == 1 {
+        if solx_mlir::TypeFactory::integer_bit_width(value.r#type()) == 1 {
             return value;
         }
         let zero = self

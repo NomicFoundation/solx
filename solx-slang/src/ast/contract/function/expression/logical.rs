@@ -31,7 +31,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let common_type = if lhs.r#type() == rhs.r#type() {
             lhs.r#type()
         } else {
-            self.state.builder.get_type(solx_mlir::Builder::UI256)
+            self.state.builder.types.ui256
         };
         let lhs = TypeConversion::from_target_type(common_type, &self.state.builder).emit(
             lhs,
@@ -65,7 +65,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (lhs, block) = self.emit_value(left, block)?;
         let lhs_bool = self.emit_is_nonzero(lhs, &block);
 
-        let i1_type = self.state.builder.get_type(solx_mlir::Builder::I1);
+        let i1_type = self.state.builder.types.i1;
         let result_ptr = self.state.builder.emit_sol_alloca(i1_type, &block);
         // TODO: solc uses `arith.constant false` here; consider switching to
         // arith dialect for i1 constants to match solc output exactly.
@@ -111,7 +111,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (lhs, block) = self.emit_value(left, block)?;
         let lhs_bool = self.emit_is_nonzero(lhs, &block);
 
-        let i1_type = self.state.builder.get_type(solx_mlir::Builder::I1);
+        let i1_type = self.state.builder.types.i1;
         let result_ptr = self.state.builder.emit_sol_alloca(i1_type, &block);
         let true_val = self.state.builder.emit_sol_constant(1, i1_type, &block);
         self.state

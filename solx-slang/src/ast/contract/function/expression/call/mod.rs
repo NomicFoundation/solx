@@ -159,8 +159,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let builder = &self.expression_emitter.state.builder;
         let context = builder.context;
         let location = builder.unknown_location;
-        let address_type = builder.get_type(solx_mlir::Builder::SOL_ADDRESS);
-        let ui256_type = builder.get_type(solx_mlir::Builder::UI256);
+        let address_type = builder.types.sol_address;
+        let ui256_type = builder.types.ui256;
         let operation = match member_identifier.resolved_built_in() {
             Some(BuiltIn::TxOrigin) => OriginOperation::builder(context, location)
                 .addr(address_type)
