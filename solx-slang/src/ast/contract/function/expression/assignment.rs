@@ -71,7 +71,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 }
                 AssignmentTarget::Storage(slot) => {
                     let old = self.emit_storage_load(slot, &block)?;
-                    (old, self.state.builder.get_type(solx_mlir::Builder::UI256))
+                    (old, self.state.builder.types.ui256)
                 }
             };
             let (rhs, block) = self.emit_value(&right, block)?;
@@ -113,7 +113,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 stored_value
             }
             AssignmentTarget::Storage(slot) => {
-                let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
+                let ui256 = self.state.builder.types.ui256;
                 let stored_value = self.state.builder.emit_sol_cast(value, ui256, &block);
                 self.emit_storage_store(slot, stored_value, &block);
                 value

@@ -40,8 +40,8 @@ impl<'context> TypeConversion<'context> {
                 context,
                 solx_utils::BIT_LENGTH_BOOLEAN as u32,
             )),
-            SlangType::Address(_) => builder.get_type(solx_mlir::Builder::SOL_ADDRESS),
-            SlangType::Literal(_) => builder.get_type(solx_mlir::Builder::UI256),
+            SlangType::Address(_) => builder.types.sol_address,
+            SlangType::Literal(_) => builder.types.ui256,
             _ => unimplemented!("unsupported Slang type"),
         }
     }
@@ -51,9 +51,9 @@ impl<'context> TypeConversion<'context> {
         target_type: Type<'context>,
         builder: &solx_mlir::Builder<'context>,
     ) -> Self {
-        if target_type == builder.get_type(solx_mlir::Builder::I1) {
+        if target_type == builder.types.i1 {
             Self::Bool
-        } else if target_type == builder.get_type(solx_mlir::Builder::SOL_ADDRESS) {
+        } else if target_type == builder.types.sol_address {
             Self::Address
         } else {
             Self::Cast(target_type)
@@ -76,10 +76,10 @@ impl<'context> TypeConversion<'context> {
                 builder.emit_sol_cmp(value, zero, solx_mlir::CmpPredicate::Ne, block)
             }
             Self::Address => {
-                let address_type = builder.get_type(solx_mlir::Builder::SOL_ADDRESS);
+                let address_type = builder.types.sol_address;
                 let truncated = if melior::ir::r#type::IntegerType::try_from(value.r#type()).is_ok()
                 {
-                    let ui160 = builder.get_type(solx_mlir::Builder::UI160);
+                    let ui160 = builder.types.ui160;
                     builder.emit_sol_cast(value, ui160, block)
                 } else {
                     value

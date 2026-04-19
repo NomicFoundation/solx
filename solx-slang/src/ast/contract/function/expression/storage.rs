@@ -15,7 +15,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
         let pointer = self.emit_storage_addr_of(slot, block);
-        let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
+        let ui256 = self.state.builder.types.ui256;
         self.state.builder.emit_sol_load(pointer, ui256, block)
     }
 
@@ -36,10 +36,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         slot: u64,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let storage_pointer_type = self
-            .state
-            .builder
-            .get_type(solx_mlir::Builder::SOL_PTR_STORAGE);
+        let storage_pointer_type = self.state.builder.types.sol_ptr_storage;
         self.state
             .builder
             .emit_sol_addr_of(&format!("slot_{slot}"), storage_pointer_type, block)
