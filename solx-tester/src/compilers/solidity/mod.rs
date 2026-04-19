@@ -3,6 +3,7 @@
 //!
 
 pub mod cache_key;
+pub mod dwarf;
 pub mod mode;
 pub mod subprocess;
 
@@ -455,6 +456,7 @@ impl SolidityCompiler {
         };
 
         solx_standard_json::CollectableError::check_errors(&output)?;
+        self::dwarf::DwarfValidator::validate_output(&output)?;
 
         let method_identifiers = match self.language {
             solx_standard_json::InputLanguage::Solidity => Some(
