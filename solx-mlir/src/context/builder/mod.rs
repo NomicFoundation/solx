@@ -790,7 +790,7 @@ impl<'context> Builder<'context> {
         let operation = block.append_operation(
             CallOperation::builder(self.context, self.unknown_location)
                 .callee(FlatSymbolRefAttribute::new(self.context, callee))
-                .results(result_types)
+                .outs(result_types)
                 .operands(operands)
                 .build()
                 .into(),
