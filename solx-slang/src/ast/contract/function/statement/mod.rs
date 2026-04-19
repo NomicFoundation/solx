@@ -187,7 +187,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     &self.state.builder,
                 )
             })
-            .unwrap_or_else(|| self.state.builder.get_type(solx_mlir::Builder::UI256));
+            .unwrap_or_else(|| self.state.builder.types.ui256);
 
         let emitter = ExpressionEmitter::new(
             &self.semantic,
@@ -271,7 +271,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 .return_types
                 .first()
                 .copied()
-                .unwrap_or_else(|| self.state.builder.get_type(solx_mlir::Builder::UI256));
+                .unwrap_or_else(|| self.state.builder.types.ui256);
             let return_value = self.state.builder.emit_sol_cast(value, return_type, &block);
             self.state.builder.emit_sol_return(&[return_value], &block);
         } else {
