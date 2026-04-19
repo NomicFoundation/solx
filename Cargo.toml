@@ -64,8 +64,10 @@ rayon = "1.11"
 
 # Utilities
 semver = { version = "1.0", features = ["serde"] }
+gimli = "0.33"
 hex = "0.4"
 num = "0.4"
+object = "0.39"
 regex = "1.12"
 glob = "0.3"
 itertools = "0.14"
