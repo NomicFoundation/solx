@@ -132,7 +132,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .state
                     .builder
                     .emit_sol_cmp(value, zero, CmpPredicate::Eq, &block);
-                let result_type = target_type.unwrap_or_else(|| self.state.builder.types.ui256);
+                let result_type = target_type.unwrap_or(self.state.builder.types.ui256);
                 let result = TypeConversion::from_target_type(result_type, &self.state.builder)
                     .emit(cmp, &self.state.builder, &block);
                 Ok((result, block))

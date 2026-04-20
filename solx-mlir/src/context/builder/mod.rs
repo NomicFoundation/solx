@@ -53,6 +53,7 @@ use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
 use crate::ods::sol::StateVarOperation;
 use crate::ods::sol::StoreOperation;
+use crate::ods::sol::StringLitOperation;
 use crate::ods::sol::WhileOperation;
 use crate::ods::sol::YieldOperation;
 
@@ -311,6 +312,31 @@ impl<'context> Builder<'context> {
             .into()
     }
 
+    // ==== String literals ====
+
+    /// Emits a `sol.string_lit` constant with a `!sol.string<Memory>` result.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
+    pub fn emit_sol_string_lit<'block, B>(&self, value: &str, block: &B) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                StringLitOperation::builder(self.context, self.unknown_location)
+                    .value(StringAttribute::new(self.context, value))
+                    .addr(self.types.sol_string_memory)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.string_lit always produces one result")
+            .into()
+    }
+
     // ==== Terminators ====
 
     /// Emits a `sol.revert` with an empty signature (no error data).
@@ -352,27 +378,31 @@ impl<'context> Builder<'context> {
         );
     }
 
-    /// Emits a `sol.require` conditional revert with an empty signature.
+    /// Emits a `sol.require` conditional revert with an optional message.
     ///
-    /// Reverts if `condition` is false. Not a terminator — execution continues
-    /// after this op when the condition is true.
+    /// Reverts if `condition` is false. When `msg` is `Some`, the revert
+    /// includes the string as a revert reason. Not a terminator — execution
+    /// continues after this op when the condition is true.
     ///
     /// # Panics
     ///
     /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    pub fn emit_sol_require<'block, B>(&self, condition: Value<'context, 'block>, block: &B)
-    where
+    pub fn emit_sol_require<'block, B>(
+        &self,
+        condition: Value<'context, 'block>,
+        msg: Option<&str>,
+        block: &B,
+    ) where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        block.append_operation(
-            RequireOperation::builder(self.context, self.unknown_location)
-                .cond(condition)
-                .msg(StringAttribute::new(self.context, ""))
-                .args(&[])
-                .build()
-                .into(),
-        );
+        let mut builder = RequireOperation::builder(self.context, self.unknown_location)
+            .cond(condition)
+            .args(&[]);
+        if let Some(msg) = msg {
+            builder = builder.msg(StringAttribute::new(self.context, msg));
+        }
+        block.append_operation(builder.build().into());
     }
 
     /// Emits a `sol.return` terminator.

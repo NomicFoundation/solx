@@ -154,6 +154,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .into();
                 Ok((Some(value), block))
             }
+            Expression::StringExpression(string_expression) => {
+                let bytes = string_expression.value();
+                let text = std::str::from_utf8(&bytes).expect("string literal is valid UTF-8");
+                let value = self.state.builder.emit_sol_string_lit(text, &block);
+                Ok((Some(value), block))
+            }
             Expression::Identifier(identifier) => {
                 let name = identifier.name();
                 match identifier.resolve_to_definition() {
@@ -302,7 +308,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::ConditionalExpression(conditional) => {
                 let result_type = self
                     .resolve_expression_type(conditional.node_id())
-                    .unwrap_or_else(|| self.state.builder.types.ui256);
+                    .unwrap_or(self.state.builder.types.ui256);
                 let condition = conditional.operand();
                 let (condition_value, block) = self.emit_value(&condition, block)?;
                 let condition_boolean = self.emit_is_nonzero(condition_value, &block);

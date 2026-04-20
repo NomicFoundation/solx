@@ -102,12 +102,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             && (positional_arguments.len() == 1
                 || positional_arguments.len() == Self::MAX_REQUIRE_ARGUMENTS)
         {
-            // TODO: encode revert reason from second argument
-            let first = positional_arguments
-                .iter()
-                .next()
-                .expect("length checked above");
-            let block = self.emit_require(&first, block)?;
+            let mut args = positional_arguments.iter();
+            let condition = args.next().expect("length checked above");
+            let message_arg = args.next();
+            let message = match &message_arg {
+                Some(Expression::StringExpression(string_expression)) => {
+                    let bytes = string_expression.value();
+                    Some(String::from_utf8(bytes).expect("require message is valid UTF-8"))
+                }
+                Some(_) => anyhow::bail!("require message must be a string literal"),
+                None => None,
+            };
+            let block = self.emit_require(&condition, message.as_deref(), block)?;
             return Ok((None, block));
         }
 
@@ -242,10 +248,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok(block)
     }
 
-    /// Emits a `require(condition)` built-in via `sol.require`.
+    /// Emits a `require(condition)` or `require(condition, "message")` built-in
+    /// via `sol.require`.
     fn emit_require(
         &self,
         condition: &Expression,
+        message: Option<&str>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<BlockRef<'context, 'block>> {
         let (condition_value, block) = self.expression_emitter.emit_value(condition, block)?;
@@ -256,7 +264,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         self.expression_emitter
             .state
             .builder
-            .emit_sol_require(condition_boolean, &block);
+            .emit_sol_require(condition_boolean, message, &block);
 
         Ok(block)
     }

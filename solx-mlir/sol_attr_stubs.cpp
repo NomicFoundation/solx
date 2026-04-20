@@ -69,4 +69,11 @@ MlirType solxCreateContractType(MlirContext ctx, const char *name_ptr,
     return wrap(mlir::sol::ContractType::get(context, name, payable));
 }
 
+MlirType solxCreateStringType(MlirContext ctx, uint32_t dataLocation) {
+    if (dataLocation > 5) abort();
+    auto *context = unwrap(ctx);
+    auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
+    return wrap(mlir::sol::StringType::get(context, location));
+}
+
 } /* extern "C" */
