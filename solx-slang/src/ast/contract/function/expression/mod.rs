@@ -12,7 +12,6 @@ pub mod storage;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -26,7 +25,6 @@ use slang_solidity::cst::NodeId;
 use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
 use solx_mlir::Environment;
-use solx_mlir::ods::sol::ExpOperation;
 
 use self::call::type_conversion::TypeConversion;
 
@@ -185,6 +183,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 self.emit_binary_op(&left, &right, &operator.text, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
+            Expression::ExponentiationExpression(expression) => {
+                let target_type = self.resolve_expression_type(expression.node_id());
+                let left = expression.left_operand();
+                let right = expression.right_operand();
+                self.emit_binary_op(&left, &right, "**", target_type, block)
+                    .map(|(value, block)| (Some(value), block))
+            }
             Expression::EqualityExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
@@ -271,40 +276,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .expression()
                     .ok_or_else(|| anyhow::anyhow!("empty tuple element"))?;
                 self.emit(&inner, block)
-            }
-            Expression::ExponentiationExpression(expression) => {
-                // TODO: implement checked exponentiation (sol.cexp) for Solidity 0.8+.
-                let target_type = self.resolve_expression_type(expression.node_id());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                let (lhs, block) = self.emit_value(&left, block)?;
-                let (rhs, block) = self.emit_value(&right, block)?;
-                let result_type = target_type.unwrap_or_else(|| self.state.builder.types.ui256);
-                let lhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
-                    lhs,
-                    &self.state.builder,
-                    &block,
-                );
-                let rhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
-                    rhs,
-                    &self.state.builder,
-                    &block,
-                );
-                let result = block
-                    .append_operation(
-                        ExpOperation::builder(
-                            self.state.builder.context,
-                            self.state.builder.unknown_location,
-                        )
-                        .lhs(lhs)
-                        .rhs(rhs)
-                        .build()
-                        .into(),
-                    )
-                    .result(0)
-                    .expect("sol.exp always produces one result")
-                    .into();
-                Ok((Some(result), block))
             }
             Expression::ConditionalExpression(conditional) => {
                 let result_type = self
