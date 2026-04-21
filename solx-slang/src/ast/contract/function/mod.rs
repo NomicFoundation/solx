@@ -11,12 +11,8 @@ use std::rc::Rc;
 use melior::ir::BlockLike;
 use melior::ir::Type;
 use slang_solidity::backend::SemanticAnalysis;
-use slang_solidity::backend::abi::AbiEntry;
-use slang_solidity::backend::ir::ast::ElementaryType;
-use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::FunctionDefinition;
 use slang_solidity::backend::ir::ast::FunctionKind;
-use slang_solidity::backend::ir::ast::TypeName;
 use slang_solidity::cst::NodeId;
 
 use solx_mlir::Context;
@@ -68,11 +64,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     ) -> anyhow::Result<String> {
         let Some(ref body) = function.body() else {
             // Abstract or interface function — no codegen needed.
-            return Ok(Self::mlir_function_name(function));
+            return Ok(function
+                .compute_canonical_signature()
+                .expect("canonical signature available for all emitted functions"));
         };
 
         let parameters = function.parameters();
-        let mlir_name = Self::mlir_function_name(function);
+        let mlir_name = function
+            .compute_canonical_signature()
+            .expect("canonical signature available for all emitted functions");
 
         let mlir_parameter_types: Vec<Type<'context>> = parameters
             .iter()
@@ -172,67 +172,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         Ok(mlir_name)
-    }
-
-    /// Builds the MLIR function name as `{name}({types})`.
-    ///
-    /// Uses slang's ABI canonical types when available (external functions),
-    /// falls back to AST-based type names for internal/private functions.
-    pub fn mlir_function_name(function: &FunctionDefinition) -> String {
-        let name = Self::mlir_base_name(function);
-
-        if let Some(AbiEntry::Function { inputs, .. }) = function.compute_abi_entry() {
-            let types: Vec<&str> = inputs.iter().map(|input| input.r#type.as_str()).collect();
-            return format!("{name}({})", types.join(","));
-        }
-
-        let types: Vec<String> = function
-            .parameters()
-            .iter()
-            .map(|parameter| {
-                let type_name = parameter.type_name();
-                Self::type_name_text(&type_name)
-            })
-            .collect();
-        format!("{name}({})", types.join(","))
-    }
-
-    /// Returns a textual representation of a Solidity type name from the AST.
-    fn type_name_text(type_name: &TypeName) -> String {
-        match type_name {
-            TypeName::ElementaryType(elementary) => Self::elementary_type_text(elementary),
-            TypeName::IdentifierPath(path) => path.name(),
-            TypeName::ArrayTypeName(array) => {
-                let base = Self::type_name_text(&array.operand());
-                match array.index() {
-                    Some(Expression::DecimalNumberExpression(decimal)) => {
-                        format!("{base}[{}]", decimal.literal().text)
-                    }
-                    Some(Expression::HexNumberExpression(hex)) => {
-                        format!("{base}[{}]", hex.literal().text)
-                    }
-                    Some(_) => format!("{base}[]"),
-                    None => format!("{base}[]"),
-                }
-            }
-            TypeName::MappingType(_) => "mapping".to_owned(),
-            TypeName::FunctionType(_) => "function".to_owned(),
-        }
-    }
-
-    /// Returns the text for an elementary type from its AST node.
-    fn elementary_type_text(elementary: &ElementaryType) -> String {
-        match elementary {
-            ElementaryType::AddressType(_) => "address".to_owned(),
-            ElementaryType::BoolKeyword => "bool".to_owned(),
-            ElementaryType::ByteKeyword => "byte".to_owned(),
-            ElementaryType::StringKeyword => "string".to_owned(),
-            ElementaryType::UintKeyword(terminal)
-            | ElementaryType::IntKeyword(terminal)
-            | ElementaryType::BytesKeyword(terminal)
-            | ElementaryType::FixedKeyword(terminal)
-            | ElementaryType::UfixedKeyword(terminal) => terminal.text.clone(),
-        }
     }
 
     /// Returns the base name for a function's MLIR symbol, using its kind to
