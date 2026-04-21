@@ -125,7 +125,7 @@ runs:
         key: ${{ steps.ccache-key.outputs.key }}
         restore-keys: ${{ steps.ccache-key.outputs.key }}
         append-timestamp: true
-        max-size: "4G"
+        max-size: "10G"
         verbose: 2
         save: ${{ github.event_name != 'pull_request' }}
 
