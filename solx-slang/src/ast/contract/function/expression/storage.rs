@@ -3,6 +3,7 @@
 //!
 
 use melior::ir::BlockRef;
+use melior::ir::Type;
 use melior::ir::Value;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
@@ -12,11 +13,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn emit_storage_load(
         &self,
         slot: u64,
+        element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
         let pointer = self.emit_storage_addr_of(slot, block);
-        let ui256 = self.state.builder.types.ui256;
-        self.state.builder.emit_sol_load(pointer, ui256, block)
+        self.state
+            .builder
+            .emit_sol_load(pointer, element_type, block)
     }
 
     /// Emits a storage store via `sol.addr_of` + `sol.store`.

@@ -192,12 +192,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .storage_layout
                     .get(&state_variable.node_id())
                     .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?;
-                let old = self.emit_storage_load(slot, block)?;
-                // TODO: use declared element type once state variable types are tracked.
-                // Currently hardcodes ui256, so `uint8 x = 255; x++` won't revert
-                // in checked mode because overflow is checked at 256-bit width.
-                let ui256 = self.state.builder.types.ui256;
-                let one = self.state.builder.emit_sol_constant(1, ui256, block);
+                let element_type = TypeConversion::resolve_state_variable_type(
+                    &state_variable,
+                    &self.state.builder,
+                )?;
+                let old = self.emit_storage_load(slot, element_type, block)?;
+                let one = self.state.builder.emit_sol_constant(1, element_type, block);
                 let new_value = block
                     .append_operation(operator.emit_sol_binary_operation(
                         self.checked,

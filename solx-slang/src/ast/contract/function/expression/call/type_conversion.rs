@@ -5,6 +5,7 @@
 use melior::ir::Type;
 use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
+use slang_solidity::backend::ir::ast::StateVariableDefinition;
 use slang_solidity::backend::ir::ast::Type as SlangType;
 
 /// Classification of Solidity type conversions.
@@ -24,20 +25,19 @@ impl<'context> TypeConversion<'context> {
     /// Maps a Slang semantic type to an MLIR type.
     pub fn resolve_slang_type(
         slang_type: &SlangType,
-        context: &'context melior::Context,
         builder: &solx_mlir::Builder<'context>,
     ) -> Type<'context> {
         match slang_type {
             SlangType::Integer(integer_type) => {
                 let bits = integer_type.bits();
                 if integer_type.signed() {
-                    Type::from(IntegerType::signed(context, bits))
+                    Type::from(IntegerType::signed(builder.context, bits))
                 } else {
-                    Type::from(IntegerType::unsigned(context, bits))
+                    Type::from(IntegerType::unsigned(builder.context, bits))
                 }
             }
             SlangType::Boolean(_) => Type::from(IntegerType::new(
-                context,
+                builder.context,
                 solx_utils::BIT_LENGTH_BOOLEAN as u32,
             )),
             SlangType::Address(_) => builder.types.sol_address,
@@ -58,6 +58,18 @@ impl<'context> TypeConversion<'context> {
         } else {
             Self::Cast(target_type)
         }
+    }
+
+    /// Resolves the declared Solidity type of a state variable to an MLIR type.
+    pub fn resolve_state_variable_type(
+        state_variable: &StateVariableDefinition,
+        builder: &solx_mlir::Builder<'context>,
+    ) -> anyhow::Result<Type<'context>> {
+        let name = state_variable.name().name();
+        let slang_type = state_variable
+            .get_type()
+            .ok_or_else(|| anyhow::anyhow!("unresolved type for state variable: {name}"))?;
+        Ok(Self::resolve_slang_type(&slang_type, builder))
     }
 
     /// Emits the conversion, returning the cast value.
