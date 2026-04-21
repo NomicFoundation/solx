@@ -6,7 +6,7 @@
 //! memory, comparisons, calls, state variables, and EVM context intrinsics.
 //!
 
-use std::collections::HashMap;
+pub mod type_factory;
 
 use melior::dialect::ods::scf::IfOperation as ScfIfOperation;
 use melior::dialect::ods::scf::YieldOperation as ScfYieldOperation;
@@ -18,7 +18,6 @@ use melior::ir::Location;
 use melior::ir::Region;
 use melior::ir::RegionLike;
 use melior::ir::Type;
-use melior::ir::TypeLike;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::attribute::FlatSymbolRefAttribute;
@@ -31,6 +30,7 @@ use melior::ir::r#type::IntegerType;
 
 use crate::CmpPredicate;
 use crate::StateMutability;
+use crate::context::builder::type_factory::TypeFactory;
 use crate::ods::sol::AddrOfOperation;
 use crate::ods::sol::AddressCastOperation;
 use crate::ods::sol::AllocaOperation;
@@ -56,123 +56,22 @@ use crate::ods::sol::WhileOperation;
 use crate::ods::sol::YieldOperation;
 
 /// Cached MLIR types and emission methods for building MLIR operations.
-///
-/// Types are cached in a [`HashMap`] keyed by their textual representation.
-/// New types can be added without changing the struct definition.
 pub struct Builder<'context> {
     /// The MLIR context with all dialects and translations registered.
     pub context: &'context melior::Context,
     /// Cached unknown source location.
     pub unknown_location: Location<'context>,
-    /// Cached MLIR types, keyed by textual representation.
-    pub types: HashMap<&'static str, Type<'context>>,
+    /// Type factory: pre-cached common types and parameterized constructors.
+    pub types: TypeFactory<'context>,
 }
 
 impl<'context> Builder<'context> {
-    // ---- Type cache keys ----
-
-    /// 1-bit boolean type key.
-    pub const I1: &'static str = "i1";
-    /// Unsigned 160-bit integer type key (address width).
-    pub const UI160: &'static str = "ui160";
-    /// Unsigned 256-bit integer type key.
-    pub const UI256: &'static str = "ui256";
-    /// Sol address type key.
-    pub const SOL_ADDRESS: &'static str = "!sol.address";
-    /// Sol storage pointer type key.
-    pub const SOL_PTR_STORAGE: &'static str = "!sol.ptr<ui256, Storage>";
-
-    // ---- Private constants ----
-
-    /// Bit width of a Solidity function selector (4 bytes).
-    const SELECTOR_BIT_WIDTH: u32 = solx_utils::BIT_LENGTH_X32 as u32;
-
-    // ==== Constructor ====
-
     /// Creates a new builder with pre-cached types.
     pub fn new(context: &'context melior::Context) -> Self {
-        let unknown_location = Location::unknown(context);
-        let types = HashMap::from([
-            (
-                Self::I1,
-                Type::from(IntegerType::new(
-                    context,
-                    solx_utils::BIT_LENGTH_BOOLEAN as u32,
-                )),
-            ),
-            (
-                Self::UI160,
-                Type::from(IntegerType::unsigned(
-                    context,
-                    solx_utils::BIT_LENGTH_ETH_ADDRESS as u32,
-                )),
-            ),
-            (
-                Self::UI256,
-                Type::from(IntegerType::unsigned(
-                    context,
-                    solx_utils::BIT_LENGTH_FIELD as u32,
-                )),
-            ),
-            // SAFETY: `solxCreateAddressType` returns a valid MlirType from
-            // the C++ Sol dialect. The context pointer is valid.
-            (Self::SOL_ADDRESS, unsafe {
-                Type::from_raw(crate::ffi::solxCreateAddressType(context.to_raw(), false))
-            }),
-            (
-                Self::SOL_PTR_STORAGE,
-                Type::parse(context, Self::SOL_PTR_STORAGE).expect("valid sol.ptr type syntax"),
-            ),
-        ]);
         Self {
             context,
-            unknown_location,
-            types,
-        }
-    }
-
-    /// Returns a cached MLIR type by its textual key.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the key is not in the cache.
-    pub fn get_type(&self, key: &str) -> Type<'context> {
-        self.types[key]
-    }
-
-    /// Returns the bit width of an MLIR integer type, or 256 for non-integer types.
-    pub fn integer_bit_width(r#type: Type<'_>) -> u32 {
-        IntegerType::try_from(r#type).map_or(solx_utils::BIT_LENGTH_FIELD as u32, |integer_type| {
-            integer_type.width()
-        })
-    }
-
-    /// Creates a `sol::AddressType` with the given payability.
-    pub fn create_address_type(&self, payable: bool) -> Type<'context> {
-        // SAFETY: `solxCreateAddressType` returns a valid MlirType from the
-        // C++ Sol dialect. The context pointer is valid.
-        unsafe {
-            Type::from_raw(crate::ffi::solxCreateAddressType(
-                self.context.to_raw(),
-                payable,
-            ))
-        }
-    }
-
-    /// Creates a `sol::PointerType` with the given element type and data location.
-    pub fn create_pointer_type(
-        &self,
-        element_type: Type<'context>,
-        location: solx_utils::DataLocation,
-    ) -> Type<'context> {
-        // SAFETY: `solxCreatePointerType` returns a valid MlirType from the
-        // C++ Sol dialect. The context and element type pointers are valid.
-        unsafe {
-            Type::from_raw(crate::ffi::solxCreatePointerType(
-                self.context.to_raw(),
-                element_type.to_raw(),
-                location as u32,
-            ))
+            unknown_location: Location::unknown(context),
+            types: TypeFactory::new(context),
         }
     }
 
@@ -274,7 +173,7 @@ impl<'context> Builder<'context> {
 
         if let Some(selector_value) = selector {
             builder = builder.selector(IntegerAttribute::new(
-                IntegerType::new(self.context, Self::SELECTOR_BIT_WIDTH).into(),
+                IntegerType::new(self.context, TypeFactory::SELECTOR_BIT_WIDTH).into(),
                 selector_value as i64,
             ));
         }
@@ -377,7 +276,7 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let bit_width = Self::integer_bit_width(integer_type);
+        let bit_width = TypeFactory::integer_bit_width(integer_type);
         let all_ones_hex = "f".repeat(bit_width as usize / 4);
         self.emit_sol_constant_from_hex_str(&all_ones_hex, integer_type, block)
     }
@@ -797,7 +696,9 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let ptr_type = self.create_pointer_type(element_type, solx_utils::DataLocation::Stack);
+        let ptr_type = self
+            .types
+            .pointer(element_type, solx_utils::DataLocation::Stack);
         block
             .append_operation(
                 AllocaOperation::builder(self.context, self.unknown_location)
@@ -889,8 +790,8 @@ impl<'context> Builder<'context> {
         let operation = block.append_operation(
             CallOperation::builder(self.context, self.unknown_location)
                 .callee(FlatSymbolRefAttribute::new(self.context, callee))
+                .outs(result_types)
                 .operands(operands)
-                .results(result_types)
                 .build()
                 .into(),
         );
@@ -930,7 +831,7 @@ impl<'context> Builder<'context> {
                     .predicate(predicate_attribute.into())
                     .lhs(lhs)
                     .rhs(rhs)
-                    .result(self.get_type(Self::I1))
+                    .result(self.types.i1)
                     .build()
                     .into(),
             )
@@ -1022,7 +923,7 @@ impl<'context> Builder<'context> {
         block.append_operation(
             StateVarOperation::builder(self.context, self.unknown_location)
                 .sym_name(StringAttribute::new(self.context, name))
-                .r#type(TypeAttribute::new(self.get_type(Self::UI256)))
+                .r#type(TypeAttribute::new(self.types.ui256))
                 .slot(slot_attribute)
                 .byte_offset(byte_offset_attribute)
                 .build()

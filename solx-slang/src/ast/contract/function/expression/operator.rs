@@ -13,9 +13,11 @@ use solx_mlir::ods::sol::AddOperation;
 use solx_mlir::ods::sol::AndOperation;
 use solx_mlir::ods::sol::CAddOperation;
 use solx_mlir::ods::sol::CDivOperation;
+use solx_mlir::ods::sol::CExpOperation;
 use solx_mlir::ods::sol::CMulOperation;
 use solx_mlir::ods::sol::CSubOperation;
 use solx_mlir::ods::sol::DivOperation;
+use solx_mlir::ods::sol::ExpOperation;
 use solx_mlir::ods::sol::ModOperation;
 use solx_mlir::ods::sol::MulOperation;
 use solx_mlir::ods::sol::OrOperation;
@@ -38,6 +40,8 @@ pub enum Operator {
     Divide,
     /// `%`
     Remainder,
+    /// `**`
+    Exponentiation,
 
     // ---- Arithmetic assignment ----
     /// `+=`
@@ -120,7 +124,7 @@ impl Operator {
     /// Builds a Sol dialect binary operation via ODS-generated builders.
     ///
     /// When `checked` is true, uses checked variants (`sol.cadd`, `sol.csub`,
-    /// `sol.cmul`, `sol.cdiv`) for arithmetic operators. Modulo, bitwise,
+    /// `sol.cmul`, `sol.cdiv`, `sol.cexp`) for arithmetic operators. Modulo, bitwise,
     /// and shift operators are always unchecked. Result type is inferred
     /// from `lhs` (`SameOperandsAndResultType`).
     ///
@@ -179,6 +183,16 @@ impl Operator {
                 .build()
                 .into(),
             Self::Remainder => ModOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::Exponentiation if checked => CExpOperation::builder(context, location)
+                .lhs(lhs)
+                .rhs(rhs)
+                .build()
+                .into(),
+            Self::Exponentiation => ExpOperation::builder(context, location)
                 .lhs(lhs)
                 .rhs(rhs)
                 .build()
@@ -242,6 +256,7 @@ impl FromStr for Operator {
             "*" => Ok(Self::Multiply),
             "/" => Ok(Self::Divide),
             "%" => Ok(Self::Remainder),
+            "**" => Ok(Self::Exponentiation),
             "+=" => Ok(Self::AddAssign),
             "-=" => Ok(Self::SubtractAssign),
             "*=" => Ok(Self::MultiplyAssign),

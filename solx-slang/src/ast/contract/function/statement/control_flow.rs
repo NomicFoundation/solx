@@ -134,7 +134,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     .emit_sol_condition(condition_boolean, &condition_end);
             }
             ForStatementCondition::Semicolon => {
-                let i1_type = self.state.builder.get_type(solx_mlir::Builder::I1);
+                let i1_type = self.state.builder.types.i1;
                 let true_val = self
                     .state
                     .builder

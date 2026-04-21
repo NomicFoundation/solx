@@ -37,8 +37,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (lhs, block) = self.emit_value(left, block)?;
         let (rhs, block) = self.emit_value(right, block)?;
         let result_type = target_type.unwrap_or_else(|| {
-            let lhs_width = solx_mlir::Builder::integer_bit_width(lhs.r#type());
-            let rhs_width = solx_mlir::Builder::integer_bit_width(rhs.r#type());
+            let lhs_width = solx_mlir::TypeFactory::integer_bit_width(lhs.r#type());
+            let rhs_width = solx_mlir::TypeFactory::integer_bit_width(rhs.r#type());
             if lhs_width >= rhs_width {
                 lhs.r#type()
             } else {
@@ -132,8 +132,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .state
                     .builder
                     .emit_sol_cmp(value, zero, CmpPredicate::Eq, &block);
-                let result_type = target_type
-                    .unwrap_or_else(|| self.state.builder.get_type(solx_mlir::Builder::UI256));
+                let result_type = target_type.unwrap_or_else(|| self.state.builder.types.ui256);
                 let result = TypeConversion::from_target_type(result_type, &self.state.builder)
                     .emit(cmp, &self.state.builder, &block);
                 Ok((result, block))
@@ -197,7 +196,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 // TODO: use declared element type once state variable types are tracked.
                 // Currently hardcodes ui256, so `uint8 x = 255; x++` won't revert
                 // in checked mode because overflow is checked at 256-bit width.
-                let ui256 = self.state.builder.get_type(solx_mlir::Builder::UI256);
+                let ui256 = self.state.builder.types.ui256;
                 let one = self.state.builder.emit_sol_constant(1, ui256, block);
                 let new_value = block
                     .append_operation(operator.emit_sol_binary_operation(

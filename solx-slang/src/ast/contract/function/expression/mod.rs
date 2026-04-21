@@ -12,7 +12,6 @@ pub mod storage;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -26,7 +25,6 @@ use slang_solidity::cst::NodeId;
 use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
 use solx_mlir::Environment;
-use solx_mlir::ods::sol::ExpOperation;
 
 use self::call::type_conversion::TypeConversion;
 
@@ -129,12 +127,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 Ok((Some(value), block))
             }
             Expression::TrueKeyword => {
-                let i1_type = self.state.builder.get_type(solx_mlir::Builder::I1);
+                let i1_type = self.state.builder.types.i1;
                 let value = self.state.builder.emit_sol_constant(1, i1_type, &block);
                 Ok((Some(value), block))
             }
             Expression::FalseKeyword => {
-                let i1_type = self.state.builder.get_type(solx_mlir::Builder::I1);
+                let i1_type = self.state.builder.types.i1;
                 let value = self.state.builder.emit_sol_constant(0, i1_type, &block);
                 Ok((Some(value), block))
             }
@@ -183,6 +181,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let right = expression.right_operand();
                 let operator = expression.operator();
                 self.emit_binary_op(&left, &right, &operator.text, result_type, block)
+                    .map(|(value, block)| (Some(value), block))
+            }
+            Expression::ExponentiationExpression(expression) => {
+                let target_type = self.resolve_expression_type(expression.node_id());
+                let left = expression.left_operand();
+                let right = expression.right_operand();
+                self.emit_binary_op(&left, &right, "**", target_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::EqualityExpression(expression) => {
@@ -272,45 +277,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .ok_or_else(|| anyhow::anyhow!("empty tuple element"))?;
                 self.emit(&inner, block)
             }
-            Expression::ExponentiationExpression(expression) => {
-                // TODO: implement checked exponentiation (sol.cexp) for Solidity 0.8+.
-                let target_type = self.resolve_expression_type(expression.node_id());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                let (lhs, block) = self.emit_value(&left, block)?;
-                let (rhs, block) = self.emit_value(&right, block)?;
-                let result_type = target_type
-                    .unwrap_or_else(|| self.state.builder.get_type(solx_mlir::Builder::UI256));
-                let lhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
-                    lhs,
-                    &self.state.builder,
-                    &block,
-                );
-                let rhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
-                    rhs,
-                    &self.state.builder,
-                    &block,
-                );
-                let result = block
-                    .append_operation(
-                        ExpOperation::builder(
-                            self.state.builder.context,
-                            self.state.builder.unknown_location,
-                        )
-                        .lhs(lhs)
-                        .rhs(rhs)
-                        .build()
-                        .into(),
-                    )
-                    .result(0)
-                    .expect("sol.exp always produces one result")
-                    .into();
-                Ok((Some(result), block))
-            }
             Expression::ConditionalExpression(conditional) => {
                 let result_type = self
                     .resolve_expression_type(conditional.node_id())
-                    .unwrap_or_else(|| self.state.builder.get_type(solx_mlir::Builder::UI256));
+                    .unwrap_or_else(|| self.state.builder.types.ui256);
                 let condition = conditional.operand();
                 let (condition_value, block) = self.emit_value(&condition, block)?;
                 let condition_boolean = self.emit_is_nonzero(condition_value, &block);
@@ -350,7 +320,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         value: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        if solx_mlir::Builder::integer_bit_width(value.r#type()) == 1 {
+        if solx_mlir::TypeFactory::integer_bit_width(value.r#type()) == 1 {
             return value;
         }
         let zero = self
