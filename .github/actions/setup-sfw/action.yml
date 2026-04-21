@@ -1,8 +1,11 @@
 name: Setup Socket Firewall (SFW)
 description: >
   Installs and configures Socket Firewall to monitor package installations.
-  On bare-metal Linux runners, installs via socketdev/action with MITM proxy
-  and CA cert trust. Inside containers, installs the sfw CLI via npm.
+  On bare-metal Linux runners, installs via socketdev/action with MITM
+  proxy. Inside containers, installs the sfw CLI via npm. In both cases,
+  discovers SFW's generated CA and exports a merged bundle via
+  CARGO_HTTP_CAINFO/GIT_SSL_CAINFO/SSL_CERT_FILE so cargo, git, and
+  rustls consumers trust the MITM cert.
   Skips on macOS/Windows where the MITM proxy is incompatible.
 
 inputs:
@@ -54,9 +57,15 @@ runs:
       with:
         mode: ${{ inputs.mode }}
 
+    # Runs for both the bare-metal (`action`) and container (`npm`) paths.
+    # In both cases the actual proxy is the sfw-free binary, which exposes
+    # its generated CA via NODE_EXTRA_CA_CERTS when it wraps a child process.
+    # Without this step, containers have no trust path for the MITM cert,
+    # so cargo git-dep clones (libgit2) fail with "unable to get local
+    # issuer certificate" whenever sfw-free intercepts github.com TLS.
     - name: Configure cargo TLS trust for SFW
       id: ca-cert
-      if: steps.detect.outputs.method == 'action'
+      if: steps.detect.outputs.method != 'none'
       shell: bash
       run: |
         # Trigger SFW cert generation (may be lazy)
