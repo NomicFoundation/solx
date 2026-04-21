@@ -120,13 +120,14 @@ runs:
     # sccache is broken with cmake+ninja+clang on MSYS2/Windows
     # (https://github.com/mozilla/sccache/issues/1097). Using ccache everywhere.
     #
-    # The &ccache-llvm-env anchor keeps this block in sync with the Build LLVM
-    # and Show ccache stats steps — composite-action sibling steps don't share
-    # env, so we'd otherwise duplicate four variables three times.
+    # The four CCACHE_* env vars below are duplicated on the Build LLVM and
+    # Show ccache stats steps. YAML anchors/merge-keys would dedupe but GHA's
+    # composite-action manifest loader rejects anchors — keep them in sync by
+    # hand.
     - name: Set up compiler cache
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5 # v1.2.14
-      env: &ccache-llvm-env
+      env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
         CCACHE_BASEDIR: ${{ github.workspace }}
         CCACHE_NOHASHDIR: "true"
@@ -144,7 +145,10 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       working-directory: ${{ inputs.working-dir }}
       env:
-        <<: *ccache-llvm-env
+        CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
+        CCACHE_BASEDIR: ${{ github.workspace }}
+        CCACHE_NOHASHDIR: "true"
+        CCACHE_COMPILERCHECK: "content"
         VERBOSE: 1
         LIBSTDCPP_SOURCE_PATH: "${{ runner.temp }}/msys64/mingw64/lib/libstdc++.a"
       run: |
@@ -171,7 +175,11 @@ runs:
       if: always() && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       continue-on-error: true
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      env: *ccache-llvm-env
+      env:
+        CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
+        CCACHE_BASEDIR: ${{ github.workspace }}
+        CCACHE_NOHASHDIR: "true"
+        CCACHE_COMPILERCHECK: "content"
       run: ccache --show-stats
 
     - name: Save LLVM artifact cache
