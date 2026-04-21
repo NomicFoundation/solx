@@ -84,7 +84,7 @@ jobs:
         if: always()
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: ${{ runner.temp }}/ccache-touch-llvm
+          path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
           restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-end
           fail-on-cache-miss: false
@@ -141,9 +141,9 @@ jobs:
         if: always()
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: ${{ runner.temp }}/ccache-touch-solc
+          path: ${{ runner.temp }}/ccache-solc
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: solc-${{ runner.os }}-${{ runner.arch }}
+          restore-keys: solc-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -178,7 +178,7 @@ jobs:
         if: always()
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: ${{ runner.temp }}/ccache-touch-llvm
+          path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
           restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-Address-end
           fail-on-cache-miss: false
@@ -216,7 +216,7 @@ jobs:
         if: always()
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: ${{ runner.temp }}/ccache-touch-llvm
+          path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
           restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-coverage-no-assertions-end
           fail-on-cache-miss: false
@@ -252,7 +252,7 @@ jobs:
         if: always()
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: ${{ runner.temp }}/ccache-touch-llvm
+          path: ${{ runner.temp }}/ccache-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
           restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-no-assertions-end
           fail-on-cache-miss: false
@@ -268,8 +268,8 @@ jobs:
         if: always()
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
-          path: ${{ runner.temp }}/ccache-touch-solc
+          path: ${{ runner.temp }}/ccache-solc
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: solc-${{ runner.os }}-${{ runner.arch }}
+          restore-keys: solc-${{ runner.os }}-${{ runner.arch }}-Release-end
           fail-on-cache-miss: false
           lookup-only: true

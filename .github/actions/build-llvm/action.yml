@@ -110,18 +110,23 @@ runs:
         KEY="${KEY}-end"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
-    # ccache-action requires `apt update` on Linux Docker jobs
+    # ccache-action refreshes the apt package index before installing ccache.
+    # `sudo` works both as root (Docker) and non-root (hosted runners); `-qq` silences routine output.
     - name: Prepare ccache installation
       if: runner.os == 'Linux' && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       shell: 'bash'
-      run: apt update
+      run: sudo apt-get update -qq
 
     # sccache is broken with cmake+ninja+clang on MSYS2/Windows
     # (https://github.com/mozilla/sccache/issues/1097). Using ccache everywhere.
+    #
+    # The &ccache-llvm-env anchor keeps this block in sync with the Build LLVM
+    # and Show ccache stats steps — composite-action sibling steps don't share
+    # env, so we'd otherwise duplicate four variables three times.
     - name: Set up compiler cache
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5 # v1.2.14
-      env:
+      env: &ccache-llvm-env
         CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
         CCACHE_BASEDIR: ${{ github.workspace }}
         CCACHE_NOHASHDIR: "true"
@@ -139,11 +144,8 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       working-directory: ${{ inputs.working-dir }}
       env:
+        <<: *ccache-llvm-env
         VERBOSE: 1
-        CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
-        CCACHE_BASEDIR: ${{ github.workspace }}
-        CCACHE_NOHASHDIR: "true"
-        CCACHE_COMPILERCHECK: "content"
         LIBSTDCPP_SOURCE_PATH: "${{ runner.temp }}/msys64/mingw64/lib/libstdc++.a"
       run: |
         set -x
@@ -163,11 +165,13 @@ runs:
           --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
           --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='2'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"
 
+    # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)
+    # from masking the real Build LLVM failure in the step summary.
     - name: Show ccache stats
       if: always() && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      continue-on-error: true
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
-      env:
-        CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
+      env: *ccache-llvm-env
       run: ccache --show-stats
 
     - name: Save LLVM artifact cache
