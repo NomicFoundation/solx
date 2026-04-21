@@ -111,11 +111,12 @@ runs:
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
     # ccache-action refreshes the apt package index before installing ccache.
-    # `sudo` works both as root (Docker) and non-root (hosted runners); `-qq` silences routine output.
+    # The solx-ci-runner container doesn't ship sudo (steps run as root), so
+    # we invoke apt-get directly. `-qq` silences routine output.
     - name: Prepare ccache installation
       if: runner.os == 'Linux' && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       shell: 'bash'
-      run: sudo apt-get update -qq
+      run: apt-get update -qq
 
     # sccache is broken with cmake+ninja+clang on MSYS2/Windows
     # (https://github.com/mozilla/sccache/issues/1097). Using ccache everywhere.

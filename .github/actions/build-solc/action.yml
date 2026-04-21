@@ -56,11 +56,12 @@ runs:
     # across neighbouring solx-solidity commits.
 
     # ccache-action refreshes the apt package index before installing ccache.
-    # `sudo` works both as root (Docker) and non-root (hosted runners); `-qq` silences routine output.
+    # The solx-ci-runner container doesn't ship sudo (steps run as root), so
+    # we invoke apt-get directly. `-qq` silences routine output.
     - name: Prepare ccache installation
       if: runner.os == 'Linux' && steps.solc-artifact-cache.outputs.cache-hit != 'true'
       shell: 'bash'
-      run: sudo apt-get update -qq
+      run: apt-get update -qq
 
     # `cmake-build-type` in the key keeps Release and RelWithDebInfo configs
     # from sharing a cache bucket and evicting each other; `-end` terminator
