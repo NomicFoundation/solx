@@ -73,6 +73,23 @@ jobs:
           enable-assertions: 'true'
           enable-mlir: 'true'
 
+      # When the artifact cache is warm, build-llvm skips ccache entirely,
+      # so the ccache entry's LRU timer isn't refreshed. Touch it explicitly
+      # so the nightly cron keeps ccache alive past GHA's 7-day eviction
+      # window. Primary key is unique → falls through to the restore-keys
+      # prefix match against the ccache-action's timestamped key.
+      # lookup-only: true skips the download; the cache service lookup alone
+      # resets the access timer.
+      - name: Touch LLVM ccache
+        if: always()
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/ccache-touch-llvm
+          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir
+          fail-on-cache-miss: false
+          lookup-only: true
+
   # ── solc: standard config (test.yaml / build-and-test) ──────────────
   warm-solc:
     strategy:
@@ -120,6 +137,16 @@ jobs:
           boost-version: '1.83.0'
           working-dir: 'solx-solidity'
 
+      - name: Touch solc ccache
+        if: always()
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/ccache-touch-solc
+          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
+          restore-keys: solc-${{ runner.os }}-${{ runner.arch }}
+          fail-on-cache-miss: false
+          lookup-only: true
+
   # ── LLVM: sanitizer config (sanitizer.yaml) ─────────────────────────
   warm-llvm-sanitizer:
     runs-on: ubuntu-24.04
@@ -146,6 +173,16 @@ jobs:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
           sanitizer: 'Address'
+
+      - name: Touch LLVM ccache
+        if: always()
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/ccache-touch-llvm
+          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-Address
+          fail-on-cache-miss: false
+          lookup-only: true
 
   # ── LLVM: coverage config (coverage.yaml) ───────────────────────────
   warm-llvm-coverage:
@@ -175,6 +212,16 @@ jobs:
           enable-coverage: 'true'
           enable-mlir: 'true'
 
+      - name: Touch LLVM ccache
+        if: always()
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/ccache-touch-llvm
+          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-coverage-no-assertions
+          fail-on-cache-miss: false
+          lookup-only: true
+
   # ── LLVM + solc: integration config (integration-tests.yaml) ────────
   warm-llvm-integration:
     runs-on: ubuntu-24.04
@@ -201,8 +248,28 @@ jobs:
           build-type: Release
           enable-assertions: 'false'
 
+      - name: Touch LLVM ccache
+        if: always()
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/ccache-touch-llvm
+          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-no-assertions
+          fail-on-cache-miss: false
+          lookup-only: true
+
       - name: Build solc
         uses: ./.github/actions/build-solc
         with:
           cmake-build-type: Release
           working-dir: 'solx-solidity'
+
+      - name: Touch solc ccache
+        if: always()
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/ccache-touch-solc
+          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
+          restore-keys: solc-${{ runner.os }}-${{ runner.arch }}
+          fail-on-cache-miss: false
+          lookup-only: true
