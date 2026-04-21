@@ -47,12 +47,24 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image || '' }}
+      # Host tooling bind-mounts for the free-disk-space action, applied only
+      # when a container is started (matrix legs with `image:` set).
+      volumes:
+        - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+        - /usr/local/lib/android:/mnt/free-disk-space/android
+        - /opt/ghc:/mnt/free-disk-space/ghc
+        - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+        - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
     name: "LLVM · ${{ matrix.name }}"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+
+      - name: Free disk space
+        if: runner.os == 'Linux' && matrix.image != ''
+        uses: ./.github/actions/free-disk-space
 
       - name: Checkout submodules
         run: |
@@ -152,12 +164,21 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+      volumes:
+        - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+        - /usr/local/lib/android:/mnt/free-disk-space/android
+        - /opt/ghc:/mnt/free-disk-space/ghc
+        - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+        - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
     name: "LLVM · Sanitizer"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
 
       - name: Checkout submodules
         run: |
@@ -189,12 +210,21 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+      volumes:
+        - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+        - /usr/local/lib/android:/mnt/free-disk-space/android
+        - /opt/ghc:/mnt/free-disk-space/ghc
+        - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+        - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
     name: "LLVM · Coverage"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
 
       - name: Checkout submodules
         run: |
@@ -227,12 +257,21 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+      volumes:
+        - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+        - /usr/local/lib/android:/mnt/free-disk-space/android
+        - /opt/ghc:/mnt/free-disk-space/ghc
+        - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+        - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
     name: "LLVM + solc · Integration"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
 
       - name: Checkout submodules
         run: |

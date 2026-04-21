@@ -49,12 +49,23 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+      # Host tooling bind-mounted so the free-disk-space action can reclaim
+      # ~24 GB before the cold LLVM build fills the runner's 14 GB budget.
+      volumes:
+        - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+        - /usr/local/lib/android:/mnt/free-disk-space/android
+        - /opt/ghc:/mnt/free-disk-space/ghc
+        - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+        - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
     steps:
 
       - name: Checkout source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
 
       # This step is required to checkout submodules
       # that are disabled in .gitmodules config
@@ -119,6 +130,15 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image || '' }} # Special workaround to allow matrix builds with optional container
+      # Host tooling bind-mounts for the free-disk-space action. These apply
+      # only when a container is started (matrix legs with `image:` set); the
+      # macOS/Windows legs run bare and the paths are irrelevant there.
+      volumes:
+        - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+        - /usr/local/lib/android:/mnt/free-disk-space/android
+        - /opt/ghc:/mnt/free-disk-space/ghc
+        - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+        - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
     name: ${{ matrix.name }}
     steps:
 
@@ -127,6 +147,13 @@ jobs:
         with:
           submodules: true
           persist-credentials: false
+
+      # Only meaningful on containerized Linux legs (the hosted x86 leg is the
+      # disk-constrained one); a no-op on macOS/Windows since the mount points
+      # don't exist there.
+      - name: Free disk space
+        if: runner.os == 'Linux' && matrix.image != ''
+        uses: ./.github/actions/free-disk-space
 
       # This step is required to checkout submodules
       # that are disabled in .gitmodules config

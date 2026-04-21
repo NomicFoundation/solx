@@ -1,0 +1,62 @@
+name: "free-disk-space"
+
+description: |
+  Reclaims ~20-25 GB of disk on GitHub-hosted Ubuntu runners by removing
+  pre-installed host tooling solx does not use.
+
+  Host-path targets (freed when bind-mounted into the container):
+    - .NET SDK           /usr/share/dotnet                ~1.6 GB
+    - Android SDK+NDK    /usr/local/lib/android           ~11-14 GB
+    - Haskell            /opt/ghc  /usr/local/.ghcup      ~5-6 GB
+    - CodeQL bundles     /opt/hostedtoolcache/CodeQL      ~5.4 GB
+
+  This action's rm runs inside the container, so the callers must
+  bind-mount each host path into the container at a fixed mount point.
+  The rm operates only on paths under `/mnt/free-disk-space/`, so a
+  missing or misconfigured mount can't target anything outside that
+  prefix. Add to the job's `container:` block:
+
+      container:
+        image: <your image>
+        volumes:
+          - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+          - /usr/local/lib/android:/mnt/free-disk-space/android
+          - /opt/ghc:/mnt/free-disk-space/ghc
+          - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+          - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
+
+  The container runs as root, so no sudo is needed. Boost is intentionally
+  NOT removed — solc's build has its own `--build-boost`, but the host's
+  /usr/local/share/boost headers may be pulled in by other tooling.
+
+runs:
+  using: "composite"
+  steps:
+    - name: "Remove unused host tooling via bind mount"
+      shell: bash
+      run: |
+        set -u
+        echo "Before:"
+        df -h /
+        # Only rm paths that exist and are non-empty. Defends against a
+        # missing `container.volumes:` silently unlinking an empty mount point
+        # on the host, and caps the blast radius to /mnt/free-disk-space/*.
+        cleanup() {
+          local p="$1"
+          case "$p" in
+            /mnt/free-disk-space/*) ;;
+            *) echo "refusing to clean path outside /mnt/free-disk-space/: $p" >&2; return 1 ;;
+          esac
+          [ -d "$p" ] || return 0
+          [ -n "$(ls -A "$p" 2>/dev/null)" ] || return 0
+          echo "  removing $p"
+          rm -rf "$p"
+        }
+        cleanup /mnt/free-disk-space/dotnet  &
+        cleanup /mnt/free-disk-space/android &
+        cleanup /mnt/free-disk-space/ghc     &
+        cleanup /mnt/free-disk-space/ghcup   &
+        cleanup /mnt/free-disk-space/codeql  &
+        wait
+        echo "After:"
+        df -h /
