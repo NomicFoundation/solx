@@ -16,7 +16,7 @@ serde.workspace = true
 semver.workspace = true
 num.workspace = true
 inkwell.workspace = true
-indexmap = { version = "2.13", features = ["serde"] }
+indexmap = { version = "2.14", features = ["serde"] }
 
 solx-utils = { path = "../solx-utils" }
 
