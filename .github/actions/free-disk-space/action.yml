@@ -49,8 +49,11 @@ runs:
           esac
           [ -d "$p" ] || return 0
           [ -n "$(ls -A "$p" 2>/dev/null)" ] || return 0
-          echo "  removing $p"
-          rm -rf "$p"
+          echo "  clearing $p"
+          # `rm -rf "$p"` would fail on the bind-mount directory itself (EBUSY);
+          # delete contents instead so the mount stays intact and a real rm
+          # failure can still surface as a non-zero exit.
+          find "$p" -mindepth 1 -delete
         }
         cleanup /mnt/free-disk-space/dotnet  &
         cleanup /mnt/free-disk-space/android &
