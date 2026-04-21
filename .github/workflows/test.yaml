@@ -191,19 +191,28 @@ jobs:
             echo "  warning: active Xcode path '${ACTIVE_XCODE}' is not an Xcode app; skipping Xcode removal"
           else
             echo "Active Xcode (keeping): ${ACTIVE_XCODE}"
+            to_remove=()
             for app in /Applications/Xcode_*.app; do
               [ -d "$app" ] || continue
               if [ "$app" = "$ACTIVE_XCODE" ]; then
                 echo "  skip (active): $app"
               else
                 echo "  removing: $app"
-                if sudo rm -rf "$app"; then
-                  removed=$((removed + 1))
-                else
-                  echo "  warning: failed to remove $app"
-                fi
+                to_remove+=("$app")
               fi
             done
+            # Each Xcode bundle is ~15 GB of small files; `rm -rf` is I/O-bound
+            # per inode, so run them concurrently (one worker per bundle).
+            # Soft-fail: a stray rm error shouldn't sink the whole job — rm's
+            # stderr will pinpoint the bad path above.
+            if [ "${#to_remove[@]}" -gt 0 ]; then
+              if printf '%s\0' "${to_remove[@]}" \
+                  | xargs -0 -n1 -P "${#to_remove[@]}" sudo rm -rf; then
+                removed=${#to_remove[@]}
+              else
+                echo "  warning: one or more Xcode removals failed (see rm stderr above)"
+              fi
+            fi
           fi
           echo "Removed ${removed} inactive Xcode version(s)"
 
