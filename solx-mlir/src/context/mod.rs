@@ -171,52 +171,47 @@ impl<'context> Context<'context> {
     /// Registers a function signature for call resolution.
     pub fn register_function_signature(
         &mut self,
-        bare_name: &str,
+        base_name: &str,
         mlir_name: String,
-        parameter_count: usize,
+        parameter_types: Vec<Type<'context>>,
         return_types: Vec<Type<'context>>,
     ) {
         self.function_signatures
-            .entry(bare_name.to_owned())
+            .entry(base_name.to_owned())
             .or_default()
-            .push(Function::new(mlir_name, parameter_count, return_types));
+            .push(Function::new(mlir_name, parameter_types, return_types));
     }
 
     /// Resolves a function call by bare name and argument count.
     ///
-    /// Returns the mangled MLIR name and the declared return types.
+    /// Returns the mangled MLIR name, declared parameter types, and return
+    /// types.
     ///
     /// # Errors
     ///
     /// Returns an error if the function is undefined or the call is ambiguous.
     pub fn resolve_function(
         &self,
-        bare_name: &str,
-        argument_count: usize,
-    ) -> anyhow::Result<(&str, &[Type<'context>])> {
+        base_name: &str,
+        argument_types: &[Type<'context>],
+    ) -> anyhow::Result<(&str, &[Type<'context>], &[Type<'context>])> {
         let signatures = self
             .function_signatures
-            .get(bare_name)
-            .ok_or_else(|| anyhow::anyhow!("undefined function: {bare_name}"))?;
-        // TODO: resolve overloads by parameter types, not just arity
-        let matches: Vec<_> = signatures
+            .get(base_name)
+            .ok_or_else(|| anyhow::anyhow!("undefined function: {base_name}"))?;
+        let matched = signatures
             .iter()
-            .filter(|signature| signature.parameter_count == argument_count)
-            .collect();
-        match matches.len() {
-            0 => anyhow::bail!("no overload of '{bare_name}' takes {argument_count} arguments"),
-            1 => Ok((matches[0].mlir_name.as_str(), &matches[0].return_types)),
-            _ => {
-                let overloads: Vec<&str> = matches
-                    .iter()
-                    .map(|signature| signature.mlir_name.as_str())
-                    .collect();
-                anyhow::bail!(
-                    "ambiguous call to '{bare_name}' with {argument_count} arguments: {}",
-                    overloads.join(", ")
+            .find(|signature| signature.parameter_types == argument_types)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no matching overload of '{base_name}' for the given argument types"
                 )
-            }
-        }
+            })?;
+        Ok((
+            matched.mlir_name.as_str(),
+            &matched.parameter_types,
+            &matched.return_types,
+        ))
     }
 
     // ==== Phase 3: Sol pass pipeline ====
