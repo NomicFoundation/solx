@@ -43,10 +43,42 @@ runs:
 
         echo "method=action" >> "$GITHUB_OUTPUT"
 
+    # Temporary pin: the `sfw` npm wrapper (2.0.4) hardcodes GitHub
+    # `releases/latest` for its binary download and has no pin env var.
+    # sfw-free v1.7.2 (2026-04-21) started MITM'ing git-over-HTTPS, but the
+    # container path below doesn't install SFW's CA, so `cargo fetch` fails
+    # on git dependencies with `unable to get local issuer certificate`.
+    # Installing the v1.6.1 binary directly as `/usr/local/bin/sfw` keeps
+    # SFW_PREFIX=sfw working unchanged. Unpin once the container path
+    # installs the SFW CA (see companion PR) or Socket addresses the
+    # regression upstream.
     - name: Install SFW (container)
       if: steps.detect.outputs.method == 'npm'
       shell: bash
-      run: npm install -g sfw@2.0.4
+      run: |
+        set -euo pipefail
+        SFW_TAG="v1.6.1"
+        case "$(uname -m)" in
+          x86_64)
+            ASSET="sfw-free-linux-x86_64"
+            SHA256="4a1e8b65e90fce7d5fd066cf0af6c93d512065fa4222a475c8d959a6bc14b9ff"
+            ;;
+          aarch64|arm64)
+            ASSET="sfw-free-linux-arm64"
+            SHA256="df2eedb2daf2572eee047adb8bfd81c9069edcb200fc7d3710fca98ec3ca81a1"
+            ;;
+          *)
+            echo "::error::Unsupported arch for pinned sfw-free: $(uname -m)"
+            exit 1
+            ;;
+        esac
+        URL="https://github.com/SocketDev/sfw-free/releases/download/${SFW_TAG}/${ASSET}"
+        TMP="$(mktemp)"
+        curl --proto '=https' --tlsv1.2 -fsSL -o "$TMP" "$URL"
+        echo "${SHA256}  ${TMP}" | sha256sum -c -
+        install -m 0755 "$TMP" /usr/local/bin/sfw
+        rm -f "$TMP"
+        echo "Pinned sfw-free ${SFW_TAG} (${ASSET}) installed at /usr/local/bin/sfw"
 
     - name: Install SFW
       if: steps.detect.outputs.method == 'action'
