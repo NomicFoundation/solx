@@ -890,7 +890,7 @@ impl<'context> Builder<'context> {
             CallOperation::builder(self.context, self.unknown_location)
                 .callee(FlatSymbolRefAttribute::new(self.context, callee))
                 .operands(operands)
-                .results(result_types)
+                .outs(result_types)
                 .build()
                 .into(),
         );
