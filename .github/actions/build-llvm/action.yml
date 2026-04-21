@@ -103,6 +103,9 @@ runs:
         [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
         [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
         [ '${{ inputs.enable-assertions }}' != 'true' ] && KEY="${KEY}-no-assertions"
+        # Terminator: prevents shorter-variant keys from prefix-matching longer ones
+        # via ccache-action's restore-keys (e.g. `...-mlir` matching `...-mlir-coverage-no-assertions`).
+        KEY="${KEY}-end"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
     # ccache-action requires `apt update` on Linux Docker jobs

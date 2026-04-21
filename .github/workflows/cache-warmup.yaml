@@ -86,7 +86,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-touch-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -180,7 +180,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-touch-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-Address
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-Address-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -218,7 +218,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-touch-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-coverage-no-assertions
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-coverage-no-assertions-end
           fail-on-cache-miss: false
           lookup-only: true
 
@@ -254,7 +254,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/ccache-touch-llvm
           key: ccache-touch-${{ github.job }}-${{ github.run_id }}
-          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-no-assertions
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-no-assertions-end
           fail-on-cache-miss: false
           lookup-only: true
 
