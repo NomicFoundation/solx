@@ -74,29 +74,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let parameters = function.parameters();
         let mlir_name = Self::mlir_function_name(function);
 
-        let mlir_parameter_types: Vec<Type<'context>> = parameters
-            .iter()
-            .map(|param| {
-                TypeConversion::resolve_slang_type(
-                    &param.get_type().expect("parameter type binding resolved"),
-                    &self.state.builder,
-                )
-            })
-            .collect();
-        let result_types: Vec<Type<'context>> = function
-            .returns()
-            .map(|returns| {
-                returns
-                    .iter()
-                    .map(|param| {
-                        TypeConversion::resolve_slang_type(
-                            &param.get_type().expect("return type binding resolved"),
-                            &self.state.builder,
-                        )
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let (mlir_parameter_types, result_types) =
+            TypeConversion::resolve_function_types(function, &self.state.builder);
 
         let selector = function.compute_selector();
 
