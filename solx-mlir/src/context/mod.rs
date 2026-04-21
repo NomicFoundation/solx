@@ -169,18 +169,19 @@ impl<'context> Context<'context> {
         &mut self,
         bare_name: &str,
         mlir_name: String,
-        parameter_count: usize,
+        parameter_types: Vec<Type<'context>>,
         return_types: Vec<Type<'context>>,
     ) {
         self.function_signatures
             .entry(bare_name.to_owned())
             .or_default()
-            .push(Function::new(mlir_name, parameter_count, return_types));
+            .push(Function::new(mlir_name, parameter_types, return_types));
     }
 
     /// Resolves a function call by bare name and argument count.
     ///
-    /// Returns the mangled MLIR name and the declared return types.
+    /// Returns the mangled MLIR name, declared parameter types, and return
+    /// types.
     ///
     /// # Errors
     ///
@@ -189,7 +190,7 @@ impl<'context> Context<'context> {
         &self,
         bare_name: &str,
         argument_count: usize,
-    ) -> anyhow::Result<(&str, &[Type<'context>])> {
+    ) -> anyhow::Result<(&str, &[Type<'context>], &[Type<'context>])> {
         let signatures = self
             .function_signatures
             .get(bare_name)
@@ -197,11 +198,15 @@ impl<'context> Context<'context> {
         // TODO: resolve overloads by parameter types, not just arity
         let matches: Vec<_> = signatures
             .iter()
-            .filter(|signature| signature.parameter_count == argument_count)
+            .filter(|signature| signature.parameter_types.len() == argument_count)
             .collect();
         match matches.len() {
             0 => anyhow::bail!("no overload of '{bare_name}' takes {argument_count} arguments"),
-            1 => Ok((matches[0].mlir_name.as_str(), &matches[0].return_types)),
+            1 => Ok((
+                matches[0].mlir_name.as_str(),
+                &matches[0].parameter_types,
+                &matches[0].return_types,
+            )),
             _ => {
                 let overloads: Vec<&str> = matches
                     .iter()

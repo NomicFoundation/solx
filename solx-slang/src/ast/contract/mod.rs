@@ -107,8 +107,18 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             }
             let name = FunctionEmitter::mlir_base_name(&function);
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
-            let parameter_count = function.parameters().len();
-            let return_types: Vec<melior::ir::Type<'_>> = function
+            let parameter_types = function
+                .parameters()
+                .iter()
+                .map(|param| {
+                    TypeConversion::resolve_slang_type(
+                        &param.get_type().expect("parameter type binding resolved"),
+                        self.state.builder.context,
+                        &self.state.builder,
+                    )
+                })
+                .collect();
+            let return_types = function
                 .returns()
                 .map(|returns| {
                     returns
@@ -125,7 +135,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .unwrap_or_default();
 
             self.state
-                .register_function_signature(&name, mlir_name, parameter_count, return_types);
+                .register_function_signature(&name, mlir_name, parameter_types, return_types);
         }
     }
 

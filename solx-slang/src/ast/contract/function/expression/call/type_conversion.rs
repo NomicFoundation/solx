@@ -2,9 +2,12 @@
 //! Solidity type conversion classification and dispatch.
 //!
 
+use melior::ir::BlockRef;
 use melior::ir::Type;
+use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
+use melior::Context;
 use slang_solidity::backend::ir::ast::Type as SlangType;
 
 /// Classification of Solidity type conversions.
@@ -24,7 +27,7 @@ impl<'context> TypeConversion<'context> {
     /// Maps a Slang semantic type to an MLIR type.
     pub fn resolve_slang_type(
         slang_type: &SlangType,
-        context: &'context melior::Context,
+        context: &'context Context,
         builder: &solx_mlir::Builder<'context>,
     ) -> Type<'context> {
         match slang_type {
@@ -63,10 +66,10 @@ impl<'context> TypeConversion<'context> {
     /// Emits the conversion, returning the cast value.
     pub fn emit<'block>(
         self,
-        value: melior::ir::Value<'context, 'block>,
+        value: Value<'context, 'block>,
         builder: &solx_mlir::Builder<'context>,
-        block: &melior::ir::BlockRef<'context, 'block>,
-    ) -> melior::ir::Value<'context, 'block>
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block>
     where
         'context: 'block,
     {
@@ -77,7 +80,7 @@ impl<'context> TypeConversion<'context> {
             }
             Self::Address => {
                 let address_type = builder.types.sol_address;
-                let truncated = if melior::ir::r#type::IntegerType::try_from(value.r#type()).is_ok()
+                let truncated = if IntegerType::try_from(value.r#type()).is_ok()
                 {
                     let ui160 = builder.types.ui160;
                     builder.emit_sol_cast(value, ui160, block)

@@ -2,7 +2,9 @@
 //! Control flow statement lowering: if/else, for, while, do-while.
 //!
 
+use melior::ir::Block;
 use melior::ir::BlockRef;
+use melior::ir::Region;
 use melior::ir::RegionLike;
 
 use slang_solidity::backend::ir::ast::ForStatementCondition;
@@ -257,8 +259,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Appends a dead block with `sol.yield` to a region whose live block
     /// already terminated (e.g. with `sol.return`). Matches the solc pattern
     /// where each `sol.if` region always ends with a `sol.yield` block.
-    fn emit_dead_yield(&self, region: &melior::ir::Region<'context>) {
-        let dead_block = melior::ir::Block::new(&[]);
+    fn emit_dead_yield(&self, region: &Region<'context>) {
+        let dead_block = Block::new(&[]);
         self.state.builder.emit_sol_yield(&dead_block);
         region.append_block(dead_block);
     }

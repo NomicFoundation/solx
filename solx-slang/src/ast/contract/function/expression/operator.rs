@@ -7,6 +7,7 @@ use std::str::FromStr;
 use melior::ir::Location;
 use melior::ir::Value;
 use melior::ir::operation::Operation;
+use melior::Context;
 
 use solx_mlir::CmpPredicate;
 use solx_mlir::ods::sol::AddOperation;
@@ -130,7 +131,7 @@ impl Operator {
     pub fn emit_sol_binary_operation<'context>(
         self,
         checked: bool,
-        context: &'context melior::Context,
+        context: &'context Context,
         location: Location<'context>,
         lhs: Value<'context, '_>,
         rhs: Value<'context, '_>,

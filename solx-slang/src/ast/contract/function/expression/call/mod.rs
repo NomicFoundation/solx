@@ -119,10 +119,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             current_block = next_block;
         }
 
-        let (mlir_name, return_types) = self
+        let (mlir_name, parameter_types, return_types) = self
             .expression_emitter
             .state
             .resolve_function(&callee_name, argument_values.len())?;
+
+        // Cast arguments to match the callee's declared parameter types.
+        let builder = &self.expression_emitter.state.builder;
+        for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
+            *value = builder.emit_sol_cast(*value, param_type, &current_block);
+        }
 
         if return_types.is_empty() {
             self.expression_emitter.state.builder.emit_sol_call(
