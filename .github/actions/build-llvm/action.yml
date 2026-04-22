@@ -52,15 +52,10 @@ runs:
   using: "composite"
   steps:
 
-    # Compute the cmake --extra-args list once, then (a) persist to a file for
-    # the Build LLVM step to re-use verbatim, and (b) hash into the artifact
-    # cache key so flag changes invalidate stale entries. Without hashing,
-    # changing output-affecting flags (e.g. LLVM_BUILD_TOOLS) while reusing
-    # the old cache key would let a pre-change entry satisfy a post-change
-    # restore — confusing or wrong installs. Non-output-affecting flag tweaks
-    # also rotate the key here; the one-time cache miss is cheap with ccache
-    # as fallback and the alternative (remembering to update the key when
-    # adding an output-affecting flag) doesn't hold up to reviewer discipline.
+    # Build the cmake --extra-args list once and hash it into the artifact
+    # cache key, so any output-affecting flag change invalidates stale
+    # entries automatically. Non-output-affecting tweaks rotate the key
+    # too — one-time cold build, cheap behind ccache.
     - name: Compute LLVM build config
       id: build-config
       shell: bash
@@ -78,9 +73,11 @@ runs:
           "-DLLVM_OPTIMIZED_TABLEGEN='On'"
         )
 
-        # Windows: skip LLVM tool binaries to cut lld-link wall-clock, but keep
-        # llvm-config (llvm-sys needs it at Rust build time) via the per-tool
-        # LLVM_TOOL_<name>_BUILD override. See #364 for background.
+        # Windows: skip ~200 LLVM tool binaries to cut lld-link wall-clock.
+        # llvm-config is still needed by llvm-sys at Rust build time — the
+        # Build LLVM step below force-builds and installs it manually.
+        # LLVM_TOOL_LLVM_CONFIG_BUILD is set defensively; LLVM's current
+        # cmake doesn't honour it for install rules (see #364).
         if [ "${{ runner.os }}" = "Windows" ]; then
           EXTRA_ARGS+=(
             "-DLLVM_BUILD_TOOLS='Off'"
@@ -89,8 +86,8 @@ runs:
           )
         fi
 
-        # Step outputs can't round-trip bash array semantics cleanly with
-        # special chars; write to a file instead.
+        # Persist to a file — step outputs don't round-trip bash array
+        # semantics with the embedded quotes.
         printf '%s\n' "${EXTRA_ARGS[@]}" > "${RUNNER_TEMP}/llvm-extra-args"
         ARGS_HASH=$(sha256sum "${RUNNER_TEMP}/llvm-extra-args" | head -c 8)
         echo "args-hash=${ARGS_HASH}" | tee -a "${GITHUB_OUTPUT}"
@@ -110,11 +107,8 @@ runs:
         KEY="${KEY}-args${{ steps.build-config.outputs.args-hash }}-${SHA}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
-    # TEMP(ci:windows-tools): forced-miss so Build LLVM always runs and the
-    # Windows tool-disable change is actually exercised. REVERT BEFORE MERGE.
     - name: Restore LLVM artifact cache
       id: llvm-artifact-cache
-      if: false
       uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: ${{ inputs.working-dir != '.' && format('{0}/target-llvm/target-final', inputs.working-dir) || 'target-llvm/target-final' }}
@@ -181,7 +175,7 @@ runs:
         append-timestamp: true
         max-size: "10G"
         verbose: 2
-        save: true # TEMP(ci:windows-tools): populate ccache on PR events so a follow-up push to this branch can measure warm-ccache + tool-disable. REVERT BEFORE MERGE to `${{ github.event_name != 'pull_request' }}`.
+        save: ${{ github.event_name != 'pull_request' }}
 
     - name: Build LLVM
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
@@ -208,10 +202,8 @@ runs:
           fi
         fi
 
-        # Load the cmake --extra-args computed in the Compute LLVM build config
-        # step (also hashed into the cache key). `while read` instead of
-        # `readarray` for macOS compatibility — macOS ships bash 3.2 by default
-        # and readarray is bash 4+.
+        # Read the --extra-args written by "Compute LLVM build config".
+        # `while read` rather than `readarray` — macOS ships bash 3.2.
         EXTRA_ARGS=()
         while IFS= read -r line; do
           EXTRA_ARGS+=("$line")
@@ -221,16 +213,10 @@ runs:
           --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
           --extra-args "${EXTRA_ARGS[@]}"
 
-        # With LLVM_BUILD_TOOLS=Off, LLVM's cmake marks every tool (including
-        # llvm-config) EXCLUDE_FROM_ALL and — critically — registers no install
-        # rule for them (`install(TARGETS ...)` is hard-gated on
-        # LLVM_BUILD_TOOLS=On in `llvm_add_tool`). But `llvm-sys` (pulled in by
-        # inkwell) needs `${LLVM_SYS_211_PREFIX}/bin/llvm-config.exe` at Rust
-        # crate-build time. Force-build the target (overrides EXCLUDE_FROM_ALL)
-        # and copy the binary into the install prefix by hand. The `LLVM_TOOL_
-        # LLVM_CONFIG_BUILD=On` flag is still set in EXTRA_ARGS for symmetry /
-        # future-proofing if LLVM's cmake grows an honoured hook, but it's the
-        # manual ninja+cp below that actually does the work today.
+        # LLVM_BUILD_TOOLS=Off marks every tool EXCLUDE_FROM_ALL and skips
+        # its install rule (`install(TARGETS ...)` in `llvm_add_tool` is
+        # gated on it). llvm-sys needs llvm-config.exe in the install
+        # prefix at Rust build time, so force-build and copy it by hand.
         if [ "${{ runner.os }}" = "Windows" ]; then
           ninja -C target-llvm/build-final llvm-config
           mkdir -p target-llvm/target-final/bin
