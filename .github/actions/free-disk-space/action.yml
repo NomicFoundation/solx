@@ -25,10 +25,6 @@ description: |
           - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
           - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
 
-  The container runs as root, so no sudo is needed. Boost is intentionally
-  NOT removed — solc's build has its own `--build-boost`, but the host's
-  /usr/local/share/boost headers may be pulled in by other tooling.
-
 runs:
   using: "composite"
   steps:

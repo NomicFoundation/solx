@@ -119,10 +119,8 @@ runs:
     # sccache is broken with cmake+ninja+clang on MSYS2/Windows
     # (https://github.com/mozilla/sccache/issues/1097). Using ccache everywhere.
     #
-    # The four CCACHE_* env vars below are duplicated on the Build LLVM and
-    # Show ccache stats steps. YAML anchors/merge-keys would dedupe but GHA's
-    # composite-action manifest loader rejects anchors — keep them in sync by
-    # hand.
+    # KEEP-IN-SYNC with CCACHE_* env on Build LLVM and Show ccache stats steps
+    # (GHA composite actions don't support YAML anchors).
     - name: Set up compiler cache
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5 # v1.2.14
