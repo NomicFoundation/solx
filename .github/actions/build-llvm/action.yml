@@ -209,8 +209,13 @@ runs:
         fi
 
         # Load the cmake --extra-args computed in the Compute LLVM build config
-        # step (also hashed into the cache key).
-        readarray -t EXTRA_ARGS < "${RUNNER_TEMP}/llvm-extra-args"
+        # step (also hashed into the cache key). `while read` instead of
+        # `readarray` for macOS compatibility — macOS ships bash 3.2 by default
+        # and readarray is bash 4+.
+        EXTRA_ARGS=()
+        while IFS= read -r line; do
+          EXTRA_ARGS+=("$line")
+        done < "${RUNNER_TEMP}/llvm-extra-args"
 
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} \
           --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
