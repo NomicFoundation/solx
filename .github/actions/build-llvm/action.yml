@@ -177,9 +177,28 @@ runs:
           LINK_JOBS=1
         fi
 
+        # Windows disables LLVM's own tool binaries (opt, llc, llvm-objdump, ...)
+        # because `lld-link` is slow per-executable and those ~200 tool links
+        # dominate Windows wall-clock even at 100% ccache hits on compiles. solx
+        # consumes LLVM via inkwell FFI and never invokes a tool from
+        # target-llvm/target-final/bin/; distro/Xcode packages provide
+        # llvm-cov / llvm-symbolizer / etc. Scoped Windows-only so non-Windows
+        # runs stay identical pending independent validation on those platforms.
+        EXTRA_ARGS=(
+          "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'"
+          "-DLLVM_PARALLEL_LINK_JOBS='${LINK_JOBS}'"
+          "-DLLVM_OPTIMIZED_TABLEGEN='On'"
+        )
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          EXTRA_ARGS+=(
+            "-DLLVM_BUILD_TOOLS='Off'"
+            "-DLLVM_INCLUDE_TOOLS='Off'"
+          )
+        fi
+
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} \
           --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
-          --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='${LINK_JOBS}'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"
+          --extra-args "${EXTRA_ARGS[@]}"
 
     # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)
     # from masking the real Build LLVM failure in the step summary.
