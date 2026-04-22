@@ -221,6 +221,22 @@ runs:
           --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
           --extra-args "${EXTRA_ARGS[@]}"
 
+        # With LLVM_BUILD_TOOLS=Off, LLVM's cmake marks every tool (including
+        # llvm-config) EXCLUDE_FROM_ALL and — critically — registers no install
+        # rule for them (`install(TARGETS ...)` is hard-gated on
+        # LLVM_BUILD_TOOLS=On in `llvm_add_tool`). But `llvm-sys` (pulled in by
+        # inkwell) needs `${LLVM_SYS_211_PREFIX}/bin/llvm-config.exe` at Rust
+        # crate-build time. Force-build the target (overrides EXCLUDE_FROM_ALL)
+        # and copy the binary into the install prefix by hand. The `LLVM_TOOL_
+        # LLVM_CONFIG_BUILD=On` flag is still set in EXTRA_ARGS for symmetry /
+        # future-proofing if LLVM's cmake grows an honoured hook, but it's the
+        # manual ninja+cp below that actually does the work today.
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          ninja -C target-llvm/build-final llvm-config
+          mkdir -p target-llvm/target-final/bin
+          cp target-llvm/build-final/bin/llvm-config.exe target-llvm/target-final/bin/
+        fi
+
     # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)
     # from masking the real Build LLVM failure in the step summary.
     - name: Show ccache stats
