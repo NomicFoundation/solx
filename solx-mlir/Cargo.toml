@@ -11,6 +11,7 @@ cc = "1.2.60"
 
 [dependencies]
 anyhow.workspace = true
+num.workspace = true
 melior = { git = "https://github.com/NomicFoundation/melior", rev = "62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2", features = ["ods-dialects", "helpers"] }
 # mlir-sys 210 wraps LLVM 21.0 C API; llvm-sys (via inkwell) targets 21.1.
 # Both are built from the same LLVM source tree (LLVM_SYS_211_PREFIX ==
