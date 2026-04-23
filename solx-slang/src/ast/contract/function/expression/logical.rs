@@ -67,12 +67,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         let i1_type = self.state.builder.types.i1;
         let result_ptr = self.state.builder.emit_sol_alloca(i1_type, &block);
-        // TODO: solc uses `arith.constant false` here; consider switching to
-        // arith dialect for i1 constants to match solc output exactly.
-        let false_val = self.state.builder.emit_sol_constant(0, i1_type, &block);
+        let false_value = self.state.builder.emit_arith_constant_bool(false, &block);
         self.state
             .builder
-            .emit_sol_store(false_val, result_ptr, &block);
+            .emit_sol_store(false_value, result_ptr, &block);
 
         let (then_block, else_block) = self.state.builder.emit_sol_if(lhs_bool, &block);
 
@@ -113,10 +111,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         let i1_type = self.state.builder.types.i1;
         let result_ptr = self.state.builder.emit_sol_alloca(i1_type, &block);
-        let true_val = self.state.builder.emit_sol_constant(1, i1_type, &block);
+        let true_value = self.state.builder.emit_arith_constant_bool(true, &block);
         self.state
             .builder
-            .emit_sol_store(true_val, result_ptr, &block);
+            .emit_sol_store(true_value, result_ptr, &block);
 
         let (then_block, else_block) = self.state.builder.emit_sol_if(lhs_bool, &block);
 
