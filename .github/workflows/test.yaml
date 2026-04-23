@@ -205,11 +205,17 @@ jobs:
             # per inode, so run them concurrently (one worker per bundle).
             # Soft-fail: a stray rm error shouldn't sink the whole job — rm's
             # stderr will pinpoint the bad path above.
+            #
+            # `removed` reflects the attempt count, not per-bundle success:
+            # xargs returns non-zero if *any* child failed, so gating the
+            # count on xargs success would print "Removed 0" even after
+            # ~30 GB was freed. The count is off by the number of failed
+            # bundles — usually one in practice — which is still a much
+            # better signal than zero.
             if [ "${#to_remove[@]}" -gt 0 ]; then
-              if printf '%s\0' "${to_remove[@]}" \
+              removed=${#to_remove[@]}
+              if ! printf '%s\0' "${to_remove[@]}" \
                   | xargs -0 -n1 -P "${#to_remove[@]}" sudo rm -rf; then
-                removed=${#to_remove[@]}
-              else
                 echo "  warning: one or more Xcode removals failed (see rm stderr above)"
               fi
             fi
