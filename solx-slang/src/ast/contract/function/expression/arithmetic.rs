@@ -105,7 +105,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let all_ones = self
                     .state
                     .builder
-                    .emit_sol_constant_all_ones(operand_type, &block)?;
+                    .emit_sol_constant_all_ones(operand_type, &block);
                 let result = block
                     .append_operation(
                         XorOperation::builder(

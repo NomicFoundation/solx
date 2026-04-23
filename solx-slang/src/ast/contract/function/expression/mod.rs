@@ -17,7 +17,6 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
-use melior::ir::r#type::IntegerType;
 use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
@@ -93,48 +92,42 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         match expression {
-            Expression::DecimalNumberExpression(decimal) => {
-                let literal = decimal.literal();
-                let text = literal.text.as_str();
-                // TODO: use resolve_expression_type once slang provides the
-                // implicit conversion target type for literals.
-                let digit_count = text.chars().filter(|char| *char != '_').count() as u32;
-                let approx_bits = (digit_count * 3322).div_ceil(1000);
-                let bit_width = Self::round_up_to_solidity_width(approx_bits);
-                let min_type =
-                    Type::from(IntegerType::unsigned(self.state.builder.context, bit_width));
-                let value = self
+            Expression::DecimalNumberExpression(decimal_number) => {
+                let value = decimal_number.integer_value().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "decimal literal cannot be lowered: it must evaluate to an integer \
+                         after applying any units"
+                    )
+                })?;
+                let result_type = self
+                    .resolve_expression_type(decimal_number.node_id())
+                    .expect("binder types every decimal literal node");
+                let constant = self
                     .state
                     .builder
-                    .emit_sol_constant_from_decimal_str(text, min_type, &block)?;
-                Ok((Some(value), block))
+                    .emit_constant(&value, result_type, &block);
+                Ok((Some(constant), block))
             }
-            Expression::HexNumberExpression(hex) => {
-                let literal = hex.literal();
-                let text = literal.text.as_str();
-                let stripped = text
-                    .strip_prefix("0x")
-                    .or(text.strip_prefix("0X"))
-                    .unwrap_or(text);
-                // TODO: use resolve_expression_type once slang provides the
-                // implicit conversion target type for literals.
-                let significant_digits = stripped.trim_start_matches('0').len() as u32;
-                let bit_width = Self::round_up_to_solidity_width(significant_digits * 4);
-                let min_type =
-                    Type::from(IntegerType::unsigned(self.state.builder.context, bit_width));
-                let value = self
+            Expression::HexNumberExpression(hex_number) => {
+                let value = hex_number
+                    .integer_value()
+                    .expect("hex literals always evaluate to integers");
+                let result_type = self
+                    .resolve_expression_type(hex_number.node_id())
+                    .expect("binder types every hex literal node");
+                let constant = self
                     .state
                     .builder
-                    .emit_sol_constant_from_hex_str(stripped, min_type, &block)?;
-                Ok((Some(value), block))
+                    .emit_constant(&value, result_type, &block);
+                Ok((Some(constant), block))
             }
             Expression::TrueKeyword => {
-                let value = self.state.builder.emit_arith_constant_bool(true, &block);
-                Ok((Some(value), block))
+                let constant = self.state.builder.emit_bool(true, &block);
+                Ok((Some(constant), block))
             }
             Expression::FalseKeyword => {
-                let value = self.state.builder.emit_arith_constant_bool(false, &block);
-                Ok((Some(value), block))
+                let constant = self.state.builder.emit_bool(false, &block);
+                Ok((Some(constant), block))
             }
             Expression::ThisKeyword => {
                 let contract_type = self
@@ -370,18 +363,5 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             &slang_type,
             &self.state.builder,
         ))
-    }
-
-    /// Rounds a bit count up to the nearest Solidity integer width.
-    ///
-    /// Solidity supports unsigned integers in 8-bit increments: 8, 16, 24, ..., 256.
-    /// Returns 8 for zero bits (smallest Solidity type).
-    fn round_up_to_solidity_width(bits: u32) -> u32 {
-        if bits == 0 {
-            return solx_utils::BIT_LENGTH_BYTE as u32;
-        }
-        let rounded =
-            bits.div_ceil(solx_utils::BIT_LENGTH_BYTE as u32) * solx_utils::BIT_LENGTH_BYTE as u32;
-        rounded.min(solx_utils::BIT_LENGTH_FIELD as u32)
     }
 }
