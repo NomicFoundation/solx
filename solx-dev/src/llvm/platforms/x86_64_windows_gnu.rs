@@ -65,6 +65,9 @@ pub fn build(
             ))
             .args(crate::llvm::platforms::shared::SHARED_BUILD_OPTS)
             .args(crate::llvm::platforms::shared::shared_build_opts_werror())
+            .args(crate::llvm::platforms::shared::windows_build_opts_distribution(
+                enable_mlir,
+            ))
             .args(extra_args)
             .args(CcacheVariant::cmake_args(ccache_variant))
             .args(crate::llvm::platforms::shared::shared_build_opts_assertions(enable_assertions))
@@ -72,7 +75,10 @@ pub fn build(
         "LLVM building cmake",
     )?;
 
-    crate::utils::ninja(llvm_build_final.as_ref())?;
+    // Windows uses `install-distribution` + an explicit LLVM_DISTRIBUTION_COMPONENTS
+    // whitelist (set by `windows_build_opts_distribution`) to skip installing the
+    // ~200 LLVM tool binaries solx doesn't use. See #364.
+    crate::utils::ninja(llvm_build_final.as_ref(), "install-distribution")?;
 
     let libstdcpp_source_path = match std::env::var("LIBSTDCPP_SOURCE_PATH") {
         Ok(libstdcpp_source_path) => PathBuf::from(libstdcpp_source_path),
