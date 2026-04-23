@@ -47,12 +47,26 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image || '' }}
+      # Host tooling bind-mounts for the free-disk-space action, applied only
+      # when a container is started (matrix legs with `image:` set).
+      # Anchor shared with the three single-job LLVM warm-ups below; keep in
+      # sync with the matching list in test.yaml.
+      volumes: &free-disk-volumes
+        - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+        - /usr/local/lib/android:/mnt/free-disk-space/android
+        - /opt/ghc:/mnt/free-disk-space/ghc
+        - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+        - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
     name: "LLVM · ${{ matrix.name }}"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+
+      - name: Free disk space
+        if: runner.os == 'Linux' && matrix.image != ''
+        uses: ./.github/actions/free-disk-space
 
       - name: Checkout submodules
         run: |
@@ -72,6 +86,23 @@ jobs:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
           enable-mlir: 'true'
+
+      # When the artifact cache is warm, build-llvm skips ccache entirely,
+      # so the ccache entry's LRU timer isn't refreshed. Touch it explicitly
+      # so the nightly cron keeps ccache alive past GHA's 7-day eviction
+      # window. Primary key is unique → falls through to the restore-keys
+      # prefix match against the ccache-action's timestamped key.
+      # lookup-only: true skips the download; the cache service lookup alone
+      # resets the access timer.
+      - name: Touch LLVM ccache
+        if: always()
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/ccache-llvm
+          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-end
+          fail-on-cache-miss: false
+          lookup-only: true
 
   # ── solc: standard config (test.yaml / build-and-test) ──────────────
   warm-solc:
@@ -94,12 +125,21 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image || '' }}
+      # solc's build footprint (~3-5 GB) fits comfortably in container
+      # headroom today, so this cleanup isn't strictly required — but the
+      # ~30 s it costs is cheap insurance against future solc/boost growth
+      # hitting ENOSPC and killing a warmup run mid-flight.
+      volumes: *free-disk-volumes
     name: "solc · ${{ matrix.name }}"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+
+      - name: Free disk space
+        if: runner.os == 'Linux' && matrix.image != ''
+        uses: ./.github/actions/free-disk-space
 
       - name: Checkout submodules
         run: |
@@ -120,17 +160,31 @@ jobs:
           boost-version: '1.83.0'
           working-dir: 'solx-solidity'
 
+      - name: Touch solc ccache
+        if: always()
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/ccache-solc
+          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
+          restore-keys: solc-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-end
+          fail-on-cache-miss: false
+          lookup-only: true
+
   # ── LLVM: sanitizer config (sanitizer.yaml) ─────────────────────────
   warm-llvm-sanitizer:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+      volumes: *free-disk-volumes
     name: "LLVM · Sanitizer"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
 
       - name: Checkout submodules
         run: |
@@ -147,17 +201,31 @@ jobs:
           enable-assertions: 'true'
           sanitizer: 'Address'
 
+      - name: Touch LLVM ccache
+        if: always()
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/ccache-llvm
+          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-Address-end
+          fail-on-cache-miss: false
+          lookup-only: true
+
   # ── LLVM: coverage config (coverage.yaml) ───────────────────────────
   warm-llvm-coverage:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+      volumes: *free-disk-volumes
     name: "LLVM · Coverage"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
 
       - name: Checkout submodules
         run: |
@@ -175,17 +243,31 @@ jobs:
           enable-coverage: 'true'
           enable-mlir: 'true'
 
+      - name: Touch LLVM ccache
+        if: always()
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/ccache-llvm
+          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-RelWithDebInfo-mlir-coverage-no-assertions-end
+          fail-on-cache-miss: false
+          lookup-only: true
+
   # ── LLVM + solc: integration config (integration-tests.yaml) ────────
   warm-llvm-integration:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+      volumes: *free-disk-volumes
     name: "LLVM + solc · Integration"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
 
       - name: Checkout submodules
         run: |
@@ -201,8 +283,28 @@ jobs:
           build-type: Release
           enable-assertions: 'false'
 
+      - name: Touch LLVM ccache
+        if: always()
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/ccache-llvm
+          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
+          restore-keys: llvm-${{ runner.os }}-${{ runner.arch }}-no-assertions-end
+          fail-on-cache-miss: false
+          lookup-only: true
+
       - name: Build solc
         uses: ./.github/actions/build-solc
         with:
           cmake-build-type: Release
           working-dir: 'solx-solidity'
+
+      - name: Touch solc ccache
+        if: always()
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ${{ runner.temp }}/ccache-solc
+          key: ccache-touch-${{ github.job }}-${{ github.run_id }}
+          restore-keys: solc-${{ runner.os }}-${{ runner.arch }}-Release-end
+          fail-on-cache-miss: false
+          lookup-only: true

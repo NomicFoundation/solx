@@ -1,0 +1,76 @@
+name: "free-disk-space"
+
+description: |
+  Reclaims ~20-25 GB of disk on GitHub-hosted Ubuntu runners by removing
+  pre-installed host tooling solx does not use.
+
+  Host-path targets (freed when bind-mounted into the container):
+    - .NET SDK           /usr/share/dotnet                ~1.6 GB
+    - Android SDK+NDK    /usr/local/lib/android           ~11-14 GB
+    - Haskell            /opt/ghc  /usr/local/.ghcup      ~5-6 GB
+    - CodeQL bundles     /opt/hostedtoolcache/CodeQL      ~5.4 GB
+
+  This action's rm runs inside the container, so the callers must
+  bind-mount each host path into the container at a fixed mount point.
+  A shell-glob `case` guards against typos in new callers — it refuses
+  paths that don't start with `/mnt/free-disk-space/`. It is NOT a
+  security boundary (the glob matches `..` traversal); all current
+  callers pass hard-coded literals. Add to the job's `container:` block:
+
+      container:
+        image: <your image>
+        volumes:
+          - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+          - /usr/local/lib/android:/mnt/free-disk-space/android
+          - /opt/ghc:/mnt/free-disk-space/ghc
+          - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+          - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
+
+runs:
+  using: "composite"
+  steps:
+    - name: "Remove unused host tooling via bind mount"
+      shell: bash
+      run: |
+        set -u
+        echo "Before:"
+        df -h /
+        # Only rm paths that exist and are non-empty. Defends against a
+        # missing `container.volumes:` silently unlinking an empty mount point
+        # on the host, and best-effort refuses callers passing paths outside
+        # /mnt/free-disk-space/. Glob-based, not realpath — enough to catch
+        # typos, not a security boundary against `..` traversal.
+        cleanup() {
+          local p="$1"
+          case "$p" in
+            /mnt/free-disk-space/*) ;;
+            *) echo "refusing to clean path outside /mnt/free-disk-space/: $p" >&2; return 1 ;;
+          esac
+          [ -d "$p" ] || return 0
+          [ -n "$(ls -A "$p" 2>/dev/null)" ] || return 0
+          echo "  clearing $p"
+          # `rm -rf "$p"` would fail on the bind-mount directory itself
+          # (EBUSY); delete contents instead so the mount stays intact.
+          find "$p" -mindepth 1 -delete
+        }
+        # Capture each PID — bare `wait` with no args returns 0 regardless
+        # of child exit codes (bash §3.7.5), which would silently mask a
+        # failed `find -delete` and hide the partial-cleanup from the log.
+        pids=()
+        cleanup /mnt/free-disk-space/dotnet  & pids+=($!)
+        cleanup /mnt/free-disk-space/android & pids+=($!)
+        cleanup /mnt/free-disk-space/ghc     & pids+=($!)
+        cleanup /mnt/free-disk-space/ghcup   & pids+=($!)
+        cleanup /mnt/free-disk-space/codeql  & pids+=($!)
+        rc=0
+        for pid in "${pids[@]}"; do
+          wait "$pid" || rc=$?
+        done
+        echo "After:"
+        df -h /
+        # Warn but don't fail the step: partial cleanup is usually still
+        # enough headroom for the downstream build, and if it isn't, ENOSPC
+        # will surface with a clearer location than this action can provide.
+        if [ "$rc" -ne 0 ]; then
+          echo "::warning::free-disk-space: one or more cleanups failed (exit $rc); subsequent steps may hit ENOSPC"
+        fi

@@ -89,11 +89,63 @@ runs:
         CARGO_TARGET_DIR: target
       run: ${SFW_PREFIX:-} cargo fetch --locked && ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev
 
+    # ccache is layered behind the SHA-keyed artifact cache: it only runs on
+    # artifact-cache miss (i.e. submodule bump) and provides object-level reuse
+    # across neighbouring solx-llvm commits.
+    - name: Define ccache key
+      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      id: ccache-key
+      run: |
+        KEY="llvm-${{ runner.os }}-${{ runner.arch }}"
+        [ '${{ inputs.build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.build-type }}"
+        [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
+        [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
+        [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
+        [ '${{ inputs.enable-assertions }}' != 'true' ] && KEY="${KEY}-no-assertions"
+        # Terminator: prevents shorter-variant keys from prefix-matching longer ones
+        # via ccache-action's restore-keys (e.g. `...-mlir` matching `...-mlir-coverage-no-assertions`).
+        KEY="${KEY}-end"
+        echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
+
+    # ccache-action refreshes the apt package index before installing ccache.
+    # The solx-ci-runner container doesn't ship sudo (steps run as root), so
+    # we invoke apt-get directly. `-qq` silences routine output.
+    - name: Prepare ccache installation
+      if: runner.os == 'Linux' && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      shell: 'bash'
+      run: apt-get update -qq
+
+    # sccache is broken with cmake+ninja+clang on MSYS2/Windows
+    # (https://github.com/mozilla/sccache/issues/1097). Using ccache everywhere.
+    #
+    # KEEP-IN-SYNC with CCACHE_* env on Build LLVM and Show ccache stats steps
+    # (GHA composite actions don't support YAML anchors).
+    - name: Set up compiler cache
+      if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5 # v1.2.14
+      env:
+        CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
+        CCACHE_BASEDIR: ${{ github.workspace }}
+        CCACHE_NOHASHDIR: "true"
+        CCACHE_COMPILERCHECK: "content"
+      with:
+        key: ${{ steps.ccache-key.outputs.key }}
+        restore-keys: ${{ steps.ccache-key.outputs.key }}
+        append-timestamp: true
+        max-size: "10G"
+        verbose: 2
+        save: ${{ github.event_name != 'pull_request' }}
+
     - name: Build LLVM
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       working-directory: ${{ inputs.working-dir }}
       env:
+        CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
+        CCACHE_BASEDIR: ${{ github.workspace }}
+        CCACHE_NOHASHDIR: "true"
+        CCACHE_COMPILERCHECK: "content"
         VERBOSE: 1
         LIBSTDCPP_SOURCE_PATH: "${{ runner.temp }}/msys64/mingw64/lib/libstdc++.a"
       run: |
@@ -110,9 +162,33 @@ runs:
           fi
         fi
 
+        # With ccache at 99%+ hit rate, link time dominates. Each LLVM tool link
+        # peaks at 2-4 GB RSS on RelWithDebInfo. The hosted macos-15 ARM runner
+        # has 3 vCPU / 7 GB RAM — two parallel links alone can exceed RAM and
+        # push into swap, which is net slower than serialized links. The intel
+        # macos-15 has 14 GB and handles 2 parallel links fine, as do Linux and
+        # Windows hosted (16 GB).
+        LINK_JOBS=2
+        if [ "${{ runner.os }}" = "macOS" ] && [ "${{ runner.arch }}" = "ARM64" ]; then
+          LINK_JOBS=1
+        fi
+
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} \
-          ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
-          --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='2'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"
+          --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
+          --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='${LINK_JOBS}'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"
+
+    # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)
+    # from masking the real Build LLVM failure in the step summary.
+    - name: Show ccache stats
+      if: always() && steps.llvm-artifact-cache.outputs.cache-hit != 'true'
+      continue-on-error: true
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      env:
+        CCACHE_DIR: ${{ runner.temp }}/ccache-llvm
+        CCACHE_BASEDIR: ${{ github.workspace }}
+        CCACHE_NOHASHDIR: "true"
+        CCACHE_COMPILERCHECK: "content"
+      run: ccache --show-stats
 
     - name: Save LLVM artifact cache
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'

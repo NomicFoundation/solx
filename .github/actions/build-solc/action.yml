@@ -49,19 +49,72 @@ runs:
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       run: ${SFW_PREFIX:-} cargo fetch --locked && ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev
 
+    # ccache is layered behind the SHA-keyed artifact cache: it only runs on
+    # artifact-cache miss (i.e. submodule bump) and provides object-level reuse
+    # across neighbouring solx-solidity commits.
+
+    # ccache-action refreshes the apt package index before installing ccache.
+    # The solx-ci-runner container doesn't ship sudo (steps run as root), so
+    # we invoke apt-get directly. `-qq` silences routine output.
+    - name: Prepare ccache installation
+      if: runner.os == 'Linux' && steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      shell: 'bash'
+      run: apt-get update -qq
+
+    # `cmake-build-type` in the key keeps Release and RelWithDebInfo configs
+    # from sharing a cache bucket and evicting each other; `-end` terminator
+    # matches the LLVM pattern and blocks future prefix-collision if more
+    # dimensions are added.
+    #
+    # KEEP-IN-SYNC with CCACHE_* env on Build solc and Show ccache stats steps
+    # (GHA composite actions don't support YAML anchors).
+    - name: Set up compiler cache for solc
+      if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5 # v1.2.14
+      env:
+        CCACHE_DIR: ${{ runner.temp }}/ccache-solc
+        CCACHE_BASEDIR: ${{ github.workspace }}
+        CCACHE_NOHASHDIR: "true"
+        CCACHE_COMPILERCHECK: "content"
+      with:
+        key: solc-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cmake-build-type }}-end
+        restore-keys: solc-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cmake-build-type }}-end
+        append-timestamp: true
+        max-size: "10G"
+        verbose: 2
+        save: ${{ github.event_name != 'pull_request' }}
+
     - name: Build solc
       if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
       # Run from the checkout root that owns solx-solidity
       working-directory: ${{ inputs.working-dir }}/..
       shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
       env:
+        CCACHE_DIR: ${{ runner.temp }}/ccache-solc
+        CCACHE_BASEDIR: ${{ github.workspace }}
+        CCACHE_NOHASHDIR: "true"
+        CCACHE_COMPILERCHECK: "content"
         CXXFLAGS: "-Wno-narrowing"
       run: |
         set -x
         ./target/release/solx-dev solc build \
           --build-type ${{ inputs.cmake-build-type }} \
           --boost-version ${{ inputs.boost-version }} \
-          --build-boost
+          --build-boost \
+          --ccache-variant=ccache
+
+    # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)
+    # from masking the real Build solc failure in the step summary.
+    - name: Show ccache stats
+      if: always() && steps.solc-artifact-cache.outputs.cache-hit != 'true'
+      continue-on-error: true
+      shell: ${{ runner.os == 'Windows' && 'msys2 {0}' || 'bash' }}
+      env:
+        CCACHE_DIR: ${{ runner.temp }}/ccache-solc
+        CCACHE_BASEDIR: ${{ github.workspace }}
+        CCACHE_NOHASHDIR: "true"
+        CCACHE_COMPILERCHECK: "content"
+      run: ccache --show-stats
 
     - name: Save solc artifact cache
       if: steps.solc-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'

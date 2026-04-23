@@ -49,12 +49,25 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+      # Host tooling bind-mounted so the free-disk-space action can reclaim
+      # ~24 GB before the cold LLVM build fills the runner's 14 GB budget.
+      # Anchor shared with build-and-test below; keep in sync with the
+      # matching list in cache-warmup.yaml.
+      volumes: &free-disk-volumes
+        - /usr/share/dotnet:/mnt/free-disk-space/dotnet
+        - /usr/local/lib/android:/mnt/free-disk-space/android
+        - /opt/ghc:/mnt/free-disk-space/ghc
+        - /usr/local/.ghcup:/mnt/free-disk-space/ghcup
+        - /opt/hostedtoolcache/CodeQL:/mnt/free-disk-space/codeql
     steps:
 
       - name: Checkout source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
 
       # This step is required to checkout submodules
       # that are disabled in .gitmodules config
@@ -119,6 +132,10 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image || '' }} # Special workaround to allow matrix builds with optional container
+      # Host tooling bind-mounts for the free-disk-space action. These apply
+      # only when a container is started (matrix legs with `image:` set); the
+      # macOS/Windows legs run bare and the paths are irrelevant there.
+      volumes: *free-disk-volumes
     name: ${{ matrix.name }}
     steps:
 
@@ -127,6 +144,13 @@ jobs:
         with:
           submodules: true
           persist-credentials: false
+
+      # Only meaningful on containerized Linux legs (the hosted x86 leg is the
+      # disk-constrained one); a no-op on macOS/Windows since the mount points
+      # don't exist there.
+      - name: Free disk space
+        if: runner.os == 'Linux' && matrix.image != ''
+        uses: ./.github/actions/free-disk-space
 
       # This step is required to checkout submodules
       # that are disabled in .gitmodules config
@@ -167,19 +191,34 @@ jobs:
             echo "  warning: active Xcode path '${ACTIVE_XCODE}' is not an Xcode app; skipping Xcode removal"
           else
             echo "Active Xcode (keeping): ${ACTIVE_XCODE}"
+            to_remove=()
             for app in /Applications/Xcode_*.app; do
               [ -d "$app" ] || continue
               if [ "$app" = "$ACTIVE_XCODE" ]; then
                 echo "  skip (active): $app"
               else
                 echo "  removing: $app"
-                if sudo rm -rf "$app"; then
-                  removed=$((removed + 1))
-                else
-                  echo "  warning: failed to remove $app"
-                fi
+                to_remove+=("$app")
               fi
             done
+            # Each Xcode bundle is ~15 GB of small files; `rm -rf` is I/O-bound
+            # per inode, so run them concurrently (one worker per bundle).
+            # Soft-fail: a stray rm error shouldn't sink the whole job — rm's
+            # stderr will pinpoint the bad path above.
+            #
+            # `removed` reflects the attempt count, not per-bundle success:
+            # xargs returns non-zero if *any* child failed, so gating the
+            # count on xargs success would print "Removed 0" even after
+            # ~30 GB was freed. The count is off by the number of failed
+            # bundles — usually one in practice — which is still a much
+            # better signal than zero.
+            if [ "${#to_remove[@]}" -gt 0 ]; then
+              removed=${#to_remove[@]}
+              if ! printf '%s\0' "${to_remove[@]}" \
+                  | xargs -0 -n1 -P "${#to_remove[@]}" sudo rm -rf; then
+                echo "  warning: one or more Xcode removals failed (see rm stderr above)"
+              fi
+            fi
           fi
           echo "Removed ${removed} inactive Xcode version(s)"
 
