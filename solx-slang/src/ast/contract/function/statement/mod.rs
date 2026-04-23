@@ -180,13 +180,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let name = declaration.name().name();
         let declared_type = declaration
             .get_type()
-            .map(|slang_type| {
-                TypeConversion::resolve_slang_type(
-                    &slang_type,
-                    self.state.builder.context,
-                    &self.state.builder,
-                )
-            })
+            .map(|slang_type| TypeConversion::resolve_slang_type(&slang_type, &self.state.builder))
             .unwrap_or_else(|| self.state.builder.types.ui256);
 
         let emitter = ExpressionEmitter::new(

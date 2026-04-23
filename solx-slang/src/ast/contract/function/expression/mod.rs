@@ -146,7 +146,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             .ok_or_else(|| {
                                 anyhow::anyhow!("unregistered state variable: {name}")
                             })?;
-                        let value = self.emit_storage_load(*slot, &block)?;
+                        let element_type = TypeConversion::resolve_state_variable_type(
+                            &state_variable,
+                            &self.state.builder,
+                        )?;
+                        let value = self.emit_storage_load(*slot, element_type, &block)?;
                         Ok((Some(value), block))
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
@@ -340,7 +344,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let slang_type = self.semantic.get_type_from_node_id(node_id)?;
         Some(TypeConversion::resolve_slang_type(
             &slang_type,
-            self.state.builder.context,
             &self.state.builder,
         ))
     }

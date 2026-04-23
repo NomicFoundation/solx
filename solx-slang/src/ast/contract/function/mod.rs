@@ -79,7 +79,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .map(|param| {
                 TypeConversion::resolve_slang_type(
                     &param.get_type().expect("parameter type binding resolved"),
-                    self.state.builder.context,
                     &self.state.builder,
                 )
             })
@@ -92,7 +91,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     .map(|param| {
                         TypeConversion::resolve_slang_type(
                             &param.get_type().expect("return type binding resolved"),
-                            self.state.builder.context,
                             &self.state.builder,
                         )
                     })
