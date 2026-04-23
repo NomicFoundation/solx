@@ -282,6 +282,35 @@ impl<'context> Builder<'context> {
         self.emit_sol_constant_from_hex_str(&all_ones_hex, integer_type, block)
     }
 
+    /// Emits an `arith.constant` for a signless `i1` boolean value.
+    ///
+    /// Boolean (`i1`) is signless in MLIR, so it uses `arith.constant`
+    /// instead of `sol.constant` (which is for signed/unsigned int types).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed.
+    pub fn emit_arith_constant_bool<'block, B>(
+        &self,
+        value: bool,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let i1_type = IntegerType::new(self.context, solx_utils::BIT_LENGTH_BOOLEAN as u32).into();
+        block
+            .append_operation(melior::dialect::arith::constant(
+                self.context,
+                IntegerAttribute::new(i1_type, i64::from(value)).into(),
+                self.unknown_location,
+            ))
+            .result(0)
+            .expect("arith.constant always produces one result")
+            .into()
+    }
+
     // ==== Terminators ====
 
     /// Emits a `sol.revert` with an empty signature (no error data).

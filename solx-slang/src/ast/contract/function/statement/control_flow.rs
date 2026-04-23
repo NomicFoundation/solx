@@ -134,14 +134,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     .emit_sol_condition(condition_boolean, &condition_end);
             }
             ForStatementCondition::Semicolon => {
-                let i1_type = self.state.builder.types.i1;
-                let true_val = self
+                let true_value = self
                     .state
                     .builder
-                    .emit_sol_constant(1, i1_type, &condition_block);
+                    .emit_arith_constant_bool(true, &condition_block);
                 self.state
                     .builder
-                    .emit_sol_condition(true_val, &condition_block);
+                    .emit_sol_condition(true_value, &condition_block);
             }
         }
 

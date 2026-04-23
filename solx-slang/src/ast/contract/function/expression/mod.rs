@@ -127,13 +127,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 Ok((Some(value), block))
             }
             Expression::TrueKeyword => {
-                let i1_type = self.state.builder.types.i1;
-                let value = self.state.builder.emit_sol_constant(1, i1_type, &block);
+                let value = self.state.builder.emit_arith_constant_bool(true, &block);
                 Ok((Some(value), block))
             }
             Expression::FalseKeyword => {
-                let i1_type = self.state.builder.types.i1;
-                let value = self.state.builder.emit_sol_constant(0, i1_type, &block);
+                let value = self.state.builder.emit_arith_constant_bool(false, &block);
                 Ok((Some(value), block))
             }
             Expression::Identifier(identifier) => {
