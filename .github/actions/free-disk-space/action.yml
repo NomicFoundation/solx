@@ -12,9 +12,10 @@ description: |
 
   This action's rm runs inside the container, so the callers must
   bind-mount each host path into the container at a fixed mount point.
-  The rm operates only on paths under `/mnt/free-disk-space/`, so a
-  missing or misconfigured mount can't target anything outside that
-  prefix. Add to the job's `container:` block:
+  A shell-glob `case` guards against typos in new callers — it refuses
+  paths that don't start with `/mnt/free-disk-space/`. It is NOT a
+  security boundary (the glob matches `..` traversal); all current
+  callers pass hard-coded literals. Add to the job's `container:` block:
 
       container:
         image: <your image>
@@ -36,7 +37,9 @@ runs:
         df -h /
         # Only rm paths that exist and are non-empty. Defends against a
         # missing `container.volumes:` silently unlinking an empty mount point
-        # on the host, and caps the blast radius to /mnt/free-disk-space/*.
+        # on the host, and best-effort refuses callers passing paths outside
+        # /mnt/free-disk-space/. Glob-based, not realpath — enough to catch
+        # typos, not a security boundary against `..` traversal.
         cleanup() {
           local p="$1"
           case "$p" in
