@@ -34,6 +34,7 @@ use crate::context::builder::type_factory::TypeFactory;
 use crate::ods::sol::AddrOfOperation;
 use crate::ods::sol::AddressCastOperation;
 use crate::ods::sol::AllocaOperation;
+use crate::ods::sol::AssertOperation;
 use crate::ods::sol::BreakOperation;
 use crate::ods::sol::CallOperation;
 use crate::ods::sol::CastOperation;
@@ -299,6 +300,24 @@ impl<'context> Builder<'context> {
             RevertOperation::builder(self.context, self.unknown_location)
                 .signature(StringAttribute::new(self.context, ""))
                 .args(&[])
+                .build()
+                .into(),
+        );
+    }
+
+    /// Emits a `sol.assert` panic if the condition is false.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
+    pub fn emit_sol_assert<'block, B>(&self, condition: Value<'context, 'block>, block: &B)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block.append_operation(
+            AssertOperation::builder(self.context, self.unknown_location)
+                .cond(condition)
                 .build()
                 .into(),
         );

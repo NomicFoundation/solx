@@ -33,6 +33,9 @@ pub struct CallEmitter<'emitter, 'state, 'context, 'block> {
 }
 
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
+    /// Solidity built-in `assert()` function name.
+    const ASSERT: &'static str = "assert";
+
     /// Solidity built-in `require()` function name.
     const REQUIRE: &'static str = "require";
 
@@ -105,6 +108,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .next()
                 .expect("length checked above");
             let block = self.emit_require(&first, block)?;
+            return Ok((None, block));
+        }
+
+        // Handle assert() built-in.
+        if callee_name == Self::ASSERT && positional_arguments.len() == 1 {
+            let first = positional_arguments
+                .iter()
+                .next()
+                .expect("length checked above");
+            let block = self.emit_assert(&first, block)?;
             return Ok((None, block));
         }
 
@@ -210,6 +223,23 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .expect("intrinsic always produces one result")
             .into();
         Ok((value, block))
+    }
+
+    /// Emits an `assert(condition)` built-in via `sol.assert`.
+    fn emit_assert(
+        &self,
+        condition: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+        let (condition_value, block) = self.expression_emitter.emit_value(condition, block)?;
+        let condition_boolean = self
+            .expression_emitter
+            .emit_is_nonzero(condition_value, &block);
+        self.expression_emitter
+            .state
+            .builder
+            .emit_sol_assert(condition_boolean, &block);
+        Ok(block)
     }
 
     /// Emits a `require(condition)` built-in via `sol.require`.
