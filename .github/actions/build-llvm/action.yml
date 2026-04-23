@@ -107,8 +107,11 @@ runs:
         KEY="${KEY}-args${{ steps.build-config.outputs.args-hash }}-${SHA}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
+    # TEMP(ci:windows-tools): forced-miss so Build LLVM always runs and the
+    # Windows tool-disable change is actually exercised. REVERT BEFORE MERGE.
     - name: Restore LLVM artifact cache
       id: llvm-artifact-cache
+      if: false
       uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: ${{ inputs.working-dir != '.' && format('{0}/target-llvm/target-final', inputs.working-dir) || 'target-llvm/target-final' }}
@@ -175,7 +178,7 @@ runs:
         append-timestamp: true
         max-size: "10G"
         verbose: 2
-        save: ${{ github.event_name != 'pull_request' }}
+        save: true # TEMP(ci:windows-tools): populate ccache on PR events so a follow-up push to this branch can measure warm-ccache + tool-disable. REVERT BEFORE MERGE to `${{ github.event_name != 'pull_request' }}`.
 
     - name: Build LLVM
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
