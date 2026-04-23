@@ -65,9 +65,7 @@ pub fn build(
             ))
             .args(crate::llvm::platforms::shared::SHARED_BUILD_OPTS)
             .args(crate::llvm::platforms::shared::shared_build_opts_werror())
-            .args(crate::llvm::platforms::shared::windows_build_opts_distribution(
-                enable_mlir,
-            ))
+            .args(crate::llvm::platforms::shared::windows_build_opts_distribution(enable_mlir))
             .args(extra_args)
             .args(CcacheVariant::cmake_args(ccache_variant))
             .args(crate::llvm::platforms::shared::shared_build_opts_assertions(enable_assertions))
