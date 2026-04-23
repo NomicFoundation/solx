@@ -125,12 +125,21 @@ jobs:
     runs-on: ${{ matrix.runner }}
     container:
       image: ${{ matrix.image || '' }}
+      # solc's build footprint (~3-5 GB) fits comfortably in container
+      # headroom today, so this cleanup isn't strictly required — but the
+      # ~30 s it costs is cheap insurance against future solc/boost growth
+      # hitting ENOSPC and killing a warmup run mid-flight.
+      volumes: *free-disk-volumes
     name: "solc · ${{ matrix.name }}"
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           submodules: true
+
+      - name: Free disk space
+        if: runner.os == 'Linux' && matrix.image != ''
+        uses: ./.github/actions/free-disk-space
 
       - name: Checkout submodules
         run: |
