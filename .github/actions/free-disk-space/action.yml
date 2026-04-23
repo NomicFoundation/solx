@@ -46,16 +46,28 @@ runs:
           [ -d "$p" ] || return 0
           [ -n "$(ls -A "$p" 2>/dev/null)" ] || return 0
           echo "  clearing $p"
-          # `rm -rf "$p"` would fail on the bind-mount directory itself (EBUSY);
-          # delete contents instead so the mount stays intact and a real rm
-          # failure can still surface as a non-zero exit.
+          # `rm -rf "$p"` would fail on the bind-mount directory itself
+          # (EBUSY); delete contents instead so the mount stays intact.
           find "$p" -mindepth 1 -delete
         }
-        cleanup /mnt/free-disk-space/dotnet  &
-        cleanup /mnt/free-disk-space/android &
-        cleanup /mnt/free-disk-space/ghc     &
-        cleanup /mnt/free-disk-space/ghcup   &
-        cleanup /mnt/free-disk-space/codeql  &
-        wait
+        # Capture each PID — bare `wait` with no args returns 0 regardless
+        # of child exit codes (bash §3.7.5), which would silently mask a
+        # failed `find -delete` and hide the partial-cleanup from the log.
+        pids=()
+        cleanup /mnt/free-disk-space/dotnet  & pids+=($!)
+        cleanup /mnt/free-disk-space/android & pids+=($!)
+        cleanup /mnt/free-disk-space/ghc     & pids+=($!)
+        cleanup /mnt/free-disk-space/ghcup   & pids+=($!)
+        cleanup /mnt/free-disk-space/codeql  & pids+=($!)
+        rc=0
+        for pid in "${pids[@]}"; do
+          wait "$pid" || rc=$?
+        done
         echo "After:"
         df -h /
+        # Warn but don't fail the step: partial cleanup is usually still
+        # enough headroom for the downstream build, and if it isn't, ENOSPC
+        # will surface with a clearer location than this action can provide.
+        if [ "$rc" -ne 0 ]; then
+          echo "::warning::free-disk-space: one or more cleanups failed (exit $rc); subsequent steps may hit ENOSPC"
+        fi
