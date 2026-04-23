@@ -165,12 +165,11 @@ runs:
     # KEEP-IN-SYNC with CCACHE_* env on Build LLVM and Show ccache stats steps
     # (GHA composite actions don't support YAML anchors).
     #
-    # Windows gotcha: CCACHE_COMPILERCHECK=content hashes the clang binary's
-    # bytes, and prepare-msys/action.yml runs `msys2/setup-msys2` with
-    # `update: true` (→ pacman -Syu) on every run. Any MSYS2 clang rebuild
-    # invalidates every entry wholesale — the GHA tarball still restores, but
-    # 0% of compiles hit. Windows ccache is therefore effectively a same-day
-    # cache; cross-day warm-cache measurements are not apples-to-apples.
+    # CCACHE_COMPILERCHECK=content hashes the clang binary's bytes, so ccache
+    # is only stable across runs while the MSYS2 toolchain is stable. That
+    # stability comes from prepare-msys/action.yml pinning MSYS2 via
+    # `update: false` — if ccache starts appearing "warm but 0% hit" again,
+    # check whether that pin was relaxed or the runner image rotated.
     - name: Set up compiler cache
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5 # v1.2.14
