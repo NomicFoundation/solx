@@ -11,6 +11,7 @@ use std::rc::Rc;
 use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::ir::ast::ContractDefinition;
 use slang_solidity::backend::ir::ast::FunctionKind;
+use slang_solidity::backend::ir::ast::FunctionMutability;
 use slang_solidity::cst::NodeId;
 
 use solx_mlir::Context;
@@ -54,6 +55,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         self.pre_register_functions(contract);
         let storage_layout = Self::compute_storage_layout(contract, file_identifier);
 
+        let payable = contract.functions().iter().any(|function| {
+            matches!(function.kind(), FunctionKind::Receive)
+                || (matches!(function.kind(), FunctionKind::Fallback)
+                    && matches!(function.mutability(), FunctionMutability::Payable))
+        });
+        let contract_type = self.state.builder.types.contract(&contract_name, payable);
+
         // Emit sol.contract and functions.
         let module_body = self.state.module.body();
         let contract_body = self.state.builder.emit_sol_contract(
@@ -77,8 +85,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 FunctionKind::Constructor => has_constructor = true,
                 _ => {}
             }
+            self.state.current_contract_type = Some(contract_type);
             let emitter = FunctionEmitter::new(&self.semantic, self.state, &storage_layout);
             emitter.emit_sol(&function, &contract_body)?;
+            self.state.current_contract_type = None;
         }
 
         // Emit a default constructor if the contract doesn't define one.

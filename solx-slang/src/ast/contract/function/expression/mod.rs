@@ -12,6 +12,7 @@ pub mod storage;
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -25,6 +26,7 @@ use slang_solidity::cst::NodeId;
 use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::ods::sol::ThisOperation;
 
 use self::call::type_conversion::TypeConversion;
 
@@ -132,6 +134,24 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Expression::FalseKeyword => {
                 let value = self.state.builder.emit_arith_constant_bool(false, &block);
+                Ok((Some(value), block))
+            }
+            Expression::ThisKeyword => {
+                let contract_type = self
+                    .state
+                    .current_contract_type
+                    .ok_or_else(|| anyhow::anyhow!("sol.this emitted outside a contract"))?;
+                let operation = ThisOperation::builder(
+                    self.state.builder.context,
+                    self.state.builder.unknown_location,
+                )
+                .addr(contract_type)
+                .build();
+                let value = block
+                    .append_operation(operation.into())
+                    .result(0)
+                    .expect("sol.this always produces one result")
+                    .into();
                 Ok((Some(value), block))
             }
             Expression::Identifier(identifier) => {
