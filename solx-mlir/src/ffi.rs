@@ -104,6 +104,12 @@ unsafe extern "C" {
         payable: bool,
     ) -> mlir_sys::MlirType;
 
+    /// Creates a `sol::StringType` with the given data location.
+    ///
+    /// `data_location` maps to `mlir::sol::DataLocation` (0=Storage, 1=CallData,
+    /// 2=Memory, 3=Stack, 4=Immutable, 5=Transient).
+    pub fn solxCreateStringType(context: MlirContext, data_location: u32) -> mlir_sys::MlirType;
+
     // ---- MLIR core (not in mlir-sys) ----
 
     /// Returns the region that owns the given block.

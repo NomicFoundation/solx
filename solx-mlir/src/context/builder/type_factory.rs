@@ -26,6 +26,8 @@ pub struct TypeFactory<'context> {
     pub sol_address: Type<'context>,
     /// Sol storage pointer type (`!sol.ptr<ui256, Storage>`).
     pub sol_ptr_storage: Type<'context>,
+    /// Sol memory string type (`!sol.string<Memory>`).
+    pub sol_string_memory: Type<'context>,
 }
 
 impl<'context> TypeFactory<'context> {
@@ -59,6 +61,14 @@ impl<'context> TypeFactory<'context> {
                 solx_utils::DataLocation::Storage as u32,
             ))
         };
+        // SAFETY: `solxCreateStringType` returns a valid MlirType from
+        // the C++ Sol dialect. The context pointer is valid.
+        let sol_string_memory = unsafe {
+            Type::from_raw(crate::ffi::solxCreateStringType(
+                context.to_raw(),
+                solx_utils::DataLocation::Memory as u32,
+            ))
+        };
         Self {
             context,
             i1,
@@ -66,6 +76,7 @@ impl<'context> TypeFactory<'context> {
             ui256,
             sol_address,
             sol_ptr_storage,
+            sol_string_memory,
         }
     }
 

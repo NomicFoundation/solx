@@ -265,7 +265,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 .return_types
                 .first()
                 .copied()
-                .unwrap_or_else(|| self.state.builder.types.ui256);
+                .unwrap_or(self.state.builder.types.ui256);
             let return_value = self.state.builder.emit_sol_cast(value, return_type, &block);
             self.state.builder.emit_sol_return(&[return_value], &block);
         } else {
