@@ -1,10 +1,11 @@
 /*
- * C wrappers for Sol dialect attribute creation.
+ * C wrappers for Sol dialect attribute and type creation.
  *
  * The Sol dialect's C API (mlir-c/Dialect/Sol.h) does not expose
- * ContractKindAttr or StateMutabilityAttr constructors. These thin
- * wrappers call the generated C++ get() methods via extern "C" linkage
- * so Rust can create these attributes through FFI.
+ * constructors for several attributes (e.g. ContractKindAttr,
+ * StateMutabilityAttr) or types (e.g. PointerType, AddressType,
+ * ContractType). These thin wrappers call the generated C++ get()
+ * methods via extern "C" linkage so Rust can create them through FFI.
  */
 
 #include "mlir/Dialect/Sol/Sol.h"
@@ -59,6 +60,13 @@ MlirType solxCreatePointerType(MlirContext ctx, MlirType elementType, uint32_t d
 MlirType solxCreateAddressType(MlirContext ctx, bool payable) {
     auto *context = unwrap(ctx);
     return wrap(mlir::sol::AddressType::get(context, payable));
+}
+
+MlirType solxCreateContractType(MlirContext ctx, const char *name_ptr,
+                                size_t name_len, bool payable) {
+    auto *context = unwrap(ctx);
+    llvm::StringRef name(name_ptr, name_len);
+    return wrap(mlir::sol::ContractType::get(context, name, payable));
 }
 
 } /* extern "C" */

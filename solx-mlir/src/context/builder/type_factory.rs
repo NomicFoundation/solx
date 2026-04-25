@@ -104,4 +104,20 @@ impl<'context> TypeFactory<'context> {
             ))
         }
     }
+
+    /// Creates a `sol::ContractType` for the named contract with the given payability.
+    pub fn contract(&self, name: &str, payable: bool) -> Type<'context> {
+        let name_bytes = name.as_bytes();
+        // SAFETY: `solxCreateContractType` returns a valid MlirType from the
+        // C++ Sol dialect. The context pointer and the name byte range are
+        // valid for the duration of the call.
+        unsafe {
+            Type::from_raw(crate::ffi::solxCreateContractType(
+                self.context.to_raw(),
+                name_bytes.as_ptr() as *const std::ffi::c_char,
+                name_bytes.len(),
+                payable,
+            ))
+        }
+    }
 }

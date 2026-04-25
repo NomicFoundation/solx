@@ -96,6 +96,14 @@ unsafe extern "C" {
     /// Creates a `sol::AddressType` with the given payability.
     pub fn solxCreateAddressType(context: MlirContext, payable: bool) -> mlir_sys::MlirType;
 
+    /// Creates a `sol::ContractType` for a contract with the given name and payability.
+    pub fn solxCreateContractType(
+        context: MlirContext,
+        name_ptr: *const std::ffi::c_char,
+        name_len: usize,
+        payable: bool,
+    ) -> mlir_sys::MlirType;
+
     // ---- MLIR core (not in mlir-sys) ----
 
     /// Returns the region that owns the given block.

@@ -43,6 +43,9 @@ pub struct Context<'context> {
     pub builder: Builder<'context>,
     /// All function signatures for call resolution (bare name -> overloads).
     pub function_signatures: HashMap<String, Vec<Function<'context>>>,
+    /// The MLIR type of the contract currently being emitted, used to type
+    /// `this` expressions. Frontends set this before emitting function bodies.
+    pub current_contract_type: Option<Type<'context>>,
 }
 
 impl<'context> Context<'context> {
@@ -161,6 +164,7 @@ impl<'context> Context<'context> {
             module,
             function_signatures: HashMap::new(),
             builder: Builder::new(context),
+            current_contract_type: None,
         }
     }
 
