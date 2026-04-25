@@ -9,7 +9,6 @@ use std::collections::BTreeMap;
 use std::rc::Rc;
 
 use slang_solidity::backend::SemanticAnalysis;
-use slang_solidity::backend::abi::AbiEntry;
 use slang_solidity::backend::ir::ast::ContractMember;
 use slang_solidity::backend::ir::ast::SourceUnit;
 
@@ -68,16 +67,12 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
             let ContractMember::FunctionDefinition(function) = contract_member else {
                 continue;
             };
-            let Some(AbiEntry::Function { name, inputs, .. }) = function.compute_abi_entry() else {
+            let Some(signature) = function.compute_canonical_signature() else {
                 continue;
             };
             let Some(selector) = function.compute_selector() else {
                 continue;
             };
-            // TODO: can be moved to slang-solidity
-            let parameter_types: Vec<&str> =
-                inputs.iter().map(|input| input.r#type.as_str()).collect();
-            let signature = format!("{name}({})", parameter_types.join(","));
             method_identifiers.insert(signature, format!("{selector:08x}"));
         }
 
