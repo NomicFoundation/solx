@@ -5,6 +5,7 @@
 use melior::ir::Type;
 use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
+use slang_solidity::backend::ir::ast::FunctionDefinition;
 use slang_solidity::backend::ir::ast::StateVariableDefinition;
 use slang_solidity::backend::ir::ast::Type as SlangType;
 
@@ -70,6 +71,42 @@ impl<'context> TypeConversion<'context> {
             .get_type()
             .ok_or_else(|| anyhow::anyhow!("unresolved type for state variable: {name}"))?;
         Ok(Self::resolve_slang_type(&slang_type, builder))
+    }
+
+    /// Resolves a function's parameter and return types from Slang AST to MLIR.
+    pub fn resolve_function_types(
+        function: &FunctionDefinition,
+        builder: &solx_mlir::Builder<'context>,
+    ) -> (Vec<Type<'context>>, Vec<Type<'context>>) {
+        let parameter_types = function
+            .parameters()
+            .iter()
+            .map(|parameter| {
+                Self::resolve_slang_type(
+                    &parameter
+                        .get_type()
+                        .expect("parameter type resolved by semantic analysis"),
+                    builder,
+                )
+            })
+            .collect();
+        let return_types = function
+            .returns()
+            .map(|returns| {
+                returns
+                    .iter()
+                    .map(|parameter| {
+                        Self::resolve_slang_type(
+                            &parameter
+                                .get_type()
+                                .expect("return type resolved by semantic analysis"),
+                            builder,
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        (parameter_types, return_types)
     }
 
     /// Emits the conversion, returning the cast value.
