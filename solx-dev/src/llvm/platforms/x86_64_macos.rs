@@ -66,7 +66,7 @@ pub fn build(
         "LLVM building cmake",
     )?;
 
-    crate::utils::ninja(llvm_build_final.as_ref())?;
+    crate::utils::ninja(llvm_build_final.as_ref(), "install")?;
 
     Ok(())
 }

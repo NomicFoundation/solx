@@ -65,6 +65,7 @@ pub fn build(
             ))
             .args(crate::llvm::platforms::shared::SHARED_BUILD_OPTS)
             .args(crate::llvm::platforms::shared::shared_build_opts_werror())
+            .args(crate::llvm::platforms::shared::windows_build_opts_distribution(enable_mlir))
             .args(extra_args)
             .args(CcacheVariant::cmake_args(ccache_variant))
             .args(crate::llvm::platforms::shared::shared_build_opts_assertions(enable_assertions))
@@ -72,7 +73,29 @@ pub fn build(
         "LLVM building cmake",
     )?;
 
-    crate::utils::ninja(llvm_build_final.as_ref())?;
+    // Windows uses `install-distribution` + an explicit LLVM_DISTRIBUTION_COMPONENTS
+    // whitelist (set by `windows_build_opts_distribution`) to skip installing the
+    // ~200 LLVM tool binaries solx doesn't use. See #364.
+    crate::utils::ninja(llvm_build_final.as_ref(), "install-distribution")?;
+
+    // `llvm-config` is excluded from the distribution because LLVM_BUILD_TOOLS=Off
+    // prevents its install target from ever being defined. Build and copy it by
+    // hand so llvm-sys can find it at Rust build time.
+    crate::utils::command(
+        Command::new("ninja")
+            .arg("-C")
+            .arg(&*llvm_build_final_str)
+            .arg("llvm-config"),
+        "Building llvm-config",
+    )?;
+    let llvm_config_source = llvm_build_final.join("bin").join("llvm-config.exe");
+    let llvm_config_dest_dir = llvm_target_final.join("bin");
+    std::fs::create_dir_all(&llvm_config_dest_dir)?;
+    fs_extra::file::copy(
+        crate::utils::path_windows_to_unix(llvm_config_source)?,
+        crate::utils::path_windows_to_unix(llvm_config_dest_dir.join("llvm-config.exe"))?,
+        &fs_extra::file::CopyOptions::default(),
+    )?;
 
     let libstdcpp_source_path = match std::env::var("LIBSTDCPP_SOURCE_PATH") {
         Ok(libstdcpp_source_path) => PathBuf::from(libstdcpp_source_path),

@@ -58,17 +58,24 @@ runs:
       working-directory: ${{ inputs.working-dir }}
       run: |
         SHA=$(git -C solx-llvm rev-parse HEAD)
+        # solx-dev owns LLVM-build cmake args (shared.rs + platforms/*.rs).
+        # Hash that tree into the key so Rust-side flag changes invalidate
+        # stale artifact-cache entries automatically. Truncate for readability.
+        DEV_HASH=$(printf %s '${{ hashFiles(format('{0}/solx-dev/src/llvm/**', inputs.working-dir)) }}' | head -c 8)
         KEY="v1-llvm-${{ runner.os }}-${{ runner.arch }}"
         [ '${{ inputs.build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.build-type }}"
         [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
         [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
         [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
         [ '${{ inputs.enable-assertions }}' != 'true' ] && KEY="${KEY}-no-assertions"
-        KEY="${KEY}-${SHA}"
+        KEY="${KEY}-dev${DEV_HASH}-${SHA}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
+    # TEMP(ci:windows-tools): forced-miss so Build LLVM always runs and the
+    # Windows tool-disable change is actually exercised. REVERT BEFORE MERGE.
     - name: Restore LLVM artifact cache
       id: llvm-artifact-cache
+      if: false
       uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: ${{ inputs.working-dir != '.' && format('{0}/target-llvm/target-final', inputs.working-dir) || 'target-llvm/target-final' }}
@@ -121,6 +128,12 @@ runs:
     #
     # KEEP-IN-SYNC with CCACHE_* env on Build LLVM and Show ccache stats steps
     # (GHA composite actions don't support YAML anchors).
+    #
+    # CCACHE_COMPILERCHECK=content hashes the clang binary's bytes, so ccache
+    # is only stable across runs while the MSYS2 toolchain is stable. That
+    # stability comes from prepare-msys/action.yml pinning MSYS2 via
+    # `update: false` — if ccache starts appearing "warm but 0% hit" again,
+    # check whether that pin was relaxed or the runner image rotated.
     - name: Set up compiler cache
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
       uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5 # v1.2.14
@@ -135,7 +148,7 @@ runs:
         append-timestamp: true
         max-size: "10G"
         verbose: 2
-        save: ${{ github.event_name != 'pull_request' }}
+        save: true # TEMP(ci:windows-tools): populate ccache on PR events so a follow-up push to this branch can measure warm-ccache + tool-disable. REVERT BEFORE MERGE to `${{ github.event_name != 'pull_request' }}`.
 
     - name: Build LLVM
       if: steps.llvm-artifact-cache.outputs.cache-hit != 'true'
@@ -162,17 +175,15 @@ runs:
           fi
         fi
 
-        # With ccache at 99%+ hit rate, link time dominates. Each LLVM tool link
-        # peaks at 2-4 GB RSS on RelWithDebInfo. The hosted macos-15 ARM runner
-        # has 3 vCPU / 7 GB RAM — two parallel links alone can exceed RAM and
-        # push into swap, which is net slower than serialized links. The intel
-        # macos-15 has 14 GB and handles 2 parallel links fine, as do Linux and
-        # Windows hosted (16 GB).
+        # macos-15 ARM runner is 3 vCPU / 7 GB RAM; two parallel RelWithDebInfo
+        # links exceed RAM and push into swap. 2 fits 14-16 GB runners fine.
         LINK_JOBS=2
         if [ "${{ runner.os }}" = "macOS" ] && [ "${{ runner.arch }}" = "ARM64" ]; then
           LINK_JOBS=1
         fi
 
+        # Windows tool-disable + install-distribution live in solx-dev
+        # (see solx-dev/src/llvm/platforms/{shared,x86_64_windows_gnu}.rs).
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} \
           --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
           --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='${LINK_JOBS}'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"

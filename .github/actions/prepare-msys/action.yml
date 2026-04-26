@@ -3,33 +3,37 @@ description: 'Prepares msys2 for Windows builds.'
 runs:
   using: composite
   steps:
-    - name: Setup msys2 (no auto-update)
+    # `update: false` pins MSYS2 to whatever snapshot the Windows runner image
+    # ships with (GitHub rotates those monthly-ish, visibly via changelog)
+    # instead of `pacman -Syu`ing to upstream head on every run. Two reasons:
+    #
+    # 1. CCACHE_COMPILERCHECK=content in build-llvm/action.yml hashes the
+    #    clang binary's bytes — uncontrolled MSYS2 refreshes invalidated the
+    #    Windows ccache wholesale (observed 2026-04-23: a supposedly warm
+    #    baseline rebuilt fully cold because clang's bytes had changed).
+    # 2. Prior history of MSYS2 auto-updates silently breaking the build
+    #    (libstdc++ incident, which led to switching to rustup's vendored
+    #    MinGW for that lib).
+    #
+    # Toolchain bumps become intentional PRs: flip to `update: true` for a
+    # one-shot validation, then back. `install:` lists packages to ensure
+    # are present against the runner image's pre-seeded MSYS2 repo state.
+    - name: Setup msys2
       uses: msys2/setup-msys2@4f806de0a5a7294ffabaff804b38a9b435a73bda # v2.30.0
       id: msys2
       with:
         path-type: inherit
-        update: true
+        update: false
         cache: false
-
-    - name: Repair keyring + update + install packages
-      shell: msys2 {0}
-      run: |
-        set -euxo pipefail
-
-        # Keyring repair (fixes "signature is invalid")
-        pacman-key --init
-        pacman-key --populate msys2
-
-        # Now install what you need
-        pacman -S --noconfirm --needed \
-          base-devel \
-          git \
-          mingw-w64-x86_64-clang \
-          mingw-w64-x86_64-lld \
-          mingw-w64-x86_64-cmake \
-          mingw-w64-x86_64-ninja \
-          mingw-w64-x86_64-gcc \
-          mingw-w64-x86_64-gcc-libs \
+        install: >-
+          base-devel
+          git
+          mingw-w64-x86_64-clang
+          mingw-w64-x86_64-lld
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-gcc-libs
           mingw-w64-x86_64-python
 
     - name: Prepare env
