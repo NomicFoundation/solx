@@ -3,11 +3,11 @@
 //!
 
 pub mod control_flow;
+mod revert;
 
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::Type;
@@ -130,15 +130,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 self.checked = saved_checked;
                 result
             }
-            Statement::RevertStatement(_revert) => {
-                // TODO: encode custom error data from revert arguments
-                self.state.builder.emit_sol_revert(&block);
-                // TODO(sol-dialect): remove once sol.revert is marked IsTerminator
-                block.append_operation(melior::dialect::llvm::unreachable(
-                    self.state.builder.unknown_location,
-                ));
-                Ok(None)
-            }
+            Statement::RevertStatement(revert) => self.emit_revert(revert, block),
             _ => anyhow::bail!(
                 "unsupported statement: {:?}",
                 std::mem::discriminant(statement)
