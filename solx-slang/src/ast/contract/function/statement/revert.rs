@@ -17,6 +17,9 @@ use slang_solidity::backend::ir::ast::RevertStatement;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::statement::StatementEmitter;
 
+/// Identifier the parser uses to recognize the Solidity `revert` built-in.
+pub const IDENTIFIER: &str = "revert";
+
 /// Revert arguments evaluated in ABI order.
 struct EvaluatedRevertArguments<'context, 'block> {
     /// Evaluated argument values.

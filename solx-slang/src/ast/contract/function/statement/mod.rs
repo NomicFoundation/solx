@@ -106,7 +106,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let expression = expression_statement.expression();
                 if let Expression::FunctionCallExpression(call) = &expression
                     && let Expression::Identifier(identifier) = call.operand()
-                    && identifier.name() == "revert"
+                    && identifier.name() == revert::IDENTIFIER
                 {
                     return self.emit_revert_call(call, block);
                 }
