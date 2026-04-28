@@ -30,6 +30,18 @@
 // CHECK: sol.func @"get_gaslimit()"
 // CHECK:   sol.gaslimit : ui256
 
+// CHECK: sol.func @"get_blobbasefee()"
+// CHECK:   sol.blobbasefee : ui256
+
+// CHECK: sol.func @"get_difficulty()"
+// CHECK:   sol.difficulty : ui256
+
+// CHECK: sol.func @"get_prevrandao()"
+// CHECK:   sol.prevrandao : ui256
+
+// CHECK: sol.func @"get_balance(address)"
+// CHECK:   sol.balance %{{.*}} : !sol.address -> ui256
+
 contract C {
     function get_sender() public view returns (address) {
         return msg.sender;
@@ -69,5 +81,21 @@ contract C {
 
     function get_gaslimit() public view returns (uint256) {
         return block.gaslimit;
+    }
+
+    function get_blobbasefee() public view returns (uint256) {
+        return block.blobbasefee;
+    }
+
+    function get_difficulty() public view returns (uint256) {
+        return block.difficulty;
+    }
+
+    function get_prevrandao() public view returns (uint256) {
+        return block.prevrandao;
+    }
+
+    function get_balance(address a) public view returns (uint256) {
+        return a.balance;
     }
 }
