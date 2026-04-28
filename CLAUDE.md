@@ -130,3 +130,10 @@ Tests live in `tests/solidity/`, `tests/yul/`, `tests/llvm-ir/`.
 - `ci:sanitizer` — enable address sanitizer tests
 - `ci:integration` — enable integration tests
 - `ci:coverage` — enable code coverage
+
+## Renovate Config
+
+When editing `renovate.json`, validate locally before pushing (CI runs the same checks via the `renovate-config-check` job in `test.yaml`):
+
+- **Schema check:** `npx --yes --package renovate -- renovate-config-validator renovate.json`
+- **Full extraction dry-run:** `LOG_LEVEL=debug npx --yes renovate --platform=local --dry-run=full` — confirms each dep shows the expected `skipReason` / `updates`. Catches gotchas like `matchPackageNames` failing to match git-source cargo deps (where `packageName` is the git URL, not the `Cargo.toml` key — use `matchDepNames` for those, as the pinned-fork rule does for `inkwell`/`melior`/`slang_solidity`/`web3`).
