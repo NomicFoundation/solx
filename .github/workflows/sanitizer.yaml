@@ -16,19 +16,13 @@ concurrency:
 
 jobs:
 
-  label-check:
+  cooldown-check:
+    name: Cargo cooldown check
     if: >-
       (github.event.action == 'labeled' && github.event.label.name == 'ci:sanitizer'
       || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:sanitizer'))
       && !github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
-    steps:
-      - run: 'true'
-
-  cooldown-check:
-    name: Cargo cooldown check
-    runs-on: ubuntu-24.04
-    needs: label-check
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -36,7 +30,7 @@ jobs:
       - uses: ./.github/actions/cooldown-check
 
   sanitizer:
-    needs: [label-check, cooldown-check]
+    needs: cooldown-check
     runs-on: solx-linux-amd64
     container:
       image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
@@ -52,9 +46,7 @@ jobs:
           submodules: true
 
       - name: Checkout submodules
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --force --depth=1 --recursive --checkout
+        uses: ./.github/actions/checkout-submodules
 
       - name: Setup SFW
         uses: ./.github/actions/setup-sfw
@@ -86,7 +78,6 @@ jobs:
     runs-on: ubuntu-24.04
     if: always()
     needs:
-      - label-check
       - cooldown-check
       - sanitizer
     steps:
@@ -95,4 +86,4 @@ jobs:
         with:
           jobs: ${{ toJSON(needs) }}
           allowed-skips: >-
-            ${{ needs.label-check.result == 'skipped' && 'label-check, cooldown-check, sanitizer' || '' }}
+            ${{ needs.cooldown-check.result == 'skipped' && 'cooldown-check, sanitizer' || '' }}
