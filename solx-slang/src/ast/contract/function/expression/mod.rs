@@ -357,6 +357,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ///
     /// Returns `None` when the semantic analysis has no type info for the node.
     /// Panics on types that `resolve_slang_type` does not yet handle.
+    // TODO: slang's binder does not fold binary expressions of literal operands —
+    // its typing rules return the type of one operand (e.g. type of the left
+    // operand for shifts), so `1 << 100` gets typed as ui8 (the type of `1`)
+    // and constant subexpressions overflow at that width. solc folds via
+    // `RationalNumberType::binaryOperatorResult`, sizing the result to fit the
+    // folded value. Either teach slang to fold, or fold here before lowering.
     pub fn resolve_expression_type(&self, node_id: NodeId) -> Option<Type<'context>> {
         let slang_type = self.semantic.get_type_from_node_id(node_id)?;
         Some(TypeConversion::resolve_slang_type(
