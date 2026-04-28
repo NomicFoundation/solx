@@ -1,6 +1,51 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ]
+  "extends": ["config:recommended"],
+  "timezone": "UTC",
+  "schedule": ["before 9am on Monday"],
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "packageRules": [
+    {
+      "description": "Extra cooldown for majors",
+      "matchUpdateTypes": ["major"],
+      "minimumReleaseAge": "30 days"
+    },
+    {
+      "description": "cargo: group minor/patch; majors stay individual",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "cargo minor/patch"
+    },
+    {
+      "description": "cargo: pre-1.0 crates treat 0.x→0.y as major (Cargo semver convention); ungroup from minor/patch so they land as individual PRs",
+      "matchManagers": ["cargo"],
+      "matchCurrentVersion": "<1.0.0",
+      "matchUpdateTypes": ["minor"],
+      "groupName": null
+    },
+    {
+      "description": "github-actions: group everything, including majors",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions"
+    },
+    {
+      "description": "dockerfile: group minor/patch; majors stay individual",
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "dockerfile minor/patch"
+    },
+    {
+      "description": "Pinned git-rev cargo deps: inkwell/melior are forks tied to the LLVM 21.1 backend, slang_solidity is pinned for __private_backend_api compat, web3 (tomusdrw) is archived upstream. Disable Renovate's default git-digest updates — these are bumped manually when feature/build compat warrants. Note: matches on depName (Cargo.toml key), not packageName (which is the git URL for git-source deps).",
+      "matchManagers": ["cargo"],
+      "matchDepNames": ["inkwell", "melior", "slang_solidity", "web3"],
+      "enabled": false
+    }
+  ],
+  "labels": ["dependencies"],
+  "configMigration": true,
+  "osvVulnerabilityAlerts": true,
+  "vulnerabilityAlerts": {
+    "enabled": true
+  }
 }
