@@ -282,12 +282,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::FunctionCallExpression(call) => {
                 self::call::CallEmitter::new(self).emit_function_call(call, block)
             }
-            Expression::MemberAccessExpression(access) => {
-                let member = access.member();
-                self::call::CallEmitter::new(self)
-                    .emit_member_access(&member, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
+            Expression::MemberAccessExpression(access) => self::call::CallEmitter::new(self)
+                .emit_member_access(access, block)
+                .map(|(value, block)| (Some(value), block)),
             Expression::TupleExpression(tuple) => {
                 let items = tuple.items();
                 // TODO: support multi-value tuples (e.g. tuple deconstruction)

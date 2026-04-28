@@ -2,25 +2,15 @@
 //! Function call and member access expression lowering.
 //!
 
+pub mod built_in;
 pub mod type_conversion;
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
-use slang_solidity::backend::built_ins::BuiltIn;
 use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::FunctionCallExpression;
-use solx_mlir::ods::sol::BaseFeeOperation;
-use solx_mlir::ods::sol::BlockNumberOperation;
-use solx_mlir::ods::sol::CallValueOperation;
-use solx_mlir::ods::sol::CallerOperation;
-use solx_mlir::ods::sol::ChainIdOperation;
-use solx_mlir::ods::sol::CoinbaseOperation;
-use solx_mlir::ods::sol::GasLimitOperation;
-use solx_mlir::ods::sol::GasPriceOperation;
-use solx_mlir::ods::sol::OriginOperation;
-use solx_mlir::ods::sol::TimestampOperation;
+use slang_solidity::backend::ir::ast::MemberAccessExpression;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 
@@ -33,15 +23,6 @@ pub struct CallEmitter<'emitter, 'state, 'context, 'block> {
 }
 
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
-    /// Solidity built-in `assert()` function name.
-    const ASSERT: &'static str = "assert";
-
-    /// Solidity built-in `require()` function name.
-    const REQUIRE: &'static str = "require";
-
-    /// Maximum number of arguments for `require()` (condition + optional message).
-    const MAX_REQUIRE_ARGUMENTS: usize = 2;
-
     /// Creates a new call emitter.
     pub fn new(expression_emitter: &'emitter ExpressionEmitter<'state, 'context, 'block>) -> Self {
         Self { expression_emitter }
@@ -97,33 +78,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let callee_name =
             callee_name.ok_or_else(|| anyhow::anyhow!("unsupported callee expression"))?;
 
-        // Handle require() built-in.
-        if callee_name == Self::REQUIRE
-            && (positional_arguments.len() == 1
-                || positional_arguments.len() == Self::MAX_REQUIRE_ARGUMENTS)
-        {
-            let mut args = positional_arguments.iter();
-            let condition = args.next().expect("length checked above");
-            let message_arg = args.next();
-            let message = match &message_arg {
-                Some(Expression::StringExpression(string_expression)) => {
-                    let bytes = string_expression.value();
-                    Some(String::from_utf8(bytes).expect("require message is valid UTF-8"))
-                }
-                Some(_) => anyhow::bail!("require message must be a string literal"),
-                None => None,
-            };
-            let block = self.emit_require(&condition, message.as_deref(), block)?;
-            return Ok((None, block));
-        }
-
-        // Handle assert() built-in.
-        if callee_name == Self::ASSERT && positional_arguments.len() == 1 {
-            let first = positional_arguments
-                .iter()
-                .next()
-                .expect("length checked above");
-            let block = self.emit_assert(&first, block)?;
+        if let Some(block) = self.try_emit_built_in_call(&callee, positional_arguments, block)? {
             return Ok((None, block));
         }
 
@@ -172,100 +127,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// Returns an error if the member access is not a recognized EVM intrinsic.
     pub fn emit_member_access(
         &self,
-        member_identifier: &slang_solidity::backend::ir::ast::Identifier,
+        access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let builder = &self.expression_emitter.state.builder;
-        let context = builder.context;
-        let location = builder.unknown_location;
-        let address_type = builder.types.sol_address;
-        let ui256_type = builder.types.ui256;
-        let operation = match member_identifier.resolved_built_in() {
-            Some(BuiltIn::TxOrigin) => OriginOperation::builder(context, location)
-                .addr(address_type)
-                .build()
-                .into(),
-            Some(BuiltIn::TxGasPrice) => GasPriceOperation::builder(context, location)
-                .val(ui256_type)
-                .build()
-                .into(),
-            Some(BuiltIn::MsgSender) => CallerOperation::builder(context, location)
-                .addr(address_type)
-                .build()
-                .into(),
-            Some(BuiltIn::MsgValue) => CallValueOperation::builder(context, location)
-                .val(ui256_type)
-                .build()
-                .into(),
-            Some(BuiltIn::BlockTimestamp) => TimestampOperation::builder(context, location)
-                .val(ui256_type)
-                .build()
-                .into(),
-            Some(BuiltIn::BlockNumber) => BlockNumberOperation::builder(context, location)
-                .val(ui256_type)
-                .build()
-                .into(),
-            Some(BuiltIn::BlockCoinbase) => CoinbaseOperation::builder(context, location)
-                .addr(address_type)
-                .build()
-                .into(),
-            Some(BuiltIn::BlockChainid) => ChainIdOperation::builder(context, location)
-                .val(ui256_type)
-                .build()
-                .into(),
-            Some(BuiltIn::BlockBasefee) => BaseFeeOperation::builder(context, location)
-                .val(ui256_type)
-                .build()
-                .into(),
-            Some(BuiltIn::BlockGaslimit) => GasLimitOperation::builder(context, location)
-                .val(ui256_type)
-                .build()
-                .into(),
-            _ => anyhow::bail!("unsupported member access: {}", member_identifier.name()),
-        };
-        let value = block
-            .append_operation(operation)
-            .result(0)
-            .expect("intrinsic always produces one result")
-            .into();
-        Ok((value, block))
-    }
-
-    /// Emits an `assert(condition)` built-in via `sol.assert`.
-    fn emit_assert(
-        &self,
-        condition: &Expression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        let (condition_value, block) = self.expression_emitter.emit_value(condition, block)?;
-        let condition_boolean = self
-            .expression_emitter
-            .emit_is_nonzero(condition_value, &block);
-        self.expression_emitter
-            .state
-            .builder
-            .emit_sol_assert(condition_boolean, &block);
-        Ok(block)
-    }
-
-    /// Emits a `require(condition)` or `require(condition, "message")` built-in
-    /// via `sol.require`.
-    fn emit_require(
-        &self,
-        condition: &Expression,
-        message: Option<&str>,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        let (condition_value, block) = self.expression_emitter.emit_value(condition, block)?;
-        let condition_boolean = self
-            .expression_emitter
-            .emit_is_nonzero(condition_value, &block);
-
-        self.expression_emitter
-            .state
-            .builder
-            .emit_sol_require(condition_boolean, message, &block);
-
-        Ok(block)
+        self.emit_built_in_member_access(access, block)
     }
 }
