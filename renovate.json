@@ -40,6 +40,12 @@
       "matchManagers": ["cargo"],
       "matchDepNames": ["inkwell", "melior", "slang_solidity", "web3"],
       "enabled": false
+    },
+    {
+      "description": "solx-ci-runner is a private GHCR package",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/nomicfoundation/solx-ci-runner"],
+      "enabled": false
     }
   ],
   "labels": ["dependencies"],
