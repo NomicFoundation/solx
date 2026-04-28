@@ -24,6 +24,7 @@ use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::pass::PassManager;
 
+use crate::dialect::Dialect;
 use crate::llvm_module::RawLlvmModule;
 
 use self::builder::Builder;
@@ -49,14 +50,6 @@ pub struct Context<'context> {
 }
 
 impl<'context> Context<'context> {
-    // ---- Public constants ----
-
-    /// Dialect key for the Sol dialect MLIR stage.
-    pub const DIALECT_SOL: &'static str = "sol";
-
-    /// Dialect key for the LLVM dialect MLIR stage.
-    pub const DIALECT_LLVM: &'static str = "llvm";
-
     // ---- Private constants ----
 
     /// MLIR `builtin.module` operation name used to locate nested modules.
@@ -285,9 +278,11 @@ impl<'context> Context<'context> {
     /// Consumes the context, runs the Sol-to-LLVM pass pipeline, and returns
     /// labeled MLIR representations captured at each pipeline stage.
     ///
-    /// Returns `HashMap<dialect_name, mlir_text>` with entries for:
-    /// - `"sol"` — Full module in Sol dialect (only when `emit_mlir` is true)
-    /// - `"llvm"` — Runtime module only in LLVM dialect (always present)
+    /// Returns a `Vec` of `(dialect, mlir_text)` pairs in pipeline order:
+    /// - [`Dialect::Sol`] — Full module in Sol dialect (only when
+    ///   `capture_sol` is true).
+    /// - [`Dialect::Llvm`] — Runtime module only in LLVM dialect (always
+    ///   present; the LLVM IR translation step consumes it).
     ///
     /// The Sol conversion pass produces a nested module structure:
     /// ```text
@@ -305,18 +300,15 @@ impl<'context> Context<'context> {
     pub fn finalize_module(
         self,
         runtime_code_identifier: &str,
-        emit_mlir: bool,
-    ) -> anyhow::Result<HashMap<String, String>> {
+        capture_sol: bool,
+    ) -> anyhow::Result<Vec<(Dialect, String)>> {
         let mut module = self.module;
 
-        let mut stages = HashMap::new();
+        let mut stages = Vec::with_capacity(2);
 
         // Capture the Sol dialect MLIR before lowering (only when requested).
-        if emit_mlir {
-            stages.insert(
-                Self::DIALECT_SOL.to_owned(),
-                module.as_operation().to_string(),
-            );
+        if capture_sol {
+            stages.push((Dialect::Sol, module.as_operation().to_string()));
         }
 
         // Lower Sol → LLVM dialect.
@@ -350,7 +342,7 @@ impl<'context> Context<'context> {
             )
         })?;
 
-        stages.insert(Self::DIALECT_LLVM.to_owned(), runtime_operation.to_string());
+        stages.push((Dialect::Llvm, runtime_operation.to_string()));
 
         Ok(stages)
     }

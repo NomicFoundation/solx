@@ -4447,11 +4447,13 @@ version = "0.1.4"
 dependencies = [
  "anyhow",
  "cc",
+ "clap",
  "hex",
  "inkwell",
  "melior",
  "mlir-sys",
  "num",
+ "serde",
  "solx-utils",
 ]
 
@@ -4500,6 +4502,7 @@ dependencies = [
  "serde",
  "serde_json",
  "solx-evm-assembly",
+ "solx-mlir",
  "solx-utils",
 ]
 
