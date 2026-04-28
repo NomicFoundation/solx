@@ -67,7 +67,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         let i1_type = self.state.builder.types.i1;
         let result_ptr = self.state.builder.emit_sol_alloca(i1_type, &block);
-        let false_value = self.state.builder.emit_arith_constant_bool(false, &block);
+        let false_value = self.state.builder.emit_bool(false, &block);
         self.state
             .builder
             .emit_sol_store(false_value, result_ptr, &block);
@@ -111,7 +111,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         let i1_type = self.state.builder.types.i1;
         let result_ptr = self.state.builder.emit_sol_alloca(i1_type, &block);
-        let true_value = self.state.builder.emit_arith_constant_bool(true, &block);
+        let true_value = self.state.builder.emit_bool(true, &block);
         self.state
             .builder
             .emit_sol_store(true_value, result_ptr, &block);

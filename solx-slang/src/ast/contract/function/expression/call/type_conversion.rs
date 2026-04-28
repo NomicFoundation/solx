@@ -5,6 +5,7 @@
 use melior::ir::Type;
 use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
+use slang_solidity::backend::ir::ast::LiteralKind;
 use slang_solidity::backend::ir::ast::StateVariableDefinition;
 use slang_solidity::backend::ir::ast::Type as SlangType;
 
@@ -41,7 +42,35 @@ impl<'context> TypeConversion<'context> {
                 solx_utils::BIT_LENGTH_BOOLEAN as u32,
             )),
             SlangType::Address(_) => builder.types.sol_address,
-            SlangType::Literal(_) => builder.types.ui256,
+            SlangType::Literal(literal_type) => match literal_type.kind() {
+                LiteralKind::Zero => Type::from(IntegerType::unsigned(
+                    builder.context,
+                    solx_utils::BIT_LENGTH_BYTE as u32,
+                )),
+                LiteralKind::Address => builder.types.sol_address,
+                LiteralKind::DecimalInteger {
+                    bytes,
+                    signed: true,
+                } => {
+                    let bits = bytes * solx_utils::BIT_LENGTH_BYTE as u32;
+                    Type::from(IntegerType::signed(builder.context, bits))
+                }
+                LiteralKind::DecimalInteger {
+                    bytes,
+                    signed: false,
+                }
+                | LiteralKind::HexInteger { bytes } => {
+                    let bits = bytes * solx_utils::BIT_LENGTH_BYTE as u32;
+                    Type::from(IntegerType::unsigned(builder.context, bits))
+                }
+                kind @ (LiteralKind::Rational
+                | LiteralKind::HexString { .. }
+                | LiteralKind::String { .. }) => {
+                    unimplemented!(
+                        "MLIR type resolution is not yet implemented for literal kind {kind:?}"
+                    )
+                }
+            },
             _ => unimplemented!("unsupported Slang type"),
         }
     }

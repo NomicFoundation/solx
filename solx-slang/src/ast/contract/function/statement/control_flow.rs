@@ -4,7 +4,6 @@
 
 use melior::ir::BlockRef;
 use melior::ir::RegionLike;
-
 use slang_solidity::backend::ir::ast::ForStatementCondition;
 use slang_solidity::backend::ir::ast::ForStatementInitialization;
 use slang_solidity::backend::ir::ast::Statement;
@@ -134,10 +133,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     .emit_sol_condition(condition_boolean, &condition_end);
             }
             ForStatementCondition::Semicolon => {
-                let true_value = self
-                    .state
-                    .builder
-                    .emit_arith_constant_bool(true, &condition_block);
+                let true_value = self.state.builder.emit_bool(true, &condition_block);
                 self.state
                     .builder
                     .emit_sol_condition(true_value, &condition_block);

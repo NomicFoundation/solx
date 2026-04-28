@@ -27,6 +27,7 @@ use melior::ir::attribute::TypeAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
+use num::BigInt;
 
 use crate::CmpPredicate;
 use crate::StateMutability;
@@ -224,92 +225,85 @@ impl<'context> Builder<'context> {
             .into()
     }
 
-    /// Emits a `sol.constant` of the given type from a decimal string.
+    /// Emits a typed integer constant, selecting the dialect by target type.
     ///
-    /// # Errors
-    ///
-    /// Returns an error if the string cannot be parsed as an MLIR integer attribute.
-    pub fn emit_sol_constant_from_decimal_str<'block, B>(
-        &self,
-        value: &str,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> anyhow::Result<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let attribute = Attribute::parse(self.context, &format!("{value} : {result_type}"))
-            .ok_or_else(|| anyhow::anyhow!("invalid {result_type} decimal literal: {value}"))?;
-        self.emit_constant_operation(attribute, result_type, block)
-    }
-
-    /// Emits a `sol.constant` of the given type from a hex string (without `0x` prefix).
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the string cannot be parsed as an MLIR integer attribute.
-    pub fn emit_sol_constant_from_hex_str<'block, B>(
-        &self,
-        hexadecimal: &str,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> anyhow::Result<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let attribute = Attribute::parse(self.context, &format!("0x{hexadecimal} : {result_type}"))
-            .ok_or_else(|| anyhow::anyhow!("invalid {result_type} hex literal: 0x{hexadecimal}"))?;
-        self.emit_constant_operation(attribute, result_type, block)
-    }
-
-    /// Emits an all-ones `sol.constant` for the given integer type.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the constant cannot be parsed as an MLIR integer attribute.
-    pub fn emit_sol_constant_all_ones<'block, B>(
-        &self,
-        integer_type: Type<'context>,
-        block: &B,
-    ) -> anyhow::Result<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let bit_width = TypeFactory::integer_bit_width(integer_type);
-        let all_ones_hex = "f".repeat(bit_width as usize / 4);
-        self.emit_sol_constant_from_hex_str(&all_ones_hex, integer_type, block)
-    }
-
-    /// Emits an `arith.constant` for a signless `i1` boolean value.
-    ///
-    /// Boolean (`i1`) is signless in MLIR, so it uses `arith.constant`
-    /// instead of `sol.constant` (which is for signed/unsigned int types).
+    /// `i1` is the signless boolean type owned by the arith dialect; every
+    /// other integer type is signed or unsigned and belongs to the sol
+    /// dialect. This is the single entry point for MLIR integer constants
+    /// that carry a `BigInt`-sized value.
     ///
     /// # Panics
     ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_arith_constant_bool<'block, B>(
+    /// Panics if the MLIR attribute parser rejects the `{value} : {type}`
+    /// rendering. For well-typed callers this is unreachable because the
+    /// type is a melior `IntegerType` and the value is a `BigInt` that
+    /// always has a canonical decimal representation.
+    pub fn emit_constant<'block, B>(
         &self,
-        value: bool,
+        value: &BigInt,
+        result_type: Type<'context>,
         block: &B,
     ) -> Value<'context, 'block>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let i1_type = IntegerType::new(self.context, solx_utils::BIT_LENGTH_BOOLEAN as u32).into();
-        block
-            .append_operation(melior::dialect::arith::constant(
-                self.context,
-                IntegerAttribute::new(i1_type, i64::from(value)).into(),
-                self.unknown_location,
-            ))
-            .result(0)
-            .expect("arith.constant always produces one result")
-            .into()
+        if result_type == self.types.sol_address {
+            let integer = self.emit_constant(value, self.types.ui160, block);
+            return self.emit_sol_address_cast(integer, result_type, block);
+        }
+        if TypeFactory::integer_bit_width(result_type) == solx_utils::BIT_LENGTH_BOOLEAN as u32 {
+            let boolean_attribute =
+                IntegerAttribute::new(result_type, i64::from(*value != BigInt::ZERO)).into();
+            return block
+                .append_operation(melior::dialect::arith::constant(
+                    self.context,
+                    boolean_attribute,
+                    self.unknown_location,
+                ))
+                .result(0)
+                .expect("arith.constant always produces one result")
+                .into();
+        }
+        // melior does not expose a `BigInt`-accepting attribute constructor,
+        // so we round-trip through the MLIR attribute parser to avoid
+        // truncating values wider than 64 bits.
+        let attribute = Attribute::parse(self.context, &format!("{value} : {result_type}"))
+            .expect("BigInt value and melior integer type always parse as an MLIR attribute");
+        self.emit_constant_operation(attribute, result_type, block)
+            .expect("well-typed BigInt constant never fails emission")
+    }
+
+    /// Emits an `i1` boolean constant.
+    pub fn emit_bool<'block, B>(&self, value: bool, block: &B) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        self.emit_constant(&BigInt::from(u8::from(value)), self.types.i1, block)
+    }
+
+    /// Emits an all-ones `sol.constant` for the given integer type.
+    pub fn emit_sol_constant_all_ones<'block, B>(
+        &self,
+        integer_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let all_ones = if IntegerType::try_from(integer_type)
+            .ok()
+            .is_some_and(|integer| integer.is_signed())
+        {
+            // Two's-complement all-ones for any signed width is `-1`.
+            BigInt::from(-1)
+        } else {
+            let bit_width = TypeFactory::integer_bit_width(integer_type);
+            (BigInt::from(1u32) << bit_width) - BigInt::from(1u32)
+        };
+        self.emit_constant(&all_ones, integer_type, block)
     }
 
     // ==== String literals ====
