@@ -50,6 +50,7 @@
   ],
   "labels": ["dependencies"],
   "configMigration": true,
+  "dependencyDashboard": false,
   "osvVulnerabilityAlerts": true,
   "vulnerabilityAlerts": {
     "enabled": true
