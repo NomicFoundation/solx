@@ -339,12 +339,15 @@ impl<'context> Builder<'context> {
 
     // ==== Terminators ====
 
-    /// Emits a `sol.revert` with an optional error signature and arguments.
+    /// Emits a `sol.revert` carrying an optional payload.
     ///
-    /// For custom errors (`revert MyError(x, y)`), pass the canonical
-    /// signature (e.g. `"MyError(uint256,address)"`) and the evaluated
-    /// argument values. For plain reverts, pass an empty signature and no
-    /// args.
+    /// `signature` doubles as the payload string: for custom errors
+    /// (`revert MyError(x, y)`) it is the canonical signature
+    /// (`"MyError(uint256,address)"`) and the evaluated arguments are passed
+    /// in `args` with `is_custom_error = true`. For string-message reverts
+    /// (`revert("message")`) it is the literal message, with no `args` and
+    /// `is_custom_error = false`. For plain `revert()` it is empty, with no
+    /// `args` and `is_custom_error = false`.
     // TODO(sol-dialect): mark `sol.revert` as `IsTerminator` like `sol.return`
     // so callers don't need to append `llvm.unreachable` after it.
     ///
