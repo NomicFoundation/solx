@@ -54,7 +54,7 @@ Build the `solx-dev` tool first, then use it to build LLVM and solc:
 cargo build --release --bin solx-dev
 
 # Build LLVM (outputs to target-llvm/target-final/)
-./target/release/solx-dev llvm build --enable-mlir
+./target/release/solx-dev llvm build --enable-mlir --enable-tests --build-type RelWithDebInfo
 
 # Build solc libraries (outputs to solx-solidity/build/)
 ./target/release/solx-dev solc build

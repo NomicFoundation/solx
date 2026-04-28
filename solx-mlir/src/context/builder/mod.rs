@@ -339,25 +339,38 @@ impl<'context> Builder<'context> {
 
     // ==== Terminators ====
 
-    /// Emits a `sol.revert` with an empty signature (no error data).
+    /// Emits a `sol.revert` carrying an optional payload.
+    ///
+    /// `signature` doubles as the payload string: for custom errors
+    /// (`revert MyError(x, y)`) it is the canonical signature
+    /// (`"MyError(uint256,address)"`) and the evaluated arguments are passed
+    /// in `args` with `is_custom_error = true`. For string-message reverts
+    /// (`revert("message")`) it is the literal message, with no `args` and
+    /// `is_custom_error = false`. For plain `revert()` it is empty, with no
+    /// `args` and `is_custom_error = false`.
     // TODO(sol-dialect): mark `sol.revert` as `IsTerminator` like `sol.return`
     // so callers don't need to append `llvm.unreachable` after it.
     ///
     /// # Panics
     ///
     /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    pub fn emit_sol_revert<'block, B>(&self, block: &B)
-    where
+    pub fn emit_sol_revert<'block, B>(
+        &self,
+        signature: &str,
+        args: &[Value<'context, 'block>],
+        is_custom_error: bool,
+        block: &B,
+    ) where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        block.append_operation(
-            RevertOperation::builder(self.context, self.unknown_location)
-                .signature(StringAttribute::new(self.context, ""))
-                .args(&[])
-                .build()
-                .into(),
-        );
+        let mut builder = RevertOperation::builder(self.context, self.unknown_location)
+            .signature(StringAttribute::new(self.context, signature))
+            .args(args);
+        if is_custom_error {
+            builder = builder.call(Attribute::unit(self.context));
+        }
+        block.append_operation(builder.build().into());
     }
 
     /// Emits a `sol.assert` panic if the condition is false.
