@@ -106,7 +106,25 @@ jobs:
           cmake-build-type: Release
           working-dir: 'solx-solidity'
 
+      - name: Share solc with main checkout
+        id: share-solc
+        continue-on-error: true
+        run: |
+          MAIN_SHA=$(git -C temp-solx-main/solx-solidity rev-parse HEAD)
+          PR_SHA=$(git -C solx-solidity rev-parse HEAD)
+          if [ "$MAIN_SHA" = "$PR_SHA" ]; then
+            echo "solc SHAs match ($PR_SHA), sharing via symlink"
+            ln -snf "$GITHUB_WORKSPACE/solx-solidity/build" \
+                    temp-solx-main/solx-solidity/build
+            ln -snf "$GITHUB_WORKSPACE/solx-solidity/boost" \
+                    temp-solx-main/solx-solidity/boost
+            echo "shared=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::solc SHAs differ (main=$MAIN_SHA PR=$PR_SHA), building main separately"
+          fi
+
       - name: Build solc (main)
+        if: steps.share-solc.outputs.shared != 'true'
         uses: ./.github/actions/build-solc
         continue-on-error: true
         with:
