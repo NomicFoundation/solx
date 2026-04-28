@@ -300,7 +300,7 @@ jobs:
   pr-checks:
     name: PR Checks (Integration)
     runs-on: ubuntu-24.04
-    if: always()
+    if: ${{ !cancelled() }}
     needs:
       - cooldown-check
       - integration

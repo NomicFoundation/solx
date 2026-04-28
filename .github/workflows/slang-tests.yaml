@@ -117,7 +117,7 @@ jobs:
   pr-checks:
     name: PR Checks (Slang)
     runs-on: ubuntu-24.04
-    if: always()
+    if: ${{ !cancelled() }}
     needs:
       - cooldown-check
       - slang-tests
