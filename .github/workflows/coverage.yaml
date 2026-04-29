@@ -59,9 +59,7 @@ jobs:
           submodules: true
 
       - name: Checkout submodules
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --init --force --depth=1 --recursive --checkout
+        uses: ./.github/actions/checkout-submodules
 
       - name: Setup SFW
         uses: ./.github/actions/setup-sfw

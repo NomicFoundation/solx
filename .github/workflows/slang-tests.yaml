@@ -73,9 +73,7 @@ jobs:
       # This step is required to checkout submodules
       # that are disabled in .gitmodules config
       - name: Checkout submodules
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --force --depth=1 --recursive --checkout
+        uses: ./.github/actions/checkout-submodules
 
       - name: Setup SFW
         uses: ./.github/actions/setup-sfw
