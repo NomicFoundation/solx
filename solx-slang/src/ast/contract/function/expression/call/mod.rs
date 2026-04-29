@@ -7,8 +7,8 @@ pub mod type_conversion;
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
-use melior::ir::ValueLike;
 use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
+use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::FunctionCallExpression;
 use slang_solidity::backend::ir::ast::MemberAccessExpression;
@@ -31,13 +31,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
     /// Emits a function call expression.
     ///
-    /// Resolves the callee by name and argument count, handling type
-    /// conversions, built-in functions, and user-defined calls.
+    /// Handles type conversions and built-in dispatch, then resolves
+    /// user-defined callees through slang's binder to a function definition
+    /// node id and looks up the registered MLIR signature.
     ///
     /// # Errors
     ///
     /// Returns an error if the callee is unsupported, arguments contain
-    /// unsupported constructs, or the function is undefined.
+    /// unsupported constructs, or the callee does not resolve to a registered
+    /// function definition.
     pub fn emit_function_call(
         &self,
         call: &FunctionCallExpression,
@@ -48,14 +50,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             anyhow::bail!("only positional arguments supported");
         };
 
-        // Resolve callee name for Identifier/PayableKeyword callees; None for
-        // ElementaryType and MemberAccessExpression (handled as identity casts).
         let callee = call.operand();
-        let callee_name: Option<String> = match &callee {
-            Expression::Identifier(identifier) => Some(identifier.name()),
-            Expression::PayableKeyword => Some("payable".to_owned()),
-            _ => None,
-        };
 
         if call.is_type_conversion() && positional_arguments.len() == 1 {
             let first = positional_arguments
@@ -75,13 +70,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((Some(result), block));
         }
 
-        // Non-conversion path: require named callee.
-        let callee_name =
-            callee_name.ok_or_else(|| anyhow::anyhow!("unsupported callee expression"))?;
-
         if let Some(block) = self.try_emit_built_in_call(&callee, positional_arguments, block)? {
             return Ok((None, block));
         }
+
+        let Expression::Identifier(callee_identifier) = &callee else {
+            anyhow::bail!("unsupported callee expression");
+        };
+        let Some(Definition::Function(function_definition)) =
+            callee_identifier.resolve_to_definition()
+        else {
+            anyhow::bail!(
+                "callee '{}' does not resolve to a function",
+                callee_identifier.name()
+            );
+        };
 
         let mut argument_values = Vec::new();
         let mut current_block = block;
@@ -94,12 +97,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             current_block = next_block;
         }
 
-        let argument_types: Vec<melior::ir::Type<'context>> =
-            argument_values.iter().map(|value| value.r#type()).collect();
         let (mlir_name, parameter_types, return_types) = self
             .expression_emitter
             .state
-            .resolve_function(&callee_name, &argument_types)?;
+            .resolve_function(function_definition.node_id().into())?;
 
         // Cast arguments to match the callee's declared parameter types.
         let builder = &self.expression_emitter.state.builder;

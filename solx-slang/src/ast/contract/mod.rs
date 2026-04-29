@@ -115,13 +115,16 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             if matches!(function.kind(), FunctionKind::Modifier) {
                 continue;
             }
-            let name = FunctionEmitter::mlir_base_name(&function);
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
             let (parameter_types, return_types) =
                 TypeConversion::resolve_function_types(&function, &self.state.builder);
 
-            self.state
-                .register_function_signature(&name, mlir_name, parameter_types, return_types);
+            self.state.register_function_signature(
+                function.node_id().into(),
+                mlir_name,
+                parameter_types,
+                return_types,
+            );
         }
     }
 

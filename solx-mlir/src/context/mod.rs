@@ -42,8 +42,8 @@ pub struct Context<'context> {
     pub module: Module<'context>,
     /// Cached MLIR types and emission methods.
     pub builder: Builder<'context>,
-    /// All function signatures for call resolution (bare name -> overloads).
-    pub function_signatures: HashMap<String, Vec<Function<'context>>>,
+    /// Resolution metadata keyed by the AST definition id of each function.
+    pub function_signatures: HashMap<usize, Function<'context>>,
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
@@ -161,49 +161,40 @@ impl<'context> Context<'context> {
         }
     }
 
-    /// Registers a function signature for call resolution.
+    /// Registers a function signature keyed by its AST definition id.
     pub fn register_function_signature(
         &mut self,
-        base_name: &str,
+        definition_id: usize,
         mlir_name: String,
         parameter_types: Vec<Type<'context>>,
         return_types: Vec<Type<'context>>,
     ) {
-        self.function_signatures
-            .entry(base_name.to_owned())
-            .or_default()
-            .push(Function::new(mlir_name, parameter_types, return_types));
+        self.function_signatures.insert(
+            definition_id,
+            Function::new(mlir_name, parameter_types, return_types),
+        );
     }
 
-    /// Resolves a function call by bare name and argument count.
+    /// Resolves a function by its AST definition id.
     ///
     /// Returns the mangled MLIR name, declared parameter types, and return
     /// types.
     ///
     /// # Errors
     ///
-    /// Returns an error if the function is undefined or the call is ambiguous.
+    /// Returns an error if the definition was not registered.
     pub fn resolve_function(
         &self,
-        base_name: &str,
-        argument_types: &[Type<'context>],
+        definition_id: usize,
     ) -> anyhow::Result<(&str, &[Type<'context>], &[Type<'context>])> {
-        let signatures = self
+        let function = self
             .function_signatures
-            .get(base_name)
-            .ok_or_else(|| anyhow::anyhow!("undefined function: {base_name}"))?;
-        let matched = signatures
-            .iter()
-            .find(|signature| signature.parameter_types == argument_types)
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "no matching overload of '{base_name}' for the given argument types"
-                )
-            })?;
+            .get(&definition_id)
+            .ok_or_else(|| anyhow::anyhow!("undefined function for definition {definition_id}"))?;
         Ok((
-            matched.mlir_name.as_str(),
-            &matched.parameter_types,
-            &matched.return_types,
+            function.mlir_name.as_str(),
+            &function.parameter_types,
+            &function.return_types,
         ))
     }
 
