@@ -7,6 +7,7 @@ pub mod type_conversion;
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use melior::ir::ValueLike;
 use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::FunctionCallExpression;
@@ -93,10 +94,19 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             current_block = next_block;
         }
 
-        let (mlir_name, return_types) = self
+        let argument_types: Vec<melior::ir::Type<'context>> =
+            argument_values.iter().map(|value| value.r#type()).collect();
+        let (mlir_name, parameter_types, return_types) = self
             .expression_emitter
             .state
-            .resolve_function(&callee_name, argument_values.len())?;
+            .resolve_function(&callee_name, &argument_types)?;
+
+        // Cast arguments to match the callee's declared parameter types.
+        let builder = &self.expression_emitter.state.builder;
+        for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
+            let conversion = TypeConversion::from_target_type(param_type, builder);
+            *value = conversion.emit(*value, builder, &current_block);
+        }
 
         if return_types.is_empty() {
             self.expression_emitter.state.builder.emit_sol_call(
