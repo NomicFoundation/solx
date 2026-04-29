@@ -94,7 +94,10 @@ pub fn build(
     fs_extra::file::copy(
         crate::utils::path_windows_to_unix(llvm_config_source)?,
         crate::utils::path_windows_to_unix(llvm_config_dest_dir.join("llvm-config.exe"))?,
-        &fs_extra::file::CopyOptions::default(),
+        &fs_extra::file::CopyOptions {
+            overwrite: true,
+            ..Default::default()
+        },
     )?;
 
     let libstdcpp_source_path = match std::env::var("LIBSTDCPP_SOURCE_PATH") {
@@ -108,7 +111,10 @@ pub fn build(
     fs_extra::file::copy(
         crate::utils::path_windows_to_unix(libstdcpp_source_path)?,
         crate::utils::path_windows_to_unix(libstdcpp_destination_path)?,
-        &fs_extra::file::CopyOptions::default(),
+        &fs_extra::file::CopyOptions {
+            overwrite: true,
+            ..Default::default()
+        },
     )?;
 
     Ok(())
