@@ -5,6 +5,7 @@
 pub mod built_in;
 pub mod type_conversion;
 
+use anyhow::Context as _;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
@@ -100,7 +101,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let (mlir_name, parameter_types, return_types) = self
             .expression_emitter
             .state
-            .resolve_function(function_definition.node_id().into())?;
+            .resolve_function(function_definition.node_id().into())
+            .with_context(|| format!("resolving callee '{}'", callee_identifier.name()))?;
 
         // Cast arguments to match the callee's declared parameter types.
         let builder = &self.expression_emitter.state.builder;

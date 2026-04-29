@@ -169,9 +169,13 @@ impl<'context> Context<'context> {
         parameter_types: Vec<Type<'context>>,
         return_types: Vec<Type<'context>>,
     ) {
-        self.function_signatures.insert(
+        let previous = self.function_signatures.insert(
             definition_id,
             Function::new(mlir_name, parameter_types, return_types),
+        );
+        debug_assert!(
+            previous.is_none(),
+            "duplicate function signature registration for definition {definition_id}",
         );
     }
 
