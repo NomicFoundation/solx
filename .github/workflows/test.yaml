@@ -100,6 +100,30 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/cooldown-check
 
+  renovate-config-check:
+    name: Renovate config check
+    runs-on: ubuntu-24.04
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Renovate schema check
+        run: npx --yes --package renovate -- renovate-config-validator renovate.json
+
+      - name: Renovate extraction dry-run
+        env:
+          # Without a token, github-tags/github-releases lookups hit the
+          # anonymous 60 req/hr rate limit shared across the runner IP.
+          GITHUB_COM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LOG_LEVEL: debug
+        run: npx --yes renovate --platform=local --dry-run=full
+
   # Build and run regression tests
   build-and-test:
     needs: changes
@@ -290,10 +314,11 @@ jobs:
       - cargo-checks
       - build-and-test
       - cooldown-check
+      - renovate-config-check
     steps:
       - name: Decide on PR checks
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
         with:
           jobs: ${{ toJSON(needs) }}
           allowed-skips: >-
-            ${{ needs.changes.outputs.code != 'true' && 'cargo-checks, build-and-test, cooldown-check' || '' }}
+            ${{ needs.changes.outputs.code != 'true' && 'cargo-checks, build-and-test, cooldown-check, renovate-config-check' || '' }}
