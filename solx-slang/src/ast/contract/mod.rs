@@ -116,7 +116,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 continue;
             }
             let name = FunctionEmitter::mlir_base_name(&function);
-            let mlir_name = FunctionEmitter::mlir_function_name(&function);
+            let mlir_name = function
+                .compute_canonical_signature()
+                .expect("canonical signature available for all emitted functions");
             let parameter_count = function.parameters().len();
             let return_types: Vec<melior::ir::Type<'_>> = function
                 .returns()
