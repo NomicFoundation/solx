@@ -5,8 +5,6 @@
 pub mod object;
 
 use std::collections::BTreeMap;
-#[cfg(feature = "mlir")]
-use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -44,9 +42,10 @@ pub struct Contract {
     pub legacy_assembly: Option<solx_evm_assembly::Assembly>,
     /// solc Yul IR.
     pub yul: Option<String>,
-    /// Labeled MLIR representations from each pipeline stage.
+    /// MLIR stages captured during the Sol → LLVM pipeline, in pipeline
+    /// order (`Sol` first, `Llvm` last).
     #[cfg(feature = "mlir")]
-    pub mlir: Option<HashMap<String, String>>,
+    pub mlir: Option<Vec<(solx_mlir::Dialect, String)>>,
 }
 
 impl Contract {
@@ -66,7 +65,7 @@ impl Contract {
         transient_storage_layout: Option<serde_json::Value>,
         legacy_assembly: Option<solx_evm_assembly::Assembly>,
         yul: Option<String>,
-        #[cfg(feature = "mlir")] mlir: Option<HashMap<String, String>>,
+        #[cfg(feature = "mlir")] mlir: Option<Vec<(solx_mlir::Dialect, String)>>,
     ) -> Self {
         Self {
             name,

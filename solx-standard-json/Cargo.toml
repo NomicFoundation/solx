@@ -20,10 +20,11 @@ hex.workspace = true
 boolinator = "2.4"
 
 solx-evm-assembly = { path = "../solx-evm-assembly" }
+solx-mlir = { path = "../solx-mlir", optional = true }
 solx-utils = { path = "../solx-utils" }
 
 [features]
-mlir = []
+mlir = ["dep:solx-mlir"]
 
 [dev-dependencies]
 serde_json.workspace = true

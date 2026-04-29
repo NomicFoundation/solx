@@ -161,10 +161,19 @@ pub struct Arguments {
     pub output_llvm_ir: bool,
 
     /// Emit MLIR at each pipeline stage.
-    /// Can be used with --output-dir to write .mlir files.
+    /// Without a value (`--emit-mlir`), prints every dialect in pipeline
+    /// order. Pass `--emit-mlir=sol` or `--emit-mlir=llvm` to print one
+    /// dialect. Can be used with --output-dir to write .mlir files.
     #[cfg(feature = "mlir")]
-    #[arg(long = "emit-mlir", help_heading = "Output Selection")]
-    pub output_mlir: bool,
+    #[arg(
+        long = "emit-mlir",
+        value_enum,
+        value_name = "DIALECT",
+        num_args = 0..=1,
+        require_equals = true,
+        help_heading = "Output Selection",
+    )]
+    pub output_mlir: Option<Option<solx_mlir::Dialect>>,
 
     //
     // Compilation Settings
@@ -321,7 +330,7 @@ impl Arguments {
                 || self.output_debug_info_runtime
                 || self.output_benchmarks;
             #[cfg(feature = "mlir")]
-            let solidity_only = solidity_only || self.output_mlir;
+            let solidity_only = solidity_only || self.output_mlir.is_some();
             if solidity_only {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "ABI, hashes, userdoc, devdoc, storage layout, transient storage layout, AST, EVM assembly, Yul, MLIR, debug info, benchmarks can be only emitted for Solidity contracts.",
@@ -362,7 +371,7 @@ impl Arguments {
                 || self.output_ethir
                 || self.output_llvm_ir;
             #[cfg(feature = "mlir")]
-            let has_output_flags = has_output_flags || self.output_mlir;
+            let has_output_flags = has_output_flags || self.output_mlir.is_some();
             if has_output_flags {
                 messages.push(solx_standard_json::OutputError::new_error(
                     "Cannot output data outside of JSON in standard JSON mode.",
@@ -496,7 +505,7 @@ impl Arguments {
             selectors.insert(solx_standard_json::InputSelector::Benchmarks);
         }
         #[cfg(feature = "mlir")]
-        if self.output_mlir {
+        if self.output_mlir.is_some() {
             selectors.insert(solx_standard_json::InputSelector::MLIR);
         }
         if self.output_ast_json {
@@ -553,6 +562,19 @@ impl Arguments {
     }
 
     ///
+    /// Returns the explicit dialect filter from `--emit-mlir=DIALECT`.
+    ///
+    /// Returns `None` for an absent flag and for the bare form
+    /// (`--emit-mlir`); both leave every captured stage in place.
+    ///
+    #[cfg(feature = "mlir")]
+    pub fn mlir_dialect_filter(&self) -> Option<solx_mlir::Dialect> {
+        self.output_mlir
+            .as_ref()
+            .and_then(|inner| inner.as_ref().copied())
+    }
+
+    ///
     /// Resolve optimizer settings from CLI arguments and environment variables.
     ///
     pub fn optimizer_settings(&self) -> anyhow::Result<solx_codegen_evm::OptimizerSettings> {
@@ -590,7 +612,7 @@ impl Arguments {
             || self.output_llvm_ir
             || self.output_assembly;
         #[cfg(feature = "mlir")]
-        let has_ir_flags = has_ir_flags || self.output_mlir;
+        let has_ir_flags = has_ir_flags || self.output_mlir.is_some();
         if !has_ir_flags {
             return Ok(None);
         }

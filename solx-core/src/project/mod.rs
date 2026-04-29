@@ -166,7 +166,10 @@ impl Project {
                 #[cfg(feature = "mlir")]
                 let result = contract.mlir.as_ref().map(|stages| {
                     stages
-                        .get(solx_mlir::Context::DIALECT_LLVM)
+                        .iter()
+                        .find_map(|(dialect, source)| {
+                            (*dialect == solx_mlir::Dialect::Llvm).then_some(source.as_str())
+                        })
                         .map(|source| {
                             ContractIR::from(ContractMLIR {
                                 source: source.to_owned(),

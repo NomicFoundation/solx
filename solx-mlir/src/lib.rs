@@ -14,6 +14,7 @@
 
 pub mod attributes;
 pub mod context;
+pub mod dialect;
 pub mod ffi;
 pub mod llvm_module;
 pub mod ods;
@@ -26,3 +27,4 @@ pub use self::context::Context;
 pub use self::context::builder::Builder;
 pub use self::context::builder::type_factory::TypeFactory;
 pub use self::context::environment::Environment;
+pub use self::dialect::Dialect;

@@ -156,6 +156,15 @@ impl<'arguments> Compiler<'arguments> {
             return Ok(());
         }
 
+        #[cfg(feature = "mlir")]
+        let build = {
+            let mut build = build;
+            if let Some(dialect) = self.arguments.mlir_dialect_filter() {
+                build.retain_mlir_dialect(dialect);
+            }
+            build
+        };
+
         if let Some(ref output_directory) = self.arguments.output_dir {
             build.write_to_directory(
                 output_directory,
