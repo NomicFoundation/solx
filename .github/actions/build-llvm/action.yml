@@ -64,6 +64,7 @@ runs:
         [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
         [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
         [ '${{ inputs.enable-assertions }}' != 'true' ] && KEY="${KEY}-no-assertions"
+        [ '${{ inputs.enable-tests }}' = 'true' ] && KEY="${KEY}-tests"
         KEY="${KEY}-${SHA}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
@@ -103,6 +104,7 @@ runs:
         [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
         [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
         [ '${{ inputs.enable-assertions }}' != 'true' ] && KEY="${KEY}-no-assertions"
+        [ '${{ inputs.enable-tests }}' = 'true' ] && KEY="${KEY}-tests"
         # Terminator: prevents shorter-variant keys from prefix-matching longer ones
         # via ccache-action's restore-keys (e.g. `...-mlir` matching `...-mlir-coverage-no-assertions`).
         KEY="${KEY}-end"

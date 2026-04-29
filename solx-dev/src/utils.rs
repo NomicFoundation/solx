@@ -12,6 +12,8 @@ use std::process::Stdio;
 use colored::Colorize;
 use path_slash::PathBufExt;
 
+use crate::llvm::path::Path as LlvmPath;
+
 /// The minimum required XCode version.
 pub const XCODE_MIN_VERSION: u32 = 11;
 
@@ -217,13 +219,25 @@ pub fn remove(project_directory: &Path, project_name: &str) -> anyhow::Result<()
 }
 
 ///
-/// Call ninja to build the LLVM.
+/// Call ninja to build and install the LLVM. When `--enable-tests` produced
+/// `llvm-lit` in the build tree, also copy it into the install prefix so it
+/// is part of the cached artifact like the rest of the toolchain.
 ///
 pub fn ninja(build_dir: &Path) -> anyhow::Result<()> {
     let mut ninja = Command::new("ninja");
     let build_dir_str = build_dir.to_string_lossy();
     ninja.args(["-C", &*build_dir_str]);
     command(ninja.arg("install"), "Running ninja install")?;
+    let lit_name = if cfg!(windows) {
+        "llvm-lit.py"
+    } else {
+        "llvm-lit"
+    };
+    let lit_source = build_dir.join("bin").join(lit_name);
+    if lit_source.exists() {
+        let install_bin = LlvmPath::llvm_target_final()?.join("bin");
+        std::fs::copy(&lit_source, install_bin.join(lit_name))?;
+    }
     Ok(())
 }
 

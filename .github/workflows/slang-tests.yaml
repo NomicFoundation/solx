@@ -88,6 +88,24 @@ jobs:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
           enable-mlir: 'true'
+          enable-tests: 'true'
+
+      # TODO: switch to origin/main once the solx-solidity MLIR-codegen PRs
+      # (#119, #120, #121) merge; until then the chain branch carries the
+      # AddressType / sol.for step / arith-bool fixes the lit tests rely on.
+      # TODO: remove this step and the Build solc step below once the lit
+      # tests stop running against solc.
+      - name: Sync solx-solidity for MLIR codegen
+        shell: bash
+        run: |
+          git -C solx-solidity fetch origin chain-mlir-pr-fixes
+          git -C solx-solidity checkout FETCH_HEAD
+
+      - name: Build solc
+        uses: ./.github/actions/build-solc
+        with:
+          cmake-build-type: RelWithDebInfo
+          enable-mlir: 'true'
 
       # bindgen's embedded clang needs to know it's targeting MinGW,
       # otherwise it can't parse MinGW-specific __attribute__ extensions
@@ -96,6 +114,20 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: echo "BINDGEN_EXTRA_CLANG_ARGS=--target=x86_64-w64-windows-gnu" >> "${GITHUB_ENV}"
+
+      - name: Preserve lit tools before disk cleanup
+        shell: bash
+        run: |
+          LIT=llvm-lit${{ runner.os == 'Windows' && '.py' || '' }}
+          mkdir -p "${RUNNER_TEMP}/lit-tools"
+          cp -r \
+            target-llvm/target-final/bin/FileCheck \
+            target-llvm/target-final/bin/${LIT} \
+            solx-llvm/llvm/utils/lit \
+            solx-solidity/build/solc/solc \
+            "${RUNNER_TEMP}/lit-tools/"
+          echo "${RUNNER_TEMP}/lit-tools" >> "${GITHUB_PATH}"
+          echo "PYTHONPATH=${RUNNER_TEMP}/lit-tools/lit" >> "${GITHUB_ENV}"
 
       - name: Free disk space (remove build artifacts before slang tests)
         shell: bash
@@ -119,6 +151,14 @@ jobs:
           cargo-test-command: 'test-slang'
           results-xml: 'slang-unit-tests-results.xml'
           check-name: 'Slang Unit Tests Results'
+
+      - name: Run MLIR lit tests
+        shell: bash
+        env:
+          SOLX_LIT_TARGET: ${{ matrix.target || '' }}
+        run: |
+          LIT=llvm-lit${{ runner.os == 'Windows' && '.py' || '' }}
+          ${LIT} -v solx-mlir/tests/lit/
 
   pr-checks:
     name: PR Checks (Slang)
