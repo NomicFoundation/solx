@@ -3,6 +3,7 @@
 //!
 
 pub mod control_flow;
+pub mod event;
 pub mod revert;
 
 use std::collections::HashMap;
@@ -138,6 +139,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 result
             }
             Statement::RevertStatement(revert) => self.emit_revert(revert, block),
+            Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
             _ => anyhow::bail!(
                 "unsupported statement: {:?}",
                 std::mem::discriminant(statement)
