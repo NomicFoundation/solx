@@ -75,6 +75,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             let (value, next_block) = emitter.emit_value(&argument, current_block)?;
             current_block = next_block;
             if parameter.indexed() {
+                // TODO: indexed reference-type parameters (string, bytes,
+                // arrays, structs) must store the keccak256 hash of their
+                // encoded value as the topic, not the value itself. That
+                // lowering is not supported by solc-MLIR yet.
                 indexed_arguments.push(value);
             } else {
                 non_indexed_arguments.push(value);
@@ -84,9 +88,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let signature = if event_definition.anonymous_keyword() {
             None
         } else {
-            Some(event_definition.compute_canonical_signature().ok_or_else(
-                || anyhow::anyhow!("cannot compute canonical signature for event"),
-            )?)
+            Some(
+                event_definition
+                    .compute_canonical_signature()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("cannot compute canonical signature for event")
+                    })?,
+            )
         };
         self.append_sol_emit(
             signature.as_deref(),
