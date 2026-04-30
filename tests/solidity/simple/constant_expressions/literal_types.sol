@@ -150,7 +150,7 @@ contract Test {
     }
 
     function address_literal() public pure returns (address) {
-        return 0x00000000000000000000000000000000000000Ff;
+        return 0x00000000000000000000000000000000000000ff;
     }
 
     function time_units() public pure returns (uint256) {
