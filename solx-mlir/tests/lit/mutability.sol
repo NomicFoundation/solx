@@ -1,9 +1,10 @@
-// RUN: solx --emit-mlir %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @"pure_fn(uint256)"{{.*}} state_mutability = #{{.*}}Pure
-// CHECK: sol.func @"view_fn()"{{.*}} state_mutability = #{{.*}}View
-// CHECK: sol.func @"payable_fn()"{{.*}} state_mutability = #{{.*}}Payable
-// CHECK: sol.func @"nonpayable_fn(uint256)"{{.*}} state_mutability = #{{.*}}NonPayable
+// CHECK: sol.func @{{.*pure_fn.*}}{{.*}} state_mutability = #{{.*}}Pure
+// CHECK: sol.func @{{.*view_fn.*}}{{.*}} state_mutability = #{{.*}}View
+// CHECK: sol.func @{{.*payable_fn.*}}{{.*}} state_mutability = #{{.*}}Payable
+// CHECK: sol.func @{{.*nonpayable_fn.*}}{{.*}} state_mutability = #{{.*}}NonPayable
 
 contract C {
     uint256 x;

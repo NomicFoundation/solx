@@ -1,45 +1,46 @@
-// RUN: solx --emit-mlir %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @"get_sender()"
+// CHECK: sol.func @{{.*get_sender.*}}
 // CHECK:   sol.caller : !sol.address
 
-// CHECK: sol.func @"get_value()"
+// CHECK: sol.func @{{.*get_value.*}}
 // CHECK:   sol.callvalue : ui256
 
-// CHECK: sol.func @"get_origin()"
+// CHECK: sol.func @{{.*get_origin.*}}
 // CHECK:   sol.origin : !sol.address
 
-// CHECK: sol.func @"get_gasprice()"
+// CHECK: sol.func @{{.*get_gasprice.*}}
 // CHECK:   sol.gasprice : ui256
 
-// CHECK: sol.func @"get_timestamp()"
+// CHECK: sol.func @{{.*get_timestamp.*}}
 // CHECK:   sol.timestamp : ui256
 
-// CHECK: sol.func @"get_number()"
+// CHECK: sol.func @{{.*get_number.*}}
 // CHECK:   sol.blocknumber : ui256
 
-// CHECK: sol.func @"get_coinbase()"
+// CHECK: sol.func @{{.*get_coinbase.*}}
 // CHECK:   sol.coinbase : !sol.address
 
-// CHECK: sol.func @"get_chainid()"
+// CHECK: sol.func @{{.*get_chainid.*}}
 // CHECK:   sol.chainid : ui256
 
-// CHECK: sol.func @"get_basefee()"
+// CHECK: sol.func @{{.*get_basefee.*}}
 // CHECK:   sol.basefee : ui256
 
-// CHECK: sol.func @"get_gaslimit()"
+// CHECK: sol.func @{{.*get_gaslimit.*}}
 // CHECK:   sol.gaslimit : ui256
 
-// CHECK: sol.func @"get_blobbasefee()"
+// CHECK: sol.func @{{.*get_blobbasefee.*}}
 // CHECK:   sol.blobbasefee : ui256
 
-// CHECK: sol.func @"get_difficulty()"
+// CHECK: sol.func @{{.*get_difficulty.*}}
 // CHECK:   sol.difficulty : ui256
 
-// CHECK: sol.func @"get_prevrandao()"
+// CHECK: sol.func @{{.*get_prevrandao.*}}
 // CHECK:   sol.prevrandao : ui256
 
-// CHECK: sol.func @"get_balance(address)"
+// CHECK: sol.func @{{.*get_balance.*}}
 // CHECK:   sol.balance %{{.*}} : !sol.address -> ui256
 
 contract C {

@@ -1,10 +1,11 @@
-// RUN: solx --emit-mlir %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @"check(uint256)"
+// CHECK: sol.func @{{.*check.*}}
 // CHECK:   %[[COND:.*]] = sol.cmp gt
 // CHECK:   sol.require %[[COND]]
 
-// CHECK: sol.func @"check_msg(uint256)"
+// CHECK: sol.func @{{.*check_msg.*}}
 // CHECK:   %[[COND:.*]] = sol.cmp gt
 // CHECK:   sol.require %[[COND]]
 

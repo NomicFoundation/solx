@@ -1,18 +1,19 @@
-// RUN: solx --emit-mlir %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @"plain_revert()"
+// CHECK: sol.func @{{.*plain_revert.*}}
 // CHECK:   sol.revert ""
 
-// CHECK: sol.func @"message_revert()"
+// CHECK: sol.func @{{.*message_revert.*}}
 // CHECK:   sol.revert "oops"
 
-// CHECK: sol.func @"custom_error(uint256)"
+// CHECK: sol.func @{{.*custom_error.*}}
 // CHECK:   sol.revert "TooLow(uint256,uint256)" %{{.*}}, %{{.*}} : ui256, {{.*}} {call}
 
-// CHECK: sol.func @"custom_error_named(uint256)"
+// CHECK: sol.func @{{.*custom_error_named.*}}
 // CHECK:   %[[X:.*]] = sol.load
-// CHECK:   %[[C:.*]] = sol.constant 100
-// CHECK:   sol.revert "TooLow(uint256,uint256)" %[[X]], %[[C]] : ui256, {{.*}} {call}
+// CHECK:   sol.constant 100
+// CHECK:   sol.revert "TooLow(uint256,uint256)" %[[X]], %{{.*}} : ui256, {{.*}} {call}
 
 contract C {
     error TooLow(uint256 supplied, uint256 minimum);

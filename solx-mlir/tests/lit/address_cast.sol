@@ -1,6 +1,7 @@
-// RUN: solx --emit-mlir %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @"to_address(uint256)"
+// CHECK: sol.func @{{.*to_address.*}}
 // CHECK:   sol.cast %{{.*}} : ui256 to ui160
 // CHECK:   sol.address_cast %{{.*}} : ui160 to !sol.address
 
