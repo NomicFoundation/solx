@@ -3,9 +3,10 @@ name: Code coverage
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
+  merge_group:
 
 concurrency:
-  group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -17,19 +18,13 @@ permissions:
 
 jobs:
 
-  label-check:
+  cooldown-check:
+    name: Cargo cooldown check
     if: >-
       (github.event.action == 'labeled' && github.event.label.name == 'ci:coverage'
       || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:coverage'))
       && !github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
-    steps:
-      - run: 'true'
-
-  cooldown-check:
-    name: Cargo cooldown check
-    runs-on: ubuntu-24.04
-    needs: label-check
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -37,7 +32,7 @@ jobs:
       - uses: ./.github/actions/cooldown-check
 
   coverage:
-    needs: [label-check, cooldown-check]
+    needs: cooldown-check
     runs-on: solx-linux-amd64
     permissions:
       contents: read
@@ -59,9 +54,7 @@ jobs:
           submodules: true
 
       - name: Checkout submodules
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --init --force --depth=1 --recursive --checkout
+        uses: ./.github/actions/checkout-submodules
 
       - name: Setup SFW
         uses: ./.github/actions/setup-sfw
@@ -272,3 +265,18 @@ jobs:
           files: 'llvm/codecov.lcov'
           slug: ${{ github.repository }}
           fail_ci_if_error: false
+
+  pr-checks:
+    name: PR Checks (Coverage)
+    runs-on: ubuntu-24.04
+    if: ${{ !cancelled() }}
+    needs:
+      - cooldown-check
+      - coverage
+    steps:
+      - name: Decide on PR checks
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}
+          allowed-skips: >-
+            ${{ needs.cooldown-check.result == 'skipped' && 'cooldown-check, coverage' || '' }}
