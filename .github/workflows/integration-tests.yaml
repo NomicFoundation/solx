@@ -64,15 +64,13 @@ jobs:
           path: temp-solx-main
 
       - name: Checkout submodules (PR)
-        run: |
-          git config --global --add safe.directory '*'
-          git submodule update --init --force --recursive --depth 1 --checkout
+        uses: ./.github/actions/checkout-submodules
 
       - name: Checkout submodules (main)
-        working-directory: temp-solx-main
+        uses: ./.github/actions/checkout-submodules
         continue-on-error: true
-        run: |
-          git submodule update --init --force --recursive --depth 1 --checkout
+        with:
+          working-directory: temp-solx-main
 
       - name: Setup SFW
         uses: ./.github/actions/setup-sfw
