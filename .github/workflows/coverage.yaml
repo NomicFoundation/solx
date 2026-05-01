@@ -38,7 +38,7 @@ jobs:
 
   coverage:
     needs: [label-check, cooldown-check]
-    runs-on: solx-linux-amd64
+    runs-on: solx-linux-amd64-self-hosted
     permissions:
       contents: read
       pull-requests: write

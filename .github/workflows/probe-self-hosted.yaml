@@ -1,0 +1,45 @@
+name: Probe self-hosted runner
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/probe-self-hosted.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: solx-linux-amd64-self-hosted
+    steps:
+      - name: Identity
+        if: always()
+        run: |
+          set +e
+          echo "whoami: $(whoami)"
+          echo "id: $(id)"
+          echo "pwd: $(pwd)"
+          echo "HOME: $HOME"
+          uname -a
+          cat /etc/os-release
+
+      - name: Workspace
+        if: always()
+        run: |
+          set +e
+          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+          echo "RUNNER_WORKSPACE: $RUNNER_WORKSPACE"
+          stat "$GITHUB_WORKSPACE"          || true
+          stat "$GITHUB_WORKSPACE/.."       || true
+          stat "$GITHUB_WORKSPACE/../.."    || true
+          ls -la "$GITHUB_WORKSPACE/.."     || true
+          ls -la "$GITHUB_WORKSPACE/../.."  || true
+
+      - name: Filesystem context
+        if: always()
+        run: |
+          set +e
+          mount | grep -E "work|home" || true
+          df -h "$GITHUB_WORKSPACE" || true
+          df -h /home/ubuntu || true
