@@ -1,33 +1,38 @@
-// RUN: solx --emit-mlir %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// Short-circuit &&: result defaults to false, then-branch stores b.
-// CHECK: sol.func @"logical_and(bool,bool)"
-// CHECK:   %[[FALSE:.*]] = arith.constant false
-// CHECK:   sol.store %[[FALSE]], %[[RES:.*]] :
+// Short-circuit &&: alloca a result slot, seed it, conditionally store b in
+// the then-branch, then load and return. solx and solc seed the slot
+// differently (constant-false vs the loaded `a`), so we don't pin the seed.
+// CHECK: sol.func @{{.*logical_and.*}}
+// CHECK:   sol.alloca : !sol.ptr<i1, Stack>
+// CHECK:   sol.alloca : !sol.ptr<i1, Stack>
+// CHECK:   %[[RES:.*]] = sol.alloca : !sol.ptr<i1, Stack>
+// CHECK:   sol.store %{{.*}}, %[[RES]]
 // CHECK:   sol.if %{{.*}} {
 // CHECK:     sol.store %{{.*}}, %[[RES]]
 // CHECK:     sol.yield
 // CHECK:   } else {
-// CHECK:     sol.yield
 // CHECK:   }
-// CHECK:   %[[RET:.*]] = sol.load %[[RES]]
-// CHECK:   sol.return %[[RET]]
+// CHECK:   sol.load %[[RES]]
+// CHECK:   sol.return
 
-// Short-circuit ||: result defaults to true, else-branch stores b.
-// CHECK: sol.func @"logical_or(bool,bool)"
-// CHECK:   %[[TRUE:.*]] = arith.constant true
-// CHECK:   sol.store %[[TRUE]], %[[RES:.*]] :
+// Short-circuit ||: same shape, the conditional store lands in the else-branch.
+// CHECK: sol.func @{{.*logical_or.*}}
+// CHECK:   sol.alloca : !sol.ptr<i1, Stack>
+// CHECK:   sol.alloca : !sol.ptr<i1, Stack>
+// CHECK:   %[[RES:.*]] = sol.alloca : !sol.ptr<i1, Stack>
+// CHECK:   sol.store %{{.*}}, %[[RES]]
 // CHECK:   sol.if %{{.*}} {
-// CHECK:     sol.yield
 // CHECK:   } else {
 // CHECK:     sol.store %{{.*}}, %[[RES]]
 // CHECK:     sol.yield
 // CHECK:   }
-// CHECK:   %[[RET:.*]] = sol.load %[[RES]]
-// CHECK:   sol.return %[[RET]]
+// CHECK:   sol.load %[[RES]]
+// CHECK:   sol.return
 
-// CHECK: sol.func @"logical_not(bool)"
-// CHECK:   %[[COND:.*]] = sol.cmp eq, %{{.*}}, %{{.*}} : i1
+// CHECK: sol.func @{{.*logical_not.*}}
+// CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : i1
 
 contract C {
     function logical_and(bool a, bool b) public pure returns (bool) {

@@ -90,8 +90,14 @@ jobs:
           enable-mlir: 'true'
           enable-utils: 'true'
 
-      # TODO: remove the Build solc step below once the lit tests stop
-      # running against solc.
+      # TODO: remove this step and the Build solc step below once the lit
+      # tests stop running against solc.
+      - name: Sync solx-solidity for MLIR codegen
+        shell: bash
+        run: |
+          git -C solx-solidity fetch origin main
+          git -C solx-solidity checkout FETCH_HEAD
+
       - name: Build solc
         uses: ./.github/actions/build-solc
         with:

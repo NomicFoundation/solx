@@ -1,21 +1,22 @@
-// RUN: solx --emit-mlir %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @"eq(uint256,uint256)"
+// CHECK: sol.func @{{.*eq.*}}
 // CHECK:   sol.cmp eq, %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @"ne(uint256,uint256)"
+// CHECK: sol.func @{{.*ne.*}}
 // CHECK:   sol.cmp ne, %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @"lt(uint256,uint256)"
+// CHECK: sol.func @{{.*lt.*}}
 // CHECK:   sol.cmp lt, %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @"le(uint256,uint256)"
+// CHECK: sol.func @{{.*le.*}}
 // CHECK:   sol.cmp le, %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @"gt(uint256,uint256)"
+// CHECK: sol.func @{{.*gt.*}}
 // CHECK:   sol.cmp gt, %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @"ge(uint256,uint256)"
+// CHECK: sol.func @{{.*ge.*}}
 // CHECK:   sol.cmp ge, %{{.*}}, %{{.*}} : ui256
 
 contract C {
