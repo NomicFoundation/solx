@@ -1,14 +1,15 @@
-// RUN: solx --emit-mlir %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @"add(uint256,uint256)"(%{{.*}}: ui256, %{{.*}}: ui256) -> ui256
+// CHECK: sol.func @{{.*add.*}}(%{{.*}}: ui256, %{{.*}}: ui256) -> ui256
 // CHECK:   sol.cadd
 
-// CHECK: sol.func @"double
-// CHECK:   sol.call @"add(uint256,uint256)"(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
+// CHECK: sol.func @{{.*double.*}}
+// CHECK:   sol.call @{{.*add.*}}(%{{.*}}, %{{.*}}) : (ui256, ui256) -> ui256
 
-// CHECK: sol.func @"chain
-// CHECK:   sol.call @"double(uint256)"
-// CHECK:   sol.call @"add(uint256,uint256)"
+// CHECK: sol.func @{{.*chain.*}}
+// CHECK:   sol.call @{{.*double.*}}
+// CHECK:   sol.call @{{.*add.*}}
 
 contract C {
     function add(uint256 a, uint256 b) public pure returns (uint256) {

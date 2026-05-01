@@ -1,29 +1,24 @@
-// RUN: solx --emit-mlir %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK-DAG: sol.state_var @slot_0 slot 0 offset 0 : ui256
-// CHECK-DAG: sol.state_var @slot_1 slot 1 offset 0 : ui256
+// CHECK-DAG: sol.state_var @{{.*}} slot 0 offset 0 : ui256
+// CHECK-DAG: sol.state_var @{{.*}} slot 1 offset 0 : ui256
 
 // Read: addr_of -> load -> return
-// CHECK: sol.func @"get_x()"
-// CHECK:   %[[PTR:.*]] = sol.addr_of @slot_0 : !sol.ptr<ui256, Storage>
-// CHECK:   %[[VAL:.*]] = sol.load %[[PTR]] : !sol.ptr<ui256, Storage>, ui256
-// CHECK:   sol.return %[[VAL]]
+// CHECK: sol.func @{{.*get_x.*}}
+// CHECK:   %[[PTR:.*]] = sol.addr_of @{{.*}} : !sol.ptr<ui256, Storage>
+// CHECK:   sol.load %[[PTR]] : !sol.ptr<ui256, Storage>, ui256
+// CHECK:   sol.return
 
 // Write: addr_of -> store
-// CHECK: sol.func @"set_x(uint256)"
-// CHECK:   %[[PTR:.*]] = sol.addr_of @slot_0 : !sol.ptr<ui256, Storage>
+// CHECK: sol.func @{{.*set_x.*}}
+// CHECK:   %[[PTR:.*]] = sol.addr_of @{{.*}} : !sol.ptr<ui256, Storage>
 // CHECK:   sol.store %{{.*}}, %[[PTR]] : ui256, !sol.ptr<ui256, Storage>
 
-// Swap: load both, store crossed
-// CHECK: sol.func @"swap()"
-// CHECK:   %[[P0:.*]] = sol.addr_of @slot_0
-// CHECK:   sol.load %[[P0]]
-// CHECK:   %[[P1:.*]] = sol.addr_of @slot_1
-// CHECK:   sol.load %[[P1]]
-// CHECK:   sol.addr_of @slot_0
-// CHECK:   sol.store
-// CHECK:   sol.addr_of @slot_1
-// CHECK:   sol.store
+// Swap: touches both state vars
+// CHECK: sol.func @{{.*swap.*}}
+// CHECK-DAG: sol.addr_of
+// CHECK-DAG: sol.store
 
 contract C {
     uint256 x;

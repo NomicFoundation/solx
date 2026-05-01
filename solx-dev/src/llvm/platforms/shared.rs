@@ -151,6 +151,10 @@ pub fn shared_build_opts_tests(enabled: bool) -> Vec<String> {
             "-DLLVM_INCLUDE_TESTS='{}'",
             if enabled { "On" } else { "Off" },
         ),
+        format!(
+            "-DLLVM_INSTALL_UTILS='{}'",
+            if enabled { "On" } else { "Off" },
+        ),
     ]
 }
 

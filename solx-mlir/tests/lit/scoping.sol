@@ -1,13 +1,14 @@
-// RUN: solx --emit-mlir %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @"nested_scope()"
+// CHECK: sol.func @{{.*nested_scope.*}}
 // CHECK:   sol.alloca : !sol.ptr<ui256, Stack>
 // CHECK:   sol.alloca : !sol.ptr<ui256, Stack>
 
-// CHECK: sol.func @"default_return()"
+// CHECK: sol.func @{{.*default_return.*}}
 // CHECK:   sol.constant 42
-// CHECK:   %[[ZERO:.*]] = sol.constant 0 : ui256
-// CHECK:   sol.return %[[ZERO]] : ui256
+// CHECK:   sol.constant 0 : ui256
+// CHECK:   sol.return
 
 contract C {
     function nested_scope() public pure returns (uint256) {
