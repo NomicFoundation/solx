@@ -78,31 +78,26 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .emit_sol_state_var(&format!("slot_{slot}"), *slot, &contract_body);
         }
 
-        let mut has_constructor = false;
+        // Emit the constructor first to align with solc's MLIR layout. The
+        // explicit-constructor body is not yet lowered, so we emit an empty
+        // stub regardless of whether the source defines one.
+        let entry = self.state.builder.emit_sol_func(
+            "constructor()",
+            &[],
+            &[],
+            None,
+            solx_mlir::StateMutability::NonPayable,
+            Some(solx_mlir::FunctionKind::Constructor),
+            &contract_body,
+        );
+        self.state.builder.emit_sol_return(&[], &entry);
+
+        // Slang's `functions()` filters out Constructor and Modifier kinds.
         for function in contract.functions() {
-            match function.kind() {
-                FunctionKind::Modifier => continue,
-                FunctionKind::Constructor => has_constructor = true,
-                _ => {}
-            }
             self.state.current_contract_type = Some(contract_type);
             let emitter = FunctionEmitter::new(&self.semantic, self.state, &storage_layout);
             emitter.emit_sol(&function, &contract_body)?;
             self.state.current_contract_type = None;
-        }
-
-        // Emit a default constructor if the contract doesn't define one.
-        if !has_constructor {
-            let entry = self.state.builder.emit_sol_func(
-                "constructor()",
-                &[],
-                &[],
-                None,
-                solx_mlir::StateMutability::NonPayable,
-                Some(solx_mlir::FunctionKind::Constructor),
-                &contract_body,
-            );
-            self.state.builder.emit_sol_return(&[], &entry);
         }
 
         Ok(())
