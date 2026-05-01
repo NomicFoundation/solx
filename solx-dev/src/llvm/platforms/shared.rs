@@ -165,6 +165,47 @@ pub fn shared_build_opts_coverage(enabled: bool) -> Vec<String> {
 }
 
 ///
+/// Windows-only: configure an `install-distribution` that ships only what solx
+/// needs, skipping the ~200 LLVM tool binaries (`opt.exe`, `llc.exe`, ...).
+///
+/// `lld-link` dominates LLVM build wall-clock on the hosted Windows runner; solx
+/// never invokes any LLVM tool at runtime (it consumes LLVM as a library via
+/// inkwell), so linking them is pure waste. `LLVM_BUILD_TOOLS=Off` marks every
+/// tool `EXCLUDE_FROM_ALL`; `LLVM_INCLUDE_TOOLS=On` keeps `tools/` in the
+/// configure pass so the umbrella targets (`llvm-libraries` etc.) are defined.
+/// `LLVM_DISTRIBUTION_COMPONENTS` whitelists the install set, which
+/// `install-distribution` then honours — see #364.
+///
+/// `llvm-config` is deliberately **not** in the distribution list: with
+/// `LLVM_BUILD_TOOLS=Off`, `llvm_add_tool` never creates the `install-llvm-config`
+/// cmake target (both `install(TARGETS)` and `add_llvm_install_targets` are
+/// gated on `LLVM_BUILD_TOOLS`), so referencing it here errors at configure
+/// time. `llvm-sys` still needs `llvm-config` at Rust build time — the Windows
+/// builder builds it via direct `ninja llvm-config` and copies the binary into
+/// the install prefix after `install-distribution` completes.
+/// `lld-*` is always included because `shared_build_opts_projects` always
+/// enables `lld`. `mlir-*` is included only when `enable_mlir` is true.
+///
+pub fn windows_build_opts_distribution(enable_mlir: bool) -> Vec<String> {
+    let mut components = vec![
+        "llvm-libraries",
+        "llvm-headers",
+        "cmake-exports",
+        "lld-libraries",
+        "lld-headers",
+        "lld-cmake-exports",
+    ];
+    if enable_mlir {
+        components.extend(["mlir-libraries", "mlir-headers", "mlir-cmake-exports"]);
+    }
+    vec![
+        "-DLLVM_BUILD_TOOLS='Off'".to_owned(),
+        "-DLLVM_INCLUDE_TOOLS='On'".to_owned(),
+        format!("-DLLVM_DISTRIBUTION_COMPONENTS='{}'", components.join(";")),
+    ]
+}
+
+///
 /// Ignore duplicate libraries warnings for MacOS with XCode>=15.
 ///
 pub fn macos_build_opts_ignore_dupicate_libs_warnings() -> Vec<String> {

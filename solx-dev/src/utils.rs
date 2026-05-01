@@ -217,13 +217,21 @@ pub fn remove(project_directory: &Path, project_name: &str) -> anyhow::Result<()
 }
 
 ///
-/// Call ninja to build the LLVM.
+/// Call ninja to build and install LLVM via the given install target.
 ///
-pub fn ninja(build_dir: &Path) -> anyhow::Result<()> {
+/// Most platforms pass `"install"`; Windows passes `"install-distribution"`
+/// together with `LLVM_DISTRIBUTION_COMPONENTS` to skip installing the ~200
+/// LLVM tool binaries that solx doesn't use (it consumes LLVM as a library
+/// via inkwell). See #364 for the wall-clock motivation.
+///
+pub fn ninja(build_dir: &Path, install_target: &str) -> anyhow::Result<()> {
     let mut ninja = Command::new("ninja");
     let build_dir_str = build_dir.to_string_lossy();
     ninja.args(["-C", &*build_dir_str]);
-    command(ninja.arg("install"), "Running ninja install")?;
+    command(
+        ninja.arg(install_target),
+        &format!("Running ninja {install_target}"),
+    )?;
     Ok(())
 }
 
