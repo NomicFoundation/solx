@@ -134,6 +134,14 @@ impl<'context> TypeConversion<'context> {
     where
         'context: 'block,
     {
+        let target_type = match &self {
+            Self::Bool => builder.types.i1,
+            Self::Address => builder.types.sol_address,
+            Self::Cast(t) => *t,
+        };
+        if value.r#type() == target_type {
+            return value;
+        }
         match self {
             Self::Bool => {
                 let zero = builder.emit_sol_constant(0, value.r#type(), block);
