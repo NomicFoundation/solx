@@ -1,8 +1,8 @@
 // RUN: solx --emit-mlir %s | FileCheck %s
 
+// CHECK: sol.func @"constructor()"() attributes {kind = #{{.*}}Constructor
 // CHECK: sol.func @"receive()"() attributes {kind = #{{.*}}Receive, state_mutability = #{{.*}}Payable}
 // CHECK: sol.func @"fallback()"() attributes {kind = #{{.*}}Fallback, state_mutability = #{{.*}}Payable}
-// CHECK: sol.func @"constructor()"() attributes {kind = #{{.*}}Constructor
 
 contract C {
     uint256 x;
