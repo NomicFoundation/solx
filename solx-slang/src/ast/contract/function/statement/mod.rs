@@ -210,7 +210,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     let (pointer, target_type) = self
                         .environment
                         .variable_with_type(&name)
-                        .ok_or_else(|| anyhow::anyhow!("undefined variable: {name}"))?;
+                        .ok_or_else(|| anyhow::anyhow!("unregistered local variable: {name}"))?;
                     let cast = self
                         .state
                         .builder
