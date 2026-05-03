@@ -131,4 +131,85 @@ impl<'context> TypeFactory<'context> {
             ))
         }
     }
+
+    /// Creates a `sol::StringType` at the given data location.
+    pub fn string(&self, location: solx_utils::DataLocation) -> Type<'context> {
+        // SAFETY: `solxCreateStringType` returns a valid MlirType from the
+        // C++ Sol dialect. The context pointer is valid.
+        unsafe {
+            Type::from_raw(crate::ffi::solxCreateStringType(
+                self.context.to_raw(),
+                location as u32,
+            ))
+        }
+    }
+
+    /// Creates a `sol::FixedBytesType` of the given byte width.
+    pub fn fixed_bytes(&self, width: u32) -> Type<'context> {
+        // SAFETY: `solxCreateFixedBytesType` returns a valid MlirType from
+        // the C++ Sol dialect. The context pointer is valid.
+        unsafe {
+            Type::from_raw(crate::ffi::solxCreateFixedBytesType(
+                self.context.to_raw(),
+                width,
+            ))
+        }
+    }
+
+    /// Creates a `sol::ArrayType`. `size = -1` denotes a dynamic array.
+    pub fn array(
+        &self,
+        size: i64,
+        element_type: Type<'context>,
+        location: solx_utils::DataLocation,
+    ) -> Type<'context> {
+        // SAFETY: `solxCreateArrayType` returns a valid MlirType from the
+        // C++ Sol dialect. The context and element type pointers are valid.
+        unsafe {
+            Type::from_raw(crate::ffi::solxCreateArrayType(
+                self.context.to_raw(),
+                size,
+                element_type.to_raw(),
+                location as u32,
+            ))
+        }
+    }
+
+    /// Creates a `sol::MappingType` with the given key and value types.
+    pub fn mapping(
+        &self,
+        key_type: Type<'context>,
+        value_type: Type<'context>,
+    ) -> Type<'context> {
+        // SAFETY: `solxCreateMappingType` returns a valid MlirType from the
+        // C++ Sol dialect. The context, key, and value type pointers are valid.
+        unsafe {
+            Type::from_raw(crate::ffi::solxCreateMappingType(
+                self.context.to_raw(),
+                key_type.to_raw(),
+                value_type.to_raw(),
+            ))
+        }
+    }
+
+    /// Creates a `sol::StructType` from member types and a data location.
+    pub fn structure(
+        &self,
+        member_types: &[Type<'context>],
+        location: solx_utils::DataLocation,
+    ) -> Type<'context> {
+        let raw_types: Vec<mlir_sys::MlirType> =
+            member_types.iter().map(|t| t.to_raw()).collect();
+        // SAFETY: `solxCreateStructType` returns a valid MlirType from the
+        // C++ Sol dialect. The context pointer is valid; the member type
+        // slice is borrowed for the duration of the call.
+        unsafe {
+            Type::from_raw(crate::ffi::solxCreateStructType(
+                self.context.to_raw(),
+                raw_types.as_ptr(),
+                raw_types.len(),
+                location as u32,
+            ))
+        }
+    }
 }

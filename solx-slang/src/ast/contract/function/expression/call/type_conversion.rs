@@ -5,11 +5,28 @@
 use melior::ir::Type;
 use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
+use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::FunctionDefinition;
 use slang_solidity::backend::ir::ast::LiteralKind;
 use slang_solidity::backend::ir::ast::Parameter;
 use slang_solidity::backend::ir::ast::StateVariableDefinition;
 use slang_solidity::backend::ir::ast::Type as SlangType;
+use slang_solidity::backend::types::DataLocation as SlangDataLocation;
+
+/// Resolves a Slang data location into a dialect data location, substituting
+/// `fallback` for `Inherited` (struct-field-relative) locations.
+fn resolve_data_location(
+    location: SlangDataLocation,
+    fallback: Option<solx_utils::DataLocation>,
+) -> solx_utils::DataLocation {
+    match location {
+        SlangDataLocation::Storage => solx_utils::DataLocation::Storage,
+        SlangDataLocation::Calldata => solx_utils::DataLocation::CallData,
+        SlangDataLocation::Memory => solx_utils::DataLocation::Memory,
+        SlangDataLocation::Inherited => fallback
+            .expect("data location 'Inherited' encountered without a parent struct location"),
+    }
+}
 
 /// Classification of Solidity type conversions.
 ///
@@ -28,6 +45,17 @@ impl<'context> TypeConversion<'context> {
     /// Maps a Slang semantic type to an MLIR type.
     pub fn resolve_slang_type(
         slang_type: &SlangType,
+        builder: &solx_mlir::Builder<'context>,
+    ) -> Type<'context> {
+        Self::resolve_slang_type_with_fallback(slang_type, None, builder)
+    }
+
+    /// Maps a Slang semantic type to an MLIR type, substituting `fallback`
+    /// for `Inherited` data locations encountered during recursive resolution
+    /// of struct member types.
+    fn resolve_slang_type_with_fallback(
+        slang_type: &SlangType,
+        fallback: Option<solx_utils::DataLocation>,
         builder: &solx_mlir::Builder<'context>,
     ) -> Type<'context> {
         match slang_type {
@@ -73,6 +101,71 @@ impl<'context> TypeConversion<'context> {
                     )
                 }
             },
+            SlangType::String(string_type) => {
+                let location = resolve_data_location(string_type.location(), fallback);
+                builder.types.string(location)
+            }
+            SlangType::Bytes(bytes_type) => {
+                let location = resolve_data_location(bytes_type.location(), fallback);
+                builder.types.string(location)
+            }
+            SlangType::ByteArray(byte_array_type) => {
+                builder.types.fixed_bytes(byte_array_type.width())
+            }
+            SlangType::Array(array_type) => {
+                let element_type = Self::resolve_slang_type_with_fallback(
+                    &array_type.element_type(),
+                    fallback,
+                    builder,
+                );
+                let location = resolve_data_location(array_type.location(), fallback);
+                builder.types.array(-1, element_type, location)
+            }
+            SlangType::FixedSizeArray(fixed_array_type) => {
+                let element_type = Self::resolve_slang_type_with_fallback(
+                    &fixed_array_type.element_type(),
+                    fallback,
+                    builder,
+                );
+                let location = resolve_data_location(fixed_array_type.location(), fallback);
+                let size = i64::try_from(fixed_array_type.size())
+                    .expect("fixed-size array length exceeds i64 range");
+                builder.types.array(size, element_type, location)
+            }
+            SlangType::Mapping(mapping_type) => {
+                let key_type = Self::resolve_slang_type_with_fallback(
+                    &mapping_type.key_type(),
+                    fallback,
+                    builder,
+                );
+                let value_type = Self::resolve_slang_type_with_fallback(
+                    &mapping_type.value_type(),
+                    fallback,
+                    builder,
+                );
+                builder.types.mapping(key_type, value_type)
+            }
+            SlangType::Struct(struct_type) => {
+                let struct_location = resolve_data_location(struct_type.location(), fallback);
+                let struct_definition = match struct_type.definition() {
+                    Definition::Struct(definition) => definition,
+                    _ => unreachable!(
+                        "Slang StructType always references a Struct definition"
+                    ),
+                };
+                let mut member_types = Vec::new();
+                for member in struct_definition.members().iter() {
+                    let member_slang_type = member
+                        .get_type()
+                        .expect("struct member type resolved by semantic analysis");
+                    member_types.push(Self::resolve_slang_type_with_fallback(
+                        &member_slang_type,
+                        Some(struct_location),
+                        builder,
+                    ));
+                }
+                builder.types.structure(&member_types, struct_location)
+            }
             _ => unimplemented!("unsupported Slang type"),
         }
     }
