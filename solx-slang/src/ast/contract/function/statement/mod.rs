@@ -181,7 +181,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let name = declaration.name().name();
         let declared_type = declaration
             .get_type()
-            .map(|slang_type| TypeConversion::resolve_slang_type(&slang_type, &self.state.builder))
+            .map(|slang_type| TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder))
             .unwrap_or_else(|| self.state.builder.types.ui256);
 
         let emitter = ExpressionEmitter::new(
@@ -209,15 +209,17 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         let pointer = emitter.state.builder.emit_sol_alloca(declared_type, &block);
 
-        let stored_value = initial_value.unwrap_or_else(|| {
-            self.state
+        if let Some(value) = initial_value {
+            emitter.state.builder.emit_sol_store(value, pointer, &block);
+        } else if melior::ir::r#type::IntegerType::try_from(declared_type).is_ok() {
+            let zero = self
+                .state
                 .builder
-                .emit_sol_constant(0, declared_type, &block)
-        });
-        emitter
-            .state
-            .builder
-            .emit_sol_store(stored_value, pointer, &block);
+                .emit_sol_constant(0, declared_type, &block);
+            emitter.state.builder.emit_sol_store(zero, pointer, &block);
+        } else {
+            unimplemented!("zero-initialization for non-integer type {declared_type}");
+        }
 
         self.environment
             .define_variable(name, pointer, declared_type);

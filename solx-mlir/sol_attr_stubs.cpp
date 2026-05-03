@@ -14,6 +14,7 @@
 #include "mlir/CAPI/IR.h"
 
 #include <cstdlib>
+#include <vector>
 
 extern "C" {
 
@@ -74,6 +75,37 @@ MlirType solxCreateStringType(MlirContext ctx, uint32_t dataLocation) {
     auto *context = unwrap(ctx);
     auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
     return wrap(mlir::sol::StringType::get(context, location));
+}
+
+MlirType solxCreateFixedBytesType(MlirContext ctx, uint32_t size) {
+    auto *context = unwrap(ctx);
+    return wrap(mlir::sol::FixedBytesType::get(context, size));
+}
+
+MlirType solxCreateArrayType(MlirContext ctx, int64_t size, MlirType elementType,
+                             uint32_t dataLocation) {
+    if (dataLocation > 5) abort();
+    auto *context = unwrap(ctx);
+    auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
+    return wrap(mlir::sol::ArrayType::get(context, size, unwrap(elementType), location));
+}
+
+MlirType solxCreateMappingType(MlirContext ctx, MlirType keyType, MlirType valType) {
+    auto *context = unwrap(ctx);
+    return wrap(mlir::sol::MappingType::get(context, unwrap(keyType), unwrap(valType)));
+}
+
+MlirType solxCreateStructType(MlirContext ctx, const MlirType *member_types,
+                              size_t member_count, uint32_t dataLocation) {
+    if (dataLocation > 5) abort();
+    auto *context = unwrap(ctx);
+    std::vector<mlir::Type> mems;
+    mems.reserve(member_count);
+    for (size_t i = 0; i < member_count; i++) {
+        mems.push_back(unwrap(member_types[i]));
+    }
+    auto location = static_cast<mlir::sol::DataLocation>(dataLocation);
+    return wrap(mlir::sol::StructType::get(context, mems, location));
 }
 
 } /* extern "C" */

@@ -364,6 +364,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let slang_type = self.semantic.get_type_from_node_id(node_id)?;
         Some(TypeConversion::resolve_slang_type(
             &slang_type,
+            None,
             &self.state.builder,
         ))
     }
