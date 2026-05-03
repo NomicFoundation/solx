@@ -5,8 +5,11 @@
 use melior::ir::Type;
 use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
+use slang_solidity::backend::ir::ast::ContractMember;
 use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::FunctionDefinition;
+use slang_solidity::backend::ir::ast::FunctionKind;
+use slang_solidity::backend::ir::ast::FunctionMutability;
 use slang_solidity::backend::ir::ast::LiteralKind;
 use slang_solidity::backend::ir::ast::Parameter;
 use slang_solidity::backend::ir::ast::StateVariableDefinition;
@@ -146,6 +149,53 @@ impl<'context> TypeConversion<'context> {
                     ));
                 }
                 builder.types.structure(&member_types, struct_location)
+            }
+            SlangType::Contract(contract_type) => {
+                let contract_definition = match contract_type.definition() {
+                    Definition::Contract(definition) => definition,
+                    _ => unreachable!(
+                        "Slang ContractType always references a Contract definition"
+                    ),
+                };
+                let payable = contract_definition.members().iter().any(|member| {
+                    let ContractMember::FunctionDefinition(function) = member else {
+                        return false;
+                    };
+                    match function.kind() {
+                        FunctionKind::Receive => true,
+                        FunctionKind::Fallback => {
+                            matches!(function.mutability(), FunctionMutability::Payable)
+                        }
+                        _ => false,
+                    }
+                });
+                builder
+                    .types
+                    .contract(contract_definition.name().name().as_str(), payable)
+            }
+            SlangType::Interface(interface_type) => {
+                let interface_definition = match interface_type.definition() {
+                    Definition::Interface(definition) => definition,
+                    _ => unreachable!(
+                        "Slang InterfaceType always references an Interface definition"
+                    ),
+                };
+                // Interfaces are never `payable` themselves; payability lives
+                // on the address-cast at the call site.
+                builder
+                    .types
+                    .contract(interface_definition.name().name().as_str(), false)
+            }
+            SlangType::Enum(enum_type) => {
+                let enum_definition = match enum_type.definition() {
+                    Definition::Enum(definition) => definition,
+                    _ => unreachable!(
+                        "Slang EnumType always references an Enum definition"
+                    ),
+                };
+                let member_count = enum_definition.members().iter().count();
+                let max = u32::try_from(member_count - 1).expect("enum member count fits in u32");
+                builder.types.enumeration(max)
             }
             _ => unimplemented!("unsupported Slang type"),
         }

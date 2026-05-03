@@ -137,6 +137,10 @@ unsafe extern "C" {
         data_location: u32,
     ) -> mlir_sys::MlirType;
 
+    /// Creates a `sol::EnumType` whose maximum valid value is `max`
+    /// (one less than the number of enum members).
+    pub fn solxCreateEnumType(context: MlirContext, max: u32) -> mlir_sys::MlirType;
+
     // ---- MLIR core (not in mlir-sys) ----
 
     /// Returns the region that owns the given block.
