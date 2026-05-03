@@ -888,6 +888,45 @@ impl<'context> Builder<'context> {
         }
     }
 
+    /// Emits a `sol.call` operation and returns all of its result values in
+    /// declaration order. Use [`Self::emit_sol_call`] when only the first
+    /// result is needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the call operation results cannot be
+    /// extracted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a
+    /// bug in the builder.
+    pub fn emit_sol_call_results<'block, B>(
+        &self,
+        callee: &str,
+        operands: &[Value<'context, 'block>],
+        result_types: &[Type<'context>],
+        block: &B,
+    ) -> anyhow::Result<Vec<Value<'context, 'block>>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let operation = block.append_operation(
+            CallOperation::builder(self.context, self.unknown_location)
+                .callee(FlatSymbolRefAttribute::new(self.context, callee))
+                .outs(result_types)
+                .operands(operands)
+                .build()
+                .into(),
+        );
+        let mut results = Vec::with_capacity(result_types.len());
+        for index in 0..result_types.len() {
+            results.push(operation.result(index)?.into());
+        }
+        Ok(results)
+    }
+
     // ==== Comparisons ====
 
     /// Emits a `sol.cmp` comparison returning `i1`.

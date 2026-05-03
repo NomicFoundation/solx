@@ -12,6 +12,7 @@ use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::FunctionCallExpression;
 use slang_solidity::backend::ir::ast::MemberAccessExpression;
+use slang_solidity::backend::ir::ast::PositionalArguments;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 
@@ -83,30 +84,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((None, block));
         }
 
-        let mut argument_values = Vec::new();
-        let mut current_block = block;
-
-        for argument in positional_arguments.iter() {
-            let (value, next_block) = self
-                .expression_emitter
-                .emit_value(&argument, current_block)?;
-            argument_values.push(value);
-            current_block = next_block;
-        }
-
-        let argument_types: Vec<melior::ir::Type<'context>> =
-            argument_values.iter().map(|value| value.r#type()).collect();
-        let (mlir_name, parameter_types, return_types) = self
-            .expression_emitter
-            .state
-            .resolve_function(&callee_name, &argument_types)?;
-
-        // Cast arguments to match the callee's declared parameter types.
-        let builder = &self.expression_emitter.state.builder;
-        for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
-            let conversion = TypeConversion::from_target_type(param_type, builder);
-            *value = conversion.emit(*value, builder, &current_block);
-        }
+        let (mlir_name, argument_values, return_types, current_block) =
+            self.emit_call_setup(&callee_name, positional_arguments, block)?;
 
         if return_types.is_empty() {
             self.expression_emitter.state.builder.emit_sol_call(
@@ -125,6 +104,89 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .expect("function call always produces at least one result");
             Ok((Some(result), current_block))
         }
+    }
+
+    /// Emits a direct, named function call and returns all of its result
+    /// values in declaration order.
+    ///
+    /// Unlike [`Self::emit_function_call`], this entry point does not handle
+    /// explicit type conversions or built-in dispatch — it is intended for
+    /// callers that need the full result tuple (e.g. tuple deconstruction).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the call uses non-positional arguments, if the
+    /// callee is not a named identifier, or if name resolution fails.
+    pub fn emit_function_call_results(
+        &self,
+        call: &FunctionCallExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
+        else {
+            anyhow::bail!("only positional arguments supported");
+        };
+
+        let callee_name = match call.operand() {
+            Expression::Identifier(identifier) => identifier.name(),
+            _ => anyhow::bail!(
+                "multi-result calls only support direct named function callees"
+            ),
+        };
+
+        let (mlir_name, argument_values, return_types, current_block) =
+            self.emit_call_setup(&callee_name, positional_arguments, block)?;
+
+        let results = self.expression_emitter.state.builder.emit_sol_call_results(
+            mlir_name,
+            &argument_values,
+            return_types,
+            &current_block,
+        )?;
+        Ok((results, current_block))
+    }
+
+    /// Emits argument values for a named call, resolves the callee's MLIR
+    /// signature, and casts each argument to its declared parameter type.
+    ///
+    /// Returns the resolved MLIR name, the cast argument values, the
+    /// declared return types, and the block in which the call should be
+    /// emitted.
+    fn emit_call_setup<'a>(
+        &'a self,
+        callee_name: &str,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        &'a str,
+        Vec<Value<'context, 'block>>,
+        &'a [melior::ir::Type<'context>],
+        BlockRef<'context, 'block>,
+    )> {
+        let mut argument_values = Vec::new();
+        let mut current_block = block;
+        for argument in positional_arguments.iter() {
+            let (value, next_block) = self
+                .expression_emitter
+                .emit_value(&argument, current_block)?;
+            argument_values.push(value);
+            current_block = next_block;
+        }
+
+        let argument_types: Vec<melior::ir::Type<'context>> =
+            argument_values.iter().map(|value| value.r#type()).collect();
+        let (mlir_name, parameter_types, return_types) = self
+            .expression_emitter
+            .state
+            .resolve_function(callee_name, &argument_types)?;
+
+        let builder = &self.expression_emitter.state.builder;
+        for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
+            let conversion = TypeConversion::from_target_type(param_type, builder);
+            *value = conversion.emit(*value, builder, &current_block);
+        }
+
+        Ok((mlir_name, argument_values, return_types, current_block))
     }
 
     /// Emits a member access expression (e.g. `tx.origin`, `msg.sender`).

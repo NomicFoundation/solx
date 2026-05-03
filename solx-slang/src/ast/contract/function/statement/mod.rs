@@ -152,34 +152,20 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a tuple deconstruction statement of the form
-    /// `(decl_or_id_or_skip, ...) = (rhs0, rhs1, ...)`.
+    /// `(decl_or_id_or_skip, ...) = expression`.
     ///
-    /// The right-hand side must currently be a tuple expression; each item is
-    /// emitted independently, then assigned to the corresponding LHS slot.
-    /// `None` slots discard their value, `Identifier` slots store into an
-    /// existing variable, and `VariableDeclarationStatement` slots allocate a
-    /// new variable. Multi-result function calls on the RHS are not yet
-    /// supported.
+    /// The right-hand side may be either a tuple expression (each item is
+    /// emitted independently) or a direct call to a multi-return function
+    /// (its result tuple is used). `None` slots discard their value,
+    /// `Identifier` slots store into an existing variable, and
+    /// `VariableDeclarationStatement` slots allocate a new variable.
     fn emit_tuple_deconstruction(
         &mut self,
         statement: &slang_solidity::backend::ir::ast::TupleDeconstructionStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let expression = statement.expression();
-        let Expression::TupleExpression(tuple) = &expression else {
-            anyhow::bail!(
-                "tuple deconstruction with non-tuple right-hand side is not yet supported"
-            );
-        };
-
-        let items = tuple.items();
         let members = statement.members();
-        anyhow::ensure!(
-            items.len() == members.len(),
-            "tuple deconstruction arity mismatch: {} LHS slots vs {} RHS values",
-            members.len(),
-            items.len(),
-        );
 
         let emitter = ExpressionEmitter::new(
             &self.semantic,
@@ -189,16 +175,43 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.checked,
         );
 
-        let mut values = Vec::with_capacity(items.len());
-        let mut current = block;
-        for item in items.iter() {
-            let inner = item
-                .expression()
-                .ok_or_else(|| anyhow::anyhow!("empty tuple element on RHS of deconstruction"))?;
-            let (value, next) = emitter.emit_value(&inner, current)?;
-            values.push(value);
-            current = next;
-        }
+        let (values, current) = match &expression {
+            Expression::TupleExpression(tuple) => {
+                let items = tuple.items();
+                anyhow::ensure!(
+                    items.len() == members.len(),
+                    "tuple deconstruction arity mismatch: {} LHS slots vs {} RHS values",
+                    members.len(),
+                    items.len(),
+                );
+                let mut values = Vec::with_capacity(items.len());
+                let mut current = block;
+                for item in items.iter() {
+                    let inner = item.expression().ok_or_else(|| {
+                        anyhow::anyhow!("empty tuple element on RHS of deconstruction")
+                    })?;
+                    let (value, next) = emitter.emit_value(&inner, current)?;
+                    values.push(value);
+                    current = next;
+                }
+                (values, current)
+            }
+            Expression::FunctionCallExpression(call) => {
+                let call_emitter =
+                    crate::ast::contract::function::expression::call::CallEmitter::new(&emitter);
+                let (values, current) = call_emitter.emit_function_call_results(call, block)?;
+                anyhow::ensure!(
+                    values.len() == members.len(),
+                    "tuple deconstruction arity mismatch: {} LHS slots vs {} call results",
+                    members.len(),
+                    values.len(),
+                );
+                (values, current)
+            }
+            _ => anyhow::bail!(
+                "tuple deconstruction with this right-hand side shape is not yet supported"
+            ),
+        };
 
         for (member, value) in members.iter().zip(values.into_iter()) {
             match member {
