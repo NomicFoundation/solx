@@ -10,6 +10,7 @@ use slang_solidity::backend::built_ins::BuiltIn;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::MemberAccessExpression;
 use slang_solidity::backend::ir::ast::PositionalArguments;
+use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::BalanceOperation;
 use solx_mlir::ods::sol::BaseFeeOperation;
 use solx_mlir::ods::sol::BlobBaseFeeOperation;
@@ -21,12 +22,17 @@ use solx_mlir::ods::sol::CodeHashOperation;
 use solx_mlir::ods::sol::CodeOperation;
 use solx_mlir::ods::sol::CoinbaseOperation;
 use solx_mlir::ods::sol::DifficultyOperation;
+use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::GasLeftOperation;
 use solx_mlir::ods::sol::GasLimitOperation;
 use solx_mlir::ods::sol::GasPriceOperation;
 use solx_mlir::ods::sol::GetCallDataOperation;
+use solx_mlir::ods::sol::Keccak256Operation;
+use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::OriginOperation;
 use solx_mlir::ods::sol::PrevRandaoOperation;
+use solx_mlir::ods::sol::Ripemd160Operation;
+use solx_mlir::ods::sol::Sha256Operation;
 use solx_mlir::ods::sol::SigOperation;
 use solx_mlir::ods::sol::TimestampOperation;
 
@@ -90,6 +96,107 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     )
                     .result(0)
                     .expect("gasleft always produces one result")
+                    .into();
+                Ok(Some((Some(value), block)))
+            }
+            BuiltIn::Keccak256 if arguments.len() == 1 => {
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let builder = &self.expression_emitter.state.builder;
+                let value = block
+                    .append_operation(
+                        Keccak256Operation::builder(builder.context, builder.unknown_location)
+                            .addr(values[0])
+                            .result(builder.types.fixed_bytes(32))
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("keccak256 always produces one result")
+                    .into();
+                Ok(Some((Some(value), block)))
+            }
+            BuiltIn::Sha256 if arguments.len() == 1 => {
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let builder = &self.expression_emitter.state.builder;
+                let value = block
+                    .append_operation(
+                        Sha256Operation::builder(builder.context, builder.unknown_location)
+                            .data(values[0])
+                            .result(builder.types.fixed_bytes(32))
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("sha256 always produces one result")
+                    .into();
+                Ok(Some((Some(value), block)))
+            }
+            BuiltIn::Ripemd160 if arguments.len() == 1 => {
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let builder = &self.expression_emitter.state.builder;
+                let value = block
+                    .append_operation(
+                        Ripemd160Operation::builder(builder.context, builder.unknown_location)
+                            .data(values[0])
+                            .result(builder.types.fixed_bytes(20))
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("ripemd160 always produces one result")
+                    .into();
+                Ok(Some((Some(value), block)))
+            }
+            BuiltIn::Ecrecover if arguments.len() == 4 => {
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let builder = &self.expression_emitter.state.builder;
+                let value = block
+                    .append_operation(
+                        EcrecoverOperation::builder(builder.context, builder.unknown_location)
+                            .hash(values[0])
+                            .v(values[1])
+                            .r(values[2])
+                            .s(values[3])
+                            .result(builder.types.sol_address)
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("ecrecover always produces one result")
+                    .into();
+                Ok(Some((Some(value), block)))
+            }
+            BuiltIn::Addmod if arguments.len() == 3 => {
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let builder = &self.expression_emitter.state.builder;
+                let value = block
+                    .append_operation(
+                        AddModOperation::builder(builder.context, builder.unknown_location)
+                            .x(values[0])
+                            .y(values[1])
+                            .r#mod(values[2])
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("addmod always produces one result")
+                    .into();
+                Ok(Some((Some(value), block)))
+            }
+            BuiltIn::Mulmod if arguments.len() == 3 => {
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let builder = &self.expression_emitter.state.builder;
+                let value = block
+                    .append_operation(
+                        MulModOperation::builder(builder.context, builder.unknown_location)
+                            .x(values[0])
+                            .y(values[1])
+                            .r#mod(values[2])
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("mulmod always produces one result")
                     .into();
                 Ok(Some((Some(value), block)))
             }
@@ -269,6 +376,23 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .expect("address-base intrinsic always produces one result")
             .into();
         Ok((value, block))
+    }
+
+    /// Emits each positional argument and returns the resulting values
+    /// alongside the current block.
+    fn emit_argument_values(
+        &self,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let mut values = Vec::with_capacity(arguments.len());
+        let mut current = block;
+        for argument in arguments.iter() {
+            let (value, next) = self.expression_emitter.emit_value(&argument, current)?;
+            values.push(value);
+            current = next;
+        }
+        Ok((values, current))
     }
 
     /// Emits an `assert(condition)` built-in via `sol.assert`.
