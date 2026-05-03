@@ -5,9 +5,13 @@
 //! parameterized Sol dialect types (pointers, addresses, integers).
 //!
 
+pub mod array_size;
+
 use melior::ir::Type;
 use melior::ir::TypeLike;
 use melior::ir::r#type::IntegerType;
+
+use self::array_size::ArraySize;
 
 /// MLIR type factory: pre-cached common types and parameterized constructors.
 ///
@@ -156,10 +160,10 @@ impl<'context> TypeFactory<'context> {
         }
     }
 
-    /// Creates a `sol::ArrayType`. `size = -1` denotes a dynamic array.
+    /// Creates a `sol::ArrayType`.
     pub fn array(
         &self,
-        size: i64,
+        size: ArraySize,
         element_type: Type<'context>,
         location: solx_utils::DataLocation,
     ) -> Type<'context> {
@@ -168,7 +172,7 @@ impl<'context> TypeFactory<'context> {
         unsafe {
             Type::from_raw(crate::ffi::solxCreateArrayType(
                 self.context.to_raw(),
-                size,
+                size.as_dialect_i64(),
                 element_type.to_raw(),
                 location as u32,
             ))

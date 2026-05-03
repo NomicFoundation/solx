@@ -93,3 +93,12 @@ features = [
     "no-libffi-linking",
     "target-evm",
 ]
+
+# Slang
+[workspace.dependencies.slang_solidity]
+git = "https://github.com/NomicFoundation/slang.git"
+# TODO: pin to a release tag instead of a revision.
+rev = "d8388d6bf696383627ece31ba3551880d0b9eafc"
+# `__private_testing_utils` is required by `__private_backend_api` internals
+# (binder/types access in node_extensions). Both are unstable Slang APIs.
+features = ["__private_backend_api", "__private_testing_utils"]
