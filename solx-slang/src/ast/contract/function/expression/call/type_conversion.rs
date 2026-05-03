@@ -12,6 +12,8 @@ use slang_solidity::backend::ir::ast::Parameter;
 use slang_solidity::backend::ir::ast::StateVariableDefinition;
 use slang_solidity::backend::ir::ast::Type as SlangType;
 
+use crate::ast::contract::is_contract_payable;
+
 /// Classification of Solidity type conversions.
 ///
 /// Used for both explicit conversions (`uint256(x)`, `address(x)`, `bool(x)`)
@@ -146,6 +148,42 @@ impl<'context> TypeConversion<'context> {
                     ));
                 }
                 builder.types.structure(&member_types, struct_location)
+            }
+            SlangType::Contract(contract_type) => {
+                let contract_definition = match contract_type.definition() {
+                    Definition::Contract(definition) => definition,
+                    _ => unreachable!(
+                        "Slang ContractType always references a Contract definition"
+                    ),
+                };
+                builder.types.contract(
+                    contract_definition.name().name().as_str(),
+                    is_contract_payable(&contract_definition),
+                )
+            }
+            SlangType::Interface(interface_type) => {
+                let interface_definition = match interface_type.definition() {
+                    Definition::Interface(definition) => definition,
+                    _ => unreachable!(
+                        "Slang InterfaceType always references an Interface definition"
+                    ),
+                };
+                // Interfaces are never `payable` themselves; payability lives
+                // on the address-cast at the call site.
+                builder
+                    .types
+                    .contract(interface_definition.name().name().as_str(), false)
+            }
+            SlangType::Enum(enum_type) => {
+                let enum_definition = match enum_type.definition() {
+                    Definition::Enum(definition) => definition,
+                    _ => unreachable!(
+                        "Slang EnumType always references an Enum definition"
+                    ),
+                };
+                let member_count = enum_definition.members().iter().count();
+                let max = u32::try_from(member_count - 1).expect("enum member count fits in u32");
+                builder.types.enumeration(max)
             }
             _ => unimplemented!("unsupported Slang type"),
         }

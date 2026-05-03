@@ -216,4 +216,17 @@ impl<'context> TypeFactory<'context> {
             ))
         }
     }
+
+    /// Creates a `sol::EnumType` whose maximum valid value is `max`
+    /// (one less than the number of enum members).
+    pub fn enumeration(&self, max: u32) -> Type<'context> {
+        // SAFETY: `solxCreateEnumType` returns a valid MlirType from the
+        // C++ Sol dialect. The context pointer is valid.
+        unsafe {
+            Type::from_raw(crate::ffi::solxCreateEnumType(
+                self.context.to_raw(),
+                max,
+            ))
+        }
+    }
 }

@@ -108,4 +108,9 @@ MlirType solxCreateStructType(MlirContext ctx, const MlirType *member_types,
     return wrap(mlir::sol::StructType::get(context, mems, location));
 }
 
+MlirType solxCreateEnumType(MlirContext ctx, uint32_t max) {
+    auto *context = unwrap(ctx);
+    return wrap(mlir::sol::EnumType::get(context, max));
+}
+
 } /* extern "C" */
