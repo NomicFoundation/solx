@@ -5,15 +5,14 @@
 use melior::ir::Type;
 use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
-use slang_solidity::backend::ir::ast::ContractMember;
 use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::FunctionDefinition;
-use slang_solidity::backend::ir::ast::FunctionKind;
-use slang_solidity::backend::ir::ast::FunctionMutability;
 use slang_solidity::backend::ir::ast::LiteralKind;
 use slang_solidity::backend::ir::ast::Parameter;
 use slang_solidity::backend::ir::ast::StateVariableDefinition;
 use slang_solidity::backend::ir::ast::Type as SlangType;
+
+use crate::ast::contract::is_contract_payable;
 
 /// Classification of Solidity type conversions.
 ///
@@ -157,21 +156,10 @@ impl<'context> TypeConversion<'context> {
                         "Slang ContractType always references a Contract definition"
                     ),
                 };
-                let payable = contract_definition.members().iter().any(|member| {
-                    let ContractMember::FunctionDefinition(function) = member else {
-                        return false;
-                    };
-                    match function.kind() {
-                        FunctionKind::Receive => true,
-                        FunctionKind::Fallback => {
-                            matches!(function.mutability(), FunctionMutability::Payable)
-                        }
-                        _ => false,
-                    }
-                });
-                builder
-                    .types
-                    .contract(contract_definition.name().name().as_str(), payable)
+                builder.types.contract(
+                    contract_definition.name().name().as_str(),
+                    is_contract_payable(&contract_definition),
+                )
             }
             SlangType::Interface(interface_type) => {
                 let interface_definition = match interface_type.definition() {

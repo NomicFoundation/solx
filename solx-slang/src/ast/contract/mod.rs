@@ -19,6 +19,18 @@ use solx_mlir::Context;
 use self::function::FunctionEmitter;
 use self::function::expression::call::type_conversion::TypeConversion;
 
+/// Returns whether `contract` is payable (declares a `receive()` function or
+/// a `payable` `fallback()` function). Single source of truth for payability
+/// derivation — used both when emitting the `sol.contract` op and when
+/// resolving `SlangType::Contract` to a `Sol_ContractType`.
+pub fn is_contract_payable(contract: &ContractDefinition) -> bool {
+    contract.functions().iter().any(|function| {
+        matches!(function.kind(), FunctionKind::Receive)
+            || (matches!(function.kind(), FunctionKind::Fallback)
+                && matches!(function.mutability(), FunctionMutability::Payable))
+    })
+}
+
 /// Lowers a Solidity contract to Sol dialect MLIR.
 ///
 /// Emits `sol.contract` wrapping `sol.func` definitions. The
@@ -55,12 +67,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         self.pre_register_functions(contract);
         let storage_layout = Self::compute_storage_layout(contract, file_identifier);
 
-        let payable = contract.functions().iter().any(|function| {
-            matches!(function.kind(), FunctionKind::Receive)
-                || (matches!(function.kind(), FunctionKind::Fallback)
-                    && matches!(function.mutability(), FunctionMutability::Payable))
-        });
-        let contract_type = self.state.builder.types.contract(&contract_name, payable);
+        let contract_type = self
+            .state
+            .builder
+            .types
+            .contract(&contract_name, is_contract_payable(contract));
 
         // Emit sol.contract and functions.
         let module_body = self.state.module.body();
