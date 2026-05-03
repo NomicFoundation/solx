@@ -71,8 +71,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((Some(result), block));
         }
 
-        if let Some(block) = self.try_emit_built_in_call(&callee, positional_arguments, block)? {
-            return Ok((None, block));
+        if let Some((value, block)) =
+            self.try_emit_built_in_call(&callee, positional_arguments, block)?
+        {
+            return Ok((value, block));
         }
 
         let Expression::Identifier(callee_identifier) = &callee else {
