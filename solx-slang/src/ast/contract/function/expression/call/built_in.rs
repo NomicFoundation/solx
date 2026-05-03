@@ -18,12 +18,16 @@ use solx_mlir::ods::sol::CallValueOperation;
 use solx_mlir::ods::sol::CallerOperation;
 use solx_mlir::ods::sol::ChainIdOperation;
 use solx_mlir::ods::sol::CodeHashOperation;
+use solx_mlir::ods::sol::CodeOperation;
 use solx_mlir::ods::sol::CoinbaseOperation;
 use solx_mlir::ods::sol::DifficultyOperation;
+use solx_mlir::ods::sol::GasLeftOperation;
 use solx_mlir::ods::sol::GasLimitOperation;
 use solx_mlir::ods::sol::GasPriceOperation;
+use solx_mlir::ods::sol::GetCallDataOperation;
 use solx_mlir::ods::sol::OriginOperation;
 use solx_mlir::ods::sol::PrevRandaoOperation;
+use solx_mlir::ods::sol::SigOperation;
 use solx_mlir::ods::sol::TimestampOperation;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
@@ -32,9 +36,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// Tries to emit `callee(arguments)` as a Solidity built-in.
     ///
     /// Resolves the callee via slang's binder to a [`BuiltIn`] variant.
-    /// Returns `Ok(Some(block))` if the call resolves to a recognized
-    /// built-in and was lowered; returns `Ok(None)` if the callee is not a
-    /// built-in and the caller should fall through to generic dispatch.
+    /// On match, returns `Ok(Some((value, block)))`, where `value` is
+    /// `Some(...)` for value-producing built-ins (e.g. `gasleft()`) and
+    /// `None` for statement-style built-ins (e.g. `assert`, `require`).
+    /// Returns `Ok(None)` if the callee is not a built-in and the caller
+    /// should fall through to generic dispatch.
     ///
     /// # Errors
     ///
@@ -45,7 +51,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         callee: &Expression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         let Expression::Identifier(identifier) = callee else {
             return Ok(None);
         };
@@ -55,7 +61,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         match built_in {
             BuiltIn::Assert if arguments.len() == 1 => {
                 let condition = arguments.iter().next().expect("argument count verified");
-                Ok(Some(self.emit_assert(&condition, block)?))
+                Ok(Some((None, self.emit_assert(&condition, block)?)))
             }
             BuiltIn::Require if matches!(arguments.len(), 1 | 2) => {
                 let mut iter = arguments.iter();
@@ -68,11 +74,24 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     Some(_) => anyhow::bail!("require message must be a string literal"),
                     None => None,
                 };
-                Ok(Some(self.emit_require(
-                    &condition,
-                    message.as_deref(),
-                    block,
-                )?))
+                Ok(Some((
+                    None,
+                    self.emit_require(&condition, message.as_deref(), block)?,
+                )))
+            }
+            BuiltIn::Gasleft if arguments.is_empty() => {
+                let builder = &self.expression_emitter.state.builder;
+                let value = block
+                    .append_operation(
+                        GasLeftOperation::builder(builder.context, builder.unknown_location)
+                            .val(builder.types.ui256)
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("gasleft always produces one result")
+                    .into();
+                Ok(Some((Some(value), block)))
             }
             _ => Ok(None),
         }
@@ -82,8 +101,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     ///
     /// Resolves the member via slang's binder to a specific `BuiltIn` variant
     /// and lowers it to the matching `sol.*` operation. Address-base intrinsics
-    /// (`address.balance`, `address.codehash`) first evaluate the address
-    /// operand and pass it as the operation's container address.
+    /// (`address.balance`, `address.codehash`, `address.code`) first evaluate
+    /// the address operand and pass it as the operation's container address.
     ///
     /// # Errors
     ///
@@ -110,6 +129,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     CodeHashOperation::builder(builder.context, builder.unknown_location)
                         .cont_addr(address_value)
                         .out(builder.types.ui256)
+                        .build()
+                        .into()
+                })
+            }
+            Some(BuiltIn::AddressCode) => {
+                self.emit_address_base_intrinsic(access, block, |address_value| {
+                    CodeOperation::builder(builder.context, builder.unknown_location)
+                        .cont_addr(address_value)
+                        .out(builder.types.sol_string_memory)
                         .build()
                         .into()
                 })
@@ -191,6 +219,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     Some(BuiltIn::BlockPrevrandao) => {
                         PrevRandaoOperation::builder(builder.context, builder.unknown_location)
                             .val(builder.types.ui256)
+                            .build()
+                            .into()
+                    }
+                    Some(BuiltIn::MsgSig) => {
+                        SigOperation::builder(builder.context, builder.unknown_location)
+                            .val(builder.types.fixed_bytes(4))
+                            .build()
+                            .into()
+                    }
+                    Some(BuiltIn::MsgData) => {
+                        GetCallDataOperation::builder(builder.context, builder.unknown_location)
+                            .addr(builder.types.string(solx_utils::DataLocation::CallData))
                             .build()
                             .into()
                     }
