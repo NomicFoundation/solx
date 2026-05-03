@@ -243,36 +243,65 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a return statement.
+    ///
+    /// A multi-element tuple expression in the return position is unpacked
+    /// into one value per declared return slot; any other expression yields
+    /// a single value. Each value is cast to its corresponding declared
+    /// return type before being emitted as a `sol.return` operand.
     fn emit_return(
         &mut self,
         return_statement: &slang_solidity::backend::ir::ast::ReturnStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        if let Some(ref expression) = return_statement.expression() {
-            // TODO: support multi-return functions (tuple deconstruction).
-            anyhow::ensure!(
-                self.return_types.len() <= 1,
-                "multi-return functions are not yet supported"
-            );
-            let emitter = ExpressionEmitter::new(
-                &self.semantic,
-                self.state,
-                self.environment,
-                self.storage_layout,
-                self.checked,
-            );
-            let (value, block) = emitter.emit_value(expression, block)?;
-            let return_type = self
-                .return_types
-                .first()
-                .copied()
-                .unwrap_or(self.state.builder.types.ui256);
-            let return_value = self.state.builder.emit_sol_cast(value, return_type, &block);
-            self.state.builder.emit_sol_return(&[return_value], &block);
-        } else {
+        let Some(expression) = return_statement.expression() else {
             self.state.builder.emit_sol_return(&[], &block);
-        }
+            return Ok(None);
+        };
 
+        let emitter = ExpressionEmitter::new(
+            &self.semantic,
+            self.state,
+            self.environment,
+            self.storage_layout,
+            self.checked,
+        );
+
+        let (values, block) = if let Expression::TupleExpression(tuple) = &expression
+            && tuple.items().len() > 1
+        {
+            let items = tuple.items();
+            let mut values = Vec::with_capacity(items.len());
+            let mut current = block;
+            for item in items.iter() {
+                let inner = item
+                    .expression()
+                    .ok_or_else(|| anyhow::anyhow!("empty tuple element in return"))?;
+                let (value, next) = emitter.emit_value(&inner, current)?;
+                values.push(value);
+                current = next;
+            }
+            (values, current)
+        } else {
+            let (value, block) = emitter.emit_value(&expression, block)?;
+            (vec![value], block)
+        };
+
+        anyhow::ensure!(
+            values.len() == self.return_types.len(),
+            "return value count {} does not match function return arity {}",
+            values.len(),
+            self.return_types.len(),
+        );
+
+        let cast_values: Vec<_> = values
+            .into_iter()
+            .zip(self.return_types.iter())
+            .map(|(value, &return_type)| {
+                self.state.builder.emit_sol_cast(value, return_type, &block)
+            })
+            .collect();
+
+        self.state.builder.emit_sol_return(&cast_values, &block);
         Ok(None)
     }
 }
