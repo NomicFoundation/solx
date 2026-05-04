@@ -86,6 +86,7 @@ jobs:
           build-type: RelWithDebInfo
           enable-assertions: 'true'
           enable-mlir: 'true'
+          enable-utils: 'true'
 
       # When the artifact cache is warm, build-llvm skips ccache entirely,
       # so the ccache entry's LRU timer isn't refreshed. Touch it explicitly
