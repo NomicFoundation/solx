@@ -53,7 +53,7 @@ runs:
 
     - name: Install SFW
       if: steps.detect.outputs.method == 'action'
-      uses: socketdev/action@4337a545deecc20f19a909e52db7a2f6ba292f42 # v1
+      uses: socketdev/action@937f824ec476dfd164d4a4d9995751427b0be143 # v1
       with:
         mode: ${{ inputs.mode }}
 

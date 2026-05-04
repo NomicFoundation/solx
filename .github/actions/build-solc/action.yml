@@ -35,7 +35,7 @@ runs:
 
     - name: Restore solc artifact cache
       id: solc-artifact-cache
-      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: |
           ${{ inputs.working-dir }}/build
@@ -70,7 +70,7 @@ runs:
     # (GHA composite actions don't support YAML anchors).
     - name: Set up compiler cache for solc
       if: steps.solc-artifact-cache.outputs.cache-hit != 'true'
-      uses: hendrikmuhs/ccache-action@a1209f81afb8c005c13b4296c32e363431bffea5 # v1.2.14
+      uses: hendrikmuhs/ccache-action@d62db5f07c26379fc4b4e0916f098a92573c3b03 # v1.2.23
       env:
         CCACHE_DIR: ${{ runner.temp }}/ccache-solc
         CCACHE_BASEDIR: ${{ github.workspace }}
@@ -118,7 +118,7 @@ runs:
 
     - name: Save solc artifact cache
       if: steps.solc-artifact-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
-      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: |
           ${{ inputs.working-dir }}/build
