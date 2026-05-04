@@ -202,6 +202,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                                 .emit_sol_load(pointer, element_type, &block)?;
                         Ok((Some(value), block))
                     }
+                    Some(Definition::Constant(constant)) => {
+                        let initializer = constant
+                            .value()
+                            .ok_or_else(|| anyhow::anyhow!("constant {name} has no initializer"))?;
+                        self.emit(&initializer, block)
+                    }
                     None => anyhow::bail!("unresolved identifier: {name}"),
                     Some(_) => anyhow::bail!("unsupported identifier reference: {name}"),
                 }
