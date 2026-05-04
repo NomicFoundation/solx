@@ -44,6 +44,11 @@ pub struct Build {
     //
     // Build Features
     //
+    /// Whether to build and install the LLVM utility binaries
+    /// (`FileCheck`, `llvm-lit`, etc.). Implied by `--enable-tests`.
+    #[arg(long, help_heading = "Build Features")]
+    pub enable_utils: bool,
+
     /// Whether to build the LLVM tests.
     #[arg(long, help_heading = "Build Features")]
     pub enable_tests: bool,

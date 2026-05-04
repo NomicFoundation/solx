@@ -15,6 +15,7 @@ use crate::llvm::sanitizer::Sanitizer;
 pub fn build(
     build_type: BuildType,
     enable_mlir: bool,
+    enable_utils: bool,
     enable_tests: bool,
     enable_coverage: bool,
     extra_args: Vec<String>,
@@ -57,6 +58,9 @@ pub fn build(
                 enable_mlir,
             ))
             .args(crate::llvm::platforms::shared::shared_build_opts_targets())
+            .args(crate::llvm::platforms::shared::shared_build_opts_utils(
+                enable_utils,
+            ))
             .args(crate::llvm::platforms::shared::shared_build_opts_tests(
                 enable_tests,
             ))
