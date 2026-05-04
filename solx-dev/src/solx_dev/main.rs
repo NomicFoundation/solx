@@ -55,6 +55,7 @@ fn main_inner() -> anyhow::Result<()> {
             solx_dev::llvm_build(
                 arguments.build_type,
                 arguments.enable_mlir,
+                arguments.enable_utils,
                 arguments.enable_tests,
                 arguments.enable_coverage,
                 extra_args_unescaped,

@@ -15,6 +15,10 @@ inputs:
     description: 'Working directory.'
     required: false
     default: '.'
+  enable-utils:
+    description: "Build and install the LLVM utility binaries (FileCheck, llvm-lit, etc.). Implied by enable-tests."
+    required: false
+    default: 'false'
   enable-tests:
     description: "Enable tests."
     required: false
@@ -64,6 +68,12 @@ runs:
         [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
         [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
         [ '${{ inputs.enable-assertions }}' != 'true' ] && KEY="${KEY}-no-assertions"
+        # `enable-tests` implies `enable-utils` (LLVM CMake requires it),
+        # so normalize before keying to avoid splitting identical artifacts.
+        UTILS='${{ inputs.enable-utils }}'
+        [ '${{ inputs.enable-tests }}' = 'true' ] && UTILS='true'
+        [ "$UTILS" = 'true' ] && KEY="${KEY}-utils"
+        [ '${{ inputs.enable-tests }}' = 'true' ] && KEY="${KEY}-tests"
         KEY="${KEY}-${SHA}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
@@ -103,6 +113,12 @@ runs:
         [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
         [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
         [ '${{ inputs.enable-assertions }}' != 'true' ] && KEY="${KEY}-no-assertions"
+        # `enable-tests` implies `enable-utils` (LLVM CMake requires it),
+        # so normalize before keying to avoid splitting identical artifacts.
+        UTILS='${{ inputs.enable-utils }}'
+        [ '${{ inputs.enable-tests }}' = 'true' ] && UTILS='true'
+        [ "$UTILS" = 'true' ] && KEY="${KEY}-utils"
+        [ '${{ inputs.enable-tests }}' = 'true' ] && KEY="${KEY}-tests"
         # Terminator: prevents shorter-variant keys from prefix-matching longer ones
         # via ccache-action's restore-keys (e.g. `...-mlir` matching `...-mlir-coverage-no-assertions`).
         KEY="${KEY}-end"
@@ -150,6 +166,7 @@ runs:
         LIBSTDCPP_SOURCE_PATH: "${{ runner.temp }}/msys64/mingw64/lib/libstdc++.a"
       run: |
         set -x
+        [ "${{ inputs.enable-utils }}" = "true" ] && ENABLE_UTILS="--enable-utils"
         [ "${{ inputs.enable-tests }}" = "true" ] && ENABLE_TESTS="--enable-tests"
         [ "${{ inputs.enable-assertions }}" = "true" ] && ENABLE_ASSERTIONS="--enable-assertions"
         [ "${{ inputs.enable-coverage }}" = "true" ] && ENABLE_COVERAGE="--enable-coverage"
@@ -174,7 +191,7 @@ runs:
         fi
 
         ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} \
-          --ccache-variant=ccache ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
+          --ccache-variant=ccache ${ENABLE_UTILS} ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
           --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='${LINK_JOBS}'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"
 
     # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)

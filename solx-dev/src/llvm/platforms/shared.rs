@@ -131,20 +131,42 @@ pub fn shared_build_opts_targets() -> Vec<String> {
 }
 
 ///
-/// The LLVM tests build options shared by all platforms.
+/// The LLVM utils build options shared by all platforms.
 ///
-pub fn shared_build_opts_tests(enabled: bool) -> Vec<String> {
+/// Toggles `FileCheck`, `llvm-lit`, and the rest of the LLVM utility binaries
+/// (`-DLLVM_{BUILD,INCLUDE,INSTALL}_UTILS`). Sufficient for workflows that
+/// only need the lit-test runners against pre-built MLIR/IR fixtures, without
+/// pulling in the full `--enable-tests` build.
+///
+pub fn shared_build_opts_utils(enabled: bool) -> Vec<String> {
     vec![
         format!(
             "-DLLVM_BUILD_UTILS='{}'",
             if enabled { "On" } else { "Off" },
         ),
         format!(
-            "-DLLVM_BUILD_TESTS='{}'",
+            "-DLLVM_INCLUDE_UTILS='{}'",
             if enabled { "On" } else { "Off" },
         ),
         format!(
-            "-DLLVM_INCLUDE_UTILS='{}'",
+            "-DLLVM_INSTALL_UTILS='{}'",
+            if enabled { "On" } else { "Off" },
+        ),
+    ]
+}
+
+///
+/// The LLVM tests build options shared by all platforms.
+///
+/// Toggles the LLVM regression and unit tests (`-DLLVM_{BUILD,INCLUDE}_TESTS`).
+/// `--enable-tests` implies `--enable-utils` (see `crate::llvm::build`);
+/// callers that only need `FileCheck`/`llvm-lit` should prefer
+/// `--enable-utils` alone.
+///
+pub fn shared_build_opts_tests(enabled: bool) -> Vec<String> {
+    vec![
+        format!(
+            "-DLLVM_BUILD_TESTS='{}'",
             if enabled { "On" } else { "Off" },
         ),
         format!(

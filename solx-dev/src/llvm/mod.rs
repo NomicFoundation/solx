@@ -23,6 +23,7 @@ use anyhow::Context;
 pub fn build(
     build_type: BuildType,
     enable_mlir: bool,
+    enable_utils: bool,
     enable_tests: bool,
     enable_coverage: bool,
     extra_args: Vec<String>,
@@ -43,11 +44,18 @@ pub fn build(
 
     std::fs::create_dir_all(Path::DIRECTORY_LLVM_TARGET)?;
 
+    // LLVM's CMake bails with a fatal error when `LLVM_INCLUDE_TESTS=On` and
+    // `LLVM_INCLUDE_UTILS=Off` (solx-llvm/llvm/CMakeLists.txt:1361, "Including
+    // tests when not building utils will not work"), so promote `enable_tests`
+    // to imply `enable_utils` rather than push that contract onto every caller.
+    let enable_utils = enable_utils || enable_tests;
+
     if cfg!(target_arch = "x86_64") {
         if cfg!(target_os = "linux") {
             platforms::x86_64_linux_gnu::build(
                 build_type,
                 enable_mlir,
+                enable_utils,
                 enable_tests,
                 enable_coverage,
                 extra_args,
@@ -61,6 +69,7 @@ pub fn build(
             platforms::x86_64_macos::build(
                 build_type,
                 enable_mlir,
+                enable_utils,
                 enable_tests,
                 enable_coverage,
                 extra_args,
@@ -72,6 +81,7 @@ pub fn build(
             platforms::x86_64_windows_gnu::build(
                 build_type,
                 enable_mlir,
+                enable_utils,
                 enable_tests,
                 enable_coverage,
                 extra_args,
@@ -87,6 +97,7 @@ pub fn build(
             platforms::aarch64_linux_gnu::build(
                 build_type,
                 enable_mlir,
+                enable_utils,
                 enable_tests,
                 enable_coverage,
                 extra_args,
@@ -100,6 +111,7 @@ pub fn build(
             platforms::aarch64_macos::build(
                 build_type,
                 enable_mlir,
+                enable_utils,
                 enable_tests,
                 enable_coverage,
                 extra_args,
