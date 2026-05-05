@@ -7,11 +7,11 @@ pub mod function;
 
 use std::collections::HashMap;
 
-use slang_solidity::backend::ir::ast::ContractDefinition;
-use slang_solidity::backend::ir::ast::ContractMember;
-use slang_solidity::backend::ir::ast::FunctionKind;
-use slang_solidity::backend::ir::ast::FunctionMutability;
-use slang_solidity::cst::NodeId;
+use slang_solidity_v2::ast::ContractDefinition;
+use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::FunctionKind;
+use slang_solidity_v2::ast::FunctionMutability;
+use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Context;
 
@@ -142,7 +142,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 TypeConversion::resolve_function_types(&function, &self.state.builder);
 
             self.state.register_function_signature(
-                function.node_id().into(),
+                function.node_id(),
                 mlir_name,
                 parameter_types,
                 return_types,
@@ -161,9 +161,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let Some(abi) = contract.compute_abi_with_file_id(file_identifier.to_owned()) else {
             return HashMap::new();
         };
-        abi.storage_layout
+        abi.storage_layout()
             .iter()
-            .map(|item| (item.node_id, item.slot as u64))
+            .map(|item| (item.node_id(), item.slot() as u64))
             .collect()
     }
 }

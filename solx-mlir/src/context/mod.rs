@@ -24,6 +24,7 @@ use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::operation::OperationMutLike;
 use melior::pass::PassManager;
+use slang_solidity_v2::ast::NodeId;
 
 use crate::llvm_module::RawLlvmModule;
 
@@ -43,7 +44,7 @@ pub struct Context<'context> {
     /// Cached MLIR types and emission methods.
     pub builder: Builder<'context>,
     /// Resolution metadata keyed by the AST definition id of each function.
-    pub function_signatures: HashMap<usize, Function<'context>>,
+    pub function_signatures: HashMap<NodeId, Function<'context>>,
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
@@ -164,7 +165,7 @@ impl<'context> Context<'context> {
     /// Registers a function signature keyed by its AST definition id.
     pub fn register_function_signature(
         &mut self,
-        definition_id: usize,
+        definition_id: NodeId,
         mlir_name: String,
         parameter_types: Vec<Type<'context>>,
         return_types: Vec<Type<'context>>,
@@ -175,7 +176,7 @@ impl<'context> Context<'context> {
         );
         debug_assert!(
             previous.is_none(),
-            "duplicate function signature registration for definition {definition_id}",
+            "duplicate function signature registration for definition {definition_id:?}",
         );
     }
 
@@ -189,12 +190,12 @@ impl<'context> Context<'context> {
     /// Returns an error if the definition was not registered.
     pub fn resolve_function(
         &self,
-        definition_id: usize,
+        definition_id: NodeId,
     ) -> anyhow::Result<(&str, &[Type<'context>], &[Type<'context>])> {
         let function = self
             .function_signatures
             .get(&definition_id)
-            .ok_or_else(|| anyhow::anyhow!("undefined function for definition {definition_id}"))?;
+            .ok_or_else(|| anyhow::anyhow!("undefined function for definition {definition_id:?}"))?;
         Ok((
             function.mlir_name.as_str(),
             &function.parameter_types,

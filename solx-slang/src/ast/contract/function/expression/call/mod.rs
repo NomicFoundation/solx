@@ -9,15 +9,14 @@ use anyhow::Context as _;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
-use slang_solidity::backend::ir::ast::Definition;
-use slang_solidity::backend::ir::ast::Expression;
-use slang_solidity::backend::ir::ast::FunctionCallExpression;
-use slang_solidity::backend::ir::ast::FunctionDefinition;
-use slang_solidity::backend::ir::ast::MemberAccessExpression;
-use slang_solidity::backend::ir::ast::PositionalArguments;
-use slang_solidity::backend::ir::ast::StructDefinition;
-
+use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::FunctionCallExpression;
+use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::MemberAccessExpression;
+use slang_solidity_v2::ast::PositionalArguments;
+use slang_solidity_v2::ast::StructDefinition;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
@@ -258,7 +257,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let (mlir_name, parameter_types, return_types) = self
             .expression_emitter
             .state
-            .resolve_function(function_definition.node_id().into())?;
+            .resolve_function(function_definition.node_id())?;
 
         let builder = &self.expression_emitter.state.builder;
         for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {

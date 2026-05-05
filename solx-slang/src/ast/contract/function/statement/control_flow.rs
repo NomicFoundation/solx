@@ -4,9 +4,9 @@
 
 use melior::ir::BlockRef;
 use melior::ir::RegionLike;
-use slang_solidity::backend::ir::ast::ForStatementCondition;
-use slang_solidity::backend::ir::ast::ForStatementInitialization;
-use slang_solidity::backend::ir::ast::Statement;
+use slang_solidity_v2::ast::ForStatementCondition;
+use slang_solidity_v2::ast::ForStatementInitialization;
+use slang_solidity_v2::ast::Statement;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::statement::StatementEmitter;
@@ -19,7 +19,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Returns an error if the condition or body contains unsupported constructs.
     pub fn emit_if(
         &mut self,
-        if_statement: &slang_solidity::backend::ir::ast::IfStatement,
+        if_statement: &slang_solidity_v2::ast::IfStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let condition_expression = if_statement.condition();
@@ -74,7 +74,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// contains unsupported constructs.
     pub fn emit_for(
         &mut self,
-        for_statement: &slang_solidity::backend::ir::ast::ForStatement,
+        for_statement: &slang_solidity_v2::ast::ForStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         self.environment.enter_scope();
@@ -103,10 +103,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     return Ok(None);
                 }
             },
-            ForStatementInitialization::TupleDeconstructionStatement(_) => {
-                anyhow::bail!("tuple deconstruction in for-init not yet supported")
-            }
-            ForStatementInitialization::Semicolon => block,
+            ForStatementInitialization::Semicolon(_) => block,
         };
 
         let (condition_block, body_block, step_block) = self.state.builder.emit_sol_for(&block);
@@ -130,7 +127,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     .builder
                     .emit_sol_condition(condition_boolean, &condition_end);
             }
-            ForStatementCondition::Semicolon => {
+            ForStatementCondition::Semicolon(_) => {
                 let true_value = self.state.builder.emit_bool(true, &condition_block);
                 self.state
                     .builder
@@ -171,7 +168,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Returns an error if the condition or body contains unsupported constructs.
     pub fn emit_while(
         &mut self,
-        while_statement: &slang_solidity::backend::ir::ast::WhileStatement,
+        while_statement: &slang_solidity_v2::ast::WhileStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let (condition_block, body_block) = self.state.builder.emit_sol_while(&block);
@@ -211,7 +208,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Returns an error if the body or condition contains unsupported constructs.
     pub fn emit_do_while(
         &mut self,
-        do_while: &slang_solidity::backend::ir::ast::DoWhileStatement,
+        do_while: &slang_solidity_v2::ast::DoWhileStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let (body_block, condition_block) = self.state.builder.emit_sol_do_while(&block);

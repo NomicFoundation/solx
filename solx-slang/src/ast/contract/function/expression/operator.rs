@@ -2,14 +2,11 @@
 //! Solidity operator parsed from source text.
 //!
 
-use std::str::FromStr;
-
 use melior::ir::Location;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::operation::Operation;
 
-use solx_mlir::CmpPredicate;
 use solx_mlir::ods::sol::AddOperation;
 use solx_mlir::ods::sol::AndOperation;
 use solx_mlir::ods::sol::CAddOperation;
@@ -67,6 +64,8 @@ pub enum Operator {
     ShiftLeft,
     /// `>>`
     ShiftRight,
+    /// `~`
+    BitwiseNot,
 
     // ---- Bitwise assignment ----
     /// `&=`
@@ -93,35 +92,21 @@ pub enum Operator {
     Less,
     /// `<=`
     LessEqual,
+    /// `!`
+    Not,
 
     // ---- Step ----
     /// `++`
     Increment,
     /// `--`
     Decrement,
+
+    // ---- Other ----
+    /// `delete`
+    Delete,
 }
 
 impl Operator {
-    /// Returns the underlying arithmetic operator for compound assignment variants.
-    ///
-    /// `AddAssign` → `Add`, `SubtractAssign` → `Subtract`, etc.
-    /// Non-assignment operators are returned unchanged.
-    pub fn arithmetic_operator(self) -> Self {
-        match self {
-            Self::AddAssign => Self::Add,
-            Self::SubtractAssign => Self::Subtract,
-            Self::MultiplyAssign => Self::Multiply,
-            Self::DivideAssign => Self::Divide,
-            Self::RemainderAssign => Self::Remainder,
-            Self::BitwiseAndAssign => Self::BitwiseAnd,
-            Self::BitwiseOrAssign => Self::BitwiseOr,
-            Self::BitwiseXorAssign => Self::BitwiseXor,
-            Self::ShiftLeftAssign => Self::ShiftLeft,
-            Self::ShiftRightAssign => Self::ShiftRight,
-            other => other,
-        }
-    }
-
     /// Builds a Sol dialect binary operation via ODS-generated builders.
     ///
     /// When `checked` is true, uses checked variants (`sol.cadd`, `sol.csub`,
@@ -228,62 +213,6 @@ impl Operator {
             _ => unreachable!(
                 "emit_sol_binary_operation called on non-arithmetic operator: {self:?}"
             ),
-        }
-    }
-
-    /// Returns the Sol dialect comparison predicate.
-    ///
-    /// # Panics
-    ///
-    /// Panics if called on a non-comparison operator.
-    pub fn cmp_predicate(self) -> CmpPredicate {
-        match self {
-            Self::Equal => CmpPredicate::Eq,
-            Self::NotEqual => CmpPredicate::Ne,
-            Self::Greater => CmpPredicate::Gt,
-            Self::GreaterEqual => CmpPredicate::Ge,
-            Self::Less => CmpPredicate::Lt,
-            Self::LessEqual => CmpPredicate::Le,
-            _ => unreachable!("cmp_predicate called on non-comparison operator: {self:?}"),
-        }
-    }
-}
-
-impl FromStr for Operator {
-    type Err = anyhow::Error;
-
-    fn from_str(operator: &str) -> Result<Self, Self::Err> {
-        match operator {
-            "+" => Ok(Self::Add),
-            "-" => Ok(Self::Subtract),
-            "*" => Ok(Self::Multiply),
-            "/" => Ok(Self::Divide),
-            "%" => Ok(Self::Remainder),
-            "**" => Ok(Self::Exponentiation),
-            "+=" => Ok(Self::AddAssign),
-            "-=" => Ok(Self::SubtractAssign),
-            "*=" => Ok(Self::MultiplyAssign),
-            "/=" => Ok(Self::DivideAssign),
-            "%=" => Ok(Self::RemainderAssign),
-            "&" => Ok(Self::BitwiseAnd),
-            "|" => Ok(Self::BitwiseOr),
-            "^" => Ok(Self::BitwiseXor),
-            "<<" => Ok(Self::ShiftLeft),
-            ">>" => Ok(Self::ShiftRight),
-            "&=" => Ok(Self::BitwiseAndAssign),
-            "|=" => Ok(Self::BitwiseOrAssign),
-            "^=" => Ok(Self::BitwiseXorAssign),
-            "<<=" => Ok(Self::ShiftLeftAssign),
-            ">>=" => Ok(Self::ShiftRightAssign),
-            "==" => Ok(Self::Equal),
-            "!=" => Ok(Self::NotEqual),
-            ">" => Ok(Self::Greater),
-            ">=" => Ok(Self::GreaterEqual),
-            "<" => Ok(Self::Less),
-            "<=" => Ok(Self::LessEqual),
-            "++" => Ok(Self::Increment),
-            "--" => Ok(Self::Decrement),
-            _ => anyhow::bail!("unsupported operator: {operator}"),
         }
     }
 }

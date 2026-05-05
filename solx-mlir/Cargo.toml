@@ -25,6 +25,7 @@ mlir-sys = "210.0"
 
 inkwell = { workspace = true, features = ["llvm21-1-no-llvm-linking"] }
 
+slang_solidity_v2 = { workspace = true }
 solx-utils = { path = "../solx-utils", features = ["mlir"] }
 
 [dev-dependencies]

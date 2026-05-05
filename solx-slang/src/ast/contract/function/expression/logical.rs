@@ -2,16 +2,14 @@
 //! Comparison and short-circuit logical expression lowering.
 //!
 
-use std::str::FromStr;
-
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use melior::ir::ValueLike;
-use slang_solidity::backend::ir::ast::Expression;
+use slang_solidity_v2::ast::Expression;
+use solx_mlir::CmpPredicate;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::contract::function::expression::operator::Operator;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits a `sol.cmp` comparison.
@@ -23,7 +21,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         &self,
         left: &Expression,
         right: &Expression,
-        operator: &str,
+        predicate: CmpPredicate,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (lhs, block) = self.emit_value(left, block)?;
@@ -43,7 +41,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             &self.state.builder,
             &block,
         );
-        let predicate = Operator::from_str(operator)?.cmp_predicate();
         let comparison = self.state.builder.emit_sol_cmp(lhs, rhs, predicate, &block);
         Ok((comparison, block))
     }

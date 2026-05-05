@@ -8,9 +8,10 @@ pub mod compilation_config;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use slang_solidity::compilation::CompilationBuilder;
-use slang_solidity::compilation::CompilationUnit;
-use slang_solidity::utils::LanguageFacts;
+use slang_solidity_v2::compilation::CompilationBuilder;
+use slang_solidity_v2::compilation::CompilationUnit;
+use slang_solidity_v2::utils::LanguageVersion;
+use slang_solidity_v2_common::diagnostics::DiagnosticExtensions;
 
 use solx_core::Frontend;
 use solx_standard_json::CollectableError;
@@ -29,7 +30,8 @@ pub struct Slang {
 
 impl Default for Slang {
     fn default() -> Self {
-        let default = LanguageFacts::LATEST_VERSION;
+        // TODO: sync with the latest version provided by Slang
+        let default: semver::Version = LanguageVersion::V0_8_35.into();
 
         Self {
             version: solx_standard_json::Version::new(default.to_string(), default),
@@ -52,11 +54,11 @@ impl Slang {
     pub fn compile(&self, sources: BTreeMap<String, String>) -> anyhow::Result<CompilationUnit> {
         let paths: Vec<String> = sources.keys().cloned().collect();
         let configuration = CompilationConfig::new(sources);
-        let mut builder = CompilationBuilder::create(self.version.default.clone(), configuration)
-            .map_err(|error| anyhow::anyhow!("slang compilation builder: {error}"))?;
+        let version: LanguageVersion = self.version.default.clone().try_into().unwrap();
+        let mut builder = CompilationBuilder::create(version, configuration);
 
         for path in paths.iter() {
-            builder.add_file(path)?;
+            builder.add_file(path.clone());
         }
 
         Ok(builder.build())
@@ -117,29 +119,30 @@ impl Frontend for Slang {
 
         let unit = self.compile(sources)?;
 
-        for file in unit.files() {
-            let file_identifier = file.id();
-            output.errors.extend(file.errors().iter().map(|error| {
-                let text_range = error.text_range();
+        output
+            .errors
+            .extend(unit.diagnostics().iter().map(|diagnostic| {
+                let file_identifier = diagnostic.file_id();
+                let text_range = diagnostic.text_range();
                 let source_location =
                     solx_standard_json::output::error::source_location::SourceLocation::new(
-                        file_identifier.to_owned(),
-                        text_range.start.utf8 as isize,
-                        text_range.end.utf8 as isize,
+                        file_identifier,
+                        text_range.start as isize,
+                        text_range.end as isize,
                     );
-
                 solx_standard_json::OutputError::new_error_with_data(
                     Some(file_identifier),
                     None,
-                    error.message(),
+                    diagnostic.message(),
                     Some(source_location),
                     Some(&input_json.sources),
                 )
             }));
 
+        for file_identifier in &unit.file_ids() {
             if let Some(output_source) = output.sources.get_mut(file_identifier) {
                 output_source.ast = Some(
-                    serde_json::to_value(file.tree().as_ref())
+                    serde_json::to_value(unit.get_file_ast_root(file_identifier).as_ref())
                         .map_err(|error| anyhow::anyhow!("CST serialization: {error}"))?,
                 );
             }
@@ -149,15 +152,10 @@ impl Frontend for Slang {
             return Ok(output);
         }
 
-        let semantic = std::rc::Rc::clone(unit.semantic_analysis());
-        let file_identifiers: Vec<String> = unit
-            .files()
-            .iter()
-            .map(|file| file.id().to_owned())
-            .collect();
+        let file_identifiers = unit.file_ids();
 
-        for file_identifier in file_identifiers.iter() {
-            let Some(source_unit) = semantic.get_file_ast_root(file_identifier) else {
+        for file_identifier in &file_identifiers {
+            let Some(source_unit) = unit.get_file_ast_root(file_identifier) else {
                 continue;
             };
             let melior_context = solx_mlir::Context::create_mlir_context();
@@ -194,7 +192,7 @@ impl Frontend for Slang {
 
             output
                 .contracts
-                .entry(file_identifier.clone())
+                .entry(file_identifier.to_string())
                 .or_default()
                 .insert(contract_name, contract);
         }

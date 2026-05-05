@@ -6,8 +6,7 @@ use std::collections::BTreeMap;
 use std::path::Component;
 use std::path::Path;
 
-use slang_solidity::compilation::CompilationBuilderConfig;
-use slang_solidity::cst::Cursor;
+use slang_solidity_v2::compilation::CompilationBuilderConfig;
 
 /// Provides file reading and import resolution for the Slang compilation builder.
 pub struct CompilationConfig {
@@ -22,31 +21,31 @@ impl CompilationConfig {
 }
 
 impl CompilationBuilderConfig for CompilationConfig {
-    type Error = anyhow::Error;
-
-    fn read_file(&mut self, file_identifier: &str) -> anyhow::Result<Option<String>> {
-        Ok(self.sources.get(file_identifier).cloned())
+    fn read_file(&mut self, file_identifier: &str) -> Result<String, String> {
+        self.sources
+            .get(file_identifier)
+            .cloned()
+            .ok_or(format!("file not found {file_identifier}"))
     }
 
     fn resolve_import(
         &mut self,
         source_file_identifier: &str,
-        import_path_cursor: &Cursor,
-    ) -> anyhow::Result<Option<String>> {
-        let literal = import_path_cursor.node().unparse();
-        let path = literal
+        import_path: &str,
+    ) -> Result<String, String> {
+        let path = import_path
             .strip_prefix('"')
             .and_then(|stripped| stripped.strip_suffix('"'))
             .or_else(|| {
-                literal
+                import_path
                     .strip_prefix('\'')
                     .and_then(|stripped| stripped.strip_suffix('\''))
             })
-            .unwrap_or(&literal);
+            .unwrap_or(import_path);
 
         // Try exact match first.
         if self.sources.contains_key(path) {
-            return Ok(Some(path.to_owned()));
+            return Ok(path.to_owned());
         }
 
         // Resolve relative imports against the importing file's directory.
@@ -67,10 +66,12 @@ impl CompilationBuilderConfig for CompilationConfig {
             let clean: std::path::PathBuf = normalized.into_iter().collect();
             let key = clean.to_string_lossy().replace('\\', "/");
             if self.sources.contains_key(&key) {
-                return Ok(Some(key));
+                return Ok(key);
             }
         }
 
-        Ok(None)
+        Err(format!(
+            "failed to resolve import {import_path} in {source_file_identifier}"
+        ))
     }
 }

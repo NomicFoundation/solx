@@ -22,8 +22,8 @@ serde_arrays = "0.2"
 ipfs-hasher = "0.13"
 base58 = "0.2"
 
-slang_solidity = { workspace = true, optional = true }
+slang_solidity_v2 = { workspace = true, optional = true }
 
 [features]
 mlir = []
-slang = ["dep:slang_solidity"]
+slang = ["dep:slang_solidity_v2"]

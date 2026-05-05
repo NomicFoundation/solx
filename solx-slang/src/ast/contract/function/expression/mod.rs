@@ -18,10 +18,12 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
-use slang_solidity::backend::ir::ast::Definition;
-use slang_solidity::backend::ir::ast::Expression;
-use slang_solidity::backend::ir::ast::Type as SlangType;
-use slang_solidity::cst::NodeId;
+use operator::Operator;
+use slang_solidity_v2::ast;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
@@ -120,15 +122,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .emit_constant(&value, result_type, &block);
                 Ok((Some(constant), block))
             }
-            Expression::TrueKeyword => {
+            Expression::TrueKeyword(_) => {
                 let constant = self.state.builder.emit_bool(true, &block);
                 Ok((Some(constant), block))
             }
-            Expression::FalseKeyword => {
+            Expression::FalseKeyword(_) => {
                 let constant = self.state.builder.emit_bool(false, &block);
                 Ok((Some(constant), block))
             }
-            Expression::ThisKeyword => {
+            Expression::ThisKeyword(_) => {
                 let contract_type = self
                     .state
                     .current_contract_type
@@ -211,37 +213,52 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let result_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                let operator = expression.operator();
-                self.emit_binary_op(&left, &right, &operator.text, result_type, block)
+                let operator = match expression.operator() {
+                    ast::AdditiveExpressionOperator::Plus(_) => Operator::Add,
+                    ast::AdditiveExpressionOperator::Minus(_) => Operator::Subtract,
+                };
+                self.emit_binary_op(&left, &right, operator, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::MultiplicativeExpression(expression) => {
                 let result_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                let operator = expression.operator();
-                self.emit_binary_op(&left, &right, &operator.text, result_type, block)
+                let operator = match expression.operator() {
+                    ast::MultiplicativeExpressionOperator::Asterisk(_) => Operator::Multiply,
+                    ast::MultiplicativeExpressionOperator::Percent(_) => Operator::Remainder,
+                    ast::MultiplicativeExpressionOperator::Slash(_) => Operator::Divide,
+                };
+                self.emit_binary_op(&left, &right, operator, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::ExponentiationExpression(expression) => {
                 let target_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, "**", target_type, block)
+                self.emit_binary_op(&left, &right, Operator::Exponentiation, target_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::EqualityExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                let operator = expression.operator();
-                self.emit_comparison(&left, &right, &operator.text, block)
+                let predicate = match expression.operator() {
+                    ast::EqualityExpressionOperator::BangEqual(_) => CmpPredicate::Ne,
+                    ast::EqualityExpressionOperator::EqualEqual(_) => CmpPredicate::Eq,
+                };
+                self.emit_comparison(&left, &right, predicate, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::InequalityExpression(expression) => {
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                let operator = expression.operator();
-                self.emit_comparison(&left, &right, &operator.text, block)
+                let predicate = match expression.operator() {
+                    ast::InequalityExpressionOperator::GreaterThan(_) => CmpPredicate::Gt,
+                    ast::InequalityExpressionOperator::GreaterThanEqual(_) => CmpPredicate::Ge,
+                    ast::InequalityExpressionOperator::LessThan(_) => CmpPredicate::Lt,
+                    ast::InequalityExpressionOperator::LessThanEqual(_) => CmpPredicate::Le,
+                };
+                self.emit_comparison(&left, &right, predicate, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::AndExpression(expression) => {
@@ -258,44 +275,60 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Expression::PostfixExpression(expression) => {
                 let operand = expression.operand();
-                let operator = expression.operator();
-                self.emit_postfix(&operand, &operator.text, block)
+                let operator = match expression.operator() {
+                    ast::PostfixExpressionOperator::MinusMinus(_) => Operator::Decrement,
+                    ast::PostfixExpressionOperator::PlusPlus(_) => Operator::Increment,
+                };
+                self.emit_postfix(&operand, operator, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::PrefixExpression(expression) => {
-                let operator = expression.operator();
                 let result_type = self.resolve_slang_type(expression.get_type());
+                let operator = match expression.operator() {
+                    ast::PrefixExpressionOperator::Bang(_) => Operator::Not,
+                    ast::PrefixExpressionOperator::DeleteKeyword(_) => Operator::Delete,
+                    ast::PrefixExpressionOperator::Minus(_) => Operator::Subtract,
+                    ast::PrefixExpressionOperator::MinusMinus(_) => Operator::Decrement,
+                    ast::PrefixExpressionOperator::PlusPlus(_) => Operator::Increment,
+                    ast::PrefixExpressionOperator::Tilde(_) => Operator::BitwiseNot,
+                };
                 let operand = expression.operand();
-                self.emit_prefix(&operator.text, &operand, result_type, block)
+                self.emit_prefix(operator, &operand, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::BitwiseAndExpression(expression) => {
                 let result_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, "&", result_type, block)
+                self.emit_binary_op(&left, &right, Operator::BitwiseAnd, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::BitwiseOrExpression(expression) => {
                 let result_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, "|", result_type, block)
+                self.emit_binary_op(&left, &right, Operator::BitwiseOr, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::BitwiseXorExpression(expression) => {
                 let result_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, "^", result_type, block)
+                self.emit_binary_op(&left, &right, Operator::BitwiseXor, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::ShiftExpression(expression) => {
                 let result_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
-                let operator = expression.operator();
-                self.emit_binary_op(&left, &right, &operator.text, result_type, block)
+                let operator = match expression.operator() {
+                    ast::ShiftExpressionOperator::GreaterThanGreaterThan(_) => Operator::ShiftRight,
+                    ast::ShiftExpressionOperator::GreaterThanGreaterThanGreaterThan(_) => {
+                        Operator::ShiftRight
+                    }
+                    ast::ShiftExpressionOperator::LessThanLessThan(_) => Operator::ShiftLeft,
+                };
+                self.emit_binary_op(&left, &right, operator, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::FunctionCallExpression(call) => {

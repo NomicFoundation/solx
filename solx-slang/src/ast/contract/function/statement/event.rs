@@ -10,12 +10,12 @@ use melior::ir::Value;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::r#type::IntegerType;
-use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
-use slang_solidity::backend::ir::ast::Definition;
-use slang_solidity::backend::ir::ast::EmitStatement;
-use slang_solidity::backend::ir::ast::Expression;
-use slang_solidity::backend::ir::ast::NamedArguments;
-use slang_solidity::backend::ir::ast::Parameters;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::EmitStatement;
+use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::NamedArguments;
+use slang_solidity_v2::ast::Parameters;
 use solx_mlir::ods::sol::EmitOperation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
@@ -87,7 +87,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 &self.state.builder,
                 &current_block,
             );
-            if indexed {
+            if indexed.is_some() {
                 // TODO: indexed reference-type parameters (string, bytes,
                 // arrays, structs) must store the keccak256 hash of their
                 // encoded value as the topic, not the value itself. That
@@ -98,7 +98,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
         }
 
-        let signature = if event_definition.anonymous_keyword() {
+        let signature = if event_definition.anonymous_keyword().is_some() {
             None
         } else {
             Some(

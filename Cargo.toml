@@ -95,10 +95,12 @@ features = [
 ]
 
 # Slang
-[workspace.dependencies.slang_solidity]
+[workspace.dependencies.slang_solidity_v2]
 git = "https://github.com/NomicFoundation/slang.git"
 # TODO: pin to a release tag instead of a revision.
-rev = "eaf0bb3b9ef6359dd5f3769575993f0311340f21"
-# `__private_testing_utils` is required by `__private_backend_api` internals
-# (binder/types access in node_extensions). Both are unstable Slang APIs.
-features = ["__private_backend_api", "__private_testing_utils"]
+rev = "bf34fec7369266c29753a54aecf5b221a1f72e47"
+
+[workspace.dependencies.slang_solidity_v2_common]
+git = "https://github.com/NomicFoundation/slang.git"
+# TODO: pin to a release tag instead of a revision.
+rev = "bf34fec7369266c29753a54aecf5b221a1f72e47"
