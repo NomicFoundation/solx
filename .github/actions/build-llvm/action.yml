@@ -74,11 +74,6 @@ runs:
         [ '${{ inputs.enable-tests }}' = 'true' ] && UTILS='true'
         [ "$UTILS" = 'true' ] && KEY="${KEY}-utils"
         [ '${{ inputs.enable-tests }}' = 'true' ] && KEY="${KEY}-tests"
-        # TEMP: force a cold artifact-cache miss on macOS x86 to measure the
-        # LINK_JOBS=1 effect against PR #396's cold reference. Revert before merge.
-        if [ "${{ runner.os }}" = "macOS" ] && [ "${{ runner.arch }}" = "X64" ]; then
-          KEY="${KEY}-cold-test"
-        fi
         KEY="${KEY}-${SHA}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
@@ -124,11 +119,6 @@ runs:
         [ '${{ inputs.enable-tests }}' = 'true' ] && UTILS='true'
         [ "$UTILS" = 'true' ] && KEY="${KEY}-utils"
         [ '${{ inputs.enable-tests }}' = 'true' ] && KEY="${KEY}-tests"
-        # TEMP: force a cold ccache miss on macOS x86 to measure the
-        # LINK_JOBS=1 effect against PR #396's cold reference. Revert before merge.
-        if [ "${{ runner.os }}" = "macOS" ] && [ "${{ runner.arch }}" = "X64" ]; then
-          KEY="${KEY}-cold-test"
-        fi
         # Terminator: prevents shorter-variant keys from prefix-matching longer ones
         # via ccache-action's restore-keys (e.g. `...-mlir` matching `...-mlir-coverage-no-assertions`).
         KEY="${KEY}-end"
