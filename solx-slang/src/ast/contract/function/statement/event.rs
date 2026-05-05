@@ -19,6 +19,7 @@ use slang_solidity::backend::ir::ast::Parameters;
 use solx_mlir::ods::sol::EmitOperation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -73,7 +74,19 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         for (parameter, argument) in parameters.iter().zip(ordered_arguments) {
             let (value, next_block) = emitter.emit_value(&argument, current_block)?;
             current_block = next_block;
-            if parameter.indexed() {
+            let indexed = parameter.indexed();
+            let parameter_type = TypeConversion::resolve_slang_type(
+                &parameter
+                    .get_type()
+                    .expect("parameter type resolved by semantic analysis"),
+                &self.state.builder,
+            );
+            let value = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
+                value,
+                &self.state.builder,
+                &current_block,
+            );
+            if indexed {
                 // TODO: indexed reference-type parameters (string, bytes,
                 // arrays, structs) must store the keccak256 hash of their
                 // encoded value as the topic, not the value itself. That
