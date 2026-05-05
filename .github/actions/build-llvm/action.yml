@@ -180,13 +180,16 @@ runs:
         fi
 
         # With ccache at 99%+ hit rate, link time dominates. Each LLVM tool link
-        # peaks at 2-4 GB RSS on RelWithDebInfo. The hosted macos-15 ARM runner
-        # has 3 vCPU / 7 GB RAM — two parallel links alone can exceed RAM and
-        # push into swap, which is net slower than serialized links. The intel
-        # macos-15 has 14 GB and handles 2 parallel links fine, as do Linux and
-        # Windows hosted (16 GB).
+        # peaks at 2-4 GB RSS on RelWithDebInfo. Both hosted macos-15 runners
+        # benefit from serialized links, for different reasons:
+        #   ARM64 (3 vCPU / 7 GB): 2 parallel links exceed RAM → swap.
+        #   x86_64 (4 vCPU / 14 GB): RAM is fine but the runner is CPU-weak;
+        #     PR #396 cold build saw +1h 12min vs the pre-utils reference, and
+        #     PR #360's link-jobs=1 win on ARM64 suggests x86 is similarly
+        #     bottlenecked on link wall-clock.
+        # Linux and Windows hosted (16 GB) handle 2 parallel links fine.
         LINK_JOBS=2
-        if [ "${{ runner.os }}" = "macOS" ] && [ "${{ runner.arch }}" = "ARM64" ]; then
+        if [ "${{ runner.os }}" = "macOS" ]; then
           LINK_JOBS=1
         fi
 
