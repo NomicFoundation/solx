@@ -62,7 +62,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         );
 
         let emitter = ExpressionEmitter::new(
-            &self.semantic,
             self.state,
             self.environment,
             self.storage_layout,

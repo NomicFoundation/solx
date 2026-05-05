@@ -195,7 +195,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         Arguments: IntoIterator<Item = Expression>,
     {
         let emitter = ExpressionEmitter::new(
-            &self.semantic,
             self.state,
             self.environment,
             self.storage_layout,
