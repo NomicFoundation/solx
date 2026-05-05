@@ -8,12 +8,12 @@
 // CHECK:   sol.revert "oops"
 
 // CHECK: sol.func @{{.*custom_error.*}}
-// CHECK:   sol.revert "TooLow(uint256,uint256)" %{{.*}}, %{{.*}} : ui256, {{.*}} {call}
+// CHECK:   sol.revert "TooLow(uint256,uint256)" %{{.*}}, %{{.*}} : ui256, ui256 {call}
 
 // CHECK: sol.func @{{.*custom_error_named.*}}
 // CHECK:   %[[X:.*]] = sol.load
 // CHECK:   sol.constant 100
-// CHECK:   sol.revert "TooLow(uint256,uint256)" %[[X]], %{{.*}} : ui256, {{.*}} {call}
+// CHECK:   sol.revert "TooLow(uint256,uint256)" %[[X]], %{{.*}} : ui256, ui256 {call}
 
 contract C {
     error TooLow(uint256 supplied, uint256 minimum);
