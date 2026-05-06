@@ -33,11 +33,11 @@ pub struct Contract {
     /// The contract Yul IR code.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ir: Option<String>,
-    /// MLIR stages captured during the Sol → LLVM pipeline, in pipeline
-    /// order (`Sol` first, `Llvm` last).
+    /// MLIR pipeline output: optional pre-pass Sol dialect snapshot plus
+    /// the deploy and runtime LLVM dialect modules.
     #[cfg(feature = "mlir")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mlir: Option<Vec<(solx_mlir::Dialect, String)>>,
+    pub mlir: Option<solx_mlir::MlirOutput>,
     /// The EVM data of the contract.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub evm: Option<EVM>,

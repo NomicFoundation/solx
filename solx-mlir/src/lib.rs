@@ -18,6 +18,7 @@ pub mod dialect;
 pub mod ffi;
 pub mod llvm_module;
 pub mod ods;
+pub mod output;
 
 pub use self::attributes::cmp_predicate::CmpPredicate;
 pub use self::attributes::contract_kind::ContractKind;
@@ -28,3 +29,4 @@ pub use self::context::builder::Builder;
 pub use self::context::builder::type_factory::TypeFactory;
 pub use self::context::environment::Environment;
 pub use self::dialect::Dialect;
+pub use self::output::MlirOutput;

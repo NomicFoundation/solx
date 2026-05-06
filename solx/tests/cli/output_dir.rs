@@ -283,8 +283,8 @@ fn emit_mlir() -> anyhow::Result<()> {
         .collect();
 
     assert!(
-        entries.len() >= 2,
-        "Expected at least 2 .mlir files (one per dialect stage)"
+        entries.len() >= 3,
+        "Expected at least 3 .mlir files (sol + llvm deploy + llvm runtime)"
     );
 
     let filenames: Vec<_> = entries
@@ -296,8 +296,16 @@ fn emit_mlir() -> anyhow::Result<()> {
         "Expected a .sol.mlir file, found: {filenames:?}"
     );
     assert!(
-        filenames.iter().any(|name| name.contains(".llvm.mlir")),
-        "Expected a .llvm.mlir file, found: {filenames:?}"
+        filenames
+            .iter()
+            .any(|name| name.contains(".llvm.deploy.mlir")),
+        "Expected a .llvm.deploy.mlir file, found: {filenames:?}"
+    );
+    assert!(
+        filenames
+            .iter()
+            .any(|name| name.contains(".llvm.runtime.mlir")),
+        "Expected a .llvm.runtime.mlir file, found: {filenames:?}"
     );
 
     Ok(())
@@ -333,8 +341,16 @@ fn emit_mlir_filter_sol() -> anyhow::Result<()> {
         "Expected a .sol.mlir file, found: {filenames:?}"
     );
     assert!(
-        !filenames.iter().any(|name| name.contains(".llvm.mlir")),
-        "Did not expect a .llvm.mlir file, found: {filenames:?}"
+        !filenames
+            .iter()
+            .any(|name| name.contains(".llvm.deploy.mlir")),
+        "Did not expect a .llvm.deploy.mlir file, found: {filenames:?}"
+    );
+    assert!(
+        !filenames
+            .iter()
+            .any(|name| name.contains(".llvm.runtime.mlir")),
+        "Did not expect a .llvm.runtime.mlir file, found: {filenames:?}"
     );
 
     Ok(())

@@ -20,12 +20,15 @@ fn default() -> anyhow::Result<()> {
     let sol_index = stdout
         .find("MLIR Dialect sol:")
         .expect("sol dialect header missing");
-    let llvm_index = stdout
-        .find("MLIR Dialect llvm:")
-        .expect("llvm dialect header missing");
+    let deploy_index = stdout
+        .find("MLIR Dialect llvm (deploy):")
+        .expect("llvm deploy dialect header missing");
+    let runtime_index = stdout
+        .find("MLIR Dialect llvm (runtime):")
+        .expect("llvm runtime dialect header missing");
     assert!(
-        sol_index < llvm_index,
-        "expected sol stage before llvm stage in pipeline order"
+        sol_index < deploy_index && deploy_index < runtime_index,
+        "expected sol stage before llvm deploy and runtime stages in pipeline order"
     );
     assert!(stdout.contains("sol.contract"));
     assert!(stdout.contains("llvm.func"));
@@ -48,7 +51,7 @@ fn filter_sol_only() -> anyhow::Result<()> {
         .success()
         .stdout(predicate::str::contains("MLIR Dialect sol:"))
         .stdout(predicate::str::contains("sol.contract"))
-        .stdout(predicate::str::contains("MLIR Dialect llvm:").not());
+        .stdout(predicate::str::contains("MLIR Dialect llvm").not());
 
     Ok(())
 }
@@ -66,7 +69,8 @@ fn filter_llvm_only() -> anyhow::Result<()> {
     let result = crate::cli::execute_solx(args)?;
     result
         .success()
-        .stdout(predicate::str::contains("MLIR Dialect llvm:"))
+        .stdout(predicate::str::contains("MLIR Dialect llvm (deploy):"))
+        .stdout(predicate::str::contains("MLIR Dialect llvm (runtime):"))
         .stdout(predicate::str::contains("llvm.func"))
         .stdout(predicate::str::contains("MLIR Dialect sol:").not());
 

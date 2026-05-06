@@ -170,7 +170,10 @@ impl Frontend for Slang {
                 continue;
             };
 
-            let runtime_code_identifier = format!("{contract_name}_deployed");
+            let runtime_code_identifier = format!(
+                "{contract_name}{}",
+                solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX
+            );
             let capture_sol_dialect = input_json.settings.output_selection.check_selection(
                 file_identifier,
                 Some(contract_name.as_str()),

@@ -44,10 +44,9 @@ pub struct Contract {
     pub legacy_assembly: Option<solx_evm_assembly::Assembly>,
     /// solc Yul IR.
     pub yul: Option<String>,
-    /// MLIR stages captured during the Sol → LLVM pipeline, in pipeline
-    /// order (`Sol` first, `Llvm` last).
+    /// MLIR pipeline output.
     #[cfg(feature = "mlir")]
-    pub mlir: Option<Vec<(solx_mlir::Dialect, String)>>,
+    pub mlir: Option<solx_mlir::MlirOutput>,
 }
 
 impl Contract {
@@ -66,7 +65,7 @@ impl Contract {
         transient_storage_layout: Option<serde_json::Value>,
         legacy_assembly: Option<solx_evm_assembly::Assembly>,
         yul: Option<String>,
-        #[cfg(feature = "mlir")] mlir: Option<Vec<(solx_mlir::Dialect, String)>>,
+        #[cfg(feature = "mlir")] mlir: Option<solx_mlir::MlirOutput>,
     ) -> Self {
         Self {
             name,
@@ -105,7 +104,13 @@ impl Contract {
             }
             Some(IR::LLVMIR(llvm_ir)) => llvm_ir.source.len(),
             #[cfg(feature = "mlir")]
-            Some(IR::MLIR(mlir)) => mlir.source.len(),
+            Some(IR::MLIR(mlir)) => {
+                mlir.source.len()
+                    + mlir
+                        .runtime_code
+                        .as_ref()
+                        .map_or(0, |runtime| runtime.source.len())
+            }
             None => 0,
         }
     }
@@ -506,10 +511,33 @@ impl Contract {
             }
             #[cfg(feature = "mlir")]
             (IR::MLIR(mlir), code_segment) => {
+                // TODO: bare contract names match what the Sol-to-LLVM pass
+                // embeds in `evm.datasize` / `evm.dataoffset` metadata, but
+                // collide if two contracts share a name across files. Fuse
+                // with the `<full_path>` convention used by EVMLA/LLVMIR via
+                // post-pass metadata substitution or by honoring the existing
+                // `ContextYulData::resolve_path` mapping in `data_size` /
+                // `data_offset` emission so the link symbols hash to the
+                // disambiguated full paths.
+                let bare_name = contract_name
+                    .name
+                    .as_deref()
+                    .expect("MLIR pipeline contracts always have a name");
+                let runtime_identifier =
+                    format!("{bare_name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX);
                 let code_identifier = match code_segment {
-                    solx_utils::CodeSegment::Deploy => contract_name.full_path.to_owned(),
+                    solx_utils::CodeSegment::Deploy => bare_name.to_owned(),
+                    solx_utils::CodeSegment::Runtime => runtime_identifier.clone(),
+                };
+                let dependencies = match code_segment {
+                    solx_utils::CodeSegment::Deploy => {
+                        let mut dependencies =
+                            solx_codegen_evm::Dependencies::new(code_identifier.as_str());
+                        dependencies.push(runtime_identifier, true);
+                        dependencies
+                    }
                     solx_utils::CodeSegment::Runtime => {
-                        format!("{}.{code_segment}", contract_name.full_path)
+                        solx_codegen_evm::Dependencies::new(code_identifier.as_str())
                     }
                 };
 
@@ -519,6 +547,7 @@ impl Contract {
                         .context("MLIR translation")?;
                 let context = unsafe { inkwell::context::Context::new(raw_llvm.context) };
                 let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
+                module.set_name(code_identifier.as_str());
 
                 let (selector_llvm_ir_unoptimized, selector_llvm_ir, selector_llvm_assembly) =
                     match code_segment {
@@ -588,7 +617,7 @@ impl Contract {
                     code_segment,
                     immutables_out,
                     metadata_out,
-                    solx_codegen_evm::Dependencies::new(code_identifier.as_str()),
+                    dependencies,
                     build.is_size_fallback,
                     build.warnings,
                     profiler.to_vec(),
