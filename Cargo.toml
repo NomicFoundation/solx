@@ -34,7 +34,7 @@ default-members = [
     "solx-solc-test-adapter",
     "solx-compiler-downloader",
 ]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 authors = [
