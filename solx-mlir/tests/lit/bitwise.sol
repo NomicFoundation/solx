@@ -1,21 +1,22 @@
-// RUN: solx --emit-mlir %s | FileCheck %s
+// RUN: solx --emit-mlir=sol %s | FileCheck %s
+// RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @"bit_and(uint256,uint256)"
+// CHECK: sol.func @{{.*bit_and.*}}
 // CHECK:   sol.and %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @"bit_or(uint256,uint256)"
+// CHECK: sol.func @{{.*bit_or.*}}
 // CHECK:   sol.or %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @"bit_xor(uint256,uint256)"
+// CHECK: sol.func @{{.*bit_xor.*}}
 // CHECK:   sol.xor %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @"bit_not(uint256)"
+// CHECK: sol.func @{{.*bit_not.*}}
 // CHECK:   sol.xor %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @"shift_left(uint256,uint256)"
+// CHECK: sol.func @{{.*shift_left.*}}
 // CHECK:   sol.shl %{{.*}}, %{{.*}} : ui256
 
-// CHECK: sol.func @"shift_right(uint256,uint256)"
+// CHECK: sol.func @{{.*shift_right.*}}
 // CHECK:   sol.shr %{{.*}}, %{{.*}} : ui256
 
 contract C {

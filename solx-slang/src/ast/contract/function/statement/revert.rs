@@ -15,6 +15,7 @@ use slang_solidity::backend::ir::ast::Parameters;
 use slang_solidity::backend::ir::ast::RevertStatement;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::statement::StatementEmitter;
 
 /// Identifier the parser uses to recognize the Solidity `revert` built-in.
@@ -65,7 +66,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             )
         })?;
         let parameters = error.parameters();
-        let evaluated = match revert.arguments() {
+        let mut evaluated = match revert.arguments() {
             ArgumentsDeclaration::PositionalArguments(positional) => {
                 self.emit_revert_argument_values(positional.iter(), block)?
             }
@@ -74,6 +75,19 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 self.emit_revert_argument_values(ordered, block)?
             }
         };
+        for (value, parameter) in evaluated.values.iter_mut().zip(parameters.iter()) {
+            let parameter_type = TypeConversion::resolve_slang_type(
+                &parameter
+                    .get_type()
+                    .expect("parameter type resolved by semantic analysis"),
+                &self.state.builder,
+            );
+            *value = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
+                *value,
+                &self.state.builder,
+                &evaluated.block,
+            );
+        }
         self.state
             .builder
             .emit_sol_revert(&signature, &evaluated.values, true, &evaluated.block);

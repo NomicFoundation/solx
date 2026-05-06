@@ -17,6 +17,10 @@ inputs:
     description: 'Boost version.'
     required: false
     default: '1.83.0'
+  enable-mlir:
+    description: 'Enable MLIR support (requires LLVM with MLIR).'
+    required: false
+    default: 'false'
 runs:
   using: "composite"
   steps:
@@ -30,6 +34,7 @@ runs:
         SCRIPT_HASH=$(find solx-dev/src/solc -type f -print0 | sort -z | xargs -0 cat | sha256sum | cut -d' ' -f1)
         KEY="v1-solc-${{ runner.os }}-${{ runner.arch }}"
         [ '${{ inputs.cmake-build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.cmake-build-type }}"
+        [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
         KEY="${KEY}-boost${{ inputs.boost-version }}-${SHA}-script${SCRIPT_HASH:0:8}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
@@ -101,6 +106,7 @@ runs:
           --build-type ${{ inputs.cmake-build-type }} \
           --boost-version ${{ inputs.boost-version }} \
           --build-boost \
+          ${{ inputs.enable-mlir == 'true' && '--enable-mlir' || '' }} \
           --ccache-variant=ccache
 
     # `continue-on-error` keeps a failing ccache install (→ ccache not on PATH)
