@@ -95,10 +95,7 @@ jobs:
       - name: Sync solx-solidity for MLIR codegen
         shell: bash
         run: |
-          # TEMP: track fix/mlir-default-threadpool until the DefaultThreadPool
-          # cross-platform fix lands on solx-solidity main. Revert to `main` once
-          # the upstream PR merges.
-          git -C solx-solidity fetch origin fix/mlir-default-threadpool
+          git -C solx-solidity fetch origin main
           git -C solx-solidity checkout FETCH_HEAD
 
       - name: Build solc
