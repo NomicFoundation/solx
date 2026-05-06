@@ -63,7 +63,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
             let target_type = self
                 .expression_emitter
-                .resolve_expression_type(call.node_id())
+                .resolve_slang_type(call.get_type())
                 .ok_or_else(|| anyhow::anyhow!("unresolved type conversion target"))?;
 
             let result =

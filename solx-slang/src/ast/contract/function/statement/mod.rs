@@ -7,12 +7,10 @@ pub mod event;
 pub mod revert;
 
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::Type;
-use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::Statement;
 use slang_solidity::backend::ir::ast::Statements;
@@ -29,8 +27,6 @@ use crate::ast::contract::function::expression::call::type_conversion::TypeConve
 /// Returns `Some(block)` as the continuation block, or `None` when control
 /// flow has been terminated (by `return`, `break`, or `continue`).
 pub struct StatementEmitter<'state, 'context, 'block> {
-    /// Slang semantic analysis for resolving expression types.
-    semantic: Rc<SemanticAnalysis>,
     /// The shared MLIR context.
     state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
@@ -52,7 +48,6 @@ pub struct StatementEmitter<'state, 'context, 'block> {
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Creates a new statement emitter.
     pub fn new(
-        semantic: &Rc<SemanticAnalysis>,
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
         region: &Region<'context>,
@@ -60,7 +55,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         return_types: &'state [Type<'context>],
     ) -> Self {
         Self {
-            semantic: Rc::clone(semantic),
             state,
             environment,
             region_pointer: region as *const Region<'context>,
@@ -112,7 +106,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     return self.emit_revert_call(call, block);
                 }
                 let emitter = ExpressionEmitter::new(
-                    &self.semantic,
                     self.state,
                     self.environment,
                     self.storage_layout,
@@ -185,7 +178,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .unwrap_or_else(|| self.state.builder.types.ui256);
 
         let emitter = ExpressionEmitter::new(
-            &self.semantic,
             self.state,
             self.environment,
             self.storage_layout,
@@ -255,7 +247,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 "multi-return functions are not yet supported"
             );
             let emitter = ExpressionEmitter::new(
-                &self.semantic,
                 self.state,
                 self.environment,
                 self.storage_layout,

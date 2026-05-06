@@ -24,7 +24,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let condition_expression = if_statement.condition();
         let emitter = ExpressionEmitter::new(
-            &self.semantic,
             self.state,
             self.environment,
             self.storage_layout,
@@ -119,7 +118,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             ForStatementCondition::ExpressionStatement(expression_statement) => {
                 let expression = expression_statement.expression();
                 let emitter = ExpressionEmitter::new(
-                    &self.semantic,
                     self.state,
                     self.environment,
                     self.storage_layout,
@@ -150,7 +148,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         // Step region — always unchecked (matches solc: loop step i++ uses sol.add).
         if let Some(ref iterator_expression) = for_statement.iterator() {
             let emitter = ExpressionEmitter::new(
-                &self.semantic,
                 self.state,
                 self.environment,
                 self.storage_layout,
@@ -184,7 +181,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         // Condition region.
         let condition_expression = while_statement.condition();
         let emitter = ExpressionEmitter::new(
-            &self.semantic,
             self.state,
             self.environment,
             self.storage_layout,
@@ -232,7 +228,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         // Condition region.
         let condition_expression = do_while.condition();
         let emitter = ExpressionEmitter::new(
-            &self.semantic,
             self.state,
             self.environment,
             self.storage_layout,

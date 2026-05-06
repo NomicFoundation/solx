@@ -10,16 +10,15 @@ pub mod operator;
 pub mod storage;
 
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
-use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
+use slang_solidity::backend::ir::ast::Type as SlangType;
 use slang_solidity::cst::NodeId;
 
 use solx_mlir::CmpPredicate;
@@ -31,8 +30,6 @@ use self::call::type_conversion::TypeConversion;
 
 /// Lowers Solidity expressions to MLIR SSA values.
 pub struct ExpressionEmitter<'state, 'context, 'block> {
-    /// Slang semantic analysis for resolving expression types.
-    pub semantic: Rc<SemanticAnalysis>,
     /// The shared MLIR context.
     pub state: &'state Context<'context>,
     /// Variable environment.
@@ -49,14 +46,12 @@ pub struct ExpressionEmitter<'state, 'context, 'block> {
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Creates a new expression emitter.
     pub fn new(
-        semantic: &Rc<SemanticAnalysis>,
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
         storage_layout: &'state HashMap<NodeId, u64>,
         checked: bool,
     ) -> Self {
         Self {
-            semantic: Rc::clone(semantic),
             state,
             environment,
             storage_layout,
@@ -100,7 +95,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     )
                 })?;
                 let result_type = self
-                    .resolve_expression_type(decimal_number.node_id())
+                    .resolve_slang_type(decimal_number.get_type())
                     .expect("binder types every decimal literal node");
                 let constant = self
                     .state
@@ -113,7 +108,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .integer_value()
                     .expect("hex literals always evaluate to integers");
                 let result_type = self
-                    .resolve_expression_type(hex_number.node_id())
+                    .resolve_slang_type(hex_number.get_type())
                     .expect("binder types every hex literal node");
                 let constant = self
                     .state
@@ -189,7 +184,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .emit_assignment(assign, block)
                 .map(|(value, block)| (Some(value), block)),
             Expression::AdditiveExpression(expression) => {
-                let result_type = self.resolve_expression_type(expression.node_id());
+                let result_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = expression.operator();
@@ -197,7 +192,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::MultiplicativeExpression(expression) => {
-                let result_type = self.resolve_expression_type(expression.node_id());
+                let result_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = expression.operator();
@@ -205,7 +200,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::ExponentiationExpression(expression) => {
-                let target_type = self.resolve_expression_type(expression.node_id());
+                let target_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 self.emit_binary_op(&left, &right, "**", target_type, block)
@@ -244,35 +239,35 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::PrefixExpression(expression) => {
-                let result_type = self.resolve_expression_type(expression.node_id());
                 let operator = expression.operator();
+                let result_type = self.resolve_slang_type(expression.get_type());
                 let operand = expression.operand();
                 self.emit_prefix(&operator.text, &operand, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::BitwiseAndExpression(expression) => {
-                let result_type = self.resolve_expression_type(expression.node_id());
+                let result_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 self.emit_binary_op(&left, &right, "&", result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::BitwiseOrExpression(expression) => {
-                let result_type = self.resolve_expression_type(expression.node_id());
+                let result_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 self.emit_binary_op(&left, &right, "|", result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::BitwiseXorExpression(expression) => {
-                let result_type = self.resolve_expression_type(expression.node_id());
+                let result_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 self.emit_binary_op(&left, &right, "^", result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::ShiftExpression(expression) => {
-                let result_type = self.resolve_expression_type(expression.node_id());
+                let result_type = self.resolve_slang_type(expression.get_type());
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = expression.operator();
@@ -297,7 +292,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Expression::ConditionalExpression(conditional) => {
                 let result_type = self
-                    .resolve_expression_type(conditional.node_id())
+                    .resolve_slang_type(conditional.get_type())
                     .unwrap_or(self.state.builder.types.ui256);
                 let condition = conditional.operand();
                 let (condition_value, block) = self.emit_value(&condition, block)?;
@@ -350,20 +345,21 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .emit_sol_cmp(value, zero, CmpPredicate::Ne, block)
     }
 
-    /// Resolves the Solidity type of an expression node to an MLIR type.
+    /// Resolves the Solidity type from Slang to an MLIR type.
     ///
-    /// Returns `None` when the semantic analysis has no type info for the node.
-    /// Panics on types that `resolve_slang_type` does not yet handle.
+    /// Returns `None` when the incoming slang type is `None`. This can happen when calling
+    /// `node.get_type()` if the node doesn't have typing information, for example when
+    /// there are unresolved references or semantic errors.
+    /// Panics on types that `TypeConversion::resolve_slang_type` does not yet handle.
     // TODO: slang's binder does not fold binary expressions of literal operands —
     // its typing rules return the type of one operand (e.g. type of the left
     // operand for shifts), so `1 << 100` gets typed as ui8 (the type of `1`)
     // and constant subexpressions overflow at that width. solc folds via
     // `RationalNumberType::binaryOperatorResult`, sizing the result to fit the
     // folded value. Either teach slang to fold, or fold here before lowering.
-    pub fn resolve_expression_type(&self, node_id: NodeId) -> Option<Type<'context>> {
-        let slang_type = self.semantic.get_type_from_node_id(node_id)?;
+    pub fn resolve_slang_type(&self, slang_type: Option<SlangType>) -> Option<Type<'context>> {
         Some(TypeConversion::resolve_slang_type(
-            &slang_type,
+            &slang_type?,
             &self.state.builder,
         ))
     }

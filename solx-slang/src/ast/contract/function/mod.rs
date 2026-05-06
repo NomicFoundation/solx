@@ -6,11 +6,9 @@ pub mod expression;
 pub mod statement;
 
 use std::collections::HashMap;
-use std::rc::Rc;
 
 use melior::ir::BlockLike;
 use melior::ir::Type;
-use slang_solidity::backend::SemanticAnalysis;
 use slang_solidity::backend::abi::AbiEntry;
 use slang_solidity::backend::ir::ast::ElementaryType;
 use slang_solidity::backend::ir::ast::Expression;
@@ -28,8 +26,6 @@ use self::statement::StatementEmitter;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub struct FunctionEmitter<'state, 'context> {
-    /// Slang semantic analysis for resolving expression types.
-    semantic: Rc<SemanticAnalysis>,
     /// The shared MLIR context.
     state: &'state Context<'context>,
     /// State variable node ID to storage slot mapping.
@@ -39,12 +35,10 @@ pub struct FunctionEmitter<'state, 'context> {
 impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
     pub fn new(
-        semantic: &Rc<SemanticAnalysis>,
         state: &'state Context<'context>,
         storage_layout: &'state HashMap<NodeId, u64>,
     ) -> Self {
         Self {
-            semantic: Rc::clone(semantic),
             state,
             storage_layout,
         }
@@ -130,7 +124,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut terminated = false;
         for statement in body.statements().iter() {
             let mut emitter = StatementEmitter::new(
-                &self.semantic,
                 self.state,
                 &mut environment,
                 &region,
