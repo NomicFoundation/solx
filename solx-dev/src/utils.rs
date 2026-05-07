@@ -219,16 +219,27 @@ pub fn remove(project_directory: &Path, project_name: &str) -> anyhow::Result<()
 }
 
 ///
-/// Call ninja to build and install the LLVM. When `llvm-lit` exists in the
-/// build tree (produced by either `--enable-utils` or `--enable-tests`), also
-/// copy it into the install prefix so it is part of the cached artifact like
-/// the rest of the toolchain.
+/// Call ninja to build and install LLVM via the given install target.
 ///
-pub fn ninja(build_dir: &Path) -> anyhow::Result<()> {
+/// All platforms pass `"install-distribution"` together with
+/// `LLVM_DISTRIBUTION_COMPONENTS` to skip the ~200 LLVM tool binaries solx
+/// doesn't use (it consumes LLVM as a library via inkwell). See #364.
+///
+/// When `llvm-lit` exists in the build tree (produced by `--enable-utils`),
+/// it is copied into the install prefix's `bin/` afterwards. Upstream LLVM
+/// has no install rule for `llvm-lit` (it's only `configure_file`'d into the
+/// build dir), so listing it in `LLVM_DISTRIBUTION_COMPONENTS` errors at
+/// configure time; the manual copy bridges that gap so the cached artifact
+/// contains `llvm-lit` like the rest of the toolchain.
+///
+pub fn ninja(build_dir: &Path, install_target: &str) -> anyhow::Result<()> {
     let mut ninja = Command::new("ninja");
     let build_dir_str = build_dir.to_string_lossy();
     ninja.args(["-C", &*build_dir_str]);
-    command(ninja.arg("install"), "Running ninja install")?;
+    command(
+        ninja.arg(install_target),
+        &format!("Running ninja {install_target}"),
+    )?;
     let lit_name = if cfg!(windows) {
         "llvm-lit.py"
     } else {
@@ -237,6 +248,7 @@ pub fn ninja(build_dir: &Path) -> anyhow::Result<()> {
     let lit_source = build_dir.join("bin").join(lit_name);
     if lit_source.exists() {
         let install_bin = LlvmPath::llvm_target_final()?.join("bin");
+        std::fs::create_dir_all(&install_bin)?;
         std::fs::copy(&lit_source, install_bin.join(lit_name))?;
     }
     Ok(())

@@ -62,19 +62,28 @@ runs:
       working-directory: ${{ inputs.working-dir }}
       run: |
         SHA=$(git -C solx-llvm rev-parse HEAD)
+        # solx-dev owns LLVM-build cmake args (shared.rs + platforms/*.rs).
+        # Hash that tree into the key so any Rust-side flag change invalidates
+        # stale artifact-cache entries automatically. Truncate for readability.
+        DEV_HASH=$(printf %s '${{ hashFiles(format('{0}/solx-dev/src/llvm/**', inputs.working-dir)) }}' | head -c 8)
         KEY="v1-llvm-${{ runner.os }}-${{ runner.arch }}"
         [ '${{ inputs.build-type }}' != 'Release' ] && KEY="${KEY}-${{ inputs.build-type }}"
         [ '${{ inputs.enable-mlir }}' = 'true' ] && KEY="${KEY}-mlir"
         [ -n '${{ inputs.sanitizer }}' ] && KEY="${KEY}-${{ inputs.sanitizer }}"
         [ '${{ inputs.enable-coverage }}' = 'true' ] && KEY="${KEY}-coverage"
         [ '${{ inputs.enable-assertions }}' != 'true' ] && KEY="${KEY}-no-assertions"
-        # `enable-tests` implies `enable-utils` (LLVM CMake requires it),
-        # so normalize before keying to avoid splitting identical artifacts.
+        # `enable-utils` extends the install-distribution whitelist with
+        # FileCheck (see solx-dev's `build_opts_distribution`), so the install
+        # prefix actually differs by this flag. `enable-tests` is kept
+        # defensively even though no current workflow sets it; if one later
+        # does, LLVM_BUILD_TESTS=On could leak test artifacts into the prefix
+        # or change cmake-exports content.
+        # Normalize tests→utils because `--enable-tests` implies `--enable-utils`.
         UTILS='${{ inputs.enable-utils }}'
         [ '${{ inputs.enable-tests }}' = 'true' ] && UTILS='true'
         [ "$UTILS" = 'true' ] && KEY="${KEY}-utils"
         [ '${{ inputs.enable-tests }}' = 'true' ] && KEY="${KEY}-tests"
-        KEY="${KEY}-${SHA}"
+        KEY="${KEY}-dev${DEV_HASH}-${SHA}"
         echo "key=${KEY}" | tee -a "${GITHUB_OUTPUT}"
 
     - name: Restore LLVM artifact cache

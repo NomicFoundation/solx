@@ -69,6 +69,10 @@ pub fn build(
             ))
             .args(crate::llvm::platforms::shared::SHARED_BUILD_OPTS)
             .args(crate::llvm::platforms::shared::shared_build_opts_werror())
+            .args(crate::llvm::platforms::shared::build_opts_distribution(
+                enable_mlir,
+                enable_utils,
+            ))
             .args(extra_args)
             .args(CcacheVariant::cmake_args(ccache_variant))
             .args(crate::llvm::platforms::shared::shared_build_opts_assertions(enable_assertions))
@@ -76,7 +80,11 @@ pub fn build(
         "LLVM building cmake",
     )?;
 
-    crate::utils::ninja(llvm_build_final.as_ref())?;
+    crate::utils::ninja(llvm_build_final.as_ref(), "install-distribution")?;
+    crate::llvm::platforms::shared::build_and_install_llvm_config(
+        llvm_build_final.as_ref(),
+        llvm_target_final.as_ref(),
+    )?;
 
     let libstdcpp_source_path = match std::env::var("LIBSTDCPP_SOURCE_PATH") {
         Ok(libstdcpp_source_path) => PathBuf::from(libstdcpp_source_path),
@@ -89,7 +97,10 @@ pub fn build(
     fs_extra::file::copy(
         crate::utils::path_windows_to_unix(libstdcpp_source_path)?,
         crate::utils::path_windows_to_unix(libstdcpp_destination_path)?,
-        &fs_extra::file::CopyOptions::default(),
+        &fs_extra::file::CopyOptions {
+            overwrite: true,
+            ..Default::default()
+        },
     )?;
 
     Ok(())
