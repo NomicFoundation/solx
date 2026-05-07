@@ -191,11 +191,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         // For implicit zero-initialization, alloca is emitted first.
         let (block, initial_value) = if let Some(ref initializer_expression) = declaration.value() {
             let (initial_value, block) = emitter.emit_value(initializer_expression, block)?;
-            let cast_value =
-                emitter
-                    .state
-                    .builder
-                    .emit_sol_cast(initial_value, declared_type, &block);
+            let cast_value = TypeConversion::from_target_type(
+                declared_type,
+                &emitter.state.builder,
+            )
+            .emit(initial_value, &emitter.state.builder, &block);
             (block, Some(cast_value))
         } else {
             (block, None)
@@ -239,35 +239,61 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a return statement.
+    ///
+    /// A multi-element tuple expression in the return position is unpacked
+    /// into one value per declared return slot; any other expression yields
+    /// a single value. Each value is cast to its corresponding declared
+    /// return type before being emitted as a `sol.return` operand.
     fn emit_return(
         &mut self,
         return_statement: &slang_solidity::backend::ir::ast::ReturnStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        if let Some(ref expression) = return_statement.expression() {
-            // TODO: support multi-return functions (tuple deconstruction).
-            anyhow::ensure!(
-                self.return_types.len() <= 1,
-                "multi-return functions are not yet supported"
-            );
-            let emitter = ExpressionEmitter::new(
-                self.state,
-                self.environment,
-                self.storage_layout,
-                self.checked,
-            );
-            let (value, block) = emitter.emit_value(expression, block)?;
-            let return_type = self
-                .return_types
-                .first()
-                .copied()
-                .unwrap_or(self.state.builder.types.ui256);
-            let return_value = self.state.builder.emit_sol_cast(value, return_type, &block);
-            self.state.builder.emit_sol_return(&[return_value], &block);
-        } else {
+        let Some(expression) = return_statement.expression() else {
             self.state.builder.emit_sol_return(&[], &block);
-        }
+            return Ok(None);
+        };
 
+        let emitter = ExpressionEmitter::new(
+            self.state,
+            self.environment,
+            self.storage_layout,
+            self.checked,
+        );
+
+        let (values, block) = if let Expression::TupleExpression(tuple) = &expression
+            && tuple.items().len() > 1
+        {
+            let items = tuple.items();
+            let mut values = Vec::with_capacity(items.len());
+            let mut current = block;
+            for item in items.iter() {
+                let inner = item
+                    .expression()
+                    .ok_or_else(|| anyhow::anyhow!("empty tuple element in return"))?;
+                let (value, next) = emitter.emit_value(&inner, current)?;
+                values.push(value);
+                current = next;
+            }
+            (values, current)
+        } else {
+            let (value, block) = emitter.emit_value(&expression, block)?;
+            (vec![value], block)
+        };
+
+        let cast_values: Vec<_> = values
+            .into_iter()
+            .zip(self.return_types.iter())
+            .map(|(value, &return_type)| {
+                TypeConversion::from_target_type(return_type, &self.state.builder).emit(
+                    value,
+                    &self.state.builder,
+                    &block,
+                )
+            })
+            .collect();
+
+        self.state.builder.emit_sol_return(&cast_values, &block);
         Ok(None)
     }
 }
