@@ -189,11 +189,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         // For implicit zero-initialization, alloca is emitted first.
         let (block, initial_value) = if let Some(ref initializer_expression) = declaration.value() {
             let (initial_value, block) = emitter.emit_value(initializer_expression, block)?;
-            let cast_value =
-                emitter
-                    .state
-                    .builder
-                    .emit_sol_cast(initial_value, declared_type, &block);
+            let builder = &emitter.state.builder;
+            let cast_value = TypeConversion::from_target_type(declared_type, builder)
+                .emit(initial_value, builder, &block);
             (block, Some(cast_value))
         } else {
             (block, None)
@@ -258,8 +256,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 .first()
                 .copied()
                 .unwrap_or(self.state.builder.types.ui256);
-            let return_value = self.state.builder.emit_sol_cast(value, return_type, &block);
-            self.state.builder.emit_sol_return(&[return_value], &block);
+            let builder = &self.state.builder;
+            let return_value =
+                TypeConversion::from_target_type(return_type, builder).emit(value, builder, &block);
+            builder.emit_sol_return(&[return_value], &block);
         } else {
             self.state.builder.emit_sol_return(&[], &block);
         }
