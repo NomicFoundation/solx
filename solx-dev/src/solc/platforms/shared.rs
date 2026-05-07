@@ -66,15 +66,14 @@ pub fn mlir_cmake_args(llvm_build_dir: &Path) -> Vec<String> {
     let llvm_build_dir = llvm_build_dir
         .canonicalize()
         .unwrap_or_else(|_| llvm_build_dir.to_path_buf());
-    let mlir_dir = llvm_build_dir.join("lib/cmake/mlir");
-    let lld_dir = llvm_build_dir.join("lib/cmake/lld");
-
-    let mut args = Vec::new();
-    if mlir_dir.exists() {
-        args.push(format!("-DMLIR_DIR={}", mlir_dir.display()));
-    }
-    if lld_dir.exists() {
-        args.push(format!("-DLLD_DIR={}", lld_dir.display()));
-    }
-    args
+    vec![
+        format!(
+            "-DMLIR_DIR={}",
+            llvm_build_dir.join("lib/cmake/mlir").display()
+        ),
+        format!(
+            "-DLLD_DIR={}",
+            llvm_build_dir.join("lib/cmake/lld").display()
+        ),
+    ]
 }
