@@ -4550,6 +4550,7 @@ dependencies = [
  "serde_json",
  "serde_stacker",
  "sha3 0.11.0",
+ "slang_solidity",
 ]
 
 [[package]]

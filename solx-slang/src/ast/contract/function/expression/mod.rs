@@ -370,6 +370,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn resolve_slang_type(&self, slang_type: Option<SlangType>) -> Option<Type<'context>> {
         Some(TypeConversion::resolve_slang_type(
             &slang_type?,
+            None,
             &self.state.builder,
         ))
     }

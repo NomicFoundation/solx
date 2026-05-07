@@ -38,3 +38,31 @@ impl From<AddressSpace> for DataLocation {
         }
     }
 }
+
+#[cfg(feature = "slang")]
+impl DataLocation {
+    /// Converts a Slang semantic data location into the dialect's data location.
+    ///
+    /// `inherited_fallback` is substituted when the Slang location is `Inherited`
+    /// (struct-field-relative). Top-level callers pass `None`; recursive struct
+    /// member resolution passes the parent struct's resolved location.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `location` is `Inherited` and `inherited_fallback` is `None`,
+    /// because semantic analysis guarantees `Inherited` only appears inside a
+    /// struct member context where a fallback is available.
+    pub fn from_slang(
+        location: slang_solidity::backend::types::DataLocation,
+        inherited_fallback: Option<Self>,
+    ) -> Self {
+        use slang_solidity::backend::types::DataLocation as Slang;
+        match location {
+            Slang::Storage => Self::Storage,
+            Slang::Calldata => Self::CallData,
+            Slang::Memory => Self::Memory,
+            Slang::Inherited => inherited_fallback
+                .expect("data location 'Inherited' encountered without a parent struct location"),
+        }
+    }
+}
