@@ -164,21 +164,16 @@ impl Project {
                     .and_then(|evm| evm.legacy_assembly.take());
 
                 #[cfg(feature = "mlir")]
-                let result = contract.mlir.as_ref().map(|stages| {
-                    stages
-                        .iter()
-                        .find_map(|(dialect, source)| {
-                            (*dialect == solx_mlir::Dialect::Llvm).then_some(source.as_str())
-                        })
-                        .map(|source| {
-                            ContractIR::from(ContractMLIR {
-                                source: source.to_owned(),
-                            })
-                        })
-                        .ok_or_else(|| {
-                            anyhow::anyhow!("MLIR stages present but no LLVM dialect entry")
-                        })
-                        .map(Some)
+                let result = contract.mlir.as_ref().map(|output| {
+                    let runtime_code = ContractMLIR {
+                        source: output.runtime_source.clone(),
+                        runtime_code: None,
+                    };
+                    let deploy_code = ContractMLIR {
+                        source: output.deploy_source.clone(),
+                        runtime_code: Some(Box::new(runtime_code)),
+                    };
+                    Ok::<_, anyhow::Error>(Some(ContractIR::from(deploy_code)))
                 });
                 #[cfg(feature = "mlir")]
                 let mlir_stages = contract.mlir.take();
@@ -594,22 +589,10 @@ impl Project {
                         (deploy_code.into(), runtime_code.into())
                     }
                     #[cfg(feature = "mlir")]
-                    Some(ContractIR::MLIR(mlir)) => {
-                        let deploy_code_identifier = contract.name.full_path.to_owned();
-                        let runtime_code_identifier = format!(
-                            "{deploy_code_identifier}.{}",
-                            solx_utils::CodeSegment::Runtime
-                        );
-
-                        let deploy_code = ContractLLVMIR::new(
-                            deploy_code_identifier.clone(),
-                            solx_utils::CodeSegment::Deploy,
-                            solx_codegen_evm::minimal_deploy_code(
-                                deploy_code_identifier.as_str(),
-                                runtime_code_identifier.as_str(),
-                            ),
-                        );
-                        (deploy_code.into(), ContractIR::MLIR(mlir))
+                    Some(ContractIR::MLIR(mut deploy_code)) => {
+                        let runtime_code: ContractMLIR =
+                            *deploy_code.runtime_code.take().expect("Always exists");
+                        (deploy_code.into(), runtime_code.into())
                     }
                     None => {
                         let build = EVMContractBuild::new(

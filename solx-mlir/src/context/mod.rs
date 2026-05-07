@@ -22,9 +22,9 @@ use melior::ir::Module;
 use melior::ir::Type;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationLike;
+use melior::ir::operation::OperationMutLike;
 use melior::pass::PassManager;
 
-use crate::dialect::Dialect;
 use crate::llvm_module::RawLlvmModule;
 
 use self::builder::Builder;
@@ -266,75 +266,74 @@ impl<'context> Context<'context> {
     }
 
     /// Consumes the context, runs the Sol-to-LLVM pass pipeline, and returns
-    /// labeled MLIR representations captured at each pipeline stage.
+    /// the deploy and runtime modules as separate LLVM dialect strings.
     ///
-    /// Returns a `Vec` of `(dialect, mlir_text)` pairs in pipeline order:
-    /// - [`Dialect::Sol`] — Full module in Sol dialect (only when
-    ///   `capture_sol` is true).
-    /// - [`Dialect::Llvm`] — Runtime module only in LLVM dialect (always
-    ///   present; the LLVM IR translation step consumes it).
-    ///
-    /// The Sol conversion pass produces a nested module structure:
+    /// The Sol conversion pass produces a nested module:
     /// ```text
     /// module @Contract { deploy __entry + module @Contract_deployed { runtime __entry } }
     /// ```
-    /// `solx-core` provides its own deploy wrapper, so this method extracts
-    /// only the inner module whose `sym_name` matches
-    /// `runtime_code_identifier` (the LLVM module identifier that
-    /// `minimal_deploy_code` references).
+    /// The inner module (matched by `runtime_code_identifier`) is detached
+    /// from the outer and stringified separately, so each can be translated
+    /// to its own LLVM IR module by `solx-codegen-evm` and emit its own
+    /// bytecode segment. The Sol-pass-generated outer carries the deploy
+    /// entry that runs the constructor and returns the runtime bytecode —
+    /// it replaces the synthetic `minimal_deploy_code` wrapper that
+    /// `solx-core` uses for non-MLIR pipelines.
     ///
     /// # Errors
     ///
-    /// Returns an error if the pass pipeline fails or the deployed module
+    /// Returns an error if the pass pipeline fails or the runtime module
     /// is not found.
     pub fn finalize_module(
         self,
         runtime_code_identifier: &str,
         capture_sol: bool,
-    ) -> anyhow::Result<Vec<(Dialect, String)>> {
+    ) -> anyhow::Result<crate::output::MlirOutput> {
         let mut module = self.module;
 
-        let mut stages = Vec::with_capacity(2);
-
-        // Capture the Sol dialect MLIR before lowering (only when requested).
-        if capture_sol {
-            stages.push((Dialect::Sol, module.as_operation().to_string()));
-        }
+        // Capture the Sol dialect MLIR before lowering, if requested.
+        let sol_source = capture_sol.then(|| module.as_operation().to_string());
 
         // Lower Sol → LLVM dialect.
         Self::run_sol_passes(self.builder.context, &mut module)?;
 
-        // Walk the outer module's body to find the inner module whose
-        // `sym_name` matches `runtime_code_identifier` and extract it as
-        // the runtime code.
+        // Detach the inner runtime module so the deploy text doesn't carry
+        // a duplicate copy and the deploy LLVM IR translation doesn't redo
+        // runtime codegen. The deploy entry still references the runtime
+        // via `evm.datasize`/`evm.dataoffset` metadata, which the linker
+        // resolves through the runtime object's identifier.
+        let runtime_llvm = Self::take_nested_module_text(&mut module, runtime_code_identifier)?;
+        let deploy_llvm = module.as_operation().to_string();
+
+        Ok(crate::output::MlirOutput {
+            sol_source,
+            deploy_source: deploy_llvm,
+            runtime_source: runtime_llvm,
+        })
+    }
+
+    /// Finds a nested `builtin.module` in `module`'s body whose `sym_name`
+    /// matches `target`, removes it from the parent, and returns its
+    /// textual form.
+    fn take_nested_module_text(module: &mut Module, target: &str) -> anyhow::Result<String> {
         let body = module.body();
-        let mut deployed_operation = None;
-        let mut operation = body.first_operation();
-        while let Some(current) = operation {
-            if current.name().as_string_ref().as_str().unwrap_or("") == Self::BUILTIN_MODULE
-                && let Ok(symbol) = current.attribute("sym_name")
-            {
-                let symbol_name: StringAttribute = symbol
-                    .try_into()
-                    .map_err(|_| anyhow::anyhow!("sym_name is not a StringAttribute"))?;
-                let symbol_name = symbol_name.value();
-                if symbol_name == runtime_code_identifier {
-                    deployed_operation = Some(current);
-                    break;
-                }
+        std::iter::successors(body.first_operation_mut(), |operation| {
+            operation.next_in_block_mut()
+        })
+        .find_map(|mut operation| {
+            if operation.name().as_string_ref().as_str().unwrap_or("") != Self::BUILTIN_MODULE {
+                return None;
             }
-            operation = current.next_in_block();
-        }
-
-        let runtime_operation = deployed_operation.ok_or_else(|| {
-            anyhow::anyhow!(
-                "no module with sym_name `{runtime_code_identifier}` in Sol pass output"
-            )
-        })?;
-
-        stages.push((Dialect::Llvm, runtime_operation.to_string()));
-
-        Ok(stages)
+            let symbol = operation.attribute("sym_name").ok()?;
+            let symbol_name: StringAttribute = symbol.try_into().ok()?;
+            if symbol_name.value() != target {
+                return None;
+            }
+            let text = operation.to_string();
+            operation.remove_from_parent();
+            Some(text)
+        })
+        .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))
     }
 
     // ==== Phase 4: LLVM translation ====

@@ -7,6 +7,9 @@
 ///
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct MLIR {
-    /// MLIR source code.
+    /// LLVM dialect text of this code segment.
     pub source: String,
+    /// Runtime code object that is only set in deploy code.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_code: Option<Box<Self>>,
 }
