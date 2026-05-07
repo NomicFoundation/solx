@@ -79,6 +79,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 &parameter
                     .get_type()
                     .expect("parameter type resolved by semantic analysis"),
+                None,
                 &self.state.builder,
             );
             let value = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(

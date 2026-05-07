@@ -110,6 +110,33 @@ unsafe extern "C" {
     /// 2=Memory, 3=Stack, 4=Immutable, 5=Transient).
     pub fn solxCreateStringType(context: MlirContext, data_location: u32) -> mlir_sys::MlirType;
 
+    /// Creates a `sol::FixedBytesType` of the given byte width.
+    pub fn solxCreateFixedBytesType(context: MlirContext, size: u32) -> mlir_sys::MlirType;
+
+    /// Creates a `sol::ArrayType` with the given size, element type, and data
+    /// location. `size = -1` denotes a dynamic array.
+    pub fn solxCreateArrayType(
+        context: MlirContext,
+        size: i64,
+        element_type: mlir_sys::MlirType,
+        data_location: u32,
+    ) -> mlir_sys::MlirType;
+
+    /// Creates a `sol::MappingType` with the given key and value types.
+    pub fn solxCreateMappingType(
+        context: MlirContext,
+        key_type: mlir_sys::MlirType,
+        value_type: mlir_sys::MlirType,
+    ) -> mlir_sys::MlirType;
+
+    /// Creates a `sol::StructType` from a slice of member types and a data location.
+    pub fn solxCreateStructType(
+        context: MlirContext,
+        member_types: *const mlir_sys::MlirType,
+        member_count: usize,
+        data_location: u32,
+    ) -> mlir_sys::MlirType;
+
     // ---- MLIR core (not in mlir-sys) ----
 
     /// Returns the region that owns the given block.
