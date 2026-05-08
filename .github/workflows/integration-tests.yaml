@@ -123,14 +123,21 @@ jobs:
           cmake-build-type: Release
           working-dir: 'solx-solidity'
 
+      # Match the cache key composition in build-solc/action.yml: SHA alone
+      # is not sufficient because a PR can change `solx-dev/src/solc/*`
+      # without bumping the submodule pin. Without the script-hash check,
+      # the PR's solc binary would be shared as the "main" baseline and
+      # silently skew benchmarks.
       - name: Share solc with main checkout
         id: share-solc
         continue-on-error: true
         run: |
           MAIN_SHA=$(git -C temp-solx-main/solx-solidity rev-parse HEAD)
           PR_SHA=$(git -C solx-solidity rev-parse HEAD)
-          if [ "$MAIN_SHA" = "$PR_SHA" ]; then
-            echo "solc SHAs match ($PR_SHA), sharing via symlink"
+          SCRIPT_PR=$(find solx-dev/src/solc -type f -print0 | sort -z | xargs -0 cat | sha256sum | cut -d' ' -f1)
+          SCRIPT_MAIN=$(find temp-solx-main/solx-dev/src/solc -type f -print0 | sort -z | xargs -0 cat | sha256sum | cut -d' ' -f1)
+          if [ "$MAIN_SHA" = "$PR_SHA" ] && [ "$SCRIPT_MAIN" = "$SCRIPT_PR" ]; then
+            echo "solc SHAs and build scripts match ($PR_SHA / ${SCRIPT_PR:0:8}), sharing via symlink"
             rm -rf temp-solx-main/solx-solidity/build temp-solx-main/solx-solidity/boost
             ln -snf "$GITHUB_WORKSPACE/solx-solidity/build" \
                     temp-solx-main/solx-solidity/build
@@ -138,7 +145,7 @@ jobs:
                     temp-solx-main/solx-solidity/boost
             echo "shared=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::solc SHAs differ (main=$MAIN_SHA PR=$PR_SHA), building main separately"
+            echo "::notice::solc inputs differ (main=$MAIN_SHA/${SCRIPT_MAIN:0:8} PR=$PR_SHA/${SCRIPT_PR:0:8}), building main separately"
           fi
 
       # If share-solc failed entirely (output empty), fall through and build.
