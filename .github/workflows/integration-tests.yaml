@@ -55,6 +55,14 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           submodules: true
 
+      # actions/checkout's `git clean -ffdx` doesn't recurse into submodules,
+      # so on a persistent self-hosted workspace a previous run can leave
+      # stale solx-solidity/{build,boost} dirs (or symlinks pointing at the
+      # PR's freshly-built artifacts) inside temp-solx-main. Wipe wholesale
+      # before re-checking out main.
+      - name: Reset main checkout dir
+        run: rm -rf temp-solx-main
+
       - name: Checkout main
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         continue-on-error: true
