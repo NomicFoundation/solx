@@ -79,6 +79,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((value, block));
         }
 
+        if let Some((value, block)) =
+            self.try_emit_built_in_call_expression(call, positional_arguments, block)?
+        {
+            return Ok((Some(value), block));
+        }
+
         if let Expression::MemberAccessExpression(access) = &callee {
             return self.emit_built_in_member_access(access, Some(positional_arguments), block);
         }

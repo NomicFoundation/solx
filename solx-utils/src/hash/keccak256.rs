@@ -33,6 +33,13 @@ impl Keccak256 {
     }
 
     ///
+    /// Returns a reference to the 32-byte binary representation.
+    ///
+    pub fn as_bytes(&self) -> &[u8; crate::BYTE_LENGTH_FIELD] {
+        &self.bytes
+    }
+
+    ///
     /// Extracts the binary representation.
     ///
     pub fn to_vec(&self) -> Vec<u8> {
