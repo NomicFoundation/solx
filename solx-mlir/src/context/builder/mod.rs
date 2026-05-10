@@ -33,6 +33,7 @@ use crate::context::builder::type_factory::TypeFactory;
 use crate::ods::sol::AddrOfOperation;
 use crate::ods::sol::AddressCastOperation;
 use crate::ods::sol::AllocaOperation;
+use crate::ods::sol::ArrayLitOperation;
 use crate::ods::sol::AssertOperation;
 use crate::ods::sol::BreakOperation;
 use crate::ods::sol::CallOperation;
@@ -49,6 +50,8 @@ use crate::ods::sol::GepOperation;
 use crate::ods::sol::IfOperation;
 use crate::ods::sol::LoadOperation;
 use crate::ods::sol::MapOperation;
+use crate::ods::sol::PopOperation;
+use crate::ods::sol::PushOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
@@ -801,6 +804,72 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.map always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.push` returning a reference to the newly appended slot.
+    ///
+    /// `address_type` is the result reference type the caller has computed
+    /// (typically `!sol.ptr<element, Storage>` for primitive element types).
+    pub fn emit_sol_push<'block, B>(
+        &self,
+        array: Value<'context, 'block>,
+        address_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                PushOperation::builder(self.context, self.unknown_location)
+                    .inp(array)
+                    .addr(address_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.push always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.pop` removing the last element from the array.
+    pub fn emit_sol_pop<'block, B>(&self, array: Value<'context, 'block>, block: &B)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block.append_operation(
+            PopOperation::builder(self.context, self.unknown_location)
+                .inp(array)
+                .build()
+                .into(),
+        );
+    }
+
+    /// Emits a `sol.array_lit` constructing an array from `elements` of the
+    /// caller-provided `array_type` (typically `!sol.array<N x T, Memory>`).
+    pub fn emit_sol_array_lit<'block, B>(
+        &self,
+        elements: &[Value<'context, 'block>],
+        array_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                ArrayLitOperation::builder(self.context, self.unknown_location)
+                    .ins(elements)
+                    .addr(array_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.array_lit always produces one result")
             .into()
     }
 
