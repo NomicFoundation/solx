@@ -47,8 +47,10 @@ use crate::ods::sol::ContractOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::ForOperation;
 use crate::ods::sol::FuncOperation;
+use crate::ods::sol::GepOperation;
 use crate::ods::sol::IfOperation;
 use crate::ods::sol::LoadOperation;
+use crate::ods::sol::MapOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
@@ -848,6 +850,64 @@ impl<'context> Builder<'context> {
                 .build()
                 .into(),
         );
+    }
+
+    /// Emits a `sol.gep` for array / `bytes` / `string` element access.
+    ///
+    /// `address_type` is the result address type the caller has computed
+    /// (typically `!sol.ptr<element, location>` for primitive elements).
+    pub fn emit_sol_gep<'block, B>(
+        &self,
+        base_address: Value<'context, 'block>,
+        index: Value<'context, 'block>,
+        address_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                GepOperation::builder(self.context, self.unknown_location)
+                    .base_addr(base_address)
+                    .idx(index)
+                    .addr(address_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.gep always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.map` for mapping value access by key.
+    ///
+    /// `address_type` is the result address type the caller has computed
+    /// (typically `!sol.ptr<value, Storage>` for primitive value types).
+    pub fn emit_sol_map<'block, B>(
+        &self,
+        mapping: Value<'context, 'block>,
+        key: Value<'context, 'block>,
+        address_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                MapOperation::builder(self.context, self.unknown_location)
+                    .mapping(mapping)
+                    .key(key)
+                    .addr(address_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.map always produces one result")
+            .into()
     }
 
     // ==== Calls ====
