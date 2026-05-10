@@ -8,7 +8,10 @@ pub mod statement;
 use std::collections::HashMap;
 
 use melior::ir::BlockLike;
+use melior::ir::BlockRef;
 use melior::ir::Type;
+use melior::ir::Value;
+use melior::ir::r#type::IntegerType;
 use slang_solidity::backend::abi::AbiEntry;
 use slang_solidity::backend::ir::ast::ElementaryType;
 use slang_solidity::backend::ir::ast::Expression;
@@ -58,7 +61,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     pub fn emit_sol(
         &self,
         function: &FunctionDefinition,
-        contract_body: &melior::ir::BlockRef<'context, '_>,
+        contract_body: &BlockRef<'context, '_>,
     ) -> anyhow::Result<String> {
         let Some(ref body) = function.body() else {
             // Abstract or interface function — no codegen needed.
@@ -104,8 +107,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 .map(|id| id.name())
                 .unwrap_or_else(|| "_".to_owned());
             let parameter_type = mlir_parameter_types[index];
-            let parameter_value: melior::ir::Value<'context, '_> =
-                function_entry_block.argument(index)?.into();
+            let parameter_value: Value<'context, '_> = function_entry_block.argument(index)?.into();
             let pointer = self
                 .state
                 .builder
@@ -115,6 +117,38 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 .emit_sol_store(parameter_value, pointer, &function_entry_block);
 
             environment.define_variable(parameter_name, pointer, parameter_type);
+        }
+
+        let mut return_slots: Vec<Option<Value<'context, '_>>> = Vec::new();
+        if let Some(returns) = function.returns() {
+            for (index, parameter) in returns.iter().enumerate() {
+                let Some(identifier) = parameter.name() else {
+                    return_slots.push(None);
+                    continue;
+                };
+                let return_type = result_types[index];
+                let pointer = self
+                    .state
+                    .builder
+                    .emit_sol_alloca(return_type, &function_entry_block);
+                // TODO: replace with a typed-zero helper covering address, fixed-bytes, and
+                // memory-resident types (e.g. `0x60` for empty `string`/`bytes` memory).
+                if IntegerType::try_from(return_type).is_ok() {
+                    let zero =
+                        self.state
+                            .builder
+                            .emit_sol_constant(0, return_type, &function_entry_block);
+                    self.state
+                        .builder
+                        .emit_sol_store(zero, pointer, &function_entry_block);
+                } else {
+                    unimplemented!(
+                        "zero-initialization for non-integer named return: {return_type}"
+                    );
+                }
+                environment.define_variable(identifier.name(), pointer, return_type);
+                return_slots.push(Some(pointer));
+            }
         }
 
         let region = function_entry_block
@@ -140,7 +174,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         if !terminated {
-            self.emit_default_return(&result_types, &current_block);
+            self.emit_default_return(&result_types, &return_slots, &current_block);
         }
 
         Ok(mlir_name)
@@ -225,20 +259,31 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
     /// Emits a default `sol.return` if the block lacks a terminator.
     ///
-    /// Emits one typed zero constant per return type and terminates the block.
+    /// For each return position, loads the current value from the named-return
+    /// slot when one was allocated, otherwise materializes a typed zero
+    /// constant.
     fn emit_default_return(
         &self,
         result_types: &[Type<'context>],
-        block: &melior::ir::BlockRef<'context, '_>,
+        return_slots: &[Option<Value<'context, '_>>],
+        block: &BlockRef<'context, '_>,
     ) {
         if block.terminator().is_some() {
             return;
         }
-        let zeros: Vec<_> = result_types
-            .iter()
-            .map(|ty| self.state.builder.emit_sol_constant(0, *ty, block))
-            .collect();
-        self.state.builder.emit_sol_return(&zeros, block);
+        let mut values: Vec<Value<'context, '_>> = Vec::with_capacity(result_types.len());
+        for (index, result_type) in result_types.iter().enumerate() {
+            let value = match return_slots.get(index).copied().flatten() {
+                Some(pointer) => self
+                    .state
+                    .builder
+                    .emit_sol_load(pointer, *result_type, block)
+                    .expect("named return slot loads with the declared type"),
+                None => self.state.builder.emit_sol_constant(0, *result_type, block),
+            };
+            values.push(value);
+        }
+        self.state.builder.emit_sol_return(&values, block);
     }
 
     /// Maps Slang's `FunctionMutability` to the Sol dialect's `StateMutability`.
