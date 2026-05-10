@@ -33,9 +33,11 @@ use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::OriginOperation;
 use solx_mlir::ods::sol::PrevRandaoOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
+use solx_mlir::ods::sol::SendOperation;
 use solx_mlir::ods::sol::Sha256Operation;
 use solx_mlir::ods::sol::SigOperation;
 use solx_mlir::ods::sol::TimestampOperation;
+use solx_mlir::ods::sol::TransferOperation;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
 
@@ -219,8 +221,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     pub fn emit_built_in_member_access(
         &self,
         access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let builder = &self.expression_emitter.state.builder;
         match access.member().resolved_built_in() {
             Some(BuiltIn::AddressBalance) => {
@@ -257,6 +260,41 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .build()
                     .into()
             }),
+            Some(BuiltIn::AddressSend) => {
+                let arguments = arguments.expect("send is a member-access call");
+                let (addr, block) = self
+                    .expression_emitter
+                    .emit_value(&access.operand(), block)?;
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let value = block
+                    .append_operation(
+                        SendOperation::builder(builder.context, builder.unknown_location)
+                            .addr(addr)
+                            .val(values[0])
+                            .status(builder.types.i1)
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("send always produces one result")
+                    .into();
+                Ok((Some(value), block))
+            }
+            Some(BuiltIn::AddressTransfer) => {
+                let arguments = arguments.expect("transfer is a member-access call");
+                let (addr, block) = self
+                    .expression_emitter
+                    .emit_value(&access.operand(), block)?;
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                block.append_operation(
+                    TransferOperation::builder(builder.context, builder.unknown_location)
+                        .addr(addr)
+                        .val(values[0])
+                        .build()
+                        .into(),
+                );
+                Ok((None, block))
+            }
             resolved => {
                 let operation = match resolved {
                     Some(BuiltIn::TxOrigin) => {
@@ -357,7 +395,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .result(0)
                     .expect("intrinsic always produces one result")
                     .into();
-                Ok((value, block))
+                Ok((Some(value), block))
             }
         }
     }
@@ -373,7 +411,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
         build_op: F,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)>
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>
     where
         F: FnOnce(Value<'context, 'block>) -> Operation<'context>,
     {
@@ -385,7 +423,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .result(0)
             .expect("unary member intrinsic always produces one result")
             .into();
-        Ok((value, block))
+        Ok((Some(value), block))
     }
 
     /// Emits each positional argument and returns the resulting values
