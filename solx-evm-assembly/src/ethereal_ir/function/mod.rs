@@ -512,6 +512,10 @@ impl Function {
                     }
                     None => anyhow::bail!("Stack underflow"),
                 };
+                // The depth constant occupies the top slot; swap acts on the
+                // element below it (the would-be EVM top) and the element
+                // `depth` positions further down. `update_io_data` then drains
+                // the constant.
                 let len = block_stack.elements.len();
                 if len < depth + 2 {
                     anyhow::bail!("Stack underflow");
@@ -597,12 +601,7 @@ impl Function {
                     }
                     None => anyhow::bail!("Stack underflow"),
                 };
-                let len = block_stack.elements.len();
-                if len < depth + 1 {
-                    anyhow::bail!("Stack underflow");
-                }
-                let dupped = block_stack.elements[len - 1 - depth].clone();
-                (vec![dupped], None)
+                (vec![block_stack.dup(depth + 1)?], None)
             }
 
             Instruction {
