@@ -50,6 +50,7 @@ use crate::ods::sol::FuncOperation;
 use crate::ods::sol::GepOperation;
 use crate::ods::sol::IfOperation;
 use crate::ods::sol::LoadOperation;
+use crate::ods::sol::MallocOperation;
 use crate::ods::sol::MapOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
@@ -796,6 +797,35 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.alloca always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.malloc` for an aggregate type, returning the address.
+    ///
+    /// Use for memory-located structs, arrays, bytes, and strings constructed
+    /// via literals (e.g. `S(a, b)` struct construction).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed.
+    pub fn emit_sol_malloc<'block, B>(
+        &self,
+        result_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                MallocOperation::builder(self.context, self.unknown_location)
+                    .addr(result_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.malloc always produces one result")
             .into()
     }
 
