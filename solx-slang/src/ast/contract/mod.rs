@@ -54,7 +54,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ///
     /// # Errors
     ///
-    /// Returns an error if any function body contains unsupported constructs.
+    /// Returns an error if any function body or constructor initializer
+    /// contains unsupported constructs.
     pub fn emit(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
         let contract_name = contract.name().name();
 
@@ -95,32 +96,16 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             );
         }
 
-        // Emit the constructor first to align with solc's MLIR layout. Lower
-        // the explicit constructor body when the source defines one, otherwise
-        // emit an empty stub.
-        if let Some(constructor) = contract.constructor() {
-            self.state.current_contract_type = Some(contract_type);
-            let emitter = FunctionEmitter::new(self.state, &storage_layout);
-            emitter.emit_sol(&constructor, &contract_body)?;
-            self.state.current_contract_type = None;
-        } else {
-            let entry = self.state.builder.emit_sol_func(
-                "constructor()",
-                &[],
-                &[],
-                None,
-                solx_mlir::StateMutability::NonPayable,
-                Some(solx_mlir::FunctionKind::Constructor),
-                &contract_body,
-            );
-            self.state.builder.emit_sol_return(&[], &entry);
-        }
+        self.state.current_contract_type = Some(contract_type);
+        FunctionEmitter::new(self.state, contract, &storage_layout)
+            .emit_constructor(&contract_body)?;
+        self.state.current_contract_type = None;
 
         // Slang's `functions()` filters out Constructor and Modifier kinds.
         for function in contract.functions() {
             self.state.current_contract_type = Some(contract_type);
-            let emitter = FunctionEmitter::new(self.state, &storage_layout);
-            emitter.emit_sol(&function, &contract_body)?;
+            FunctionEmitter::new(self.state, contract, &storage_layout)
+                .emit_sol(&function, &contract_body)?;
             self.state.current_contract_type = None;
         }
 
