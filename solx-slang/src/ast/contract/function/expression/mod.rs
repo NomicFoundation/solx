@@ -202,6 +202,24 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                                 .emit_sol_load(pointer, element_type, &block)?;
                         Ok((Some(value), block))
                     }
+                    Some(Definition::Constant(constant_definition)) => {
+                        let initializer = constant_definition.value().ok_or_else(|| {
+                            anyhow::anyhow!("constant '{name}' has no initializer")
+                        })?;
+                        let slang_type = constant_definition.get_type().ok_or_else(|| {
+                            anyhow::anyhow!("unresolved type for constant: {name}")
+                        })?;
+                        let target_type = TypeConversion::resolve_slang_type(
+                            &slang_type,
+                            None,
+                            &self.state.builder,
+                        );
+                        let (value, block) = self.emit_value(&initializer, block)?;
+                        let cast =
+                            TypeConversion::from_target_type(target_type, &self.state.builder)
+                                .emit(value, &self.state.builder, &block);
+                        Ok((Some(cast), block))
+                    }
                     None => anyhow::bail!("unresolved identifier: {name}"),
                     Some(_) => anyhow::bail!("unsupported identifier reference: {name}"),
                 }
