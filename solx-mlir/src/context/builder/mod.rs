@@ -1094,6 +1094,9 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
+        if value.r#type() == to_type {
+            return value;
+        }
         block
             .append_operation(
                 AddressCastOperation::builder(self.context, self.unknown_location)
