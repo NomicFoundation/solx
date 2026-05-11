@@ -510,17 +510,16 @@ impl Function {
                     Some(other) => {
                         anyhow::bail!("SWAPX expected constant offset, found {other}")
                     }
-                    None => anyhow::bail!("Stack underflow"),
+                    None => anyhow::bail!("SWAPX: stack underflow"),
                 };
-                // The depth constant occupies the top slot; swap acts on the
-                // element below it (the would-be EVM top) and the element
-                // `depth` positions further down. `update_io_data` then drains
-                // the constant.
-                let len = block_stack.elements.len();
-                if len < depth + 2 {
-                    anyhow::bail!("Stack underflow");
+                let needed = depth
+                    .checked_add(2)
+                    .ok_or_else(|| anyhow::anyhow!("SWAPX offset too large"))?;
+                let length = block_stack.elements.len();
+                if length < needed {
+                    anyhow::bail!("SWAPX: stack underflow");
                 }
-                block_stack.elements.swap(len - 2, len - 2 - depth);
+                block_stack.elements.swap(length - 2, length - 2 - depth);
                 (vec![], None)
             }
 
@@ -599,9 +598,12 @@ impl Function {
                     Some(other) => {
                         anyhow::bail!("DUPX expected constant offset, found {other}")
                     }
-                    None => anyhow::bail!("Stack underflow"),
+                    None => anyhow::bail!("DUPX: stack underflow"),
                 };
-                (vec![block_stack.dup(depth + 1)?], None)
+                let index = depth
+                    .checked_add(1)
+                    .ok_or_else(|| anyhow::anyhow!("DUPX offset too large"))?;
+                (vec![block_stack.dup(index)?], None)
             }
 
             Instruction {
