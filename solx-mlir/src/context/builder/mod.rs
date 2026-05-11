@@ -377,6 +377,8 @@ impl<'context> Builder<'context> {
         &self,
         condition: Value<'context, 'block>,
         msg: Option<&str>,
+        args: &[Value<'context, 'block>],
+        is_call: bool,
         block: &B,
     ) where
         B: BlockLike<'context, 'block>,
@@ -384,9 +386,12 @@ impl<'context> Builder<'context> {
     {
         let mut builder = RequireOperation::builder(self.context, self.unknown_location)
             .cond(condition)
-            .args(&[]);
+            .args(args);
         if let Some(msg) = msg {
             builder = builder.msg(StringAttribute::new(self.context, msg));
+        }
+        if is_call {
+            builder = builder.call(Attribute::unit(self.context));
         }
         block.append_operation(builder.build().into());
     }
