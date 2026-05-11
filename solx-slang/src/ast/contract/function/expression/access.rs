@@ -54,10 +54,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let index_expression = index_access
             .start()
             .expect("slang validates a[i] has an index expression");
-        let base_slang_type = base
+        let base_type = base
             .get_type()
             .ok_or_else(|| anyhow::anyhow!("base of index access has no resolved type"))?;
-        let result_slang_type = index_access
+        let result_type = index_access
             .get_type()
             .expect("slang types every index-access expression");
 
@@ -65,16 +65,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (index_value, block) = self.emit_value(&index_expression, block)?;
 
         let element_type =
-            TypeConversion::resolve_slang_type(&result_slang_type, None, &self.state.builder);
-        let base_location = Self::resolve_base_location(&base_slang_type);
+            TypeConversion::resolve_slang_type(&result_type, None, &self.state.builder);
+        let base_location = Self::resolve_base_location(&base_type);
         let address_type = Self::address_type(
             &self.state.builder,
             element_type,
             base_location,
-            &result_slang_type,
+            &result_type,
         );
 
-        let address = match &base_slang_type {
+        let address = match &base_type {
             SlangType::Mapping(_) => {
                 self.state
                     .builder
@@ -90,15 +90,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Maps a slang container type's data location to the dialect-side
     /// `DataLocation`.
-    fn resolve_base_location(base_slang_type: &SlangType) -> DataLocation {
-        match base_slang_type.data_location() {
+    fn resolve_base_location(base_type: &SlangType) -> DataLocation {
+        match base_type.data_location() {
             Some(SlangDataLocation::Inherited) => {
                 unreachable!("slang should not surface Inherited at an index-access base")
             }
             Some(other) => DataLocation::from_slang(other, None),
             None => unimplemented!(
                 "index access on a value-typed base is not yet wired: {:?}",
-                std::mem::discriminant(base_slang_type)
+                std::mem::discriminant(base_type)
             ),
         }
     }

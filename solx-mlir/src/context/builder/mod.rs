@@ -1048,8 +1048,13 @@ impl<'context> Builder<'context> {
     /// # Panics
     ///
     /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_state_var<'block, B>(&self, name: &str, slot: u64, block: &B)
-    where
+    pub fn emit_sol_state_var<'block, B>(
+        &self,
+        name: &str,
+        slot: u64,
+        element_type: Type<'context>,
+        block: &B,
+    ) where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
@@ -1065,7 +1070,7 @@ impl<'context> Builder<'context> {
         block.append_operation(
             StateVarOperation::builder(self.context, self.unknown_location)
                 .sym_name(StringAttribute::new(self.context, name))
-                .r#type(TypeAttribute::new(self.types.ui256))
+                .r#type(TypeAttribute::new(element_type))
                 .slot(slot_attribute)
                 .byte_offset(byte_offset_attribute)
                 .build()

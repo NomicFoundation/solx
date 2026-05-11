@@ -7,6 +7,7 @@ pub mod arithmetic;
 pub mod assignment;
 pub mod call;
 pub mod logical;
+pub mod member;
 pub mod operator;
 pub mod storage;
 
@@ -20,6 +21,7 @@ use melior::ir::ValueLike;
 use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::Type as SlangType;
+use slang_solidity::backend::types::DataLocation as SlangDataLocation;
 use slang_solidity::cst::NodeId;
 
 use solx_mlir::Builder;
@@ -161,11 +163,28 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             .ok_or_else(|| {
                                 anyhow::anyhow!("unregistered state variable: {name}")
                             })?;
-                        let element_type = TypeConversion::resolve_state_variable_type(
-                            &state_variable,
+                        let declared_type = state_variable.get_type().ok_or_else(|| {
+                            anyhow::anyhow!("unresolved type for state variable: {name}")
+                        })?;
+                        let element_type = TypeConversion::resolve_slang_type(
+                            &declared_type,
+                            None,
                             &self.state.builder,
-                        )?;
-                        let value = self.emit_storage_load(*slot, element_type, &block)?;
+                        );
+                        let address = self.state.builder.emit_sol_addr_of(
+                            &format!("slot_{slot}"),
+                            Self::address_type(
+                                &self.state.builder,
+                                element_type,
+                                DataLocation::Storage,
+                                &declared_type,
+                            ),
+                            &block,
+                        );
+                        let value =
+                            self.state
+                                .builder
+                                .emit_sol_load(address, element_type, &block)?;
                         Ok((Some(value), block))
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
@@ -283,9 +302,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::FunctionCallExpression(call) => {
                 self::call::CallEmitter::new(self).emit_function_call(call, block)
             }
-            Expression::MemberAccessExpression(access) => self::call::CallEmitter::new(self)
-                .emit_member_access(access, block)
-                .map(|(value, block)| (Some(value), block)),
             Expression::TupleExpression(tuple) => {
                 let items = tuple.items();
                 // TODO: support multi-value tuples (e.g. tuple deconstruction)
@@ -362,6 +378,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let value = builder.emit_sol_array_lit(&element_values, array_type, &current);
                 Ok((Some(value), current))
             }
+            Expression::MemberAccessExpression(access) => {
+                if let Some((value, block)) = self.emit_struct_field(access, block)? {
+                    Ok((Some(value), block))
+                } else {
+                    self::call::CallEmitter::new(self)
+                        .emit_member_access(access, block)
+                        .map(|(value, block)| (Some(value), block))
+                }
+            }
             Expression::IndexAccessExpression(index_access) => {
                 self.emit_index_access(index_access, block)
             }
@@ -434,6 +459,24 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             element_type
         } else {
             builder.types.pointer(element_type, base_location)
+        }
+    }
+
+    /// Concrete data location of `expression`, walking back through nested
+    /// member/index accesses past slang's `Inherited` marker on nested
+    /// struct fields like `o.inner.b`.
+    fn resolved_data_location(expression: &Expression) -> Option<SlangDataLocation> {
+        match expression.get_type().and_then(|t| t.data_location())? {
+            SlangDataLocation::Inherited => match expression {
+                Expression::MemberAccessExpression(access) => {
+                    Self::resolved_data_location(&access.operand())
+                }
+                Expression::IndexAccessExpression(access) => {
+                    Self::resolved_data_location(&access.operand())
+                }
+                _ => None,
+            },
+            other => Some(other),
         }
     }
 }
