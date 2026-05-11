@@ -17,8 +17,11 @@ use crate::ast::contract::function::expression::operator::Operator;
 
 /// Assignment target resolved from the Slang binder.
 enum AssignmentTarget<'context, 'block> {
-    /// Local variable — alloca'd pointer and its declared element type.
-    Local(Value<'context, 'block>, Type<'context>),
+    /// Address-typed pointer with its declared element type.
+    ///
+    /// Covers local variables, function parameters, and the result of an
+    /// `a[i]` / `m[k]` index-access expression on the left-hand side.
+    Pointer(Value<'context, 'block>, Type<'context>),
     /// State variable — storage slot and declared element type.
     Storage(u64, Type<'context>),
 }
@@ -31,32 +34,41 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let left = assign.left_operand();
-        let Expression::Identifier(identifier) = &left else {
-            anyhow::bail!("unsupported assignment target");
-        };
-        let name = identifier.name();
-
-        let target = match identifier.resolve_to_definition() {
-            Some(Definition::StateVariable(state_variable)) => {
-                let slot = self
-                    .storage_layout
-                    .get(&state_variable.node_id())
-                    .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?;
-                let element_type = TypeConversion::resolve_state_variable_type(
-                    &state_variable,
-                    &self.state.builder,
-                )?;
-                AssignmentTarget::Storage(*slot, element_type)
+        let (target, block) = match &left {
+            Expression::Identifier(identifier) => {
+                let name = identifier.name();
+                let target = match identifier.resolve_to_definition() {
+                    Some(Definition::StateVariable(state_variable)) => {
+                        let slot = self
+                            .storage_layout
+                            .get(&state_variable.node_id())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("unregistered state variable: {name}")
+                            })?;
+                        let element_type = TypeConversion::resolve_state_variable_type(
+                            &state_variable,
+                            &self.state.builder,
+                        )?;
+                        AssignmentTarget::Storage(*slot, element_type)
+                    }
+                    Some(Definition::Variable(_) | Definition::Parameter(_)) => {
+                        let (pointer, element_type) =
+                            self.environment.variable_with_type(&name).ok_or_else(|| {
+                                anyhow::anyhow!("unregistered local variable: {name}")
+                            })?;
+                        AssignmentTarget::Pointer(pointer, element_type)
+                    }
+                    None => anyhow::bail!("unresolved identifier: {name}"),
+                    Some(_) => anyhow::bail!("unsupported assignment target: {name}"),
+                };
+                (target, block)
             }
-            Some(Definition::Variable(_) | Definition::Parameter(_)) => {
-                let (pointer, element_type) = self
-                    .environment
-                    .variable_with_type(&name)
-                    .ok_or_else(|| anyhow::anyhow!("unregistered local variable: {name}"))?;
-                AssignmentTarget::Local(pointer, element_type)
+            Expression::IndexAccessExpression(index_access) => {
+                let (address, element_type, block) =
+                    self.emit_index_access_address(index_access, block)?;
+                (AssignmentTarget::Pointer(address, element_type), block)
             }
-            None => anyhow::bail!("unresolved identifier: {name}"),
-            Some(_) => anyhow::bail!("unsupported assignment target: {name}"),
+            _ => anyhow::bail!("unsupported assignment target"),
         };
 
         let operator = assign.operator();
@@ -66,7 +78,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             self.emit_value(&right, block)?
         } else {
             let (old, target_type) = match target {
-                AssignmentTarget::Local(pointer, element_type) => {
+                AssignmentTarget::Pointer(pointer, element_type) => {
                     let old = self
                         .state
                         .builder
@@ -105,7 +117,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         };
 
         let result = match target {
-            AssignmentTarget::Local(pointer, element_type) => {
+            AssignmentTarget::Pointer(pointer, element_type) => {
                 let stored_value = TypeConversion::from_target_type(
                     element_type,
                     &self.state.builder,

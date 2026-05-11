@@ -16,6 +16,14 @@
 // CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<ui256, ui256>, ui256, !sol.ptr<ui256, Storage>
 // CHECK:   sol.load %{{.*}} : !sol.ptr<ui256, Storage>, ui256
 
+// CHECK: sol.func {{.*}}writeArray
+// CHECK:   sol.gep %{{.*}}, %{{.*}} : !sol.array<? x ui256, Memory>, ui256, !sol.ptr<ui256, Memory>
+// CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Memory>
+
+// CHECK: sol.func {{.*}}writeMapping
+// CHECK:   sol.map %{{.*}}, %{{.*}} : !sol.mapping<ui256, ui256>, ui256, !sol.ptr<ui256, Storage>
+// CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>
+
 contract C {
     mapping(uint256 => uint256) m;
 
@@ -29,5 +37,13 @@ contract C {
 
     function readMapping(uint256 k) public view returns (uint256) {
         return m[k];
+    }
+
+    function writeArray(uint256[] memory a, uint256 i, uint256 v) public pure {
+        a[i] = v;
+    }
+
+    function writeMapping(uint256 k, uint256 v) public {
+        m[k] = v;
     }
 }

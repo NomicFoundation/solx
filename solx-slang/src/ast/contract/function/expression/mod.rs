@@ -319,91 +319,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 Ok((Some(result), block))
             }
             Expression::IndexAccessExpression(index_access) => {
-                if index_access.end().is_some() {
-                    unimplemented!("range index (a[i:j]) is not yet supported");
-                }
-                let index_expression = index_access
-                    .start()
-                    .expect("slang validates a[i] has an index expression");
-                let base = index_access.operand();
-                let base_slang_type = match &base {
-                    Expression::Identifier(identifier) => {
-                        let name = identifier.name();
-                        match identifier.resolve_to_definition() {
-                            Some(Definition::StateVariable(state_variable)) => {
-                                state_variable.get_type()
-                            }
-                            Some(Definition::Variable(variable)) => variable.get_type(),
-                            Some(Definition::Parameter(parameter)) => parameter.get_type(),
-                            None => anyhow::bail!("unresolved identifier: {name}"),
-                            Some(_) => {
-                                anyhow::bail!("unsupported identifier reference: {name}")
-                            }
-                        }
-                    }
-                    Expression::MemberAccessExpression(member) => member.get_type(),
-                    Expression::IndexAccessExpression(inner) => inner.get_type(),
-                    Expression::FunctionCallExpression(call) => call.get_type(),
-                    Expression::TupleExpression(tuple) => tuple.get_type(),
-                    Expression::ConditionalExpression(conditional) => conditional.get_type(),
-                    _ => unimplemented!("index access base of unsupported expression kind"),
-                }
-                .ok_or_else(|| anyhow::anyhow!("base of index access has no resolved type"))?;
-                let result_slang_type = index_access
-                    .get_type()
-                    .expect("slang types every index-access expression");
-                let (base_value, block) = self.emit_value(&base, block)?;
-                let (index_value, block) = self.emit_value(&index_expression, block)?;
-                let builder = &self.state.builder;
-                let element_type =
-                    TypeConversion::resolve_slang_type(&result_slang_type, None, builder);
-                let base_slang_location = match &base_slang_type {
-                    SlangType::Mapping(_) => SlangDataLocation::Storage,
-                    SlangType::Array(t) => t.location(),
-                    SlangType::FixedSizeArray(t) => t.location(),
-                    SlangType::Bytes(t) => t.location(),
-                    SlangType::String(t) => t.location(),
-                    other => anyhow::bail!(
-                        "unsupported index access base type: {:?}",
-                        std::mem::discriminant(other)
-                    ),
-                };
-                let base_location = match base_slang_location {
-                    SlangDataLocation::Inherited => unimplemented!(
-                        "index access through Inherited (struct-field) location is not yet \
-                         supported"
-                    ),
-                    other => solx_utils::DataLocation::from_slang(other, None),
-                };
-                // Mirror `Sol_GepOp::build`'s non-ptr-ref-in-storage rule
-                // (solx-llvm SolOps.cpp:299-302): when the element is itself a
-                // reference type and lives in Storage or CallData, the result
-                // address IS the element type rather than a pointer to it.
-                let element_is_non_ptr_ref = matches!(
-                    result_slang_type,
-                    SlangType::Array(_)
-                        | SlangType::FixedSizeArray(_)
-                        | SlangType::Bytes(_)
-                        | SlangType::String(_)
-                        | SlangType::Mapping(_)
-                        | SlangType::Struct(_)
-                );
-                let address_type = if element_is_non_ptr_ref
-                    && matches!(
-                        base_location,
-                        solx_utils::DataLocation::Storage | solx_utils::DataLocation::CallData
-                    ) {
-                    element_type
-                } else {
-                    builder.types.pointer(element_type, base_location)
-                };
-                let address = match &base_slang_type {
-                    SlangType::Mapping(_) => {
-                        builder.emit_sol_map(base_value, index_value, address_type, &block)
-                    }
-                    _ => builder.emit_sol_gep(base_value, index_value, address_type, &block),
-                };
-                let value = builder.emit_sol_load(address, element_type, &block)?;
+                let (address, element_type, block) =
+                    self.emit_index_access_address(index_access, block)?;
+                let value = self
+                    .state
+                    .builder
+                    .emit_sol_load(address, element_type, &block)?;
                 Ok((Some(value), block))
             }
             _ => anyhow::bail!(
@@ -432,6 +353,101 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         self.state
             .builder
             .emit_sol_cmp(value, zero, CmpPredicate::Ne, block)
+    }
+
+    /// Emits the address for an `a[i]` / `m[k]` expression and returns it
+    /// together with the element MLIR type.
+    ///
+    /// Shared between the value-producing read path and the lvalue write path
+    /// in `emit_assignment`.
+    pub fn emit_index_access_address(
+        &self,
+        index_access: &slang_solidity::backend::ir::ast::IndexAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        Value<'context, 'block>,
+        Type<'context>,
+        BlockRef<'context, 'block>,
+    )> {
+        if index_access.end().is_some() {
+            unimplemented!("range index (a[i:j]) is not yet supported");
+        }
+        let index_expression = index_access
+            .start()
+            .expect("slang validates a[i] has an index expression");
+        let base = index_access.operand();
+        let base_slang_type = match &base {
+            Expression::Identifier(identifier) => {
+                let name = identifier.name();
+                match identifier.resolve_to_definition() {
+                    Some(Definition::StateVariable(state_variable)) => state_variable.get_type(),
+                    Some(Definition::Variable(variable)) => variable.get_type(),
+                    Some(Definition::Parameter(parameter)) => parameter.get_type(),
+                    None => anyhow::bail!("unresolved identifier: {name}"),
+                    Some(_) => anyhow::bail!("unsupported identifier reference: {name}"),
+                }
+            }
+            Expression::MemberAccessExpression(member) => member.get_type(),
+            Expression::IndexAccessExpression(inner) => inner.get_type(),
+            Expression::FunctionCallExpression(call) => call.get_type(),
+            Expression::TupleExpression(tuple) => tuple.get_type(),
+            Expression::ConditionalExpression(conditional) => conditional.get_type(),
+            _ => unimplemented!("index access base of unsupported expression kind"),
+        }
+        .ok_or_else(|| anyhow::anyhow!("base of index access has no resolved type"))?;
+        let result_slang_type = index_access
+            .get_type()
+            .expect("slang types every index-access expression");
+        let (base_value, block) = self.emit_value(&base, block)?;
+        let (index_value, block) = self.emit_value(&index_expression, block)?;
+        let builder = &self.state.builder;
+        let element_type = TypeConversion::resolve_slang_type(&result_slang_type, None, builder);
+        let base_slang_location = match &base_slang_type {
+            SlangType::Mapping(_) => SlangDataLocation::Storage,
+            SlangType::Array(t) => t.location(),
+            SlangType::FixedSizeArray(t) => t.location(),
+            SlangType::Bytes(t) => t.location(),
+            SlangType::String(t) => t.location(),
+            other => anyhow::bail!(
+                "unsupported index access base type: {:?}",
+                std::mem::discriminant(other)
+            ),
+        };
+        let base_location = match base_slang_location {
+            SlangDataLocation::Inherited => unimplemented!(
+                "index access through Inherited (struct-field) location is not yet supported"
+            ),
+            other => solx_utils::DataLocation::from_slang(other, None),
+        };
+        // Mirror `Sol_GepOp::build`'s non-ptr-ref-in-storage rule
+        // (solx-llvm SolOps.cpp:299-302): when the element is itself a
+        // reference type and lives in Storage or CallData, the result
+        // address IS the element type rather than a pointer to it.
+        let element_is_non_ptr_ref = matches!(
+            result_slang_type,
+            SlangType::Array(_)
+                | SlangType::FixedSizeArray(_)
+                | SlangType::Bytes(_)
+                | SlangType::String(_)
+                | SlangType::Mapping(_)
+                | SlangType::Struct(_)
+        );
+        let address_type = if element_is_non_ptr_ref
+            && matches!(
+                base_location,
+                solx_utils::DataLocation::Storage | solx_utils::DataLocation::CallData
+            ) {
+            element_type
+        } else {
+            builder.types.pointer(element_type, base_location)
+        };
+        let address = match &base_slang_type {
+            SlangType::Mapping(_) => {
+                builder.emit_sol_map(base_value, index_value, address_type, &block)
+            }
+            _ => builder.emit_sol_gep(base_value, index_value, address_type, &block),
+        };
+        Ok((address, element_type, block))
     }
 
     /// Resolves the Solidity type from Slang to an MLIR type.
