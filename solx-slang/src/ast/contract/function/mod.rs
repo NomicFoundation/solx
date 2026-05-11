@@ -8,12 +8,14 @@ pub mod statement;
 use std::collections::HashMap;
 
 use melior::ir::BlockLike;
+use melior::ir::BlockRef;
 use melior::ir::Type;
 use slang_solidity::backend::abi::AbiEntry;
 use slang_solidity::backend::ir::ast::ElementaryType;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::FunctionDefinition;
 use slang_solidity::backend::ir::ast::FunctionKind;
+use slang_solidity::backend::ir::ast::Type as SlangType;
 use slang_solidity::backend::ir::ast::TypeName;
 use slang_solidity::cst::NodeId;
 
@@ -21,8 +23,20 @@ use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::StateMutability;
 
+use self::expression::ExpressionEmitter;
 use self::expression::call::type_conversion::TypeConversion;
 use self::statement::StatementEmitter;
+
+/// State variable with an inline initializer, to be emitted at the top of the
+/// constructor body before the user-written constructor statements run.
+pub struct StateVarInitializer {
+    /// Storage slot for the state variable.
+    pub slot: u64,
+    /// Slang semantic type of the state variable.
+    pub slang_type: SlangType,
+    /// Initializer expression from the source-level `T x = <expr>;` declaration.
+    pub initializer: Expression,
+}
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub struct FunctionEmitter<'state, 'context> {
@@ -30,6 +44,8 @@ pub struct FunctionEmitter<'state, 'context> {
     state: &'state Context<'context>,
     /// State variable node ID to storage slot mapping.
     storage_layout: &'state HashMap<NodeId, u64>,
+    /// State variable initializers, emitted at the top of the constructor.
+    state_var_initializers: &'state [StateVarInitializer],
 }
 
 impl<'state, 'context> FunctionEmitter<'state, 'context> {
@@ -37,10 +53,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     pub fn new(
         state: &'state Context<'context>,
         storage_layout: &'state HashMap<NodeId, u64>,
+        state_var_initializers: &'state [StateVarInitializer],
     ) -> Self {
         Self {
             state,
             storage_layout,
+            state_var_initializers,
         }
     }
 
@@ -121,6 +139,16 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .parent_region()
             .expect("entry block belongs to a region");
         let mut current_block = function_entry_block;
+
+        // State variable initializers run at the top of the constructor body,
+        // before any user-written statements, mirroring solc's MLIR layout.
+        if matches!(function.kind(), FunctionKind::Constructor) {
+            for initializer in self.state_var_initializers {
+                current_block =
+                    self.emit_state_var_initializer(initializer, &environment, current_block)?;
+            }
+        }
+
         let mut terminated = false;
         for statement in body.statements().iter() {
             let mut emitter = StatementEmitter::new(
@@ -144,6 +172,51 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         Ok(mlir_name)
+    }
+
+    /// Emits a single state variable initializer at the top of the constructor.
+    ///
+    /// Reference-typed slots (struct, array, mapping, bytes, string) are
+    /// written via `sol.copy` from the evaluated value into the storage
+    /// reference. Primitive slots use `sol.store` after casting to the
+    /// declared element type.
+    pub fn emit_state_var_initializer<'block>(
+        &self,
+        initializer: &StateVarInitializer,
+        environment: &Environment<'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<BlockRef<'context, 'block>>
+    where
+        'context: 'block,
+    {
+        let builder = &self.state.builder;
+        let element_type =
+            TypeConversion::resolve_slang_type(&initializer.slang_type, None, builder);
+        let emitter = ExpressionEmitter::new(self.state, environment, self.storage_layout, true);
+        let (value, block) = emitter.emit_value(&initializer.initializer, block)?;
+        let slot_name = format!("slot_{}", initializer.slot);
+        let is_ref = matches!(
+            initializer.slang_type,
+            SlangType::Struct(_)
+                | SlangType::Array(_)
+                | SlangType::FixedSizeArray(_)
+                | SlangType::Mapping(_)
+                | SlangType::Bytes(_)
+                | SlangType::String(_)
+        );
+        if is_ref {
+            let storage_addr = builder.emit_sol_addr_of(&slot_name, element_type, &block);
+            builder.emit_sol_copy(value, storage_addr, &block);
+        } else {
+            let ptr_type = builder
+                .types
+                .pointer(element_type, solx_utils::DataLocation::Storage);
+            let storage_addr = builder.emit_sol_addr_of(&slot_name, ptr_type, &block);
+            let cast = TypeConversion::from_target_type(element_type, builder)
+                .emit(value, builder, &block);
+            builder.emit_sol_store(cast, storage_addr, &block);
+        }
+        Ok(block)
     }
 
     /// Builds the MLIR function name as `{name}({types})`.

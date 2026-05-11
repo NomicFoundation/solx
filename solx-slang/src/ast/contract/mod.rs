@@ -16,6 +16,7 @@ use slang_solidity::cst::NodeId;
 use solx_mlir::Context;
 
 use self::function::FunctionEmitter;
+use self::function::StateVarInitializer;
 use self::function::expression::call::type_conversion::TypeConversion;
 
 /// Lowers a Solidity contract to Sol dialect MLIR.
@@ -69,6 +70,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // according to the source-level state variable declaration. The slot
         // type drives `sol.addr_of` / `sol.gep` so we can't fall back to a
         // generic `ui256` when the variable is a struct, array, mapping, etc.
+        // Collect any inline initializers (`T x = <expr>;`) for emission at
+        // the top of the constructor body, mirroring solc's MLIR layout.
+        let mut state_var_initializers = Vec::new();
         for member in contract.members().iter() {
             let ContractMember::StateVariableDefinition(state_variable) = member else {
                 continue;
@@ -84,18 +88,41 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 element_type,
                 &contract_body,
             );
+            if let Some(initializer_expression) = state_variable.value() {
+                // Array-literal initializers (`[1, 2]`) depend on
+                // `Expression::ArrayExpression` lowering, which lives in a
+                // different stack. Skipping leaves the slot at its default
+                // (zero), matching pre-initializer behavior.
+                if matches!(
+                    initializer_expression,
+                    slang_solidity::backend::ir::ast::Expression::ArrayExpression(_)
+                ) {
+                    continue;
+                }
+                let slang_type = state_variable.get_type().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "unresolved type for state variable: {}",
+                        state_variable.name().name()
+                    )
+                })?;
+                state_var_initializers.push(StateVarInitializer {
+                    slot: *slot,
+                    slang_type,
+                    initializer: initializer_expression,
+                });
+            }
         }
 
         // Emit the constructor first to align with solc's MLIR layout. Lower
         // the explicit constructor body when the source defines one, otherwise
-        // emit an empty stub.
+        // emit a stub that runs only the state-variable initializers.
+        self.state.current_contract_type = Some(contract_type);
         if let Some(constructor) = contract.constructor() {
-            self.state.current_contract_type = Some(contract_type);
-            let emitter = FunctionEmitter::new(self.state, &storage_layout);
+            let emitter =
+                FunctionEmitter::new(self.state, &storage_layout, &state_var_initializers);
             emitter.emit_sol(&constructor, &contract_body)?;
-            self.state.current_contract_type = None;
         } else {
-            let entry = self.state.builder.emit_sol_func(
+            let mut entry = self.state.builder.emit_sol_func(
                 "constructor()",
                 &[],
                 &[],
@@ -104,13 +131,20 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 Some(solx_mlir::FunctionKind::Constructor),
                 &contract_body,
             );
+            let environment = solx_mlir::Environment::new();
+            let emitter =
+                FunctionEmitter::new(self.state, &storage_layout, &state_var_initializers);
+            for initializer in &state_var_initializers {
+                entry = emitter.emit_state_var_initializer(initializer, &environment, entry)?;
+            }
             self.state.builder.emit_sol_return(&[], &entry);
         }
+        self.state.current_contract_type = None;
 
         // Slang's `functions()` filters out Constructor and Modifier kinds.
         for function in contract.functions() {
             self.state.current_contract_type = Some(contract_type);
-            let emitter = FunctionEmitter::new(self.state, &storage_layout);
+            let emitter = FunctionEmitter::new(self.state, &storage_layout, &[]);
             emitter.emit_sol(&function, &contract_body)?;
             self.state.current_contract_type = None;
         }
