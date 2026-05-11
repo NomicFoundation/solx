@@ -1118,6 +1118,7 @@ impl<'context> Builder<'context> {
         &self,
         name: &str,
         slot: u64,
+        byte_offset: u32,
         element_type: Type<'context>,
         block: &B,
     ) where
@@ -1131,7 +1132,7 @@ impl<'context> Builder<'context> {
                 .expect("slot literal is an integer attribute");
         let byte_offset_attribute = IntegerAttribute::new(
             IntegerType::new(self.context, solx_utils::BIT_LENGTH_X32 as u32).into(),
-            0,
+            byte_offset.into(),
         );
         block.append_operation(
             StateVarOperation::builder(self.context, self.unknown_location)

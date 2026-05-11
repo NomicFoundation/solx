@@ -19,6 +19,7 @@ use slang_solidity::cst::NodeId;
 use solx_mlir::Context;
 use solx_mlir::Environment;
 
+use crate::ast::contract::function::StorageSymbol;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
@@ -35,8 +36,8 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     /// Stored as a raw pointer to allow switching between Sol op regions
     /// without lifetime conflicts.
     region_pointer: *const Region<'context>,
-    /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, u64>,
+    /// State variable node ID to storage symbol mapping.
+    storage_layout: &'state HashMap<NodeId, StorageSymbol>,
     /// The function's declared return types, for `emit_return` to cast to.
     return_types: &'state [Type<'context>],
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
@@ -51,7 +52,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
         region: &Region<'context>,
-        storage_layout: &'state HashMap<NodeId, u64>,
+        storage_layout: &'state HashMap<NodeId, StorageSymbol>,
         return_types: &'state [Type<'context>],
     ) -> Self {
         Self {

@@ -17,6 +17,7 @@ use solx_mlir::Context;
 
 use self::function::FunctionEmitter;
 use self::function::StateVarInitializer;
+use self::function::StorageSymbol;
 use self::function::expression::call::type_conversion::TypeConversion;
 
 /// Lowers a Solidity contract to Sol dialect MLIR.
@@ -77,14 +78,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             let ContractMember::StateVariableDefinition(state_variable) = member else {
                 continue;
             };
-            let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
+            let Some(symbol) = storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };
             let element_type =
                 TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
             self.state.builder.emit_sol_state_var(
-                &format!("slot_{slot}"),
-                *slot,
+                &symbol.name,
+                symbol.slot,
+                symbol.byte_offset,
                 element_type,
                 &contract_body,
             );
@@ -106,7 +108,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     )
                 })?;
                 state_var_initializers.push(StateVarInitializer {
-                    slot: *slot,
+                    symbol_name: symbol.name.clone(),
                     slang_type,
                     initializer: initializer_expression,
                 });
@@ -174,18 +176,30 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
     /// Computes the storage layout using slang-solidity's ABI computation.
     ///
-    /// Returns a mapping from state variable node ID to storage slot.
-    /// Returns an empty map if the ABI is unavailable.
+    /// Returns a mapping from state variable node ID to its storage symbol
+    /// (slot, byte offset, and unique MLIR symbol name). Returns an empty map
+    /// if the ABI is unavailable.
     fn compute_storage_layout(
         contract: &ContractDefinition,
         file_identifier: &str,
-    ) -> HashMap<NodeId, u64> {
+    ) -> HashMap<NodeId, StorageSymbol> {
         let Some(abi) = contract.compute_abi_with_file_id(file_identifier.to_owned()) else {
             return HashMap::new();
         };
         abi.storage_layout
             .iter()
-            .map(|item| (item.node_id, item.slot as u64))
+            .map(|item| {
+                let node_id_usize: usize = item.node_id.into();
+                let name = format!("{}_{}", item.label, node_id_usize);
+                (
+                    item.node_id,
+                    StorageSymbol {
+                        name,
+                        slot: item.slot as u64,
+                        byte_offset: item.offset as u32,
+                    },
+                )
+            })
             .collect()
     }
 }

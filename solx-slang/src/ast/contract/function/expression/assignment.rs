@@ -22,8 +22,8 @@ enum AssignmentTarget<'context, 'block> {
     /// Covers local variables, function parameters, and the result of an
     /// `a[i]` / `m[k]` index-access expression on the left-hand side.
     Pointer(Value<'context, 'block>, Type<'context>),
-    /// State variable — storage slot and declared element type.
-    Storage(u64, Type<'context>),
+    /// State variable — MLIR symbol name and declared element type.
+    Storage(String, Type<'context>),
 }
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
@@ -39,7 +39,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let name = identifier.name();
                 let target = match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(state_variable)) => {
-                        let slot = self
+                        let symbol = self
                             .storage_layout
                             .get(&state_variable.node_id())
                             .ok_or_else(|| {
@@ -49,7 +49,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             &state_variable,
                             &self.state.builder,
                         )?;
-                        AssignmentTarget::Storage(*slot, element_type)
+                        AssignmentTarget::Storage(symbol.name.clone(), element_type)
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let (pointer, element_type) =
@@ -91,8 +91,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         .emit_sol_load(pointer, element_type, &block)?;
                     (old, element_type)
                 }
-                AssignmentTarget::Storage(slot, element_type) => {
-                    let old = self.emit_storage_load(slot, element_type, &block)?;
+                AssignmentTarget::Storage(ref symbol_name, element_type) => {
+                    let old = self.emit_storage_load(symbol_name, element_type, &block)?;
                     (old, element_type)
                 }
             };
@@ -134,13 +134,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .emit_sol_store(stored_value, pointer, &block);
                 stored_value
             }
-            AssignmentTarget::Storage(slot, element_type) => {
+            AssignmentTarget::Storage(ref symbol_name, element_type) => {
                 let stored_value = TypeConversion::from_target_type(
                     element_type,
                     &self.state.builder,
                 )
                 .emit(value, &self.state.builder, &block);
-                self.emit_storage_store(slot, stored_value, &block);
+                self.emit_storage_store(symbol_name, stored_value, element_type, &block);
                 stored_value
             }
         };

@@ -30,6 +30,7 @@ use solx_mlir::Environment;
 use solx_mlir::ods::sol::ThisOperation;
 
 use self::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::StorageSymbol;
 
 /// Lowers Solidity expressions to MLIR SSA values.
 pub struct ExpressionEmitter<'state, 'context, 'block> {
@@ -37,8 +38,8 @@ pub struct ExpressionEmitter<'state, 'context, 'block> {
     pub state: &'state Context<'context>,
     /// Variable environment.
     pub environment: &'state Environment<'context, 'block>,
-    /// State variable node ID to storage slot mapping.
-    pub storage_layout: &'state HashMap<NodeId, u64>,
+    /// State variable node ID to storage symbol mapping.
+    pub storage_layout: &'state HashMap<NodeId, StorageSymbol>,
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
     ///
     /// `true` by default (Solidity 0.8+). Set to `false` inside `unchecked {}`
@@ -51,7 +52,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn new(
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
-        storage_layout: &'state HashMap<NodeId, u64>,
+        storage_layout: &'state HashMap<NodeId, StorageSymbol>,
         checked: bool,
     ) -> Self {
         Self {
@@ -155,7 +156,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let name = identifier.name();
                 match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(state_variable)) => {
-                        let slot = self
+                        let symbol = self
                             .storage_layout
                             .get(&state_variable.node_id())
                             .ok_or_else(|| {
@@ -182,13 +183,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                                 | SlangType::Bytes(_)
                                 | SlangType::String(_)
                         ) {
-                            self.state.builder.emit_sol_addr_of(
-                                &format!("slot_{slot}"),
-                                element_type,
-                                &block,
-                            )
+                            self.state
+                                .builder
+                                .emit_sol_addr_of(&symbol.name, element_type, &block)
                         } else {
-                            self.emit_storage_load(*slot, element_type, &block)?
+                            self.emit_storage_load(&symbol.name, element_type, &block)?
                         };
                         Ok((Some(value), block))
                     }

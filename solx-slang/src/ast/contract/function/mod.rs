@@ -27,11 +27,26 @@ use self::expression::ExpressionEmitter;
 use self::expression::call::type_conversion::TypeConversion;
 use self::statement::StatementEmitter;
 
+/// Storage layout entry for a single state variable.
+///
+/// Solidity packs multiple non-256-bit state variables into the same storage
+/// slot, so the symbol name has to be unique per definition (we follow solc's
+/// `{label}_{node_id}` convention) and the byte offset has to carry through
+/// to `sol.state_var` for the lowering to address each variable correctly.
+pub struct StorageSymbol {
+    /// MLIR symbol name (e.g. `small_9`), unique even across packed slots.
+    pub name: String,
+    /// Storage slot index.
+    pub slot: u64,
+    /// Byte offset within the slot (0 for unpacked variables).
+    pub byte_offset: u32,
+}
+
 /// State variable with an inline initializer, to be emitted at the top of the
 /// constructor body before the user-written constructor statements run.
 pub struct StateVarInitializer {
-    /// Storage slot for the state variable.
-    pub slot: u64,
+    /// MLIR symbol name of the target state variable.
+    pub symbol_name: String,
     /// Slang semantic type of the state variable.
     pub slang_type: SlangType,
     /// Initializer expression from the source-level `T x = <expr>;` declaration.
@@ -42,8 +57,8 @@ pub struct StateVarInitializer {
 pub struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
-    /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, u64>,
+    /// State variable node ID to storage symbol mapping.
+    storage_layout: &'state HashMap<NodeId, StorageSymbol>,
     /// State variable initializers, emitted at the top of the constructor.
     state_var_initializers: &'state [StateVarInitializer],
 }
@@ -52,7 +67,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
     pub fn new(
         state: &'state Context<'context>,
-        storage_layout: &'state HashMap<NodeId, u64>,
+        storage_layout: &'state HashMap<NodeId, StorageSymbol>,
         state_var_initializers: &'state [StateVarInitializer],
     ) -> Self {
         Self {
@@ -194,7 +209,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             TypeConversion::resolve_slang_type(&initializer.slang_type, None, builder);
         let emitter = ExpressionEmitter::new(self.state, environment, self.storage_layout, true);
         let (value, block) = emitter.emit_value(&initializer.initializer, block)?;
-        let slot_name = format!("slot_{}", initializer.slot);
         let is_ref = matches!(
             initializer.slang_type,
             SlangType::Struct(_)
@@ -205,13 +219,14 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 | SlangType::String(_)
         );
         if is_ref {
-            let storage_addr = builder.emit_sol_addr_of(&slot_name, element_type, &block);
+            let storage_addr =
+                builder.emit_sol_addr_of(&initializer.symbol_name, element_type, &block);
             builder.emit_sol_copy(value, storage_addr, &block);
         } else {
             let ptr_type = builder
                 .types
                 .pointer(element_type, solx_utils::DataLocation::Storage);
-            let storage_addr = builder.emit_sol_addr_of(&slot_name, ptr_type, &block);
+            let storage_addr = builder.emit_sol_addr_of(&initializer.symbol_name, ptr_type, &block);
             let cast = TypeConversion::from_target_type(element_type, builder)
                 .emit(value, builder, &block);
             builder.emit_sol_store(cast, storage_addr, &block);
