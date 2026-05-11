@@ -2,33 +2,33 @@
 //!     "name": "default",
 //!     "inputs": [
 //!         {
-//!             "method": "test",
+//!             "method": "testCheckEntrypointDoesNotHitInvalidBytecode",
 //!             "calldata": []
 //!         }
 //!     ],
 //!     "expected": [
-//!         "42"
+//!         "1"
 //!     ]
 //! } ] }
 
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.19;
 
-contract Callee {
-    function f(
+contract PlaceholderContract {
+    function check_entrypoint(
         bool, bool, bool, bool, bool,
         bool, bool, bool, bool, bool,
         bool, bool, bool, bool, bool
-    ) external pure returns (uint256) {
-        return 42;
+    ) public pure returns (bool) {
+        return true;
     }
 }
 
 contract Test {
-    function test() external returns (uint256) {
-        Callee c = new Callee();
-        return c.f(
+    function testCheckEntrypointDoesNotHitInvalidBytecode() public returns (bool) {
+        PlaceholderContract target = new PlaceholderContract();
+        return target.check_entrypoint(
             false, false, false, false, false,
             false, false, false, false, false,
             false, false, false, false, false
