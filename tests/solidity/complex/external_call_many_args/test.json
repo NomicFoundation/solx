@@ -1,0 +1,20 @@
+{
+    "cases": [
+        {
+            "name": "default",
+            "inputs": [
+                {
+                    "instance": "SolxInvalidBytecodeTest",
+                    "method": "testCheckEntrypointDoesNotHitInvalidBytecode",
+                    "calldata": []
+                }
+            ],
+            "expected": [
+                "1"
+            ]
+        }
+    ],
+    "contracts": {
+        "SolxInvalidBytecodeTest": "SolxInvalidBytecode.t.sol:SolxInvalidBytecodeTest"
+    }
+}
