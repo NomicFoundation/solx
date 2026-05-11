@@ -68,6 +68,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     self.emit_index_access_address(index_access, block)?;
                 (AssignmentTarget::Pointer(address, element_type), block)
             }
+            Expression::MemberAccessExpression(access) => {
+                let (address, element_type, block) = self
+                    .emit_struct_field_address(access, block)?
+                    .ok_or_else(|| anyhow::anyhow!("unsupported assignment target"))?;
+                (AssignmentTarget::Pointer(address, element_type), block)
+            }
             _ => anyhow::bail!("unsupported assignment target"),
         };
 

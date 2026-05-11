@@ -16,8 +16,10 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
+use melior::ir::r#type::IntegerType;
 use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
+use slang_solidity::backend::ir::ast::MemberAccessExpression;
 use slang_solidity::backend::ir::ast::Type as SlangType;
 use slang_solidity::backend::types::DataLocation as SlangDataLocation;
 use slang_solidity::cst::NodeId;
@@ -159,11 +161,35 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             .ok_or_else(|| {
                                 anyhow::anyhow!("unregistered state variable: {name}")
                             })?;
-                        let element_type = TypeConversion::resolve_state_variable_type(
-                            &state_variable,
+                        let slang_type = state_variable.get_type().ok_or_else(|| {
+                            anyhow::anyhow!("unresolved type for state variable: {name}")
+                        })?;
+                        let element_type = TypeConversion::resolve_slang_type(
+                            &slang_type,
+                            None,
                             &self.state.builder,
-                        )?;
-                        let value = self.emit_storage_load(*slot, element_type, &block)?;
+                        );
+                        // A reference-type state variable (struct, array,
+                        // mapping, bytes, string) in Storage IS its slot
+                        // region — `sol.addr_of` returns the type directly and
+                        // there is no value to `sol.load`. Mirror solc.
+                        let value = if matches!(
+                            slang_type,
+                            SlangType::Struct(_)
+                                | SlangType::Array(_)
+                                | SlangType::FixedSizeArray(_)
+                                | SlangType::Mapping(_)
+                                | SlangType::Bytes(_)
+                                | SlangType::String(_)
+                        ) {
+                            self.state.builder.emit_sol_addr_of(
+                                &format!("slot_{slot}"),
+                                element_type,
+                                &block,
+                            )
+                        } else {
+                            self.emit_storage_load(*slot, element_type, &block)?
+                        };
                         Ok((Some(value), block))
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
@@ -278,9 +304,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::FunctionCallExpression(call) => {
                 self::call::CallEmitter::new(self).emit_function_call(call, block)
             }
-            Expression::MemberAccessExpression(access) => self::call::CallEmitter::new(self)
-                .emit_member_access(access, block)
-                .map(|(value, block)| (Some(value), block)),
+            Expression::MemberAccessExpression(access) => {
+                if let Some((address, element_type, block)) =
+                    self.emit_struct_field_address(access, block.clone())?
+                {
+                    let value = self.load_or_address(address, element_type, &block)?;
+                    Ok((Some(value), block))
+                } else {
+                    self::call::CallEmitter::new(self)
+                        .emit_member_access(access, block)
+                        .map(|(value, block)| (Some(value), block))
+                }
+            }
             Expression::TupleExpression(tuple) => {
                 let items = tuple.items();
                 // TODO: support multi-value tuples (e.g. tuple deconstruction)
@@ -321,10 +356,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::IndexAccessExpression(index_access) => {
                 let (address, element_type, block) =
                     self.emit_index_access_address(index_access, block)?;
-                let value = self
-                    .state
-                    .builder
-                    .emit_sol_load(address, element_type, &block)?;
+                let value = self.load_or_address(address, element_type, &block)?;
                 Ok((Some(value), block))
             }
             _ => anyhow::bail!(
@@ -353,6 +385,28 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         self.state
             .builder
             .emit_sol_cmp(value, zero, CmpPredicate::Ne, block)
+    }
+
+    /// Loads `address` as `element_type` when `element_type` is reached via a
+    /// pointer, or returns `address` directly when it already IS the value.
+    ///
+    /// The latter holds for reference-type elements (struct, array, mapping,
+    /// bytes, string) in Storage or CallData — the non-ptr-ref-in-storage rule
+    /// produces an address whose type equals the element type, and `sol.load`
+    /// on it would be invalid.
+    fn load_or_address(
+        &self,
+        address: Value<'context, 'block>,
+        element_type: Type<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Value<'context, 'block>> {
+        if address.r#type() == element_type {
+            Ok(address)
+        } else {
+            self.state
+                .builder
+                .emit_sol_load(address, element_type, block)
+        }
     }
 
     /// Emits the address for an `a[i]` / `m[k]` expression and returns it
@@ -448,6 +502,91 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             _ => builder.emit_sol_gep(base_value, index_value, address_type, &block),
         };
         Ok((address, element_type, block))
+    }
+
+    /// Emits the address for a struct field access (`s.field`), returning it
+    /// together with the field's element MLIR type and the post-evaluation
+    /// block. Returns `Ok(None)` when the access is not a struct field (e.g.
+    /// `msg.sender` or other built-in / non-struct base).
+    ///
+    /// Shared between the value-producing read path and the lvalue write path
+    /// in `emit_assignment`.
+    pub fn emit_struct_field_address(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<
+        Option<(
+            Value<'context, 'block>,
+            Type<'context>,
+            BlockRef<'context, 'block>,
+        )>,
+    > {
+        let base = access.operand();
+        let base_slang_type = match &base {
+            Expression::Identifier(identifier) => match identifier.resolve_to_definition() {
+                Some(Definition::StateVariable(state_variable)) => state_variable.get_type(),
+                Some(Definition::Variable(variable)) => variable.get_type(),
+                Some(Definition::Parameter(parameter)) => parameter.get_type(),
+                _ => None,
+            },
+            Expression::MemberAccessExpression(member) => member.get_type(),
+            Expression::IndexAccessExpression(inner) => inner.get_type(),
+            Expression::FunctionCallExpression(call) => call.get_type(),
+            Expression::TupleExpression(tuple) => tuple.get_type(),
+            Expression::ConditionalExpression(conditional) => conditional.get_type(),
+            _ => None,
+        };
+        let Some(SlangType::Struct(struct_type)) = base_slang_type else {
+            return Ok(None);
+        };
+        let struct_location = solx_utils::DataLocation::from_slang(struct_type.location(), None);
+        let struct_definition = match struct_type.definition() {
+            Definition::Struct(definition) => definition,
+            _ => unreachable!("Slang StructType always references a Struct definition"),
+        };
+        let member_name = access.member().name();
+        let mut field_info = None;
+        for (idx, member) in struct_definition.members().iter().enumerate() {
+            if member.name().name() == member_name {
+                field_info = Some((idx, member.get_type()));
+                break;
+            }
+        }
+        let (field_index, field_slang_type) =
+            field_info.ok_or_else(|| anyhow::anyhow!("unknown struct member: {member_name}"))?;
+        let field_slang_type = field_slang_type
+            .ok_or_else(|| anyhow::anyhow!("struct member has no resolved type: {member_name}"))?;
+        let (base_value, block) = self.emit_value(&base, block)?;
+        let builder = &self.state.builder;
+        let element_type =
+            TypeConversion::resolve_slang_type(&field_slang_type, Some(struct_location), builder);
+        // Mirror `Sol_GepOp::build`'s non-ptr-ref-in-storage rule
+        // (solx-llvm SolOps.cpp:299-302): when the element is itself a
+        // reference type and lives in Storage or CallData, the result
+        // address IS the element type rather than a pointer to it.
+        let element_is_non_ptr_ref = matches!(
+            field_slang_type,
+            SlangType::Array(_)
+                | SlangType::FixedSizeArray(_)
+                | SlangType::Bytes(_)
+                | SlangType::String(_)
+                | SlangType::Mapping(_)
+                | SlangType::Struct(_)
+        );
+        let address_type = if element_is_non_ptr_ref
+            && matches!(
+                struct_location,
+                solx_utils::DataLocation::Storage | solx_utils::DataLocation::CallData
+            ) {
+            element_type
+        } else {
+            builder.types.pointer(element_type, struct_location)
+        };
+        let ui64_type = Type::from(IntegerType::unsigned(builder.context, 64));
+        let index_value = builder.emit_sol_constant(field_index as i64, ui64_type, &block);
+        let address = builder.emit_sol_gep(base_value, index_value, address_type, &block);
+        Ok(Some((address, element_type, block)))
     }
 
     /// Resolves the Solidity type from Slang to an MLIR type.

@@ -8,6 +8,7 @@ pub mod function;
 use std::collections::HashMap;
 
 use slang_solidity::backend::ir::ast::ContractDefinition;
+use slang_solidity::backend::ir::ast::ContractMember;
 use slang_solidity::backend::ir::ast::FunctionKind;
 use slang_solidity::backend::ir::ast::FunctionMutability;
 use slang_solidity::cst::NodeId;
@@ -64,11 +65,25 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             &module_body,
         );
 
-        // Emit sol.state_var declarations for each storage slot.
-        for slot in storage_layout.values() {
-            self.state
-                .builder
-                .emit_sol_state_var(&format!("slot_{slot}"), *slot, &contract_body);
+        // Emit sol.state_var declarations for each storage slot, typed
+        // according to the source-level state variable declaration. The slot
+        // type drives `sol.addr_of` / `sol.gep` so we can't fall back to a
+        // generic `ui256` when the variable is a struct, array, mapping, etc.
+        for member in contract.members().iter() {
+            let ContractMember::StateVariableDefinition(state_variable) = member else {
+                continue;
+            };
+            let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
+                continue;
+            };
+            let element_type =
+                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
+            self.state.builder.emit_sol_state_var(
+                &format!("slot_{slot}"),
+                *slot,
+                element_type,
+                &contract_body,
+            );
         }
 
         // Emit the constructor first to align with solc's MLIR layout. Lower
