@@ -4,6 +4,7 @@
 
 pub mod expression;
 pub mod statement;
+pub mod storage_slot;
 
 use std::collections::HashMap;
 
@@ -12,7 +13,6 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
-use ruint::aliases::U256;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ElementaryType;
@@ -29,6 +29,7 @@ use solx_mlir::StateMutability;
 use self::expression::ExpressionEmitter;
 use self::expression::call::type_conversion::TypeConversion;
 use self::statement::StatementEmitter;
+use self::storage_slot::StorageSlot;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub struct FunctionEmitter<'state, 'context> {
@@ -36,8 +37,10 @@ pub struct FunctionEmitter<'state, 'context> {
     state: &'state Context<'context>,
     /// Containing contract.
     contract: &'state ContractDefinition,
-    /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, U256>,
+    /// State variable node ID to `(slot, byte_offset)` mapping. The byte
+    /// offset is zero for unpacked variables and non-zero for variables
+    /// packed into a shared slot.
+    storage_layout: &'state HashMap<NodeId, StorageSlot>,
 }
 
 impl<'state, 'context> FunctionEmitter<'state, 'context> {
@@ -45,7 +48,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     pub fn new(
         state: &'state Context<'context>,
         contract: &'state ContractDefinition,
-        storage_layout: &'state HashMap<NodeId, U256>,
+        storage_layout: &'state HashMap<NodeId, StorageSlot>,
     ) -> Self {
         Self {
             state,

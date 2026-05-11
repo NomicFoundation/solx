@@ -7,7 +7,6 @@ pub mod function;
 
 use std::collections::HashMap;
 
-use ruint::aliases::U256;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
@@ -18,6 +17,7 @@ use solx_mlir::Context;
 
 use self::function::FunctionEmitter;
 use self::function::expression::call::type_conversion::TypeConversion;
+use self::function::storage_slot::StorageSlot;
 
 /// Lowers a Solidity contract to Sol dialect MLIR.
 ///
@@ -89,8 +89,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             let element_type =
                 TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
             self.state.builder.emit_sol_state_var(
-                &format!("slot_{slot}"),
-                *slot,
+                &slot.name,
+                slot.slot,
+                slot.byte_offset,
                 element_type,
                 &contract_body,
             );
@@ -134,15 +135,26 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
     /// Computes the storage layout using slang-solidity's ABI computation.
     ///
-    /// Returns a mapping from state variable node ID to storage slot.
-    /// Returns an empty map if the ABI is unavailable.
-    fn compute_storage_layout(contract: &ContractDefinition) -> HashMap<NodeId, U256> {
+    /// Returns a mapping from state variable node ID to its storage slot
+    /// (slot index and byte offset within the slot). Returns an empty map
+    /// if the ABI is unavailable.
+    fn compute_storage_layout(contract: &ContractDefinition) -> HashMap<NodeId, StorageSlot> {
         let Some(abi) = contract.compute_abi() else {
             return HashMap::new();
         };
         abi.storage_layout()
             .iter()
-            .map(|item| (item.node_id(), item.slot()))
+            .map(|item| {
+                (
+                    item.node_id(),
+                    StorageSlot::new(
+                        item.slot(),
+                        item.offset() as u32,
+                        item.label(),
+                        item.node_id(),
+                    ),
+                )
+            })
             .collect()
     }
 }
