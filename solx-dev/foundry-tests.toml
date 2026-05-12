@@ -1,5 +1,9 @@
 # Foundry project test configuration.
 #
+# Build systems:
+#   [build_systems]
+#   yarn = "<x.y.z>"                # Pinned version installed globally before each project run.
+#
 # Compilers:
 #   [compilers.<id>]
 #   name = "00.solc"              # Display name in reports (hyphens become newlines)
@@ -24,6 +28,9 @@
 #   left = "03.solx-legacy"         # Left toolchain: {compiler.name}-{codegen}
 #   right = "02.solx-main-legacy"   # Right toolchain: {compiler.name}-{codegen}
 #   disabled = true/false           # Whether to skip this comparison
+
+[build_systems]
+yarn = "1.22.22"
 
 [compilers.solc]
 name = "00.solc-0.8.34"

@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use self::comparison::Comparison;
 use self::compiler::Compiler;
 use self::project::Project;
+use self::project::build_system::BuildSystem;
 
 ///
 /// `solx` Hardhat config.
@@ -25,6 +26,9 @@ pub struct Config {
     /// List of comparisons for Excel diff columns.
     #[serde(default)]
     pub comparisons: Vec<Comparison>,
+    /// Pinned versions of build systems installed globally before per-project tests.
+    #[serde(default)]
+    pub build_systems: BTreeMap<BuildSystem, String>,
 }
 
 impl TryFrom<PathBuf> for Config {

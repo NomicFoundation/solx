@@ -25,6 +25,9 @@ pub struct Config {
     /// List of comparisons for Excel diff columns.
     #[serde(default)]
     pub comparisons: Vec<Comparison>,
+    /// Pinned versions of build systems installed globally before per-project tests.
+    #[serde(default)]
+    pub build_systems: BTreeMap<String, String>,
 }
 
 impl TryFrom<PathBuf> for Config {
