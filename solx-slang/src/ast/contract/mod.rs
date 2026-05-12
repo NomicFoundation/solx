@@ -20,7 +20,7 @@ use self::function::expression::call::type_conversion::TypeConversion;
 /// Lowers a Solidity contract to Sol dialect MLIR.
 ///
 /// Emits `sol.contract` wrapping `sol.func` definitions. The
-/// `convert-sol-to-std` pass generates the entry-point dispatcher
+/// `convert-sol-to-yul` pass generates the entry-point dispatcher
 /// from the function selectors.
 pub struct ContractEmitter<'state, 'context> {
     /// The shared MLIR context.

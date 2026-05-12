@@ -31,7 +31,7 @@
 
 // CHECK: sol.func @{{.*infinite_for.*}}
 // CHECK:   sol.for cond {
-// CHECK:     %[[TRUE:.*]] = arith.constant true
+// CHECK:     %[[TRUE:.*]] = sol.constant true
 // CHECK:     sol.condition %[[TRUE]]
 // CHECK:   } body {
 
