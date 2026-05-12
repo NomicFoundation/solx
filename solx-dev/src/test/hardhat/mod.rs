@@ -120,30 +120,38 @@ pub fn test(
             }
 
             let build_system = project.build_system.to_string();
-            let mut npm_install_build_system = Command::new("npm");
-            npm_install_build_system.current_dir(project_directory.as_path());
-            npm_install_build_system.args(["--loglevel", "error"]);
-            npm_install_build_system.arg("--force");
-            npm_install_build_system.arg("--yes");
-            npm_install_build_system.arg("install");
-            npm_install_build_system.arg("--global");
-            npm_install_build_system.arg(build_system.as_str());
-            crate::utils::command_with_retries(
-                &mut npm_install_build_system,
-                format!(
-                    "{} build system {} for Hardhat project {project_name}",
-                    solx_utils::cargo_status_ok("Installing"),
-                    build_system.bright_yellow().bold()
-                )
-                .as_str(),
-                16,
-            )?;
+            if let Some(npm_spec) = project.build_system.to_npm_spec() {
+                let mut npm_install_build_system = Command::new("npm");
+                npm_install_build_system.current_dir(project_directory.as_path());
+                npm_install_build_system.args(["--loglevel", "error"]);
+                npm_install_build_system.arg("--force");
+                npm_install_build_system.arg("--yes");
+                npm_install_build_system.arg("install");
+                npm_install_build_system.arg("--global");
+                npm_install_build_system.arg(npm_spec);
+                crate::utils::command_with_retries(
+                    &mut npm_install_build_system,
+                    format!(
+                        "{} build system {} for Hardhat project {project_name}",
+                        solx_utils::cargo_status_ok("Installing"),
+                        build_system.bright_yellow().bold()
+                    )
+                    .as_str(),
+                    16,
+                )?;
+            }
             let mut build_system_install_command = Command::new(build_system.as_str());
             build_system_install_command.current_dir(project_directory.as_path());
-            if let BuildSystem::Npm = project.build_system {
-                build_system_install_command.args(["--loglevel", "error"]);
-                build_system_install_command.arg("--force");
-                build_system_install_command.arg("--yes");
+            match project.build_system {
+                BuildSystem::Npm => {
+                    build_system_install_command.args(["--loglevel", "error"]);
+                    build_system_install_command.arg("--force");
+                    build_system_install_command.arg("--yes");
+                }
+                BuildSystem::Pnpm => {
+                    build_system_install_command.arg("--ignore-scripts");
+                }
+                _ => {}
             }
             build_system_install_command.arg("install");
             crate::utils::command_with_retries(
@@ -166,6 +174,9 @@ pub fn test(
                 }
                 BuildSystem::Yarn => {
                     dependency_override_command.arg("--silent");
+                }
+                BuildSystem::Pnpm => {
+                    dependency_override_command.arg("--ignore-scripts");
                 }
                 _ => {}
             }
