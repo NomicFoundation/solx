@@ -48,6 +48,12 @@
       "allowedVersions": "<0.13"
     },
     {
+      "description": "Pin mlir-sys to <220 (MLIR v21). solx-llvm is built against LLVM 21.1; mlir-sys 220 targets MLIR v22 which requires a coordinated solx-llvm migration to LLVM 22 first. solx-mlir/Cargo.toml carries a TODO to track mlir-sys 211 availability — the 211 line is what we want, not the 220 jump. PR #420 was the unwanted bump. Drop this rule once solx-llvm migrates to LLVM 22 (or once mlir-sys 211 ships and we move to it).",
+      "matchManagers": ["cargo"],
+      "matchDepNames": ["mlir-sys"],
+      "allowedVersions": "<220"
+    },
+    {
       "description": "solx-ci-runner is a private GHCR package",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["ghcr.io/nomicfoundation/solx-ci-runner"],
