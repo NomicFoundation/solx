@@ -34,8 +34,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (lhs, block) = self.emit_value(left, block)?;
         let (rhs, block) = self.emit_value(right, block)?;
+        let (lhs, block) = self.emit_value(left, block)?;
         let result_type = target_type.unwrap_or_else(|| {
             let lhs_width = solx_mlir::TypeFactory::integer_bit_width(lhs.r#type());
             let rhs_width = solx_mlir::TypeFactory::integer_bit_width(rhs.r#type());
