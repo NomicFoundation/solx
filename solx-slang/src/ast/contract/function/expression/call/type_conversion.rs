@@ -124,11 +124,14 @@ impl<'context> TypeConversion<'context> {
                 )
             }
             SlangType::Mapping(mapping_type) => {
-                let key_type =
-                    Self::resolve_slang_type(&mapping_type.key_type(), inherited_location, builder);
+                let key_type = Self::resolve_slang_type(
+                    &mapping_type.key_type(),
+                    Some(solx_utils::DataLocation::Storage),
+                    builder,
+                );
                 let value_type = Self::resolve_slang_type(
                     &mapping_type.value_type(),
-                    inherited_location,
+                    Some(solx_utils::DataLocation::Storage),
                     builder,
                 );
                 builder.types.mapping(key_type, value_type)
@@ -142,6 +145,9 @@ impl<'context> TypeConversion<'context> {
                     Definition::Struct(definition) => definition,
                     _ => unreachable!("Slang StructType always references a Struct definition"),
                 };
+                // TODO(v2): move struct-member type resolution into Slang itself
+                // so consumers don't have to walk `members()` and propagate the
+                // struct's data location by hand.
                 let mut member_types = Vec::new();
                 for member in struct_definition.members().iter() {
                     let member_slang_type = member
