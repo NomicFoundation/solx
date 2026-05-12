@@ -21,7 +21,7 @@ serde.workspace = true
 # compatible. If these crates diverge to different LLVM builds, the
 # transmutes in context.rs become unsound.
 # TODO: Track mlir-sys 211 availability.
-mlir-sys = "210.0"
+mlir-sys = "220.0"
 
 inkwell = { workspace = true, features = ["llvm21-1-no-llvm-linking"] }
 
