@@ -13,8 +13,8 @@ use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
 
 use solx_mlir::CmpPredicate;
+use solx_mlir::ods::sol::NotOperation;
 use solx_mlir::ods::sol::SubOperation;
-use solx_mlir::ods::sol::XorOperation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -102,23 +102,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let operand_type = target_type.unwrap_or_else(|| value.r#type());
                 let value = TypeConversion::from_target_type(operand_type, &self.state.builder)
                     .emit(value, &self.state.builder, &block);
-                let all_ones = self
-                    .state
-                    .builder
-                    .emit_sol_constant_all_ones(operand_type, &block);
                 let result = block
                     .append_operation(
-                        XorOperation::builder(
+                        NotOperation::builder(
                             self.state.builder.context,
                             self.state.builder.unknown_location,
                         )
-                        .lhs(value)
-                        .rhs(all_ones)
+                        .value(value)
                         .build()
                         .into(),
                     )
                     .result(0)
-                    .expect("sol.xor always produces one result")
+                    .expect("sol.not always produces one result")
                     .into();
                 Ok((result, block))
             }

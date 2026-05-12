@@ -11,7 +11,7 @@
 // CHECK:   sol.xor %{{.*}}, %{{.*}} : ui256
 
 // CHECK: sol.func @{{.*bit_not.*}}
-// CHECK:   sol.xor %{{.*}}, %{{.*}} : ui256
+// CHECK:   sol.not %{{.*}} : ui256
 
 // CHECK: sol.func @{{.*shift_left.*}}
 // CHECK:   sol.shl %{{.*}}, %{{.*}} : ui256

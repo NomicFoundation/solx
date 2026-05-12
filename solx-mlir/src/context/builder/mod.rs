@@ -277,29 +277,6 @@ impl<'context> Builder<'context> {
         self.emit_constant(&BigInt::from(u8::from(value)), self.types.i1, block)
     }
 
-    /// Emits an all-ones `sol.constant` for the given integer type.
-    pub fn emit_sol_constant_all_ones<'block, B>(
-        &self,
-        integer_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let all_ones = if IntegerType::try_from(integer_type)
-            .ok()
-            .is_some_and(|integer| integer.is_signed())
-        {
-            // Two's-complement all-ones for any signed width is `-1`.
-            BigInt::from(-1)
-        } else {
-            let bit_width = TypeFactory::integer_bit_width(integer_type);
-            (BigInt::from(1u32) << bit_width) - BigInt::from(1u32)
-        };
-        self.emit_constant(&all_ones, integer_type, block)
-    }
-
     // ==== String literals ====
 
     /// Emits a `sol.string_lit` constant with a `!sol.string<Memory>` result.
