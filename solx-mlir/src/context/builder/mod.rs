@@ -8,8 +8,6 @@
 
 pub mod type_factory;
 
-use melior::dialect::ods::scf::IfOperation as ScfIfOperation;
-use melior::dialect::ods::scf::YieldOperation as ScfYieldOperation;
 use melior::ir::Attribute;
 use melior::ir::Block;
 use melior::ir::BlockLike;
@@ -447,82 +445,6 @@ impl<'context> Builder<'context> {
             .first_block()
             .expect("else region has a block");
         (then_ref, else_ref)
-    }
-
-    /// Emits a value-producing `scf.if` with then and else regions.
-    ///
-    /// Returns `(then_block, else_block)`. Each region must be terminated
-    /// with `emit_scf_yield` passing a value matching the result type.
-    /// The operation result is the yielded value from the taken branch.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the operation result cannot be extracted.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_scf_if<'block>(
-        &self,
-        condition: Value<'context, 'block>,
-        result_type: Type<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
-        BlockRef<'context, 'block>,
-        BlockRef<'context, 'block>,
-        Value<'context, 'block>,
-    )>
-    where
-        'context: 'block,
-    {
-        let then_region = Region::new();
-        let then_block = Block::new(&[]);
-        then_region.append_block(then_block);
-
-        let else_region = Region::new();
-        let else_block = Block::new(&[]);
-        else_region.append_block(else_block);
-
-        let operation = block.append_operation(
-            ScfIfOperation::builder(self.context, self.unknown_location)
-                .results(&[result_type])
-                .condition(condition)
-                .then_region(then_region)
-                .else_region(else_region)
-                .build()
-                .into(),
-        );
-
-        let result = operation.result(0)?.into();
-        let then_ref = operation
-            .region(0)
-            .expect("scf.if has then region")
-            .first_block()
-            .expect("then region has a block");
-        let else_ref = operation
-            .region(1)
-            .expect("scf.if has else region")
-            .first_block()
-            .expect("else region has a block");
-        Ok((then_ref, else_ref, result))
-    }
-
-    /// Emits a `scf.yield` region terminator with a value.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_scf_yield<'block, B>(&self, operands: &[Value<'context, 'block>], block: &B)
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block.append_operation(
-            ScfYieldOperation::builder(self.context, self.unknown_location)
-                .results(operands)
-                .build()
-                .into(),
-        );
     }
 
     /// Emits a `sol.while` with condition and body regions.
