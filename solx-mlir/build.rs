@@ -20,12 +20,13 @@ fn main() {
     // Sol dialect — custom Solidity MLIR dialect defined in solx-llvm.
     println!("cargo:rustc-link-lib=static=MLIRSolDialect");
     println!("cargo:rustc-link-lib=static=MLIRCAPISol");
-    println!("cargo:rustc-link-lib=static=MLIRSolToStandard");
+    println!("cargo:rustc-link-lib=static=MLIRSolToYul");
     println!("cargo:rustc-link-lib=static=MLIRSolTransforms");
 
-    // Yul dialect — dependency of the Sol-to-standard conversion pass.
+    // Yul dialect — dependency of the Sol-to-Yul conversion pass.
     println!("cargo:rustc-link-lib=static=MLIRYulDialect");
     println!("cargo:rustc-link-lib=static=MLIRCAPIYul");
+    println!("cargo:rustc-link-lib=static=MLIRYulToStandard");
 
     let include_path = std::path::PathBuf::from(&prefix).join("include");
 

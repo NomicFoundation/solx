@@ -105,13 +105,13 @@ impl<'context> Context<'context> {
     /// Creates a new MLIR state with an empty module.
     ///
     /// Sets the `sol.evm_version` module attribute required by the
-    /// `convert-sol-to-std` pass.
+    /// `convert-sol-to-yul` pass.
     pub fn new(context: &'context melior::Context, evm_version: solx_utils::EVMVersion) -> Self {
         let location = Location::unknown(context);
         let module = Module::new(location);
 
         // Set the EVM version attribute on the module — required by the
-        // Sol-to-standard conversion pass.
+        // Sol-to-Yul conversion pass.
         // SAFETY: `solxCreateEvmVersionAttr` returns a valid MlirAttribute
         // from the C++ Sol dialect. The context pointer is valid.
         let evm_version_attribute = unsafe {
@@ -207,12 +207,13 @@ impl<'context> Context<'context> {
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
     ///
     /// The pass pipeline is:
-    /// 1. `convert-sol-to-std` — Sol + Yul → func/arith/scf/cf/LLVM
-    /// 2. `convert-func-to-llvm`
+    /// 1. `convert-sol-to-yul` — Sol → Yul
+    /// 2. `convert-yul-to-std` — Yul → func/arith/scf/cf/LLVM
     /// 3. `convert-scf-to-cf`
-    /// 4. `convert-cf-to-llvm`
+    /// 4. `convert-func-to-llvm`
     /// 5. `convert-arith-to-llvm`
-    /// 6. `reconcile-unrealized-casts`
+    /// 6. `convert-cf-to-llvm`
+    /// 7. `reconcile-unrealized-casts`
     ///
     /// Modifier lowering and LICM are skipped — they operate on `sol.modifier`
     /// and `sol.while`/`sol.for` ops which are not yet emitted.
@@ -238,7 +239,10 @@ impl<'context> Context<'context> {
                 crate::ffi::mlirCreateSolModifierOpLoweringPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateConversionConvertSolToStandardPass(),
+                crate::ffi::mlirCreateConversionConvertSolToYulPass(),
+            ));
+            pass_manager.add_pass(melior::pass::Pass::from_raw(
+                crate::ffi::mlirCreateConversionConvertYulToStandardPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateTransformsCanonicalizer(),
