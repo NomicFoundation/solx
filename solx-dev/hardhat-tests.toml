@@ -1,5 +1,11 @@
 # Hardhat project test configuration.
 #
+# Build systems:
+#   [build_systems]
+#   yarn = "<x.y.z>"                # Pinned version installed globally before each project run.
+#   pnpm = "<x.y.z>"
+#   bun  = "<x.y.z>"
+#
 # Compilers:
 #   [compilers.<id>]
 #   name = "00.solc"              # Display name in reports (hyphens become newlines)
@@ -26,6 +32,11 @@
 #   left = "03.solx-legacy"         # Left toolchain: {compiler.name}-{codegen}
 #   right = "02.solx-main-legacy"   # Right toolchain: {compiler.name}-{codegen}
 #   disabled = true/false           # Whether to skip this comparison
+
+[build_systems]
+yarn = "1.22.22"
+pnpm = "10.17.1"
+bun = "1.3.13"
 
 [compilers.solc]
 name = "00.solc-0.8.34"

@@ -123,6 +123,12 @@ pub fn test(
                 crate::utils::exists("npm")?;
 
                 let build_system = "yarn";
+                let yarn_version = config.build_systems.get(build_system).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Foundry test configuration missing `build_systems.{build_system}`"
+                    )
+                })?;
+                let npm_spec = format!("{build_system}@{yarn_version}");
                 let mut npm_install_yarn = Command::new("npm");
                 npm_install_yarn.current_dir(project_directory.as_path());
                 npm_install_yarn.arg("install");
@@ -130,7 +136,7 @@ pub fn test(
                 npm_install_yarn.arg("--force");
                 npm_install_yarn.arg("--yes");
                 npm_install_yarn.arg("--global");
-                npm_install_yarn.arg(build_system);
+                npm_install_yarn.arg(&npm_spec);
                 crate::utils::command_with_retries(
                     &mut npm_install_yarn,
                     format!(

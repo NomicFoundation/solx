@@ -120,7 +120,8 @@ pub fn test(
             }
 
             let build_system = project.build_system.to_string();
-            if let Some(npm_spec) = project.build_system.to_npm_spec() {
+            if let Some(version) = config.build_systems.get(&project.build_system) {
+                let npm_spec = format!("{build_system}@{version}");
                 let mut npm_install_build_system = Command::new("npm");
                 npm_install_build_system.current_dir(project_directory.as_path());
                 npm_install_build_system.args(["--loglevel", "error"]);
@@ -128,7 +129,7 @@ pub fn test(
                 npm_install_build_system.arg("--yes");
                 npm_install_build_system.arg("install");
                 npm_install_build_system.arg("--global");
-                npm_install_build_system.arg(npm_spec);
+                npm_install_build_system.arg(&npm_spec);
                 crate::utils::command_with_retries(
                     &mut npm_install_build_system,
                     format!(
@@ -139,6 +140,8 @@ pub fn test(
                     .as_str(),
                     16,
                 )?;
+            } else if project.build_system != BuildSystem::Npm {
+                anyhow::bail!("Hardhat test configuration missing `build_systems.{build_system}`");
             }
             let mut build_system_install_command = Command::new(build_system.as_str());
             build_system_install_command.current_dir(project_directory.as_path());
