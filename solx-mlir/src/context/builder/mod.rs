@@ -255,15 +255,9 @@ impl<'context> Builder<'context> {
         if TypeFactory::integer_bit_width(result_type) == solx_utils::BIT_LENGTH_BOOLEAN as u32 {
             let boolean_attribute =
                 IntegerAttribute::new(result_type, i64::from(*value != BigInt::ZERO)).into();
-            return block
-                .append_operation(melior::dialect::arith::constant(
-                    self.context,
-                    boolean_attribute,
-                    self.unknown_location,
-                ))
-                .result(0)
-                .expect("arith.constant always produces one result")
-                .into();
+            return self
+                .emit_constant_operation(boolean_attribute, result_type, block)
+                .expect("well-typed boolean constant never fails emission");
         }
         // melior does not expose a `BigInt`-accepting attribute constructor,
         // so we round-trip through the MLIR attribute parser to avoid
