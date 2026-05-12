@@ -127,7 +127,7 @@ pub fn test(
             npm_install_build_system.arg("--yes");
             npm_install_build_system.arg("install");
             npm_install_build_system.arg("--global");
-            npm_install_build_system.arg(build_system.as_str());
+            npm_install_build_system.arg(project.build_system.to_npm_spec());
             crate::utils::command_with_retries(
                 &mut npm_install_build_system,
                 format!(
@@ -140,10 +140,16 @@ pub fn test(
             )?;
             let mut build_system_install_command = Command::new(build_system.as_str());
             build_system_install_command.current_dir(project_directory.as_path());
-            if let BuildSystem::Npm = project.build_system {
-                build_system_install_command.args(["--loglevel", "error"]);
-                build_system_install_command.arg("--force");
-                build_system_install_command.arg("--yes");
+            match project.build_system {
+                BuildSystem::Npm => {
+                    build_system_install_command.args(["--loglevel", "error"]);
+                    build_system_install_command.arg("--force");
+                    build_system_install_command.arg("--yes");
+                }
+                BuildSystem::Pnpm => {
+                    build_system_install_command.arg("--ignore-scripts");
+                }
+                _ => {}
             }
             build_system_install_command.arg("install");
             crate::utils::command_with_retries(
@@ -166,6 +172,9 @@ pub fn test(
                 }
                 BuildSystem::Yarn => {
                     dependency_override_command.arg("--silent");
+                }
+                BuildSystem::Pnpm => {
+                    dependency_override_command.arg("--ignore-scripts");
                 }
                 _ => {}
             }

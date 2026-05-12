@@ -29,3 +29,19 @@ impl std::fmt::Display for BuildSystem {
         }
     }
 }
+
+impl BuildSystem {
+    /// Argument passed to `npm install --global` to install this build system.
+    /// Pinned to exact versions so behaviour doesn't drift when registry
+    /// `latest` advances under us. `npm` itself is left unpinned because it
+    /// ships with Node and we manage Node via `actions/setup-node`.
+    // build-system pin: keep in sync with .github/workflows/integration-tests.yaml ("Install Yarn" step)
+    pub fn to_npm_spec(&self) -> &'static str {
+        match self {
+            Self::Npm => "npm",
+            Self::Yarn => "yarn@1.22.22",
+            Self::Pnpm => "pnpm@10.17.1",
+            Self::Bun => "bun@1.3.13",
+        }
+    }
+}
