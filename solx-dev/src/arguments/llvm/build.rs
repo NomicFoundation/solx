@@ -49,6 +49,10 @@ pub struct Build {
     #[arg(long, help_heading = "Build Features")]
     pub enable_utils: bool,
 
+    /// Whether to build and install the LLVM IR debug tools (`opt`, `llc`).
+    #[arg(long, help_heading = "Build Features")]
+    pub enable_tools: bool,
+
     /// Whether to build the LLVM tests.
     #[arg(long, help_heading = "Build Features")]
     pub enable_tests: bool,

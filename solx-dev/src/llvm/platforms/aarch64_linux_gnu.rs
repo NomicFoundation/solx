@@ -16,6 +16,7 @@ pub fn build(
     build_type: BuildType,
     enable_mlir: bool,
     enable_utils: bool,
+    enable_tools: bool,
     enable_tests: bool,
     enable_coverage: bool,
     extra_args: Vec<String>,
@@ -85,9 +86,10 @@ pub fn build(
         "LLVM building cmake",
     )?;
     crate::utils::ninja(llvm_build_final.as_ref(), "install-distribution")?;
-    crate::llvm::platforms::shared::build_and_install_llvm_config(
+    crate::llvm::platforms::shared::build_and_install_llvm_binaries(
         llvm_build_final.as_ref(),
         llvm_target_final.as_ref(),
+        enable_tools,
     )?;
     Ok(())
 }
