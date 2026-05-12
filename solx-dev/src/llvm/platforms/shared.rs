@@ -36,6 +36,17 @@ pub const SHARED_BUILD_OPTS: [&str; 23] = [
     "-DBUG_REPORT_URL='https://github.com/matter-labs/solx-llvm/issues'",
 ];
 
+/// LLVM binaries always built and copied into the install prefix after
+/// `ninja install-distribution` — their install rules are suppressed by
+/// `LLVM_BUILD_TOOLS=Off`, and `llvm-sys` needs `llvm-config` at Rust build
+/// time.
+const REQUIRED_LLVM_BINARIES: &[&str] = &["llvm-config"];
+
+/// LLVM IR debug tools installed alongside `REQUIRED_LLVM_BINARIES` when
+/// `--enable-tools` is passed, for local inspection and optimization of
+/// emitted IR.
+const OPTIONAL_LLVM_BINARIES: &[&str] = &["opt", "llc"];
+
 ///
 /// The CMake argument for LLVM_ENABLE_PROJECTS.
 /// LLD is always included; MLIR is added when `enable_mlir` is true.
@@ -205,10 +216,12 @@ pub fn shared_build_opts_coverage(enabled: bool) -> Vec<String> {
 /// `LLVM_BUILD_TOOLS=Off`, cmake's `llvm_add_tool` skips creation of the
 /// `install-llvm-config` target, so referencing it here errors at configure
 /// time. `llvm-sys` still needs `llvm-config` at Rust build time —
-/// `build_and_install_llvm_config` builds it directly via `ninja
-/// llvm-config` and copies the binary into the install prefix afterwards.
-/// `lld-*` is always included because `shared_build_opts_projects` always
-/// enables `lld`. `mlir-*` is included only when `enable_mlir` is true.
+/// `build_and_install_llvm_binaries` builds it directly via
+/// `ninja llvm-config` and copies the binary into the install prefix
+/// afterwards. The same helper also installs `opt` and `llc` when
+/// `--enable-tools` is passed. `lld-*` is always included because
+/// `shared_build_opts_projects` always enables `lld`. `mlir-*` is included
+/// only when `enable_mlir` is true.
 ///
 /// When `enable_utils` is true, `FileCheck` is added to the whitelist —
 /// `solx-mlir/tests/lit/*.sol` uses it in RUN lines, so it must land in the
@@ -247,11 +260,13 @@ pub fn build_opts_distribution(enable_mlir: bool, enable_utils: bool) -> Vec<Str
 }
 
 ///
-/// Build `llvm-config` directly (it has no install target under
-/// `LLVM_BUILD_TOOLS=Off`) and copy it into the install prefix's `bin/`.
+/// Build the LLVM binaries whose install rules are suppressed by
+/// `LLVM_BUILD_TOOLS=Off` and copy them into the install prefix's `bin/`.
+/// `llvm-config` is always installed (`llvm-sys` needs it at Rust build
+/// time); `opt` and `llc` are added when `enable_tools` is set, for local
+/// LLVM-IR inspection and optimization.
 ///
-/// `llvm-sys` invokes `llvm-config` at Rust build time to discover libs and
-/// flags. Both ninja args and the destination path use forward-slash form on
+/// Both ninja args and the destination path use forward-slash form on
 /// Windows; callers are expected to pass already-normalized paths (existing
 /// Windows code uses `path_windows_to_unix` for this).
 ///
@@ -259,34 +274,45 @@ pub fn build_opts_distribution(enable_mlir: bool, enable_utils: bool) -> Vec<Str
 /// target prefix succeed; `fs_extra::file::copy`'s default would error on
 /// `AlreadyExists` for the second run.
 ///
-pub fn build_and_install_llvm_config(build_dir: &Path, target_dir: &Path) -> anyhow::Result<()> {
+pub fn build_and_install_llvm_binaries(
+    build_dir: &Path,
+    target_dir: &Path,
+    enable_tools: bool,
+) -> anyhow::Result<()> {
+    let optional_binaries: &[&str] = if enable_tools {
+        OPTIONAL_LLVM_BINARIES
+    } else {
+        &[]
+    };
+
     let exe_suffix = if cfg!(target_os = "windows") {
         ".exe"
     } else {
         ""
     };
-    let bin_name = format!("llvm-config{exe_suffix}");
     let build_dir_str = build_dir.to_string_lossy();
+    let dest_dir = target_dir.join("bin");
+    std::fs::create_dir_all(&dest_dir)?;
 
     crate::utils::command(
         Command::new("ninja")
             .arg("-C")
             .arg(&*build_dir_str)
-            .arg("llvm-config"),
-        "Building llvm-config",
+            .args(REQUIRED_LLVM_BINARIES.iter().chain(optional_binaries)),
+        "Building LLVM binaries",
     )?;
 
-    let source = build_dir.join("bin").join(&bin_name);
-    let dest_dir = target_dir.join("bin");
-    std::fs::create_dir_all(&dest_dir)?;
-    fs_extra::file::copy(
-        &source,
-        dest_dir.join(&bin_name),
-        &fs_extra::file::CopyOptions {
-            overwrite: true,
-            ..Default::default()
-        },
-    )?;
+    for bin in REQUIRED_LLVM_BINARIES.iter().chain(optional_binaries) {
+        let bin_name = format!("{bin}{exe_suffix}");
+        fs_extra::file::copy(
+            build_dir.join("bin").join(&bin_name),
+            dest_dir.join(&bin_name),
+            &fs_extra::file::CopyOptions {
+                overwrite: true,
+                ..Default::default()
+            },
+        )?;
+    }
     Ok(())
 }
 
