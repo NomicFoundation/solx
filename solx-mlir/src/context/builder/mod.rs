@@ -300,8 +300,6 @@ impl<'context> Builder<'context> {
             .into()
     }
 
-    // ==== Terminators ====
-
     /// Emits a `sol.revert` carrying an optional payload.
     ///
     /// `signature` doubles as the payload string: for custom errors
@@ -311,8 +309,11 @@ impl<'context> Builder<'context> {
     /// (`revert("message")`) it is the literal message, with no `args` and
     /// `is_custom_error = false`. For plain `revert()` it is empty, with no
     /// `args` and `is_custom_error = false`.
-    // TODO(sol-dialect): mark `sol.revert` as `IsTerminator` like `sol.return`
-    // so callers don't need to append `llvm.unreachable` after it.
+    ///
+    /// `sol.revert` does not carry the `IsTerminator` trait, so callers must
+    /// ensure the enclosing block reaches a structural terminator through the
+    /// normal codegen path (a following statement, a region yield, or the
+    /// function-epilogue default return).
     ///
     /// # Panics
     ///
