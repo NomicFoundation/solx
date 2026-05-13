@@ -11,10 +11,10 @@
 // CHECK:   sol.cadd %{{.*}}, %{{.*}} : si256
 
 // CHECK: sol.func @{{.*bool_return.*}}
-// CHECK:   %true = arith.constant true
+// CHECK:   %true = sol.constant true
 
 // CHECK: sol.func @{{.*bool_false.*}}
-// CHECK:   %false = arith.constant false
+// CHECK:   %false = sol.constant false
 
 contract C {
     function uint8_arith(uint8 a, uint8 b) public pure returns (uint8) {

@@ -298,22 +298,32 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let (condition_value, block) = self.emit_value(&condition, block)?;
                 let condition_boolean = self.emit_is_nonzero(condition_value, &block);
 
-                let (then_block, else_block, result) =
-                    self.state
-                        .builder
-                        .emit_scf_if(condition_boolean, result_type, &block)?;
+                let result_slot = self.state.builder.emit_sol_alloca(result_type, &block);
+                let (then_block, else_block) =
+                    self.state.builder.emit_sol_if(condition_boolean, &block);
 
                 let true_expression = conditional.true_expression();
                 let (then_value, then_end) = self.emit_value(&true_expression, then_block)?;
                 let then_cast = TypeConversion::from_target_type(result_type, &self.state.builder)
                     .emit(then_value, &self.state.builder, &then_end);
-                self.state.builder.emit_scf_yield(&[then_cast], &then_end);
+                self.state
+                    .builder
+                    .emit_sol_store(then_cast, result_slot, &then_end);
+                self.state.builder.emit_sol_yield(&then_end);
 
                 let false_expression = conditional.false_expression();
                 let (else_value, else_end) = self.emit_value(&false_expression, else_block)?;
                 let else_cast = TypeConversion::from_target_type(result_type, &self.state.builder)
                     .emit(else_value, &self.state.builder, &else_end);
-                self.state.builder.emit_scf_yield(&[else_cast], &else_end);
+                self.state
+                    .builder
+                    .emit_sol_store(else_cast, result_slot, &else_end);
+                self.state.builder.emit_sol_yield(&else_end);
+
+                let result = self
+                    .state
+                    .builder
+                    .emit_sol_load(result_slot, result_type, &block)?;
 
                 Ok((Some(result), block))
             }

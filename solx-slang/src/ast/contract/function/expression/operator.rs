@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use melior::ir::Location;
 use melior::ir::Value;
+use melior::ir::ValueLike;
 use melior::ir::operation::Operation;
 
 use solx_mlir::CmpPredicate;
@@ -188,11 +189,13 @@ impl Operator {
                 .build()
                 .into(),
             Self::Exponentiation if checked => CExpOperation::builder(context, location)
+                .result(lhs.r#type())
                 .lhs(lhs)
                 .rhs(rhs)
                 .build()
                 .into(),
             Self::Exponentiation => ExpOperation::builder(context, location)
+                .result(lhs.r#type())
                 .lhs(lhs)
                 .rhs(rhs)
                 .build()

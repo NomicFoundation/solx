@@ -5,7 +5,7 @@
 ///
 /// `solx` Hardhat project build system.
 ///
-#[derive(Debug, Default, serde::Deserialize)]
+#[derive(Debug, Default, Eq, PartialEq, Ord, PartialOrd, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BuildSystem {
     /// Eponymous build system.

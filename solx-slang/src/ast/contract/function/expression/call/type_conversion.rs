@@ -179,6 +179,15 @@ impl<'context> TypeConversion<'context> {
         }
     }
 
+    /// Returns the MLIR target type this conversion produces.
+    pub fn to_target_type(&self, builder: &solx_mlir::Builder<'context>) -> Type<'context> {
+        match self {
+            Self::Bool => builder.types.i1,
+            Self::Address => builder.types.sol_address,
+            Self::Cast(target_type) => *target_type,
+        }
+    }
+
     /// Resolves the declared Solidity type of a state variable to an MLIR type.
     pub fn resolve_state_variable_type(
         state_variable: &StateVariableDefinition,
@@ -223,6 +232,9 @@ impl<'context> TypeConversion<'context> {
     where
         'context: 'block,
     {
+        if value.r#type() == self.to_target_type(builder) {
+            return value;
+        }
         match self {
             Self::Bool => {
                 let zero = builder.emit_sol_constant(0, value.r#type(), block);

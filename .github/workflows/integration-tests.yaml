@@ -226,9 +226,6 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1
 
-      - name: Install Yarn
-        run: ${SFW_PREFIX:-} npm install -g yarn bun pnpm
-
       # Some projects might use hardcoded ssh URLs: force git to use https instead.
       - name: Git https settings
         run: |
