@@ -202,7 +202,7 @@ runs:
           LINK_JOBS=1
         fi
 
-        ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} \
+        ./target/release/solx-dev llvm build --build-type ${{ inputs.build-type }} --install-distribution \
           --ccache-variant=ccache ${ENABLE_UTILS} ${ENABLE_TESTS} ${ENABLE_VALGRIND} ${VALGRIND_OPTIONS} ${ENABLE_ASSERTIONS} ${ENABLE_COVERAGE} ${ENABLE_MLIR} ${SANITIZER} \
           --extra-args "-DCMAKE_EXPORT_COMPILE_COMMANDS='Off'" "-DLLVM_PARALLEL_LINK_JOBS='${LINK_JOBS}'" "-DLLVM_OPTIMIZED_TABLEGEN='On'"
 

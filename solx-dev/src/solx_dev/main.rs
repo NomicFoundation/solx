@@ -56,7 +56,7 @@ fn main_inner() -> anyhow::Result<()> {
                 arguments.build_type,
                 arguments.enable_mlir,
                 arguments.enable_utils,
-                arguments.enable_tools,
+                arguments.install_distribution,
                 arguments.enable_tests,
                 arguments.enable_coverage,
                 extra_args_unescaped,
