@@ -19,8 +19,8 @@
 // `DOUBLE` is a constant whose initializer references another constant,
 // exercising recursive inlining: `DOUBLE` → `FOO * 2` → `42 * 2`.
 // CHECK:      sol.func @{{.*getDouble.*}}() -> ui8
-// CHECK:        sol.constant 42 : ui8
-// CHECK:        sol.constant 2 : ui8
+// CHECK-DAG:    sol.constant 42 : ui8
+// CHECK-DAG:    sol.constant 2 : ui8
 // CHECK:        sol.cmul %{{.*}}, %{{.*}} : ui8
 
 contract C {
