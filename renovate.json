@@ -9,8 +9,8 @@
     {
       "customType": "regex",
       "description": "Track build-system and dependency pins inside solx-dev harness configs. The `pkg = \"x.y.z\"` shape appears in both `hardhat-tests.toml` and `foundry-tests.toml` under `[build_systems]`; the `\"pkg@x.y.z\"` shape appears in `hardhat-tests.toml` `dependencies` arrays (foundry-tests.toml has no such arrays).",
-      "fileMatch": [
-        "^solx-dev/(hardhat|foundry)-tests\\.toml$"
+      "managerFilePatterns": [
+        "/^solx-dev/(hardhat|foundry)-tests\\.toml$/"
       ],
       "matchStrings": [
         "\"(?<depName>[a-z][\\w-]*)@(?<currentValue>\\d+\\.\\d+\\.\\d+)\"",
