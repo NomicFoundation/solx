@@ -166,10 +166,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         Ok((Some(value), block))
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
-                        let (pointer, element_type) =
-                            self.environment.variable_with_type(&name).ok_or_else(|| {
-                                anyhow::anyhow!("unregistered local variable: {name}")
-                            })?;
+                        let (pointer, element_type) = self.environment.variable_with_type(&name);
                         let value =
                             self.state
                                 .builder

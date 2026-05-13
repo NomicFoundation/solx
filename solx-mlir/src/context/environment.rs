@@ -64,28 +64,25 @@ impl<'context, 'block> Environment<'context, 'block> {
             .insert(name, (pointer, element_type));
     }
 
-    /// Looks up a variable's alloca'd pointer by name.
-    ///
-    /// Searches from the innermost scope outward.
-    pub fn variable(&self, name: &str) -> Option<Value<'context, 'block>> {
-        self.variable_with_type(name).map(|(pointer, _)| pointer)
-    }
-
     /// Looks up a variable's alloca'd pointer and element type by name.
     ///
     /// Searches from the innermost scope outward.
     ///
-    /// Returns `None` if no variable with the given name has been defined
-    /// in any enclosing scope.
-    pub fn variable_with_type(
-        &self,
-        name: &str,
-    ) -> Option<(Value<'context, 'block>, Type<'context>)> {
+    /// # Panics
+    ///
+    /// Panics if no binding exists. Slang's semantic pass guarantees every
+    /// emitted identifier reference resolves, so a miss here is a solx-internal
+    /// invariant failure rather than a user error.
+    ///
+    // TODO: key on the Slang `NodeId` of the declaration instead of the textual
+    // name to disambiguate same-named locals across scopes without relying on
+    // `enter_scope`/`exit_scope` discipline at the call sites.
+    pub fn variable_with_type(&self, name: &str) -> (Value<'context, 'block>, Type<'context>) {
         for scope in self.scopes.iter().rev() {
             if let Some(entry) = scope.get(name) {
-                return Some(*entry);
+                return *entry;
             }
         }
-        None
+        unreachable!("unregistered local variable: {name}");
     }
 }

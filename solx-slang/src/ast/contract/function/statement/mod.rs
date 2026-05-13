@@ -5,6 +5,7 @@
 pub mod control_flow;
 pub mod event;
 pub mod revert;
+pub mod tuple_deconstruction;
 
 use std::collections::HashMap;
 
@@ -133,6 +134,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             Statement::RevertStatement(revert) => self.emit_revert(revert, block),
             Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
+            Statement::TupleDeconstructionStatement(deconstruction) => {
+                self.emit_tuple_deconstruction(deconstruction, block)
+            }
             _ => anyhow::bail!(
                 "unsupported statement: {:?}",
                 std::mem::discriminant(statement)

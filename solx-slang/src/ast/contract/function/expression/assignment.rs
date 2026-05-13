@@ -49,10 +49,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 AssignmentTarget::Storage(*slot, element_type)
             }
             Some(Definition::Variable(_) | Definition::Parameter(_)) => {
-                let (pointer, element_type) = self
-                    .environment
-                    .variable_with_type(&name)
-                    .ok_or_else(|| anyhow::anyhow!("unregistered local variable: {name}"))?;
+                let (pointer, element_type) = self.environment.variable_with_type(&name);
                 AssignmentTarget::Local(pointer, element_type)
             }
             None => anyhow::bail!("unresolved identifier: {name}"),
