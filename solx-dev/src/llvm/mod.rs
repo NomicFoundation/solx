@@ -24,7 +24,7 @@ pub fn build(
     build_type: BuildType,
     enable_mlir: bool,
     enable_utils: bool,
-    enable_tools: bool,
+    install_distribution: bool,
     enable_tests: bool,
     enable_coverage: bool,
     extra_args: Vec<String>,
@@ -50,6 +50,9 @@ pub fn build(
     // tests when not building utils will not work"), so promote `enable_tests`
     // to imply `enable_utils` rather than push that contract onto every caller.
     let enable_utils = enable_utils || enable_tests;
+    // `--enable-tests` requires the full toolset (the regression suite
+    // depends on every LLVM binary), so it overrides `--install-distribution`.
+    let install_distribution = install_distribution && !enable_tests;
 
     if cfg!(target_arch = "x86_64") {
         if cfg!(target_os = "linux") {
@@ -57,7 +60,7 @@ pub fn build(
                 build_type,
                 enable_mlir,
                 enable_utils,
-                enable_tools,
+                install_distribution,
                 enable_tests,
                 enable_coverage,
                 extra_args,
@@ -72,7 +75,7 @@ pub fn build(
                 build_type,
                 enable_mlir,
                 enable_utils,
-                enable_tools,
+                install_distribution,
                 enable_tests,
                 enable_coverage,
                 extra_args,
@@ -85,7 +88,7 @@ pub fn build(
                 build_type,
                 enable_mlir,
                 enable_utils,
-                enable_tools,
+                install_distribution,
                 enable_tests,
                 enable_coverage,
                 extra_args,
@@ -102,7 +105,7 @@ pub fn build(
                 build_type,
                 enable_mlir,
                 enable_utils,
-                enable_tools,
+                install_distribution,
                 enable_tests,
                 enable_coverage,
                 extra_args,
@@ -117,7 +120,7 @@ pub fn build(
                 build_type,
                 enable_mlir,
                 enable_utils,
-                enable_tools,
+                install_distribution,
                 enable_tests,
                 enable_coverage,
                 extra_args,

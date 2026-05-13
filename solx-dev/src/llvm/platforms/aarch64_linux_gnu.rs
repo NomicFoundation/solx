@@ -16,7 +16,7 @@ pub fn build(
     build_type: BuildType,
     enable_mlir: bool,
     enable_utils: bool,
-    enable_tools: bool,
+    install_distribution: bool,
     enable_tests: bool,
     enable_coverage: bool,
     extra_args: Vec<String>,
@@ -39,6 +39,12 @@ pub fn build(
     let llvm_module_llvm_str = llvm_module_llvm.to_string_lossy();
     let llvm_build_final_str = llvm_build_final.to_string_lossy();
     let llvm_target_final_str = llvm_target_final.to_string_lossy();
+
+    let distribution_opts = if install_distribution {
+        crate::llvm::platforms::shared::build_opts_distribution(enable_mlir, enable_utils)
+    } else {
+        Vec::new()
+    };
 
     crate::utils::command(
         Command::new("cmake")
@@ -71,10 +77,7 @@ pub fn build(
             .args(crate::llvm::platforms::shared::SHARED_BUILD_OPTS)
             .args(crate::llvm::platforms::shared::shared_build_opts_split_dwarf(build_type))
             .args(crate::llvm::platforms::shared::shared_build_opts_werror())
-            .args(crate::llvm::platforms::shared::build_opts_distribution(
-                enable_mlir,
-                enable_utils,
-            ))
+            .args(&distribution_opts)
             .args(extra_args)
             .args(CcacheVariant::cmake_args(ccache_variant))
             .args(crate::llvm::platforms::shared::shared_build_opts_assertions(enable_assertions))
@@ -85,11 +88,11 @@ pub fn build(
             )),
         "LLVM building cmake",
     )?;
-    crate::utils::ninja(llvm_build_final.as_ref(), "install-distribution")?;
     crate::llvm::platforms::shared::build_and_install_llvm_binaries(
         llvm_build_final.as_ref(),
         llvm_target_final.as_ref(),
-        enable_tools,
+        install_distribution,
     )?;
+
     Ok(())
 }

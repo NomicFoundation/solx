@@ -49,9 +49,12 @@ pub struct Build {
     #[arg(long, help_heading = "Build Features")]
     pub enable_utils: bool,
 
-    /// Whether to build and install the LLVM IR debug tools (`opt`, `llc`).
+    /// Install only the lean `LLVM_DISTRIBUTION_COMPONENTS` whitelist
+    /// (`ninja install-distribution`) plus `llvm-config`. Intended for CI
+    /// artifacts; overridden by `--enable-tests`, which requires the full
+    /// toolset.
     #[arg(long, help_heading = "Build Features")]
-    pub enable_tools: bool,
+    pub install_distribution: bool,
 
     /// Whether to build the LLVM tests.
     #[arg(long, help_heading = "Build Features")]

@@ -96,7 +96,7 @@ jobs:
             pushd temp-solx-main
             ${SFW_PREFIX:-} cargo fetch --locked
             ${SFW_PREFIX:-} cargo build --frozen --release --bin solx-dev
-            ./target/release/solx-dev llvm build --build-type Release
+            ./target/release/solx-dev llvm build --build-type Release --install-distribution
             popd
           fi
 

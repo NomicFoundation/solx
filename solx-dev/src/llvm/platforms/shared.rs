@@ -42,11 +42,6 @@ pub const SHARED_BUILD_OPTS: [&str; 23] = [
 /// time.
 const REQUIRED_LLVM_BINARIES: &[&str] = &["llvm-config"];
 
-/// LLVM IR debug tools installed alongside `REQUIRED_LLVM_BINARIES` when
-/// `--enable-tools` is passed, for local inspection and optimization of
-/// emitted IR.
-const OPTIONAL_LLVM_BINARIES: &[&str] = &["opt", "llc"];
-
 ///
 /// The CMake argument for LLVM_ENABLE_PROJECTS.
 /// LLD is always included; MLIR is added when `enable_mlir` is true.
@@ -218,8 +213,7 @@ pub fn shared_build_opts_coverage(enabled: bool) -> Vec<String> {
 /// time. `llvm-sys` still needs `llvm-config` at Rust build time —
 /// `build_and_install_llvm_binaries` builds it directly via
 /// `ninja llvm-config` and copies the binary into the install prefix
-/// afterwards. The same helper also installs `opt` and `llc` when
-/// `--enable-tools` is passed. `lld-*` is always included because
+/// afterwards. `lld-*` is always included because
 /// `shared_build_opts_projects` always enables `lld`. `mlir-*` is included
 /// only when `enable_mlir` is true.
 ///
@@ -260,11 +254,10 @@ pub fn build_opts_distribution(enable_mlir: bool, enable_utils: bool) -> Vec<Str
 }
 
 ///
-/// Build the LLVM binaries whose install rules are suppressed by
-/// `LLVM_BUILD_TOOLS=Off` and copy them into the install prefix's `bin/`.
-/// `llvm-config` is always installed (`llvm-sys` needs it at Rust build
-/// time); `opt` and `llc` are added when `enable_tools` is set, for local
-/// LLVM-IR inspection and optimization.
+/// Install LLVM. `install_distribution = false` runs the unfiltered
+/// `ninja install` (full toolset); `true` runs `ninja install-distribution`
+/// and then builds and copies `REQUIRED_LLVM_BINARIES`, whose install rules
+/// are suppressed by `LLVM_BUILD_TOOLS=Off`.
 ///
 /// Both ninja args and the destination path use forward-slash form on
 /// Windows; callers are expected to pass already-normalized paths (existing
@@ -277,13 +270,13 @@ pub fn build_opts_distribution(enable_mlir: bool, enable_utils: bool) -> Vec<Str
 pub fn build_and_install_llvm_binaries(
     build_dir: &Path,
     target_dir: &Path,
-    enable_tools: bool,
+    install_distribution: bool,
 ) -> anyhow::Result<()> {
-    let optional_binaries: &[&str] = if enable_tools {
-        OPTIONAL_LLVM_BINARIES
-    } else {
-        &[]
-    };
+    if !install_distribution {
+        crate::utils::ninja(build_dir, "install")?;
+        return Ok(());
+    }
+    crate::utils::ninja(build_dir, "install-distribution")?;
 
     let exe_suffix = if cfg!(target_os = "windows") {
         ".exe"
@@ -298,11 +291,11 @@ pub fn build_and_install_llvm_binaries(
         Command::new("ninja")
             .arg("-C")
             .arg(&*build_dir_str)
-            .args(REQUIRED_LLVM_BINARIES.iter().chain(optional_binaries)),
+            .args(REQUIRED_LLVM_BINARIES.iter()),
         "Building LLVM binaries",
     )?;
 
-    for bin in REQUIRED_LLVM_BINARIES.iter().chain(optional_binaries) {
+    for bin in REQUIRED_LLVM_BINARIES.iter() {
         let bin_name = format!("{bin}{exe_suffix}");
         fs_extra::file::copy(
             build_dir.join("bin").join(&bin_name),
