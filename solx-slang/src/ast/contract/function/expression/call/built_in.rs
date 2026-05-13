@@ -234,6 +234,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                             .build()
                             .into()
                     }
+                    // TODO: split this catch-all so non-built-in member accesses (struct fields, etc.) and unimplemented built-ins surface distinct errors.
                     _ => anyhow::bail!("unsupported member access: {}", access.member().name()),
                 };
                 let value = block
