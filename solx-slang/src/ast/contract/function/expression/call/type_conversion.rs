@@ -197,6 +197,12 @@ impl<'context> TypeConversion<'context> {
                 let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
                 builder.types.enumeration(max.into())
             }
+            SlangType::UserDefinedValue(udvt) => {
+                let target_type = udvt
+                    .target_type()
+                    .expect("UDVT target type resolved by semantic analysis");
+                Self::resolve_slang_type(&target_type, inherited_location, builder)
+            }
             _ => unimplemented!("unsupported Slang type"),
         }
     }
