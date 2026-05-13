@@ -28,6 +28,7 @@ use solx_mlir::ods::sol::GasLimitOperation;
 use solx_mlir::ods::sol::GasPriceOperation;
 use solx_mlir::ods::sol::GetCallDataOperation;
 use solx_mlir::ods::sol::Keccak256Operation;
+use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::OriginOperation;
 use solx_mlir::ods::sol::PrevRandaoOperation;
@@ -223,7 +224,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let builder = &self.expression_emitter.state.builder;
         match access.member().resolved_built_in() {
             Some(BuiltIn::AddressBalance) => {
-                self.emit_address_base_intrinsic(access, block, |address_value| {
+                self.emit_unary_member_intrinsic(access, block, |address_value| {
                     BalanceOperation::builder(builder.context, builder.unknown_location)
                         .cont_addr(address_value)
                         .out(builder.types.ui256)
@@ -232,7 +233,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 })
             }
             Some(BuiltIn::AddressCodehash) => {
-                self.emit_address_base_intrinsic(access, block, |address_value| {
+                self.emit_unary_member_intrinsic(access, block, |address_value| {
                     CodeHashOperation::builder(builder.context, builder.unknown_location)
                         .cont_addr(address_value)
                         .out(builder.types.ui256)
@@ -241,7 +242,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 })
             }
             Some(BuiltIn::AddressCode) => {
-                self.emit_address_base_intrinsic(access, block, |address_value| {
+                self.emit_unary_member_intrinsic(access, block, |address_value| {
                     CodeOperation::builder(builder.context, builder.unknown_location)
                         .cont_addr(address_value)
                         .out(builder.types.sol_string_memory)
@@ -249,6 +250,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         .into()
                 })
             }
+            Some(BuiltIn::Length) => self.emit_unary_member_intrinsic(access, block, |operand| {
+                LengthOperation::builder(builder.context, builder.unknown_location)
+                    .inp(operand)
+                    .len(builder.types.ui256)
+                    .build()
+                    .into()
+            }),
             resolved => {
                 let operation = match resolved {
                     Some(BuiltIn::TxOrigin) => {
@@ -354,12 +362,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
     }
 
-    /// Emits an EVM intrinsic that reads from a per-address container, e.g.
-    /// `address.balance` (`sol.balance`) or `address.codehash` (`sol.code_hash`).
+    /// Emits an intrinsic whose single operand is the receiver of a member
+    /// access — e.g. `address.balance` (`sol.balance`), `address.codehash`
+    /// (`sol.code_hash`), or `array.length` (`sol.length`).
     ///
-    /// Evaluates the address operand, builds the operation via `build_op`, and
+    /// Evaluates the receiver, builds the operation via `build_op`, and
     /// extracts its single result.
-    fn emit_address_base_intrinsic<F>(
+    fn emit_unary_member_intrinsic<F>(
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
@@ -374,7 +383,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let value = block
             .append_operation(build_op(address_value))
             .result(0)
-            .expect("address-base intrinsic always produces one result")
+            .expect("unary member intrinsic always produces one result")
             .into();
         Ok((value, block))
     }
