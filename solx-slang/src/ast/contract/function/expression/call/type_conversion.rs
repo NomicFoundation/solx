@@ -192,8 +192,10 @@ impl<'context> TypeConversion<'context> {
                     _ => unreachable!("Slang EnumType always references an Enum definition"),
                 };
                 let member_count = enum_definition.members().iter().count();
-                let max = u32::try_from(member_count - 1).expect("enum member count fits in u32");
-                builder.types.enumeration(max)
+                // Solidity caps enums at 256 members, so the max enumerator
+                // index always fits in a `u8`.
+                let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
+                builder.types.enumeration(max.into())
             }
             _ => unimplemented!("unsupported Slang type"),
         }

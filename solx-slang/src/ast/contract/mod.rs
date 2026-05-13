@@ -37,6 +37,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// a `payable` `fallback()` function). Single source of truth for payability
     /// derivation — used both when emitting the `sol.contract` op and when
     /// resolving `SlangType::Contract` to a `Sol_ContractType`.
+    // TODO: walk the inheritance tree like solc does (`receiveFunction` /
+    // `fallbackFunction` on `ContractDefinition`, `ContractType::isPayable`)
+    // and move this helper into Slang.
     pub fn is_contract_payable(contract: &ContractDefinition) -> bool {
         contract.functions().iter().any(|function| {
             matches!(function.kind(), FunctionKind::Receive)
