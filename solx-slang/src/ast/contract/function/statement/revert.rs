@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
@@ -39,9 +38,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// matched to error parameters, or any argument expression cannot be
     /// lowered.
     ///
-    /// # Returns None
+    /// # Returns
     ///
-    /// Always returns `None` because `sol.revert` terminates control flow.
+    /// Returns the block after the `sol.revert` op. `sol.revert` is not a
+    /// terminator at the dialect level, so codegen continues in the same
+    /// block; the function epilogue (or an enclosing region's yield) supplies
+    /// the structural terminator.
     pub fn emit_revert(
         &self,
         revert: &RevertStatement,
@@ -50,11 +52,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let error = match revert.error().resolve_to_definition() {
             None => {
                 self.state.builder.emit_sol_revert("", &[], false, &block);
-                // TODO(sol-dialect): remove once `sol.revert` is marked `IsTerminator`.
-                block.append_operation(melior::dialect::llvm::unreachable(
-                    self.state.builder.unknown_location,
-                ));
-                return Ok(None);
+                return Ok(Some(block));
             }
             Some(Definition::Error(error)) => error,
             Some(_) => anyhow::bail!("revert target does not resolve to an error definition"),
@@ -92,13 +90,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         self.state
             .builder
             .emit_sol_revert(&signature, &evaluated.values, true, &evaluated.block);
-        // TODO(sol-dialect): remove once `sol.revert` is marked `IsTerminator`.
-        evaluated
-            .block
-            .append_operation(melior::dialect::llvm::unreachable(
-                self.state.builder.unknown_location,
-            ));
-        Ok(None)
+        Ok(Some(evaluated.block))
     }
 
     /// Emits a `sol.revert` for the call form `revert()` or `revert("message")`.
@@ -110,9 +102,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// the message is empty (which would emit ambiguous bytecode under the
     /// current Sol dialect; `revert()` is the no-data form).
     ///
-    /// # Returns None
+    /// # Returns
     ///
-    /// Always returns `None` because `sol.revert` terminates control flow.
+    /// Returns the block after the `sol.revert` op. `sol.revert` is not a
+    /// terminator at the dialect level, so codegen continues in the same
+    /// block; the function epilogue (or an enclosing region's yield) supplies
+    /// the structural terminator.
     pub fn emit_revert_call(
         &self,
         call: &FunctionCallExpression,
@@ -144,11 +139,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         self.state
             .builder
             .emit_sol_revert(&signature, &[], false, &block);
-        // TODO(sol-dialect): remove once `sol.revert` is marked `IsTerminator`.
-        block.append_operation(melior::dialect::llvm::unreachable(
-            self.state.builder.unknown_location,
-        ));
-        Ok(None)
+        Ok(Some(block))
     }
 
     /// Orders named revert arguments by the custom error's parameter declaration order.
