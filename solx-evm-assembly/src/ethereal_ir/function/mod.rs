@@ -499,6 +499,29 @@ impl Function {
                 block_stack.swap(16)?;
                 (vec![], None)
             }
+            Instruction {
+                name: InstructionName::SWAPX,
+                ..
+            } => {
+                let depth = match block_stack.elements.last() {
+                    Some(Element::Constant(constant)) => constant
+                        .to_usize()
+                        .ok_or_else(|| anyhow::anyhow!("SWAPX offset too large"))?,
+                    Some(other) => {
+                        anyhow::bail!("SWAPX expected constant offset, found {other}")
+                    }
+                    None => anyhow::bail!("SWAPX: stack underflow"),
+                };
+                let needed = depth
+                    .checked_add(2)
+                    .ok_or_else(|| anyhow::anyhow!("SWAPX offset too large"))?;
+                let length = block_stack.elements.len();
+                if length < needed {
+                    anyhow::bail!("SWAPX: stack underflow");
+                }
+                block_stack.elements.swap(length - 2, length - 2 - depth);
+                (vec![], None)
+            }
 
             Instruction {
                 name: InstructionName::DUP1,
@@ -564,6 +587,24 @@ impl Function {
                 name: InstructionName::DUP16,
                 ..
             } => (vec![block_stack.dup(16)?], None),
+            Instruction {
+                name: InstructionName::DUPX,
+                ..
+            } => {
+                let depth = match block_stack.elements.last() {
+                    Some(Element::Constant(constant)) => constant
+                        .to_usize()
+                        .ok_or_else(|| anyhow::anyhow!("DUPX offset too large"))?,
+                    Some(other) => {
+                        anyhow::bail!("DUPX expected constant offset, found {other}")
+                    }
+                    None => anyhow::bail!("DUPX: stack underflow"),
+                };
+                let index = depth
+                    .checked_add(1)
+                    .ok_or_else(|| anyhow::anyhow!("DUPX offset too large"))?;
+                (vec![block_stack.dup(index)?], None)
+            }
 
             Instruction {
                 name: InstructionName::PUSH0,
