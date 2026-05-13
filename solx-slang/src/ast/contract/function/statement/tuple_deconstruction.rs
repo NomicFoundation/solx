@@ -65,10 +65,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 }
                 TupleDeconstructionMember::Identifier(identifier) => {
                     let name = identifier.name();
-                    let (pointer, target_type) = self
-                        .environment
-                        .variable_with_type(&name)
-                        .ok_or_else(|| anyhow::anyhow!("unregistered local variable: {name}"))?;
+                    let (pointer, target_type) = self.environment.variable_with_type(&name);
                     let builder = &self.state.builder;
                     let cast = TypeConversion::from_target_type(target_type, builder)
                         .emit(value, builder, &current);
