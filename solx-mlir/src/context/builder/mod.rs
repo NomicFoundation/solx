@@ -746,7 +746,9 @@ impl<'context> Builder<'context> {
 
     // ==== Calls ====
 
-    /// Emits a `sol.call` operation.
+    /// Emits a `sol.call` operation and returns its first result value, or
+    /// `None` if the callee is `void`. Use [`Self::emit_sol_call_results`]
+    /// when all results are needed.
     ///
     /// # Errors
     ///
@@ -766,6 +768,34 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
+        let results = self.emit_sol_call_results(callee, operands, result_types, block)?;
+        Ok(results.into_iter().next())
+    }
+
+    /// Emits a `sol.call` operation and returns all of its result values in
+    /// declaration order. Use [`Self::emit_sol_call`] when only the first
+    /// result is needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any of the call operation results cannot be
+    /// extracted.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a
+    /// bug in the builder.
+    pub fn emit_sol_call_results<'block, B>(
+        &self,
+        callee: &str,
+        operands: &[Value<'context, 'block>],
+        result_types: &[Type<'context>],
+        block: &B,
+    ) -> anyhow::Result<Vec<Value<'context, 'block>>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
         let operation = block.append_operation(
             CallOperation::builder(self.context, self.unknown_location)
                 .callee(FlatSymbolRefAttribute::new(self.context, callee))
@@ -774,12 +804,11 @@ impl<'context> Builder<'context> {
                 .build()
                 .into(),
         );
-        if result_types.is_empty() {
-            Ok(None)
-        } else {
-            // TODO: return all results for multi-return functions
-            Ok(Some(operation.result(0)?.into()))
+        let mut results = Vec::with_capacity(result_types.len());
+        for index in 0..result_types.len() {
+            results.push(operation.result(index)?.into());
         }
+        Ok(results)
     }
 
     // ==== Comparisons ====
