@@ -331,6 +331,35 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
                 Ok((Some(result), block))
             }
+            Expression::ArrayExpression(array_expression) => {
+                let result_slang_type = array_expression
+                    .get_type()
+                    .expect("slang types every array literal");
+                let element_slang_type = match &result_slang_type {
+                    SlangType::FixedSizeArray(fixed_array_type) => fixed_array_type.element_type(),
+                    SlangType::Array(array_type) => array_type.element_type(),
+                    _ => anyhow::bail!(
+                        "array literal has unexpected result type: {:?}",
+                        std::mem::discriminant(&result_slang_type)
+                    ),
+                };
+                let builder = &self.state.builder;
+                let array_type =
+                    TypeConversion::resolve_slang_type(&result_slang_type, None, builder);
+                let element_type =
+                    TypeConversion::resolve_slang_type(&element_slang_type, None, builder);
+                let mut element_values = Vec::new();
+                let mut current = block;
+                for item in array_expression.items().iter() {
+                    let (value, next) = self.emit_value(&item, current)?;
+                    let cast_value = TypeConversion::from_target_type(element_type, builder)
+                        .emit(value, builder, &next);
+                    element_values.push(cast_value);
+                    current = next;
+                }
+                let value = builder.emit_sol_array_lit(&element_values, array_type, &current);
+                Ok((Some(value), current))
+            }
             Expression::IndexAccessExpression(index_access) => {
                 self.emit_index_access(index_access, block)
             }
