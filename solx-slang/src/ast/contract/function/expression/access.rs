@@ -5,6 +5,7 @@
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::ValueLike;
 use slang_solidity::backend::ir::ast::IndexAccessExpression;
 use slang_solidity::backend::ir::ast::Type as SlangType;
 use slang_solidity::backend::types::DataLocation as SlangDataLocation;
@@ -24,6 +25,32 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         index_access: &IndexAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let (address, element_type, block) = self.emit_index_access_address(index_access, block)?;
+        let value = if address.r#type() == element_type {
+            address
+        } else {
+            self.state
+                .builder
+                .emit_sol_load(address, element_type, &block)?
+        };
+        Ok((Some(value), block))
+    }
+
+    /// Emits the address yielded by `a[i]` / `m[k]` together with the element
+    /// MLIR type, without the trailing `sol.load`.
+    ///
+    /// Shared between the value-producing read path
+    /// ([`Self::emit_index_access`]) and the lvalue write path in
+    /// `emit_assignment`.
+    pub fn emit_index_access_address(
+        &self,
+        index_access: &IndexAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        Value<'context, 'block>,
+        Type<'context>,
+        BlockRef<'context, 'block>,
+    )> {
         if index_access.end().is_some() {
             unimplemented!("range index (a[i:j]) is not yet supported");
         }
@@ -63,15 +90,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .builder
                 .emit_sol_gep(base_value, index_value, address_type, &block),
         };
-        let value = if address_type == element_type {
-            address
-        } else {
-            self.state
-                .builder
-                .emit_sol_load(address, element_type, &block)?
-        };
-
-        Ok((Some(value), block))
+        Ok((address, element_type, block))
     }
 
     /// Maps a slang container type's data location to the dialect-side
