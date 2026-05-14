@@ -63,10 +63,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .builder
                 .emit_sol_gep(base_value, index_value, address_type, &block),
         };
-        let value = self
-            .state
-            .builder
-            .emit_sol_load(address, element_type, &block)?;
+        let value = if address_type == element_type {
+            address
+        } else {
+            self.state
+                .builder
+                .emit_sol_load(address, element_type, &block)?
+        };
 
         Ok((Some(value), block))
     }
@@ -75,12 +78,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// `DataLocation`.
     fn resolve_base_location(base_slang_type: &SlangType) -> DataLocation {
         match base_slang_type.data_location() {
-            Some(SlangDataLocation::Inherited) => unimplemented!(
-                "index access through Inherited (struct-field) location is not yet supported"
-            ),
+            Some(SlangDataLocation::Inherited) => {
+                unreachable!("slang should not surface Inherited at an index-access base")
+            }
             Some(other) => DataLocation::from_slang(other, None),
             None => unimplemented!(
-                "index access base of unsupported type kind: {:?}",
+                "index access on a value-typed base is not yet wired: {:?}",
                 std::mem::discriminant(base_slang_type)
             ),
         }
