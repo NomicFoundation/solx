@@ -120,7 +120,13 @@ impl Error {
     where
         S: std::fmt::Display,
     {
-        let source_location = path.map(|path| SourceLocation::new(path.to_owned(), None, None));
+        let source_location = path.map(|path| {
+            SourceLocation::new(
+                path.to_owned(),
+                SourceLocation::UNKNOWN_OFFSET,
+                SourceLocation::UNKNOWN_OFFSET,
+            )
+        });
         Self::new_error_with_data(path, None, message, source_location, None)
     }
 

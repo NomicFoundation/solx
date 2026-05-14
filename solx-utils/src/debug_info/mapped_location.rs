@@ -59,17 +59,15 @@ impl MappedLocation {
     ///
     pub fn from_solc_location(
         path: String,
-        start: Option<isize>,
-        end: Option<isize>,
+        start: isize,
+        end: isize,
         source_code: Option<&str>,
     ) -> Self {
         let source_code = match source_code {
             Some(source_code) => source_code,
             None => return Self::new(path),
         };
-        let start = start.unwrap_or_default();
-        let end = end.unwrap_or_default();
-        if start <= 0 || end <= 0 {
+        if start < 0 || end < 0 || end < start {
             return Self::new(path);
         }
         let start = start as usize;
@@ -81,7 +79,7 @@ impl MappedLocation {
 
             if cursor <= start && start <= cursor_next {
                 let column = start - cursor;
-                let (line, column) = if column - 1 == source_line.len() {
+                let (line, column) = if column == source_line.len() + 1 {
                     (line + 2, 1)
                 } else {
                     (line + 1, start - cursor + 1)

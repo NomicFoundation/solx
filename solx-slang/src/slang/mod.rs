@@ -14,6 +14,7 @@ use slang_solidity::utils::LanguageFacts;
 
 use solx_core::Frontend;
 use solx_standard_json::CollectableError;
+use solx_standard_json::output::error::source_location::SourceLocation;
 
 use crate::ast::AstEmitter;
 
@@ -102,13 +103,11 @@ impl Frontend for Slang {
                         Some(path.as_str()),
                         None,
                         "Source content is unavailable.",
-                        Some(
-                            solx_standard_json::output::error::source_location::SourceLocation::new(
-                                path.to_owned(),
-                                None,
-                                None,
-                            ),
-                        ),
+                        Some(SourceLocation::new(
+                            path.to_owned(),
+                            SourceLocation::UNKNOWN_OFFSET,
+                            SourceLocation::UNKNOWN_OFFSET,
+                        )),
                         Some(&input_json.sources),
                     ));
                 continue;
@@ -125,8 +124,8 @@ impl Frontend for Slang {
                 let source_location =
                     solx_standard_json::output::error::source_location::SourceLocation::new(
                         file_identifier.to_owned(),
-                        Some(text_range.start.utf8 as isize),
-                        Some(text_range.end.utf8 as isize),
+                        text_range.start.utf8 as isize,
+                        text_range.end.utf8 as isize,
                     );
 
                 solx_standard_json::OutputError::new_error_with_data(

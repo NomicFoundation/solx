@@ -10,19 +10,21 @@
 pub struct SourceLocation {
     /// File path.
     pub file: String,
-    /// Start location.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub start: Option<isize>,
-    /// End location.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub end: Option<isize>,
+    /// Start offset. [`SourceLocation::UNKNOWN_OFFSET`] when unknown.
+    pub start: isize,
+    /// End offset. [`SourceLocation::UNKNOWN_OFFSET`] when unknown.
+    pub end: isize,
 }
 
 impl SourceLocation {
+    /// Sentinel emitted in `start`/`end` when offsets are unknown,
+    /// matching `solc`'s convention.
+    pub const UNKNOWN_OFFSET: isize = -1;
+
     ///
     /// A shortcut constructor.
     ///
-    pub fn new<S>(file: S, start: Option<isize>, end: Option<isize>) -> Self
+    pub fn new<S>(file: S, start: isize, end: isize) -> Self
     where
         S: Into<String>,
     {
