@@ -535,29 +535,27 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         if value_argument.is_some() && matches!(&base_slang_type, SlangType::Bytes(_)) {
             unimplemented!("bytes.push(x) lowers to sol.push_string, which is not yet wired");
         }
+        let builder = &self.expression_emitter.state.builder;
 
-        let (element_slang_type, slang_location) = match &base_slang_type {
-            SlangType::Array(array_type) => {
-                (Some(array_type.element_type()), array_type.location())
-            }
-            SlangType::Bytes(bytes_type) => (None, bytes_type.location()),
+        let (element_type, slang_location) = match &base_slang_type {
+            SlangType::Array(array_type) => (
+                TypeConversion::resolve_slang_type(&array_type.element_type(), None, builder),
+                array_type.location(),
+            ),
+            SlangType::Bytes(bytes_type) => (builder.types.fixed_bytes(1), bytes_type.location()),
             other => unreachable!(
                 "Solidity's .push is a member of dynamic arrays and bytes only; got {:?}",
                 std::mem::discriminant(other)
             ),
         };
         let base_location = match slang_location {
-            SlangDataLocation::Inherited => unimplemented!(
-                "array push through Inherited (struct-field) location is not yet supported"
-            ),
+            SlangDataLocation::Inherited => {
+                unreachable!("slang's binder should not surface Inherited at an array push base")
+            }
             other => solx_utils::DataLocation::from_slang(other, None),
         };
 
         let (array_value, block) = self.expression_emitter.emit_value(&base, block)?;
-        let builder = &self.expression_emitter.state.builder;
-        let element_type = element_slang_type
-            .map(|slang_type| TypeConversion::resolve_slang_type(&slang_type, None, builder))
-            .unwrap_or_else(|| builder.types.fixed_bytes(1));
         let address_type = builder.types.pointer(element_type, base_location);
         let new_slot = builder.emit_sol_push(array_value, address_type, &block);
 
