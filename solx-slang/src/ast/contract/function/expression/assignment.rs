@@ -8,6 +8,7 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::ValueLike;
 use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
 
@@ -63,6 +64,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::IndexAccessExpression(index_access) => {
                 let (address, element_type, block) =
                     self.emit_index_access_address(index_access, block)?;
+                if address.r#type() == element_type {
+                    unimplemented!(
+                        "assignment to a reference-typed `a[i]` element in storage/calldata is not yet supported"
+                    );
+                }
                 (AssignmentTarget::Pointer(address, element_type), block)
             }
             _ => anyhow::bail!("unsupported assignment target"),
