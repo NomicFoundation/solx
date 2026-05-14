@@ -79,6 +79,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((value, block));
         }
 
+        if let Expression::MemberAccessExpression(access) = &callee {
+            return self.emit_built_in_member_access(access, Some(positional_arguments), block);
+        }
+
         let Expression::Identifier(callee_identifier) = &callee else {
             anyhow::bail!("unsupported callee expression");
         };
@@ -200,10 +204,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((mlir_name, argument_values, return_types, current_block))
     }
 
-    /// Emits a member access expression (e.g. `tx.origin`, `msg.sender`).
-    ///
-    /// Resolves the member via slang's binder to a specific `BuiltIn` variant
-    /// rather than string-matching the member name.
+    /// Emits a bare member access expression (e.g. `tx.origin`, `msg.sender`).
     ///
     /// # Errors
     ///
@@ -213,6 +214,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        self.emit_built_in_member_access(access, block)
+        let (value, block) = self.emit_built_in_member_access(access, None, block)?;
+        Ok((
+            value.expect("bare member access always produces a value"),
+            block,
+        ))
     }
 }
