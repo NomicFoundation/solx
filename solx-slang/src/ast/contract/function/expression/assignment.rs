@@ -56,8 +56,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let (pointer, element_type) = self.environment.variable_with_type(&name);
                         AssignmentTarget::Pointer(pointer, element_type)
                     }
-                    None => anyhow::bail!("unresolved identifier: {name}"),
-                    Some(_) => anyhow::bail!("unsupported assignment target: {name}"),
+                    None => unreachable!("slang resolves every identifier reference"),
+                    Some(_) => unimplemented!(
+                        "assignment to non-variable definition '{name}' is not yet supported"
+                    ),
                 };
                 (target, block)
             }
@@ -71,7 +73,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 }
                 (AssignmentTarget::Pointer(address, element_type), block)
             }
-            _ => anyhow::bail!("unsupported assignment target"),
+            _ => unimplemented!(
+                "assignment target {:?} is not yet supported",
+                std::mem::discriminant(&left)
+            ),
         };
 
         let operator = assign.operator();

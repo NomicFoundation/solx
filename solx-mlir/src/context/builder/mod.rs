@@ -698,14 +698,16 @@ impl<'context> Builder<'context> {
 
     /// Emits a `sol.load` from a pointer with an explicit result type.
     ///
-    /// Use this when the pointer element type is known at emission time.
+    /// Short-circuits when `address` is already the element (the gep result
+    /// for reference-typed elements in `Storage`/`CallData`), returning it
+    /// unchanged.
     ///
     /// # Errors
     ///
     /// Returns an error if the load operation result cannot be extracted.
     pub fn emit_sol_load<'block, B>(
         &self,
-        pointer: Value<'context, 'block>,
+        address: Value<'context, 'block>,
         result_type: Type<'context>,
         block: &B,
     ) -> anyhow::Result<Value<'context, 'block>>
@@ -713,10 +715,13 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
+        if address.r#type() == result_type {
+            return Ok(address);
+        }
         Ok(block
             .append_operation(
                 LoadOperation::builder(self.context, self.unknown_location)
-                    .addr(pointer)
+                    .addr(address)
                     .out(result_type)
                     .build()
                     .into(),
