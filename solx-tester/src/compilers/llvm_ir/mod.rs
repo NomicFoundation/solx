@@ -77,8 +77,7 @@ impl LLVMIRCompiler {
             let mut output_directory = debug_output_directory.to_owned();
             output_directory.push(mode.to_string());
 
-            command.arg("--debug-output-dir");
-            command.arg(output_directory);
+            command.env("SOLX_OUTPUT_DIR", output_directory);
         }
 
         let mut process = command
