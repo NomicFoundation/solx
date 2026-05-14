@@ -2,27 +2,37 @@
 //! Solidity built-in function and EVM intrinsic lowering.
 //!
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Operation;
+use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::attribute::DenseI32ArrayAttribute;
+use melior::ir::operation::OperationMutLike;
+use melior::ir::r#type::IntegerType;
 use slang_solidity::backend::built_ins::BuiltIn;
 use slang_solidity::backend::ir::ast::Expression;
+use slang_solidity::backend::ir::ast::FunctionCallExpression;
 use slang_solidity::backend::ir::ast::MemberAccessExpression;
 use slang_solidity::backend::ir::ast::PositionalArguments;
+use slang_solidity::backend::ir::ast::Type as SlangType;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::BalanceOperation;
 use solx_mlir::ods::sol::BaseFeeOperation;
 use solx_mlir::ods::sol::BlobBaseFeeOperation;
 use solx_mlir::ods::sol::BlockNumberOperation;
+use solx_mlir::ods::sol::BytesCastOperation;
 use solx_mlir::ods::sol::CallValueOperation;
 use solx_mlir::ods::sol::CallerOperation;
 use solx_mlir::ods::sol::ChainIdOperation;
 use solx_mlir::ods::sol::CodeHashOperation;
 use solx_mlir::ods::sol::CodeOperation;
 use solx_mlir::ods::sol::CoinbaseOperation;
+use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::DifficultyOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
+use solx_mlir::ods::sol::EncodeOperation;
 use solx_mlir::ods::sol::GasLeftOperation;
 use solx_mlir::ods::sol::GasLimitOperation;
 use solx_mlir::ods::sol::GasPriceOperation;
@@ -40,6 +50,7 @@ use solx_mlir::ods::sol::TimestampOperation;
 use solx_mlir::ods::sol::TransferOperation;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
     /// Tries to emit `callee(arguments)` as a Solidity built-in.
@@ -207,6 +218,29 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
     }
 
+    /// Tries to emit a built-in that needs the full [`FunctionCallExpression`]
+    /// context — typically because the result type comes from `call.get_type()`
+    /// rather than from the operands (e.g. `abi.decode(payload, (T))`).
+    ///
+    /// Resolves the callee's member access to a [`BuiltIn`] variant and
+    /// dispatches to the matching handler. Returns `Ok(Some((value, block)))`
+    /// on match, `Ok(None)` if no handler matched and the caller should
+    /// fall through to other dispatch.
+    pub fn try_emit_built_in_call_expression(
+        &self,
+        call: &FunctionCallExpression,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
+        let Expression::MemberAccessExpression(access) = call.operand() else {
+            return Ok(None);
+        };
+        match access.member().resolved_built_in() {
+            Some(BuiltIn::AbiDecode) => self.emit_abi_decode(call, arguments, block).map(Some),
+            _ => Ok(None),
+        }
+    }
+
     /// Emits a member access expression as an EVM intrinsic.
     ///
     /// Resolves the member via slang's binder to a specific `BuiltIn` variant
@@ -294,6 +328,68 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         .into(),
                 );
                 Ok((None, block))
+            }
+            Some(BuiltIn::AbiEncode) => {
+                let arguments = arguments.expect("abi.encode is a member-access call");
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let result = self.emit_sol_encode(&values, None, false, &block);
+                Ok((Some(result), block))
+            }
+            Some(BuiltIn::AbiEncodePacked) => {
+                let arguments = arguments.expect("abi.encodePacked is a member-access call");
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let result = self.emit_sol_encode(&values, None, true, &block);
+                Ok((Some(result), block))
+            }
+            Some(BuiltIn::AbiEncodeWithSelector) => {
+                let arguments = arguments.expect("abi.encodeWithSelector is a member-access call");
+                let (mut values, block) = self.emit_argument_values(arguments, block)?;
+                let selector =
+                    builder.emit_sol_cast(values.remove(0), builder.types.fixed_bytes(4), &block);
+                let result = self.emit_sol_encode(&values, Some(selector), false, &block);
+                Ok((Some(result), block))
+            }
+            Some(BuiltIn::AbiEncodeWithSignature) => {
+                let arguments = arguments.expect("abi.encodeWithSignature is a member-access call");
+                let mut iter = arguments.iter();
+                let signature_expression =
+                    iter.next().expect("slang validates non-empty arguments");
+                let Expression::StringExpression(string_expression) = signature_expression else {
+                    unimplemented!(
+                        "abi.encodeWithSignature with a non-literal signature is not yet supported"
+                    );
+                };
+                let signature_bytes = string_expression.value();
+                let hash = solx_utils::Keccak256Hash::from_slice(&signature_bytes);
+                let selector_bytes: [u8; 4] = hash.as_bytes()[..4]
+                    .try_into()
+                    .expect("keccak256 always yields 32 bytes");
+                let selector_word = u32::from_be_bytes(selector_bytes);
+                let selector_int = builder.emit_sol_constant(
+                    i64::from(selector_word),
+                    Type::from(IntegerType::unsigned(builder.context, 32)),
+                    &block,
+                );
+                let selector_value = block
+                    .append_operation(
+                        BytesCastOperation::builder(builder.context, builder.unknown_location)
+                            .inp(selector_int)
+                            .out(builder.types.fixed_bytes(4))
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("sol.bytes_cast always produces one result")
+                    .into();
+                let mut values = Vec::with_capacity(arguments.len() - 1);
+                let mut current = block;
+                for argument in iter {
+                    let (value, next) = self.expression_emitter.emit_value(&argument, current)?;
+                    values.push(value);
+                    current = next;
+                }
+                let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
+                Ok((Some(result), current))
             }
             resolved => {
                 let operation = match resolved {
@@ -441,6 +537,89 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             current = next;
         }
         Ok((values, current))
+    }
+
+    /// Emits a `sol.encode` operation producing a `bytes memory` payload.
+    ///
+    /// `selector`, when present, is prepended as the first 4 bytes of the
+    /// payload and must already be of `!sol.fixed_bytes<4>` type. `packed`
+    /// emits the ABI-packed encoding (no per-element padding).
+    ///
+    /// Sets `operand_segment_sizes` manually because melior's ODS-generated
+    /// builder does not synthesize the attribute for `AttrSizedOperandSegments`
+    /// ops; the dialect verifier rejects the op without it.
+    fn emit_sol_encode(
+        &self,
+        ins: &[Value<'context, 'block>],
+        selector: Option<Value<'context, 'block>>,
+        packed: bool,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        let builder = &self.expression_emitter.state.builder;
+        let mut op_builder = EncodeOperation::builder(builder.context, builder.unknown_location)
+            .ins(ins)
+            .res(builder.types.sol_string_memory);
+        if let Some(selector_value) = selector {
+            op_builder = op_builder.selector(selector_value);
+        }
+        if packed {
+            op_builder = op_builder.packed(Attribute::unit(builder.context));
+        }
+        let mut operation: Operation = op_builder.build().into();
+        // TODO: drop this manual segment-sizes plumbing once the melior op-builder
+        // macro emits `operand_segment_sizes` automatically for ops with variadic
+        // or optional operand groups.
+        let ins_count = i32::try_from(ins.len()).expect("encode argument count fits in i32");
+        let segment_sizes = DenseI32ArrayAttribute::new(
+            builder.context,
+            &[ins_count, i32::from(selector.is_some())],
+        );
+        operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
+        block
+            .append_operation(operation)
+            .result(0)
+            .expect("sol.encode always produces one result")
+            .into()
+    }
+
+    /// Emits `abi.decode(payload, (T))` as a `sol.decode` operation.
+    ///
+    /// The result type comes from the call's slang type (`call.get_type()`);
+    /// multi-result decode requires the multi-result-call dispatch and is
+    /// not yet supported.
+    fn emit_abi_decode(
+        &self,
+        call: &FunctionCallExpression,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let payload_expression = arguments
+            .iter()
+            .next()
+            .expect("slang validates the payload argument");
+        let (payload_value, block) = self
+            .expression_emitter
+            .emit_value(&payload_expression, block)?;
+        let return_slang_type = call
+            .get_type()
+            .expect("abi.decode call is typed by the binder");
+        if matches!(return_slang_type, SlangType::Tuple(_)) {
+            unimplemented!("abi.decode returning multiple values is not yet supported");
+        }
+        let builder = &self.expression_emitter.state.builder;
+        let result_type = TypeConversion::resolve_slang_type(&return_slang_type, None, builder);
+        let value = block
+            .append_operation(
+                DecodeOperation::builder(builder.context, builder.unknown_location)
+                    .addr(payload_value)
+                    .outs(&[result_type])
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("abi.decode single-result always produces one value")
+            .into();
+        Ok((value, block))
     }
 
     /// Emits an `assert(condition)` built-in via `sol.assert`.
