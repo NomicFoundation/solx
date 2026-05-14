@@ -2,6 +2,7 @@
 //! Expression lowering to MLIR SSA values.
 //!
 
+pub mod access;
 pub mod arithmetic;
 pub mod assignment;
 pub mod call;
@@ -329,6 +330,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .emit_sol_load(result_slot, result_type, &block)?;
 
                 Ok((Some(result), block))
+            }
+            Expression::IndexAccessExpression(index_access) => {
+                self.emit_index_access(index_access, block)
             }
             _ => anyhow::bail!(
                 "unsupported expression: {:?}",
