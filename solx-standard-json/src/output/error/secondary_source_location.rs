@@ -10,12 +10,10 @@
 pub struct SecondarySourceLocation {
     /// File path.
     pub file: String,
-    /// Start location.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub start: Option<isize>,
-    /// End location.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub end: Option<isize>,
+    /// Start offset. [`super::source_location::SourceLocation::UNKNOWN_OFFSET`] when unknown.
+    pub start: isize,
+    /// End offset. [`super::source_location::SourceLocation::UNKNOWN_OFFSET`] when unknown.
+    pub end: isize,
     /// Additional diagnostic message.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,

@@ -91,8 +91,8 @@ impl Source {
             .and_then(|source| source.content.as_deref());
         let mapped_location = solx_utils::DebugInfoMappedLocation::from_solc_location(
             path.to_owned(),
-            Some(solc_location.start),
-            Some(solc_location.end),
+            solc_location.start,
+            solc_location.end,
             source_code,
         );
 
@@ -132,8 +132,8 @@ impl Source {
             .and_then(|source| source.content.as_deref());
         let mapped_location = solx_utils::DebugInfoMappedLocation::from_solc_location(
             path.to_owned(),
-            Some(solc_location.start),
-            Some(solc_location.end),
+            solc_location.start,
+            solc_location.end,
             source_code,
         );
 
@@ -166,8 +166,8 @@ impl Source {
             .and_then(|source| source.content.as_deref());
         let mapped_location = solx_utils::DebugInfoMappedLocation::from_solc_location(
             path.to_owned(),
-            Some(solc_location.start),
-            Some(solc_location.end),
+            solc_location.start,
+            solc_location.end,
             source_code,
         );
 
