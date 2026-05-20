@@ -104,7 +104,7 @@ url = "https://github.com/antonbaliasnikov/hardhat-template"
 commit = "05f2ce84c7da0ce4ce986107c15cb7a197e04daf"
 description = "An example Hardhat v2 project with solx support."
 build_system = "bun"
-dependencies = [ "hardhat@2.20.1" ]
+dependencies = [ "hardhat@2.28.6" ]
 
 [projects.hardhat-v3]
 url = "https://github.com/antonbaliasnikov/solx-hh3"
@@ -117,7 +117,7 @@ url = "https://github.com/antonbaliasnikov/openzeppelin-contracts"
 commit = "bd3c4ba5d950860ecd957a84acc65083c3aec20e"
 description = "A library for secure smart contract development."
 build_system = "pnpm"
-dependencies = [ "hardhat@2.20.1" ]
+dependencies = [ "hardhat@2.28.6" ]
 [projects.openzeppelin.env]
 EVM_DISABLE_MEMORY_SAFE_ASM_CHECK = "true"
 
