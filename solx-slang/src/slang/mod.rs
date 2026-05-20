@@ -54,7 +54,13 @@ impl Slang {
     pub fn compile(&self, sources: BTreeMap<String, String>) -> anyhow::Result<CompilationUnit> {
         let paths: Vec<String> = sources.keys().cloned().collect();
         let configuration = CompilationConfig::new(sources);
-        let version: LanguageVersion = self.version.default.clone().try_into().unwrap();
+        let version: LanguageVersion =
+            self.version.default.clone().try_into().map_err(|error| {
+                anyhow::anyhow!(
+                    "failed to convert Solidity version '{}' to a Slang language version: {error}",
+                    self.version.default
+                )
+            })?;
         let mut builder = CompilationBuilder::create(version, configuration);
 
         for path in paths.iter() {
@@ -143,7 +149,7 @@ impl Frontend for Slang {
             if let Some(output_source) = output.sources.get_mut(file_identifier) {
                 output_source.ast = Some(
                     serde_json::to_value(unit.get_file_ast_root(file_identifier).as_ref())
-                        .map_err(|error| anyhow::anyhow!("CST serialization: {error}"))?,
+                        .map_err(|error| anyhow::anyhow!("AST serialization: {error}"))?,
                 );
             }
         }

@@ -34,7 +34,7 @@ fn integer_bits_required(value: &BigInt) -> u32 {
         let magnitude_minus_one = -value - 1u32;
         u32::try_from(magnitude_minus_one.bits()).unwrap() + 1
     } else {
-        u32::try_from(value.bits()).unwrap() + 1
+        u32::try_from(value.bits()).unwrap().max(1)
     }
 }
 

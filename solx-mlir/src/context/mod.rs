@@ -195,7 +195,9 @@ impl<'context> Context<'context> {
         let function = self
             .function_signatures
             .get(&definition_id)
-            .ok_or_else(|| anyhow::anyhow!("undefined function for definition {definition_id:?}"))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("undefined function for definition {definition_id:?}")
+            })?;
         Ok((
             function.mlir_name.as_str(),
             &function.parameter_types,
