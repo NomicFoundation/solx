@@ -78,6 +78,12 @@
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["yarn"],
       "allowedVersions": "<2"
+    },
+    {
+      "description": "The `hardhat@x.y.z` entries in solx-dev/hardhat-tests.toml are pinned Hardhat v2 fixtures; don't bump them across the v2→v3 line.",
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["hardhat"],
+      "allowedVersions": "<3"
     }
   ],
   "labels": ["dependencies"],
