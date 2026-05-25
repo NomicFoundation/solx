@@ -10,8 +10,8 @@ use std::path::PathBuf;
 
 use slang_solidity_v2::compilation::CompilationBuilder;
 use slang_solidity_v2::compilation::CompilationUnit;
+use slang_solidity_v2::diagnostics::DiagnosticExtensions;
 use slang_solidity_v2::utils::LanguageVersion;
-use slang_solidity_v2_common::diagnostics::DiagnosticExtensions;
 
 use solx_core::Frontend;
 use solx_standard_json::CollectableError;
@@ -30,8 +30,7 @@ pub struct Slang {
 
 impl Default for Slang {
     fn default() -> Self {
-        // TODO: sync with the latest version provided by Slang
-        let default: semver::Version = LanguageVersion::V0_8_35.into();
+        let default: semver::Version = LanguageVersion::LATEST.into();
 
         Self {
             version: solx_standard_json::Version::new(default.to_string(), default),

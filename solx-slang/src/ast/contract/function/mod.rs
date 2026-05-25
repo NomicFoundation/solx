@@ -12,6 +12,7 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
+use ruint::aliases::U256;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ElementaryType;
 use slang_solidity_v2::ast::Expression;
@@ -32,14 +33,14 @@ pub struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
     /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, u64>,
+    storage_layout: &'state HashMap<NodeId, U256>,
 }
 
 impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
     pub fn new(
         state: &'state Context<'context>,
-        storage_layout: &'state HashMap<NodeId, u64>,
+        storage_layout: &'state HashMap<NodeId, U256>,
     ) -> Self {
         Self {
             state,

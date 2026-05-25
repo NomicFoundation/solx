@@ -7,6 +7,7 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
+use ruint::aliases::U256;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
@@ -23,7 +24,7 @@ enum AssignmentTarget<'context, 'block> {
     /// `a[i]` / `m[k]` index-access expression on the left-hand side.
     Pointer(Value<'context, 'block>, Type<'context>),
     /// State variable — storage slot and declared element type.
-    Storage(u64, Type<'context>),
+    Storage(U256, Type<'context>),
 }
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {

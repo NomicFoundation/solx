@@ -27,6 +27,7 @@ use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::TypeLike;
 use num::BigInt;
+use ruint::aliases::U256;
 
 use crate::CmpPredicate;
 use crate::StateMutability;
@@ -1122,7 +1123,7 @@ impl<'context> Builder<'context> {
     pub fn emit_sol_state_var<'block, B>(
         &self,
         name: &str,
-        slot: u64,
+        slot: U256,
         element_type: Type<'context>,
         block: &B,
     ) where

@@ -74,6 +74,7 @@ itertools = "0.14"
 sha2 = "0.11"
 sha3 = "0.12"
 md5 = "0.8"
+ruint = { version = "1.17.2" }
 
 # Testing
 [workspace.dependencies.web3]
@@ -98,9 +99,4 @@ features = [
 [workspace.dependencies.slang_solidity_v2]
 git = "https://github.com/NomicFoundation/slang.git"
 # TODO: pin to a release tag instead of a revision.
-rev = "bf34fec7369266c29753a54aecf5b221a1f72e47"
-
-[workspace.dependencies.slang_solidity_v2_common]
-git = "https://github.com/NomicFoundation/slang.git"
-# TODO: pin to a release tag instead of a revision.
-rev = "bf34fec7369266c29753a54aecf5b221a1f72e47"
+rev = "47238e294b9e0b9fc7889bd748a5b528baed3c2b"

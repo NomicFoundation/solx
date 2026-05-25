@@ -7,6 +7,7 @@ pub mod function;
 
 use std::collections::HashMap;
 
+use ruint::aliases::U256;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
@@ -157,13 +158,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     fn compute_storage_layout(
         contract: &ContractDefinition,
         file_identifier: &str,
-    ) -> HashMap<NodeId, u64> {
+    ) -> HashMap<NodeId, U256> {
         let Some(abi) = contract.compute_abi_with_file_id(file_identifier.to_owned()) else {
             return HashMap::new();
         };
         abi.storage_layout()
             .iter()
-            .map(|item| (item.node_id(), item.slot() as u64))
+            .map(|item| (item.node_id(), item.slot()))
             .collect()
     }
 }

@@ -7,6 +7,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 
+use ruint::aliases::U256;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
@@ -15,7 +16,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits a storage load via `sol.addr_of` + `sol.load`.
     pub fn emit_storage_load(
         &self,
-        slot: u64,
+        slot: U256,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
@@ -28,7 +29,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits a storage store via `sol.addr_of` + `sol.store`.
     pub fn emit_storage_store(
         &self,
-        slot: u64,
+        slot: U256,
         value: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) {
@@ -39,7 +40,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Returns a `!sol.ptr<element_type, Storage>` pointer via `sol.addr_of`.
     fn emit_storage_addr_of(
         &self,
-        slot: u64,
+        slot: U256,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
