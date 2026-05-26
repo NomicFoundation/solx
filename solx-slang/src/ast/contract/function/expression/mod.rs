@@ -22,10 +22,12 @@ use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::Type as SlangType;
 use slang_solidity::cst::NodeId;
 
+use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::ods::sol::ThisOperation;
+use solx_utils::DataLocation;
 
 use self::call::type_conversion::TypeConversion;
 
@@ -409,5 +411,29 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             None,
             &self.state.builder,
         ))
+    }
+
+    /// Picks the MLIR type of the address yielded by `sol.gep` / `sol.map`.
+    ///
+    /// Mirrors `Sol_GepOp::build`'s non-ptr-ref-in-storage rule: when the
+    /// element is itself a reference type and lives in `Storage` or
+    /// `CallData`, the result address IS the element type rather than a
+    /// pointer to it.
+    fn address_type(
+        builder: &Builder<'context>,
+        element_type: Type<'context>,
+        base_location: DataLocation,
+        result_type: &SlangType,
+    ) -> Type<'context> {
+        if result_type.is_reference_type()
+            && matches!(
+                base_location,
+                DataLocation::Storage | DataLocation::CallData
+            )
+        {
+            element_type
+        } else {
+            builder.types.pointer(element_type, base_location)
+        }
     }
 }

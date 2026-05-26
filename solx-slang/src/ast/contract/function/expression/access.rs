@@ -9,7 +9,6 @@ use slang_solidity::backend::ir::ast::IndexAccessExpression;
 use slang_solidity::backend::ir::ast::Type as SlangType;
 use slang_solidity::backend::types::DataLocation as SlangDataLocation;
 
-use solx_mlir::Builder;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
@@ -24,6 +23,29 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         index_access: &IndexAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let (address, element_type, block) = self.emit_index_access_address(index_access, block)?;
+        let value = self
+            .state
+            .builder
+            .emit_sol_load(address, element_type, &block)?;
+        Ok((Some(value), block))
+    }
+
+    /// Emits the address yielded by `a[i]` / `m[k]` together with the element
+    /// MLIR type, without the trailing `sol.load`.
+    ///
+    /// Shared between the value-producing read path
+    /// ([`Self::emit_index_access`]) and the lvalue write path in
+    /// `emit_assignment`.
+    pub fn emit_index_access_address(
+        &self,
+        index_access: &IndexAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        Value<'context, 'block>,
+        Type<'context>,
+        BlockRef<'context, 'block>,
+    )> {
         if index_access.end().is_some() {
             unimplemented!("range index (a[i:j]) is not yet supported");
         }
@@ -63,15 +85,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .builder
                 .emit_sol_gep(base_value, index_value, address_type, &block),
         };
-        let value = if address_type == element_type {
-            address
-        } else {
-            self.state
-                .builder
-                .emit_sol_load(address, element_type, &block)?
-        };
-
-        Ok((Some(value), block))
+        Ok((address, element_type, block))
     }
 
     /// Maps a slang container type's data location to the dialect-side
@@ -86,30 +100,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 "index access on a value-typed base is not yet wired: {:?}",
                 std::mem::discriminant(base_slang_type)
             ),
-        }
-    }
-
-    /// Picks the MLIR type of the address yielded by `sol.gep` / `sol.map`.
-    ///
-    /// Mirrors `Sol_GepOp::build`'s non-ptr-ref-in-storage rule: when the
-    /// element is itself a reference type and lives in `Storage` or
-    /// `CallData`, the result address IS the element type rather than a
-    /// pointer to it.
-    fn address_type(
-        builder: &Builder<'context>,
-        element_type: Type<'context>,
-        base_location: DataLocation,
-        result_slang_type: &SlangType,
-    ) -> Type<'context> {
-        if result_slang_type.is_reference_type()
-            && matches!(
-                base_location,
-                DataLocation::Storage | DataLocation::CallData
-            )
-        {
-            element_type
-        } else {
-            builder.types.pointer(element_type, base_location)
         }
     }
 }
