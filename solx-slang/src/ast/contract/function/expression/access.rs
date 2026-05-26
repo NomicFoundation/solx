@@ -5,6 +5,8 @@
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::ValueLike;
+use melior::ir::r#type::TypeLike;
 use slang_solidity::backend::ir::ast::IndexAccessExpression;
 use slang_solidity::backend::ir::ast::Type as SlangType;
 use slang_solidity::backend::types::DataLocation as SlangDataLocation;
@@ -17,7 +19,10 @@ use crate::ast::contract::function::expression::call::type_conversion::TypeConve
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers `a[i]` / `m[k]` for arrays, dynamic `bytes`, mappings, and
     /// strings to `sol.gep` (sequential containers) or `sol.map` (mappings),
-    /// followed by a `sol.load` of the addressed element.
+    /// followed by a `sol.load` of the addressed element. For dynamic
+    /// `bytes` the C++ element type is `!sol.byte`; a `sol.bytes_cast`
+    /// widens it to `!sol.fixedbytes<1>` to match Solidity's `bytes1`
+    /// typing. `sol.bytes_cast` is a no-op for matching types.
     pub fn emit_index_access(
         &self,
         index_access: &IndexAccessExpression,
@@ -28,6 +33,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .state
             .builder
             .emit_sol_load(address, element_type, &block)?;
+        let result_type = index_access
+            .get_type()
+            .expect("slang types every index-access expression");
+        let slang_expected =
+            TypeConversion::resolve_slang_type(&result_type, None, &self.state.builder);
+        let value = self
+            .state
+            .builder
+            .emit_sol_bytes_cast(value, slang_expected, &block);
         Ok((Some(value), block))
     }
 
@@ -64,26 +78,39 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (base_value, block) = self.emit_value(&base, block)?;
         let (index_value, block) = self.emit_value(&index_expression, block)?;
 
-        let element_type =
-            TypeConversion::resolve_slang_type(&result_type, None, &self.state.builder);
-        let base_location = Self::resolve_base_location(&base_type);
-        let address_type = Self::address_type(
-            &self.state.builder,
-            element_type,
-            base_location,
-            &result_type,
-        );
-
-        let address = match &base_type {
+        let (address, element_type) = match &base_type {
             SlangType::Mapping(_) => {
-                self.state
-                    .builder
-                    .emit_sol_map(base_value, index_value, address_type, &block)
+                let element_type =
+                    TypeConversion::resolve_slang_type(&result_type, None, &self.state.builder);
+                let base_location = Self::resolve_base_location(&base_type);
+                let address_type = Self::address_type(
+                    &self.state.builder,
+                    element_type,
+                    base_location,
+                    &result_type,
+                );
+                let address =
+                    self.state
+                        .builder
+                        .emit_sol_map(base_value, index_value, address_type, &block);
+                (address, element_type)
             }
-            _ => self
-                .state
-                .builder
-                .emit_sol_gep(base_value, index_value, address_type, &block),
+            _ => {
+                // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
+                // `sol::getEltType` on the C++ side; the struct-field index
+                // is ignored for non-struct base types.
+                let element_type = unsafe {
+                    Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
+                        base_value.r#type().to_raw(),
+                        0,
+                    ))
+                };
+                let address =
+                    self.state
+                        .builder
+                        .emit_sol_gep(base_value, index_value, element_type, &block);
+                (address, element_type)
+            }
         };
         Ok((address, element_type, block))
     }

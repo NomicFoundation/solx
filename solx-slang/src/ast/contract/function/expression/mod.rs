@@ -21,7 +21,6 @@ use melior::ir::ValueLike;
 use slang_solidity::backend::ir::ast::Definition;
 use slang_solidity::backend::ir::ast::Expression;
 use slang_solidity::backend::ir::ast::Type as SlangType;
-use slang_solidity::backend::types::DataLocation as SlangDataLocation;
 use slang_solidity::cst::NodeId;
 
 use solx_mlir::Builder;
@@ -459,24 +458,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             element_type
         } else {
             builder.types.pointer(element_type, base_location)
-        }
-    }
-
-    /// Concrete data location of `expression`, walking back through nested
-    /// member/index accesses past slang's `Inherited` marker on nested
-    /// struct fields like `o.inner.b`.
-    fn resolved_data_location(expression: &Expression) -> Option<SlangDataLocation> {
-        match expression.get_type().and_then(|t| t.data_location())? {
-            SlangDataLocation::Inherited => match expression {
-                Expression::MemberAccessExpression(access) => {
-                    Self::resolved_data_location(&access.operand())
-                }
-                Expression::IndexAccessExpression(access) => {
-                    Self::resolved_data_location(&access.operand())
-                }
-                _ => None,
-            },
-            other => Some(other),
         }
     }
 }

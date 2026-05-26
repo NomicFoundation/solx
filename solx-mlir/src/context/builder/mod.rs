@@ -25,6 +25,7 @@ use melior::ir::attribute::TypeAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
+use melior::ir::r#type::TypeLike;
 use num::BigInt;
 
 use crate::CmpPredicate;
@@ -36,6 +37,7 @@ use crate::ods::sol::AllocaOperation;
 use crate::ods::sol::ArrayLitOperation;
 use crate::ods::sol::AssertOperation;
 use crate::ods::sol::BreakOperation;
+use crate::ods::sol::BytesCastOperation;
 use crate::ods::sol::CallOperation;
 use crate::ods::sol::CastOperation;
 use crate::ods::sol::CmpOperation;
@@ -754,21 +756,29 @@ impl<'context> Builder<'context> {
         );
     }
 
-    /// Emits a `sol.gep` for array / `bytes` / `string` element access.
-    ///
-    /// `address_type` is the result address type the caller has computed
-    /// (typically `!sol.ptr<element, location>` for primitive elements).
+    /// Emits a `sol.gep` for array / `bytes` / `string` / struct field
+    /// access. `element_type` is the pointee the caller wants to address.
+    /// The gep's result type is derived from `(base_address.r#type(),
+    /// element_type)` via `GepOp::getResultType` on the C++ side.
     pub fn emit_sol_gep<'block, B>(
         &self,
         base_address: Value<'context, 'block>,
         index: Value<'context, 'block>,
-        address_type: Type<'context>,
+        element_type: Type<'context>,
         block: &B,
     ) -> Value<'context, 'block>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
+        // SAFETY: `mlirSolGepGetResultType` returns a valid MlirType from
+        // `sol::GepOp::getResultType` on the C++ side.
+        let address_type = unsafe {
+            Type::from_raw(crate::ffi::mlirSolGepGetResultType(
+                base_address.r#type().to_raw(),
+                element_type.to_raw(),
+            ))
+        };
         block
             .append_operation(
                 GepOperation::builder(self.context, self.unknown_location)
@@ -1010,6 +1020,37 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.cast always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.bytes_cast` between byte / fixedbytes / integer types.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
+    pub fn emit_sol_bytes_cast<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        to_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        if value.r#type() == to_type {
+            return value;
+        }
+        block
+            .append_operation(
+                BytesCastOperation::builder(self.context, self.unknown_location)
+                    .inp(value)
+                    .out(to_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.bytes_cast always produces one result")
             .into()
     }
 
