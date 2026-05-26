@@ -144,6 +144,19 @@ unsafe extern "C" {
     /// (one less than the number of enum members).
     pub fn solxCreateEnumType(context: MlirContext, max: u32) -> mlir_sys::MlirType;
 
+    // ---- Sol type inference ----
+
+    /// Returns the element type of a non-mapping reference type. For
+    /// struct types, `struct_field_idx` selects the member.
+    pub fn mlirSolGetEltType(ty: mlir_sys::MlirType, struct_field_idx: u64) -> mlir_sys::MlirType;
+
+    /// Returns the result type of a `sol.gep` whose base has type
+    /// `base_addr_ty` and whose pointee is `element_type`.
+    pub fn mlirSolGepGetResultType(
+        base_addr_ty: mlir_sys::MlirType,
+        element_type: mlir_sys::MlirType,
+    ) -> mlir_sys::MlirType;
+
     // ---- MLIR core (not in mlir-sys) ----
 
     /// Returns the region that owns the given block.

@@ -22,6 +22,8 @@ pub struct TypeFactory<'context> {
 
     /// 1-bit boolean type (`i1`).
     pub i1: Type<'context>,
+    /// Unsigned 64-bit integer type (`ui64`, struct/array field-index width).
+    pub ui64: Type<'context>,
     /// Unsigned 160-bit integer type (`ui160`, address width).
     pub ui160: Type<'context>,
     /// Unsigned 256-bit integer type (`ui256`).
@@ -43,6 +45,10 @@ impl<'context> TypeFactory<'context> {
         let i1 = Type::from(IntegerType::new(
             context,
             solx_utils::BIT_LENGTH_BOOLEAN as u32,
+        ));
+        let ui64 = Type::from(IntegerType::unsigned(
+            context,
+            solx_utils::BIT_LENGTH_X64 as u32,
         ));
         let ui160 = Type::from(IntegerType::unsigned(
             context,
@@ -76,6 +82,7 @@ impl<'context> TypeFactory<'context> {
         Self {
             context,
             i1,
+            ui64,
             ui160,
             ui256,
             sol_address,

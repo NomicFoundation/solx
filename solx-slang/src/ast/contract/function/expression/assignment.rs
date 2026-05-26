@@ -40,16 +40,25 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let name = identifier.name();
                 let target = match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(state_variable)) => {
+                        let declared_type = state_variable.get_type().ok_or_else(|| {
+                            anyhow::anyhow!("unresolved type for state variable: {name}")
+                        })?;
+                        if declared_type.is_reference_type() {
+                            unimplemented!(
+                                "assignment to a reference-typed state variable is not yet supported"
+                            );
+                        }
                         let slot = self
                             .storage_layout
                             .get(&state_variable.node_id())
                             .ok_or_else(|| {
                                 anyhow::anyhow!("unregistered state variable: {name}")
                             })?;
-                        let element_type = TypeConversion::resolve_state_variable_type(
-                            &state_variable,
+                        let element_type = TypeConversion::resolve_slang_type(
+                            &declared_type,
+                            None,
                             &self.state.builder,
-                        )?;
+                        );
                         AssignmentTarget::Storage(*slot, element_type)
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
@@ -69,6 +78,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 if address.r#type() == element_type {
                     unimplemented!(
                         "assignment to a reference-typed `a[i]` element in storage/calldata is not yet supported"
+                    );
+                }
+                (AssignmentTarget::Pointer(address, element_type), block)
+            }
+            Expression::MemberAccessExpression(access) => {
+                let (address, element_type, block) = self
+                    .emit_struct_field_address(access, block)?
+                    .expect("slang validates a member-access lvalue resolves to a struct field");
+                if address.r#type() == element_type {
+                    unimplemented!(
+                        "assignment to a reference-typed struct field in storage/calldata is not yet supported"
                     );
                 }
                 (AssignmentTarget::Pointer(address, element_type), block)
