@@ -29,15 +29,6 @@ pub enum TypeConversion<'context> {
     Cast(Type<'context>),
 }
 
-fn integer_bits_required(value: &BigInt) -> u32 {
-    if value.is_negative() {
-        let magnitude_minus_one = -value - 1u32;
-        u32::try_from(magnitude_minus_one.bits()).unwrap() + 1
-    } else {
-        u32::try_from(value.bits()).unwrap().max(1)
-    }
-}
-
 impl<'context> TypeConversion<'context> {
     /// Maps a Slang semantic type to an MLIR type.
     ///
@@ -67,7 +58,7 @@ impl<'context> TypeConversion<'context> {
             SlangType::Literal(literal_type) => match literal_type.kind() {
                 LiteralKind::Address => builder.types.sol_address,
                 LiteralKind::Integer { value } => {
-                    let bits = integer_bits_required(&value) as usize;
+                    let bits = Self::integer_bits_required(&value) as usize;
                     let bits = bits
                         .next_multiple_of(solx_utils::BIT_LENGTH_BYTE)
                         .max(solx_utils::BIT_LENGTH_BYTE);
@@ -214,6 +205,17 @@ impl<'context> TypeConversion<'context> {
                 Self::resolve_slang_type(&target_type, inherited_location, builder)
             }
             _ => unimplemented!("unsupported Slang type"),
+        }
+    }
+
+    // TODO: Remove when nomicFoundation/slang#1793 is merged and we can instead
+    // depend on `LiteralType::mobile_type()` for literal type conversion.
+    fn integer_bits_required(value: &BigInt) -> u32 {
+        if value.is_negative() {
+            let magnitude_minus_one = -value - 1u32;
+            u32::try_from(magnitude_minus_one.bits()).unwrap() + 1
+        } else {
+            u32::try_from(value.bits()).unwrap().max(1)
         }
     }
 
