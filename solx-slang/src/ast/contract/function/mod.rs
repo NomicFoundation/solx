@@ -12,13 +12,14 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
-use slang_solidity::backend::abi::AbiEntry;
-use slang_solidity::backend::ir::ast::ElementaryType;
-use slang_solidity::backend::ir::ast::Expression;
-use slang_solidity::backend::ir::ast::FunctionDefinition;
-use slang_solidity::backend::ir::ast::FunctionKind;
-use slang_solidity::backend::ir::ast::TypeName;
-use slang_solidity::cst::NodeId;
+use ruint::aliases::U256;
+use slang_solidity_v2::abi::AbiEntry;
+use slang_solidity_v2::ast::ElementaryType;
+use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::FunctionKind;
+use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::TypeName;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -32,14 +33,14 @@ pub struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
     /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, u64>,
+    storage_layout: &'state HashMap<NodeId, U256>,
 }
 
 impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
     pub fn new(
         state: &'state Context<'context>,
-        storage_layout: &'state HashMap<NodeId, u64>,
+        storage_layout: &'state HashMap<NodeId, U256>,
     ) -> Self {
         Self {
             state,
@@ -80,9 +81,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         let mlir_kind = match function.kind() {
             FunctionKind::Constructor => Some(solx_mlir::FunctionKind::Constructor),
-            FunctionKind::Fallback | FunctionKind::Unnamed => {
-                Some(solx_mlir::FunctionKind::Fallback)
-            }
+            FunctionKind::Fallback => Some(solx_mlir::FunctionKind::Fallback),
             FunctionKind::Receive => Some(solx_mlir::FunctionKind::Receive),
             FunctionKind::Regular => None,
             FunctionKind::Modifier => unreachable!("modifiers are filtered before emission"),
@@ -187,8 +186,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     pub fn mlir_function_name(function: &FunctionDefinition) -> String {
         let name = Self::mlir_base_name(function);
 
-        if let Some(AbiEntry::Function { inputs, .. }) = function.compute_abi_entry() {
-            let types: Vec<&str> = inputs.iter().map(|input| input.r#type.as_str()).collect();
+        if let Some(AbiEntry::Function(abi_function)) = function.compute_abi_entry() {
+            let inputs = abi_function.inputs();
+            let types: Vec<&str> = inputs.iter().map(|input| input.type_name()).collect();
             return format!("{name}({})", types.join(","));
         }
 
@@ -212,10 +212,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 let base = Self::type_name_text(&array.operand());
                 match array.index() {
                     Some(Expression::DecimalNumberExpression(decimal)) => {
-                        format!("{base}[{}]", decimal.literal().text)
+                        format!("{base}[{}]", decimal.literal().unparse())
                     }
                     Some(Expression::HexNumberExpression(hex)) => {
-                        format!("{base}[{}]", hex.literal().text)
+                        format!("{base}[{}]", hex.literal().unparse())
                     }
                     Some(_) => format!("{base}[]"),
                     None => format!("{base}[]"),
@@ -230,14 +230,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     fn elementary_type_text(elementary: &ElementaryType) -> String {
         match elementary {
             ElementaryType::AddressType(_) => "address".to_owned(),
-            ElementaryType::BoolKeyword => "bool".to_owned(),
-            ElementaryType::ByteKeyword => "byte".to_owned(),
-            ElementaryType::StringKeyword => "string".to_owned(),
-            ElementaryType::UintKeyword(terminal)
-            | ElementaryType::IntKeyword(terminal)
-            | ElementaryType::BytesKeyword(terminal)
-            | ElementaryType::FixedKeyword(terminal)
-            | ElementaryType::UfixedKeyword(terminal) => terminal.text.clone(),
+            ElementaryType::BoolKeyword(_) => "bool".to_owned(),
+            ElementaryType::StringKeyword(_) => "string".to_owned(),
+            ElementaryType::UintKeyword(terminal) => terminal.unparse().to_string(),
+            ElementaryType::IntKeyword(terminal) => terminal.unparse().to_string(),
+            ElementaryType::BytesKeyword(terminal) => terminal.unparse().to_string(),
+            ElementaryType::FixedKeyword(terminal) => terminal.unparse().to_string(),
+            ElementaryType::UfixedKeyword(terminal) => terminal.unparse().to_string(),
         }
     }
 
@@ -250,7 +249,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 .name()
                 .expect("regular functions have a name")
                 .name(),
-            FunctionKind::Fallback | FunctionKind::Unnamed => "fallback".to_owned(),
+            FunctionKind::Fallback => "fallback".to_owned(),
             FunctionKind::Receive => "receive".to_owned(),
             FunctionKind::Constructor => "constructor".to_owned(),
             FunctionKind::Modifier => unreachable!("modifiers are not emitted as functions"),
@@ -291,7 +290,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Required because the Sol dialect defines its own mutability enum
     /// independently of the Slang AST representation.
     fn map_state_mutability(function: &FunctionDefinition) -> StateMutability {
-        use slang_solidity::backend::ir::ast::FunctionMutability;
+        use slang_solidity_v2::ast::FunctionMutability;
         match function.mutability() {
             FunctionMutability::Pure => StateMutability::Pure,
             FunctionMutability::View => StateMutability::View,

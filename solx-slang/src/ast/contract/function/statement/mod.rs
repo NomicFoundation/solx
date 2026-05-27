@@ -5,17 +5,18 @@
 pub mod control_flow;
 pub mod event;
 pub mod revert;
-pub mod tuple_deconstruction;
+pub mod variable_declaration;
 
 use std::collections::HashMap;
 
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::Type;
-use slang_solidity::backend::ir::ast::Expression;
-use slang_solidity::backend::ir::ast::Statement;
-use slang_solidity::backend::ir::ast::Statements;
-use slang_solidity::cst::NodeId;
+use ruint::aliases::U256;
+use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::Statement;
+use slang_solidity_v2::ast::Statements;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -37,7 +38,7 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     /// without lifetime conflicts.
     region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, u64>,
+    storage_layout: &'state HashMap<NodeId, U256>,
     /// The function's declared return types, for `emit_return` to cast to.
     return_types: &'state [Type<'context>],
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
@@ -52,7 +53,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
         region: &Region<'context>,
-        storage_layout: &'state HashMap<NodeId, u64>,
+        storage_layout: &'state HashMap<NodeId, U256>,
         return_types: &'state [Type<'context>],
     ) -> Self {
         Self {
@@ -134,9 +135,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             Statement::RevertStatement(revert) => self.emit_revert(revert, block),
             Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
-            Statement::TupleDeconstructionStatement(deconstruction) => {
-                self.emit_tuple_deconstruction(deconstruction, block)
-            }
             _ => anyhow::bail!(
                 "unsupported statement: {:?}",
                 std::mem::discriminant(statement)
@@ -169,61 +167,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         Ok(Some(current))
     }
 
-    /// Emits a variable declaration with optional initializer.
-    fn emit_variable_declaration(
-        &mut self,
-        declaration: &slang_solidity::backend::ir::ast::VariableDeclarationStatement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let name = declaration.name().name();
-        let declared_type = declaration
-            .get_type()
-            .map(|slang_type| {
-                TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
-            })
-            .unwrap_or_else(|| self.state.builder.types.ui256);
-
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
-        );
-
-        // For explicit initializers, evaluate and cast before alloca to match
-        // solc's emission order (constant → cast → alloca → store).
-        // For implicit zero-initialization, alloca is emitted first.
-        let (block, initial_value) = if let Some(ref initializer_expression) = declaration.value() {
-            let (initial_value, block) = emitter.emit_value(initializer_expression, block)?;
-            let cast_value = TypeConversion::from_target_type(
-                declared_type,
-                &emitter.state.builder,
-            )
-            .emit(initial_value, &emitter.state.builder, &block);
-            (block, Some(cast_value))
-        } else {
-            (block, None)
-        };
-
-        let pointer = emitter.state.builder.emit_sol_alloca(declared_type, &block);
-
-        if let Some(value) = initial_value {
-            emitter.state.builder.emit_sol_store(value, pointer, &block);
-        } else if melior::ir::r#type::IntegerType::try_from(declared_type).is_ok() {
-            let zero = self
-                .state
-                .builder
-                .emit_sol_constant(0, declared_type, &block);
-            emitter.state.builder.emit_sol_store(zero, pointer, &block);
-        } else {
-            unimplemented!("zero-initialization for non-integer type {declared_type}");
-        }
-
-        self.environment
-            .define_variable(name, pointer, declared_type);
-        Ok(Some(block))
-    }
-
     /// Emits a `sol.break` terminator.
     fn emit_break(
         &self,
@@ -250,7 +193,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// return type before being emitted as a `sol.return` operand.
     fn emit_return(
         &mut self,
-        return_statement: &slang_solidity::backend::ir::ast::ReturnStatement,
+        return_statement: &slang_solidity_v2::ast::ReturnStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let Some(expression) = return_statement.expression() else {

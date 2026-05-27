@@ -7,9 +7,9 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::r#type::TypeLike;
-use slang_solidity::backend::ir::ast::Definition;
-use slang_solidity::backend::ir::ast::MemberAccessExpression;
-use slang_solidity::backend::ir::ast::Type as SlangType;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::MemberAccessExpression;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 

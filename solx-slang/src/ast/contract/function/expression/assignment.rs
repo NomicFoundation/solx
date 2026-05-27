@@ -2,15 +2,15 @@
 //! Assignment expression lowering.
 //!
 
-use std::str::FromStr;
-
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
-use slang_solidity::backend::ir::ast::Definition;
-use slang_solidity::backend::ir::ast::Expression;
+use ruint::aliases::U256;
+use slang_solidity_v2::ast;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -24,14 +24,14 @@ enum AssignmentTarget<'context, 'block> {
     /// `a[i]` / `m[k]` index-access expression on the left-hand side.
     Pointer(Value<'context, 'block>, Type<'context>),
     /// State variable — storage slot and declared element type.
-    Storage(u64, Type<'context>),
+    Storage(U256, Type<'context>),
 }
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits an assignment expression (`=`, `+=`, `-=`, `*=`).
     pub fn emit_assignment(
         &self,
-        assign: &slang_solidity::backend::ir::ast::AssignmentExpression,
+        assign: &slang_solidity_v2::ast::AssignmentExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let left = assign.left_operand();
@@ -99,12 +99,33 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             ),
         };
 
-        let operator = assign.operator();
-        let operator_text = operator.text.as_str();
         let right = assign.right_operand();
-        let (value, block) = if operator_text == "=" {
+        let (value, block) = if matches!(
+            assign.operator(),
+            ast::AssignmentExpressionOperator::Equal(_)
+        ) {
             self.emit_value(&right, block)?
         } else {
+            let operator = match assign.operator() {
+                ast::AssignmentExpressionOperator::AmpersandEqual(_) => Operator::BitwiseAnd,
+                ast::AssignmentExpressionOperator::AsteriskEqual(_) => Operator::Multiply,
+                ast::AssignmentExpressionOperator::BarEqual(_) => Operator::BitwiseOr,
+                ast::AssignmentExpressionOperator::CaretEqual(_) => Operator::BitwiseXor,
+                ast::AssignmentExpressionOperator::Equal(_) => {
+                    unreachable!("should already be handled")
+                }
+                ast::AssignmentExpressionOperator::GreaterThanGreaterThanEqual(_) => {
+                    Operator::ShiftRight
+                }
+                ast::AssignmentExpressionOperator::GreaterThanGreaterThanGreaterThanEqual(_) => {
+                    Operator::ShiftRight
+                }
+                ast::AssignmentExpressionOperator::LessThanLessThanEqual(_) => Operator::ShiftLeft,
+                ast::AssignmentExpressionOperator::MinusEqual(_) => Operator::Subtract,
+                ast::AssignmentExpressionOperator::PercentEqual(_) => Operator::Remainder,
+                ast::AssignmentExpressionOperator::PlusEqual(_) => Operator::Add,
+                ast::AssignmentExpressionOperator::SlashEqual(_) => Operator::Divide,
+            };
             let (old, target_type) = match target {
                 AssignmentTarget::Pointer(pointer, element_type) => {
                     let old = self
@@ -129,7 +150,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 &self.state.builder,
                 &block,
             );
-            let operator = Operator::from_str(operator_text)?.arithmetic_operator();
             let result = block
                 .append_operation(operator.emit_sol_binary_operation(
                     self.checked,

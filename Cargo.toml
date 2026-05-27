@@ -74,6 +74,7 @@ itertools = "0.14"
 sha2 = "0.11"
 sha3 = "0.12"
 md5 = "0.8"
+ruint = "1.17"
 
 # Testing
 [workspace.dependencies.web3]
@@ -95,10 +96,7 @@ features = [
 ]
 
 # Slang
-[workspace.dependencies.slang_solidity]
+[workspace.dependencies.slang_solidity_v2]
 git = "https://github.com/NomicFoundation/slang.git"
 # TODO: pin to a release tag instead of a revision.
-rev = "eaf0bb3b9ef6359dd5f3769575993f0311340f21"
-# `__private_testing_utils` is required by `__private_backend_api` internals
-# (binder/types access in node_extensions). Both are unstable Slang APIs.
-features = ["__private_backend_api", "__private_testing_utils"]
+rev = "47238e294b9e0b9fc7889bd748a5b528baed3c2b"

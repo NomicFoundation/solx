@@ -53,10 +53,10 @@ impl DataLocation {
     /// because semantic analysis guarantees `Inherited` only appears inside a
     /// struct member context where a fallback is available.
     pub fn from_slang(
-        location: slang_solidity::backend::types::DataLocation,
+        location: slang_solidity_v2::ast::DataLocation,
         inherited_fallback: Option<Self>,
     ) -> Self {
-        use slang_solidity::backend::types::DataLocation as Slang;
+        use slang_solidity_v2::ast::DataLocation as Slang;
         match location {
             Slang::Storage => Self::Storage,
             Slang::Calldata => Self::CallData,

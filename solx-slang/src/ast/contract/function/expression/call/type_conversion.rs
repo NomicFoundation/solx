@@ -5,12 +5,14 @@
 use melior::ir::Type;
 use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
-use slang_solidity::backend::ir::ast::Definition;
-use slang_solidity::backend::ir::ast::FunctionDefinition;
-use slang_solidity::backend::ir::ast::LiteralKind;
-use slang_solidity::backend::ir::ast::Parameter;
-use slang_solidity::backend::ir::ast::StateVariableDefinition;
-use slang_solidity::backend::ir::ast::Type as SlangType;
+use num_bigint::BigInt;
+use num_traits::sign::Signed;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::LiteralKind;
+use slang_solidity_v2::ast::Parameter;
+use slang_solidity_v2::ast::StateVariableDefinition;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::contract::ContractEmitter;
 
@@ -54,31 +56,30 @@ impl<'context> TypeConversion<'context> {
             )),
             SlangType::Address(_) => builder.types.sol_address,
             SlangType::Literal(literal_type) => match literal_type.kind() {
-                LiteralKind::Zero => Type::from(IntegerType::unsigned(
-                    builder.context,
-                    solx_utils::BIT_LENGTH_BYTE as u32,
-                )),
                 LiteralKind::Address => builder.types.sol_address,
-                LiteralKind::DecimalInteger {
-                    bytes,
-                    signed: true,
-                } => {
-                    let bits = bytes * solx_utils::BIT_LENGTH_BYTE as u32;
-                    Type::from(IntegerType::signed(builder.context, bits))
+                LiteralKind::Integer { value } => {
+                    let bits = Self::integer_bits_required(&value) as usize;
+                    let bits = bits
+                        .next_multiple_of(solx_utils::BIT_LENGTH_BYTE)
+                        .max(solx_utils::BIT_LENGTH_BYTE);
+                    let bits = u32::try_from(bits).expect("bit size fits in 32 bits");
+                    if value.is_negative() {
+                        Type::from(IntegerType::signed(builder.context, bits))
+                    } else {
+                        Type::from(IntegerType::unsigned(builder.context, bits))
+                    }
                 }
-                LiteralKind::DecimalInteger {
-                    bytes,
-                    signed: false,
-                }
-                | LiteralKind::HexInteger { bytes } => {
+                LiteralKind::HexInteger { bytes, .. } => {
                     let bits = bytes * solx_utils::BIT_LENGTH_BYTE as u32;
                     Type::from(IntegerType::unsigned(builder.context, bits))
                 }
                 LiteralKind::String { .. } => {
                     builder.types.string(solx_utils::DataLocation::Memory)
                 }
-                LiteralKind::HexString { bytes } => builder.types.fixed_bytes(bytes),
-                LiteralKind::Rational => unimplemented!(
+                LiteralKind::HexString { bytes } => builder
+                    .types
+                    .fixed_bytes(bytes.try_into().expect("hex string length fits in u32")),
+                LiteralKind::Rational { .. } => unimplemented!(
                     "MLIR type resolution is not yet implemented for rational literals"
                 ),
             },
@@ -204,6 +205,17 @@ impl<'context> TypeConversion<'context> {
                 Self::resolve_slang_type(&target_type, inherited_location, builder)
             }
             _ => unimplemented!("unsupported Slang type"),
+        }
+    }
+
+    // TODO: Remove when nomicFoundation/slang#1793 is merged and we can instead
+    // depend on `LiteralType::mobile_type()` for literal type conversion.
+    fn integer_bits_required(value: &BigInt) -> u32 {
+        if value.is_negative() {
+            let magnitude_minus_one = -value - 1u32;
+            u32::try_from(magnitude_minus_one.bits()).unwrap() + 1
+        } else {
+            u32::try_from(value.bits()).unwrap().max(1)
         }
     }
 

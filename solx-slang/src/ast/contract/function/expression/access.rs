@@ -7,9 +7,9 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::r#type::TypeLike;
-use slang_solidity::backend::ir::ast::IndexAccessExpression;
-use slang_solidity::backend::ir::ast::Type as SlangType;
-use slang_solidity::backend::types::DataLocation as SlangDataLocation;
+use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
+use slang_solidity_v2::ast::IndexAccessExpression;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_utils::DataLocation;
 

@@ -7,8 +7,8 @@ pub mod contract;
 
 use std::collections::BTreeMap;
 
-use slang_solidity::backend::ir::ast::ContractMember;
-use slang_solidity::backend::ir::ast::SourceUnit;
+use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::SourceUnit;
 
 use solx_mlir::Context;
 
@@ -53,7 +53,7 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         let name = contract.name().name();
         let file_identifier = unit.file_id();
         let mut emitter = ContractEmitter::new(self.state);
-        emitter.emit(contract, &file_identifier)?;
+        emitter.emit(contract, file_identifier)?;
 
         let mut method_identifiers = BTreeMap::new();
         for contract_member in contract.members().iter() {

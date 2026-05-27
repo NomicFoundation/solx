@@ -2,15 +2,13 @@
 //! Arithmetic expression lowering: binary ops, prefix, postfix.
 //!
 
-use std::str::FromStr;
-
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
-use slang_solidity::backend::ir::ast::Definition;
-use slang_solidity::backend::ir::ast::Expression;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 
 use solx_mlir::CmpPredicate;
 use solx_mlir::ods::sol::NotOperation;
@@ -30,7 +28,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         &self,
         left: &Expression,
         right: &Expression,
-        operator: &str,
+        operator: Operator,
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
@@ -55,7 +53,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             &self.state.builder,
             &block,
         );
-        let operator = Operator::from_str(operator)?;
         let value = block
             .append_operation(operator.emit_sol_binary_operation(
                 self.checked,
@@ -74,7 +71,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn emit_postfix(
         &self,
         operand: &Expression,
-        operator: &str,
+        operator: Operator,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (old, _) = self.emit_increment_decrement(operand, operator, &block)?;
@@ -87,17 +84,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// solc's typed MLIR). When `None`, falls back to ui256 semantics.
     pub fn emit_prefix(
         &self,
-        operator: &str,
+        operator: Operator,
         operand: &Expression,
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         match operator {
-            "++" | "--" => {
+            Operator::Increment | Operator::Decrement => {
                 let (_old, new_value) = self.emit_increment_decrement(operand, operator, &block)?;
                 Ok((new_value, block))
             }
-            "~" => {
+            Operator::BitwiseNot => {
                 let (value, block) = self.emit_value(operand, block)?;
                 let operand_type = target_type.unwrap_or_else(|| value.r#type());
                 let value = TypeConversion::from_target_type(operand_type, &self.state.builder)
@@ -117,7 +114,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .into();
                 Ok((result, block))
             }
-            "!" => {
+            Operator::Not => {
                 let (value, block) = self.emit_value(operand, block)?;
                 let zero = self
                     .state
@@ -132,7 +129,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .emit(cmp, &self.state.builder, &block);
                 Ok((result, block))
             }
-            "-" => {
+            Operator::Subtract => {
                 // Unary negation uses unchecked subtraction. Checked negation
                 // requires signed-type awareness (e.g. -INT_MIN should revert
                 // in checked mode) which needs a dedicated op — not sol.csub,
@@ -161,7 +158,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .into();
                 Ok((result, block))
             }
-            _ => anyhow::bail!("unsupported prefix operator: {operator}"),
+            _ => anyhow::bail!("unsupported prefix operator: {operator:?}"),
         }
     }
 
@@ -172,14 +169,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     fn emit_increment_decrement(
         &self,
         operand: &Expression,
-        operator: &str,
+        operator: Operator,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, Value<'context, 'block>)> {
         let Expression::Identifier(identifier) = operand else {
-            anyhow::bail!("unsupported operand for {operator}");
+            anyhow::bail!("unsupported operand for {operator:?}");
         };
         let name = identifier.name();
-        let operator = Operator::from_str(operator)?;
 
         match identifier.resolve_to_definition() {
             Some(Definition::StateVariable(state_variable)) => {

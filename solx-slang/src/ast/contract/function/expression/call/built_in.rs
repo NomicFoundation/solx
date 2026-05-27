@@ -11,13 +11,13 @@ use melior::ir::Value;
 use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::operation::OperationMutLike;
 use melior::ir::r#type::IntegerType;
-use slang_solidity::backend::built_ins::BuiltIn;
-use slang_solidity::backend::ir::ast::Expression;
-use slang_solidity::backend::ir::ast::FunctionCallExpression;
-use slang_solidity::backend::ir::ast::MemberAccessExpression;
-use slang_solidity::backend::ir::ast::PositionalArguments;
-use slang_solidity::backend::ir::ast::Type as SlangType;
-use slang_solidity::backend::types::DataLocation as SlangDataLocation;
+use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
+use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::FunctionCallExpression;
+use slang_solidity_v2::ast::MemberAccessExpression;
+use slang_solidity_v2::ast::PositionalArguments;
+use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::BalanceOperation;
 use solx_mlir::ods::sol::BaseFeeOperation;
@@ -76,7 +76,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let Expression::Identifier(identifier) = callee else {
             return Ok(None);
         };
-        let Some(built_in) = identifier.resolved_built_in() else {
+        let Some(built_in) = identifier.resolve_to_built_in() else {
             return Ok(None);
         };
         match built_in {
@@ -236,7 +236,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let Expression::MemberAccessExpression(access) = call.operand() else {
             return Ok(None);
         };
-        match access.member().resolved_built_in() {
+        match access.member().resolve_to_built_in() {
             Some(BuiltIn::AbiDecode) => self.emit_abi_decode(call, arguments, block).map(Some),
             _ => Ok(None),
         }
@@ -260,7 +260,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let builder = &self.expression_emitter.state.builder;
-        match access.member().resolved_built_in() {
+        match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressBalance) => {
                 self.emit_unary_member_intrinsic(access, block, |address_value| {
                     BalanceOperation::builder(builder.context, builder.unknown_location)
@@ -393,7 +393,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 Ok((Some(result), current))
             }
             Some(BuiltIn::ArrayPop) => self.emit_array_pop(access, block),
-            Some(BuiltIn::ArrayPush(_)) => {
+            Some(BuiltIn::ArrayPush) => {
                 let arguments = arguments.expect("array push is a member-access call");
                 self.emit_array_push(access, arguments, block)
             }

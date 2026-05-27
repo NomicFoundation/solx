@@ -5,13 +5,13 @@ use std::collections::hash_map::Entry;
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
-use slang_solidity::backend::ir::ast::ArgumentsDeclaration;
-use slang_solidity::backend::ir::ast::Definition;
-use slang_solidity::backend::ir::ast::Expression;
-use slang_solidity::backend::ir::ast::FunctionCallExpression;
-use slang_solidity::backend::ir::ast::NamedArguments;
-use slang_solidity::backend::ir::ast::Parameters;
-use slang_solidity::backend::ir::ast::RevertStatement;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::FunctionCallExpression;
+use slang_solidity_v2::ast::NamedArguments;
+use slang_solidity_v2::ast::Parameters;
+use slang_solidity_v2::ast::RevertStatement;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
