@@ -74,7 +74,7 @@ itertools = "0.14"
 sha2 = "0.11"
 sha3 = "0.12"
 md5 = "0.8"
-ruint = { version = "1.17.2" }
+ruint = "1.17"
 
 # Testing
 [workspace.dependencies.web3]
