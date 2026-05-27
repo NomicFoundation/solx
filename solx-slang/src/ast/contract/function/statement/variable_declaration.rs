@@ -37,6 +37,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let name = declaration.declaration().name().name();
         let declared_type = declaration
+            .declaration()
             .get_type()
             .map(|slang_type| {
                 TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
