@@ -55,15 +55,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// # Errors
     ///
     /// Returns an error if any function body contains unsupported constructs.
-    pub fn emit(
-        &mut self,
-        contract: &ContractDefinition,
-        file_identifier: &str,
-    ) -> anyhow::Result<()> {
+    pub fn emit(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
         let contract_name = contract.name().name();
 
         self.pre_register_functions(contract);
-        let storage_layout = Self::compute_storage_layout(contract, file_identifier);
+        let storage_layout = Self::compute_storage_layout(contract);
 
         let contract_type = self
             .state
@@ -155,11 +151,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ///
     /// Returns a mapping from state variable node ID to storage slot.
     /// Returns an empty map if the ABI is unavailable.
-    fn compute_storage_layout(
-        contract: &ContractDefinition,
-        file_identifier: &str,
-    ) -> HashMap<NodeId, U256> {
-        let Some(abi) = contract.compute_abi_with_file_id(file_identifier.to_owned()) else {
+    fn compute_storage_layout(contract: &ContractDefinition) -> HashMap<NodeId, U256> {
+        let Some(abi) = contract.compute_abi() else {
             return HashMap::new();
         };
         abi.storage_layout()
