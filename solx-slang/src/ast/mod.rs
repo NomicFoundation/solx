@@ -51,9 +51,8 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         };
 
         let name = contract.name().name();
-        let file_identifier = unit.file_id();
         let mut emitter = ContractEmitter::new(self.state);
-        emitter.emit(contract, file_identifier)?;
+        emitter.emit(contract)?;
 
         let mut method_identifiers = BTreeMap::new();
         for contract_member in contract.members().iter() {

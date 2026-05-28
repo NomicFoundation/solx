@@ -147,7 +147,7 @@ impl Frontend for Slang {
         for file_identifier in &unit.file_ids() {
             if let Some(output_source) = output.sources.get_mut(file_identifier) {
                 output_source.ast = Some(
-                    serde_json::to_value(unit.get_file_ast_root(file_identifier).as_ref())
+                    serde_json::to_value(unit.file(file_identifier).map(|file| file.ast()))
                         .map_err(|error| anyhow::anyhow!("AST serialization: {error}"))?,
                 );
             }
@@ -160,9 +160,10 @@ impl Frontend for Slang {
         let file_identifiers = unit.file_ids();
 
         for file_identifier in &file_identifiers {
-            let Some(source_unit) = unit.get_file_ast_root(file_identifier) else {
+            let Some(file) = unit.file(file_identifier) else {
                 continue;
             };
+            let source_unit = file.ast();
             let melior_context = solx_mlir::Context::create_mlir_context();
 
             let evm_version = input_json.settings.evm_version.unwrap_or_default();
