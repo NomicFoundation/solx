@@ -10,6 +10,7 @@ pub mod builder;
 pub mod environment;
 pub mod function;
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Once;
 
@@ -48,6 +49,11 @@ pub struct Context<'context> {
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
+    /// Cross-contract references collected during emission, in encounter
+    /// order. Populated by [`Self::add_dependency`] from emitters that
+    /// reach into other contracts (e.g. `sol.new`), drained into the
+    /// returned [`crate::output::MlirOutput`] by [`Self::finalize_module`].
+    dependencies: RefCell<Vec<String>>,
 }
 
 impl<'context> Context<'context> {
@@ -159,6 +165,17 @@ impl<'context> Context<'context> {
             function_signatures: HashMap::new(),
             builder: Builder::new(context),
             current_contract_type: None,
+            dependencies: RefCell::new(Vec::new()),
+        }
+    }
+
+    /// Records a cross-contract reference (e.g. the object name passed to
+    /// `sol.new`). Duplicates are ignored. The accumulated list is drained
+    /// into [`crate::output::MlirOutput::dependencies`] at finalize time.
+    pub fn add_dependency(&self, name: String) {
+        let mut dependencies = self.dependencies.borrow_mut();
+        if !dependencies.iter().any(|existing| existing == &name) {
+            dependencies.push(name);
         }
     }
 
@@ -316,6 +333,7 @@ impl<'context> Context<'context> {
             sol_source,
             deploy_source: deploy_llvm,
             runtime_source: runtime_llvm,
+            dependencies: self.dependencies.into_inner(),
         })
     }
 
