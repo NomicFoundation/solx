@@ -14,6 +14,7 @@ use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
 use ruint::aliases::U256;
 use slang_solidity_v2::abi::AbiEntry;
+use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ElementaryType;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -25,6 +26,7 @@ use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::StateMutability;
 
+use self::expression::ExpressionEmitter;
 use self::expression::call::type_conversion::TypeConversion;
 use self::statement::StatementEmitter;
 
@@ -32,6 +34,8 @@ use self::statement::StatementEmitter;
 pub struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
+    /// Containing contract.
+    contract: &'state ContractDefinition,
     /// State variable node ID to storage slot mapping.
     storage_layout: &'state HashMap<NodeId, U256>,
 }
@@ -40,10 +44,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
     pub fn new(
         state: &'state Context<'context>,
+        contract: &'state ContractDefinition,
         storage_layout: &'state HashMap<NodeId, U256>,
     ) -> Self {
         Self {
             state,
+            contract,
             storage_layout,
         }
     }
@@ -154,6 +160,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .parent_region()
             .expect("entry block belongs to a region");
         let mut current_block = function_entry_block;
+
+        // State variable initializers run at the top of the constructor body,
+        // before any user-written statements.
+        if matches!(function.kind(), FunctionKind::Constructor) {
+            let emitter =
+                ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
+            current_block = emitter.emit_state_var_initializers(self.contract, current_block)?;
+        }
+
         let mut terminated = false;
         for statement in body.statements().iter() {
             let mut emitter = StatementEmitter::new(
@@ -177,6 +192,43 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         Ok(mlir_name)
+    }
+
+    /// Emits the contract's constructor as a `sol.func`.
+    ///
+    /// Dispatches to [`Self::emit_sol`] when the contract declares one,
+    /// otherwise emits a `constructor()` running just the state-variable
+    /// initializers.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a state-variable initializer has an unresolved
+    /// type or contains unsupported constructs, or if the explicit
+    /// constructor body contains unsupported statements.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an entry block is not attached to a region, which is
+    /// unreachable because `emit_sol_func` always creates a region.
+    pub fn emit_constructor(&self, contract_body: &BlockRef<'context, '_>) -> anyhow::Result<()> {
+        if let Some(constructor) = self.contract.constructor() {
+            self.emit_sol(&constructor, contract_body)?;
+            return Ok(());
+        }
+        let entry = self.state.builder.emit_sol_func(
+            "constructor()",
+            &[],
+            &[],
+            None,
+            StateMutability::NonPayable,
+            Some(solx_mlir::FunctionKind::Constructor),
+            contract_body,
+        );
+        let environment = Environment::new();
+        let emitter = ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
+        let block = emitter.emit_state_var_initializers(self.contract, entry)?;
+        self.state.builder.emit_sol_return(&[], &block);
+        Ok(())
     }
 
     /// Builds the MLIR function name as `{name}({types})`.

@@ -46,6 +46,7 @@ use crate::ods::sol::ConditionOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ContinueOperation;
 use crate::ods::sol::ContractOperation;
+use crate::ods::sol::CopyOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::ForOperation;
 use crate::ods::sol::FuncOperation;
@@ -732,6 +733,33 @@ impl<'context> Builder<'context> {
             .result(0)
             .expect("sol.malloc always produces one result")
             .into()
+    }
+
+    /// Emits a `sol.copy` between two references.
+    ///
+    /// Use for source-level assignments that cross data locations (e.g. a
+    /// state-variable initializer copying a memory string literal into the
+    /// declared storage slot).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed.
+    pub fn emit_sol_copy<'block, B>(
+        &self,
+        src: Value<'context, 'block>,
+        dst: Value<'context, 'block>,
+        block: &B,
+    ) where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block.append_operation(
+            CopyOperation::builder(self.context, self.unknown_location)
+                .src(src)
+                .dst(dst)
+                .build()
+                .into(),
+        );
     }
 
     /// Emits a `sol.load` from a pointer with an explicit result type.
