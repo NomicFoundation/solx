@@ -10,9 +10,14 @@
 
 #include "mlir/Dialect/Sol/Sol.h"
 #include "mlir/IR/MLIRContext.h"
+#include "mlir-c/BuiltinAttributes.h"
 #include "mlir-c/IR.h"
 #include "mlir/CAPI/IR.h"
+#include "llvm/ADT/APInt.h"
+#include "llvm/ADT/ArrayRef.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <vector>
 
@@ -48,6 +53,16 @@ MlirAttribute solxCreateEvmVersionAttr(MlirContext ctx, uint32_t version) {
     auto attr = mlir::sol::EvmVersionAttr::get(
         context, static_cast<mlir::sol::EvmVersion>(version));
     return wrap(attr);
+}
+
+MlirAttribute solxCreateIntegerAttr(MlirType ty, bool isNegative,
+                                    size_t numWords, const uint64_t *magnitude) {
+    unsigned bitWidth = unwrap(ty).getIntOrFloatBitWidth();
+    llvm::APInt value = numWords == 0
+        ? llvm::APInt::getZero(bitWidth)
+        : llvm::APInt(bitWidth, llvm::ArrayRef<uint64_t>(magnitude, numWords));
+    if (isNegative) value.negate();
+    return mlirIntegerAttrGetFromWords(ty, value.getNumWords(), value.getRawData());
 }
 
 MlirType solxCreatePointerType(MlirContext ctx, MlirType elementType, uint32_t dataLocation) {

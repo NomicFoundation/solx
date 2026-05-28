@@ -84,6 +84,17 @@ unsafe extern "C" {
     /// Creates an `EvmVersionAttr`.
     pub fn solxCreateEvmVersionAttr(context: MlirContext, version: u32) -> mlir_sys::MlirAttribute;
 
+    /// Creates an MLIR `IntegerAttr` of `ty` from an LSB-first array of
+    /// `num_words` 64-bit chunks describing the unsigned magnitude. When
+    /// `is_negative` is true the result is the two's-complement of that
+    /// magnitude within the type's bit width.
+    pub fn solxCreateIntegerAttr(
+        ty: mlir_sys::MlirType,
+        is_negative: bool,
+        num_words: usize,
+        magnitude: *const u64,
+    ) -> mlir_sys::MlirAttribute;
+
     // ---- Sol type constructors (from sol_attr_stubs.cpp) ----
 
     /// Creates a `sol::PointerType` with the given element type and data location.
