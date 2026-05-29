@@ -239,13 +239,6 @@ impl<'context> Builder<'context> {
     /// other integer type is signed or unsigned and belongs to the sol
     /// dialect. This is the single entry point for MLIR integer constants
     /// that carry a `BigInt`-sized value.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR attribute parser rejects the `{value} : {type}`
-    /// rendering. For well-typed callers this is unreachable because the
-    /// type is a melior `IntegerType` and the value is a `BigInt` that
-    /// always has a canonical decimal representation.
     pub fn emit_constant<'block, B>(
         &self,
         value: &BigInt,
@@ -267,11 +260,15 @@ impl<'context> Builder<'context> {
                 .emit_constant_operation(boolean_attribute, result_type, block)
                 .expect("well-typed boolean constant never fails emission");
         }
-        // melior does not expose a `BigInt`-accepting attribute constructor,
-        // so we round-trip through the MLIR attribute parser to avoid
-        // truncating values wider than 64 bits.
-        let attribute = Attribute::parse(self.context, &format!("{value} : {result_type}"))
-            .expect("BigInt value and melior integer type always parse as an MLIR attribute");
+        let (sign, words) = value.to_u64_digits();
+        let attribute = unsafe {
+            Attribute::from_raw(crate::ffi::solxCreateIntegerAttr(
+                result_type.to_raw(),
+                sign == num::bigint::Sign::Minus,
+                words.len(),
+                words.as_ptr(),
+            ))
+        };
         self.emit_constant_operation(attribute, result_type, block)
             .expect("well-typed BigInt constant never fails emission")
     }
