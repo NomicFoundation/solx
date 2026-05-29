@@ -12,7 +12,6 @@ use std::collections::HashMap;
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::Type;
-use ruint::aliases::U256;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Statement;
@@ -23,6 +22,7 @@ use solx_mlir::Environment;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::storage_slot::StorageSlot;
 
 /// Lowers Solidity statements to MLIR operations with control flow.
 ///
@@ -38,7 +38,7 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     /// without lifetime conflicts.
     region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, U256>,
+    storage_layout: &'state HashMap<NodeId, StorageSlot>,
     /// The function's declared return types, for `emit_return` to cast to.
     return_types: &'state [Type<'context>],
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
@@ -53,7 +53,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
         region: &Region<'context>,
-        storage_layout: &'state HashMap<NodeId, U256>,
+        storage_layout: &'state HashMap<NodeId, StorageSlot>,
         return_types: &'state [Type<'context>],
     ) -> Self {
         Self {

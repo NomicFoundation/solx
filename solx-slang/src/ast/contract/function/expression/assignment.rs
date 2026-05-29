@@ -7,7 +7,6 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
-use ruint::aliases::U256;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
@@ -15,6 +14,7 @@ use slang_solidity_v2::ast::Expression;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::expression::operator::Operator;
+use crate::ast::contract::function::storage_slot::StorageSlot;
 
 /// Assignment target resolved from the Slang binder.
 enum AssignmentTarget<'context, 'block> {
@@ -24,7 +24,7 @@ enum AssignmentTarget<'context, 'block> {
     /// `a[i]` / `m[k]` index-access expression on the left-hand side.
     Pointer(Value<'context, 'block>, Type<'context>),
     /// State variable — storage slot and declared element type.
-    Storage(U256, Type<'context>),
+    Storage(StorageSlot, Type<'context>),
 }
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
@@ -51,15 +51,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let slot = self
                             .storage_layout
                             .get(&state_variable.node_id())
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("unregistered state variable: {name}")
-                            })?;
+                            .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?
+                            .clone();
                         let element_type = TypeConversion::resolve_slang_type(
                             &declared_type,
                             None,
                             &self.state.builder,
                         );
-                        AssignmentTarget::Storage(*slot, element_type)
+                        AssignmentTarget::Storage(slot, element_type)
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let (pointer, element_type) = self.environment.variable_with_type(&name);
@@ -126,17 +125,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 ast::AssignmentExpressionOperator::PlusEqual(_) => Operator::Add,
                 ast::AssignmentExpressionOperator::SlashEqual(_) => Operator::Divide,
             };
-            let (old, target_type) = match target {
+            let (old, target_type) = match &target {
                 AssignmentTarget::Pointer(pointer, element_type) => {
                     let old = self
                         .state
                         .builder
-                        .emit_sol_load(pointer, element_type, &block)?;
-                    (old, element_type)
+                        .emit_sol_load(*pointer, *element_type, &block)?;
+                    (old, *element_type)
                 }
                 AssignmentTarget::Storage(slot, element_type) => {
-                    let old = self.emit_storage_load(slot, element_type, &block)?;
-                    (old, element_type)
+                    let old = self.emit_storage_load(slot, *element_type, &block)?;
+                    (old, *element_type)
                 }
             };
             let (rhs, block) = self.emit_value(&right, block)?;
@@ -164,25 +163,25 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             (result, block)
         };
 
-        let result = match target {
+        let result = match &target {
             AssignmentTarget::Pointer(pointer, element_type) => {
                 let stored_value = TypeConversion::from_target_type(
-                    element_type,
+                    *element_type,
                     &self.state.builder,
                 )
                 .emit(value, &self.state.builder, &block);
                 self.state
                     .builder
-                    .emit_sol_store(stored_value, pointer, &block);
+                    .emit_sol_store(stored_value, *pointer, &block);
                 stored_value
             }
             AssignmentTarget::Storage(slot, element_type) => {
                 let stored_value = TypeConversion::from_target_type(
-                    element_type,
+                    *element_type,
                     &self.state.builder,
                 )
                 .emit(value, &self.state.builder, &block);
-                self.emit_storage_store(slot, stored_value, &block);
+                self.emit_storage_store(slot, stored_value, *element_type, &block);
                 stored_value
             }
         };

@@ -5,9 +5,7 @@
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::ValueLike;
 
-use ruint::aliases::U256;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Expression;
@@ -15,12 +13,13 @@ use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::storage_slot::StorageSlot;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits a storage load via `sol.addr_of` + `sol.load`.
     pub fn emit_storage_load(
         &self,
-        slot: U256,
+        slot: &StorageSlot,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
@@ -33,11 +32,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits a storage store via `sol.addr_of` + `sol.store`.
     pub fn emit_storage_store(
         &self,
-        slot: U256,
+        slot: &StorageSlot,
         value: Value<'context, 'block>,
+        element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) {
-        let pointer = self.emit_storage_addr_of(slot, value.r#type(), block);
+        let pointer = self.emit_storage_addr_of(slot, element_type, block);
         self.state.builder.emit_sol_store(value, pointer, block);
     }
 
@@ -78,12 +78,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             })?;
             let builder = &self.state.builder;
             let element_type = TypeConversion::resolve_slang_type(&declared_type, None, builder);
-            let (value, next_block) = self.emit_value(&initializer, block)?;
-            block = next_block;
             let address_type =
                 Self::address_type(builder, element_type, DataLocation::Storage, &declared_type);
-            let storage_ref =
-                builder.emit_sol_addr_of(&format!("slot_{slot}"), address_type, &block);
+            let storage_ref = builder.emit_sol_addr_of(&slot.name, address_type, &block);
+            let (value, next_block) = self.emit_value(&initializer, block)?;
+            block = next_block;
             if declared_type.is_reference_type() {
                 builder.emit_sol_copy(value, storage_ref, &block);
             } else {
@@ -98,7 +97,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Returns a `!sol.ptr<element_type, Storage>` pointer via `sol.addr_of`.
     fn emit_storage_addr_of(
         &self,
-        slot: U256,
+        slot: &StorageSlot,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
@@ -109,6 +108,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .pointer(element_type, DataLocation::Storage);
         self.state
             .builder
-            .emit_sol_addr_of(&format!("slot_{slot}"), pointer_type, block)
+            .emit_sol_addr_of(&slot.name, pointer_type, block)
     }
 }

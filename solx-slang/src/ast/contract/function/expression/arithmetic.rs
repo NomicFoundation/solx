@@ -179,7 +179,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         match identifier.resolve_to_definition() {
             Some(Definition::StateVariable(state_variable)) => {
-                let slot = *self
+                let slot = self
                     .storage_layout
                     .get(&state_variable.node_id())
                     .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?;
@@ -200,7 +200,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .result(0)
                     .expect("binary operation always produces one result")
                     .into();
-                self.emit_storage_store(slot, new_value, block);
+                self.emit_storage_store(slot, new_value, element_type, block);
                 Ok((old, new_value))
             }
             Some(Definition::Variable(_) | Definition::Parameter(_)) => {
