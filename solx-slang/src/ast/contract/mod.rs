@@ -12,6 +12,7 @@ use ruint::aliases::U256;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
@@ -23,6 +24,7 @@ use slang_solidity_v2::ast::Type as SlangType;
 
 use melior::ir::BlockLike;
 use melior::ir::Type;
+use melior::ir::r#type::TypeLike;
 use melior::ir::Value;
 
 use solx_mlir::Context;
@@ -374,20 +376,70 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
             }
             let result_slang = current;
-            if input_types.is_empty()
-                || input_types.len() != abi.inputs().len()
-                || result_slang.is_reference_type()
-            {
+            if input_types.is_empty() || input_types.len() != abi.inputs().len() {
                 return Ok(());
             }
             let container_type =
                 TypeConversion::resolve_state_variable_type(state_variable, builder)?;
             let result_type =
                 TypeConversion::resolve_slang_type(&result_slang, Some(location), builder);
+            // A struct result expands into a tuple of its value-type members,
+            // skipping mapping/array/nested-struct members — matching solc's
+            // auto-generated accessor (slang's `can_return_from_getter`). Only
+            // all-value structs are handled here; a returnable string/bytes/function
+            // member needs storage→memory handling we don't do yet, so such a getter
+            // is skipped (left ungenerated) rather than emitted incorrectly.
+            let struct_plan: Option<Vec<(u64, Type<'context>)>> = match &result_slang {
+                SlangType::Struct(struct_type) => {
+                    let Definition::Struct(struct_definition) = struct_type.definition() else {
+                        return Ok(());
+                    };
+                    let mut plan = Vec::new();
+                    for (member_index, member) in struct_definition.members().iter().enumerate() {
+                        match member.get_type() {
+                            Some(
+                                SlangType::Mapping(_)
+                                | SlangType::Array(_)
+                                | SlangType::FixedSizeArray(_)
+                                | SlangType::Struct(_),
+                            ) => continue,
+                            Some(_) => {}
+                            None => return Ok(()),
+                        }
+                        // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
+                        // `sol::getEltType` for the struct field at `member_index`
+                        // (which mirrors the AST member index, including skipped
+                        // members, exactly as `emit_struct_field_address` does).
+                        let member_type = unsafe {
+                            Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
+                                result_type.to_raw(),
+                                member_index as u64,
+                            ))
+                        };
+                        if solx_mlir::TypeFactory::is_sol_reference(member_type)
+                            || solx_mlir::TypeFactory::is_sol_function_ref(member_type)
+                        {
+                            return Ok(());
+                        }
+                        plan.push((member_index as u64, member_type));
+                    }
+                    if plan.is_empty() {
+                        return Ok(());
+                    }
+                    Some(plan)
+                }
+                // Other reference results (`string`/`bytes`/array) aren't handled yet.
+                _ if result_slang.is_reference_type() => return Ok(()),
+                _ => None,
+            };
+            let result_types: Vec<Type<'context>> = match &struct_plan {
+                Some(plan) => plan.iter().map(|(_, member_type)| *member_type).collect(),
+                None => vec![result_type],
+            };
             let entry = builder.emit_sol_func(
                 &signature,
                 &input_types,
-                std::slice::from_ref(&result_type),
+                &result_types,
                 Some(selector),
                 StateMutability::View,
                 None,
@@ -431,8 +483,27 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     }
                 };
             }
-            let value = builder.emit_sol_load(base, result_type, &entry)?;
-            builder.emit_sol_return(&[value], &entry);
+            match &struct_plan {
+                Some(plan) => {
+                    // Expand the struct at `base` into its value-member tuple.
+                    let mut values = Vec::new();
+                    for (member_index, member_type) in plan {
+                        let index_value = builder.emit_sol_constant(
+                            *member_index as i64,
+                            builder.types.ui64,
+                            &entry,
+                        );
+                        let address =
+                            builder.emit_sol_gep(base, index_value, *member_type, &entry);
+                        values.push(builder.emit_sol_load(address, *member_type, &entry)?);
+                    }
+                    builder.emit_sol_return(&values, &entry);
+                }
+                None => {
+                    let value = builder.emit_sol_load(base, result_type, &entry)?;
+                    builder.emit_sol_return(&[value], &entry);
+                }
+            }
             return Ok(());
         }
 
