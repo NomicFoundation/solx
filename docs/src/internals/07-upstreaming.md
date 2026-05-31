@@ -164,24 +164,29 @@ type; the Sol dialect has no flat multi-value type); `verbatim` is solx-llvm.
 ## melior (Rust MLIR bindings — `~/src/melior`)
 
 1. **`operand_segment_sizes` not written by the generated builder — silent invalid
-   IR (MUST)** *(panel-promoted from the solx-llvm list)*. For `AttrSizedOperandSegments`
-   ops the macro *generates a reader* (`macro/.../generation/element_accessor.rs:77-112`)
-   but `generate_build_fn` (`macro/.../generation/operation_builder.rs:279-328`)
-   never writes the attribute, so the verifier rejects the op. solx hand-sets it for
-   `sol.encode` (`abi.rs:34-43`) and `sol.new` (`built_in/mod.rs:1433-1436`). Fix:
-   accumulate per-group counts and emit the segment-size attr in the builder. (M)
+   IR** — **DONE in melior** (`feat(macro): auto-emit operand_segment_sizes for
+   AttrSizedOperandSegments ops`, on melior `dev-experimental` rev `193e8252`).
+   `generate_build_fn` now synthesizes the attribute from per-group operand counts
+   the setters record into a pre-zeroed accumulator (variadic → slice length,
+   single/optional → 1, unset optional → 0), folded in alongside the other inherent
+   attributes; non-`AttrSizedOperandSegments` ops are unaffected (empty, unallocated
+   accumulator). The `sol.encode` (`abi.rs`) and `sol.create` (`built_in/mod.rs`)
+   hand-sets and their `DenseI32ArrayAttribute`/`OperationMutLike` imports are removed;
+   solx is re-pinned to the new rev in **both** solx-mlir and solx-slang (they share
+   the dep and must stay in lockstep). Suite unchanged, zero regressions.
 2. **Op-naming forces 39 manual aliases** *(corrected: 39 in one file, not "~40
    across 9")* — `dialect!` hard-codes `XxxOperation` (`macro/.../operation.rs:83`),
    so `assembly/mod.rs:51-89` hand-writes 39 `…Operation as YulXxxOp` aliases (the
    Yul ops collide with Sol `Div/Mod/Return/Revert`, forcing renames). Add
    `operation_name_prefix`/`operation_name_suffix` to `DialectInput`. (S–M)
-3. **Stale-`.td` rerun footgun — `YulInterfaces.td` is unmirrored** *(corrected:
-   the missing include is `YulInterfaces.td` — included by `YulOps.td:13`; the
-   previously-named `SolEnums.td` does not exist — Sol enums are inline in
-   `SolBase.td`)*. The macro reads tablegen via `env!("LLVM_INCLUDE_DIRECTORY")` and
-   emits no `cargo:rerun-if-changed`; `build.rs:35-46` hand-lists 5 `.td` files but
-   not `YulInterfaces.td`, so edits to it ship stale wrappers. Fix: a `melior_build`
-   helper emitting the transitive rerun set. (S → M)
+3. **Stale-`.td` rerun footgun — `YulInterfaces.td` is unmirrored** — **DONE in solx**
+   (`build(solx-mlir): track YulInterfaces.td for dialect! macro re-expansion`).
+   `build.rs` now lists `YulInterfaces.td` (included by `YulOps.td:13`) in its
+   `rerun-if-changed` set, so editing it re-expands the `dialect!` macro;
+   `SolCanonicalization.td` stays omitted (not in `SolOps.td`'s include graph), and
+   MLIR's own interface `.td`s are covered by `rerun-if-env-changed=LLVM_SYS_211_PREFIX`.
+   The broader `melior_build` transitive-rerun helper is deferred — the concrete
+   missing dependency was the actual footgun and is now covered.
 4. **Wide-integer `IntegerAttribute` constructor** — **DONE in melior**
    (`feat(ir): IntegerAttribute::from_words`, on melior `dev-experimental`). Added a
    safe `from_words(ty, &[u64])` wrapper over `mlirIntegerAttrGetFromWords` (confirmed
@@ -201,8 +206,8 @@ melior's `BlockLike::parent_region()` — solx cleanup, delete the shim.
 ## Suggested sequencing
 
 - **melior** (smallest, self-contained, own test suite — fully verifiable): #1
-  `operand_segment_sizes` (removes a silent-invalid-IR trap), #4 `from_words` (the
-  C-API already exists), #2 naming knob, #3 rerun helper.
+  `operand_segment_sizes` (**done**), #3 `YulInterfaces.td` rerun (**done**), #4
+  `from_words` (**done**); only #2 naming knob remains.
 - **slang** (binder depth): the additive accessors — #5 internal canonical
   signatures (**done**, solx-side consumption), #8 payability/ordinal (next); the
   flagship #1/#3 and the #2 typing bug are deeper type-system work.
