@@ -131,9 +131,9 @@ impl Frontend for Slang {
                 let text_range = diagnostic.text_range();
                 let source_location =
                     solx_standard_json::output::error::source_location::SourceLocation::new(
-                        file_identifier.to_owned(),
-                        text_range.start.utf8 as isize,
-                        text_range.end.utf8 as isize,
+                        file_identifier,
+                        text_range.start as isize,
+                        text_range.end as isize,
                     );
                 solx_standard_json::OutputError::new_error_with_data(
                     Some(file_identifier),
@@ -147,7 +147,7 @@ impl Frontend for Slang {
         for file_identifier in &unit.file_ids() {
             if let Some(output_source) = output.sources.get_mut(file_identifier) {
                 output_source.ast = Some(
-                    serde_json::to_value(unit.file(file_identifier).map(|file| file.ast()))
+                    serde_json::to_value(unit.get_file_ast_root(file_identifier).as_ref())
                         .map_err(|error| anyhow::anyhow!("AST serialization: {error}"))?,
                 );
             }
@@ -160,7 +160,7 @@ impl Frontend for Slang {
         let file_identifiers = unit.file_ids();
 
         for file_identifier in &file_identifiers {
-            let Some(file) = unit.file(file_identifier) else {
+            let Some(source_unit) = unit.get_file_ast_root(file_identifier) else {
                 continue;
             };
             let source_unit = file.ast();

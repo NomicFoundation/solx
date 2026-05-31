@@ -7,6 +7,7 @@ pub mod function;
 
 use std::collections::HashMap;
 
+use ruint::aliases::U256;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
@@ -89,10 +90,29 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             let element_type =
                 TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
             self.state.builder.emit_sol_state_var(
-                &slot.name,
-                slot.slot,
-                slot.byte_offset,
+                &format!("slot_{slot}"),
+                *slot,
                 element_type,
+                &contract_body,
+            );
+        }
+
+        // Emit the constructor first to align with solc's MLIR layout. Lower
+        // the explicit constructor body when the source defines one, otherwise
+        // emit an empty stub.
+        if let Some(constructor) = contract.constructor() {
+            self.state.current_contract_type = Some(contract_type);
+            let emitter = FunctionEmitter::new(self.state, &storage_layout);
+            emitter.emit_sol(&constructor, &contract_body)?;
+            self.state.current_contract_type = None;
+        } else {
+            let entry = self.state.builder.emit_sol_func(
+                "constructor()",
+                &[],
+                &[],
+                None,
+                solx_mlir::StateMutability::NonPayable,
+                Some(solx_mlir::FunctionKind::Constructor),
                 &contract_body,
             );
         }
@@ -135,26 +155,18 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
     /// Computes the storage layout using slang-solidity's ABI computation.
     ///
-    /// Returns a mapping from state variable node ID to its storage slot
-    /// (slot index and byte offset within the slot). Returns an empty map
-    /// if the ABI is unavailable.
-    fn compute_storage_layout(contract: &ContractDefinition) -> HashMap<NodeId, StorageSlot> {
-        let Some(abi) = contract.compute_abi() else {
+    /// Returns a mapping from state variable node ID to storage slot.
+    /// Returns an empty map if the ABI is unavailable.
+    fn compute_storage_layout(
+        contract: &ContractDefinition,
+        file_identifier: &str,
+    ) -> HashMap<NodeId, U256> {
+        let Some(abi) = contract.compute_abi_with_file_id(file_identifier.to_owned()) else {
             return HashMap::new();
         };
         abi.storage_layout()
             .iter()
-            .map(|item| {
-                (
-                    item.node_id(),
-                    StorageSlot::new(
-                        item.slot(),
-                        item.offset() as u32,
-                        item.label(),
-                        item.node_id(),
-                    ),
-                )
-            })
+            .map(|item| (item.node_id(), item.slot()))
             .collect()
     }
 }

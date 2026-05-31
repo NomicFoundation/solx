@@ -19,6 +19,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use operator::Operator;
+use ruint::aliases::U256;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
@@ -42,7 +43,7 @@ pub struct ExpressionEmitter<'state, 'context, 'block> {
     /// Variable environment.
     pub environment: &'state Environment<'context, 'block>,
     /// State variable node ID to storage slot mapping.
-    pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
+    pub storage_layout: &'state HashMap<NodeId, U256>,
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
     ///
     /// `true` by default (Solidity 0.8+). Set to `false` inside `unchecked {}`
@@ -55,7 +56,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn new(
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
-        storage_layout: &'state HashMap<NodeId, StorageSlot>,
+        storage_layout: &'state HashMap<NodeId, U256>,
         checked: bool,
     ) -> Self {
         Self {
@@ -174,7 +175,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             &self.state.builder,
                         );
                         let address = self.state.builder.emit_sol_addr_of(
-                            &slot.name,
+                            &format!("slot_{slot}"),
                             Self::address_type(
                                 &self.state.builder,
                                 element_type,

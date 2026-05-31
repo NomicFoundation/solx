@@ -13,8 +13,8 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
+use ruint::aliases::U256;
 use slang_solidity_v2::abi::AbiEntry;
-use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ElementaryType;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -35,20 +35,15 @@ use self::storage_slot::StorageSlot;
 pub struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
-    /// Containing contract.
-    contract: &'state ContractDefinition,
-    /// State variable node ID to `(slot, byte_offset)` mapping. The byte
-    /// offset is zero for unpacked variables and non-zero for variables
-    /// packed into a shared slot.
-    storage_layout: &'state HashMap<NodeId, StorageSlot>,
+    /// State variable node ID to storage slot mapping.
+    storage_layout: &'state HashMap<NodeId, U256>,
 }
 
 impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
     pub fn new(
         state: &'state Context<'context>,
-        contract: &'state ContractDefinition,
-        storage_layout: &'state HashMap<NodeId, StorageSlot>,
+        storage_layout: &'state HashMap<NodeId, U256>,
     ) -> Self {
         Self {
             state,

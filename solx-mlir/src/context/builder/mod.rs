@@ -732,33 +732,6 @@ impl<'context> Builder<'context> {
             .into()
     }
 
-    /// Emits a `sol.copy` between two references.
-    ///
-    /// Use for source-level assignments that cross data locations (e.g. a
-    /// state-variable initializer copying a memory string literal into the
-    /// declared storage slot).
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_copy<'block, B>(
-        &self,
-        src: Value<'context, 'block>,
-        dst: Value<'context, 'block>,
-        block: &B,
-    ) where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block.append_operation(
-            CopyOperation::builder(self.context, self.unknown_location)
-                .src(src)
-                .dst(dst)
-                .build()
-                .into(),
-        );
-    }
-
     /// Emits a `sol.load` from a pointer with an explicit result type.
     ///
     /// Short-circuits when `address` is already the element (the gep result
@@ -1154,7 +1127,6 @@ impl<'context> Builder<'context> {
         &self,
         name: &str,
         slot: U256,
-        byte_offset: u32,
         element_type: Type<'context>,
         block: &B,
     ) where
