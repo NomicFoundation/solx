@@ -10,6 +10,7 @@ use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::CmpPredicate;
 use solx_mlir::ods::sol::NotOperation;
@@ -243,6 +244,68 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         // enums, build a ui256 zero and bridge it to the
                         // enum type via `sol.enum_cast` before storing.
                         let builder = &self.state.builder;
+
+                        // `delete x` on a reference-typed storage variable
+                        // (array / struct / string / bytes) resets it to its
+                        // default by copying a freshly allocated, zero-initialised
+                        // memory aggregate of the same type into the slot.
+                        // `sol.copy` writes the storage destination and clears the
+                        // previous tail for dynamic aggregates. `delete` on a
+                        // mapping is a no-op in Solidity.
+                        if solx_mlir::TypeFactory::is_sol_reference(element_type) {
+                            let declared_type = state_variable.get_type().ok_or_else(|| {
+                                anyhow::anyhow!("unresolved type for state variable: {name}")
+                            })?;
+                            match &declared_type {
+                                // `delete` on a mapping is a no-op in Solidity.
+                                SlangType::Mapping(_) => {
+                                    let placeholder =
+                                        builder.emit_sol_constant(0, builder.types.ui256, &block);
+                                    return Ok((placeholder, block));
+                                }
+                                // Dynamic `bytes`/`string` reset to empty: copy a
+                                // freshly allocated zero-length memory buffer into the
+                                // slot. `sol.copy` writes the storage destination and
+                                // clears the previous tail.
+                                SlangType::Bytes(_) | SlangType::String(_) => {
+                                    let memory_type = TypeConversion::resolve_slang_type(
+                                        &declared_type,
+                                        Some(solx_utils::DataLocation::Memory),
+                                        builder,
+                                    );
+                                    let zero_size =
+                                        builder.emit_sol_constant(0, builder.types.ui256, &block);
+                                    let default_value = builder
+                                        .emit_sol_malloc_sized(memory_type, zero_size, &block);
+                                    let address = builder.emit_sol_addr_of(
+                                        &crate::ast::contract::ContractEmitter::storage_symbol(
+                                            slot,
+                                            byte_offset,
+                                            location,
+                                        ),
+                                        Self::address_type(
+                                            builder,
+                                            element_type,
+                                            location,
+                                            &declared_type,
+                                        ),
+                                        &block,
+                                    );
+                                    builder.emit_sol_copy(default_value, address, &block);
+                                    let placeholder =
+                                        builder.emit_sol_constant(0, builder.types.ui256, &block);
+                                    return Ok((placeholder, block));
+                                }
+                                // Arrays and structs need a Memory-located aggregate
+                                // for `sol.malloc`; relocating a storage variable's
+                                // type to Memory is not yet wired, so bail cleanly
+                                // rather than asserting inside `genMemAlloc`.
+                                _ => anyhow::bail!(
+                                    "delete of a reference-type storage variable is not yet supported"
+                                ),
+                            }
+                        }
+
                         let zero = if melior::ir::r#type::IntegerType::try_from(element_type)
                             .is_ok()
                         {
