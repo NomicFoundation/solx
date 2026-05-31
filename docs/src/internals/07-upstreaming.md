@@ -62,15 +62,32 @@ called out inline (reference-type `delete`, and `operand_segment_sizes`).
    based on Rust string-width parsing. The reinterpret-vs-shift decision should be
    a dialect concern (relax the verifier with defined no-shift semantics, or a
    width/alignment-aware `CastOpInterface`). (S–M, rebuild)
-9. **Typed C-FFI type predicates** (`solxIsFixedBytesType`, `solxGetFixedBytesWidth`,
-   `solxIsEnumType`, …) — `TypeFactory::is_sol_*` (`type_factory/mod.rs:48-98`)
-   matches `format!("{ty}")` AsmPrinter text; `fixed_bytes_width` now *gates cast
-   routing* (#8) and `delete` dispatch, so AsmPrinter drift silently miscompiles.
-   Implementations are trivial `isa<>`/`cast<>` one-liners. (S, rebuild)
+9. **Typed C-FFI type predicates** — **DONE** (`refactor(slang): typed C-FFI Sol
+   type predicates`). `TypeFactory::is_sol_*` and `fixed_bytes_width` no longer
+   match `format!("{ty}")` AsmPrinter text; they call `solxIs*Type` /
+   `solxGetFixedBytesWidth` `isa<>` one-liners. **Placement note:** these landed
+   in `solx-mlir/sol_attr_stubs.cpp` (alongside the existing `solxCreate*Type`
+   glue), *not* solx-llvm's `Sol.h`/`Sol.cpp` — so **no LLVM rebuild**, and the
+   anti-drift property still holds (the stub compiles against the dialect C++
+   API). Canonical promotion of the whole `sol_attr_stubs.cpp` shim into
+   solx-llvm's Sol CAPI is a separate, later item (see #11). Two inline
+   string-match stragglers (`expression/mod.rs`, `built_in/mod.rs`) were migrated
+   too. Suite unchanged (pure refactor).
 10. **Op verifiers** (`SolOps.td:24` all-ops TODO, `:335` map, `:494` emit; repeated
     `AnyType→Sol_PtrTy/Sol_StringType` AsmPrinter FIXMEs at `:244,291,315,443,1095,1105`)
-    — make frontend mis-emission fail at `module.verify()` instead of a deep crash;
-    also fixes the printer bug that undermines #9. (M, rebuild)
+    — make frontend mis-emission fail at `module.verify()` instead of a deep crash.
+    (With #9 done, type introspection no longer depends on the printer; the FIXMEs
+    still matter for op verification.) (M, rebuild)
+11. **Promote `sol_attr_stubs.cpp` into the Sol dialect's C-API** *(new)* — the Sol
+    C-API (`mlir-c/Dialect/Sol.h`) is deliberately thin (passes + two inference
+    helpers), so solx carries a parallel `extern "C"` surface in
+    `solx-mlir/sol_attr_stubs.cpp`: `solxCreate*Type`/`solxCreate*Attr` constructors
+    and the `solxIs*Type`/`solxGetFixedBytesWidth` predicates from #9. These belong
+    in `Sol.h`/`Sol.cpp` as the dialect's complete, canonical C-API — single source
+    of truth, usable by any consumer. Deferred deliberately: the surface still churns
+    with frontend development, and solx-mlir gives no-LLVM-rebuild iteration. Do it
+    once the surface stabilises. *(Not melior — generic bindings must not carry a
+    downstream dialect's glue.)* (M, rebuild)
 
 ### Already complete in solx-llvm — fix is in the *frontend*
 - **`immutable`**: `Sol_ImmutableOp`/`Sol_LoadImmutableOp`/`evm::lowerSetImmutables`
