@@ -351,7 +351,18 @@ impl<'context> TypeConversion<'context> {
                 };
                 builder.emit_sol_address_cast(truncated, address_type, block)
             }
-            Self::Cast(target_type) => builder.emit_sol_cast(value, target_type, block),
+            Self::Cast(target_type) => {
+                // Reference-typed values (arrays/structs/strings/bytes) only
+                // differ by data location; `sol.cast` rejects them, so route
+                // through `sol.data_loc_cast` instead.
+                if Self::is_reference_mlir_type(value.r#type())
+                    && Self::is_reference_mlir_type(target_type)
+                {
+                    builder.emit_sol_data_loc_cast(value, target_type, block)
+                } else {
+                    builder.emit_sol_cast(value, target_type, block)
+                }
+            }
         }
     }
 
@@ -360,5 +371,16 @@ impl<'context> TypeConversion<'context> {
     /// a typed detection FFI.
     fn is_sol_enum(t: melior::ir::Type<'_>) -> bool {
         format!("{t}").starts_with("!sol.enum")
+    }
+
+    /// Heuristic check for a Sol reference type (array/struct/string/bytes/
+    /// mapping) by textual form.
+    fn is_reference_mlir_type(t: melior::ir::Type<'_>) -> bool {
+        let text = format!("{t}");
+        text.starts_with("!sol.array")
+            || text.starts_with("!sol.struct")
+            || text.starts_with("!sol.string")
+            || text.starts_with("!sol.bytes")
+            || text.starts_with("!sol.mapping")
     }
 }

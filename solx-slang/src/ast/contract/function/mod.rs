@@ -169,8 +169,85 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             current_block = emitter.emit_state_var_initializers(self.contract, current_block)?;
         }
 
+        // Collect modifier bodies that wrap this function (`function f() onlyOwner {...}`).
+        // Base-constructor invocations (`constructor() Base(arg)`) also appear
+        // here but resolve to a contract, not a modifier — skip those.
+        let mut modifier_stages: Vec<slang_solidity_v2::ast::Statements> = Vec::new();
+        for invocation in function.modifier_invocations().iter() {
+            let Some(slang_solidity_v2::ast::Definition::Modifier(modifier_definition)) =
+                invocation.name().resolve_to_definition()
+            else {
+                continue;
+            };
+            let Some(modifier_body) = modifier_definition.body() else {
+                continue;
+            };
+            // Bind modifier parameters by evaluating the invocation arguments
+            // in the function's entry scope.
+            let argument_expressions: Vec<Expression> = match invocation.arguments() {
+                Some(slang_solidity_v2::ast::ArgumentsDeclaration::PositionalArguments(
+                    positional,
+                )) => positional.iter().collect(),
+                _ => Vec::new(),
+            };
+            for (parameter, argument) in modifier_definition
+                .parameters()
+                .iter()
+                .zip(argument_expressions)
+            {
+                let Some(identifier) = parameter.name() else {
+                    continue;
+                };
+                let parameter_type = parameter
+                    .get_type()
+                    .map(|slang_type| {
+                        TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
+                    })
+                    .unwrap_or_else(|| self.state.builder.types.ui256);
+                let (value, next_block) = {
+                    let emitter = ExpressionEmitter::new(
+                        self.state,
+                        &environment,
+                        self.storage_layout,
+                        true,
+                    );
+                    emitter.emit_value(&argument, current_block)?
+                };
+                current_block = next_block;
+                let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder)
+                    .emit(value, &self.state.builder, &current_block);
+                let pointer = self
+                    .state
+                    .builder
+                    .emit_sol_alloca(parameter_type, &current_block);
+                self.state.builder.emit_sol_store(cast, pointer, &current_block);
+                environment.define_variable(identifier.name(), pointer, parameter_type);
+            }
+            modifier_stages.push(modifier_body.statements());
+        }
+
         let mut terminated = false;
-        for statement in body.statements().iter() {
+        if modifier_stages.is_empty() {
+            for statement in body.statements().iter() {
+                let mut emitter = StatementEmitter::new(
+                    self.state,
+                    &mut environment,
+                    &region,
+                    self.storage_layout,
+                    &result_types,
+                );
+                match emitter.emit(&statement, current_block)? {
+                    Some(next) => current_block = next,
+                    None => {
+                        terminated = true;
+                        break;
+                    }
+                }
+            }
+        } else {
+            // The wrapped function body is the final stage; `_;` placeholders
+            // step through `modifier_stages`.
+            modifier_stages.push(body.statements());
             let mut emitter = StatementEmitter::new(
                 self.state,
                 &mut environment,
@@ -178,12 +255,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 self.storage_layout,
                 &result_types,
             );
-            match emitter.emit(&statement, current_block)? {
+            emitter.modifier_stages = modifier_stages;
+            match emitter.emit_modifier_chain(current_block)? {
                 Some(next) => current_block = next,
-                None => {
-                    terminated = true;
-                    break;
-                }
+                None => terminated = true,
             }
         }
 

@@ -152,8 +152,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Expression::StringExpression(string_expression) => {
                 let bytes = string_expression.value();
-                let text = std::str::from_utf8(&bytes).expect("string literal is valid UTF-8");
-                let value = self.state.builder.emit_sol_string_lit(text, &block);
+                // `hex"…"` literals decode to arbitrary bytes; treat them
+                // as raw bytes rather than UTF-8 strings.
+                let text = match std::str::from_utf8(&bytes) {
+                    Ok(text) => text.to_owned(),
+                    Err(_) => bytes.iter().map(|b| *b as char).collect::<String>(),
+                };
+                let value = self.state.builder.emit_sol_string_lit(&text, &block);
                 Ok((Some(value), block))
             }
             Expression::Identifier(identifier) => {

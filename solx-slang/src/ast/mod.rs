@@ -45,27 +45,26 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         emitter.emit(contract)?;
 
         let mut method_identifiers = BTreeMap::new();
+        // Walk the inheritance-linearised function list so derived
+        // contracts expose inherited externals in their ABI.
+        for function in contract.compute_linearised_functions() {
+            let Some(signature) = function.compute_canonical_signature() else {
+                continue;
+            };
+            let Some(selector) = function.compute_selector() else {
+                continue;
+            };
+            method_identifiers.insert(signature, format!("{selector:08x}"));
+        }
         for contract_member in contract.members().iter() {
-            match contract_member {
-                ContractMember::FunctionDefinition(function) => {
-                    let Some(signature) = function.compute_canonical_signature() else {
-                        continue;
-                    };
-                    let Some(selector) = function.compute_selector() else {
-                        continue;
-                    };
-                    method_identifiers.insert(signature, format!("{selector:08x}"));
-                }
-                ContractMember::StateVariableDefinition(state_variable) => {
-                    let Some(signature) = state_variable.compute_canonical_signature() else {
-                        continue;
-                    };
-                    let Some(selector) = state_variable.compute_selector() else {
-                        continue;
-                    };
-                    method_identifiers.insert(signature, format!("{selector:08x}"));
-                }
-                _ => {}
+            if let ContractMember::StateVariableDefinition(state_variable) = contract_member {
+                let Some(signature) = state_variable.compute_canonical_signature() else {
+                    continue;
+                };
+                let Some(selector) = state_variable.compute_selector() else {
+                    continue;
+                };
+                method_identifiers.insert(signature, format!("{selector:08x}"));
             }
         }
 

@@ -47,6 +47,7 @@ use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ContinueOperation;
 use crate::ods::sol::ContractOperation;
 use crate::ods::sol::CopyOperation;
+use crate::ods::sol::DataLocCastOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::ForOperation;
 use crate::ods::sol::FuncOperation;
@@ -1081,6 +1082,39 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.cast always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.data_loc_cast` converting a reference-typed value between
+    /// data locations (e.g. a storage array to a memory array). Returns the
+    /// input unchanged when the types already match.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
+    pub fn emit_sol_data_loc_cast<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        to_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        if value.r#type() == to_type {
+            return value;
+        }
+        block
+            .append_operation(
+                DataLocCastOperation::builder(self.context, self.unknown_location)
+                    .inp(value)
+                    .out(to_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.data_loc_cast always produces one result")
             .into()
     }
 

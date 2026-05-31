@@ -26,22 +26,58 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (lhs, block) = self.emit_value(left, block)?;
         let (rhs, block) = self.emit_value(right, block)?;
-        let common_type = if lhs.r#type() == rhs.r#type() {
-            lhs.r#type()
-        } else {
-            self.state.builder.types.ui256
-        };
-        let lhs = TypeConversion::from_target_type(common_type, &self.state.builder).emit(
+        if lhs.r#type() == rhs.r#type() {
+            let comparison = self.state.builder.emit_sol_cmp(lhs, rhs, predicate, &block);
+            return Ok((comparison, block));
+        }
+        // Mixed-signedness comparison: widen each operand to 256 bits while
+        // preserving its own signedness (avoid sign-extending an unsigned
+        // value, which `sol.cast ui8 → si256` would do). After widening,
+        // emit `sol.cmp` at a common signed/unsigned type.
+        let signed_lhs = melior::ir::r#type::IntegerType::try_from(lhs.r#type())
+            .map(|t| t.is_signed())
+            .unwrap_or(false);
+        let signed_rhs = melior::ir::r#type::IntegerType::try_from(rhs.r#type())
+            .map(|t| t.is_signed())
+            .unwrap_or(false);
+        let context = self.state.builder.context;
+        let signed_256 =
+            melior::ir::Type::from(melior::ir::r#type::IntegerType::signed(context, 256));
+        let unsigned_256 = self.state.builder.types.ui256;
+        // First widen each operand to its own signedness at 256 bits.
+        let lhs_wide_type = if signed_lhs { signed_256 } else { unsigned_256 };
+        let rhs_wide_type = if signed_rhs { signed_256 } else { unsigned_256 };
+        let lhs_wide = TypeConversion::from_target_type(lhs_wide_type, &self.state.builder).emit(
             lhs,
             &self.state.builder,
             &block,
         );
-        let rhs = TypeConversion::from_target_type(common_type, &self.state.builder).emit(
+        let rhs_wide = TypeConversion::from_target_type(rhs_wide_type, &self.state.builder).emit(
             rhs,
             &self.state.builder,
             &block,
         );
-        let comparison = self.state.builder.emit_sol_cmp(lhs, rhs, predicate, &block);
+        // Both are now 256 bits. If either is signed, retype the other to
+        // signed (a bit-preserving cast); else both are unsigned.
+        let common = if signed_lhs || signed_rhs { signed_256 } else { unsigned_256 };
+        let lhs_common = if lhs_wide.r#type() == common {
+            lhs_wide
+        } else {
+            self.state
+                .builder
+                .emit_sol_cast(lhs_wide, common, &block)
+        };
+        let rhs_common = if rhs_wide.r#type() == common {
+            rhs_wide
+        } else {
+            self.state
+                .builder
+                .emit_sol_cast(rhs_wide, common, &block)
+        };
+        let comparison =
+            self.state
+                .builder
+                .emit_sol_cmp(lhs_common, rhs_common, predicate, &block);
         Ok((comparison, block))
     }
 

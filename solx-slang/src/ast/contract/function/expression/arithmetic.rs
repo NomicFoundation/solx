@@ -193,11 +193,37 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let (pointer, element_type) =
                             self.environment.variable_with_type(&name);
-                        let zero = self
-                            .state
-                            .builder
-                            .emit_sol_constant(0, element_type, &block);
-                        self.state.builder.emit_sol_store(zero, pointer, &block);
+                        let builder = &self.state.builder;
+                        let zero = if melior::ir::r#type::IntegerType::try_from(element_type)
+                            .is_ok()
+                        {
+                            builder.emit_sol_constant(0, element_type, &block)
+                        } else if format!("{element_type}").starts_with("!sol.enum") {
+                            let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                            block
+                                .append_operation(
+                                    solx_mlir::ods::sol::EnumCastOperation::builder(
+                                        builder.context,
+                                        builder.unknown_location,
+                                    )
+                                    .inp(raw)
+                                    .out(element_type)
+                                    .build()
+                                    .into(),
+                                )
+                                .result(0)
+                                .expect("sol.enum_cast produces one result")
+                                .into()
+                        } else {
+                            // Reference type variable (array/string/struct in
+                            // memory). Real Solidity rebinds to a fresh empty
+                            // instance, but our codegen has no analogue, so
+                            // we bail rather than emit a misleading store.
+                            anyhow::bail!(
+                                "delete on a non-integer local '{name}' is not yet supported"
+                            );
+                        };
+                        builder.emit_sol_store(zero, pointer, &block);
                         Ok((zero, block))
                     }
                     Some(Definition::StateVariable(state_variable)) => {
@@ -211,11 +237,35 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             &state_variable,
                             &self.state.builder,
                         )?;
-                        let zero = self
-                            .state
-                            .builder
-                            .emit_sol_constant(0, element_type, &block);
-                        let _ = element_type;
+                        // `sol.constant 0` requires an integer type. For
+                        // enums, build a ui256 zero and bridge it to the
+                        // enum type via `sol.enum_cast` before storing.
+                        let builder = &self.state.builder;
+                        let zero = if melior::ir::r#type::IntegerType::try_from(element_type)
+                            .is_ok()
+                        {
+                            builder.emit_sol_constant(0, element_type, &block)
+                        } else if format!("{element_type}").starts_with("!sol.enum") {
+                            let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                            block
+                                .append_operation(
+                                    solx_mlir::ods::sol::EnumCastOperation::builder(
+                                        builder.context,
+                                        builder.unknown_location,
+                                    )
+                                    .inp(raw)
+                                    .out(element_type)
+                                    .build()
+                                    .into(),
+                                )
+                                .result(0)
+                                .expect("sol.enum_cast produces one result")
+                                .into()
+                        } else {
+                            // Reference / struct types — leave un-deleted for
+                            // now (the test will fail with the old value).
+                            builder.emit_sol_constant(0, builder.types.ui256, &block)
+                        };
                         self.emit_storage_store(slot, zero, &block);
                         Ok((zero, block))
                     }

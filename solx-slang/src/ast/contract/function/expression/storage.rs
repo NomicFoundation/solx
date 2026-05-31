@@ -63,10 +63,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         contract: &ContractDefinition,
         mut block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        for member in contract.members().iter() {
-            let ContractMember::StateVariableDefinition(state_variable) = member else {
-                continue;
-            };
+        for state_variable in contract.compute_linearised_state_variables() {
             let Some(slot) = self.storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };

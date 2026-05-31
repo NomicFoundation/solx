@@ -44,11 +44,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let declared_type = state_variable.get_type().ok_or_else(|| {
                             anyhow::anyhow!("unresolved type for state variable: {name}")
                         })?;
-                        if declared_type.is_reference_type() {
-                            unimplemented!(
-                                "assignment to a reference-typed state variable is not yet supported"
-                            );
-                        }
                         let slot = self
                             .storage_layout
                             .get(&state_variable.node_id())
@@ -60,6 +55,35 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             None,
                             &self.state.builder,
                         );
+                        // Fixed-size arrays copy element-by-element via
+                        // `sol.copy` from the RHS reference to the storage
+                        // slot. Other reference types (bytes/string/dynamic
+                        // arrays/structs) are not yet supported.
+                        if matches!(
+                            declared_type,
+                            slang_solidity_v2::ast::Type::FixedSizeArray(_)
+                        ) {
+                            let right = assign.right_operand();
+                            let (rhs_value, block) = self.emit_value(&right, block)?;
+                            let address_type = Self::address_type(
+                                &self.state.builder,
+                                element_type,
+                                solx_utils::DataLocation::Storage,
+                                &declared_type,
+                            );
+                            let storage_ref = self.state.builder.emit_sol_addr_of(
+                                &format!("slot_{slot}"),
+                                address_type,
+                                &block,
+                            );
+                            self.state.builder.emit_sol_copy(rhs_value, storage_ref, &block);
+                            return Ok((rhs_value, block));
+                        }
+                        if declared_type.is_reference_type() {
+                            anyhow::bail!(
+                                "assignment to a reference-typed state variable is not yet supported"
+                            );
+                        }
                         AssignmentTarget::Storage(*slot, element_type)
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {

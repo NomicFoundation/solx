@@ -232,12 +232,19 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let (argument_value, next_block) =
                 self.expression_emitter.emit_value(&argument, block)?;
             block = next_block;
-            let stored = TypeConversion::from_target_type(field_type, builder).emit(
-                argument_value,
-                builder,
-                &block,
-            );
-            builder.emit_sol_store(stored, field_address, &block);
+            // Reference-typed fields (nested struct, array, mapping) take the
+            // argument as a pointer and must be deep-copied via `sol.copy`.
+            // Value-typed fields use a normal cast + store.
+            if field_slang_type.is_reference_type() {
+                builder.emit_sol_copy(argument_value, field_address, &block);
+            } else {
+                let stored = TypeConversion::from_target_type(field_type, builder).emit(
+                    argument_value,
+                    builder,
+                    &block,
+                );
+                builder.emit_sol_store(stored, field_address, &block);
+            }
         }
 
         Ok((struct_address, block))
@@ -283,12 +290,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let (argument_value, next_block) =
                 self.expression_emitter.emit_value(&value_expression, block)?;
             block = next_block;
-            let stored = TypeConversion::from_target_type(field_type, builder).emit(
-                argument_value,
-                builder,
-                &block,
-            );
-            builder.emit_sol_store(stored, field_address, &block);
+            if field_slang_type.is_reference_type() {
+                builder.emit_sol_copy(argument_value, field_address, &block);
+            } else {
+                let stored = TypeConversion::from_target_type(field_type, builder).emit(
+                    argument_value,
+                    builder,
+                    &block,
+                );
+                builder.emit_sol_store(stored, field_address, &block);
+            }
         }
 
         Ok((struct_address, block))

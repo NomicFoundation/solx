@@ -56,6 +56,13 @@ pub struct StatementEmitter<'state, 'context, 'block> {
         HashMap<String, slang_solidity_v2::ast::YulFunctionDefinition>,
     /// Depth counter used to abort runaway inlining of recursive yul fns.
     pub(super) yul_inline_depth: HashMap<String, usize>,
+    /// Inlined modifier/body stages. Stage `i` is a modifier body; the last
+    /// stage is the wrapped function body. Each `_;` placeholder emits the
+    /// next stage. Empty when the function has no modifiers (the body is
+    /// emitted directly by `FunctionEmitter`).
+    pub(super) modifier_stages: Vec<Statements>,
+    /// Index of the next stage to emit when a `_;` placeholder is hit.
+    pub(super) modifier_stage_index: usize,
 }
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -76,7 +83,28 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             checked: true,
             yul_functions: HashMap::new(),
             yul_inline_depth: HashMap::new(),
+            modifier_stages: Vec::new(),
+            modifier_stage_index: 0,
         }
+    }
+
+    /// Emits the modifier chain starting at the current stage index. Stage 0
+    /// is the outermost modifier body; subsequent stages are reached via the
+    /// `_;` placeholder. Used by `FunctionEmitter` to drive a modified
+    /// function: it binds modifier parameters, sets `modifier_stages`, and
+    /// calls this with the entry block.
+    pub fn emit_modifier_chain(
+        &mut self,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        let stage = self.modifier_stage_index;
+        let Some(statements) = self.modifier_stages.get(stage).cloned() else {
+            return Ok(Some(block));
+        };
+        self.modifier_stage_index = stage + 1;
+        let result = self.emit_block(statements, block);
+        self.modifier_stage_index = stage;
+        result
     }
 
     /// Returns a reference to the current region.
@@ -114,6 +142,16 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             Statement::ExpressionStatement(expression_statement) => {
                 let expression = expression_statement.expression();
+                // A bare `_;` inside a modifier body is the placeholder for
+                // the wrapped function body (or the next modifier).
+                if let Expression::Identifier(identifier) = &expression
+                    && matches!(
+                        identifier.resolve_to_built_in(),
+                        Some(slang_solidity_v2::ast::BuiltIn::ModifierUnderscore)
+                    )
+                {
+                    return self.emit_modifier_chain(block);
+                }
                 if let Expression::FunctionCallExpression(call) = &expression
                     && let Expression::Identifier(identifier) = call.operand()
                     && identifier.name() == revert::IDENTIFIER

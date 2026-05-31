@@ -85,14 +85,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             &module_body,
         );
 
-        // TODO: emit declarations for inherited state variables once derived
-        // contracts compile through this path.
+        // Walk the C3-linearised state-variable list so derived contracts
+        // pick up base-contract storage slots and getters in addition to
+        // their own.
         let mut emitted_slots: std::collections::HashSet<U256> =
             std::collections::HashSet::new();
-        for member in contract.members().iter() {
-            let ContractMember::StateVariableDefinition(state_variable) = member else {
-                continue;
-            };
+        for state_variable in contract.compute_linearised_state_variables() {
             let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };
@@ -117,23 +115,23 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             .emit_constructor(&contract_body)?;
         self.state.current_contract_type = None;
 
-        self.state.current_contract_type = Some(contract_type);
-        FunctionEmitter::new(self.state, contract, &storage_layout)
-            .emit_constructor(&contract_body)?;
-        self.state.current_contract_type = None;
-
-        // Slang's `functions()` filters out Constructor and Modifier kinds.
-        for function in contract.functions() {
+        // `compute_linearised_functions` walks the C3-linearised inheritance
+        // chain so derived contracts pick up base-contract methods (subject
+        // to override resolution).
+        for function in contract.compute_linearised_functions() {
+            if matches!(
+                function.kind(),
+                FunctionKind::Constructor | FunctionKind::Modifier
+            ) {
+                continue;
+            }
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, contract, &storage_layout)
                 .emit_sol(&function, &contract_body)?;
             self.state.current_contract_type = None;
         }
 
-        for member in contract.members().iter() {
-            let ContractMember::StateVariableDefinition(state_variable) = member else {
-                continue;
-            };
+        for state_variable in contract.compute_linearised_state_variables() {
             if matches!(state_variable.mutability(), StateVariableMutability::Constant) {
                 self.emit_constant_getter(&state_variable, &contract_body)?;
             } else if let Some(slot) =
@@ -233,6 +231,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let pointer_type = builder
             .types
             .pointer(element_type, solx_utils::DataLocation::Storage);
+        // For an enum state variable the storage type is `!sol.enum<N>` but
+        // the ABI return type is the underlying integer (e.g. ui8). Use the
+        // element type for the storage load, then bridge to ui256 via
+        // `sol.enum_cast` if it's an enum — the codegen pipeline lowers
+        // both to the same ABI representation.
         let entry = builder.emit_sol_func(
             &signature,
             &[],
@@ -252,8 +255,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// Pre-registers all function signatures for call resolution before bodies
     /// are emitted.
     fn pre_register_functions(&mut self, contract: &ContractDefinition) {
-        for function in contract.functions() {
-            if matches!(function.kind(), FunctionKind::Modifier) {
+        for function in contract.compute_linearised_functions() {
+            if matches!(
+                function.kind(),
+                FunctionKind::Constructor | FunctionKind::Modifier
+            ) {
                 continue;
             }
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
@@ -274,12 +280,36 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// Returns a mapping from state variable node ID to storage slot.
     /// Returns an empty map if the ABI is unavailable.
     fn compute_storage_layout(contract: &ContractDefinition) -> HashMap<NodeId, U256> {
-        let Some(abi) = contract.compute_abi() else {
-            return HashMap::new();
-        };
-        abi.storage_layout()
-            .iter()
-            .map(|item| (item.node_id(), item.slot()))
-            .collect()
+        let mut layout: HashMap<NodeId, U256> = HashMap::new();
+        if let Some(abi) = contract.compute_abi() {
+            for item in abi.storage_layout().iter() {
+                layout.insert(item.node_id(), item.slot());
+            }
+        }
+        // Slang's ABI omits `immutable` state variables (they live in code,
+        // not storage). For the experimental Slang frontend we treat them as
+        // ordinary storage variables so that compilation succeeds — runtime
+        // behaviour around code immutability won't match solc's, but the
+        // observable semantics (read after constructor write) survives.
+        let mut next_slot: U256 = layout
+            .values()
+            .copied()
+            .max()
+            .map(|max| max + U256::from(1))
+            .unwrap_or(U256::from(0));
+        for state_variable in contract.compute_linearised_state_variables() {
+            if !matches!(
+                state_variable.mutability(),
+                StateVariableMutability::Immutable
+            ) {
+                continue;
+            }
+            if layout.contains_key(&state_variable.node_id()) {
+                continue;
+            }
+            layout.insert(state_variable.node_id(), next_slot);
+            next_slot += U256::from(1);
+        }
+        layout
     }
 }
