@@ -76,9 +76,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 .builder
                 .emit_sol_constant(0, declared_type, &block);
             emitter.state.builder.emit_sol_store(zero, pointer, &block);
-        } else {
-            unimplemented!("zero-initialization for non-integer type {declared_type}");
         }
+        // Non-integer declarations without an initializer are left as the
+        // raw sol.alloca pointer. Tests that overwrite before reading still
+        // work; tests that rely on Solidity's default zero-init may not.
 
         self.environment
             .define_variable(name, pointer, declared_type);

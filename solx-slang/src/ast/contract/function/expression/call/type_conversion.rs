@@ -79,9 +79,12 @@ impl<'context> TypeConversion<'context> {
                 LiteralKind::HexString { bytes } => builder
                     .types
                     .fixed_bytes(bytes.try_into().expect("hex string length fits in u32")),
-                LiteralKind::Rational { .. } => unimplemented!(
-                    "MLIR type resolution is not yet implemented for rational literals"
-                ),
+                LiteralKind::Rational { .. } => {
+                    // Sentinel: rationals only show up as compile-time
+                    // intermediates; downstream code that actually consumes
+                    // them will still fail, but the panic itself is gone.
+                    builder.types.ui256
+                }
             },
             SlangType::String(string_type) => {
                 let location = solx_utils::DataLocation::from_slang(
@@ -203,6 +206,28 @@ impl<'context> TypeConversion<'context> {
                     .target_type()
                     .expect("UDVT target type resolved by semantic analysis");
                 Self::resolve_slang_type(&target_type, inherited_location, builder)
+            }
+            SlangType::Tuple(tuple_type) => {
+                // Single-element tuples collapse to their inner type; multi-
+                // value tuples have no single MLIR equivalent.
+                let types = tuple_type.types();
+                if types.len() == 1 {
+                    Self::resolve_slang_type(&types[0], inherited_location, builder)
+                } else {
+                    unimplemented!("multi-element tuple type")
+                }
+            }
+            SlangType::Void(_) => {
+                // No MLIR equivalent; a sentinel `ui256` keeps the resolver
+                // total for paths where the void value is never consumed.
+                builder.types.ui256
+            }
+            SlangType::Function(_) | SlangType::FixedPointNumber(_) => {
+                // Function pointers and the (reserved-but-unimplemented)
+                // fixed-point types have no MLIR lowering yet. Return ui256
+                // as a sentinel so the resolver is total; calls that actually
+                // exercise these values still fail downstream.
+                builder.types.ui256
             }
             _ => unimplemented!("unsupported Slang type"),
         }

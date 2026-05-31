@@ -51,6 +51,29 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        // Named-argument struct constructors (`S({field: value, ...})`) are
+        // translated by mapping each declared member to the value with the
+        // matching name, then delegating to the normal struct-constructor
+        // emission path.
+        if let ArgumentsDeclaration::NamedArguments(named_arguments) = &call.arguments()
+            && let Expression::Identifier(callee_identifier) = call.operand()
+            && let Some(Definition::Struct(struct_definition)) =
+                callee_identifier.resolve_to_definition()
+        {
+            let result_type = self
+                .expression_emitter
+                .resolve_slang_type(call.get_type())
+                .ok_or_else(|| anyhow::anyhow!("unresolved struct constructor type"))?;
+            return self
+                .emit_named_struct_constructor(
+                    &struct_definition,
+                    result_type,
+                    named_arguments,
+                    block,
+                )
+                .map(|(value, block)| (Some(value), block));
+        }
+
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
         else {
             anyhow::bail!("only positional arguments supported");
@@ -170,6 +193,57 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
             let (argument_value, next_block) =
                 self.expression_emitter.emit_value(&argument, block)?;
+            block = next_block;
+            let stored = TypeConversion::from_target_type(field_type, builder).emit(
+                argument_value,
+                builder,
+                &block,
+            );
+            builder.emit_sol_store(stored, field_address, &block);
+        }
+
+        Ok((struct_address, block))
+    }
+
+    /// Emits a named-argument struct constructor `S({a: x, b: y, c: z})`.
+    ///
+    /// Matches each declared member by name and emits the values in
+    /// declaration order. Members without a matching named argument cause
+    /// the call to bail.
+    fn emit_named_struct_constructor(
+        &self,
+        struct_definition: &StructDefinition,
+        result_type: Type<'context>,
+        named_arguments: &slang_solidity_v2::ast::NamedArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let builder = &self.expression_emitter.state.builder;
+        let struct_address = builder.emit_sol_malloc(result_type, &block);
+
+        let mut block = block;
+        for (index, member) in struct_definition.members().iter().enumerate() {
+            let member_name = member.name().name();
+            let argument = named_arguments
+                .iter()
+                .find(|argument| argument.name().name() == member_name)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "named struct constructor missing field {member_name}",
+                    )
+                })?;
+            let field_slang_type = member.get_type().expect("slang types every struct member");
+            let field_type = TypeConversion::resolve_slang_type(
+                &field_slang_type,
+                Some(DataLocation::Memory),
+                builder,
+            );
+            let index_value = builder.emit_sol_constant(index as i64, builder.types.ui64, &block);
+            let field_address =
+                builder.emit_sol_gep(struct_address, index_value, field_type, &block);
+
+            let value_expression = argument.value();
+            let (argument_value, next_block) =
+                self.expression_emitter.emit_value(&value_expression, block)?;
             block = next_block;
             let stored = TypeConversion::from_target_type(field_type, builder).emit(
                 argument_value,

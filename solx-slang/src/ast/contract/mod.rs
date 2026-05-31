@@ -11,10 +11,14 @@ use ruint::aliases::U256;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
+use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableDefinition;
+use slang_solidity_v2::ast::StateVariableMutability;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Context;
 use solx_mlir::StateMutability;
@@ -122,12 +126,71 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             let ContractMember::StateVariableDefinition(state_variable) = member else {
                 continue;
             };
-            let Some(slot) = storage_layout.get(&state_variable.node_id()).copied() else {
-                continue;
-            };
-            self.emit_state_variable_getter(&state_variable, slot, &contract_body)?;
+            if matches!(state_variable.mutability(), StateVariableMutability::Constant) {
+                self.emit_constant_getter(&state_variable, &contract_body)?;
+            } else if let Some(slot) =
+                storage_layout.get(&state_variable.node_id()).copied()
+            {
+                self.emit_state_variable_getter(&state_variable, slot, &contract_body)?;
+            }
         }
 
+        Ok(())
+    }
+
+    /// Emits the auto-generated external getter for a `public constant` state
+    /// variable. Only direct integer / address literals are supported; more
+    /// elaborate constant expressions need the full expression emitter.
+    fn emit_constant_getter(
+        &self,
+        state_variable: &StateVariableDefinition,
+        contract_body: &melior::ir::BlockRef<'context, '_>,
+    ) -> anyhow::Result<()> {
+        let Some(AbiEntry::Function(abi)) = state_variable.compute_abi_entry() else {
+            return Ok(());
+        };
+        if !abi.inputs().is_empty() {
+            return Ok(());
+        }
+        let Some(signature) = state_variable.compute_canonical_signature() else {
+            return Ok(());
+        };
+        let Some(selector) = state_variable.compute_selector() else {
+            return Ok(());
+        };
+        let Some(initializer) = state_variable.value() else {
+            return Ok(());
+        };
+
+        let value = match &initializer {
+            Expression::DecimalNumberExpression(decimal) => decimal.integer_value(),
+            Expression::HexNumberExpression(hex) => hex.integer_value(),
+            _ => initializer.get_type().and_then(|slang_type| match slang_type {
+                SlangType::Literal(literal) => match literal.kind() {
+                    LiteralKind::Integer { value } => Some(value),
+                    LiteralKind::HexInteger { value, .. } => Some(value),
+                    _ => None,
+                },
+                _ => None,
+            }),
+        };
+        let Some(value) = value else {
+            return Ok(());
+        };
+
+        let builder = &self.state.builder;
+        let element_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
+        let entry = builder.emit_sol_func(
+            &signature,
+            &[],
+            std::slice::from_ref(&element_type),
+            Some(selector),
+            StateMutability::Pure,
+            None,
+            contract_body,
+        );
+        let constant = builder.emit_constant(&value, element_type, &entry);
+        builder.emit_sol_return(&[constant], &entry);
         Ok(())
     }
 

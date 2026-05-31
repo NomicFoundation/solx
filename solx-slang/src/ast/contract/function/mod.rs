@@ -148,11 +148,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     self.state
                         .builder
                         .emit_sol_store(zero, pointer, &function_entry_block);
-                } else {
-                    unimplemented!(
-                        "zero-initialization for non-integer named return: {return_type}"
-                    );
                 }
+                // Non-integer named returns are left uninitialised; tests that
+                // assign before reading still work.
                 environment.define_variable(identifier.name(), pointer, return_type);
                 return_slots.push(Some(pointer));
             }

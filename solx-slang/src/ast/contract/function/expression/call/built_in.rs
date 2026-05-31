@@ -34,6 +34,7 @@ use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::DifficultyOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::EncodeOperation;
+use solx_mlir::ods::sol::EnumCastOperation;
 use solx_mlir::ods::sol::GasLeftOperation;
 use solx_mlir::ods::sol::GasLimitOperation;
 use solx_mlir::ods::sol::GasPriceOperation;
@@ -252,6 +253,86 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: Option<&PositionalArguments>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        // `MyEnum.VARIANT` — emit the variant index as a ui256 constant and
+        // bridge to `!sol.enum<max>` via `sol.enum_cast`.
+        if arguments.is_none()
+            && matches!(
+                access.member().resolve_to_definition(),
+                Some(slang_solidity_v2::ast::Definition::EnumMember(_))
+            )
+            && let slang_solidity_v2::ast::Expression::Identifier(receiver) = access.operand()
+            && let Some(slang_solidity_v2::ast::Definition::Enum(enum_definition)) =
+                receiver.resolve_to_definition()
+        {
+            let member_name = access.member().name();
+            if let Some(index) = enum_definition
+                .members()
+                .iter()
+                .position(|member| member.name() == member_name)
+            {
+                let builder = &self.expression_emitter.state.builder;
+                let max_member = enum_definition.members().iter().count() - 1;
+                let max = u8::try_from(max_member).expect("enum member count fits in u8");
+                let enum_type = builder.types.enumeration(max.into());
+                let raw =
+                    builder.emit_sol_constant(index as i64, builder.types.ui256, &block);
+                let value = block
+                    .append_operation(
+                        EnumCastOperation::builder(builder.context, builder.unknown_location)
+                            .inp(raw)
+                            .out(enum_type)
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("sol.enum_cast always produces one result")
+                    .into();
+                return Ok((Some(value), block));
+            }
+        }
+
+        // Experimental: `this.f(args)` / `b.f(args)` whose member resolves to a
+        // function already registered in the current context is lowered as a
+        // local `sol.call` instead of a true external call. Skips real
+        // external-call semantics (gas stipend, reentrancy guards) but is good
+        // enough for tests whose behaviour does not depend on those.
+        if let Some(arguments) = arguments
+            && let Some(slang_solidity_v2::ast::Definition::Function(function_definition)) =
+                access.member().resolve_to_definition()
+        {
+            let resolved = self
+                .expression_emitter
+                .state
+                .resolve_function(function_definition.node_id())
+                .ok()
+                .map(|(name, params, returns)| {
+                    (name.to_owned(), params.to_vec(), returns.to_vec())
+                });
+            if let Some((mlir_name, parameter_types, return_types)) = resolved {
+                let mut argument_values = Vec::with_capacity(arguments.len());
+                let mut current_block = block;
+                for argument in arguments.iter() {
+                    let (value, next) = self
+                        .expression_emitter
+                        .emit_value(&argument, current_block)?;
+                    argument_values.push(value);
+                    current_block = next;
+                }
+                let builder = &self.expression_emitter.state.builder;
+                for (value, param_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
+                    let conversion = TypeConversion::from_target_type(*param_type, builder);
+                    *value = conversion.emit(*value, builder, &current_block);
+                }
+                let result = builder.emit_sol_call(
+                    &mlir_name,
+                    &argument_values,
+                    &return_types,
+                    &current_block,
+                )?;
+                return Ok((result, current_block));
+            }
+        }
+
         let builder = &self.expression_emitter.state.builder;
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressBalance) => {

@@ -158,6 +158,61 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .into();
                 Ok((result, block))
             }
+            Operator::Delete => {
+                // `delete m[k]` / `delete arr[i]` resets the indexed element.
+                if let Expression::IndexAccessExpression(index_access) = operand {
+                    let (address, element_type, block) =
+                        self.emit_index_access_address(index_access, block)?;
+                    let zero = self
+                        .state
+                        .builder
+                        .emit_sol_constant(0, element_type, &block);
+                    self.state
+                        .builder
+                        .emit_sol_store(zero, address, &block);
+                    return Ok((zero, block));
+                }
+                // `delete x` resets `x` to its type's zero value. For the
+                // experimental branch only scalar identifiers are supported —
+                // reference-type deletion (arrays, mappings, structs) needs
+                // dedicated lowering.
+                let Expression::Identifier(identifier) = operand else {
+                    anyhow::bail!("unsupported delete operand");
+                };
+                let name = identifier.name();
+                match identifier.resolve_to_definition() {
+                    Some(Definition::Variable(_) | Definition::Parameter(_)) => {
+                        let (pointer, element_type) =
+                            self.environment.variable_with_type(&name);
+                        let zero = self
+                            .state
+                            .builder
+                            .emit_sol_constant(0, element_type, &block);
+                        self.state.builder.emit_sol_store(zero, pointer, &block);
+                        Ok((zero, block))
+                    }
+                    Some(Definition::StateVariable(state_variable)) => {
+                        let slot = *self
+                            .storage_layout
+                            .get(&state_variable.node_id())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("unregistered state variable: {name}")
+                            })?;
+                        let element_type = TypeConversion::resolve_state_variable_type(
+                            &state_variable,
+                            &self.state.builder,
+                        )?;
+                        let zero = self
+                            .state
+                            .builder
+                            .emit_sol_constant(0, element_type, &block);
+                        let _ = element_type;
+                        self.emit_storage_store(slot, zero, &block);
+                        Ok((zero, block))
+                    }
+                    _ => anyhow::bail!("unsupported delete target: {name}"),
+                }
+            }
             _ => anyhow::bail!("unsupported prefix operator: {operator:?}"),
         }
     }
@@ -172,7 +227,70 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         operator: Operator,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, Value<'context, 'block>)> {
-        let Expression::Identifier(identifier) = operand else {
+        // Unwrap parenthesised single-element tuples like `--(i)`.
+        let unwrapped: Option<Expression> = match operand {
+            Expression::TupleExpression(tuple) if tuple.items().len() == 1 => tuple
+                .items()
+                .iter()
+                .next()
+                .and_then(|item| item.expression()),
+            _ => None,
+        };
+        let effective = unwrapped.as_ref().unwrap_or(operand);
+        // Pointer-target inc/dec: `s.field++`, `arr[i]++`, `m[k]++`.
+        if let Expression::MemberAccessExpression(access) = effective
+            && let Some((address, element_type, block_after)) =
+                self.emit_struct_field_address(access, *block)?
+        {
+            let block = block_after;
+            let old = self
+                .state
+                .builder
+                .emit_sol_load(address, element_type, &block)?;
+            let one = self.state.builder.emit_sol_constant(1, element_type, &block);
+            let new_value = block
+                .append_operation(operator.emit_sol_binary_operation(
+                    self.checked,
+                    self.state.builder.context,
+                    self.state.builder.unknown_location,
+                    old,
+                    one,
+                ))
+                .result(0)
+                .expect("binary operation always produces one result")
+                .into();
+            self.state
+                .builder
+                .emit_sol_store(new_value, address, &block);
+            return Ok((old, new_value));
+        }
+        if let Expression::IndexAccessExpression(index_access) = effective {
+            let (address, element_type, block_after) =
+                self.emit_index_access_address(index_access, *block)?;
+            let block = block_after;
+            let old = self
+                .state
+                .builder
+                .emit_sol_load(address, element_type, &block)?;
+            let one = self.state.builder.emit_sol_constant(1, element_type, &block);
+            let new_value = block
+                .append_operation(operator.emit_sol_binary_operation(
+                    self.checked,
+                    self.state.builder.context,
+                    self.state.builder.unknown_location,
+                    old,
+                    one,
+                ))
+                .result(0)
+                .expect("binary operation always produces one result")
+                .into();
+            self.state
+                .builder
+                .emit_sol_store(new_value, address, &block);
+            return Ok((old, new_value));
+        }
+
+        let Expression::Identifier(identifier) = effective else {
             anyhow::bail!("unsupported operand for {operator:?}");
         };
         let name = identifier.name();
