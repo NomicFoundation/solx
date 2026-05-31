@@ -32,12 +32,19 @@ fn main() {
 
     // Track Sol/Yul dialect .td files so that Cargo re-expands the
     // `melior::dialect!` macros in `src/ods.rs` when any definition changes.
+    // These mirror the `include` graphs of the two top-level files the
+    // `melior::dialect!` macro expands (`SolOps.td`, `YulOps.td`); editing any of
+    // them must re-expand the macro. MLIR's own builtin-interface `.td`s pulled in
+    // by those files live under the LLVM prefix and are covered by the
+    // `rerun-if-env-changed=LLVM_SYS_211_PREFIX` above. `SolCanonicalization.td` is
+    // deliberately absent — it is not in `SolOps.td`'s include graph.
     for td_file in &[
         "mlir/Dialect/Sol/SolOps.td",
         "mlir/Dialect/Sol/SolBase.td",
         "mlir/Dialect/Sol/SolInterfaces.td",
         "mlir/Dialect/Yul/YulOps.td",
         "mlir/Dialect/Yul/YulBase.td",
+        "mlir/Dialect/Yul/YulInterfaces.td",
     ] {
         println!(
             "cargo:rerun-if-changed={}",
