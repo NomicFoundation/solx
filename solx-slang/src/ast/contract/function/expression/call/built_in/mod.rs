@@ -1247,10 +1247,26 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .get_type()
             .ok_or_else(|| anyhow::anyhow!("base of array push has no resolved type"))?;
         let value_argument = arguments.iter().next();
-        if value_argument.is_some() && matches!(&base_slang_type, SlangType::Bytes(_)) {
-            anyhow::bail!("bytes.push(x) lowers to sol.push_string, which is not yet wired");
-        }
         let builder = &self.expression_emitter.state.builder;
+
+        // `bytes.push(x)` has a dedicated lowering (`sol.push_string`) that
+        // handles the in-place → out-of-place encoding transition; the generic
+        // `sol.push` reference path below is only for value-typed dynamic arrays
+        // and the no-argument `bytes.push()` overload.
+        if matches!(&base_slang_type, SlangType::Bytes(_))
+            && let Some(push_value) = &value_argument
+        {
+            let (array_value, block) = self.expression_emitter.emit_value(&base, block)?;
+            // `emit_value_for_target` materializes a string literal (`data.push("a")`)
+            // as a fixedbytes constant rather than a memory string.
+            let (value, block) = self
+                .expression_emitter
+                .emit_value_for_target(push_value, builder.types.fixed_bytes(1), block)?;
+            let byte_value = TypeConversion::from_target_type(builder.types.fixed_bytes(1), builder)
+                .emit(value, builder, &block);
+            builder.emit_sol_push_string(array_value, byte_value, &block);
+            return Ok((None, block));
+        }
 
         let (element_type, slang_location) = match &base_slang_type {
             SlangType::Array(array_type) => (

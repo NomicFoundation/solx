@@ -67,6 +67,7 @@ use crate::ods::sol::MallocOperation;
 use crate::ods::sol::MapOperation;
 use crate::ods::sol::PopOperation;
 use crate::ods::sol::PushOperation;
+use crate::ods::sol::PushStringOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
@@ -961,6 +962,29 @@ impl<'context> Builder<'context> {
             .result(0)
             .expect("sol.push always produces one result")
             .into()
+    }
+
+    /// Emits a `sol.push_string` appending a byte `value` to a dynamic
+    /// `bytes`/`string` (`bytes.push(x)`). Unlike `sol.push`, this handles the
+    /// in-place → out-of-place storage-encoding transition at the 31-byte
+    /// boundary, so it is the dedicated lowering for the single-argument
+    /// `push` overload on byte arrays.
+    pub fn emit_sol_push_string<'block, B>(
+        &self,
+        array: Value<'context, 'block>,
+        value: Value<'context, 'block>,
+        block: &B,
+    ) where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block.append_operation(
+            PushStringOperation::builder(self.context, self.unknown_location)
+                .addr(array)
+                .value(value)
+                .build()
+                .into(),
+        );
     }
 
     /// Emits a `sol.pop` removing the last element from the array.
