@@ -169,11 +169,15 @@ type; the Sol dialect has no flat multi-value type); `verbatim` is solx-llvm.
    emits no `cargo:rerun-if-changed`; `build.rs:35-46` hand-lists 5 `.td` files but
    not `YulInterfaces.td`, so edits to it ship stale wrappers. Fix: a `melior_build`
    helper emitting the transitive rerun set. (S → M)
-4. **Wide-integer `IntegerAttribute` constructor — the C-API already exists**
-   *(corrected)*. `IntegerAttribute::new` takes only `i64`, so `builder/mod.rs:301,1675`
-   round-trip 256-bit constants through `Attribute::parse(format!("{v} : i256"))`.
-   `mlirIntegerAttrGetFromWords` is already present in mlir-sys; melior only needs a
-   safe `IntegerAttribute::from_words(ty, &[u64])` wrapper. (S)
+4. **Wide-integer `IntegerAttribute` constructor** — **DONE in melior**
+   (`feat(ir): IntegerAttribute::from_words`, on melior `dev-experimental`). Added a
+   safe `from_words(ty, &[u64])` wrapper over `mlirIntegerAttrGetFromWords` (confirmed
+   present in the fork's C-API headers and mlir-sys 210.0.4). *solx consumption
+   deferred:* `builder/mod.rs:302,1699` materialize a **`BigInt`**, and the
+   `Attribute::parse(format!("{v} : i256"))` round-trip handles sign + width for free;
+   swapping to `from_words` would add error-prone `BigInt`→two's-complement-words
+   conversion to remove a correct round-trip — not worth it. The wrapper is the win;
+   use it where words are already natural.
 
 *Not melior's problem:* `solxCreate*Type`/`solxCreate*Attr` + `mlirSol*` inference
 are Sol-specific glue (keep in solx); `ffi::block_parent_region` duplicates
