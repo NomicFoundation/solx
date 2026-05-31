@@ -2,73 +2,73 @@
 //! Solidity built-in function and EVM intrinsic lowering.
 //!
 
-use melior::ir::Attribute;
-use melior::ir::BlockLike;
-use melior::ir::BlockRef;
-use melior::ir::Operation;
-use melior::ir::Type;
-use melior::ir::Value;
-use melior::ir::ValueLike;
-use melior::ir::attribute::DenseI32ArrayAttribute;
-use melior::ir::attribute::StringAttribute;
-use melior::ir::operation::OperationMutLike;
-use melior::ir::r#type::IntegerType;
-use slang_solidity_v2::ast::BuiltIn;
-use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
-use slang_solidity_v2::ast::Definition;
-use slang_solidity_v2::ast::ElementaryType;
-use slang_solidity_v2::ast::ArgumentsDeclaration;
-use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::FunctionCallExpression;
-use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::PositionalArguments;
-use slang_solidity_v2::ast::Type as SlangType;
-use slang_solidity_v2::ast::TypeName as SlangTypeName;
-use solx_mlir::ods::sol::AddModOperation;
-use solx_mlir::ods::sol::BalanceOperation;
-use solx_mlir::ods::sol::BareCallOperation;
-use solx_mlir::ods::sol::ThisOperation;
-use solx_mlir::ods::sol::BareDelegateCallOperation;
-use solx_mlir::ods::sol::BareStaticCallOperation;
-use solx_mlir::ods::sol::BaseFeeOperation;
-use solx_mlir::ods::sol::BlobBaseFeeOperation;
-use solx_mlir::ods::sol::BlockHashOperation;
-use solx_mlir::ods::sol::BlockNumberOperation;
-use solx_mlir::ods::sol::BytesCastOperation;
-use solx_mlir::ods::sol::CallValueOperation;
-use solx_mlir::ods::sol::CallerOperation;
-use solx_mlir::ods::sol::ChainIdOperation;
-use solx_mlir::ods::sol::CodeHashOperation;
-use solx_mlir::ods::sol::CodeOperation;
-use solx_mlir::ods::sol::CoinbaseOperation;
-use solx_mlir::ods::sol::ConcatOperation;
-use solx_mlir::ods::sol::DecodeOperation;
-use solx_mlir::ods::sol::DifficultyOperation;
-use solx_mlir::ods::sol::EcrecoverOperation;
-use solx_mlir::ods::sol::EncodeOperation;
-use solx_mlir::ods::sol::EnumCastOperation;
-use solx_mlir::ods::sol::ExtFuncSelectorOperation;
-use solx_mlir::ods::sol::GasLeftOperation;
-use solx_mlir::ods::sol::GasLimitOperation;
-use solx_mlir::ods::sol::GasPriceOperation;
-use solx_mlir::ods::sol::GetCallDataOperation;
-use solx_mlir::ods::sol::Keccak256Operation;
-use solx_mlir::ods::sol::LengthOperation;
-use solx_mlir::ods::sol::MulModOperation;
-use solx_mlir::ods::sol::NewOperation;
-use solx_mlir::ods::sol::ObjectCodeOperation;
-use solx_mlir::ods::sol::OriginOperation;
-use solx_mlir::ods::sol::PrevRandaoOperation;
-use solx_mlir::ods::sol::Ripemd160Operation;
-use solx_mlir::ods::sol::SendOperation;
-use solx_mlir::ods::sol::Sha256Operation;
-use solx_mlir::ods::sol::SigOperation;
-use solx_mlir::ods::sol::TimestampOperation;
-use solx_mlir::ods::sol::TransferOperation;
+pub(crate) use melior::ir::Attribute;
+pub(crate) use melior::ir::BlockLike;
+pub(crate) use melior::ir::BlockRef;
+pub(crate) use melior::ir::Operation;
+pub(crate) use melior::ir::Type;
+pub(crate) use melior::ir::Value;
+pub(crate) use melior::ir::ValueLike;
+pub(crate) use melior::ir::attribute::DenseI32ArrayAttribute;
+pub(crate) use melior::ir::attribute::StringAttribute;
+pub(crate) use melior::ir::operation::OperationMutLike;
+pub(crate) use melior::ir::r#type::IntegerType;
+pub(crate) use slang_solidity_v2::ast::BuiltIn;
+pub(crate) use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
+pub(crate) use slang_solidity_v2::ast::Definition;
+pub(crate) use slang_solidity_v2::ast::ElementaryType;
+pub(crate) use slang_solidity_v2::ast::ArgumentsDeclaration;
+pub(crate) use slang_solidity_v2::ast::Expression;
+pub(crate) use slang_solidity_v2::ast::FunctionCallExpression;
+pub(crate) use slang_solidity_v2::ast::MemberAccessExpression;
+pub(crate) use slang_solidity_v2::ast::PositionalArguments;
+pub(crate) use slang_solidity_v2::ast::Type as SlangType;
+pub(crate) use slang_solidity_v2::ast::TypeName as SlangTypeName;
+pub(crate) use solx_mlir::ods::sol::AddModOperation;
+pub(crate) use solx_mlir::ods::sol::BalanceOperation;
+pub(crate) use solx_mlir::ods::sol::BareCallOperation;
+pub(crate) use solx_mlir::ods::sol::ThisOperation;
+pub(crate) use solx_mlir::ods::sol::BareDelegateCallOperation;
+pub(crate) use solx_mlir::ods::sol::BareStaticCallOperation;
+pub(crate) use solx_mlir::ods::sol::BaseFeeOperation;
+pub(crate) use solx_mlir::ods::sol::BlobBaseFeeOperation;
+pub(crate) use solx_mlir::ods::sol::BlockHashOperation;
+pub(crate) use solx_mlir::ods::sol::BlockNumberOperation;
+pub(crate) use solx_mlir::ods::sol::BytesCastOperation;
+pub(crate) use solx_mlir::ods::sol::CallValueOperation;
+pub(crate) use solx_mlir::ods::sol::CallerOperation;
+pub(crate) use solx_mlir::ods::sol::ChainIdOperation;
+pub(crate) use solx_mlir::ods::sol::CodeHashOperation;
+pub(crate) use solx_mlir::ods::sol::CodeOperation;
+pub(crate) use solx_mlir::ods::sol::CoinbaseOperation;
+pub(crate) use solx_mlir::ods::sol::ConcatOperation;
+pub(crate) use solx_mlir::ods::sol::DecodeOperation;
+pub(crate) use solx_mlir::ods::sol::DifficultyOperation;
+pub(crate) use solx_mlir::ods::sol::EcrecoverOperation;
+pub(crate) use solx_mlir::ods::sol::EncodeOperation;
+pub(crate) use solx_mlir::ods::sol::EnumCastOperation;
+pub(crate) use solx_mlir::ods::sol::ExtFuncSelectorOperation;
+pub(crate) use solx_mlir::ods::sol::GasLeftOperation;
+pub(crate) use solx_mlir::ods::sol::GasLimitOperation;
+pub(crate) use solx_mlir::ods::sol::GasPriceOperation;
+pub(crate) use solx_mlir::ods::sol::GetCallDataOperation;
+pub(crate) use solx_mlir::ods::sol::Keccak256Operation;
+pub(crate) use solx_mlir::ods::sol::LengthOperation;
+pub(crate) use solx_mlir::ods::sol::MulModOperation;
+pub(crate) use solx_mlir::ods::sol::NewOperation;
+pub(crate) use solx_mlir::ods::sol::ObjectCodeOperation;
+pub(crate) use solx_mlir::ods::sol::OriginOperation;
+pub(crate) use solx_mlir::ods::sol::PrevRandaoOperation;
+pub(crate) use solx_mlir::ods::sol::Ripemd160Operation;
+pub(crate) use solx_mlir::ods::sol::SendOperation;
+pub(crate) use solx_mlir::ods::sol::Sha256Operation;
+pub(crate) use solx_mlir::ods::sol::SigOperation;
+pub(crate) use solx_mlir::ods::sol::TimestampOperation;
+pub(crate) use solx_mlir::ods::sol::TransferOperation;
 
-use crate::ast::contract::ContractEmitter;
-use crate::ast::contract::function::expression::call::CallEmitter;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+pub(crate) use crate::ast::contract::ContractEmitter;
+pub(crate) use crate::ast::contract::function::expression::call::CallEmitter;
+pub(crate) use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
     /// Tries to emit `callee(arguments)` as a Solidity built-in.
@@ -1534,213 +1534,6 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok(Some((vec![status, ret_data], block)))
     }
 
-    /// Emits a `sol.encode` operation producing a `bytes memory` payload.
-    ///
-    /// `selector`, when present, is prepended as the first 4 bytes of the
-    /// payload and must already be of `!sol.fixed_bytes<4>` type. `packed`
-    /// emits the ABI-packed encoding (no per-element padding).
-    ///
-    /// Sets `operand_segment_sizes` manually because melior's ODS-generated
-    /// builder does not synthesize the attribute for `AttrSizedOperandSegments`
-    /// ops; the dialect verifier rejects the op without it.
-    fn emit_sol_encode(
-        &self,
-        ins: &[Value<'context, 'block>],
-        selector: Option<Value<'context, 'block>>,
-        packed: bool,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        let builder = &self.expression_emitter.state.builder;
-        let mut op_builder = EncodeOperation::builder(builder.context, builder.unknown_location)
-            .ins(ins)
-            .res(builder.types.sol_string_memory);
-        if let Some(selector_value) = selector {
-            op_builder = op_builder.selector(selector_value);
-        }
-        if packed {
-            op_builder = op_builder.packed(Attribute::unit(builder.context));
-        }
-        let mut operation: Operation = op_builder.build().into();
-        // TODO: drop this manual segment-sizes plumbing once the melior op-builder
-        // macro emits `operand_segment_sizes` automatically for ops with variadic
-        // or optional operand groups.
-        let ins_count = i32::try_from(ins.len()).expect("encode argument count fits in i32");
-        let segment_sizes = DenseI32ArrayAttribute::new(
-            builder.context,
-            &[ins_count, i32::from(selector.is_some())],
-        );
-        operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
-        block
-            .append_operation(operation)
-            .result(0)
-            .expect("sol.encode always produces one result")
-            .into()
-    }
-
-    /// Resolves an `abi.decode` type-list element — a type name in value
-    /// position such as `uint256`, `bytes`, or `bytes32` — to its MLIR type.
-    ///
-    /// Slang does not assign a semantic type to a type name used as an
-    /// expression (its `get_type()` is `None`, and the enclosing `abi.decode`
-    /// call is typed as a tuple of `Void`), so the type is reconstructed
-    /// structurally. Only elementary types are supported; arrays, mappings,
-    /// and user-defined types bail so the decode falls back to failing rather
-    /// than producing a wrong type.
-    fn resolve_abi_type_expression(
-        &self,
-        expression: &Expression,
-    ) -> anyhow::Result<Type<'context>> {
-        match expression {
-            Expression::ElementaryType(elementary) => {
-                self.resolve_abi_elementary_type(elementary)
-            }
-            Expression::TypeExpression(type_expression) => {
-                match type_expression.type_name() {
-                    SlangTypeName::ElementaryType(elementary) => {
-                        self.resolve_abi_elementary_type(&elementary)
-                    }
-                    _ => anyhow::bail!(
-                        "abi.decode of arrays, mappings, and user-defined types is not yet supported"
-                    ),
-                }
-            }
-            _ => anyhow::bail!("unsupported abi.decode type-list element"),
-        }
-    }
-
-    /// Maps a Solidity elementary type keyword (`uint<N>`, `int<N>`, `bytes`,
-    /// `bytes<N>`, `bool`, `address`, `string`) to its MLIR type, parsing the
-    /// width from the keyword's source text (`uint`/`int` default to 256 bits).
-    fn resolve_abi_elementary_type(
-        &self,
-        elementary: &ElementaryType,
-    ) -> anyhow::Result<Type<'context>> {
-        let builder = &self.expression_emitter.state.builder;
-        let parse_width = |text: &str, prefix: &str| -> anyhow::Result<u32> {
-            match text.trim().strip_prefix(prefix) {
-                Some("") => Ok(256),
-                Some(digits) => digits
-                    .parse::<u32>()
-                    .map_err(|_| anyhow::anyhow!("invalid `{prefix}` width in `{text}`")),
-                None => anyhow::bail!("`{text}` is not a `{prefix}` type"),
-            }
-        };
-        let resolved = match elementary {
-            ElementaryType::BoolKeyword(_) => builder.types.i1,
-            ElementaryType::AddressType(_) => builder.types.sol_address,
-            ElementaryType::StringKeyword(_) => {
-                builder.types.string(solx_utils::DataLocation::Memory)
-            }
-            ElementaryType::UintKeyword(keyword) => {
-                let bits = parse_width(keyword.unparse(), "uint")?;
-                Type::from(IntegerType::unsigned(builder.context, bits))
-            }
-            ElementaryType::IntKeyword(keyword) => {
-                let bits = parse_width(keyword.unparse(), "int")?;
-                Type::from(IntegerType::signed(builder.context, bits))
-            }
-            ElementaryType::BytesKeyword(keyword) => {
-                let text = keyword.unparse();
-                if text.trim() == "bytes" {
-                    builder.types.string(solx_utils::DataLocation::Memory)
-                } else {
-                    builder.types.fixed_bytes(parse_width(text, "bytes")?)
-                }
-            }
-            ElementaryType::FixedKeyword(_) | ElementaryType::UfixedKeyword(_) => {
-                anyhow::bail!("fixed-point types are not supported")
-            }
-        };
-        Ok(resolved)
-    }
-
-    /// Determines the MLIR result types of `abi.decode(payload, (T1, T2, …))`.
-    ///
-    /// Slang types most decode calls correctly, but leaves an elementary
-    /// type-name argument (`uint256`, `bytes`, …) untyped — the call's type is
-    /// a tuple whose corresponding element is `Void`. Those positions are
-    /// reconstructed from the type-list argument via
-    /// [`Self::resolve_abi_type_expression`]; every other position keeps
-    /// slang's type, so arrays, structs, enums, and user-defined value types
-    /// continue to resolve through the binder.
-    fn abi_decode_result_types(
-        &self,
-        call: &FunctionCallExpression,
-        arguments: &PositionalArguments,
-    ) -> anyhow::Result<Vec<Type<'context>>> {
-        let builder = &self.expression_emitter.state.builder;
-        let argument_types: Vec<Expression> = match arguments.iter().nth(1) {
-            Some(Expression::TupleExpression(tuple)) => {
-                tuple.items().iter().filter_map(|item| item.expression()).collect()
-            }
-            Some(other) => vec![other],
-            None => Vec::new(),
-        };
-        let slang_types: Vec<SlangType> = match call.get_type() {
-            Some(SlangType::Tuple(tuple)) => tuple.types(),
-            Some(other) => vec![other],
-            None => Vec::new(),
-        };
-        let count = slang_types.len().max(argument_types.len());
-        (0..count)
-            .map(|index| {
-                // Prefer slang's type whenever it is meaningful.
-                if let Some(slang_type) = slang_types.get(index)
-                    && !matches!(slang_type, SlangType::Void(_))
-                {
-                    return Ok(TypeConversion::resolve_slang_type(slang_type, None, builder));
-                }
-                // Slang left this position untyped (`Void`). If the type-list
-                // argument names an elementary type, reconstruct it; otherwise
-                // fall back to slang's resolution (`Void` -> `ui256`), preserving
-                // prior behaviour for 256-bit-word decodes such as user-defined
-                // value types.
-                if let Some(argument) = argument_types.get(index)
-                    && let Ok(resolved) = self.resolve_abi_type_expression(argument)
-                {
-                    return Ok(resolved);
-                }
-                Ok(slang_types.get(index).map_or(builder.types.ui256, |slang_type| {
-                    TypeConversion::resolve_slang_type(slang_type, None, builder)
-                }))
-            })
-            .collect()
-    }
-
-    /// Emits `abi.decode(payload, (T1, T2, …))` as a `sol.decode` operation,
-    /// yielding one value per requested type.
-    pub(super) fn emit_abi_decode(
-        &self,
-        call: &FunctionCallExpression,
-        arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let payload_expression = arguments
-            .iter()
-            .next()
-            .expect("slang validates the payload argument");
-        let (payload_value, block) = self
-            .expression_emitter
-            .emit_value(&payload_expression, block)?;
-        let result_types = self.abi_decode_result_types(call, arguments)?;
-        let builder = &self.expression_emitter.state.builder;
-        let operation = block.append_operation(
-            DecodeOperation::builder(builder.context, builder.unknown_location)
-                .addr(payload_value)
-                .outs(&result_types)
-                .build()
-                .into(),
-        );
-        let values: Vec<Value<'context, 'block>> = (0..result_types.len())
-            .map(|index| {
-                operation
-                    .result(index)
-                    .expect("sol.decode yields one result per requested type")
-                    .into()
-            })
-            .collect();
-        Ok((values, block))
-    }
 
     /// Emits an `assert(condition)` built-in via `sol.assert`.
     fn emit_assert(
@@ -1853,3 +1646,5 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
     }
 }
+
+mod abi;
