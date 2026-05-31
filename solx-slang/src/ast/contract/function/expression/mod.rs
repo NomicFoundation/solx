@@ -123,6 +123,29 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             );
             return Ok((value, block));
         }
+        // A string literal assigned to a single byte — the element of
+        // `bytes`/`string`, `x[i] = "c"` — materializes as a `!sol.byte`
+        // constant. `sol.bytes_cast` rejects a dynamic-string operand, so a
+        // plain `emit_value` (which emits `sol.string_lit`) would fail to cast.
+        if let Expression::StringExpression(string_expression) = expression
+            && format!("{target_type}") == "!sol.byte"
+        {
+            let literal_bytes = string_expression.value();
+            let byte = literal_bytes.first().copied().unwrap_or(0);
+            let ui8 = Type::from(melior::ir::r#type::IntegerType::unsigned(
+                self.state.builder.context,
+                8,
+            ));
+            let integer = self
+                .state
+                .builder
+                .emit_constant(&num_bigint::BigInt::from(byte), ui8, &block);
+            let value = self
+                .state
+                .builder
+                .emit_sol_bytes_cast(integer, target_type, &block);
+            return Ok((value, block));
+        }
         self.emit_value(expression, block)
     }
 

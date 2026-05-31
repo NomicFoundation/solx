@@ -94,7 +94,39 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
         let callee = call.operand();
 
-        if call.is_type_conversion() && positional_arguments.len() == 1 {
+        // A single-field struct constructor `S(x)` is reported as a "type
+        // conversion" by slang's CST heuristic (the callee is a type name), but
+        // it must build a struct via `emit_struct_constructor` — not cast the
+        // argument to the struct type (which `sol.cast` rejects: it is
+        // integer-only). Multi-field structs have >1 argument and already skip
+        // this branch; route the single-field case to the `Definition::Struct`
+        // dispatch below.
+        //
+        // Restrict this to a value-typed field: when the sole field is a
+        // reference type (nested struct / array), `emit_struct_constructor`
+        // emits a `sol.copy` the backend cannot yet lower (EVMUtil.cpp NYI for
+        // copying aggregate members). Those keep the existing type-conversion
+        // path to avoid a compile regression — they were already mis-compiled
+        // (wrong value) rather than failing to compile.
+        let callee_is_struct_constructor = match &callee {
+            Expression::Identifier(identifier) => {
+                match identifier.resolve_to_definition() {
+                    Some(Definition::Struct(struct_definition)) => struct_definition
+                        .members()
+                        .iter()
+                        .next()
+                        .and_then(|member| member.get_type())
+                        .is_some_and(|field_type| !field_type.is_reference_type()),
+                    _ => false,
+                }
+            }
+            _ => false,
+        };
+
+        if call.is_type_conversion()
+            && positional_arguments.len() == 1
+            && !callee_is_struct_constructor
+        {
             let first = positional_arguments
                 .iter()
                 .next()

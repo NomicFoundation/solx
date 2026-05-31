@@ -204,9 +204,11 @@ impl<'context> Builder<'context> {
             ));
         }
 
-        if selector.is_some() || matches!(kind, Some(crate::FunctionKind::Constructor)) {
-            builder = builder.orig_fn_type(TypeAttribute::new(function_type.into()));
-        }
+        // Preserve the pre-lowering (Sol-typed) signature: the Sol→Yul lowering
+        // reads `orig_fn_type` after the live `function_type` has been converted
+        // to lowered types. Set on every function — the constructor/external
+        // dispatch and the fallback (which has no selector) all rely on it.
+        builder = builder.orig_fn_type(TypeAttribute::new(function_type.into()));
 
         // Assign a unique non-zero id so the function can be the target of an
         // internal function pointer (`sol.func_constant` / `sol.icall`).
@@ -1364,6 +1366,10 @@ impl<'context> Builder<'context> {
         let is_address = |t: Type<'context>| text(t).starts_with("!sol.address");
         let is_contract = |t: Type<'context>| text(t).starts_with("!sol.contract");
         let is_fixed_bytes = |t: Type<'context>| text(t).starts_with("!sol.fixedbytes");
+        // The element type of `bytes`/`string` is the single-byte `!sol.byte`,
+        // distinct from `!sol.fixedbytes<1>`. `sol.bytes_cast` accepts it
+        // alongside integers and fixedbytes; `sol.cast` (integer-only) does not.
+        let is_byte = |t: Type<'context>| text(t) == "!sol.byte";
         let src = value.r#type();
 
         // Enum ↔ integer (`sol.enum_cast` accepts `Sol_Int`, which includes
@@ -1396,8 +1402,8 @@ impl<'context> Builder<'context> {
             let as_160 = self.emit_sol_cast(value, ui160, block);
             return self.emit_sol_address_cast(as_160, to_type, block);
         }
-        // bytesN ↔ {byte, integer}.
-        if is_fixed_bytes(src) || is_fixed_bytes(to_type) {
+        // byte / bytesN ↔ {byte, bytesN, integer}.
+        if is_fixed_bytes(src) || is_fixed_bytes(to_type) || is_byte(src) || is_byte(to_type) {
             return self.emit_sol_bytes_cast(value, to_type, block);
         }
         block

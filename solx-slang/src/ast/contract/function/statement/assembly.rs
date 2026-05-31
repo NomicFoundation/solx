@@ -17,6 +17,7 @@ use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
 use num_traits::Num;
 use slang_solidity_v2::ast::AssemblyStatement;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::YulExpression;
 use slang_solidity_v2::ast::YulLiteral;
 use slang_solidity_v2::ast::YulStatement;
@@ -84,6 +85,7 @@ use solx_mlir::ods::yul::SelfBalanceOperation as YulSelfBalanceOp;
 use solx_mlir::ods::yul::SignExtendOperation as YulSignExtendOp;
 use solx_mlir::ods::yul::StopOperation as YulStopOp;
 
+use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -645,11 +647,74 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 Ok((constant, block))
             }
             YulExpression::YulPath(path) => {
-                let name = path
+                let identifier = path
                     .iter()
                     .next()
-                    .ok_or_else(|| anyhow::anyhow!("empty yul path"))?
-                    .name();
+                    .ok_or_else(|| anyhow::anyhow!("empty yul path"))?;
+                let name = identifier.name();
+                // A Solidity constant referenced in assembly (`assembly { x := C }`)
+                // resolves to `Definition::Constant`, not a yul/local variable.
+                // Emit its initializer value (widened to a 256-bit word) rather
+                // than looking it up as a local, which would hit
+                // `variable_with_type`'s unreachable. Multi-element paths
+                // (`x.slot` / `x.offset`) keep the existing handling.
+                if path.len() == 1
+                    && let Some(Definition::Constant(constant)) =
+                        identifier.resolve_to_definition()
+                {
+                    let initializer = constant.value().ok_or_else(|| {
+                        anyhow::anyhow!("constant {name} has no initializer")
+                    })?;
+                    let emitter = ExpressionEmitter::new(
+                        self.state,
+                        self.environment,
+                        self.storage_layout,
+                        self.checked,
+                    );
+                    let (value, block) = emitter.emit(&initializer, block)?;
+                    let value = value.ok_or_else(|| {
+                        anyhow::anyhow!("constant {name} initializer produced no value")
+                    })?;
+                    let builder = &self.state.builder;
+                    let ui256 = builder.types.ui256;
+                    let widened = if value.r#type() == ui256 {
+                        value
+                    } else {
+                        builder.emit_sol_cast(value, ui256, &block)
+                    };
+                    return Ok((widened, block));
+                }
+                // `stateVar.slot` / `stateVar.offset` in assembly resolves to the
+                // storage slot number / in-slot byte offset from the storage
+                // layout. The path is `[stateVar, slot|offset]`.
+                if path.len() == 2 {
+                    let parts: Vec<_> = path.iter().collect();
+                    let member = parts[1].name();
+                    if (member == "slot" || member == "offset")
+                        && let Some(Definition::StateVariable(state_variable)) =
+                            parts[0].resolve_to_definition()
+                    {
+                        let &(slot, byte_offset, _location) = self
+                            .storage_layout
+                            .get(&state_variable.node_id())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "unregistered state variable: {}",
+                                    parts[0].name()
+                                )
+                            })?;
+                        let builder = &self.state.builder;
+                        let ui256 = builder.types.ui256;
+                        let value = if member == "slot" {
+                            let slot_big = BigInt::from_str_radix(&slot.to_string(), 10)
+                                .expect("U256 decimal string parses as BigInt");
+                            builder.emit_constant(&slot_big, ui256, &block)
+                        } else {
+                            builder.emit_sol_constant(i64::from(byte_offset), ui256, &block)
+                        };
+                        return Ok((value, block));
+                    }
+                }
                 let (pointer, element_type) = self.environment.variable_with_type(&name);
                 let value = self
                     .state

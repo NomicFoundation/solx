@@ -61,7 +61,27 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         // Plain assignment: evaluate the RHS and store / copy it into the target.
         if matches!(assign.operator(), ast::AssignmentExpressionOperator::Equal(_)) {
-            let (value, block) = self.emit_value(&assign.right_operand(), block)?;
+            // Emit the RHS already coerced toward the lvalue's element type, so a
+            // string literal assigned to a `bytesN` / byte element materializes
+            // as a constant of that type (via `emit_value_for_target`) instead of
+            // a dynamic string that `sol.cast` / `sol.bytes_cast` then reject.
+            // For reference-copy targets there is no scalar element type to
+            // coerce toward, so fall back to a plain `emit_value`.
+            let store_element_type = match &target {
+                LvalueTarget::Store(AssignmentTarget::Pointer(_, element_type)) => {
+                    Some(*element_type)
+                }
+                LvalueTarget::Store(AssignmentTarget::Storage(_, _, element_type, _)) => {
+                    Some(*element_type)
+                }
+                LvalueTarget::ReferenceCopy(_) => None,
+            };
+            let (value, block) = match store_element_type {
+                Some(element_type) => {
+                    self.emit_value_for_target(&assign.right_operand(), element_type, block)?
+                }
+                None => self.emit_value(&assign.right_operand(), block)?,
+            };
             let result = self.store_to_lvalue(target, value, &block);
             return Ok((result, block));
         }
