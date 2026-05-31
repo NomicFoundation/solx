@@ -296,10 +296,32 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                                         builder.emit_sol_constant(0, builder.types.ui256, &block);
                                     return Ok((placeholder, block));
                                 }
-                                // Arrays and structs need a Memory-located aggregate
-                                // for `sol.malloc`; relocating a storage variable's
-                                // type to Memory is not yet wired, so bail cleanly
-                                // rather than asserting inside `genMemAlloc`.
+                                // Arrays and structs: `sol.delete` recursively
+                                // clears every storage slot the aggregate occupies
+                                // (matching solc's deep delete — dynamic members
+                                // reset to empty, nested aggregates recurse).
+                                SlangType::Struct(_)
+                                | SlangType::Array(_)
+                                | SlangType::FixedSizeArray(_) => {
+                                    let address = builder.emit_sol_addr_of(
+                                        &crate::ast::contract::ContractEmitter::storage_symbol(
+                                            slot,
+                                            byte_offset,
+                                            location,
+                                        ),
+                                        Self::address_type(
+                                            builder,
+                                            element_type,
+                                            location,
+                                            &declared_type,
+                                        ),
+                                        &block,
+                                    );
+                                    builder.emit_sol_delete(address, &block);
+                                    let placeholder =
+                                        builder.emit_sol_constant(0, builder.types.ui256, &block);
+                                    return Ok((placeholder, block));
+                                }
                                 _ => anyhow::bail!(
                                     "delete of a reference-type storage variable is not yet supported"
                                 ),

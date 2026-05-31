@@ -51,6 +51,7 @@ use crate::ods::sol::ContractOperation;
 use crate::ods::sol::CopyOperation;
 use crate::ods::sol::DataLocCastOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
+use crate::ods::sol::DeleteOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
@@ -808,6 +809,29 @@ impl<'context> Builder<'context> {
             CopyOperation::builder(self.context, self.unknown_location)
                 .src(src)
                 .dst(dst)
+                .build()
+                .into(),
+        );
+    }
+
+    /// Emits a `sol.delete` that recursively clears the storage occupied by the
+    /// reference-typed value at `reference` (Solidity `delete x` on an aggregate
+    /// storage variable — array, struct, `bytes`/`string`).
+    ///
+    /// `reference` must be a `Storage` reference (e.g. the result of
+    /// [`Self::emit_sol_addr_of`] for the aggregate state variable).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed.
+    pub fn emit_sol_delete<'block, B>(&self, reference: Value<'context, 'block>, block: &B)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block.append_operation(
+            DeleteOperation::builder(self.context, self.unknown_location)
+                .reference(reference)
                 .build()
                 .into(),
         );
