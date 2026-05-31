@@ -8,13 +8,16 @@ pub mod function;
 use std::collections::HashMap;
 
 use ruint::aliases::U256;
+use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::StateVariableDefinition;
 
 use solx_mlir::Context;
+use solx_mlir::StateMutability;
 
 use self::function::FunctionEmitter;
 use self::function::expression::call::type_conversion::TypeConversion;
@@ -97,25 +100,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             );
         }
 
-        // Emit the constructor first to align with solc's MLIR layout. Lower
-        // the explicit constructor body when the source defines one, otherwise
-        // emit an empty stub.
-        if let Some(constructor) = contract.constructor() {
-            self.state.current_contract_type = Some(contract_type);
-            let emitter = FunctionEmitter::new(self.state, &storage_layout);
-            emitter.emit_sol(&constructor, &contract_body)?;
-            self.state.current_contract_type = None;
-        } else {
-            let entry = self.state.builder.emit_sol_func(
-                "constructor()",
-                &[],
-                &[],
-                None,
-                solx_mlir::StateMutability::NonPayable,
-                Some(solx_mlir::FunctionKind::Constructor),
-                &contract_body,
-            );
-        }
+        self.state.current_contract_type = Some(contract_type);
+        FunctionEmitter::new(self.state, contract, &storage_layout)
+            .emit_constructor(&contract_body)?;
+        self.state.current_contract_type = None;
 
         self.state.current_contract_type = Some(contract_type);
         FunctionEmitter::new(self.state, contract, &storage_layout)
@@ -130,6 +118,63 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             self.state.current_contract_type = None;
         }
 
+        for member in contract.members().iter() {
+            let ContractMember::StateVariableDefinition(state_variable) = member else {
+                continue;
+            };
+            let Some(slot) = storage_layout.get(&state_variable.node_id()).copied() else {
+                continue;
+            };
+            self.emit_state_variable_getter(&state_variable, slot, &contract_body)?;
+        }
+
+        Ok(())
+    }
+
+    /// Emits the auto-generated external getter for a public state variable.
+    ///
+    /// Scalar `T public name;` becomes `function name() external view
+    /// returns (T)` reading slot `slot`. Array/mapping/struct getters
+    /// require indexed access and are not yet emitted; they are silently
+    /// skipped here so the rest of the contract still compiles.
+    fn emit_state_variable_getter(
+        &self,
+        state_variable: &StateVariableDefinition,
+        slot: U256,
+        contract_body: &melior::ir::BlockRef<'context, '_>,
+    ) -> anyhow::Result<()> {
+        let Some(AbiEntry::Function(abi)) = state_variable.compute_abi_entry() else {
+            return Ok(());
+        };
+        // Scalar getters only for now — indexed forms need sol.gep / sol.map.
+        if !abi.inputs().is_empty() {
+            return Ok(());
+        }
+        let Some(signature) = state_variable.compute_canonical_signature() else {
+            return Ok(());
+        };
+        let Some(selector) = state_variable.compute_selector() else {
+            return Ok(());
+        };
+
+        let builder = &self.state.builder;
+        let element_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
+        let pointer_type = builder
+            .types
+            .pointer(element_type, solx_utils::DataLocation::Storage);
+        let entry = builder.emit_sol_func(
+            &signature,
+            &[],
+            std::slice::from_ref(&element_type),
+            Some(selector),
+            StateMutability::View,
+            None,
+            contract_body,
+        );
+        let slot_name = format!("slot_{slot}");
+        let pointer = builder.emit_sol_addr_of(&slot_name, pointer_type, &entry);
+        let value = builder.emit_sol_load(pointer, element_type, &entry)?;
+        builder.emit_sol_return(&[value], &entry);
         Ok(())
     }
 
@@ -157,11 +202,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ///
     /// Returns a mapping from state variable node ID to storage slot.
     /// Returns an empty map if the ABI is unavailable.
-    fn compute_storage_layout(
-        contract: &ContractDefinition,
-        file_identifier: &str,
-    ) -> HashMap<NodeId, U256> {
-        let Some(abi) = contract.compute_abi_with_file_id(file_identifier.to_owned()) else {
+    fn compute_storage_layout(contract: &ContractDefinition) -> HashMap<NodeId, U256> {
+        let Some(abi) = contract.compute_abi() else {
             return HashMap::new();
         };
         abi.storage_layout()
