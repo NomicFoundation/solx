@@ -23,6 +23,7 @@ use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::BalanceOperation;
 use solx_mlir::ods::sol::BareCallOperation;
+use solx_mlir::ods::sol::ThisOperation;
 use solx_mlir::ods::sol::BareDelegateCallOperation;
 use solx_mlir::ods::sol::BareStaticCallOperation;
 use solx_mlir::ods::sol::BaseFeeOperation;
@@ -285,6 +286,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: Option<&PositionalArguments>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        self.emit_built_in_member_access_with_value(access, arguments, None, block)
+    }
+
+    /// As [`Self::emit_built_in_member_access`], but with an explicit external
+    /// call `value` (from `f{value: v}()` call options).
+    pub fn emit_built_in_member_access_with_value(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        call_value: Option<Value<'context, 'block>>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         // `MyEnum.VARIANT` — emit the variant index as a ui256 constant and
         // bridge to `!sol.enum<max>` via `sol.enum_cast`.
         if arguments.is_none()
@@ -320,6 +333,105 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .expect("sol.enum_cast always produces one result")
                     .into();
                 return Ok((Some(value), block));
+            }
+        }
+
+        // `this.f` / `obj.f` used as a value (no call) is an external
+        // function pointer: `sol.ext_func_constant(addr, selector)`.
+        if arguments.is_none()
+            && let Some(slang_solidity_v2::ast::Definition::Function(function_definition)) =
+                access.member().resolve_to_definition()
+            && let Some(selector) = function_definition.compute_selector()
+        {
+            let (parameter_types, return_types) = TypeConversion::resolve_function_types(
+                &function_definition,
+                &self.expression_emitter.state.builder,
+            );
+            let (receiver_value, current_block) = self
+                .expression_emitter
+                .emit_value(&access.operand(), block)?;
+            let builder = &self.expression_emitter.state.builder;
+            let address = builder.emit_sol_address_cast(
+                receiver_value,
+                builder.types.sol_address,
+                &current_block,
+            );
+            let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
+            let value =
+                builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &current_block);
+            return Ok((Some(value), current_block));
+        }
+
+        // `this.f(args)` is a genuine external call in Solidity (CALL to the
+        // contract's own address), so it populates returndata and runs the
+        // dispatcher. Emit a real `sol.ext_icall` rather than the local-call
+        // shortcut below — tests that inspect `returndatasize()` rely on this.
+        if let Some(arguments) = arguments
+            && matches!(access.operand(), slang_solidity_v2::ast::Expression::ThisKeyword(_))
+            && let Some(slang_solidity_v2::ast::Definition::Function(function_definition)) =
+                access.member().resolve_to_definition()
+            && let Some(selector) = function_definition.compute_selector()
+        {
+            let resolved = self
+                .expression_emitter
+                .state
+                .resolve_function(function_definition.node_id())
+                .ok()
+                .map(|(_, params, returns)| (params.to_vec(), returns.to_vec()));
+            if let Some((parameter_types, return_types)) = resolved {
+                let mut argument_values = Vec::with_capacity(arguments.len());
+                let mut current_block = block;
+                for argument in arguments.iter() {
+                    let (value, next) = self
+                        .expression_emitter
+                        .emit_value(&argument, current_block)?;
+                    argument_values.push(value);
+                    current_block = next;
+                }
+                let builder = &self.expression_emitter.state.builder;
+                for (value, param_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
+                    *value = TypeConversion::from_target_type(*param_type, builder)
+                        .emit(*value, builder, &current_block);
+                }
+                // `this` as an address.
+                let contract_type = self
+                    .expression_emitter
+                    .state
+                    .current_contract_type
+                    .ok_or_else(|| anyhow::anyhow!("sol.this emitted outside a contract"))?;
+                let this_value = current_block
+                    .append_operation(
+                        ThisOperation::builder(builder.context, builder.unknown_location)
+                            .addr(contract_type)
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("sol.this always produces one result")
+                    .into();
+                let address = builder.emit_sol_address_cast(
+                    this_value,
+                    builder.types.sol_address,
+                    &current_block,
+                );
+                let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
+                let callee = builder.emit_sol_ext_func_constant(
+                    address,
+                    selector,
+                    ext_ref_type,
+                    &current_block,
+                );
+                let value = call_value.unwrap_or_else(|| {
+                    builder.emit_sol_constant(0, builder.types.ui256, &current_block)
+                });
+                let results = builder.emit_sol_ext_icall(
+                    callee,
+                    &argument_values,
+                    &return_types,
+                    value,
+                    &current_block,
+                )?;
+                return Ok((results.into_iter().next(), current_block));
             }
         }
 
@@ -363,6 +475,89 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 )?;
                 return Ok((result, current_block));
             }
+        }
+
+        // External call to another contract/interface instance:
+        // `ICounter(addr).f(args)` / `instance.f(args)` where the member
+        // resolves to a function not defined in (registered for) the current
+        // contract. Evaluate the operand as the target address and emit a
+        // real `sol.ext_icall`.
+        if let Some(arguments) = arguments
+            && let Some(slang_solidity_v2::ast::Definition::Function(function_definition)) =
+                access.member().resolve_to_definition()
+            && let Some(selector) = function_definition.compute_selector()
+        {
+            let (parameter_types, return_types) = TypeConversion::resolve_function_types(
+                &function_definition,
+                &self.expression_emitter.state.builder,
+            );
+            // Evaluate the receiver expression as the callee address.
+            let (receiver_value, mut current_block) = self
+                .expression_emitter
+                .emit_value(&access.operand(), block)?;
+            let mut argument_values = Vec::with_capacity(arguments.len());
+            for argument in arguments.iter() {
+                let (value, next) = self
+                    .expression_emitter
+                    .emit_value(&argument, current_block)?;
+                argument_values.push(value);
+                current_block = next;
+            }
+            let builder = &self.expression_emitter.state.builder;
+            for (value, param_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
+                *value = TypeConversion::from_target_type(*param_type, builder)
+                    .emit(*value, builder, &current_block);
+            }
+            let address = builder.emit_sol_address_cast(
+                receiver_value,
+                builder.types.sol_address,
+                &current_block,
+            );
+            let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
+            let callee =
+                builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &current_block);
+            let value = call_value.unwrap_or_else(|| {
+                builder.emit_sol_constant(0, builder.types.ui256, &current_block)
+            });
+            let results = builder.emit_sol_ext_icall(
+                callee,
+                &argument_values,
+                &return_types,
+                value,
+                &current_block,
+            )?;
+            return Ok((results.into_iter().next(), current_block));
+        }
+
+        // `type(T).min` / `type(T).max` are compile-time integer constants.
+        if let Some(builtin @ (BuiltIn::TypeMin | BuiltIn::TypeMax)) =
+            access.member().resolve_to_built_in()
+            && let Some(result_type) = self
+                .expression_emitter
+                .resolve_slang_type(access.get_type())
+            && let Ok(integer_type) = melior::ir::r#type::IntegerType::try_from(result_type)
+        {
+            let bits = solx_mlir::TypeFactory::integer_bit_width(result_type);
+            let signed = integer_type.is_signed();
+            let value = match (builtin, signed) {
+                (BuiltIn::TypeMin, false) => num_bigint::BigInt::ZERO,
+                (BuiltIn::TypeMin, true) => {
+                    -(num_bigint::BigInt::from(1) << (bits as usize - 1))
+                }
+                (BuiltIn::TypeMax, false) => {
+                    (num_bigint::BigInt::from(1) << bits as usize) - 1
+                }
+                (BuiltIn::TypeMax, true) => {
+                    (num_bigint::BigInt::from(1) << (bits as usize - 1)) - 1
+                }
+                _ => unreachable!("matched TypeMin/TypeMax above"),
+            };
+            let value =
+                self.expression_emitter
+                    .state
+                    .builder
+                    .emit_constant(&value, result_type, &block);
+            return Ok((Some(value), block));
         }
 
         let builder = &self.expression_emitter.state.builder;

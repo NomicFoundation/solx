@@ -39,7 +39,7 @@ pub struct FunctionEmitter<'state, 'context> {
     /// Containing contract.
     contract: &'state ContractDefinition,
     /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, U256>,
+    storage_layout: &'state HashMap<NodeId, (U256, u32)>,
 }
 
 impl<'state, 'context> FunctionEmitter<'state, 'context> {
@@ -47,7 +47,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     pub fn new(
         state: &'state Context<'context>,
         contract: &'state ContractDefinition,
-        storage_layout: &'state HashMap<NodeId, U256>,
+        storage_layout: &'state HashMap<NodeId, (U256, u32)>,
     ) -> Self {
         Self {
             state,
@@ -286,23 +286,108 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Panics if an entry block is not attached to a region, which is
     /// unreachable because `emit_sol_func` always creates a region.
     pub fn emit_constructor(&self, contract_body: &BlockRef<'context, '_>) -> anyhow::Result<()> {
-        if let Some(constructor) = self.contract.constructor() {
-            self.emit_sol(&constructor, contract_body)?;
-            return Ok(());
-        }
+        let derived_constructor = self.contract.constructor();
+
+        // The deployed constructor takes the derived contract's constructor
+        // parameters (if any).
+        let (parameter_types, mutability) = match &derived_constructor {
+            Some(constructor) => {
+                let (parameter_types, _) =
+                    TypeConversion::resolve_function_types(constructor, &self.state.builder);
+                (parameter_types, Self::map_state_mutability(constructor))
+            }
+            None => (Vec::new(), StateMutability::NonPayable),
+        };
+
         let entry = self.state.builder.emit_sol_func(
             "constructor()",
-            &[],
+            &parameter_types,
             &[],
             None,
-            StateMutability::NonPayable,
+            mutability,
             Some(solx_mlir::FunctionKind::Constructor),
             contract_body,
         );
-        let environment = Environment::new();
-        let emitter = ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
-        let block = emitter.emit_state_var_initializers(self.contract, entry)?;
-        self.state.builder.emit_sol_return(&[], &block);
+
+        let mut environment = Environment::new();
+
+        // Bind the derived constructor's parameters.
+        if let Some(constructor) = &derived_constructor {
+            for (index, parameter) in constructor.parameters().iter().enumerate() {
+                let parameter_name = parameter
+                    .name()
+                    .map(|id| id.name())
+                    .unwrap_or_else(|| "_".to_owned());
+                let parameter_type = parameter_types[index];
+                let parameter_value: Value<'context, '_> = entry.argument(index)?.into();
+                let pointer = self.state.builder.emit_sol_alloca(parameter_type, &entry);
+                self.state
+                    .builder
+                    .emit_sol_store(parameter_value, pointer, &entry);
+                environment.define_variable(parameter_name, pointer, parameter_type);
+            }
+        }
+
+        // Run all (linearised) state-variable initializers first.
+        let mut current_block = {
+            let emitter =
+                ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
+            emitter.emit_state_var_initializers(self.contract, entry)?
+        };
+
+        // Run base-contract constructor bodies in C3 order (most-base first),
+        // then the derived constructor body. `compute_linearised_bases`
+        // returns most-derived first and includes the contract itself, so we
+        // reverse to get base-first ordering.
+        let region = entry.parent_region().expect("entry block has a region");
+        let return_types: [Type<'context>; 0] = [];
+        let mut bases = self.contract.compute_linearised_bases();
+        bases.reverse();
+        let mut terminated = false;
+        for base in bases.iter() {
+            let slang_solidity_v2::ast::ContractBase::Contract(base_contract) = base else {
+                continue;
+            };
+            let Some(base_constructor) = base_contract.constructor() else {
+                continue;
+            };
+            // The derived constructor's parameters are already bound; base
+            // constructors with their own parameters need argument values
+            // supplied through inheritance specifiers, which we do not yet
+            // thread through — skip running their bodies in that case.
+            let is_self = base_contract.node_id() == self.contract.node_id();
+            if !is_self && !base_constructor.parameters().is_empty() {
+                continue;
+            }
+            let Some(body) = base_constructor.body() else {
+                continue;
+            };
+            environment.enter_scope();
+            for statement in body.statements().iter() {
+                let mut emitter = StatementEmitter::new(
+                    self.state,
+                    &mut environment,
+                    &region,
+                    self.storage_layout,
+                    &return_types,
+                );
+                match emitter.emit(&statement, current_block)? {
+                    Some(next) => current_block = next,
+                    None => {
+                        terminated = true;
+                        break;
+                    }
+                }
+            }
+            environment.exit_scope();
+            if terminated {
+                break;
+            }
+        }
+
+        if !terminated {
+            self.state.builder.emit_sol_return(&[], &current_block);
+        }
         Ok(())
     }
 

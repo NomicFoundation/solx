@@ -155,6 +155,27 @@ unsafe extern "C" {
     /// (one less than the number of enum members).
     pub fn solxCreateEnumType(context: MlirContext, max: u32) -> mlir_sys::MlirType;
 
+    /// Creates a `sol::FuncRefType` wrapping a `FunctionType` built from the
+    /// given parameter and result type arrays. Used for internal function
+    /// pointers (`function(...) internal returns (...)`).
+    pub fn solxCreateFuncRefType(
+        context: MlirContext,
+        param_types: *const mlir_sys::MlirType,
+        param_count: usize,
+        result_types: *const mlir_sys::MlirType,
+        result_count: usize,
+    ) -> mlir_sys::MlirType;
+
+    /// Creates a `sol::ExtFuncRefType` (external function reference: address +
+    /// selector) wrapping a `FunctionType`. Used for external calls.
+    pub fn solxCreateExtFuncRefType(
+        context: MlirContext,
+        param_types: *const mlir_sys::MlirType,
+        param_count: usize,
+        result_types: *const mlir_sys::MlirType,
+        result_count: usize,
+    ) -> mlir_sys::MlirType;
+
     // ---- Sol type inference ----
 
     /// Returns the element type of a non-mapping reference type. For

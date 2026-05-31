@@ -135,11 +135,57 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         match statement {
             YulStatement::YulVariableAssignmentStatement(assignment) => {
                 let expression = assignment.expression();
-                let (value, block) = self.emit_yul_expression(&expression, block)?;
                 let variables = assignment.variables();
+                // Multi-target assignment `x, y, z := f()` — the RHS must be a
+                // call to a user-defined yul function with matching arity.
                 if variables.len() != 1 {
-                    anyhow::bail!("multi-value yul assignment not supported");
+                    let YulExpression::YulFunctionCallExpression(call) = &expression else {
+                        anyhow::bail!("multi-value yul assignment requires a call RHS");
+                    };
+                    let YulExpression::YulPath(callee_path) = call.operand() else {
+                        anyhow::bail!("multi-value yul assignment RHS has non-path callee");
+                    };
+                    let callee = callee_path
+                        .iter()
+                        .next()
+                        .ok_or_else(|| anyhow::anyhow!("empty yul callee path"))?
+                        .name();
+                    if !self.yul_functions.contains_key(&callee) {
+                        anyhow::bail!("multi-value yul assignment RHS is not a user-defined function");
+                    }
+                    let mut arguments = Vec::new();
+                    let mut current = block;
+                    for argument in call.arguments().iter() {
+                        let (value, next) = self.emit_yul_expression(&argument, current)?;
+                        arguments.push(value);
+                        current = next;
+                    }
+                    let (values, current) =
+                        self.emit_yul_user_call_multi(&callee, &arguments, current)?;
+                    anyhow::ensure!(
+                        values.len() == variables.len(),
+                        "yul assignment arity mismatch: {} targets vs {} results",
+                        variables.len(),
+                        values.len(),
+                    );
+                    for (path, value) in variables.iter().zip(values) {
+                        let name = path
+                            .iter()
+                            .next()
+                            .ok_or_else(|| anyhow::anyhow!("empty yul lvalue path"))?
+                            .name();
+                        let (pointer, element_type) = self.environment.variable_with_type(&name);
+                        let builder = &self.state.builder;
+                        let cast = if value.r#type() == element_type {
+                            value
+                        } else {
+                            builder.emit_sol_cast(value, element_type, &current)
+                        };
+                        builder.emit_sol_store(cast, pointer, &current);
+                    }
+                    return Ok(current);
                 }
+                let (value, block) = self.emit_yul_expression(&expression, block)?;
                 let path = variables
                     .iter()
                     .next()
@@ -613,6 +659,23 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let ui256 = builder.types.ui256;
                 let cast = if value.r#type() == ui256 {
                     value
+                } else if format!("{}", value.r#type()).starts_with("!sol.enum") {
+                    // Enum-typed variables bridge to ui256 via `sol.enum_cast`;
+                    // `sol.cast` rejects non-integer enum operands.
+                    block
+                        .append_operation(
+                            solx_mlir::ods::sol::EnumCastOperation::builder(
+                                builder.context,
+                                builder.unknown_location,
+                            )
+                            .inp(value)
+                            .out(ui256)
+                            .build()
+                            .into(),
+                        )
+                        .result(0)
+                        .expect("sol.enum_cast produces one result")
+                        .into()
                 } else {
                     builder.emit_sol_cast(value, ui256, &block)
                 };

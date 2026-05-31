@@ -48,7 +48,13 @@ use crate::ods::sol::ContinueOperation;
 use crate::ods::sol::ContractOperation;
 use crate::ods::sol::CopyOperation;
 use crate::ods::sol::DataLocCastOperation;
+use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::DoWhileOperation;
+use crate::ods::sol::ExtFuncConstantOperation;
+use crate::ods::sol::ExtICallOperation;
+use crate::ods::sol::FuncConstantOperation;
+use crate::ods::sol::GasLeftOperation;
+use crate::ods::sol::ICallOperation;
 use crate::ods::sol::ForOperation;
 use crate::ods::sol::FuncOperation;
 use crate::ods::sol::GepOperation;
@@ -75,6 +81,11 @@ pub struct Builder<'context> {
     pub unknown_location: Location<'context>,
     /// Type factory: pre-cached common types and parameterized constructors.
     pub types: TypeFactory<'context>,
+    /// Monotonic counter assigning a unique non-zero `id` to each `sol.func`.
+    /// The Sol→Yul lowering of `sol.func_constant` / `sol.icall` (internal
+    /// function pointers) requires every pointer-target function to carry an
+    /// `id`; assigning to all functions is harmless for the rest.
+    function_id_counter: std::cell::Cell<i64>,
 }
 
 impl<'context> Builder<'context> {
@@ -84,6 +95,7 @@ impl<'context> Builder<'context> {
             context,
             unknown_location: Location::unknown(context),
             types: TypeFactory::new(context),
+            function_id_counter: std::cell::Cell::new(1),
         }
     }
 
@@ -193,6 +205,15 @@ impl<'context> Builder<'context> {
         if selector.is_some() || matches!(kind, Some(crate::FunctionKind::Constructor)) {
             builder = builder.orig_fn_type(TypeAttribute::new(function_type.into()));
         }
+
+        // Assign a unique non-zero id so the function can be the target of an
+        // internal function pointer (`sol.func_constant` / `sol.icall`).
+        let function_id = self.function_id_counter.get();
+        self.function_id_counter.set(function_id + 1);
+        builder = builder.id(IntegerAttribute::new(
+            IntegerType::new(self.context, 64).into(),
+            function_id,
+        ));
 
         let operation = block.append_operation(builder.build().into());
         operation
@@ -1017,6 +1038,183 @@ impl<'context> Builder<'context> {
         Ok(results)
     }
 
+    /// Emits a `sol.func_constant` producing a reference to an internal
+    /// function `name` with the given `func_ref` type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed.
+    pub fn emit_sol_func_constant<'block, B>(
+        &self,
+        name: &str,
+        func_ref_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                FuncConstantOperation::builder(self.context, self.unknown_location)
+                    .addr(func_ref_type)
+                    .sym(FlatSymbolRefAttribute::new(self.context, name))
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.func_constant always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.default_func_constant` — the zero/uninitialized value for
+    /// an internal function pointer (calling it reverts).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed.
+    pub fn emit_sol_default_func_constant<'block, B>(
+        &self,
+        func_ref_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                DefaultFuncConstantOperation::builder(self.context, self.unknown_location)
+                    .addr(func_ref_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.default_func_constant always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.icall` (indirect call through an internal function
+    /// pointer) and returns its result values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a result cannot be retrieved.
+    pub fn emit_sol_icall<'block, B>(
+        &self,
+        callee: Value<'context, 'block>,
+        operands: &[Value<'context, 'block>],
+        result_types: &[Type<'context>],
+        block: &B,
+    ) -> anyhow::Result<Vec<Value<'context, 'block>>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let operation = block.append_operation(
+            ICallOperation::builder(self.context, self.unknown_location)
+                .outs(result_types)
+                .callee(callee)
+                .callee_operands(operands)
+                .build()
+                .into(),
+        );
+        let mut results = Vec::with_capacity(result_types.len());
+        for index in 0..result_types.len() {
+            results.push(operation.result(index)?.into());
+        }
+        Ok(results)
+    }
+
+    /// Emits a `sol.ext_func_constant` building an external function
+    /// reference from an address value and a 4-byte selector.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed.
+    pub fn emit_sol_ext_func_constant<'block, B>(
+        &self,
+        address: Value<'context, 'block>,
+        selector: u32,
+        ext_func_ref_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                ExtFuncConstantOperation::builder(self.context, self.unknown_location)
+                    .addr(address)
+                    .selector(IntegerAttribute::new(
+                        IntegerType::new(self.context, TypeFactory::SELECTOR_BIT_WIDTH).into(),
+                        selector as i64,
+                    ))
+                    .result(ext_func_ref_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.ext_func_constant always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.ext_icall` (external call through an external function
+    /// reference), forwarding all remaining gas and the given `value`.
+    /// Returns the decoded result values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a result cannot be retrieved.
+    pub fn emit_sol_ext_icall<'block, B>(
+        &self,
+        callee: Value<'context, 'block>,
+        operands: &[Value<'context, 'block>],
+        result_types: &[Type<'context>],
+        value: Value<'context, 'block>,
+        block: &B,
+    ) -> anyhow::Result<Vec<Value<'context, 'block>>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        // Forward all remaining gas (`gas()` / `gasleft()`), the default for
+        // an external call without an explicit `{gas: ...}` option.
+        let gas: Value<'context, 'block> = block
+            .append_operation(
+                GasLeftOperation::builder(self.context, self.unknown_location)
+                    .val(self.types.ui256)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.gas always produces one result")
+            .into();
+        // `sol.ext_icall` results are `(i1 status, decoded-returns...)`. We
+        // prepend the status type and drop it from the values we hand back —
+        // a non-try call reverts internally on failure, so the status is
+        // always true here.
+        let mut out_types = Vec::with_capacity(result_types.len() + 1);
+        out_types.push(self.types.i1);
+        out_types.extend_from_slice(result_types);
+        let operation = block.append_operation(
+            ExtICallOperation::builder(self.context, self.unknown_location)
+                .outs(&out_types)
+                .callee(callee)
+                .callee_operands(operands)
+                .gas(gas)
+                .value(value)
+                .build()
+                .into(),
+        );
+        let mut results = Vec::with_capacity(result_types.len());
+        for index in 0..result_types.len() {
+            results.push(operation.result(index + 1)?.into());
+        }
+        Ok(results)
+    }
+
     // ==== Comparisons ====
 
     /// Emits a `sol.cmp` comparison returning `i1`.
@@ -1188,6 +1386,7 @@ impl<'context> Builder<'context> {
         &self,
         name: &str,
         slot: U256,
+        byte_offset: u32,
         element_type: Type<'context>,
         block: &B,
     ) where
@@ -1201,7 +1400,7 @@ impl<'context> Builder<'context> {
                 .expect("slot literal is an integer attribute");
         let byte_offset_attribute = IntegerAttribute::new(
             IntegerType::new(self.context, solx_utils::BIT_LENGTH_X32 as u32).into(),
-            byte_offset.into(),
+            byte_offset as i64,
         );
         block.append_operation(
             StateVarOperation::builder(self.context, self.unknown_location)

@@ -222,11 +222,34 @@ impl<'context> TypeConversion<'context> {
                 // total for paths where the void value is never consumed.
                 builder.types.ui256
             }
-            SlangType::Function(_) | SlangType::FixedPointNumber(_) => {
-                // Function pointers and the (reserved-but-unimplemented)
-                // fixed-point types have no MLIR lowering yet. Return ui256
-                // as a sentinel so the resolver is total; calls that actually
-                // exercise these values still fail downstream.
+            SlangType::Function(function_type) => {
+                // Function pointer → `!sol.func_ref<fnTy>` (internal) or
+                // `!sol.ext_func_ref<fnTy>` (external).
+                let parameter_types: Vec<_> = function_type
+                    .parameter_types()
+                    .iter()
+                    .map(|t| Self::resolve_slang_type(t, None, builder))
+                    .collect();
+                let return_type = function_type.return_type();
+                let result_types: Vec<_> = match &return_type {
+                    SlangType::Void(_) => Vec::new(),
+                    SlangType::Tuple(tuple) => tuple
+                        .types()
+                        .iter()
+                        .map(|t| Self::resolve_slang_type(t, None, builder))
+                        .collect(),
+                    other => vec![Self::resolve_slang_type(other, None, builder)],
+                };
+                if function_type.is_externally_visible() {
+                    builder.types.ext_func_ref(&parameter_types, &result_types)
+                } else {
+                    builder.types.func_ref(&parameter_types, &result_types)
+                }
+            }
+            SlangType::FixedPointNumber(_) => {
+                // The (reserved-but-unimplemented) fixed-point types have no
+                // MLIR lowering yet. Return ui256 as a sentinel so the
+                // resolver is total; code that consumes them still fails.
                 builder.types.ui256
             }
             _ => unimplemented!("unsupported Slang type"),
@@ -359,6 +382,12 @@ impl<'context> TypeConversion<'context> {
                     && Self::is_reference_mlir_type(target_type)
                 {
                     builder.emit_sol_data_loc_cast(value, target_type, block)
+                } else if Self::is_address_like_mlir_type(value.r#type())
+                    || Self::is_address_like_mlir_type(target_type)
+                {
+                    // address ↔ contract conversions (e.g. `ICounter(addr)`)
+                    // go through `sol.address_cast`, not `sol.cast`.
+                    builder.emit_sol_address_cast(value, target_type, block)
                 } else {
                     builder.emit_sol_cast(value, target_type, block)
                 }
@@ -382,5 +411,12 @@ impl<'context> TypeConversion<'context> {
             || text.starts_with("!sol.string")
             || text.starts_with("!sol.bytes")
             || text.starts_with("!sol.mapping")
+    }
+
+    /// Heuristic check for a Sol address or contract type by textual form —
+    /// conversions among these use `sol.address_cast`.
+    fn is_address_like_mlir_type(t: melior::ir::Type<'_>) -> bool {
+        let text = format!("{t}");
+        text.starts_with("!sol.address") || text.starts_with("!sol.contract")
     }
 }

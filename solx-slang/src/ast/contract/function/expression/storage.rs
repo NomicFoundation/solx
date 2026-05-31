@@ -26,10 +26,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn emit_storage_load(
         &self,
         slot: U256,
+        byte_offset: u32,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
-        let pointer = self.emit_storage_addr_of(slot, element_type, block);
+        let pointer = self.emit_storage_addr_of(slot, byte_offset, element_type, block);
         self.state
             .builder
             .emit_sol_load(pointer, element_type, block)
@@ -39,11 +40,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn emit_storage_store(
         &self,
         slot: U256,
+        byte_offset: u32,
         value: Value<'context, 'block>,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) {
-        let pointer = self.emit_storage_addr_of(slot, value.r#type(), block);
+        let pointer = self.emit_storage_addr_of(slot, byte_offset, value.r#type(), block);
         self.state.builder.emit_sol_store(value, pointer, block);
     }
 
@@ -64,7 +66,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         mut block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<BlockRef<'context, 'block>> {
         for state_variable in contract.compute_linearised_state_variables() {
-            let Some(slot) = self.storage_layout.get(&state_variable.node_id()) else {
+            let Some(&(slot, byte_offset)) = self.storage_layout.get(&state_variable.node_id())
+            else {
                 continue;
             };
             let Some(initializer) = state_variable.value() else {
@@ -85,8 +88,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             block = next_block;
             let address_type =
                 Self::address_type(builder, element_type, DataLocation::Storage, &declared_type);
-            let storage_ref =
-                builder.emit_sol_addr_of(&format!("slot_{slot}"), address_type, &block);
+            let storage_ref = builder.emit_sol_addr_of(
+                &crate::ast::contract::ContractEmitter::storage_symbol(slot, byte_offset),
+                address_type,
+                &block,
+            );
             if declared_type.is_reference_type() {
                 builder.emit_sol_copy(value, storage_ref, &block);
             } else {
@@ -102,6 +108,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     fn emit_storage_addr_of(
         &self,
         slot: U256,
+        byte_offset: u32,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
@@ -110,8 +117,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .builder
             .types
             .pointer(element_type, DataLocation::Storage);
-        self.state
-            .builder
-            .emit_sol_addr_of(&format!("slot_{slot}"), pointer_type, block)
+        self.state.builder.emit_sol_addr_of(
+            &crate::ast::contract::ContractEmitter::storage_symbol(slot, byte_offset),
+            pointer_type,
+            block,
+        )
     }
 }

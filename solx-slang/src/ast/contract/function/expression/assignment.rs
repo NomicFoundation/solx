@@ -24,8 +24,9 @@ enum AssignmentTarget<'context, 'block> {
     /// Covers local variables, function parameters, and the result of an
     /// `a[i]` / `m[k]` index-access expression on the left-hand side.
     Pointer(Value<'context, 'block>, Type<'context>),
-    /// State variable — storage slot and declared element type.
-    Storage(U256, Type<'context>),
+    /// State variable — storage slot, byte offset within the slot, and
+    /// declared element type.
+    Storage(U256, u32, Type<'context>),
 }
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
@@ -44,7 +45,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let declared_type = state_variable.get_type().ok_or_else(|| {
                             anyhow::anyhow!("unresolved type for state variable: {name}")
                         })?;
-                        let slot = self
+                        let &(slot, byte_offset) = self
                             .storage_layout
                             .get(&state_variable.node_id())
                             .ok_or_else(|| {
@@ -55,14 +56,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             None,
                             &self.state.builder,
                         );
-                        // Fixed-size arrays copy element-by-element via
-                        // `sol.copy` from the RHS reference to the storage
-                        // slot. Other reference types (bytes/string/dynamic
-                        // arrays/structs) are not yet supported.
-                        if matches!(
-                            declared_type,
-                            slang_solidity_v2::ast::Type::FixedSizeArray(_)
-                        ) {
+                        // Reference-typed storage assignment (fixed/dynamic
+                        // arrays, `string`, `bytes`, structs) copies the RHS
+                        // reference into the storage slot via `sol.copy`.
+                        // Mappings are not assignable.
+                        if declared_type.is_reference_type()
+                            && !matches!(declared_type, slang_solidity_v2::ast::Type::Mapping(_))
+                        {
                             let right = assign.right_operand();
                             let (rhs_value, block) = self.emit_value(&right, block)?;
                             let address_type = Self::address_type(
@@ -72,19 +72,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                                 &declared_type,
                             );
                             let storage_ref = self.state.builder.emit_sol_addr_of(
-                                &format!("slot_{slot}"),
+                                &crate::ast::contract::ContractEmitter::storage_symbol(
+                                    slot, byte_offset,
+                                ),
                                 address_type,
                                 &block,
                             );
                             self.state.builder.emit_sol_copy(rhs_value, storage_ref, &block);
                             return Ok((rhs_value, block));
                         }
-                        if declared_type.is_reference_type() {
-                            anyhow::bail!(
-                                "assignment to a reference-typed state variable is not yet supported"
-                            );
-                        }
-                        AssignmentTarget::Storage(*slot, element_type)
+                        AssignmentTarget::Storage(slot, byte_offset, element_type)
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let (pointer, element_type) = self.environment.variable_with_type(&name);
@@ -159,9 +156,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         .emit_sol_load(*pointer, *element_type, &block)?;
                     (old, *element_type)
                 }
-                AssignmentTarget::Storage(slot, element_type) => {
-                    let old = self.emit_storage_load(slot, *element_type, &block)?;
-                    (old, *element_type)
+                AssignmentTarget::Storage(slot, byte_offset, element_type) => {
+                    let old = self.emit_storage_load(slot, byte_offset, element_type, &block)?;
+                    (old, element_type)
                 }
             };
             let (rhs, block) = self.emit_value(&right, block)?;
@@ -201,13 +198,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .emit_sol_store(stored_value, *pointer, &block);
                 stored_value
             }
-            AssignmentTarget::Storage(slot, element_type) => {
+            AssignmentTarget::Storage(slot, byte_offset, element_type) => {
                 let stored_value = TypeConversion::from_target_type(
                     *element_type,
                     &self.state.builder,
                 )
                 .emit(value, &self.state.builder, &block);
-                self.emit_storage_store(slot, stored_value, *element_type, &block);
+                self.emit_storage_store(slot, byte_offset, stored_value, &block);
                 stored_value
             }
         };

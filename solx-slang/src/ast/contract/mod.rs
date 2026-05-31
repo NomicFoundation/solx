@@ -88,23 +88,23 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // Walk the C3-linearised state-variable list so derived contracts
         // pick up base-contract storage slots and getters in addition to
         // their own.
-        let mut emitted_slots: std::collections::HashSet<U256> =
+        let mut emitted_slots: std::collections::HashSet<(U256, u32)> =
             std::collections::HashSet::new();
         for state_variable in contract.compute_linearised_state_variables() {
-            let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
+            let Some(&(slot, byte_offset)) = storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };
-            if !emitted_slots.insert(*slot) {
-                // Multiple state variables can share the same slot when
-                // packed (e.g. several `uint8` fields). Emit `slot_N` only
-                // once; subsequent accesses resolve to the same symbol.
+            if !emitted_slots.insert((slot, byte_offset)) {
+                // Distinct state variables may share a (slot, offset) only
+                // through inheritance re-linearisation; emit each symbol once.
                 continue;
             }
             let element_type =
                 TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
             self.state.builder.emit_sol_state_var(
-                &format!("slot_{slot}"),
-                *slot,
+                &Self::storage_symbol(slot, byte_offset),
+                slot,
+                byte_offset,
                 element_type,
                 &contract_body,
             );
@@ -134,14 +134,26 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         for state_variable in contract.compute_linearised_state_variables() {
             if matches!(state_variable.mutability(), StateVariableMutability::Constant) {
                 self.emit_constant_getter(&state_variable, &contract_body)?;
-            } else if let Some(slot) =
-                storage_layout.get(&state_variable.node_id()).copied()
+            } else if let Some(&(slot, byte_offset)) =
+                storage_layout.get(&state_variable.node_id())
             {
-                self.emit_state_variable_getter(&state_variable, slot, &contract_body)?;
+                self.emit_state_variable_getter(
+                    &state_variable,
+                    slot,
+                    byte_offset,
+                    &contract_body,
+                )?;
             }
         }
 
         Ok(())
+    }
+
+    /// Builds the storage-variable symbol name for a `(slot, byte_offset)`
+    /// location. Packed small-value variables share a slot but differ in
+    /// byte offset, so the offset is part of the symbol.
+    pub(crate) fn storage_symbol(slot: U256, byte_offset: u32) -> String {
+        format!("slot_{slot}_{byte_offset}")
     }
 
     /// Emits the auto-generated external getter for a `public constant` state
@@ -210,6 +222,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         &self,
         state_variable: &StateVariableDefinition,
         slot: U256,
+        byte_offset: u32,
         contract_body: &melior::ir::BlockRef<'context, '_>,
     ) -> anyhow::Result<()> {
         let Some(AbiEntry::Function(abi)) = state_variable.compute_abi_entry() else {
@@ -226,16 +239,22 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             return Ok(());
         };
 
+        let declared_type = state_variable.get_type().ok_or_else(|| {
+            anyhow::anyhow!("unresolved type for state variable getter")
+        })?;
         let builder = &self.state.builder;
         let element_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
-        let pointer_type = builder
-            .types
-            .pointer(element_type, solx_utils::DataLocation::Storage);
-        // For an enum state variable the storage type is `!sol.enum<N>` but
-        // the ABI return type is the underlying integer (e.g. ui8). Use the
-        // element type for the storage load, then bridge to ui256 via
-        // `sol.enum_cast` if it's an enum — the codegen pipeline lowers
-        // both to the same ABI representation.
+        // A reference-typed state variable (`string`/`bytes`/array/struct) is
+        // addressed by the reference type itself in storage; value types use
+        // a `!sol.ptr<T, Storage>`. Matching the address type the initializer
+        // uses keeps the `sol.addr_of` symbol consistent.
+        let address_type = if declared_type.is_reference_type() {
+            element_type
+        } else {
+            builder
+                .types
+                .pointer(element_type, solx_utils::DataLocation::Storage)
+        };
         let entry = builder.emit_sol_func(
             &signature,
             &[],
@@ -245,9 +264,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             None,
             contract_body,
         );
-        let slot_name = format!("slot_{slot}");
-        let pointer = builder.emit_sol_addr_of(&slot_name, pointer_type, &entry);
-        let value = builder.emit_sol_load(pointer, element_type, &entry)?;
+        let slot_name = Self::storage_symbol(slot, byte_offset);
+        let storage_ref = builder.emit_sol_addr_of(&slot_name, address_type, &entry);
+        let value = if declared_type.is_reference_type() {
+            // The storage reference is the value the ABI encoder reads from.
+            storage_ref
+        } else {
+            builder.emit_sol_load(storage_ref, element_type, &entry)?
+        };
         builder.emit_sol_return(&[value], &entry);
         Ok(())
     }
@@ -279,11 +303,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ///
     /// Returns a mapping from state variable node ID to storage slot.
     /// Returns an empty map if the ABI is unavailable.
-    fn compute_storage_layout(contract: &ContractDefinition) -> HashMap<NodeId, U256> {
-        let mut layout: HashMap<NodeId, U256> = HashMap::new();
+    fn compute_storage_layout(contract: &ContractDefinition) -> HashMap<NodeId, (U256, u32)> {
+        let mut layout: HashMap<NodeId, (U256, u32)> = HashMap::new();
         if let Some(abi) = contract.compute_abi() {
             for item in abi.storage_layout().iter() {
-                layout.insert(item.node_id(), item.slot());
+                let byte_offset = u32::try_from(item.offset()).unwrap_or(0);
+                layout.insert(item.node_id(), (item.slot(), byte_offset));
             }
         }
         // Slang's ABI omits `immutable` state variables (they live in code,
@@ -293,7 +318,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // observable semantics (read after constructor write) survives.
         let mut next_slot: U256 = layout
             .values()
-            .copied()
+            .map(|(slot, _)| *slot)
             .max()
             .map(|max| max + U256::from(1))
             .unwrap_or(U256::from(0));
@@ -307,7 +332,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             if layout.contains_key(&state_variable.node_id()) {
                 continue;
             }
-            layout.insert(state_variable.node_id(), next_slot);
+            layout.insert(state_variable.node_id(), (next_slot, 0));
             next_slot += U256::from(1);
         }
         layout

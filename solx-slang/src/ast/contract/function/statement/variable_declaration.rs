@@ -36,13 +36,25 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let name = declaration.declaration().name().name();
-        let declared_type = declaration
-            .declaration()
-            .get_type()
+        let slang_declared_type = declaration.declaration().get_type();
+        let declared_type = slang_declared_type
+            .as_ref()
             .map(|slang_type| {
-                TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
+                TypeConversion::resolve_slang_type(slang_type, None, &self.state.builder)
             })
             .unwrap_or_else(|| self.state.builder.types.ui256);
+        // A value-type memory aggregate declared without an initializer
+        // (`T[n] memory a;`, `S memory s;`) is zero-allocated in memory by
+        // Solidity; without that, indexing it reverts. Allocate fixed-size
+        // arrays and structs up front.
+        let needs_memory_alloc = declaration.value().is_none()
+            && matches!(
+                slang_declared_type,
+                Some(
+                    slang_solidity_v2::ast::Type::FixedSizeArray(_)
+                        | slang_solidity_v2::ast::Type::Struct(_)
+                )
+            );
 
         let emitter = ExpressionEmitter::new(
             self.state,
@@ -76,10 +88,14 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 .builder
                 .emit_sol_constant(0, declared_type, &block);
             emitter.state.builder.emit_sol_store(zero, pointer, &block);
+        } else if needs_memory_alloc {
+            // Allocate a fresh zero-initialised aggregate in memory and bind
+            // the variable to it.
+            let allocated = emitter.state.builder.emit_sol_malloc(declared_type, &block);
+            emitter.state.builder.emit_sol_store(allocated, pointer, &block);
         }
-        // Non-integer declarations without an initializer are left as the
-        // raw sol.alloca pointer. Tests that overwrite before reading still
-        // work; tests that rely on Solidity's default zero-init may not.
+        // Other non-integer declarations without an initializer are left as
+        // the raw sol.alloca pointer.
 
         self.environment
             .define_variable(name, pointer, declared_type);

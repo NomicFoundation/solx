@@ -43,7 +43,7 @@ pub struct ExpressionEmitter<'state, 'context, 'block> {
     /// Variable environment.
     pub environment: &'state Environment<'context, 'block>,
     /// State variable node ID to storage slot mapping.
-    pub storage_layout: &'state HashMap<NodeId, U256>,
+    pub storage_layout: &'state HashMap<NodeId, (U256, u32)>,
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
     ///
     /// `true` by default (Solidity 0.8+). Set to `false` inside `unchecked {}`
@@ -56,7 +56,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn new(
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
-        storage_layout: &'state HashMap<NodeId, U256>,
+        storage_layout: &'state HashMap<NodeId, (U256, u32)>,
         checked: bool,
     ) -> Self {
         Self {
@@ -94,6 +94,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         expression: &Expression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        // Constant folding: slang assigns a `Literal` type carrying the
+        // computed value to compile-time constant (sub)expressions. Emitting
+        // that value directly matches solc's exact rational arithmetic — e.g.
+        // `1/2*2 == 1` and `2**256-1` (which would overflow if evaluated with
+        // runtime 256-bit ops). Only computed expressions are folded; simple
+        // literals/identifiers keep their existing paths.
+        if Self::is_foldable_expression(expression)
+            && let Some(value) = self.try_emit_constant_literal(expression, &block)
+        {
+            return Ok((Some(value), block));
+        }
         match expression {
             Expression::DecimalNumberExpression(decimal_number) => {
                 let value = decimal_number.integer_value().ok_or_else(|| {
@@ -165,7 +176,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let name = identifier.name();
                 match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(state_variable)) => {
-                        let slot = self
+                        let &(slot, byte_offset) = self
                             .storage_layout
                             .get(&state_variable.node_id())
                             .ok_or_else(|| {
@@ -180,7 +191,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             &self.state.builder,
                         );
                         let address = self.state.builder.emit_sol_addr_of(
-                            &format!("slot_{slot}"),
+                            &crate::ast::contract::ContractEmitter::storage_symbol(
+                                slot, byte_offset,
+                            ),
                             Self::address_type(
                                 &self.state.builder,
                                 element_type,
@@ -208,6 +221,35 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             .value()
                             .ok_or_else(|| anyhow::anyhow!("constant {name} has no initializer"))?;
                         self.emit(&initializer, block)
+                    }
+                    Some(Definition::Function(function_definition)) => {
+                        // A bare function name used as a value is an internal
+                        // function pointer: emit `sol.func_constant @name`.
+                        let (mlir_name, _, _) = self
+                            .state
+                            .resolve_function(function_definition.node_id())
+                            .map_err(|_| {
+                                anyhow::anyhow!("unregistered function pointer: {name}")
+                            })?;
+                        let mlir_name = mlir_name.to_owned();
+                        let func_ref_type = identifier
+                            .get_type()
+                            .map(|slang_type| {
+                                TypeConversion::resolve_slang_type(
+                                    &slang_type,
+                                    None,
+                                    &self.state.builder,
+                                )
+                            })
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("unresolved function-pointer type: {name}")
+                            })?;
+                        let value = self.state.builder.emit_sol_func_constant(
+                            &mlir_name,
+                            func_ref_type,
+                            &block,
+                        );
+                        Ok((Some(value), block))
                     }
                     None => anyhow::bail!("unresolved identifier: {name}"),
                     Some(_) => anyhow::bail!("unsupported identifier reference: {name}"),
@@ -475,6 +517,51 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             None,
             &self.state.builder,
         ))
+    }
+
+    /// Whether an expression is a computed form worth constant-folding (binary
+    /// arithmetic / bitwise / shift / unary). Simple literals, identifiers,
+    /// and calls are excluded — they keep their existing emission paths.
+    fn is_foldable_expression(expression: &Expression) -> bool {
+        matches!(
+            expression,
+            Expression::AdditiveExpression(_)
+                | Expression::MultiplicativeExpression(_)
+                | Expression::ExponentiationExpression(_)
+                | Expression::ShiftExpression(_)
+                | Expression::BitwiseAndExpression(_)
+                | Expression::BitwiseOrExpression(_)
+                | Expression::BitwiseXorExpression(_)
+                | Expression::PrefixExpression(_)
+        )
+    }
+
+    /// Emits a folded constant value when `expression` carries a compile-time
+    /// `Literal` integer/rational type. Returns `None` when the expression is
+    /// not a constant (slang only assigns a `Literal` type to compile-time
+    /// constants) or the rational is non-integer.
+    fn try_emit_constant_literal(
+        &self,
+        expression: &Expression,
+        block: &BlockRef<'context, 'block>,
+    ) -> Option<Value<'context, 'block>> {
+        use slang_solidity_v2::ast::LiteralKind;
+        let SlangType::Literal(literal_type) = expression.get_type()? else {
+            return None;
+        };
+        let value = match literal_type.kind() {
+            LiteralKind::Integer { value } => value,
+            LiteralKind::HexInteger { value, .. } => value,
+            LiteralKind::Rational { value } => {
+                if !value.is_integer() {
+                    return None;
+                }
+                value.to_integer()
+            }
+            _ => return None,
+        };
+        let result_type = self.resolve_slang_type(expression.get_type())?;
+        Some(self.state.builder.emit_constant(&value, result_type, block))
     }
 
     /// Picks the MLIR type of the address yielded by `sol.gep` / `sol.map`.

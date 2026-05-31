@@ -17,6 +17,7 @@ use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StructDefinition;
+use slang_solidity_v2::ast::Type as SlangType;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
@@ -123,16 +124,27 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let inner = call_options.operand();
             if let Expression::MemberAccessExpression(access) = &inner {
                 let mut current_block = block;
+                let mut call_value = None;
                 for option in call_options.options().iter() {
                     let value_expression = option.value();
-                    let (_value, next) = self
+                    let (value, next) = self
                         .expression_emitter
                         .emit_value(&value_expression, current_block)?;
                     current_block = next;
+                    // Capture `{value: v}` to forward as the external call's
+                    // wei value; other options (gas, salt) are evaluated for
+                    // side effects only.
+                    if option.name().name() == "value" {
+                        let builder = &self.expression_emitter.state.builder;
+                        let cast = TypeConversion::from_target_type(builder.types.ui256, builder)
+                            .emit(value, builder, &current_block);
+                        call_value = Some(cast);
+                    }
                 }
-                return self.emit_built_in_member_access(
+                return self.emit_built_in_member_access_with_value(
                     access,
                     Some(positional_arguments),
+                    call_value,
                     current_block,
                 );
             }
@@ -154,6 +166,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
 
         let Expression::Identifier(callee_identifier) = &callee else {
+            // Non-identifier callee (e.g. `arr[i]()` array of function
+            // pointers). If it has function-pointer type, call indirectly.
+            if let Some(function_slang_type) = Self::callee_type(&callee)
+                && matches!(&function_slang_type, SlangType::Function(_))
+            {
+                return self.emit_indirect_call(
+                    &callee,
+                    &function_slang_type,
+                    positional_arguments,
+                    block,
+                );
+            }
             anyhow::bail!("unsupported callee expression");
         };
         let function_definition = match callee_identifier.resolve_to_definition() {
@@ -171,6 +195,24 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         block,
                     )
                     .map(|(value, block)| (Some(value), block));
+            }
+            // Calling through an internal function pointer: the callee is a
+            // variable/parameter/state-variable of function type. Load the
+            // `func_ref` value and emit `sol.icall`.
+            Some(
+                Definition::Variable(_)
+                | Definition::Parameter(_)
+                | Definition::StateVariable(_),
+            ) => {
+                let function_slang_type = callee_identifier
+                    .get_type()
+                    .ok_or_else(|| anyhow::anyhow!("unresolved function-pointer type"))?;
+                return self.emit_indirect_call(
+                    &callee,
+                    &function_slang_type,
+                    positional_arguments,
+                    block,
+                );
             }
             _ => anyhow::bail!(
                 "callee '{}' does not resolve to a function",
@@ -199,6 +241,84 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .expect("function call always produces at least one result");
             Ok((Some(result), current_block))
         }
+    }
+
+    /// Returns the slang type of a callee expression, for the common forms
+    /// that can produce a function-pointer value (identifiers and index
+    /// accesses). Used to decide whether to route a non-identifier callee
+    /// through an indirect call.
+    fn callee_type(callee: &Expression) -> Option<SlangType> {
+        match callee {
+            Expression::Identifier(identifier) => identifier.get_type(),
+            Expression::IndexAccessExpression(index_access) => index_access.get_type(),
+            Expression::MemberAccessExpression(member_access) => member_access.get_type(),
+            _ => None,
+        }
+    }
+
+    /// Emits an indirect call through an internal function pointer. The
+    /// callee expression evaluates to a `func_ref` value (an identifier
+    /// naming a function-typed variable, an array element `arr[i]`, etc.)
+    /// which drives a `sol.icall`.
+    fn emit_indirect_call(
+        &self,
+        callee: &Expression,
+        function_slang_type: &SlangType,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        // Load the function-pointer value.
+        let (callee_value, mut current_block) =
+            self.expression_emitter.emit_value(callee, block)?;
+
+        // Derive parameter and result types from the pointer's function type.
+        let SlangType::Function(function_type) = function_slang_type else {
+            anyhow::bail!("indirect-call callee is not a function type");
+        };
+        let builder = &self.expression_emitter.state.builder;
+        let parameter_types: Vec<Type<'context>> = function_type
+            .parameter_types()
+            .iter()
+            .map(|t| TypeConversion::resolve_slang_type(t, None, builder))
+            .collect();
+        let result_types: Vec<Type<'context>> = match function_type.return_type() {
+            SlangType::Void(_) => Vec::new(),
+            SlangType::Tuple(tuple) => tuple
+                .types()
+                .iter()
+                .map(|t| TypeConversion::resolve_slang_type(t, None, builder))
+                .collect(),
+            other => vec![TypeConversion::resolve_slang_type(&other, None, builder)],
+        };
+
+        // Evaluate and cast arguments to the declared parameter types.
+        let mut argument_values = Vec::with_capacity(positional_arguments.len());
+        for argument in positional_arguments.iter() {
+            let (value, next) = self.expression_emitter.emit_value(&argument, current_block)?;
+            argument_values.push(value);
+            current_block = next;
+        }
+        let builder = &self.expression_emitter.state.builder;
+        for (value, parameter_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
+            *value = TypeConversion::from_target_type(*parameter_type, builder)
+                .emit(*value, builder, &current_block);
+        }
+
+        // External function pointers dispatch through a real CALL
+        // (`sol.ext_icall`); internal ones through `sol.icall`.
+        let results = if function_type.is_externally_visible() {
+            let zero_value = builder.emit_sol_constant(0, builder.types.ui256, &current_block);
+            builder.emit_sol_ext_icall(
+                callee_value,
+                &argument_values,
+                &result_types,
+                zero_value,
+                &current_block,
+            )?
+        } else {
+            builder.emit_sol_icall(callee_value, &argument_values, &result_types, &current_block)?
+        };
+        Ok((results.into_iter().next(), current_block))
     }
 
     /// Emits a struct-literal constructor `S(a, b, c)` in memory.

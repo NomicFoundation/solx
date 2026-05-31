@@ -41,7 +41,7 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     /// without lifetime conflicts.
     region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, U256>,
+    storage_layout: &'state HashMap<NodeId, (U256, u32)>,
     /// The function's declared return types, for `emit_return` to cast to.
     return_types: &'state [Type<'context>],
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
@@ -71,7 +71,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
         region: &Region<'context>,
-        storage_layout: &'state HashMap<NodeId, U256>,
+        storage_layout: &'state HashMap<NodeId, (U256, u32)>,
         return_types: &'state [Type<'context>],
     ) -> Self {
         Self {
