@@ -68,8 +68,11 @@ miscompiling, except where noted under "semantic gaps" below.
   bare-reverts, so a slang array getter would diverge from solc on OOB (matching
   it needs a bare-revert bounds check — a follow-up). Also skipped: reference-typed
   keys (`bytes`/`string`) or results, and multi-level / multi-input getters.
-- `uintN[] memory` returns and reads of a fixed array-of-structs still miscompile
-  (`storage/static_array_copy_cleanup`).
+- Zeroing of an unwritten static-array memory **return parameter** is still
+  incomplete (`array/arrayMemoryAllocation/array_static_return_param_zeroed_memory_index_access`).
+  The basic case — a `uintN[] memory` return that reads a fixed array-of-structs —
+  now works (`storage/static_array_copy_cleanup` passes), via the named-return
+  aggregate-allocation prologue.
 - `verbatim` in inline assembly.
 - Public/`delegatecall` libraries as deployable objects.
 
