@@ -60,9 +60,16 @@ miscompiling, except where noted under "semantic gaps" below.
 - Array-literal state-variable initializers (`uint[] constant a = [1, 2, 3]`).
 - `delete` of a state variable — structs, fixed/dynamic arrays, `bytes`/`string`,
   mappings, and value types — is supported (aggregates via the `sol.delete` op,
-  which recursively clears the storage). Independent of `delete`, two storage
-  features still miscompile: array push/getter under a `layout at N` specifier,
-  and reads of a fixed array-of-structs / `uintN[] memory` returns.
+  which recursively clears the storage).
+- **Indexed public getters are not generated.** `emit_state_variable_getter`
+  (`contract/mod.rs:285`) emits only scalar (no-input) getters and silently skips
+  any getter with inputs, so the auto-generated accessor for `T[] public x`
+  (`x(uint256)`) or `mapping(K=>V) public m` (`m(K)`) is absent — calling its
+  selector reverts. This (not `delete` or `layout at N`) is what fails
+  `storageLayoutSpecifier/delete` and the array/mapping public-getter tests.
+  Needs a bounds-checked `sol.gep` + load (arrays) / `sol.map` + load (mappings).
+- `uintN[] memory` returns and reads of a fixed array-of-structs still miscompile
+  (`storage/static_array_copy_cleanup`).
 - `verbatim` in inline assembly.
 - Public/`delegatecall` libraries as deployable objects.
 

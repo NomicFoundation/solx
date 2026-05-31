@@ -45,8 +45,10 @@ called out inline (reference-type `delete`, and `operand_segment_sizes`).
    `array(2)` getter under `layout at N` (`storageLayoutSpecifier/delete`, fails
    *before* any delete) and the initial all-zeros read of a fixed-array-of-structs
    (`storage/static_array_copy_cleanup`, fails *before* any delete). Separate
-   items: array ops under `layout at N`, and fixed-array-of-struct reads /
-   `uintN[] memory` returns.
+   frontend items: **indexed public getters** `x(i)` / `m(k)` are not generated
+   (`emit_state_variable_getter` is scalar-only, `contract/mod.rs:285` — this is
+   what actually fails the `layout at N` test, the getter selector reverts), and
+   `uintN[] memory` returns / fixed-array-of-struct reads.
 3. **`sol.cast::fold` is disabled** — `SolOps.cpp:70-80` returns `{}` because
    `constFoldCastOp` does an unchecked `cast<IntegerAttr>` that fires on solx's
    signedness/width combos (self-documented in-tree: "~140 aborts"). Fix: a
