@@ -57,7 +57,6 @@ miscompiling, except where noted under "semantic gaps" below.
   types — `uintN`/`intN`/`bytes`/`bytesN`/`bool`/`address`/`string` — are
   reconstructed from the type-list argument).
 - `abi.decode` of a storage `bytes` payload (needs a storage→memory copy first).
-- Array-literal state-variable initializers (`uint[] constant a = [1, 2, 3]`).
 - `delete` of a state variable — structs, fixed/dynamic arrays, `bytes`/`string`,
   mappings, and value types — is supported (aggregates via the `sol.delete` op,
   which recursively clears the storage).
