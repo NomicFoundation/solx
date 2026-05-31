@@ -51,7 +51,6 @@ miscompiling, except where noted under "semantic gaps" below.
 
 ### Not yet implemented (clean compile error)
 
-- `bytes.push(x)` (the no-argument `bytes.push()` is supported).
 - `abi.encodeWithSignature(sig, …)` with a non-literal signature.
 - `abi.decode` into non-elementary types when Slang does not type the
   type-argument (arrays/structs/user types fall back to the binder; elementary
@@ -59,6 +58,9 @@ miscompiling, except where noted under "semantic gaps" below.
   reconstructed from the type-list argument).
 - `abi.decode` of a storage `bytes` payload (needs a storage→memory copy first).
 - Array-literal state-variable initializers (`uint[] constant a = [1, 2, 3]`).
+- `delete` of a storage array or struct (relocating the variable's resolved
+  type to `Memory` for the zero-value copy is not yet wired). `delete` of
+  `bytes`/`string`, mappings, and value-typed state variables is supported.
 - `verbatim` in inline assembly.
 - Public/`delegatecall` libraries as deployable objects.
 
@@ -79,7 +81,6 @@ These currently compile but do not yet match solc semantics in all cases:
 - **`stateVar.slot` / `.offset`** in assembly emit the slot/offset from the
   frontend's storage layout; this must continue to agree with the backend's
   storage allocator (verified for `layout at N` and field packing).
-- **`delete` on reference-type storage** is not yet a recursive clear.
 - **Mixed-signedness comparison** widens via a bit-preserving cast; rely on
   solc's type checker to reject the cases where this would matter.
 
