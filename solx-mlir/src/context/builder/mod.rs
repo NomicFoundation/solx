@@ -754,6 +754,32 @@ impl<'context> Builder<'context> {
             .into()
     }
 
+    /// Emits a `sol.malloc` for a dynamically-sized aggregate (`new T[](n)`,
+    /// `new bytes(n)`), passing the element count / byte length as the optional
+    /// `size` operand so the allocation and length slot are set up correctly.
+    pub fn emit_sol_malloc_sized<'block, B>(
+        &self,
+        result_type: Type<'context>,
+        size: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                MallocOperation::builder(self.context, self.unknown_location)
+                    .addr(result_type)
+                    .size(size)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.malloc always produces one result")
+            .into()
+    }
+
     /// Emits a `sol.copy` between two references.
     ///
     /// Use for source-level assignments that cross data locations (e.g. a
@@ -1215,6 +1241,61 @@ impl<'context> Builder<'context> {
         Ok(results)
     }
 
+    /// Emits a `sol.ext_icall` with `try_call` set, used to lower
+    /// `try expr { ... } catch { ... }`. Returns `(status, results)` where
+    /// `status` is the i1 success flag (false on revert, no auto-revert) and
+    /// `results` are the decoded return values (valid only when `status`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a result cannot be retrieved.
+    pub fn emit_sol_ext_icall_try<'block, B>(
+        &self,
+        callee: Value<'context, 'block>,
+        operands: &[Value<'context, 'block>],
+        result_types: &[Type<'context>],
+        value: Value<'context, 'block>,
+        block: &B,
+    ) -> anyhow::Result<(Value<'context, 'block>, Vec<Value<'context, 'block>>)>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let gas: Value<'context, 'block> = block
+            .append_operation(
+                GasLeftOperation::builder(self.context, self.unknown_location)
+                    .val(self.types.ui256)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.gas always produces one result")
+            .into();
+        let mut out_types = Vec::with_capacity(result_types.len() + 1);
+        out_types.push(self.types.i1);
+        out_types.extend_from_slice(result_types);
+        let operation = block.append_operation(
+            ExtICallOperation::builder(self.context, self.unknown_location)
+                .outs(&out_types)
+                .callee(callee)
+                .callee_operands(operands)
+                .gas(gas)
+                .value(value)
+                .try_call(Attribute::unit(self.context))
+                .build()
+                .into(),
+        );
+        let status: Value<'context, 'block> = operation
+            .result(0)
+            .expect("sol.ext_icall try produces a status result")
+            .into();
+        let mut results = Vec::with_capacity(result_types.len());
+        for index in 0..result_types.len() {
+            results.push(operation.result(index + 1)?.into());
+        }
+        Ok((status, results))
+    }
+
     // ==== Comparisons ====
 
     /// Emits a `sol.cmp` comparison returning `i1`.
@@ -1269,6 +1350,14 @@ impl<'context> Builder<'context> {
     {
         if value.r#type() == to_type {
             return value;
+        }
+        // sol.cast is integer-only; the verifier rejects a fixedbytes operand or
+        // result. Any bytesN-involving conversion belongs to sol.bytes_cast, so
+        // route it there regardless of which caller emitted it (no caller can
+        // rely on sol.cast working for fixedbytes, since it is rejected).
+        let is_fixed_bytes = |t: Type<'context>| format!("{t}").starts_with("!sol.fixedbytes");
+        if is_fixed_bytes(value.r#type()) || is_fixed_bytes(to_type) {
+            return self.emit_sol_bytes_cast(value, to_type, block);
         }
         block
             .append_operation(

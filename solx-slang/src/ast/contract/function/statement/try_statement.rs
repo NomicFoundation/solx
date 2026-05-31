@@ -1,68 +1,156 @@
 //! Try-catch statement lowering.
 //!
-//! Experimental: emits only the success path of `try expr returns (...) { body }
-//! catch { ... }`. Catch clauses are ignored — a real implementation requires
-//! a `sol.try` op with exception regions, which is out of scope for the
-//! Slang frontend bring-up. Tests that rely on the catch path being taken
-//! will fail at runtime; tests where the try expression succeeds should pass.
+//! `try recv.f(args) returns (...) { body } catch { handler }` lowers to a
+//! `sol.ext_icall` with `try_call` set (which yields a success flag instead
+//! of reverting), then a `sol.if` on that flag: the success region binds the
+//! decoded returns and runs `body`; the failure region runs the catch
+//! `handler`. The catch error parameter (`catch (bytes memory reason)`) is
+//! not yet bound — the handler body still runs.
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TryStatement;
 
+use solx_mlir::ffi;
+
 use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
-    /// Lowers a `try` statement by emitting only the success path.
+    /// Lowers a `try` statement.
     pub fn emit_try(
         &mut self,
         try_statement: &TryStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let expression = try_statement.expression();
-        let returns = try_statement.returns();
 
+        // Only external calls can be `try`-ed. Recognise `recv.f(args)` and
+        // `recv.f{value: v}(args)`; anything else falls back to running just
+        // the success body (no real catch path).
+        let is_external_call = matches!(&expression, Expression::FunctionCallExpression(call)
+            if matches!(
+                call.operand(),
+                Expression::MemberAccessExpression(_) | Expression::CallOptionsExpression(_)
+            ));
+        if !is_external_call {
+            return self.emit_try_success_only(try_statement, block);
+        }
+        let Expression::FunctionCallExpression(call) = &expression else {
+            return self.emit_try_success_only(try_statement, block);
+        };
+
+        // Emit the external call with try semantics → (status, results).
+        let (status, results, current_block) = {
+            let emitter = ExpressionEmitter::new(
+                self.state,
+                self.environment,
+                self.storage_layout,
+                self.checked,
+            );
+            let call_emitter = CallEmitter::new(&emitter);
+            match call_emitter.emit_external_call_try(call, block) {
+                Ok(triple) => triple,
+                // Not an external call we can lower with try semantics — run
+                // the success body only.
+                Err(_) => return self.emit_try_success_only(try_statement, block),
+            }
+        };
+
+        let (then_block, else_block) = self.state.builder.emit_sol_if(status, &current_block);
+        let then_region = ffi::block_parent_region(&then_block);
+        let else_region = ffi::block_parent_region(&else_block);
+        let saved_region = self.region_pointer;
+
+        // Success region: bind declared returns from the call results, run body.
+        self.set_region(&then_region);
+        let then_entry = then_block;
+        if let Some(parameters) = try_statement.returns() {
+            for (parameter, result) in parameters.iter().zip(results.iter()) {
+                let Some(identifier) = parameter.name() else {
+                    continue;
+                };
+                let parameter_type = parameter
+                    .get_type()
+                    .map(|slang_type| {
+                        TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
+                    })
+                    .unwrap_or_else(|| self.state.builder.types.ui256);
+                let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder)
+                    .emit(*result, &self.state.builder, &then_entry);
+                let pointer = self
+                    .state
+                    .builder
+                    .emit_sol_alloca(parameter_type, &then_entry);
+                self.state.builder.emit_sol_store(cast, pointer, &then_entry);
+                self.environment
+                    .define_variable(identifier.name(), pointer, parameter_type);
+            }
+        }
+        let then_end = self.emit_block(try_statement.body().statements(), then_entry)?;
+        if let Some(end) = then_end {
+            self.state.builder.emit_sol_yield(&end);
+        }
+
+        // Failure region: run the first catch clause's body (if any).
+        self.set_region(&else_region);
+        let else_entry = else_block;
+        let mut else_end = Some(else_entry);
+        if let Some(catch_clause) = try_statement.catch_clauses().iter().next() {
+            else_end = self.emit_block(catch_clause.body().statements(), else_entry)?;
+        }
+        if let Some(end) = else_end {
+            self.state.builder.emit_sol_yield(&end);
+        }
+
+        self.region_pointer = saved_region;
+        Ok(Some(current_block))
+    }
+
+    /// Fallback used when the try expression is not an external call we can
+    /// lower with try semantics: emit the call and the success body, ignoring
+    /// the catch clause.
+    fn emit_try_success_only(
+        &mut self,
+        try_statement: &TryStatement,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        let expression = try_statement.expression();
         let emitter = ExpressionEmitter::new(
             self.state,
             self.environment,
             self.storage_layout,
             self.checked,
         );
-
         let (value, current_block) = emitter.emit(&expression, block)?;
 
-        if let Some(parameters) = returns
+        if let Some(parameters) = try_statement.returns()
             && let Some(value) = value
+            && let Some(parameter) = parameters.iter().next()
+            && let Some(name_identifier) = parameter.name()
         {
-            let parameter_list: Vec<_> = parameters.iter().collect();
-            // Single-return case: bind the call result to the first named
-            // return parameter, if it has a name. Multi-return tuple
-            // destructuring is not yet handled.
-            if let Some(parameter) = parameter_list.first()
-                && let Some(name_identifier) = parameter.name()
-            {
-                let name = name_identifier.name();
-                let parameter_type = parameter
-                    .get_type()
-                    .map(|slang_type| {
-                        TypeConversion::resolve_slang_type(
-                            &slang_type,
-                            None,
-                            &self.state.builder,
-                        )
-                    })
-                    .unwrap_or_else(|| self.state.builder.types.ui256);
-                let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder)
-                    .emit(value, &self.state.builder, &current_block);
-                let pointer = self
-                    .state
-                    .builder
-                    .emit_sol_alloca(parameter_type, &current_block);
-                self.state.builder.emit_sol_store(cast, pointer, &current_block);
-                self.environment.define_variable(name, pointer, parameter_type);
-            }
+            let name = name_identifier.name();
+            let parameter_type = parameter
+                .get_type()
+                .map(|slang_type| {
+                    TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
+                })
+                .unwrap_or_else(|| self.state.builder.types.ui256);
+            let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
+                value,
+                &self.state.builder,
+                &current_block,
+            );
+            let pointer = self
+                .state
+                .builder
+                .emit_sol_alloca(parameter_type, &current_block);
+            self.state.builder.emit_sol_store(cast, pointer, &current_block);
+            self.environment.define_variable(name, pointer, parameter_type);
         }
 
         self.emit_block(try_statement.body().statements(), current_block)

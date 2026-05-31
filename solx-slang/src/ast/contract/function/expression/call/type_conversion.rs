@@ -388,6 +388,13 @@ impl<'context> TypeConversion<'context> {
                     // address ↔ contract conversions (e.g. `ICounter(addr)`)
                     // go through `sol.address_cast`, not `sol.cast`.
                     builder.emit_sol_address_cast(value, target_type, block)
+                } else if Self::is_fixed_bytes_mlir_type(value.r#type())
+                    || Self::is_fixed_bytes_mlir_type(target_type)
+                {
+                    // `bytesN` conversions (`bytes32(x)`, `uint256(someBytes32)`)
+                    // go through `sol.bytes_cast`; `sol.cast` is integer-only and
+                    // the verifier rejects a fixedbytes operand or result.
+                    builder.emit_sol_bytes_cast(value, target_type, block)
                 } else {
                     builder.emit_sol_cast(value, target_type, block)
                 }
@@ -418,5 +425,11 @@ impl<'context> TypeConversion<'context> {
     fn is_address_like_mlir_type(t: melior::ir::Type<'_>) -> bool {
         let text = format!("{t}");
         text.starts_with("!sol.address") || text.starts_with("!sol.contract")
+    }
+
+    /// Heuristic check for a Sol `!sol.fixedbytes<N>` type by textual form —
+    /// conversions involving these use `sol.bytes_cast`, not `sol.cast`.
+    fn is_fixed_bytes_mlir_type(t: melior::ir::Type<'_>) -> bool {
+        format!("{t}").starts_with("!sol.fixedbytes")
     }
 }

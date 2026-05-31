@@ -6,6 +6,7 @@ pub mod built_in;
 pub mod type_conversion;
 
 use anyhow::Context as _;
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -89,6 +90,35 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .expect("len checked to be 1 above");
             let (value, block) = self.expression_emitter.emit_value(&first, block)?;
             let builder = &self.expression_emitter.state.builder;
+
+            // `E(x)` (integer -> enum): slang surfaces no call type for this
+            // conversion, and it lowers to `sol.enum_cast` (not `sol.cast`).
+            // Detect an enum callee, coerce the argument to `ui256`, and bridge.
+            if let Expression::Identifier(callee_identifier) = &callee
+                && let Some(Definition::Enum(enum_definition)) =
+                    callee_identifier.resolve_to_definition()
+            {
+                let member_count = enum_definition.members().iter().count();
+                let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
+                let enum_type = builder.types.enumeration(max.into());
+                let raw = TypeConversion::from_target_type(builder.types.ui256, builder)
+                    .emit(value, builder, &block);
+                let result = block
+                    .append_operation(
+                        solx_mlir::ods::sol::EnumCastOperation::builder(
+                            builder.context,
+                            builder.unknown_location,
+                        )
+                        .inp(raw)
+                        .out(enum_type)
+                        .build()
+                        .into(),
+                    )
+                    .result(0)
+                    .expect("sol.enum_cast always produces one result")
+                    .into();
+                return Ok((Some(result), block));
+            }
 
             let target_type = self
                 .expression_emitter

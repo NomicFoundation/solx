@@ -15,11 +15,13 @@ use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
+use slang_solidity_v2::ast::TypeName as SlangTypeName;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::BalanceOperation;
 use solx_mlir::ods::sol::BareCallOperation;
@@ -37,6 +39,7 @@ use solx_mlir::ods::sol::ChainIdOperation;
 use solx_mlir::ods::sol::CodeHashOperation;
 use solx_mlir::ods::sol::CodeOperation;
 use solx_mlir::ods::sol::CoinbaseOperation;
+use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::DifficultyOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
@@ -265,6 +268,43 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         };
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AbiDecode) => self.emit_abi_decode(call, arguments, block).map(Some),
+            // `string.concat(...)` / `bytes.concat(...)` lower to `sol.concat`,
+            // which takes a variadic list of string / bytesN values and yields
+            // a freshly allocated memory string. An empty argument list is
+            // valid (`string.concat()` -> "").
+            Some(BuiltIn::StringConcat | BuiltIn::BytesConcat) => {
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let builder = &self.expression_emitter.state.builder;
+                let result_type = builder.types.string(solx_utils::DataLocation::Memory);
+                let value = block
+                    .append_operation(
+                        ConcatOperation::builder(builder.context, builder.unknown_location)
+                            .args(&values)
+                            .result(result_type)
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("sol.concat always produces one result")
+                    .into();
+                Ok(Some((value, block)))
+            }
+            // `T.wrap(x)` / `T.unwrap(x)` — a user-defined value type is
+            // represented as its underlying type, so both directions are pure
+            // bit-level identities. Emit the single argument coerced to the
+            // call's result type (the underlying MLIR type in either case).
+            Some(BuiltIn::Wrap | BuiltIn::Unwrap) if arguments.len() == 1 => {
+                let argument = arguments.iter().next().expect("argument count verified");
+                let (value, block) = self.expression_emitter.emit_value(&argument, block)?;
+                let target_type = self
+                    .expression_emitter
+                    .resolve_slang_type(call.get_type())
+                    .ok_or_else(|| anyhow::anyhow!("unresolved wrap/unwrap result type"))?;
+                let builder = &self.expression_emitter.state.builder;
+                let value = TypeConversion::from_target_type(target_type, builder)
+                    .emit(value, builder, &block);
+                Ok(Some((value, block)))
+            }
             _ => Ok(None),
         }
     }
@@ -287,6 +327,97 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         self.emit_built_in_member_access_with_value(access, arguments, None, block)
+    }
+
+    /// Emits an external member call `recv.f(args)` (optionally with a
+    /// `{value: v}` option) as a `sol.ext_icall` with `try_call` set, for
+    /// `try recv.f(args) returns (...) { ... } catch { ... }`. Returns the
+    /// success status, the decoded result values, and the continuation block.
+    pub fn emit_external_call_try(
+        &self,
+        call: &FunctionCallExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)>
+    {
+        // Unwrap an optional `{value: v}` call-options layer around the
+        // member access.
+        let callee = call.operand();
+        let mut current_block = block;
+        let mut call_value: Option<Value<'context, 'block>> = None;
+        let access = match &callee {
+            Expression::MemberAccessExpression(access) => access.clone(),
+            Expression::CallOptionsExpression(options) => {
+                for option in options.options().iter() {
+                    let (value, next) = self
+                        .expression_emitter
+                        .emit_value(&option.value(), current_block)?;
+                    current_block = next;
+                    if option.name().name() == "value" {
+                        let builder = &self.expression_emitter.state.builder;
+                        call_value = Some(
+                            TypeConversion::from_target_type(builder.types.ui256, builder)
+                                .emit(value, builder, &current_block),
+                        );
+                    }
+                }
+                match options.operand() {
+                    Expression::MemberAccessExpression(access) => access,
+                    _ => anyhow::bail!("try call options operand is not a member access"),
+                }
+            }
+            _ => anyhow::bail!("try expression is not an external member call"),
+        };
+
+        let Some(slang_solidity_v2::ast::Definition::Function(function_definition)) =
+            access.member().resolve_to_definition()
+        else {
+            anyhow::bail!("try callee does not resolve to a function");
+        };
+        let selector = function_definition
+            .compute_selector()
+            .ok_or_else(|| anyhow::anyhow!("try callee has no selector"))?;
+        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
+            &function_definition,
+            &self.expression_emitter.state.builder,
+        );
+
+        let ArgumentsDeclaration::PositionalArguments(positional_arguments) = call.arguments()
+        else {
+            anyhow::bail!("try call uses non-positional arguments");
+        };
+
+        let (receiver_value, next) = self
+            .expression_emitter
+            .emit_value(&access.operand(), current_block)?;
+        current_block = next;
+        let mut argument_values = Vec::with_capacity(positional_arguments.len());
+        for argument in positional_arguments.iter() {
+            let (value, next) = self
+                .expression_emitter
+                .emit_value(&argument, current_block)?;
+            argument_values.push(value);
+            current_block = next;
+        }
+        let builder = &self.expression_emitter.state.builder;
+        for (value, param_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
+            *value = TypeConversion::from_target_type(*param_type, builder)
+                .emit(*value, builder, &current_block);
+        }
+        let address =
+            builder.emit_sol_address_cast(receiver_value, builder.types.sol_address, &current_block);
+        let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
+        let callee_ref =
+            builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &current_block);
+        let value = call_value
+            .unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &current_block));
+        let (status, results) = builder.emit_sol_ext_icall_try(
+            callee_ref,
+            &argument_values,
+            &return_types,
+            value,
+            &current_block,
+        )?;
+        Ok((status, results, current_block))
     }
 
     /// As [`Self::emit_built_in_member_access`], but with an explicit external
@@ -332,6 +463,66 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .result(0)
                     .expect("sol.enum_cast always produces one result")
                     .into();
+                return Ok((Some(value), block));
+            }
+        }
+
+        // `f.selector` / `E.selector` / `this.x.selector` — compile-time
+        // selector constant, with the base resolving to a function, error,
+        // event, or public state variable. A user library function may also be
+        // named `selector` (attached via `using`); that is always a call, so
+        // the `arguments.is_none()` guard excludes it, and we additionally
+        // refuse a `selector` member that resolves to a user function for the
+        // contrived case of taking such a bound function as a value. Function,
+        // error, and getter selectors are 4-byte (`bytes4`); event selectors
+        // are the full 32-byte keccak topic hash (`bytes32`).
+        if arguments.is_none()
+            && access.member().name() == "selector"
+            && !matches!(
+                access.member().resolve_to_definition(),
+                Some(Definition::Function(_))
+            )
+        {
+            let operand_definition = match access.operand() {
+                Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+                Expression::MemberAccessExpression(inner) => {
+                    inner.member().resolve_to_definition()
+                }
+                _ => None,
+            };
+            let builder = &self.expression_emitter.state.builder;
+            // Each arm yields (selector value, fixedbytes width in bytes): a
+            // 4-byte `bytes4` for functions / errors / getters, the full
+            // 32-byte keccak topic hash (`bytes32`) for events.
+            let selector_constant: Option<(num_bigint::BigInt, u32)> = match &operand_definition {
+                Some(Definition::Function(function)) => function
+                    .compute_selector()
+                    .map(|selector| (num_bigint::BigInt::from(selector), 4)),
+                Some(Definition::Error(error)) => error
+                    .compute_selector()
+                    .map(|selector| (num_bigint::BigInt::from(selector), 4)),
+                Some(Definition::StateVariable(state_variable)) => state_variable
+                    .compute_selector()
+                    .map(|selector| (num_bigint::BigInt::from(selector), 4)),
+                Some(Definition::Event(event)) => {
+                    event.compute_canonical_signature().map(|signature| {
+                        let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
+                        let value =
+                            num_bigint::BigInt::from_bytes_be(num_bigint::Sign::Plus, hash.as_bytes());
+                        (value, 32)
+                    })
+                }
+                _ => None,
+            };
+            if let Some((value, width_bytes)) = selector_constant {
+                // `!sol.fixedbytes<N>` rejects a bare integer attribute, so emit
+                // the value as an integer constant of the matching width and
+                // bridge to fixedbytes via `sol.bytes_cast`.
+                let integer_type =
+                    Type::from(IntegerType::unsigned(builder.context, width_bytes * 8));
+                let integer = builder.emit_constant(&value, integer_type, &block);
+                let value =
+                    builder.emit_sol_bytes_cast(integer, builder.types.fixed_bytes(width_bytes), &block);
                 return Ok((Some(value), block));
             }
         }
@@ -529,6 +720,39 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((results.into_iter().next(), current_block));
         }
 
+        // External call to a public state variable's auto-generated getter:
+        // `instance.value()` where `value` is a scalar `public` state var on
+        // another contract. (Mapping/array getters with key args are not
+        // handled here.)
+        if let Some(arguments) = arguments
+            && arguments.is_empty()
+            && let Some(slang_solidity_v2::ast::Definition::StateVariable(state_variable)) =
+                access.member().resolve_to_definition()
+            && let Some(selector) = state_variable.compute_selector()
+            && let Ok(return_type) = TypeConversion::resolve_state_variable_type(
+                &state_variable,
+                &self.expression_emitter.state.builder,
+            )
+        {
+            let return_types = [return_type];
+            let (receiver_value, current_block) = self
+                .expression_emitter
+                .emit_value(&access.operand(), block)?;
+            let builder = &self.expression_emitter.state.builder;
+            let address = builder.emit_sol_address_cast(
+                receiver_value,
+                builder.types.sol_address,
+                &current_block,
+            );
+            let ext_ref_type = builder.types.ext_func_ref(&[], &return_types);
+            let callee =
+                builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &current_block);
+            let zero = builder.emit_sol_constant(0, builder.types.ui256, &current_block);
+            let results =
+                builder.emit_sol_ext_icall(callee, &[], &return_types, zero, &current_block)?;
+            return Ok((results.into_iter().next(), current_block));
+        }
+
         // `type(T).min` / `type(T).max` are compile-time integer constants.
         if let Some(builtin @ (BuiltIn::TypeMin | BuiltIn::TypeMax)) =
             access.member().resolve_to_built_in()
@@ -557,6 +781,42 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .state
                     .builder
                     .emit_constant(&value, result_type, &block);
+            return Ok((Some(value), block));
+        }
+
+        // `type(I).interfaceId` is a compile-time `bytes4` constant: the
+        // EIP-165 interface identifier, defined as the XOR of the selectors of
+        // the functions declared *directly* within the interface `I`. Inherited
+        // functions are deliberately excluded (matching solc), so we iterate
+        // the interface's own members rather than its linearised functions.
+        if let Some(BuiltIn::TypeInterfaceId) = access.member().resolve_to_built_in()
+            && let Expression::TypeExpression(type_expression) = access.operand()
+            && let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name()
+            && let Some(Definition::Interface(interface_definition)) =
+                identifier_path.resolve_to_definition()
+        {
+            let mut interface_id: u32 = 0;
+            let members = interface_definition.members();
+            for member in members.iter() {
+                if let slang_solidity_v2::ast::ContractMember::FunctionDefinition(function) =
+                    member
+                    && let Some(selector) = function.compute_selector()
+                {
+                    interface_id ^= selector;
+                }
+            }
+            // `!sol.fixedbytes<4>` rejects a bare integer attribute, so emit the
+            // identifier as a `uint32` constant and bridge to `bytes4` via
+            // `sol.bytes_cast` (same pattern as `f.selector`).
+            let builder = &self.expression_emitter.state.builder;
+            let integer_type = Type::from(IntegerType::unsigned(builder.context, 32));
+            let integer = builder.emit_constant(
+                &num_bigint::BigInt::from(interface_id),
+                integer_type,
+                &block,
+            );
+            let value =
+                builder.emit_sol_bytes_cast(integer, builder.types.fixed_bytes(4), &block);
             return Ok((Some(value), block));
         }
 
@@ -699,6 +959,60 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     let (value, next) = self.expression_emitter.emit_value(&argument, current)?;
                     values.push(value);
                     current = next;
+                }
+                let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
+                Ok((Some(result), current))
+            }
+            Some(BuiltIn::AbiEncodeCall) => {
+                // `abi.encodeCall(f, (args...))` == the function's 4-byte
+                // selector followed by the ABI-encoded argument tuple.
+                let arguments = arguments.expect("abi.encodeCall is a member-access call");
+                let mut iter = arguments.iter();
+                let function_reference = iter
+                    .next()
+                    .expect("abi.encodeCall takes a function and an argument tuple");
+                let function_definition = match &function_reference {
+                    Expression::MemberAccessExpression(member_access) => {
+                        member_access.member().resolve_to_definition()
+                    }
+                    Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+                    _ => None,
+                };
+                let Some(Definition::Function(function)) = function_definition else {
+                    anyhow::bail!("abi.encodeCall first argument must resolve to a function");
+                };
+                let selector_word = function
+                    .compute_selector()
+                    .ok_or_else(|| anyhow::anyhow!("abi.encodeCall function has no selector"))?;
+                let selector_int = builder.emit_sol_constant(
+                    i64::from(selector_word),
+                    Type::from(IntegerType::unsigned(builder.context, 32)),
+                    &block,
+                );
+                let selector_value =
+                    builder.emit_sol_bytes_cast(selector_int, builder.types.fixed_bytes(4), &block);
+                // The second argument is the call-argument tuple (possibly empty).
+                let mut values = Vec::new();
+                let mut current = block;
+                if let Some(argument_tuple) = iter.next() {
+                    match &argument_tuple {
+                        Expression::TupleExpression(tuple) => {
+                            for item in tuple.items().iter() {
+                                if let Some(inner) = item.expression() {
+                                    let (value, next) =
+                                        self.expression_emitter.emit_value(&inner, current)?;
+                                    values.push(value);
+                                    current = next;
+                                }
+                            }
+                        }
+                        other => {
+                            let (value, next) =
+                                self.expression_emitter.emit_value(other, current)?;
+                            values.push(value);
+                            current = next;
+                        }
+                    }
                 }
                 let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
                 Ok((Some(result), current))
@@ -935,26 +1249,53 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let slang_type = call
-            .get_type()
-            .ok_or_else(|| anyhow::anyhow!("new expression has no resolved type"))?;
-        // `new T[](size)` allocates a dynamic memory array. Use `sol.malloc`
-        // with the resolved array type; downstream sets up the length slot
-        // from the argument.
-        if matches!(slang_type, SlangType::Array(_) | SlangType::Bytes(_) | SlangType::String(_)) {
+        let slang_type = call.get_type();
+        // `new T[](n)` / `new bytes(n)` / `new string(n)` allocate a dynamic
+        // memory aggregate of `n` elements/bytes via `sol.malloc`, passing the
+        // count as the `size` operand so the length slot is initialised. slang
+        // resolves the array forms' call type, but `new bytes`/`new string`
+        // surface no call type, so fall back to the syntactic type name (both
+        // lower to a memory string).
+        let dynamic_result_type = match &slang_type {
+            Some(inner @ (SlangType::Array(_) | SlangType::Bytes(_) | SlangType::String(_))) => {
+                Some(TypeConversion::resolve_slang_type(
+                    inner,
+                    Some(solx_utils::DataLocation::Memory),
+                    &self.expression_emitter.state.builder,
+                ))
+            }
+            None
+                if matches!(
+                    call.operand(),
+                    Expression::NewExpression(new_expression)
+                        if matches!(new_expression.type_name(), SlangTypeName::ElementaryType(_))
+                ) =>
+            {
+                Some(
+                    self.expression_emitter
+                        .state
+                        .builder
+                        .types
+                        .string(solx_utils::DataLocation::Memory),
+                )
+            }
+            _ => None,
+        };
+        if let Some(result_type) = dynamic_result_type {
+            let (values, block) = self.emit_argument_values(arguments, block)?;
             let builder = &self.expression_emitter.state.builder;
-            let result_type = TypeConversion::resolve_slang_type(
-                &slang_type,
-                Some(solx_utils::DataLocation::Memory),
-                builder,
-            );
-            let address = builder.emit_sol_malloc(result_type, &block);
-            // Evaluate (and discard) the size argument for side effects.
-            let (_values, block) = self.emit_argument_values(arguments, block)?;
+            let address = match values.first() {
+                Some(&size_value) => {
+                    let size = TypeConversion::from_target_type(builder.types.ui256, builder)
+                        .emit(size_value, builder, &block);
+                    builder.emit_sol_malloc_sized(result_type, size, &block)
+                }
+                None => builder.emit_sol_malloc(result_type, &block),
+            };
             return Ok((Some(address), block));
         }
-        let SlangType::Contract(contract_type) = slang_type else {
-            anyhow::bail!("new expression must produce a contract type");
+        let Some(SlangType::Contract(contract_type)) = slang_type else {
+            anyhow::bail!("new expression has no resolved type or unsupported new target");
         };
         let Definition::Contract(contract_definition) = contract_type.definition() else {
             unreachable!("Slang ContractType always references a Contract definition");
