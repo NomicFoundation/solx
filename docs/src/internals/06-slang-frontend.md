@@ -62,11 +62,12 @@ miscompiling, except where noted under "semantic gaps" below.
   mappings, and value types — is supported (aggregates via the `sol.delete` op,
   which recursively clears the storage).
 - **Indexed public getters** are generated for single-input, value-result
-  containers: `T[] public x` → `x(uint256)` (via `sol.gep` + load) and
-  `mapping(K=>V) public m` with value key/result → `m(K)` (via `sol.map` + load),
-  mirroring `x[i]` / `m[k]`. Still skipped (the selector reverts): reference-typed
-  keys (`bytes`/`string`) or results (struct/array values), multi-dimensional
-  arrays, and multi-level mappings (all need multi-input accessors).
+  **mappings**: `mapping(K=>V) public m` with a value key and value result →
+  `m(K)` (via `sol.map` + load), mirroring `m[k]`. **Array getters are skipped**:
+  `sol.gep` panics with `Panic(0x32)` on out-of-bounds, but solc's array accessor
+  bare-reverts, so a slang array getter would diverge from solc on OOB (matching
+  it needs a bare-revert bounds check — a follow-up). Also skipped: reference-typed
+  keys (`bytes`/`string`) or results, and multi-level / multi-input getters.
 - `uintN[] memory` returns and reads of a fixed array-of-structs still miscompile
   (`storage/static_array_copy_cleanup`).
 - `verbatim` in inline assembly.
