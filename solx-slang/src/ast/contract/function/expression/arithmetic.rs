@@ -33,11 +33,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        // Solidity evaluates subexpressions left-to-right; emit `left` before
-        // `right` so side effects (calls, `++`, storage writes) observe the
-        // source order.
-        let (lhs, block) = self.emit_value(left, block)?;
-        let (rhs, block) = self.emit_value(right, block)?;
+        // Solidity evaluates subexpressions left-to-right; `emit_binary_operands`
+        // preserves that order while materializing a string literal paired with
+        // a `bytesN` / `byte` operand as a fixedbytes/byte constant.
+        let (lhs, rhs, block) = self.emit_binary_operands(left, right, block)?;
         let result_type = target_type.unwrap_or_else(|| {
             let lhs_width = solx_mlir::TypeFactory::integer_bit_width(lhs.r#type());
             let rhs_width = solx_mlir::TypeFactory::integer_bit_width(rhs.r#type());

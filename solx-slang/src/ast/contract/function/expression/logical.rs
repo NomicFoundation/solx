@@ -24,8 +24,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         predicate: CmpPredicate,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (lhs, block) = self.emit_value(left, block)?;
-        let (rhs, block) = self.emit_value(right, block)?;
+        // A string literal compared with a `bytesN` / `byte` operand (`b == "d"`)
+        // materializes as a fixedbytes/byte constant rather than a memory string.
+        let (lhs, rhs, block) = self.emit_binary_operands(left, right, block)?;
         if lhs.r#type() == rhs.r#type() {
             let comparison = self.state.builder.emit_sol_cmp(lhs, rhs, predicate, &block);
             return Ok((comparison, block));

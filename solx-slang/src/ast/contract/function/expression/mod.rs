@@ -149,6 +149,52 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         self.emit_value(expression, block)
     }
 
+    /// Emits the two operands of a binary expression (comparison, arithmetic,
+    /// bitwise), materializing a string literal paired with a `bytesN` / `byte`
+    /// operand (`b == "d"`, `b | "a"`) as a fixedbytes/byte constant rather than
+    /// a memory string — which a plain emit would feed into the integer-only
+    /// operand cast. String literals are side-effect-free, so the literal is
+    /// emitted after the other operand (once its type is known), preserving the
+    /// observable left-to-right evaluation order of any side effects.
+    pub fn emit_binary_operands(
+        &self,
+        left: &Expression,
+        right: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        Value<'context, 'block>,
+        Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    )> {
+        let is_bytes_like = |ty: Type<'context>| {
+            solx_mlir::TypeFactory::is_sol_fixed_bytes(ty)
+                || solx_mlir::TypeFactory::is_sol_byte(ty)
+        };
+        let left_is_string = matches!(left, Expression::StringExpression(_));
+        let right_is_string = matches!(right, Expression::StringExpression(_));
+        if right_is_string && !left_is_string {
+            let (lhs, block) = self.emit_value(left, block)?;
+            let (rhs, block) = if is_bytes_like(lhs.r#type()) {
+                self.emit_value_for_target(right, lhs.r#type(), block)?
+            } else {
+                self.emit_value(right, block)?
+            };
+            Ok((lhs, rhs, block))
+        } else if left_is_string && !right_is_string {
+            let (rhs, block) = self.emit_value(right, block)?;
+            let (lhs, block) = if is_bytes_like(rhs.r#type()) {
+                self.emit_value_for_target(left, rhs.r#type(), block)?
+            } else {
+                self.emit_value(left, block)?
+            };
+            Ok((lhs, rhs, block))
+        } else {
+            let (lhs, block) = self.emit_value(left, block)?;
+            let (rhs, block) = self.emit_value(right, block)?;
+            Ok((lhs, rhs, block))
+        }
+    }
+
     /// Emits MLIR for an expression, appending operations to `block`.
     ///
     /// Returns `None` for void expressions (calls with no return value).
