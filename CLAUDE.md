@@ -48,17 +48,27 @@ Solidity → Slang (parse, analyze) → MLIR → LLVM IR → EVM bytecode
 
 ### Prerequisites
 
-Build the `solx-dev` tool first, then use it to build LLVM and solc:
+Build the `solx-dev` tool, then build LLVM (outputs to `target-llvm/target-final/`):
 
 ```bash
 cargo build --release --bin solx-dev
-
-# Build LLVM (outputs to target-llvm/target-final/)
-./target/release/solx-dev llvm build --enable-mlir --enable-tests --build-type RelWithDebInfo
-
-# Build solc libraries (outputs to solx-solidity/build/)
-./target/release/solx-dev solc build
+./target/release/solx-dev llvm build --enable-mlir --enable-assertions --enable-utils --build-type RelWithDebInfo
 ```
+
+Re-run that **exact** command to rebuild LLVM incrementally after editing `solx-llvm`
+(idempotent CMake reconfigure + incremental ninja, minutes):
+
+- **Never run `ninja` directly** — always go through `solx-dev`.
+- **Flags must match exactly.** Any change (e.g. adding `--enable-tests` /
+  `--install-distribution`, dropping `--enable-assertions` / `--enable-utils`) rewrites
+  the CMake cache and forces a **full** rebuild (hours). These flags match
+  `build-final/CMakeCache.txt` (`LLVM_ENABLE_ASSERTIONS=On`, `LLVM_BUILD_UTILS=On`,
+  `LLVM_BUILD_TESTS=Off`, `CMAKE_BUILD_TYPE=RelWithDebInfo`) — verify against the cache,
+  do not guess.
+
+> Note: many solx-llvm C-API changes (e.g. Sol type predicates) actually live in
+> `solx-mlir/sol_attr_stubs.cpp`, compiled by `solx-mlir`'s `build.rs` — those need
+> only a solx rebuild, **no** LLVM rebuild.
 
 ### Building solx
 
