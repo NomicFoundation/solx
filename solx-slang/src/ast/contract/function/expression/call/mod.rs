@@ -686,6 +686,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((results, block));
         }
 
+        // `(a, b) = recv.f(args)` / `this.f(args)` — a genuine external contract
+        // call returning a tuple. Bare calls, `abi.decode`, and library calls
+        // are already handled above, so any remaining member-access callee that
+        // resolves to a function is an external call.
+        if let Some((results, block)) =
+            self.try_emit_external_call_results(call, positional_arguments, block)?
+        {
+            return Ok((results, block));
+        }
+
         let Expression::Identifier(callee_identifier) = call.operand() else {
             anyhow::bail!("multi-result calls only support direct named function callees");
         };

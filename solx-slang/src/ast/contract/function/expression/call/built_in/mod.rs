@@ -1534,6 +1534,101 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok(Some((vec![status, ret_data], block)))
     }
 
+    /// Tries to emit an external member call `recv.f(args)` / `this.f(args)`
+    /// used as the right-hand side of tuple deconstruction, returning every
+    /// decoded result value in declaration order. Returns `Ok(None)` if the
+    /// callee is not a member access resolving to a function, so the caller
+    /// can fall through to the named-function dispatch path.
+    ///
+    /// Library and bare-call (`addr.call` / `delegatecall` / `staticcall`)
+    /// callees are handled by earlier branches of
+    /// [`super::super::call::CallEmitter::emit_function_call_results`], so this
+    /// path only ever sees genuine external contract calls. The call is lowered
+    /// as a real `sol.ext_icall`, which is always correct for tuple returns
+    /// even when a same-contract `this.f()` could otherwise use the local-call
+    /// shortcut.
+    pub fn try_emit_external_call_results(
+        &self,
+        call: &FunctionCallExpression,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        // Unwrap an optional `{value: v}` / `{gas: g}` call-options layer. Only
+        // the value is forwarded; gas is left to the backend's default stipend.
+        let mut current_block = block;
+        let mut call_value: Option<Value<'context, 'block>> = None;
+        let access = match call.operand() {
+            Expression::MemberAccessExpression(access) => access,
+            Expression::CallOptionsExpression(options) => {
+                for option in options.options().iter() {
+                    let (value, next) = self
+                        .expression_emitter
+                        .emit_value(&option.value(), current_block)?;
+                    current_block = next;
+                    if option.name().name() == "value" {
+                        let builder = &self.expression_emitter.state.builder;
+                        call_value = Some(
+                            TypeConversion::from_target_type(builder.types.ui256, builder)
+                                .emit(value, builder, &current_block),
+                        );
+                    }
+                }
+                match options.operand() {
+                    Expression::MemberAccessExpression(access) => access,
+                    _ => return Ok(None),
+                }
+            }
+            _ => return Ok(None),
+        };
+        let Some(slang_solidity_v2::ast::Definition::Function(function_definition)) =
+            access.member().resolve_to_definition()
+        else {
+            return Ok(None);
+        };
+        let Some(selector) = function_definition.compute_selector() else {
+            return Ok(None);
+        };
+        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
+            &function_definition,
+            &self.expression_emitter.state.builder,
+        );
+
+        let (receiver_value, next) =
+            self.expression_emitter.emit_value(&access.operand(), current_block)?;
+        current_block = next;
+        let mut argument_values = Vec::with_capacity(arguments.len());
+        for argument in arguments.iter() {
+            let (value, next) = self
+                .expression_emitter
+                .emit_value(&argument, current_block)?;
+            argument_values.push(value);
+            current_block = next;
+        }
+        let builder = &self.expression_emitter.state.builder;
+        for (value, param_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
+            *value = TypeConversion::from_target_type(*param_type, builder)
+                .emit(*value, builder, &current_block);
+        }
+        let address = builder.emit_sol_address_cast(
+            receiver_value,
+            builder.types.sol_address,
+            &current_block,
+        );
+        let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
+        let callee_ref =
+            builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &current_block);
+        let value = call_value
+            .unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &current_block));
+        let results = builder.emit_sol_ext_icall(
+            callee_ref,
+            &argument_values,
+            &return_types,
+            value,
+            &current_block,
+        )?;
+        Ok(Some((results, current_block)))
+    }
+
 
     /// Emits an `assert(condition)` built-in via `sol.assert`.
     fn emit_assert(
