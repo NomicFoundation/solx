@@ -22,6 +22,7 @@ use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use melior::ir::BlockLike;
+use melior::ir::Type;
 use melior::ir::Value;
 
 use solx_mlir::Context;
@@ -298,23 +299,47 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         })?;
         let builder = &self.state.builder;
 
-        // Single-input getter for a value-result mapping: `mapping(K=>V)(K) -> V`.
-        // `map` indexes the base reference and the result is loaded, mirroring
-        // `map[k]`. **Array getters are intentionally skipped**: solc's
-        // auto-generated array accessor bare-reverts (empty data) on an
-        // out-of-bounds index, but `sol.gep` emits a `Panic(0x32)`, so a slang
-        // array getter would diverge from solc / the stable pipelines on OOB
-        // (the semantic tests expect the bare revert). Reference-typed keys or
-        // results, and multi-input getters, are also skipped (selector reverts).
+        // Getter for a (possibly nested) value-result mapping: `m(K) -> V`,
+        // `m(K1, K2) -> V`, ... Each nesting level chains a `sol.map` over its key
+        // argument and the final value is loaded, mirroring `m[k1][k2]`.
+        //
+        // **Array getters are intentionally skipped** (including arrays nested in
+        // mappings): solc's auto-generated array accessor bare-reverts (empty
+        // data) on an out-of-bounds index, but `sol.gep` emits a `Panic(0x32)`, so
+        // a slang array getter would diverge from solc / the stable pipelines on
+        // OOB (the semantic tests expect the bare revert). Reference-typed keys or
+        // results are also skipped (selector then reverts).
         if !abi.inputs().is_empty() {
-            let SlangType::Mapping(mapping_type) = &declared_type else {
-                return Ok(());
-            };
-            let key_slang = mapping_type.key_type();
-            let result_slang = mapping_type.value_type();
-            if abi.inputs().len() != 1
+            // Per level: the key's input type and the `sol.map` result type (the
+            // inner mapping's reference for intermediate levels, a `!sol.ptr<V>`
+            // for the final value).
+            let mut input_types: Vec<Type<'context>> = Vec::new();
+            let mut level_types: Vec<Type<'context>> = Vec::new();
+            let mut current = declared_type.clone();
+            while let SlangType::Mapping(mapping_type) = &current {
+                let key_slang = mapping_type.key_type();
+                if key_slang.is_reference_type() {
+                    return Ok(());
+                }
+                let value_slang = mapping_type.value_type();
+                let resolved_value =
+                    TypeConversion::resolve_slang_type(&value_slang, Some(location), builder);
+                let level_type = if matches!(value_slang, SlangType::Mapping(_)) {
+                    resolved_value
+                } else {
+                    builder.types.pointer(resolved_value, location)
+                };
+                input_types
+                    .push(TypeConversion::resolve_slang_type(&key_slang, Some(location), builder));
+                level_types.push(level_type);
+                current = value_slang;
+            }
+            let result_slang = current;
+            // Only fully-mapping chains down to a value result (no array/struct
+            // anywhere) are handled; anything else falls through to revert.
+            if input_types.is_empty()
+                || input_types.len() != abi.inputs().len()
                 || result_slang.is_reference_type()
-                || key_slang.is_reference_type()
             {
                 return Ok(());
             }
@@ -322,10 +347,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 TypeConversion::resolve_state_variable_type(state_variable, builder)?;
             let result_type =
                 TypeConversion::resolve_slang_type(&result_slang, Some(location), builder);
-            let input_type = TypeConversion::resolve_slang_type(&key_slang, Some(location), builder);
             let entry = builder.emit_sol_func(
                 &signature,
-                std::slice::from_ref(&input_type),
+                &input_types,
                 std::slice::from_ref(&result_type),
                 Some(selector),
                 StateMutability::View,
@@ -333,11 +357,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 contract_body,
             );
             let slot_name = Self::storage_symbol(slot, byte_offset, location);
-            let base = builder.emit_sol_addr_of(&slot_name, container_type, &entry);
-            let arg: Value<'context, '_> = entry.argument(0)?.into();
-            let value_ptr = builder.types.pointer(result_type, location);
-            let address = builder.emit_sol_map(base, arg, value_ptr, &entry);
-            let value = builder.emit_sol_load(address, result_type, &entry)?;
+            let mut base = builder.emit_sol_addr_of(&slot_name, container_type, &entry);
+            for (index, level_type) in level_types.iter().enumerate() {
+                let arg: Value<'context, '_> = entry.argument(index)?.into();
+                base = builder.emit_sol_map(base, arg, *level_type, &entry);
+            }
+            let value = builder.emit_sol_load(base, result_type, &entry)?;
             builder.emit_sol_return(&[value], &entry);
             return Ok(());
         }
