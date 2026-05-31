@@ -61,13 +61,20 @@ miscompiling, except where noted under "semantic gaps" below.
 - `delete` of a state variable — structs, fixed/dynamic arrays, `bytes`/`string`,
   mappings, and value types — is supported (aggregates via the `sol.delete` op,
   which recursively clears the storage).
-- **Indexed public getters** are generated for single-input, value-result
-  **mappings**: `mapping(K=>V) public m` with a value key and value result →
-  `m(K)` (via `sol.map` + load), mirroring `m[k]`. **Array getters are skipped**:
-  `sol.gep` panics with `Panic(0x32)` on out-of-bounds, but solc's array accessor
-  bare-reverts, so a slang array getter would diverge from solc on OOB (matching
-  it needs a bare-revert bounds check — a follow-up). Also skipped: reference-typed
-  keys (`bytes`/`string`) or results, and multi-level / multi-input getters.
+- **Indexed public getters** are generated for value-result **mappings and arrays**,
+  including nested and multi-input forms — `m(K)`, `a(uint256)`, `a(i, j)`,
+  `m(k1, k2)`, mixed `m(k)[i]` — chaining a `sol.map` (mappings) or a
+  bounds-checked `sol.gep` (arrays) per level over each key/index. Array levels emit
+  an explicit `index < length` check that **bare-reverts** (`revert(0,0)`) on
+  out-of-bounds to match solc's accessor (not `sol.gep`'s `Panic(0x32)`). Still a
+  **follow-up: struct-result getters**. A contract declaring a public multi-field
+  struct now *compiles* (the slang ABI fix — `extract_function_type_parameters_abi`
+  expands the getter's tuple return), so all the contract's state-variable
+  references resolve; but the getter body still returns the struct storage reference
+  as one value instead of expanding it into the field tuple `(a, b, …)` (skipping
+  mapping/array members), so the getter itself reverts/mismatches
+  (`storage/struct_accessor`, `getters/mapping_to_struct`). Reference-typed keys
+  (`bytes`/`string`) are also skipped.
 - Zeroing of an unwritten static-array memory **return parameter** is still
   incomplete (`array/arrayMemoryAllocation/array_static_return_param_zeroed_memory_index_access`).
   The basic case — a `uintN[] memory` return that reads a fixed array-of-structs —

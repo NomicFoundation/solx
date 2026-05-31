@@ -111,6 +111,21 @@ called out inline (reference-type `delete`, and `operand_segment_sizes`).
 
 ## slang (`slang_solidity_v2` — Rust parser/binder)
 
+0. **Multi-output (tuple) getter return ABI** — **DONE in slang** (`fix(abi): expand
+   multi-output tuple getter returns into per-element ABI outputs`, on
+   `exp-struct-getter-abi` = pinned `af822aba` + the fix; solx re-pinned to
+   `0170a712`). `extract_function_type_parameters_abi` (`abi/mod.rs`) emitted a
+   single ABI output, so a getter whose return type is a tuple — notably the
+   auto-generated accessor of a public **multi-field struct** — hit
+   `type_as_abi_parameter`'s default arm where `type_canonical_name(tuple)` is
+   `None`; that `None` propagated through `compute_abi_entry → compute_abi_entries →
+   compute_abi`, **nulling the entire contract ABI + storage layout**, so *every*
+   state-variable reference in such a contract failed (`unregistered state
+   variable`). Now a `Type::Tuple` return expands into one output per element. Suite
+   **+49 PASSED** (12 struct/UDVT/layout files now compile); the struct getter body
+   itself still needs solx-side field-tuple expansion (a follow-up — see
+   `06-slang-frontend.md`).
+
 1. **Type a type-name used in value position — the `abi.decode` `Void` flagship,
    a latent miscompile** *(panel — severity upgraded)*. `get_type()` is `Void` for
    the type-list elements of `abi.decode(payload, (T))`, so `abi.rs:60-126`
