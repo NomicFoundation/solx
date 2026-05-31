@@ -58,11 +58,11 @@ miscompiling, except where noted under "semantic gaps" below.
   reconstructed from the type-list argument).
 - `abi.decode` of a storage `bytes` payload (needs a storage→memory copy first).
 - Array-literal state-variable initializers (`uint[] constant a = [1, 2, 3]`).
-- `delete` of a fixed array-of-structs, or of a dynamic array under a
-  `layout at N` storage specifier, still miscompiles (the value clears but the
-  result is wrong). `delete` of structs, plain fixed/dynamic arrays,
-  `bytes`/`string`, mappings, and value-typed state variables is supported (via
-  the `sol.delete` op).
+- `delete` of a state variable — structs, fixed/dynamic arrays, `bytes`/`string`,
+  mappings, and value types — is supported (aggregates via the `sol.delete` op,
+  which recursively clears the storage). Independent of `delete`, two storage
+  features still miscompile: array push/getter under a `layout at N` specifier,
+  and reads of a fixed array-of-structs / `uintN[] memory` returns.
 - `verbatim` in inline assembly.
 - Public/`delegatecall` libraries as deployable objects.
 

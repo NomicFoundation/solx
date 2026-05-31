@@ -38,9 +38,15 @@ called out inline (reference-type `delete`, and `operand_segment_sizes`).
    frontend emits `sol.delete` for struct / fixed / dynamic arrays
    (`arithmetic.rs`), keeping `bytes`/`string` on malloc+copy and mappings a
    no-op. Suite +101 PASSED, 16 INVALID files resolved, zero PASSED→FAILED.
-   **Known gaps** (INVALID→FAILED, to investigate): `delete` of a fixed
-   array-of-structs (`storage/static_array_copy_cleanup`) and of a dynamic array
-   under `layout at N` (`storageLayoutSpecifier/delete`) still miscompile.
+   **`delete` itself is correct.** Two files convert INVALID→FAILED, but their
+   failing cases are *pre-existing bugs in other features* made reachable only
+   once `delete` let the files compile — verified by case index: the
+   `arrayLength()` check *after* `delete array` passes, while the failures are the
+   `array(2)` getter under `layout at N` (`storageLayoutSpecifier/delete`, fails
+   *before* any delete) and the initial all-zeros read of a fixed-array-of-structs
+   (`storage/static_array_copy_cleanup`, fails *before* any delete). Separate
+   items: array ops under `layout at N`, and fixed-array-of-struct reads /
+   `uintN[] memory` returns.
 3. **`sol.cast::fold` is disabled** — `SolOps.cpp:70-80` returns `{}` because
    `constFoldCastOp` does an unchecked `cast<IntegerAttr>` that fires on solx's
    signedness/width combos (self-documented in-tree: "~140 aborts"). Fix: a
