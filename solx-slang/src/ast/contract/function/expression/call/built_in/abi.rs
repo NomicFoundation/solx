@@ -31,16 +31,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         if packed {
             op_builder = op_builder.packed(Attribute::unit(builder.context));
         }
-        let mut operation: Operation = op_builder.build().into();
-        // TODO: drop this manual segment-sizes plumbing once the melior op-builder
-        // macro emits `operand_segment_sizes` automatically for ops with variadic
-        // or optional operand groups.
-        let ins_count = i32::try_from(ins.len()).expect("encode argument count fits in i32");
-        let segment_sizes = DenseI32ArrayAttribute::new(
-            builder.context,
-            &[ins_count, i32::from(selector.is_some())],
-        );
-        operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
+        // `operand_segment_sizes` ([ins.len(), selector?]) is synthesized by the
+        // melior op-builder macro for this `AttrSizedOperandSegments` op.
+        let operation: Operation = op_builder.build().into();
         block
             .append_operation(operation)
             .result(0)

@@ -9,9 +9,7 @@ pub(crate) use melior::ir::Operation;
 pub(crate) use melior::ir::Type;
 pub(crate) use melior::ir::Value;
 pub(crate) use melior::ir::ValueLike;
-pub(crate) use melior::ir::attribute::DenseI32ArrayAttribute;
 pub(crate) use melior::ir::attribute::StringAttribute;
-pub(crate) use melior::ir::operation::OperationMutLike;
 pub(crate) use melior::ir::r#type::IntegerType;
 pub(crate) use slang_solidity_v2::ast::BuiltIn;
 pub(crate) use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
@@ -1421,7 +1419,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let (ctor_args, block) = self.emit_argument_values(arguments, block)?;
         let val = builder.emit_sol_constant(0, builder.types.ui256, &block);
 
-        let mut operation: Operation =
+        // `operand_segment_sizes` (TableGen order: val=1, salt=0, ctorArgs=N) is
+        // synthesized by the melior op-builder macro for this
+        // `AttrSizedOperandSegments` op — `.val()` and `.ctor_args()` are set while
+        // the optional `salt` is left unset, yielding [1, 0, ctor_args.len()].
+        let operation: Operation =
             NewOperation::builder(builder.context, builder.unknown_location)
                 .obj_name(StringAttribute::new(builder.context, &contract_name))
                 .val(val)
@@ -1429,11 +1431,6 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .out(result_type)
                 .build()
                 .into();
-
-        // operand_segment_sizes follows TableGen order: val, salt, ctorArgs.
-        let ctor_count = i32::try_from(ctor_args.len()).expect("ctor count fits in i32");
-        let segment_sizes = DenseI32ArrayAttribute::new(builder.context, &[1, 0, ctor_count]);
-        operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
 
         let value = block
             .append_operation(operation)

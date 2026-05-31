@@ -17,7 +17,7 @@ ruint.workspace = true
 serde_json.workspace = true
 semver.workspace = true
 slang_solidity_v2.workspace = true
-melior = { git = "https://github.com/NomicFoundation/melior", rev = "62a909e2ff67fcc19f7f42dc4fb70c3e03376bd2", features = ["ods-dialects", "helpers"] }
+melior = { git = "https://github.com/NomicFoundation/melior", rev = "193e8252ca5d2774555b3e2f29ec8b97f28f5d38", features = ["ods-dialects", "helpers"] }
 
 solx-codegen-evm = { path = "../solx-codegen-evm" }
 solx-core = { path = "../solx-core", features = ["mlir"] }
