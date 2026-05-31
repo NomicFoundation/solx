@@ -216,7 +216,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         ))
                     }
                     None => unreachable!("slang resolves every identifier reference"),
-                    Some(_) => unimplemented!(
+                    Some(_) => anyhow::bail!(
                         "assignment to non-variable definition '{name}' is not yet supported"
                     ),
                 }
@@ -248,7 +248,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     ))
                 }
             }
-            _ => unimplemented!(
+            _ => anyhow::bail!(
                 "assignment target {:?} is not yet supported",
                 std::mem::discriminant(lvalue)
             ),

@@ -23,7 +23,7 @@ use crate::ast::contract::function::expression::call::type_conversion::TypeConve
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits a storage load via `sol.addr_of` + `sol.load`.
-    pub fn emit_storage_load(
+    pub(crate) fn emit_storage_load(
         &self,
         slot: U256,
         byte_offset: u32,
@@ -38,7 +38,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a storage store via `sol.addr_of` + `sol.store`.
-    pub fn emit_storage_store(
+    pub(crate) fn emit_storage_store(
         &self,
         slot: U256,
         byte_offset: u32,
@@ -77,7 +77,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 continue;
             };
             if matches!(initializer, Expression::ArrayExpression(_)) {
-                unimplemented!("array-literal state variable initializers are not yet supported");
+                anyhow::bail!("array-literal state variable initializers are not yet supported");
             }
             let declared_type = state_variable.get_type().ok_or_else(|| {
                 anyhow::anyhow!(

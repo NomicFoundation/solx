@@ -39,16 +39,16 @@ use crate::ast::contract::function::storage_slot::StorageSlot;
 /// Lowers Solidity expressions to MLIR SSA values.
 pub struct ExpressionEmitter<'state, 'context, 'block> {
     /// The shared MLIR context.
-    pub state: &'state Context<'context>,
+    pub(crate) state: &'state Context<'context>,
     /// Variable environment.
-    pub environment: &'state Environment<'context, 'block>,
+    pub(crate) environment: &'state Environment<'context, 'block>,
     /// State variable node ID to storage slot mapping.
-    pub storage_layout: &'state HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>,
+    pub(crate) storage_layout: &'state HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>,
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
     ///
     /// `true` by default (Solidity 0.8+). Set to `false` inside `unchecked {}`
     /// blocks and for-loop step expressions.
-    pub checked: bool,
+    pub(crate) checked: bool,
 }
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
@@ -110,7 +110,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let int_value = num_bigint::BigInt::from_bytes_be(num_bigint::Sign::Plus, &buffer);
             let integer_type = Type::from(melior::ir::r#type::IntegerType::unsigned(
                 self.state.builder.context,
-                width * 8,
+                width * solx_utils::BIT_LENGTH_BYTE as u32,
             ));
             let integer = self
                 .state
@@ -128,13 +128,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         // constant. `sol.bytes_cast` rejects a dynamic-string operand, so a
         // plain `emit_value` (which emits `sol.string_lit`) would fail to cast.
         if let Expression::StringExpression(string_expression) = expression
-            && format!("{target_type}") == "!sol.byte"
+            && solx_mlir::TypeFactory::is_sol_byte(target_type)
         {
             let literal_bytes = string_expression.value();
             let byte = literal_bytes.first().copied().unwrap_or(0);
             let ui8 = Type::from(melior::ir::r#type::IntegerType::unsigned(
                 self.state.builder.context,
-                8,
+                solx_utils::BIT_LENGTH_BYTE as u32,
             ));
             let integer = self
                 .state
@@ -468,7 +468,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 // functions' `Public` visibility (resolved to `ext_func_ref`).
                 // The branch values are emitted as `func_ref`, so recover the
                 // internal-pointer result type to match.
-                let result_type = if TypeConversion::is_function_ref_mlir_type(resolved_type) {
+                let result_type = if solx_mlir::TypeFactory::is_sol_function_ref(resolved_type) {
                     self.bare_function_ref_type(&conditional.true_expression())
                         .or_else(|| {
                             self.bare_function_ref_type(&conditional.false_expression())
@@ -540,7 +540,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 }
                 let element_type = match element_values.first() {
                     Some(first)
-                        if TypeConversion::is_function_ref_mlir_type(first.r#type())
+                        if solx_mlir::TypeFactory::is_sol_function_ref(first.r#type())
                             && first.r#type() != declared_element_type =>
                     {
                         first.r#type()

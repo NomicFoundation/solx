@@ -127,7 +127,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             None => String::new(),
             Some(Expression::StringExpression(string_expression)) => {
                 let message = String::from_utf8(string_expression.value())
-                    .expect("revert message is valid UTF-8");
+                    .map_err(|_| anyhow::anyhow!("revert message contains invalid UTF-8"))?;
                 anyhow::ensure!(
                     !message.is_empty(),
                     "revert(\"\") would emit ambiguous bytecode under the current Sol dialect; use revert() for no-data revert"

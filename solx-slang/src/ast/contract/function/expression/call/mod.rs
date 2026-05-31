@@ -142,7 +142,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let (value, block) = self.expression_emitter.emit_value(&first, block)?;
                 let builder = &self.expression_emitter.state.builder;
                 let member_count = enum_definition.members().iter().count();
-                let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
+                let max = u8::try_from(member_count.saturating_sub(1))
+                    .expect("enum member count fits in u8");
                 let enum_type = builder.types.enumeration(max.into());
                 let raw = TypeConversion::from_target_type(builder.types.ui256, builder)
                     .emit(value, builder, &block);
@@ -261,7 +262,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let Expression::Identifier(callee_identifier) = &callee else {
             // Non-identifier callee (e.g. `arr[i]()` array of function
             // pointers). If it has function-pointer type, call indirectly.
-            if let Some(function_slang_type) = Self::callee_type(&callee)
+            if let Some(function_slang_type) = callee.get_type()
                 && matches!(&function_slang_type, SlangType::Function(_))
             {
                 return self.emit_indirect_call(
@@ -334,15 +335,6 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .expect("function call always produces at least one result");
             Ok((Some(result), current_block))
         }
-    }
-
-    /// Returns the slang type of a callee expression. Used to decide whether
-    /// to route a non-identifier callee through an indirect call: any callee
-    /// whose type is a function pointer (a parenthesized name `(foo)()`, a
-    /// ternary `(c ? g : h)()`, an array element `arr[i]()`, the result of a
-    /// call `x()()`, …) dispatches via [`Self::emit_indirect_call`].
-    fn callee_type(callee: &Expression) -> Option<SlangType> {
-        callee.get_type()
     }
 
     /// Emits an indirect call through an internal function pointer. The

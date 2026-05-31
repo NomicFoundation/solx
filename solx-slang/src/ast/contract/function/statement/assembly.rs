@@ -706,8 +706,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                         let builder = &self.state.builder;
                         let ui256 = builder.types.ui256;
                         let value = if member == "slot" {
-                            let slot_big = BigInt::from_str_radix(&slot.to_string(), 10)
-                                .expect("U256 decimal string parses as BigInt");
+                            let slot_big =
+                                BigInt::from_bytes_be(num_bigint::Sign::Plus, &slot.to_be_bytes_vec());
                             builder.emit_constant(&slot_big, ui256, &block)
                         } else {
                             builder.emit_sol_constant(i64::from(byte_offset), ui256, &block)
@@ -724,7 +724,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let ui256 = builder.types.ui256;
                 let cast = if value.r#type() == ui256 {
                     value
-                } else if format!("{}", value.r#type()).starts_with("!sol.enum") {
+                } else if solx_mlir::TypeFactory::is_sol_enum(value.r#type()) {
                     // Enum-typed variables bridge to ui256 via `sol.enum_cast`;
                     // `sol.cast` rejects non-integer enum operands.
                     block
@@ -1876,13 +1876,19 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 }
                 Ok((builder.emit_sol_constant(0, ui256, &block), block))
             }
-            "memoryguard" | "verbatim" => {
-                // memoryguard returns its argument; verbatim is opaque.
+            "memoryguard" => {
+                // memoryguard(x) is an optimizer hint that returns its argument.
                 if arguments.is_empty() {
                     Ok((builder.emit_sol_constant(0, ui256, &block), block))
                 } else {
                     Ok((arguments[0], block))
                 }
+            }
+            "verbatim" => {
+                // `verbatim_<n>i_<m>o` injects opaque raw EVM bytecode; returning
+                // an argument unchanged would silently drop it. (The suffixed
+                // forms also reach the unsupported-intrinsic bail below.)
+                anyhow::bail!("verbatim is not yet supported in inline assembly")
             }
             "log0" | "log1" | "log2" | "log3" | "log4" => {
                 if arguments.len() < 2 {

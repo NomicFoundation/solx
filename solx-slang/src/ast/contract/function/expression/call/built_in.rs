@@ -16,6 +16,7 @@ use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::ElementaryType;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
@@ -457,7 +458,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .position(|member| member.name() == member_name)
             {
                 let builder = &self.expression_emitter.state.builder;
-                let max_member = enum_definition.members().iter().count() - 1;
+                let max_member = enum_definition.members().iter().count().saturating_sub(1);
                 let max = u8::try_from(max_member).expect("enum member count fits in u8");
                 let enum_type = builder.types.enumeration(max.into());
                 let raw =
@@ -1016,7 +1017,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let signature_expression =
                     iter.next().expect("slang validates non-empty arguments");
                 let Expression::StringExpression(string_expression) = signature_expression else {
-                    unimplemented!(
+                    anyhow::bail!(
                         "abi.encodeWithSignature with a non-literal signature is not yet supported"
                     );
                 };
@@ -1247,7 +1248,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .ok_or_else(|| anyhow::anyhow!("base of array push has no resolved type"))?;
         let value_argument = arguments.iter().next();
         if value_argument.is_some() && matches!(&base_slang_type, SlangType::Bytes(_)) {
-            unimplemented!("bytes.push(x) lowers to sol.push_string, which is not yet wired");
+            anyhow::bail!("bytes.push(x) lowers to sol.push_string, which is not yet wired");
         }
         let builder = &self.expression_emitter.state.builder;
 
@@ -1576,11 +1577,138 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .into()
     }
 
-    /// Emits `abi.decode(payload, (T))` as a `sol.decode` operation.
+    /// Resolves an `abi.decode` type-list element — a type name in value
+    /// position such as `uint256`, `bytes`, or `bytes32` — to its MLIR type.
     ///
-    /// The result type comes from the call's slang type (`call.get_type()`);
-    /// multi-result decode requires the multi-result-call dispatch and is
-    /// not yet supported.
+    /// Slang does not assign a semantic type to a type name used as an
+    /// expression (its `get_type()` is `None`, and the enclosing `abi.decode`
+    /// call is typed as a tuple of `Void`), so the type is reconstructed
+    /// structurally. Only elementary types are supported; arrays, mappings,
+    /// and user-defined types bail so the decode falls back to failing rather
+    /// than producing a wrong type.
+    fn resolve_abi_type_expression(
+        &self,
+        expression: &Expression,
+    ) -> anyhow::Result<Type<'context>> {
+        match expression {
+            Expression::ElementaryType(elementary) => {
+                self.resolve_abi_elementary_type(elementary)
+            }
+            Expression::TypeExpression(type_expression) => {
+                match type_expression.type_name() {
+                    SlangTypeName::ElementaryType(elementary) => {
+                        self.resolve_abi_elementary_type(&elementary)
+                    }
+                    _ => anyhow::bail!(
+                        "abi.decode of arrays, mappings, and user-defined types is not yet supported"
+                    ),
+                }
+            }
+            _ => anyhow::bail!("unsupported abi.decode type-list element"),
+        }
+    }
+
+    /// Maps a Solidity elementary type keyword (`uint<N>`, `int<N>`, `bytes`,
+    /// `bytes<N>`, `bool`, `address`, `string`) to its MLIR type, parsing the
+    /// width from the keyword's source text (`uint`/`int` default to 256 bits).
+    fn resolve_abi_elementary_type(
+        &self,
+        elementary: &ElementaryType,
+    ) -> anyhow::Result<Type<'context>> {
+        let builder = &self.expression_emitter.state.builder;
+        let parse_width = |text: &str, prefix: &str| -> anyhow::Result<u32> {
+            match text.trim().strip_prefix(prefix) {
+                Some("") => Ok(256),
+                Some(digits) => digits
+                    .parse::<u32>()
+                    .map_err(|_| anyhow::anyhow!("invalid `{prefix}` width in `{text}`")),
+                None => anyhow::bail!("`{text}` is not a `{prefix}` type"),
+            }
+        };
+        let resolved = match elementary {
+            ElementaryType::BoolKeyword(_) => builder.types.i1,
+            ElementaryType::AddressType(_) => builder.types.sol_address,
+            ElementaryType::StringKeyword(_) => {
+                builder.types.string(solx_utils::DataLocation::Memory)
+            }
+            ElementaryType::UintKeyword(keyword) => {
+                let bits = parse_width(keyword.unparse(), "uint")?;
+                Type::from(IntegerType::unsigned(builder.context, bits))
+            }
+            ElementaryType::IntKeyword(keyword) => {
+                let bits = parse_width(keyword.unparse(), "int")?;
+                Type::from(IntegerType::signed(builder.context, bits))
+            }
+            ElementaryType::BytesKeyword(keyword) => {
+                let text = keyword.unparse();
+                if text.trim() == "bytes" {
+                    builder.types.string(solx_utils::DataLocation::Memory)
+                } else {
+                    builder.types.fixed_bytes(parse_width(text, "bytes")?)
+                }
+            }
+            ElementaryType::FixedKeyword(_) | ElementaryType::UfixedKeyword(_) => {
+                anyhow::bail!("fixed-point types are not supported")
+            }
+        };
+        Ok(resolved)
+    }
+
+    /// Determines the MLIR result types of `abi.decode(payload, (T1, T2, …))`.
+    ///
+    /// Slang types most decode calls correctly, but leaves an elementary
+    /// type-name argument (`uint256`, `bytes`, …) untyped — the call's type is
+    /// a tuple whose corresponding element is `Void`. Those positions are
+    /// reconstructed from the type-list argument via
+    /// [`Self::resolve_abi_type_expression`]; every other position keeps
+    /// slang's type, so arrays, structs, enums, and user-defined value types
+    /// continue to resolve through the binder.
+    fn abi_decode_result_types(
+        &self,
+        call: &FunctionCallExpression,
+        arguments: &PositionalArguments,
+    ) -> anyhow::Result<Vec<Type<'context>>> {
+        let builder = &self.expression_emitter.state.builder;
+        let argument_types: Vec<Expression> = match arguments.iter().nth(1) {
+            Some(Expression::TupleExpression(tuple)) => {
+                tuple.items().iter().filter_map(|item| item.expression()).collect()
+            }
+            Some(other) => vec![other],
+            None => Vec::new(),
+        };
+        let slang_types: Vec<SlangType> = match call.get_type() {
+            Some(SlangType::Tuple(tuple)) => tuple.types(),
+            Some(other) => vec![other],
+            None => Vec::new(),
+        };
+        let count = slang_types.len().max(argument_types.len());
+        (0..count)
+            .map(|index| {
+                // Prefer slang's type whenever it is meaningful.
+                if let Some(slang_type) = slang_types.get(index)
+                    && !matches!(slang_type, SlangType::Void(_))
+                {
+                    return Ok(TypeConversion::resolve_slang_type(slang_type, None, builder));
+                }
+                // Slang left this position untyped (`Void`). If the type-list
+                // argument names an elementary type, reconstruct it; otherwise
+                // fall back to slang's resolution (`Void` -> `ui256`), preserving
+                // prior behaviour for 256-bit-word decodes such as user-defined
+                // value types.
+                if let Some(argument) = argument_types.get(index)
+                    && let Ok(resolved) = self.resolve_abi_type_expression(argument)
+                {
+                    return Ok(resolved);
+                }
+                Ok(slang_types.get(index).map_or(builder.types.ui256, |slang_type| {
+                    TypeConversion::resolve_slang_type(slang_type, None, builder)
+                }))
+            })
+            .collect()
+    }
+
+    /// Emits `abi.decode(payload, (T1, T2, …))` as a `sol.decode` operation,
+    /// yielding one value per requested type.
     pub(super) fn emit_abi_decode(
         &self,
         call: &FunctionCallExpression,
@@ -1594,20 +1722,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let (payload_value, block) = self
             .expression_emitter
             .emit_value(&payload_expression, block)?;
-        let return_slang_type = call
-            .get_type()
-            .expect("abi.decode call is typed by the binder");
+        let result_types = self.abi_decode_result_types(call, arguments)?;
         let builder = &self.expression_emitter.state.builder;
-        // `abi.decode(payload, (A, B, …))` yields one value per requested type;
-        // a single requested type decodes to a scalar.
-        let result_types: Vec<Type<'context>> = match &return_slang_type {
-            SlangType::Tuple(tuple) => tuple
-                .types()
-                .iter()
-                .map(|element| TypeConversion::resolve_slang_type(element, None, builder))
-                .collect(),
-            other => vec![TypeConversion::resolve_slang_type(other, None, builder)],
-        };
         let operation = block.append_operation(
             DecodeOperation::builder(builder.context, builder.unknown_location)
                 .addr(payload_value)
@@ -1710,7 +1826,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         match message {
             Some(Expression::StringExpression(string_expression)) => {
                 let bytes = string_expression.value();
-                let literal = String::from_utf8(bytes).expect("require message is valid UTF-8");
+                let literal = String::from_utf8(bytes)
+                    .map_err(|_| anyhow::anyhow!("require message contains invalid UTF-8"))?;
                 builder.emit_sol_require(condition_boolean, Some(&literal), &[], false, &block);
                 Ok(block)
             }

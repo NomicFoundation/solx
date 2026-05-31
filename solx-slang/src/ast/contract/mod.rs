@@ -51,15 +51,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         Self { state }
     }
 
-    /// Returns whether `contract` is payable (declares a `receive()` function or
-    /// a `payable` `fallback()` function). Single source of truth for payability
-    /// derivation — used both when emitting the `sol.contract` op and when
-    /// resolving `SlangType::Contract` to a `Sol_ContractType`.
-    // TODO: walk the inheritance tree like solc does (`receiveFunction` /
-    // `fallbackFunction` on `ContractDefinition`, `ContractType::isPayable`)
-    // and move this helper into Slang.
+    /// Returns whether `contract` is payable (a `receive()` function or a
+    /// `payable` `fallback()`, declared on the contract or inherited). Single
+    /// source of truth for payability derivation — used both when emitting the
+    /// `sol.contract` op and when resolving `SlangType::Contract` to a
+    /// `Sol_ContractType`. Walks the C3-linearised function set so a `receive`
+    /// inherited from a base marks the deriving contract payable, matching solc.
     pub fn is_contract_payable(contract: &ContractDefinition) -> bool {
-        contract.functions().iter().any(|function| {
+        contract.compute_linearised_functions().iter().any(|function| {
             matches!(function.kind(), FunctionKind::Receive)
                 || (matches!(function.kind(), FunctionKind::Fallback)
                     && matches!(function.mutability(), FunctionMutability::Payable))

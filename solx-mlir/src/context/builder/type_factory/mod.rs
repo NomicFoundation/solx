@@ -37,6 +37,63 @@ pub struct TypeFactory<'context> {
 }
 
 impl<'context> TypeFactory<'context> {
+    // ---- Sol-dialect type predicates ----
+    //
+    // The melior C-FFI does not expose typed introspection for Sol-dialect
+    // types, so these match the `AsmPrinter` textual form. They are centralized
+    // here so every caller shares one definition; replace with C-FFI predicates
+    // (`solxIs*Type`) when those land.
+
+    /// Whether `ty` is a Sol enum type (`!sol.enum<N>`).
+    pub fn is_sol_enum(ty: Type<'_>) -> bool {
+        format!("{ty}").starts_with("!sol.enum")
+    }
+
+    /// Whether `ty` is the Sol address type (`!sol.address`).
+    pub fn is_sol_address(ty: Type<'_>) -> bool {
+        format!("{ty}").starts_with("!sol.address")
+    }
+
+    /// Whether `ty` is a Sol contract type (`!sol.contract<…>`).
+    pub fn is_sol_contract(ty: Type<'_>) -> bool {
+        format!("{ty}").starts_with("!sol.contract")
+    }
+
+    /// Whether `ty` is an address-like type — `!sol.address` or
+    /// `!sol.contract<…>` — for which conversions use `sol.address_cast`.
+    pub fn is_sol_address_like(ty: Type<'_>) -> bool {
+        Self::is_sol_address(ty) || Self::is_sol_contract(ty)
+    }
+
+    /// Whether `ty` is a Sol fixed-bytes type (`!sol.fixedbytes<N>`).
+    pub fn is_sol_fixed_bytes(ty: Type<'_>) -> bool {
+        format!("{ty}").starts_with("!sol.fixedbytes")
+    }
+
+    /// Whether `ty` is the single-byte `!sol.byte` — the element type of
+    /// `bytes`/`string`, distinct from `!sol.fixedbytes<1>`.
+    pub fn is_sol_byte(ty: Type<'_>) -> bool {
+        format!("{ty}") == "!sol.byte"
+    }
+
+    /// Whether `ty` is a Sol reference type: array, struct, string, bytes, or
+    /// mapping.
+    pub fn is_sol_reference(ty: Type<'_>) -> bool {
+        let text = format!("{ty}");
+        text.starts_with("!sol.array")
+            || text.starts_with("!sol.struct")
+            || text.starts_with("!sol.string")
+            || text.starts_with("!sol.bytes")
+            || text.starts_with("!sol.mapping")
+    }
+
+    /// Whether `ty` is a Sol function-pointer type — internal
+    /// `!sol.func_ref<…>` or external `!sol.ext_func_ref<…>`.
+    pub fn is_sol_function_ref(ty: Type<'_>) -> bool {
+        let text = format!("{ty}");
+        text.starts_with("!sol.func_ref") || text.starts_with("!sol.ext_func_ref")
+    }
+
     /// Bit width of a Solidity function selector (4 bytes).
     pub const SELECTOR_BIT_WIDTH: u32 = solx_utils::BIT_LENGTH_X32 as u32;
 

@@ -14,6 +14,7 @@
 - [EVM Instructions Reference](./internals/03-evm-instructions.md)
 - [Yul Builtins Reference](./internals/04-yul-builtins.md)
 - [Binary Layout and Linking](./internals/05-binary-layout.md)
+- [Experimental Slang Frontend](./internals/06-slang-frontend.md)
 
 # Developer Guide
 

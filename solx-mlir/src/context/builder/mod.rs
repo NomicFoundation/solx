@@ -1361,15 +1361,11 @@ impl<'context> Builder<'context> {
         // ABI encoders, comparisons, value transfers, explicit conversions) gets
         // the right op without repeating the dispatch. No caller can rely on
         // `sol.cast` accepting these types, since the verifier rejects them.
-        let text = |t: Type<'context>| format!("{t}");
-        let is_enum = |t: Type<'context>| text(t).starts_with("!sol.enum");
-        let is_address = |t: Type<'context>| text(t).starts_with("!sol.address");
-        let is_contract = |t: Type<'context>| text(t).starts_with("!sol.contract");
-        let is_fixed_bytes = |t: Type<'context>| text(t).starts_with("!sol.fixedbytes");
-        // The element type of `bytes`/`string` is the single-byte `!sol.byte`,
-        // distinct from `!sol.fixedbytes<1>`. `sol.bytes_cast` accepts it
-        // alongside integers and fixedbytes; `sol.cast` (integer-only) does not.
-        let is_byte = |t: Type<'context>| text(t) == "!sol.byte";
+        let is_enum = TypeFactory::is_sol_enum;
+        let is_address = TypeFactory::is_sol_address;
+        let is_contract = TypeFactory::is_sol_contract;
+        let is_fixed_bytes = TypeFactory::is_sol_fixed_bytes;
+        let is_byte = TypeFactory::is_sol_byte;
         let src = value.r#type();
 
         // Enum ↔ integer (`sol.enum_cast` accepts `Sol_Int`, which includes
@@ -1405,6 +1401,12 @@ impl<'context> Builder<'context> {
         // byte / bytesN ↔ {byte, bytesN, integer}.
         if is_fixed_bytes(src) || is_fixed_bytes(to_type) || is_byte(src) || is_byte(to_type) {
             return self.emit_sol_bytes_cast(value, to_type, block);
+        }
+        // Reference types (array / struct / string / bytes / mapping) differ
+        // only by data location; a reference→reference cast routes through
+        // `sol.data_loc_cast`.
+        if TypeFactory::is_sol_reference(src) && TypeFactory::is_sol_reference(to_type) {
+            return self.emit_sol_data_loc_cast(value, to_type, block);
         }
         block
             .append_operation(

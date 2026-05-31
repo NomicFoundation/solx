@@ -198,7 +198,8 @@ impl<'context> TypeConversion<'context> {
                 let member_count = enum_definition.members().iter().count();
                 // Solidity caps enums at 256 members, so the max enumerator
                 // index always fits in a `u8`.
-                let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
+                let max = u8::try_from(member_count.saturating_sub(1))
+                    .expect("enum member count fits in u8");
                 builder.types.enumeration(max.into())
             }
             SlangType::UserDefinedValue(udvt) => {
@@ -261,9 +262,13 @@ impl<'context> TypeConversion<'context> {
     fn integer_bits_required(value: &BigInt) -> u32 {
         if value.is_negative() {
             let magnitude_minus_one = -value - 1u32;
-            u32::try_from(magnitude_minus_one.bits()).unwrap() + 1
+            u32::try_from(magnitude_minus_one.bits())
+                .expect("a BigInt bit count fits in u32")
+                + 1
         } else {
-            u32::try_from(value.bits()).unwrap().max(1)
+            u32::try_from(value.bits())
+                .expect("a BigInt bit count fits in u32")
+                .max(1)
         }
     }
 
@@ -299,7 +304,14 @@ impl<'context> TypeConversion<'context> {
         let slang_type = state_variable
             .get_type()
             .ok_or_else(|| anyhow::anyhow!("unresolved type for state variable: {name}"))?;
-        Ok(Self::resolve_slang_type(&slang_type, None, builder))
+        // State variables live in storage, so reference-typed members (string /
+        // bytes / array / struct) default to the `Storage` location rather than
+        // `Memory` when their own location is `Inherited`.
+        Ok(Self::resolve_slang_type(
+            &slang_type,
+            Some(solx_utils::DataLocation::Storage),
+            builder,
+        ))
     }
 
     /// Resolves a function's parameter and return types from Slang AST to MLIR.
@@ -340,7 +352,7 @@ impl<'context> TypeConversion<'context> {
         }
         // If the source value is a Sol enum, bridge it back to `ui256`
         // via `sol.enum_cast` first; `sol.cast` requires an integer input.
-        let value = if Self::is_sol_enum(value.r#type()) {
+        let value = if solx_mlir::TypeFactory::is_sol_enum(value.r#type()) {
             block
                 .append_operation(
                     solx_mlir::ods::sol::EnumCastOperation::builder(
@@ -375,68 +387,13 @@ impl<'context> TypeConversion<'context> {
                 builder.emit_sol_address_cast(truncated, address_type, block)
             }
             Self::Cast(target_type) => {
-                // Reference-typed values (arrays/structs/strings/bytes) only
-                // differ by data location; `sol.cast` rejects them, so route
-                // through `sol.data_loc_cast` instead.
-                if Self::is_reference_mlir_type(value.r#type())
-                    && Self::is_reference_mlir_type(target_type)
-                {
-                    builder.emit_sol_data_loc_cast(value, target_type, block)
-                } else if Self::is_address_like_mlir_type(value.r#type())
-                    || Self::is_address_like_mlir_type(target_type)
-                {
-                    // address ↔ contract conversions (e.g. `ICounter(addr)`)
-                    // go through `sol.address_cast`, not `sol.cast`.
-                    builder.emit_sol_address_cast(value, target_type, block)
-                } else if Self::is_fixed_bytes_mlir_type(value.r#type())
-                    || Self::is_fixed_bytes_mlir_type(target_type)
-                {
-                    // `bytesN` conversions (`bytes32(x)`, `uint256(someBytes32)`)
-                    // go through `sol.bytes_cast`; `sol.cast` is integer-only and
-                    // the verifier rejects a fixedbytes operand or result.
-                    builder.emit_sol_bytes_cast(value, target_type, block)
-                } else {
-                    builder.emit_sol_cast(value, target_type, block)
-                }
+                // All cast-op routing — reference→`data_loc_cast`,
+                // address/contract→`address_cast`, fixedbytes/byte→`bytes_cast`,
+                // enum→`enum_cast`, integer→`cast` — is centralized in
+                // `Builder::emit_sol_cast`.
+                builder.emit_sol_cast(value, target_type, block)
             }
         }
     }
 
-    /// Heuristic check for whether an MLIR type is a Sol `!sol.enum<N>` —
-    /// matches by its textual form since the C++ dialect does not expose
-    /// a typed detection FFI.
-    fn is_sol_enum(t: melior::ir::Type<'_>) -> bool {
-        format!("{t}").starts_with("!sol.enum")
-    }
-
-    /// Heuristic check for a Sol reference type (array/struct/string/bytes/
-    /// mapping) by textual form.
-    fn is_reference_mlir_type(t: melior::ir::Type<'_>) -> bool {
-        let text = format!("{t}");
-        text.starts_with("!sol.array")
-            || text.starts_with("!sol.struct")
-            || text.starts_with("!sol.string")
-            || text.starts_with("!sol.bytes")
-            || text.starts_with("!sol.mapping")
-    }
-
-    /// Heuristic check for a Sol address or contract type by textual form —
-    /// conversions among these use `sol.address_cast`.
-    fn is_address_like_mlir_type(t: melior::ir::Type<'_>) -> bool {
-        let text = format!("{t}");
-        text.starts_with("!sol.address") || text.starts_with("!sol.contract")
-    }
-
-    /// Heuristic check for a Sol `!sol.fixedbytes<N>` type by textual form —
-    /// conversions involving these use `sol.bytes_cast`, not `sol.cast`.
-    fn is_fixed_bytes_mlir_type(t: melior::ir::Type<'_>) -> bool {
-        format!("{t}").starts_with("!sol.fixedbytes")
-    }
-
-    /// Heuristic check for a Sol function-pointer type — internal
-    /// `!sol.func_ref<…>` or external `!sol.ext_func_ref<…>` — by textual form.
-    pub(crate) fn is_function_ref_mlir_type(t: melior::ir::Type<'_>) -> bool {
-        let text = format!("{t}");
-        text.starts_with("!sol.func_ref") || text.starts_with("!sol.ext_func_ref")
-    }
 }

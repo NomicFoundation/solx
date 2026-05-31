@@ -429,8 +429,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     Some(Expression::HexNumberExpression(hex)) => {
                         format!("{base}[{}]", hex.literal().unparse())
                     }
-                    Some(_) => format!("{base}[]"),
-                    None => format!("{base}[]"),
+                    Some(_) | None => format!("{base}[]"),
                 }
             }
             TypeName::MappingType(_) => "mapping".to_owned(),

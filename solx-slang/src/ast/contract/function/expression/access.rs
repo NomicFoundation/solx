@@ -151,7 +151,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             SlangType::Mapping(_) => {
                 let element_type =
                     TypeConversion::resolve_slang_type(&result_type, None, &self.state.builder);
-                let base_location = Self::resolve_base_location(&base_type);
+                let base_location = Self::resolve_base_location(&base_type)?;
                 let address_type = Self::address_type(
                     &self.state.builder,
                     element_type,
@@ -186,13 +186,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Maps a slang container type's data location to the dialect-side
     /// `DataLocation`.
-    fn resolve_base_location(base_type: &SlangType) -> DataLocation {
+    fn resolve_base_location(base_type: &SlangType) -> anyhow::Result<DataLocation> {
         match base_type.data_location() {
             Some(SlangDataLocation::Inherited) => {
                 unreachable!("slang should not surface Inherited at an index-access base")
             }
-            Some(other) => DataLocation::from_slang(other, None),
-            None => unimplemented!(
+            Some(other) => Ok(DataLocation::from_slang(other, None)),
+            None => anyhow::bail!(
                 "index access on a value-typed base is not yet wired: {:?}",
                 std::mem::discriminant(base_type)
             ),

@@ -33,8 +33,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (rhs, block) = self.emit_value(right, block)?;
+        // Solidity evaluates subexpressions left-to-right; emit `left` before
+        // `right` so side effects (calls, `++`, storage writes) observe the
+        // source order.
         let (lhs, block) = self.emit_value(left, block)?;
+        let (rhs, block) = self.emit_value(right, block)?;
         let result_type = target_type.unwrap_or_else(|| {
             let lhs_width = solx_mlir::TypeFactory::integer_bit_width(lhs.r#type());
             let rhs_width = solx_mlir::TypeFactory::integer_bit_width(rhs.r#type());
@@ -198,7 +201,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             .is_ok()
                         {
                             builder.emit_sol_constant(0, element_type, &block)
-                        } else if format!("{element_type}").starts_with("!sol.enum") {
+                        } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
                             let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
                             block
                                 .append_operation(
@@ -245,7 +248,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             .is_ok()
                         {
                             builder.emit_sol_constant(0, element_type, &block)
-                        } else if format!("{element_type}").starts_with("!sol.enum") {
+                        } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
                             let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
                             block
                                 .append_operation(
@@ -261,9 +264,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                                 .result(0)
                                 .expect("sol.enum_cast produces one result")
                                 .into()
+                        } else if solx_mlir::TypeFactory::is_sol_reference(element_type) {
+                            // Array / struct / string / bytes / mapping need
+                            // recursive zeroing, not yet implemented. Fail cleanly
+                            // rather than storing a type-mismatched `ui256(0)` into
+                            // a reference-typed slot (which the verifier rejects).
+                            anyhow::bail!(
+                                "delete of a reference-type storage variable is not yet supported"
+                            );
                         } else {
-                            // Reference / struct types — leave un-deleted for
-                            // now (the test will fail with the old value).
+                            // Word-sized types (e.g. function pointers) zero
+                            // correctly with a plain `ui256(0)` store.
                             builder.emit_sol_constant(0, builder.types.ui256, &block)
                         };
                         self.emit_storage_store(slot, byte_offset, zero, location, &block);
