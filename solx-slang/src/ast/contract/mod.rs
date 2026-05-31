@@ -22,6 +22,7 @@ use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use melior::ir::BlockLike;
+use melior::ir::Value;
 
 use solx_mlir::Context;
 use solx_mlir::StateMutability;
@@ -297,28 +298,39 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         })?;
         let builder = &self.state.builder;
 
-        // Indexed getter for a value-element array: `x(uint256) -> element`.
-        // The base array reference is `gep`'d by the index argument and the
-        // element loaded, mirroring normal `array[i]` access. Mappings,
-        // struct / nested-reference elements, and multi-dimensional (multi-input)
-        // getters are still skipped (the selector then reverts).
+        // Single-input getter for a value-result array or mapping:
+        //   `array(uint256) -> element`, `mapping(K=>V)(K) -> V`.
+        // The base reference is indexed (`gep` for arrays, `map` for mappings)
+        // and the result loaded, mirroring `array[i]` / `map[k]`. Reference-typed
+        // results or keys, and multi-dimensional (multi-input) getters, are still
+        // skipped (the selector then reverts).
         if !abi.inputs().is_empty() {
-            let element_slang = match &declared_type {
-                SlangType::Array(array_type) => array_type.element_type(),
-                SlangType::FixedSizeArray(array_type) => array_type.element_type(),
+            let (input_slang, result_slang) = match &declared_type {
+                SlangType::Array(array_type) => (None, array_type.element_type()),
+                SlangType::FixedSizeArray(array_type) => (None, array_type.element_type()),
+                SlangType::Mapping(mapping_type) => {
+                    (Some(mapping_type.key_type()), mapping_type.value_type())
+                }
                 _ => return Ok(()),
             };
-            if abi.inputs().len() != 1 || element_slang.is_reference_type() {
+            if abi.inputs().len() != 1
+                || result_slang.is_reference_type()
+                || input_slang.as_ref().is_some_and(SlangType::is_reference_type)
+            {
                 return Ok(());
             }
             let container_type =
                 TypeConversion::resolve_state_variable_type(state_variable, builder)?;
-            let element_type =
-                TypeConversion::resolve_slang_type(&element_slang, Some(location), builder);
+            let result_type =
+                TypeConversion::resolve_slang_type(&result_slang, Some(location), builder);
+            let input_type = match &input_slang {
+                Some(key) => TypeConversion::resolve_slang_type(key, Some(location), builder),
+                None => builder.types.ui256,
+            };
             let entry = builder.emit_sol_func(
                 &signature,
-                std::slice::from_ref(&builder.types.ui256),
-                std::slice::from_ref(&element_type),
+                std::slice::from_ref(&input_type),
+                std::slice::from_ref(&result_type),
                 Some(selector),
                 StateMutability::View,
                 None,
@@ -326,9 +338,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             );
             let slot_name = Self::storage_symbol(slot, byte_offset, location);
             let base = builder.emit_sol_addr_of(&slot_name, container_type, &entry);
-            let address =
-                builder.emit_sol_gep(base, entry.argument(0)?.into(), element_type, &entry);
-            let value = builder.emit_sol_load(address, element_type, &entry)?;
+            let arg: Value<'context, '_> = entry.argument(0)?.into();
+            let address = if matches!(declared_type, SlangType::Mapping(_)) {
+                let value_ptr = builder.types.pointer(result_type, location);
+                builder.emit_sol_map(base, arg, value_ptr, &entry)
+            } else {
+                builder.emit_sol_gep(base, arg, result_type, &entry)
+            };
+            let value = builder.emit_sol_load(address, result_type, &entry)?;
             builder.emit_sol_return(&[value], &entry);
             return Ok(());
         }
