@@ -9,10 +9,12 @@ use melior::ir::Operation;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::attribute::DenseI32ArrayAttribute;
+use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationMutLike;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::MemberAccessExpression;
@@ -20,8 +22,12 @@ use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::BalanceOperation;
+use solx_mlir::ods::sol::BareCallOperation;
+use solx_mlir::ods::sol::BareDelegateCallOperation;
+use solx_mlir::ods::sol::BareStaticCallOperation;
 use solx_mlir::ods::sol::BaseFeeOperation;
 use solx_mlir::ods::sol::BlobBaseFeeOperation;
+use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::BlockNumberOperation;
 use solx_mlir::ods::sol::BytesCastOperation;
 use solx_mlir::ods::sol::CallValueOperation;
@@ -42,6 +48,7 @@ use solx_mlir::ods::sol::GetCallDataOperation;
 use solx_mlir::ods::sol::Keccak256Operation;
 use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::MulModOperation;
+use solx_mlir::ods::sol::NewOperation;
 use solx_mlir::ods::sol::OriginOperation;
 use solx_mlir::ods::sol::PrevRandaoOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
@@ -51,6 +58,7 @@ use solx_mlir::ods::sol::SigOperation;
 use solx_mlir::ods::sol::TimestampOperation;
 use solx_mlir::ods::sol::TransferOperation;
 
+use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
@@ -121,6 +129,30 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     )
                     .result(0)
                     .expect("keccak256 always produces one result")
+                    .into();
+                Ok(Some((Some(value), block)))
+            }
+            BuiltIn::Blockhash if arguments.len() == 1 => {
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let builder = &self.expression_emitter.state.builder;
+                let block_number = TypeConversion::from_target_type(
+                    builder.types.ui256,
+                    builder,
+                )
+                .emit(values[0], builder, &block);
+                let value = block
+                    .append_operation(
+                        BlockHashOperation::builder(
+                            builder.context,
+                            builder.unknown_location,
+                        )
+                        .block_number(block_number)
+                        .val(builder.types.fixed_bytes(32))
+                        .build()
+                        .into(),
+                    )
+                    .result(0)
+                    .expect("blockhash always produces one result")
                     .into();
                 Ok(Some((Some(value), block)))
             }
@@ -404,6 +436,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 );
                 Ok((None, block))
             }
+            Some(
+                builtin @ (BuiltIn::AddressCall
+                | BuiltIn::AddressDelegatecall
+                | BuiltIn::AddressStaticcall),
+            ) => {
+                let arguments = arguments.expect("bare call is a member-access call");
+                let (_status, _ret_data, block) =
+                    self.emit_bare_call(access, builtin, arguments, block)?;
+                Ok((None, block))
+            }
             Some(BuiltIn::AbiEncode) => {
                 let arguments = arguments.expect("abi.encode is a member-access call");
                 let (values, block) = self.emit_argument_values(arguments, block)?;
@@ -684,6 +726,186 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             current = next;
         }
         Ok((values, current))
+    }
+
+    /// Emits a `new Contract(args)` expression as a `sol.new` operation.
+    ///
+    /// The contract type comes from the binder; payability is derived the same
+    /// way it is when resolving a `SlangType::Contract` reference. Value
+    /// transfer (`new C{value: x}()`) and `CREATE2` salt (`new C{salt: s}()`)
+    /// are not yet handled — those go through `CallOptionsExpression`.
+    pub fn emit_new(
+        &self,
+        call: &FunctionCallExpression,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let slang_type = call
+            .get_type()
+            .ok_or_else(|| anyhow::anyhow!("new expression has no resolved type"))?;
+        // `new T[](size)` allocates a dynamic memory array. Use `sol.malloc`
+        // with the resolved array type; downstream sets up the length slot
+        // from the argument.
+        if matches!(slang_type, SlangType::Array(_) | SlangType::Bytes(_) | SlangType::String(_)) {
+            let builder = &self.expression_emitter.state.builder;
+            let result_type = TypeConversion::resolve_slang_type(
+                &slang_type,
+                Some(solx_utils::DataLocation::Memory),
+                builder,
+            );
+            let address = builder.emit_sol_malloc(result_type, &block);
+            // Evaluate (and discard) the size argument for side effects.
+            let (_values, block) = self.emit_argument_values(arguments, block)?;
+            return Ok((Some(address), block));
+        }
+        let SlangType::Contract(contract_type) = slang_type else {
+            anyhow::bail!("new expression must produce a contract type");
+        };
+        let Definition::Contract(contract_definition) = contract_type.definition() else {
+            unreachable!("Slang ContractType always references a Contract definition");
+        };
+        let contract_name = contract_definition.name().name();
+        let payable = ContractEmitter::is_contract_payable(&contract_definition);
+
+        // Tell the linker that this contract embeds `contract_name`'s deploy
+        // bytecode so the assembler pulls it in.
+        self.expression_emitter
+            .state
+            .add_dependency(contract_name.clone());
+
+        let builder = &self.expression_emitter.state.builder;
+        let result_type = builder.types.contract(&contract_name, payable);
+
+        let (ctor_args, block) = self.emit_argument_values(arguments, block)?;
+        let val = builder.emit_sol_constant(0, builder.types.ui256, &block);
+
+        let mut operation: Operation =
+            NewOperation::builder(builder.context, builder.unknown_location)
+                .obj_name(StringAttribute::new(builder.context, &contract_name))
+                .val(val)
+                .ctor_args(&ctor_args)
+                .out(result_type)
+                .build()
+                .into();
+
+        // operand_segment_sizes follows TableGen order: val, salt, ctorArgs.
+        let ctor_count = i32::try_from(ctor_args.len()).expect("ctor count fits in i32");
+        let segment_sizes = DenseI32ArrayAttribute::new(builder.context, &[1, 0, ctor_count]);
+        operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
+
+        let value = block
+            .append_operation(operation)
+            .result(0)
+            .expect("sol.new always produces one result")
+            .into();
+        Ok((Some(value), block))
+    }
+
+    /// Emits one of the bare-call ops and returns both `(status, ret_data)`
+    /// SSA values. Gas defaults to `gasleft()`; value defaults to zero for
+    /// `addr.call`. Call options (`{gas: g, value: v}`) are not yet handled.
+    fn emit_bare_call(
+        &self,
+        access: &MemberAccessExpression,
+        kind: BuiltIn,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        Value<'context, 'block>,
+        Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    )> {
+        let (addr, block) = self
+            .expression_emitter
+            .emit_value(&access.operand(), block)?;
+        let (input_values, block) = self.emit_argument_values(arguments, block)?;
+        let input = input_values[0];
+
+        let builder = &self.expression_emitter.state.builder;
+        let gas = block
+            .append_operation(
+                GasLeftOperation::builder(builder.context, builder.unknown_location)
+                    .val(builder.types.ui256)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("gasleft always produces one result")
+            .into();
+
+        let operation: Operation = match kind {
+            BuiltIn::AddressCall => {
+                let val = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                BareCallOperation::builder(builder.context, builder.unknown_location)
+                    .addr(addr)
+                    .gas(gas)
+                    .val(val)
+                    .inp(input)
+                    .status(builder.types.i1)
+                    .ret_data(builder.types.sol_string_memory)
+                    .build()
+                    .into()
+            }
+            BuiltIn::AddressDelegatecall => {
+                BareDelegateCallOperation::builder(builder.context, builder.unknown_location)
+                    .addr(addr)
+                    .gas(gas)
+                    .inp(input)
+                    .status(builder.types.i1)
+                    .ret_data(builder.types.sol_string_memory)
+                    .build()
+                    .into()
+            }
+            BuiltIn::AddressStaticcall => {
+                BareStaticCallOperation::builder(builder.context, builder.unknown_location)
+                    .addr(addr)
+                    .gas(gas)
+                    .inp(input)
+                    .status(builder.types.i1)
+                    .ret_data(builder.types.sol_string_memory)
+                    .build()
+                    .into()
+            }
+            _ => unreachable!("bare call kind must be Call, Delegatecall, or Staticcall"),
+        };
+
+        let result = block.append_operation(operation);
+        let status = result
+            .result(0)
+            .expect("bare call always produces a status")
+            .into();
+        let ret_data = result
+            .result(1)
+            .expect("bare call always produces return data")
+            .into();
+        Ok((status, ret_data, block))
+    }
+
+    /// Tries to emit a multi-result bare call (`addr.call`, `addr.delegatecall`,
+    /// or `addr.staticcall`) used as the right-hand side of tuple
+    /// deconstruction. Returns `Ok(None)` if the callee is not a bare-call
+    /// member access so the caller can fall through to the named-function
+    /// dispatch path.
+    pub fn try_emit_bare_call_results(
+        &self,
+        call: &FunctionCallExpression,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        let Expression::MemberAccessExpression(access) = call.operand() else {
+            return Ok(None);
+        };
+        let Some(kind) = access.member().resolve_to_built_in() else {
+            return Ok(None);
+        };
+        if !matches!(
+            kind,
+            BuiltIn::AddressCall | BuiltIn::AddressDelegatecall | BuiltIn::AddressStaticcall
+        ) {
+            return Ok(None);
+        }
+        let (status, ret_data, block) = self.emit_bare_call(&access, kind, arguments, block)?;
+        Ok(Some((vec![status, ret_data], block)))
     }
 
     /// Emits a `sol.encode` operation producing a `bytes memory` payload.

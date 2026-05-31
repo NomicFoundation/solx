@@ -115,6 +115,44 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return self.emit_built_in_member_access(access, Some(positional_arguments), block);
         }
 
+        // `addr.call{value: v, gas: g}(data)` and friends — unwrap the
+        // `CallOptionsExpression` and route to the inner member access /
+        // new expression. Options are evaluated for side effects but their
+        // values do not yet thread through to the underlying op.
+        if let Expression::CallOptionsExpression(call_options) = &callee {
+            let inner = call_options.operand();
+            if let Expression::MemberAccessExpression(access) = &inner {
+                let mut current_block = block;
+                for option in call_options.options().iter() {
+                    let value_expression = option.value();
+                    let (_value, next) = self
+                        .expression_emitter
+                        .emit_value(&value_expression, current_block)?;
+                    current_block = next;
+                }
+                return self.emit_built_in_member_access(
+                    access,
+                    Some(positional_arguments),
+                    current_block,
+                );
+            }
+            if let Expression::NewExpression(_) = &inner {
+                let mut current_block = block;
+                for option in call_options.options().iter() {
+                    let value_expression = option.value();
+                    let (_value, next) = self
+                        .expression_emitter
+                        .emit_value(&value_expression, current_block)?;
+                    current_block = next;
+                }
+                return self.emit_new(call, positional_arguments, current_block);
+            }
+        }
+
+        if let Expression::NewExpression(_) = &callee {
+            return self.emit_new(call, positional_arguments, block);
+        }
+
         let Expression::Identifier(callee_identifier) = &callee else {
             anyhow::bail!("unsupported callee expression");
         };
@@ -276,6 +314,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         else {
             anyhow::bail!("only positional arguments supported");
         };
+
+        if let Some((values, block)) =
+            self.try_emit_bare_call_results(call, positional_arguments, block)?
+        {
+            return Ok((values, block));
+        }
 
         let Expression::Identifier(callee_identifier) = call.operand() else {
             anyhow::bail!("multi-result calls only support direct named function callees");
