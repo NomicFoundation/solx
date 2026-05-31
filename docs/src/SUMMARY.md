@@ -15,6 +15,7 @@
 - [Yul Builtins Reference](./internals/04-yul-builtins.md)
 - [Binary Layout and Linking](./internals/05-binary-layout.md)
 - [Experimental Slang Frontend](./internals/06-slang-frontend.md)
+- [Upstreaming Analysis](./internals/07-upstreaming.md)
 
 # Developer Guide
 
