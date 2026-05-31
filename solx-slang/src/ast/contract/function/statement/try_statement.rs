@@ -4,8 +4,10 @@
 //! `sol.ext_icall` with `try_call` set (which yields a success flag instead
 //! of reverting), then a `sol.if` on that flag: the success region binds the
 //! decoded returns and runs `body`; the failure region runs the catch
-//! `handler`. The catch error parameter (`catch (bytes memory reason)`) is
-//! not yet bound — the handler body still runs.
+//! `handler`. A catch error parameter (`catch (bytes memory reason)`,
+//! `catch Error(string r)`, `catch Panic(uint c)`) is not yet bound — such a
+//! handler fails with a clear diagnostic rather than panicking on the
+//! unregistered-local lookup; a parameter-less `catch { … }` handler runs.
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
@@ -101,6 +103,22 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let else_entry = else_block;
         let mut else_end = Some(else_entry);
         if let Some(catch_clause) = try_statement.catch_clauses().iter().next() {
+            // The catch error parameter (`catch Error(string r)`, `catch Panic(uint
+            // c)`, `catch (bytes memory s)`) is not yet bound: it requires the
+            // failure-path revert data (returndata) decoded to the parameter type,
+            // which solx has no builder-level access to today. Emitting the handler
+            // body that references it would hit the unregistered-local `unreachable!`
+            // and panic, so fail with a clear diagnostic instead. A handler with no
+            // error parameter (`catch { … }`) still runs.
+            if catch_clause
+                .error()
+                .is_some_and(|error| error.parameters().iter().next().is_some())
+            {
+                anyhow::bail!(
+                    "try/catch error-parameter binding is not yet supported \
+                     (catch Error/Panic/(bytes …))"
+                );
+            }
             else_end = self.emit_block(catch_clause.body().statements(), else_entry)?;
         }
         if let Some(end) = else_end {
