@@ -45,11 +45,13 @@ use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConditionOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ContinueOperation;
+use crate::ods::sol::ContractCastOperation;
 use crate::ods::sol::ContractOperation;
 use crate::ods::sol::CopyOperation;
 use crate::ods::sol::DataLocCastOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::DoWhileOperation;
+use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::FuncConstantOperation;
@@ -1351,12 +1353,51 @@ impl<'context> Builder<'context> {
         if value.r#type() == to_type {
             return value;
         }
-        // sol.cast is integer-only; the verifier rejects a fixedbytes operand or
-        // result. Any bytesN-involving conversion belongs to sol.bytes_cast, so
-        // route it there regardless of which caller emitted it (no caller can
-        // rely on sol.cast working for fixedbytes, since it is rejected).
-        let is_fixed_bytes = |t: Type<'context>| format!("{t}").starts_with("!sol.fixedbytes");
-        if is_fixed_bytes(value.r#type()) || is_fixed_bytes(to_type) {
+        // `sol.cast` is integer-only; its verifier rejects enum, address,
+        // contract, and fixedbytes operands/results. Each of those belongs to a
+        // dedicated cast op. Route here — centrally — so every caller (event and
+        // ABI encoders, comparisons, value transfers, explicit conversions) gets
+        // the right op without repeating the dispatch. No caller can rely on
+        // `sol.cast` accepting these types, since the verifier rejects them.
+        let text = |t: Type<'context>| format!("{t}");
+        let is_enum = |t: Type<'context>| text(t).starts_with("!sol.enum");
+        let is_address = |t: Type<'context>| text(t).starts_with("!sol.address");
+        let is_contract = |t: Type<'context>| text(t).starts_with("!sol.contract");
+        let is_fixed_bytes = |t: Type<'context>| text(t).starts_with("!sol.fixedbytes");
+        let src = value.r#type();
+
+        // Enum ↔ integer (`sol.enum_cast` accepts `Sol_Int`, which includes
+        // `!sol.enum<N>`); narrowing to an enum range-checks (and may revert).
+        if is_enum(src) || is_enum(to_type) {
+            return self.emit_sol_enum_cast(value, to_type, block);
+        }
+        // Contract ↔ contract (inheritance up/downcast, interface) uses the
+        // dedicated `sol.contract_cast`; `sol.address_cast` rejects two distinct
+        // contract endpoints.
+        if is_contract(src) && is_contract(to_type) {
+            return self.emit_sol_contract_cast(value, to_type, block);
+        }
+        // address ↔ {integer, contract, fixedbytes<20>}. `sol.address_cast`
+        // requires the integer side to be exactly `ui160`, so a wider/narrower
+        // integer bridges through `ui160` (then a plain `sol.cast` resizes it).
+        // `contract` and `fixedbytes<20>` endpoints cast directly.
+        if is_address(src) || is_address(to_type) {
+            let ui160 = self.types.ui160;
+            if is_address(src) {
+                if is_contract(to_type) || is_fixed_bytes(to_type) || to_type == ui160 {
+                    return self.emit_sol_address_cast(value, to_type, block);
+                }
+                let as_160 = self.emit_sol_address_cast(value, ui160, block);
+                return self.emit_sol_cast(as_160, to_type, block);
+            }
+            if is_contract(src) || is_fixed_bytes(src) || src == ui160 {
+                return self.emit_sol_address_cast(value, to_type, block);
+            }
+            let as_160 = self.emit_sol_cast(value, ui160, block);
+            return self.emit_sol_address_cast(as_160, to_type, block);
+        }
+        // bytesN ↔ {byte, integer}.
+        if is_fixed_bytes(src) || is_fixed_bytes(to_type) {
             return self.emit_sol_bytes_cast(value, to_type, block);
         }
         block
@@ -1369,6 +1410,71 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.cast always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.enum_cast` between an integer and an enum type (either
+    /// direction). Returns the input unchanged when the types already match.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
+    pub fn emit_sol_enum_cast<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        to_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        if value.r#type() == to_type {
+            return value;
+        }
+        block
+            .append_operation(
+                EnumCastOperation::builder(self.context, self.unknown_location)
+                    .inp(value)
+                    .out(to_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.enum_cast always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.contract_cast` between two contract types (inheritance
+    /// up/downcast or interface). Returns the input unchanged when the types
+    /// already match.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
+    pub fn emit_sol_contract_cast<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        to_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        if value.r#type() == to_type {
+            return value;
+        }
+        block
+            .append_operation(
+                ContractCastOperation::builder(self.context, self.unknown_location)
+                    .inp(value)
+                    .out(to_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.contract_cast always produces one result")
             .into()
     }
 

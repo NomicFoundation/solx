@@ -99,8 +99,6 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .iter()
                 .next()
                 .expect("len checked to be 1 above");
-            let (value, block) = self.expression_emitter.emit_value(&first, block)?;
-            let builder = &self.expression_emitter.state.builder;
 
             // `E(x)` (integer -> enum): slang surfaces no call type for this
             // conversion, and it lowers to `sol.enum_cast` (not `sol.cast`).
@@ -109,6 +107,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 && let Some(Definition::Enum(enum_definition)) =
                     callee_identifier.resolve_to_definition()
             {
+                let (value, block) = self.expression_emitter.emit_value(&first, block)?;
+                let builder = &self.expression_emitter.state.builder;
                 let member_count = enum_definition.members().iter().count();
                 let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
                 let enum_type = builder.types.enumeration(max.into());
@@ -136,6 +136,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .resolve_slang_type(call.get_type())
                 .ok_or_else(|| anyhow::anyhow!("unresolved type conversion target"))?;
 
+            // `emit_value_for_target` materializes a string literal directly as a
+            // `fixedbytes<N>` constant when the target is `bytesN` (e.g.
+            // `bytes32("abc")`); `sol.bytes_cast` rejects a dynamic-string
+            // operand, so a plain `emit_value` would fail here.
+            let (value, block) = self
+                .expression_emitter
+                .emit_value_for_target(&first, target_type, block)?;
+            let builder = &self.expression_emitter.state.builder;
             let result =
                 TypeConversion::from_target_type(target_type, builder).emit(value, builder, &block);
             return Ok((Some(result), block));
@@ -151,6 +159,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             self.try_emit_built_in_call_expression(call, positional_arguments, block)?
         {
             return Ok((Some(value), block));
+        }
+
+        // Internal library function call — direct `L.f(args)` or a `using for`
+        // `x.f(args)`. Must precede the member-access built-in dispatch below:
+        // that path's `this.f(args)` branch would otherwise consume `x.f(args)`
+        // without prepending the `x` receiver as the implicit `self`. Shared
+        // with the multi-result path so a tuple-returning library function
+        // (`return _s.reverse()`) yields all of its results.
+        if let Some((results, block)) =
+            self.try_emit_library_call(&callee, positional_arguments, block)?
+        {
+            return Ok((results.into_iter().next(), block));
         }
 
         if let Expression::MemberAccessExpression(access) = &callee {
@@ -514,6 +534,90 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((results.into_iter().next(), current_block))
     }
 
+    /// Emits a `using for` / direct library call (`x.f(args)` or `L.f(args)`)
+    /// when `callee` is a member access onto a pre-registered library internal
+    /// function, returning every result value (so tuple-returning library
+    /// functions work in both single- and multi-result contexts). For the
+    /// `using for` form the receiver is prepended as the implicit `self`
+    /// argument. Returns `None` when `callee` is not such a call, letting the
+    /// caller fall through to ordinary dispatch.
+    fn try_emit_library_call(
+        &self,
+        callee: &Expression,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        let Expression::MemberAccessExpression(access) = callee else {
+            return Ok(None);
+        };
+        let Some(Definition::Function(library_function)) = access.member().resolve_to_definition()
+        else {
+            return Ok(None);
+        };
+        if !self
+            .expression_emitter
+            .state
+            .library_function_ids
+            .contains(&library_function.node_id())
+        {
+            return Ok(None);
+        }
+
+        // A `using for` receiver (`x.f(args)`) is a value and becomes the
+        // implicit `self`. A namespace qualifier — a library (`L.f(args)`) or an
+        // import alias (`import "a.sol" as M; M.f(args)`) — is not a value, so it
+        // contributes no `self` and only the explicit arguments are passed.
+        let receiver_is_qualifier = matches!(
+            access.operand(),
+            Expression::Identifier(identifier)
+                if matches!(
+                    identifier.resolve_to_definition(),
+                    Some(
+                        Definition::Library(_)
+                            | Definition::Import(_)
+                            | Definition::ImportedSymbol(_)
+                    )
+                )
+        );
+        let (mlir_name, parameter_types, return_types) = self
+            .expression_emitter
+            .state
+            .resolve_function(library_function.node_id())?;
+
+        let mut argument_values = Vec::new();
+        let mut current_block = block;
+        if !receiver_is_qualifier {
+            let (self_value, next) = self
+                .expression_emitter
+                .emit_value(&access.operand(), current_block)?;
+            argument_values.push(self_value);
+            current_block = next;
+        }
+        for argument in positional_arguments.iter() {
+            let (value, next) = self
+                .expression_emitter
+                .emit_value(&argument, current_block)?;
+            argument_values.push(value);
+            current_block = next;
+        }
+
+        let builder = &self.expression_emitter.state.builder;
+        for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
+            *value = TypeConversion::from_target_type(parameter_type, builder).emit(
+                *value,
+                builder,
+                &current_block,
+            );
+        }
+        let results = builder.emit_sol_call_results(
+            mlir_name,
+            &argument_values,
+            return_types,
+            &current_block,
+        )?;
+        Ok(Some((results, current_block)))
+    }
+
     /// Emits a direct, named function call and returns all of its result
     /// values in declaration order.
     ///
@@ -550,6 +654,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             )
         {
             return self.emit_abi_decode(call, positional_arguments, block);
+        }
+
+        if let Some((results, block)) =
+            self.try_emit_library_call(&call.operand(), positional_arguments, block)?
+        {
+            return Ok((results, block));
         }
 
         let Expression::Identifier(callee_identifier) = call.operand() else {

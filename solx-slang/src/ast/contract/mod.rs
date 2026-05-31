@@ -4,6 +4,7 @@
 
 /// Function definition lowering to Sol dialect MLIR.
 pub mod function;
+mod library;
 
 use std::collections::HashMap;
 
@@ -75,6 +76,26 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let contract_name = contract.name().name();
 
         self.pre_register_functions(contract);
+
+        // Internal library functions called by the contract (`L.f(...)`) are
+        // not part of `compute_linearised_functions`, so pre-register them and
+        // emit their bodies into this contract's module below — they lower like
+        // ordinary internal functions.
+        let library_functions = library::collect_library_functions(contract);
+        for library_function in &library_functions {
+            let mlir_name = FunctionEmitter::mlir_function_name(library_function);
+            let (parameter_types, return_types) =
+                TypeConversion::resolve_function_types(library_function, &self.state.builder);
+            self.state.register_function_signature(
+                library_function.node_id(),
+                mlir_name,
+                parameter_types,
+                return_types,
+            );
+        }
+        self.state.library_function_ids =
+            library_functions.iter().map(|f| f.node_id()).collect();
+
         let storage_layout = Self::compute_storage_layout(contract);
 
         let contract_type = self
@@ -141,6 +162,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, contract, &storage_layout)
                 .emit_sol(&function, &contract_body)?;
+            self.state.current_contract_type = None;
+        }
+
+        // Emit the collected internal library functions into this contract's
+        // body so the `sol.call`s above resolve.
+        for library_function in &library_functions {
+            self.state.current_contract_type = Some(contract_type);
+            FunctionEmitter::new(self.state, contract, &storage_layout)
+                .emit_sol(library_function, &contract_body)?;
             self.state.current_contract_type = None;
         }
 

@@ -12,6 +12,7 @@ pub mod function;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Once;
 
 use melior::dialect::DialectRegistry;
@@ -46,6 +47,12 @@ pub struct Context<'context> {
     pub builder: Builder<'context>,
     /// Resolution metadata keyed by the AST definition id of each function.
     pub function_signatures: HashMap<NodeId, Function<'context>>,
+    /// Node ids of the library functions pre-registered for the contract being
+    /// emitted. A member call whose callee is in this set is a library call
+    /// (`L.f(...)` or a `using for` `x.f(...)`), distinguishing it from the
+    /// contract's own member/inherited functions. Frontends set this before
+    /// emitting function bodies.
+    pub library_function_ids: HashSet<NodeId>,
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
@@ -163,6 +170,7 @@ impl<'context> Context<'context> {
         Self {
             module,
             function_signatures: HashMap::new(),
+            library_function_ids: HashSet::new(),
             builder: Builder::new(context),
             current_contract_type: None,
             dependencies: RefCell::new(Vec::new()),

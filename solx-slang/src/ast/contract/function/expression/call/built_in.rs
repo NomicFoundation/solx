@@ -968,10 +968,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .expression_emitter
                     .emit_value(&access.operand(), block)?;
                 let (values, block) = self.emit_argument_values(arguments, block)?;
+                // `sol.transfer` takes the wei amount as `ui256`; a narrow
+                // literal (`transfer(1 wei)`) must be widened.
+                let amount = builder.emit_sol_cast(values[0], builder.types.ui256, &block);
                 block.append_operation(
                     TransferOperation::builder(builder.context, builder.unknown_location)
                         .addr(addr)
-                        .val(values[0])
+                        .val(amount)
                         .build()
                         .into(),
                 );
@@ -1656,6 +1659,53 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let condition_boolean = self
             .expression_emitter
             .emit_is_nonzero(condition_value, &block);
+
+        // `require(cond, CustomError(args))` reverts with the custom error's
+        // ABI encoding (selector + encoded args) when `cond` is false, exactly
+        // like `revert CustomError(args)` but gated on the condition.
+        if let Some(Expression::FunctionCallExpression(error_call)) = message
+            && let Expression::Identifier(callee) = error_call.operand()
+            && let Some(Definition::Error(error_definition)) = callee.resolve_to_definition()
+        {
+            let signature = error_definition.compute_canonical_signature().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "cannot compute canonical signature for error `{}`",
+                    error_definition.name().name()
+                )
+            })?;
+            let ArgumentsDeclaration::PositionalArguments(error_arguments) =
+                error_call.arguments()
+            else {
+                anyhow::bail!("named arguments in a `require` custom error are not supported");
+            };
+            let (mut argument_values, block) =
+                self.emit_argument_values(&error_arguments, block)?;
+            let parameters = error_definition.parameters();
+            let builder = &self.expression_emitter.state.builder;
+            for (value, parameter) in argument_values.iter_mut().zip(parameters.iter()) {
+                let parameter_type = TypeConversion::resolve_slang_type(
+                    &parameter
+                        .get_type()
+                        .expect("error parameter typed by the binder"),
+                    None,
+                    builder,
+                );
+                *value = TypeConversion::from_target_type(parameter_type, builder).emit(
+                    *value,
+                    builder,
+                    &block,
+                );
+            }
+            builder.emit_sol_require(
+                condition_boolean,
+                Some(&signature),
+                &argument_values,
+                true,
+                &block,
+            );
+            return Ok(block);
+        }
+
         let builder = &self.expression_emitter.state.builder;
         match message {
             Some(Expression::StringExpression(string_expression)) => {

@@ -20,6 +20,7 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Statement;
 use slang_solidity_v2::ast::Statements;
 
+use crate::ast::contract::function::expression::call::CallEmitter;
 use solx_mlir::Context;
 use solx_mlir::Environment;
 
@@ -276,6 +277,14 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 current = next;
             }
             (values, current)
+        } else if self.return_types.len() > 1 {
+            // A single expression that yields more than one value can only be a
+            // tuple-returning call, e.g. `return f();` or `return _s.reverse();`.
+            // Emit every result so the `yul.func_return` arity matches.
+            let Expression::FunctionCallExpression(call) = &expression else {
+                anyhow::bail!("multi-value return from a non-call expression is not supported");
+            };
+            CallEmitter::new(&emitter).emit_function_call_results(call, block)?
         } else {
             let (value, block) = match self.return_types.first() {
                 Some(&return_type) => {
