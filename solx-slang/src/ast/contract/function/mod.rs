@@ -423,6 +423,21 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             return format!("{name}({})", types.join(","));
         }
 
+        // Internal/private functions: prefer slang's internal signature, which uses
+        // well-defined internal type names (`type_internal_name`) for parameters that
+        // cannot be ABI-encoded. This avoids the AST-text fallback's mangling hazards
+        // — qualified user types (`a.b.T` and `c.d.T` both collapsing to `T`) and
+        // every `mapping(...)` collapsing to the literal `mapping` — which could
+        // alias two distinct internal functions onto a single MLIR symbol. Both the
+        // definition (`pre_register_functions` / `emit_sol`) and every call site
+        // (`resolve_function` by node id) route through this function, so the symbol
+        // stays consistent across the change.
+        if let Some(signature) = function.compute_internal_signature() {
+            return signature;
+        }
+
+        // Fallback for callees slang cannot type, and for constructor / fallback /
+        // receive (which have no name, so `compute_internal_signature` is `None`).
         let types: Vec<String> = function
             .parameters()
             .iter()
