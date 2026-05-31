@@ -66,14 +66,16 @@ miscompiling, except where noted under "semantic gaps" below.
   `m(k1, k2)`, mixed `m(k)[i]` — chaining a `sol.map` (mappings) or a
   bounds-checked `sol.gep` (arrays) per level over each key/index. Array levels emit
   an explicit `index < length` check that **bare-reverts** (`revert(0,0)`) on
-  out-of-bounds to match solc's accessor (not `sol.gep`'s `Panic(0x32)`). Still a
-  **follow-up: struct-result getters**. A contract declaring a public multi-field
-  struct now *compiles* (the slang ABI fix — `extract_function_type_parameters_abi`
-  expands the getter's tuple return), so all the contract's state-variable
-  references resolve; but the getter body still returns the struct storage reference
-  as one value instead of expanding it into the field tuple `(a, b, …)` (skipping
-  mapping/array members), so the getter itself reverts/mismatches
-  (`storage/struct_accessor`, `getters/mapping_to_struct`). Reference-typed keys
+  out-of-bounds to match solc's accessor (not `sol.gep`'s `Panic(0x32)`).
+  **Struct-result getters** expand the struct into its **value-member tuple** —
+  `sol.gep` by AST member index + load per member, skipping mapping/array/nested-struct
+  members (matching solc / slang's `can_return_from_getter`) — so `mapping(K=>Struct)
+  public m` and `Struct public s` getters work (`storage/struct_accessor`,
+  `getters/mapping_to_struct`, `getters/array_mapping_struct`). This rests on the
+  slang ABI fix (`extract_function_type_parameters_abi` expands the getter's tuple
+  return; otherwise the whole contract ABI + storage layout was nulled). **Follow-up:**
+  a struct whose *returned* members include a `string`/`bytes` (or other reference)
+  field skips the getter — those need storage→memory handling. Reference-typed keys
   (`bytes`/`string`) are also skipped.
 - Zeroing of an unwritten static-array memory **return parameter** is still
   incomplete (`array/arrayMemoryAllocation/array_static_return_param_zeroed_memory_index_access`).
