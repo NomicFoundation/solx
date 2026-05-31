@@ -39,6 +39,7 @@ use crate::ods::sol::ArrayLitOperation;
 use crate::ods::sol::AssertOperation;
 use crate::ods::sol::BreakOperation;
 use crate::ods::sol::BytesCastOperation;
+use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::CallOperation;
 use crate::ods::sol::CastOperation;
 use crate::ods::sol::CmpOperation;
@@ -1537,6 +1538,23 @@ impl<'context> Builder<'context> {
         if value.r#type() == to_type {
             return value;
         }
+        // `fixedbytes<N>` and a full 256-bit machine word share the same
+        // representation, but `sol.bytes_cast` only accepts the width-matched
+        // pair `fixedbytes<N>` ↔ `ui(8*N)`. When a `bytesN` value flows to or
+        // from a full 256-bit word (inline-assembly reads/writes, ABI heads,
+        // storage words), reinterpret its raw left-aligned representation via
+        // `sol.conv_cast` rather than shifting it as a value conversion.
+        let src = value.r#type();
+        let is_word256 =
+            |ty: Type<'context>| IntegerType::try_from(ty).is_ok_and(|int| int.width() == 256);
+        let bytes_into_word =
+            TypeFactory::fixed_bytes_width(src).is_some_and(|width| width != 32)
+                && is_word256(to_type);
+        let word_into_bytes = is_word256(src)
+            && TypeFactory::fixed_bytes_width(to_type).is_some_and(|width| width != 32);
+        if bytes_into_word || word_into_bytes {
+            return self.emit_sol_conv_cast(value, to_type, block);
+        }
         block
             .append_operation(
                 BytesCastOperation::builder(self.context, self.unknown_location)
@@ -1547,6 +1565,36 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.bytes_cast always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.conv_cast` — a no-op reinterpret between types that share
+    /// the same machine representation (e.g. a `bytesN` value and the full
+    /// 256-bit EVM stack word). Unlike [`Self::emit_sol_bytes_cast`] it applies
+    /// no shift, preserving the value's native alignment.
+    pub fn emit_sol_conv_cast<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        to_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        if value.r#type() == to_type {
+            return value;
+        }
+        block
+            .append_operation(
+                ConvCastOperation::builder(self.context, self.unknown_location)
+                    .inp(value)
+                    .out(to_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.conv_cast always produces one result")
             .into()
     }
 

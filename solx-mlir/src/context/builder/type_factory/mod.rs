@@ -70,6 +70,16 @@ impl<'context> TypeFactory<'context> {
         format!("{ty}").starts_with("!sol.fixedbytes")
     }
 
+    /// The byte width `N` of a `!sol.fixedbytes<N>` type, or `None` for any
+    /// other type.
+    pub fn fixed_bytes_width(ty: Type<'_>) -> Option<u32> {
+        format!("{ty}")
+            .strip_prefix("!sol.fixedbytes<")?
+            .strip_suffix('>')?
+            .parse()
+            .ok()
+    }
+
     /// Whether `ty` is the single-byte `!sol.byte` — the element type of
     /// `bytes`/`string`, distinct from `!sol.fixedbytes<1>`.
     pub fn is_sol_byte(ty: Type<'_>) -> bool {
