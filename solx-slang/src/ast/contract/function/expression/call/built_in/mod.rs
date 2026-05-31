@@ -546,7 +546,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let (operand_value, block) = self
                     .expression_emitter
                     .emit_value(&access.operand(), block)?;
-                if format!("{}", operand_value.r#type()).starts_with("!sol.ext_func_ref") {
+                if solx_mlir::TypeFactory::is_sol_ext_function_ref(operand_value.r#type()) {
                     let builder = &self.expression_emitter.state.builder;
                     let selector = block
                         .append_operation(

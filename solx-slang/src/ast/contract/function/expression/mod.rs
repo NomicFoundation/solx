@@ -95,10 +95,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         if let Expression::StringExpression(string_expression) = expression
-            && let Some(width) = format!("{target_type}")
-                .strip_prefix("!sol.fixedbytes<")
-                .and_then(|rest| rest.strip_suffix('>'))
-                .and_then(|digits| digits.parse::<u32>().ok())
+            && let Some(width) = solx_mlir::TypeFactory::fixed_bytes_width(target_type)
         {
             let literal_bytes = string_expression.value();
             // Fixedbytes are left-aligned: the literal occupies the high-order

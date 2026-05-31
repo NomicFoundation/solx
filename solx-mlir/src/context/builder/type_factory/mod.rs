@@ -39,24 +39,25 @@ pub struct TypeFactory<'context> {
 impl<'context> TypeFactory<'context> {
     // ---- Sol-dialect type predicates ----
     //
-    // The melior C-FFI does not expose typed introspection for Sol-dialect
-    // types, so these match the `AsmPrinter` textual form. They are centralized
-    // here so every caller shares one definition; replace with C-FFI predicates
-    // (`solxIs*Type`) when those land.
+    // Typed `isa<>` introspection via the C-FFI in `sol_attr_stubs.cpp` — no
+    // string parsing, so the `AsmPrinter` form can change without silently
+    // miscompiling. Centralized here so every caller shares one definition; the
+    // category predicates (reference, function-ref, address-like) compose the
+    // per-type FFI predicates.
 
     /// Whether `ty` is a Sol enum type (`!sol.enum<N>`).
     pub fn is_sol_enum(ty: Type<'_>) -> bool {
-        format!("{ty}").starts_with("!sol.enum")
+        unsafe { crate::ffi::solxIsEnumType(ty.to_raw()) }
     }
 
     /// Whether `ty` is the Sol address type (`!sol.address`).
     pub fn is_sol_address(ty: Type<'_>) -> bool {
-        format!("{ty}").starts_with("!sol.address")
+        unsafe { crate::ffi::solxIsAddressType(ty.to_raw()) }
     }
 
     /// Whether `ty` is a Sol contract type (`!sol.contract<…>`).
     pub fn is_sol_contract(ty: Type<'_>) -> bool {
-        format!("{ty}").starts_with("!sol.contract")
+        unsafe { crate::ffi::solxIsContractType(ty.to_raw()) }
     }
 
     /// Whether `ty` is an address-like type — `!sol.address` or
@@ -67,41 +68,50 @@ impl<'context> TypeFactory<'context> {
 
     /// Whether `ty` is a Sol fixed-bytes type (`!sol.fixedbytes<N>`).
     pub fn is_sol_fixed_bytes(ty: Type<'_>) -> bool {
-        format!("{ty}").starts_with("!sol.fixedbytes")
+        unsafe { crate::ffi::solxIsFixedBytesType(ty.to_raw()) }
     }
 
     /// The byte width `N` of a `!sol.fixedbytes<N>` type, or `None` for any
     /// other type.
     pub fn fixed_bytes_width(ty: Type<'_>) -> Option<u32> {
-        format!("{ty}")
-            .strip_prefix("!sol.fixedbytes<")?
-            .strip_suffix('>')?
-            .parse()
-            .ok()
+        if Self::is_sol_fixed_bytes(ty) {
+            Some(unsafe { crate::ffi::solxGetFixedBytesWidth(ty.to_raw()) })
+        } else {
+            None
+        }
     }
 
     /// Whether `ty` is the single-byte `!sol.byte` — the element type of
     /// `bytes`/`string`, distinct from `!sol.fixedbytes<1>`.
     pub fn is_sol_byte(ty: Type<'_>) -> bool {
-        format!("{ty}") == "!sol.byte"
+        unsafe { crate::ffi::solxIsByteType(ty.to_raw()) }
     }
 
-    /// Whether `ty` is a Sol reference type: array, struct, string, bytes, or
-    /// mapping.
+    /// Whether `ty` is a Sol reference type: array, struct, string/`bytes`, or
+    /// mapping. (`bytes` and `string` share `!sol.string`.)
     pub fn is_sol_reference(ty: Type<'_>) -> bool {
-        let text = format!("{ty}");
-        text.starts_with("!sol.array")
-            || text.starts_with("!sol.struct")
-            || text.starts_with("!sol.string")
-            || text.starts_with("!sol.bytes")
-            || text.starts_with("!sol.mapping")
+        let raw = ty.to_raw();
+        unsafe {
+            crate::ffi::solxIsStringType(raw)
+                || crate::ffi::solxIsArrayType(raw)
+                || crate::ffi::solxIsStructType(raw)
+                || crate::ffi::solxIsMappingType(raw)
+        }
     }
 
     /// Whether `ty` is a Sol function-pointer type — internal
     /// `!sol.func_ref<…>` or external `!sol.ext_func_ref<…>`.
     pub fn is_sol_function_ref(ty: Type<'_>) -> bool {
-        let text = format!("{ty}");
-        text.starts_with("!sol.func_ref") || text.starts_with("!sol.ext_func_ref")
+        let raw = ty.to_raw();
+        unsafe {
+            crate::ffi::solxIsFuncRefType(raw) || crate::ffi::solxIsExtFuncRefType(raw)
+        }
+    }
+
+    /// Whether `ty` is an external function reference (`!sol.ext_func_ref<…>`),
+    /// as opposed to an internal `!sol.func_ref<…>`.
+    pub fn is_sol_ext_function_ref(ty: Type<'_>) -> bool {
+        unsafe { crate::ffi::solxIsExtFuncRefType(ty.to_raw()) }
     }
 
     /// Bit width of a Solidity function selector (4 bytes).

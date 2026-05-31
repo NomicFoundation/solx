@@ -165,4 +165,62 @@ MlirType solxCreateExtFuncRefType(MlirContext ctx, const MlirType *param_types,
     return wrap(mlir::sol::ExtFuncRefType::get(context, fnTy));
 }
 
+/*
+ * Type predicates.
+ *
+ * Typed `isa<>` introspection for Sol-dialect types, replacing the textual
+ * AsmPrinter matching that `TypeFactory::is_sol_*` used (which silently
+ * miscompiles if the type printer drifts). One predicate per Sol type; the
+ * Rust side composes categories (reference, function-ref, address-like).
+ */
+
+bool solxIsEnumType(MlirType ty) {
+    return mlir::isa<mlir::sol::EnumType>(unwrap(ty));
+}
+
+bool solxIsAddressType(MlirType ty) {
+    return mlir::isa<mlir::sol::AddressType>(unwrap(ty));
+}
+
+bool solxIsContractType(MlirType ty) {
+    return mlir::isa<mlir::sol::ContractType>(unwrap(ty));
+}
+
+bool solxIsFixedBytesType(MlirType ty) {
+    return mlir::isa<mlir::sol::FixedBytesType>(unwrap(ty));
+}
+
+/* Caller must ensure `ty` is a FixedBytesType (see solxIsFixedBytesType). */
+uint32_t solxGetFixedBytesWidth(MlirType ty) {
+    return mlir::cast<mlir::sol::FixedBytesType>(unwrap(ty)).getSize();
+}
+
+bool solxIsByteType(MlirType ty) {
+    return mlir::isa<mlir::sol::ByteType>(unwrap(ty));
+}
+
+bool solxIsStringType(MlirType ty) {
+    return mlir::isa<mlir::sol::StringType>(unwrap(ty));
+}
+
+bool solxIsArrayType(MlirType ty) {
+    return mlir::isa<mlir::sol::ArrayType>(unwrap(ty));
+}
+
+bool solxIsStructType(MlirType ty) {
+    return mlir::isa<mlir::sol::StructType>(unwrap(ty));
+}
+
+bool solxIsMappingType(MlirType ty) {
+    return mlir::isa<mlir::sol::MappingType>(unwrap(ty));
+}
+
+bool solxIsFuncRefType(MlirType ty) {
+    return mlir::isa<mlir::sol::FuncRefType>(unwrap(ty));
+}
+
+bool solxIsExtFuncRefType(MlirType ty) {
+    return mlir::isa<mlir::sol::ExtFuncRefType>(unwrap(ty));
+}
+
 } /* extern "C" */
