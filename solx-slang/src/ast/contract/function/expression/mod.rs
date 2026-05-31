@@ -43,7 +43,7 @@ pub struct ExpressionEmitter<'state, 'context, 'block> {
     /// Variable environment.
     pub environment: &'state Environment<'context, 'block>,
     /// State variable node ID to storage slot mapping.
-    pub storage_layout: &'state HashMap<NodeId, (U256, u32)>,
+    pub storage_layout: &'state HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>,
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
     ///
     /// `true` by default (Solidity 0.8+). Set to `false` inside `unchecked {}`
@@ -56,7 +56,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn new(
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
-        storage_layout: &'state HashMap<NodeId, (U256, u32)>,
+        storage_layout: &'state HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>,
         checked: bool,
     ) -> Self {
         Self {
@@ -79,6 +79,51 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (value, block) = self.emit(expression, block)?;
         let value = value.ok_or_else(|| anyhow::anyhow!("expression produced no value"))?;
         Ok((value, block))
+    }
+
+    /// Emits an expression toward a known target MLIR type. The only special
+    /// case is a string literal used where a `bytesN` value is expected
+    /// (`bytes2 a = "a"`, a `bytes3` argument, `return "abc"`): slang types the
+    /// literal as a string, so a plain emit + `bytes_cast` would feed a memory
+    /// string into the integer-only cast. Emit a left-aligned fixedbytes
+    /// constant directly instead. Every other expression defers to
+    /// [`Self::emit_value`] (the caller still applies its own coercion).
+    pub fn emit_value_for_target(
+        &self,
+        expression: &Expression,
+        target_type: Type<'context>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        if let Expression::StringExpression(string_expression) = expression
+            && let Some(width) = format!("{target_type}")
+                .strip_prefix("!sol.fixedbytes<")
+                .and_then(|rest| rest.strip_suffix('>'))
+                .and_then(|digits| digits.parse::<u32>().ok())
+        {
+            let literal_bytes = string_expression.value();
+            // Fixedbytes are left-aligned: the literal occupies the high-order
+            // bytes, zero-padded on the right.
+            let mut buffer = vec![0u8; width as usize];
+            for (slot, byte) in buffer.iter_mut().zip(literal_bytes.iter()) {
+                *slot = *byte;
+            }
+            let int_value = num_bigint::BigInt::from_bytes_be(num_bigint::Sign::Plus, &buffer);
+            let integer_type = Type::from(melior::ir::r#type::IntegerType::unsigned(
+                self.state.builder.context,
+                width * 8,
+            ));
+            let integer = self
+                .state
+                .builder
+                .emit_constant(&int_value, integer_type, &block);
+            let value = self.state.builder.emit_sol_bytes_cast(
+                integer,
+                self.state.builder.types.fixed_bytes(width),
+                &block,
+            );
+            return Ok((value, block));
+        }
+        self.emit_value(expression, block)
     }
 
     /// Emits MLIR for an expression, appending operations to `block`.
@@ -176,7 +221,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let name = identifier.name();
                 match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(state_variable)) => {
-                        let &(slot, byte_offset) = self
+                        let &(slot, byte_offset, location) = self
                             .storage_layout
                             .get(&state_variable.node_id())
                             .ok_or_else(|| {
@@ -192,12 +237,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         );
                         let address = self.state.builder.emit_sol_addr_of(
                             &crate::ast::contract::ContractEmitter::storage_symbol(
-                                slot, byte_offset,
+                                slot, byte_offset, location,
                             ),
                             Self::address_type(
                                 &self.state.builder,
                                 element_type,
-                                DataLocation::Storage,
+                                location,
                                 &declared_type,
                             ),
                             &block,
@@ -223,27 +268,25 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         self.emit(&initializer, block)
                     }
                     Some(Definition::Function(function_definition)) => {
-                        // A bare function name used as a value is an internal
-                        // function pointer: emit `sol.func_constant @name`.
-                        let (mlir_name, _, _) = self
+                        // A bare function name used as a value is always an
+                        // *internal* function pointer (`sol.func_constant`) — an
+                        // external pointer requires `this.f`. Build the
+                        // `!sol.func_ref` type from the declared signature rather
+                        // than the identifier's slang type, which reports
+                        // `ext_func_ref` for a public function (visibility
+                        // `Public`) and would mismatch the internal-pointer target.
+                        let (mlir_name, parameter_types, return_types) = self
                             .state
                             .resolve_function(function_definition.node_id())
                             .map_err(|_| {
                                 anyhow::anyhow!("unregistered function pointer: {name}")
                             })?;
+                        let func_ref_type = self
+                            .state
+                            .builder
+                            .types
+                            .func_ref(parameter_types, return_types);
                         let mlir_name = mlir_name.to_owned();
-                        let func_ref_type = identifier
-                            .get_type()
-                            .map(|slang_type| {
-                                TypeConversion::resolve_slang_type(
-                                    &slang_type,
-                                    None,
-                                    &self.state.builder,
-                                )
-                            })
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("unresolved function-pointer type: {name}")
-                            })?;
                         let value = self.state.builder.emit_sol_func_constant(
                             &mlir_name,
                             func_ref_type,
@@ -394,9 +437,23 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 self.emit(&inner, block)
             }
             Expression::ConditionalExpression(conditional) => {
-                let result_type = self
+                let resolved_type = self
                     .resolve_slang_type(conditional.get_type())
                     .unwrap_or(self.state.builder.types.ui256);
+                // A ternary whose branches are bare function names yields an
+                // *internal* function pointer, but slang types it from the
+                // functions' `Public` visibility (resolved to `ext_func_ref`).
+                // The branch values are emitted as `func_ref`, so recover the
+                // internal-pointer result type to match.
+                let result_type = if TypeConversion::is_function_ref_mlir_type(resolved_type) {
+                    self.bare_function_ref_type(&conditional.true_expression())
+                        .or_else(|| {
+                            self.bare_function_ref_type(&conditional.false_expression())
+                        })
+                        .unwrap_or(resolved_type)
+                } else {
+                    resolved_type
+                };
                 let condition = conditional.operand();
                 let (condition_value, block) = self.emit_value(&condition, block)?;
                 let condition_boolean = self.emit_is_nonzero(condition_value, &block);
@@ -443,19 +500,48 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     ),
                 };
                 let builder = &self.state.builder;
-                let array_type =
-                    TypeConversion::resolve_slang_type(&result_slang_type, None, builder);
-                let element_type =
+                let declared_element_type =
                     TypeConversion::resolve_slang_type(&element_slang_type, None, builder);
+                // Emit the element values first. For a function-pointer array
+                // literal the emitted values are authoritative: a bare function
+                // name is an internal `func_ref`, but slang types the literal
+                // from the function's `Public` visibility, which resolves to
+                // `ext_func_ref`. Adopt the value's function-ref type when it
+                // disagrees, and rebuild the array type to match.
                 let mut element_values = Vec::new();
                 let mut current = block;
                 for item in array_expression.items().iter() {
                     let (value, next) = self.emit_value(&item, current)?;
-                    let cast_value = TypeConversion::from_target_type(element_type, builder)
-                        .emit(value, builder, &next);
-                    element_values.push(cast_value);
+                    element_values.push(value);
                     current = next;
                 }
+                let element_type = match element_values.first() {
+                    Some(first)
+                        if TypeConversion::is_function_ref_mlir_type(first.r#type())
+                            && first.r#type() != declared_element_type =>
+                    {
+                        first.r#type()
+                    }
+                    _ => declared_element_type,
+                };
+                let array_type = if element_type == declared_element_type {
+                    TypeConversion::resolve_slang_type(&result_slang_type, None, builder)
+                } else if let SlangType::FixedSizeArray(fixed_array_type) = &result_slang_type {
+                    builder.types.array(
+                        solx_mlir::ArraySize::Fixed(fixed_array_type.size() as u64),
+                        element_type,
+                        DataLocation::from_slang(fixed_array_type.location(), None),
+                    )
+                } else {
+                    TypeConversion::resolve_slang_type(&result_slang_type, None, builder)
+                };
+                let element_values: Vec<_> = element_values
+                    .into_iter()
+                    .map(|value| {
+                        TypeConversion::from_target_type(element_type, builder)
+                            .emit(value, builder, &current)
+                    })
+                    .collect();
                 let value = builder.emit_sol_array_lit(&element_values, array_type, &current);
                 Ok((Some(value), current))
             }
@@ -517,6 +603,28 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             None,
             &self.state.builder,
         ))
+    }
+
+    /// If `expression` is a bare function name (always an internal function
+    /// pointer), returns its `!sol.func_ref` type built from the declared
+    /// signature. Slang types such a reference from the function's `Public`
+    /// visibility, which `resolve_slang_type` maps to `ext_func_ref`; callers
+    /// that *infer* a result type from the expression (array literals,
+    /// ternaries) use this to recover the authoritative internal-pointer type.
+    fn bare_function_ref_type(&self, expression: &Expression) -> Option<Type<'context>> {
+        let Expression::Identifier(identifier) = expression else {
+            return None;
+        };
+        let Some(Definition::Function(function_definition)) =
+            identifier.resolve_to_definition()
+        else {
+            return None;
+        };
+        let (_, parameter_types, return_types) = self
+            .state
+            .resolve_function(function_definition.node_id())
+            .ok()?;
+        Some(self.state.builder.types.func_ref(parameter_types, return_types))
     }
 
     /// Whether an expression is a computed form worth constant-folding (binary

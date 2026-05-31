@@ -41,7 +41,7 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     /// without lifetime conflicts.
     region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, (U256, u32)>,
+    storage_layout: &'state HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>,
     /// The function's declared return types, for `emit_return` to cast to.
     return_types: &'state [Type<'context>],
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
@@ -71,7 +71,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
         region: &Region<'context>,
-        storage_layout: &'state HashMap<NodeId, (U256, u32)>,
+        storage_layout: &'state HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>,
         return_types: &'state [Type<'context>],
     ) -> Self {
         Self {
@@ -277,7 +277,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             (values, current)
         } else {
-            let (value, block) = emitter.emit_value(&expression, block)?;
+            let (value, block) = match self.return_types.first() {
+                Some(&return_type) => {
+                    emitter.emit_value_for_target(&expression, return_type, block)?
+                }
+                None => emitter.emit_value(&expression, block)?,
+            };
             (vec![value], block)
         };
 

@@ -28,9 +28,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         slot: U256,
         byte_offset: u32,
         element_type: Type<'context>,
+        location: DataLocation,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
-        let pointer = self.emit_storage_addr_of(slot, byte_offset, element_type, block);
+        let pointer = self.emit_storage_addr_of(slot, byte_offset, element_type, location, block);
         self.state
             .builder
             .emit_sol_load(pointer, element_type, block)
@@ -42,10 +43,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         slot: U256,
         byte_offset: u32,
         value: Value<'context, 'block>,
-        element_type: Type<'context>,
+        location: DataLocation,
         block: &BlockRef<'context, 'block>,
     ) {
-        let pointer = self.emit_storage_addr_of(slot, byte_offset, value.r#type(), block);
+        let pointer =
+            self.emit_storage_addr_of(slot, byte_offset, value.r#type(), location, block);
         self.state.builder.emit_sol_store(value, pointer, block);
     }
 
@@ -66,7 +68,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         mut block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<BlockRef<'context, 'block>> {
         for state_variable in contract.compute_linearised_state_variables() {
-            let Some(&(slot, byte_offset)) = self.storage_layout.get(&state_variable.node_id())
+            let Some(&(slot, byte_offset, location)) =
+                self.storage_layout.get(&state_variable.node_id())
             else {
                 continue;
             };
@@ -87,9 +90,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let (value, next_block) = self.emit_value(&initializer, block)?;
             block = next_block;
             let address_type =
-                Self::address_type(builder, element_type, DataLocation::Storage, &declared_type);
+                Self::address_type(builder, element_type, location, &declared_type);
             let storage_ref = builder.emit_sol_addr_of(
-                &crate::ast::contract::ContractEmitter::storage_symbol(slot, byte_offset),
+                &crate::ast::contract::ContractEmitter::storage_symbol(slot, byte_offset, location),
                 address_type,
                 &block,
             );
@@ -104,21 +107,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Ok(block)
     }
 
-    /// Returns a `!sol.ptr<element_type, Storage>` pointer via `sol.addr_of`.
+    /// Returns a `!sol.ptr<element_type, location>` pointer via `sol.addr_of`,
+    /// where `location` is `Storage` for persistent and `Transient` for
+    /// transient state variables.
     fn emit_storage_addr_of(
         &self,
         slot: U256,
         byte_offset: u32,
         element_type: Type<'context>,
+        location: DataLocation,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let pointer_type = self
-            .state
-            .builder
-            .types
-            .pointer(element_type, DataLocation::Storage);
+        let pointer_type = self.state.builder.types.pointer(element_type, location);
         self.state.builder.emit_sol_addr_of(
-            &crate::ast::contract::ContractEmitter::storage_symbol(slot, byte_offset),
+            &crate::ast::contract::ContractEmitter::storage_symbol(slot, byte_offset, location),
             pointer_type,
             block,
         )

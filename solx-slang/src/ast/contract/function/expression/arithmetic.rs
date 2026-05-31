@@ -227,7 +227,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         Ok((zero, block))
                     }
                     Some(Definition::StateVariable(state_variable)) => {
-                        let (slot, byte_offset) = *self
+                        let (slot, byte_offset, location) = *self
                             .storage_layout
                             .get(&state_variable.node_id())
                             .ok_or_else(|| {
@@ -266,7 +266,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             // now (the test will fail with the old value).
                             builder.emit_sol_constant(0, builder.types.ui256, &block)
                         };
-                        self.emit_storage_store(slot, byte_offset, zero, &block);
+                        self.emit_storage_store(slot, byte_offset, zero, location, &block);
                         Ok((zero, block))
                     }
                     _ => anyhow::bail!("unsupported delete target: {name}"),
@@ -356,7 +356,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         match identifier.resolve_to_definition() {
             Some(Definition::StateVariable(state_variable)) => {
-                let (slot, byte_offset) = *self
+                let (slot, byte_offset, location) = *self
                     .storage_layout
                     .get(&state_variable.node_id())
                     .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?;
@@ -364,7 +364,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     &state_variable,
                     &self.state.builder,
                 )?;
-                let old = self.emit_storage_load(slot, byte_offset, element_type, block)?;
+                let old = self.emit_storage_load(slot, byte_offset, element_type, location, block)?;
                 let one = self.state.builder.emit_sol_constant(1, element_type, block);
                 let new_value = block
                     .append_operation(operator.emit_sol_binary_operation(
@@ -377,7 +377,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .result(0)
                     .expect("binary operation always produces one result")
                     .into();
-                self.emit_storage_store(slot, byte_offset, new_value, block);
+                self.emit_storage_store(slot, byte_offset, new_value, location, block);
                 Ok((old, new_value))
             }
             Some(Definition::Variable(_) | Definition::Parameter(_)) => {

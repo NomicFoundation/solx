@@ -76,6 +76,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .map(|(value, block)| (Some(value), block));
         }
 
+        // Named-argument calls to a directly-named function (`f({b: 2, a: 1})`)
+        // reorder the arguments to the callee's declared parameter order and
+        // dispatch as an ordinary positional call.
+        if let ArgumentsDeclaration::NamedArguments(named_arguments) = &call.arguments()
+            && let Expression::Identifier(callee_identifier) = call.operand()
+            && let Some(Definition::Function(function_definition)) =
+                callee_identifier.resolve_to_definition()
+        {
+            return self.emit_named_function_call(&function_definition, named_arguments, block);
+        }
+
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
         else {
             anyhow::bail!("only positional arguments supported");
@@ -273,17 +284,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
     }
 
-    /// Returns the slang type of a callee expression, for the common forms
-    /// that can produce a function-pointer value (identifiers and index
-    /// accesses). Used to decide whether to route a non-identifier callee
-    /// through an indirect call.
+    /// Returns the slang type of a callee expression. Used to decide whether
+    /// to route a non-identifier callee through an indirect call: any callee
+    /// whose type is a function pointer (a parenthesized name `(foo)()`, a
+    /// ternary `(c ? g : h)()`, an array element `arr[i]()`, the result of a
+    /// call `x()()`, …) dispatches via [`Self::emit_indirect_call`].
     fn callee_type(callee: &Expression) -> Option<SlangType> {
-        match callee {
-            Expression::Identifier(identifier) => identifier.get_type(),
-            Expression::IndexAccessExpression(index_access) => index_access.get_type(),
-            Expression::MemberAccessExpression(member_access) => member_access.get_type(),
-            _ => None,
-        }
+        callee.get_type()
     }
 
     /// Emits an indirect call through an internal function pointer. The
@@ -455,6 +462,58 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((struct_address, block))
     }
 
+    /// Emits a direct call written with named arguments (`f({b: 2, a: 1})`).
+    ///
+    /// Slang preserves named arguments in source order, so they are reordered
+    /// to the callee's declared parameter order, emitted, coerced to the
+    /// declared parameter types, and dispatched as an ordinary `sol.call`. The
+    /// first result (if any) is returned, matching [`Self::emit_function_call`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a parameter is unnamed, an argument for a parameter
+    /// is missing, or argument emission / signature resolution fails.
+    fn emit_named_function_call(
+        &self,
+        function_definition: &FunctionDefinition,
+        named_arguments: &slang_solidity_v2::ast::NamedArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let mut argument_values = Vec::new();
+        let mut current_block = block;
+        for parameter in function_definition.parameters().iter() {
+            let parameter_name = parameter
+                .name()
+                .ok_or_else(|| anyhow::anyhow!("named call to a function with an unnamed parameter"))?
+                .name();
+            let argument = named_arguments
+                .iter()
+                .find(|argument| argument.name().name() == parameter_name)
+                .ok_or_else(|| anyhow::anyhow!("named call missing argument `{parameter_name}`"))?;
+            let (value, next_block) = self
+                .expression_emitter
+                .emit_value(&argument.value(), current_block)?;
+            argument_values.push(value);
+            current_block = next_block;
+        }
+
+        let (mlir_name, parameter_types, return_types) = self
+            .expression_emitter
+            .state
+            .resolve_function(function_definition.node_id())?;
+        let builder = &self.expression_emitter.state.builder;
+        for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
+            *value = TypeConversion::from_target_type(param_type, builder).emit(
+                *value,
+                builder,
+                &current_block,
+            );
+        }
+        let results =
+            builder.emit_sol_call_results(mlir_name, &argument_values, return_types, &current_block)?;
+        Ok((results.into_iter().next(), current_block))
+    }
+
     /// Emits a direct, named function call and returns all of its result
     /// values in declaration order.
     ///
@@ -480,6 +539,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             self.try_emit_bare_call_results(call, positional_arguments, block)?
         {
             return Ok((values, block));
+        }
+
+        // Multi-value `abi.decode(payload, (A, B, …))` in a tuple assignment
+        // `(a, b) = abi.decode(...)` returns one value per requested type.
+        if let Expression::MemberAccessExpression(access) = call.operand()
+            && matches!(
+                access.member().resolve_to_built_in(),
+                Some(slang_solidity_v2::ast::BuiltIn::AbiDecode)
+            )
+        {
+            return self.emit_abi_decode(call, positional_arguments, block);
         }
 
         let Expression::Identifier(callee_identifier) = call.operand() else {
@@ -523,20 +593,29 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         &'a [melior::ir::Type<'context>],
         BlockRef<'context, 'block>,
     )> {
-        let mut argument_values = Vec::new();
-        let mut current_block = block;
-        for argument in positional_arguments.iter() {
-            let (value, next_block) = self
-                .expression_emitter
-                .emit_value(&argument, current_block)?;
-            argument_values.push(value);
-            current_block = next_block;
-        }
-
+        // Resolve the signature first so each argument can be emitted toward
+        // its declared parameter type — notably so a string literal in a
+        // `bytesN` parameter becomes a fixedbytes constant rather than a memory
+        // string (see `emit_value_for_target`).
         let (mlir_name, parameter_types, return_types) = self
             .expression_emitter
             .state
             .resolve_function(function_definition.node_id())?;
+
+        let mut argument_values = Vec::new();
+        let mut current_block = block;
+        for (index, argument) in positional_arguments.iter().enumerate() {
+            let (value, next_block) = match parameter_types.get(index) {
+                Some(&param_type) => self.expression_emitter.emit_value_for_target(
+                    &argument,
+                    param_type,
+                    current_block,
+                )?,
+                None => self.expression_emitter.emit_value(&argument, current_block)?,
+            };
+            argument_values.push(value);
+            current_block = next_block;
+        }
 
         let builder = &self.expression_emitter.state.builder;
         for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {

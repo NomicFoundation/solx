@@ -67,7 +67,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         // solc's emission order (constant → cast → alloca → store).
         // For implicit zero-initialization, alloca is emitted first.
         let (block, initial_value) = if let Some(ref initializer_expression) = declaration.value() {
-            let (initial_value, block) = emitter.emit_value(initializer_expression, block)?;
+            let (initial_value, block) =
+                emitter.emit_value_for_target(initializer_expression, declared_type, block)?;
             let cast_value = TypeConversion::from_target_type(
                 declared_type,
                 &emitter.state.builder,

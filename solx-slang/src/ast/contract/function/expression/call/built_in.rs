@@ -8,6 +8,7 @@ use melior::ir::BlockRef;
 use melior::ir::Operation;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::ValueLike;
 use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::operation::OperationMutLike;
@@ -45,6 +46,7 @@ use solx_mlir::ods::sol::DifficultyOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::EncodeOperation;
 use solx_mlir::ods::sol::EnumCastOperation;
+use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 use solx_mlir::ods::sol::GasLeftOperation;
 use solx_mlir::ods::sol::GasLimitOperation;
 use solx_mlir::ods::sol::GasPriceOperation;
@@ -53,6 +55,7 @@ use solx_mlir::ods::sol::Keccak256Operation;
 use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::NewOperation;
+use solx_mlir::ods::sol::ObjectCodeOperation;
 use solx_mlir::ods::sol::OriginOperation;
 use solx_mlir::ods::sol::PrevRandaoOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
@@ -267,7 +270,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(None);
         };
         match access.member().resolve_to_built_in() {
-            Some(BuiltIn::AbiDecode) => self.emit_abi_decode(call, arguments, block).map(Some),
+            Some(BuiltIn::AbiDecode) => {
+                let (values, block) = self.emit_abi_decode(call, arguments, block)?;
+                let value = values
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("abi.decode produced no value"))?;
+                Ok(Some((value, block)))
+            }
             // `string.concat(...)` / `bytes.concat(...)` lower to `sol.concat`,
             // which takes a variadic list of string / bytesN values and yields
             // a freshly allocated memory string. An empty argument list is
@@ -524,6 +534,35 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let value =
                     builder.emit_sol_bytes_cast(integer, builder.types.fixed_bytes(width_bytes), &block);
                 return Ok((Some(value), block));
+            }
+            // Fall back to a runtime selector extraction when the operand is an
+            // external function-pointer VALUE rather than a statically-known
+            // function (`fun.selector`, `(cond ? a : b).selector`). The static
+            // arms above already handle named functions / errors / events /
+            // getters; here `sol.ext_func_selector` pulls the 4-byte selector
+            // out of the `!sol.ext_func_ref` value at runtime.
+            if let Some(SlangType::Function(_)) = access.operand().get_type() {
+                let (operand_value, block) = self
+                    .expression_emitter
+                    .emit_value(&access.operand(), block)?;
+                if format!("{}", operand_value.r#type()).starts_with("!sol.ext_func_ref") {
+                    let builder = &self.expression_emitter.state.builder;
+                    let selector = block
+                        .append_operation(
+                            ExtFuncSelectorOperation::builder(
+                                builder.context,
+                                builder.unknown_location,
+                            )
+                            .func(operand_value)
+                            .result(builder.types.fixed_bytes(4))
+                            .build()
+                            .into(),
+                        )
+                        .result(0)
+                        .expect("sol.ext_func_selector always produces one result")
+                        .into();
+                    return Ok((Some(selector), block));
+                }
             }
         }
 
@@ -817,6 +856,53 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             );
             let value =
                 builder.emit_sol_bytes_cast(integer, builder.types.fixed_bytes(4), &block);
+            return Ok((Some(value), block));
+        }
+
+        // `type(C).creationCode` / `type(C).runtimeCode` yield the contract's
+        // deploy / deployed bytecode as `bytes memory`, lowered to
+        // `sol.object_code` referencing the object by name (`C` for creation,
+        // `C_deployed` for runtime). The reference is registered as a linker
+        // dependency so the assembler pulls the object in (as `new C()` does).
+        if let Some(builtin @ (BuiltIn::TypeCreationCode | BuiltIn::TypeRuntimeCode)) =
+            access.member().resolve_to_built_in()
+            && let Expression::TypeExpression(type_expression) = access.operand()
+            && let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name()
+            && let Some(Definition::Contract(contract_definition)) =
+                identifier_path.resolve_to_definition()
+        {
+            let contract_name = contract_definition.name().name();
+            self.expression_emitter
+                .state
+                .add_dependency(contract_name.clone());
+            let object_name = match builtin {
+                BuiltIn::TypeRuntimeCode => {
+                    format!("{contract_name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX)
+                }
+                _ => contract_name,
+            };
+            let result_type = self
+                .expression_emitter
+                .resolve_slang_type(access.get_type())
+                .unwrap_or_else(|| {
+                    self.expression_emitter
+                        .state
+                        .builder
+                        .types
+                        .string(solx_utils::DataLocation::Memory)
+                });
+            let builder = &self.expression_emitter.state.builder;
+            let value = block
+                .append_operation(
+                    ObjectCodeOperation::builder(builder.context, builder.unknown_location)
+                        .obj_name(StringAttribute::new(builder.context, &object_name))
+                        .out(result_type)
+                        .build()
+                        .into(),
+                )
+                .result(0)
+                .expect("sol.object_code always produces one result")
+                .into();
             return Ok((Some(value), block));
         }
 
@@ -1492,12 +1578,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// The result type comes from the call's slang type (`call.get_type()`);
     /// multi-result decode requires the multi-result-call dispatch and is
     /// not yet supported.
-    fn emit_abi_decode(
+    pub(super) fn emit_abi_decode(
         &self,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let payload_expression = arguments
             .iter()
             .next()
@@ -1508,23 +1594,33 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let return_slang_type = call
             .get_type()
             .expect("abi.decode call is typed by the binder");
-        if matches!(return_slang_type, SlangType::Tuple(_)) {
-            unimplemented!("abi.decode returning multiple values is not yet supported");
-        }
         let builder = &self.expression_emitter.state.builder;
-        let result_type = TypeConversion::resolve_slang_type(&return_slang_type, None, builder);
-        let value = block
-            .append_operation(
-                DecodeOperation::builder(builder.context, builder.unknown_location)
-                    .addr(payload_value)
-                    .outs(&[result_type])
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("abi.decode single-result always produces one value")
-            .into();
-        Ok((value, block))
+        // `abi.decode(payload, (A, B, …))` yields one value per requested type;
+        // a single requested type decodes to a scalar.
+        let result_types: Vec<Type<'context>> = match &return_slang_type {
+            SlangType::Tuple(tuple) => tuple
+                .types()
+                .iter()
+                .map(|element| TypeConversion::resolve_slang_type(element, None, builder))
+                .collect(),
+            other => vec![TypeConversion::resolve_slang_type(other, None, builder)],
+        };
+        let operation = block.append_operation(
+            DecodeOperation::builder(builder.context, builder.unknown_location)
+                .addr(payload_value)
+                .outs(&result_types)
+                .build()
+                .into(),
+        );
+        let values: Vec<Value<'context, 'block>> = (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index)
+                    .expect("sol.decode yields one result per requested type")
+                    .into()
+            })
+            .collect();
+        Ok((values, block))
     }
 
     /// Emits an `assert(condition)` built-in via `sol.assert`.

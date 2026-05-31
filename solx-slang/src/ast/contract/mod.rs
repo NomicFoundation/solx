@@ -27,6 +27,13 @@ use self::function::FunctionEmitter;
 use self::function::expression::call::type_conversion::TypeConversion;
 use self::function::storage_slot::StorageSlot;
 
+/// Maps each state variable's node ID to its storage location: the slot, the
+/// byte offset within the slot, and the data location (persistent `Storage`
+/// or `Transient`). The data location selects SLOAD/SSTORE versus TLOAD/TSTORE
+/// access and keeps transient symbols distinct from storage symbols (the two
+/// address spaces have independent, potentially colliding slot numbering).
+pub(crate) type StorageLayout = HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>;
+
 /// Lowers a Solidity contract to Sol dialect MLIR.
 ///
 /// Emits `sol.contract` wrapping `sol.func` definitions. The
@@ -88,21 +95,27 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // Walk the C3-linearised state-variable list so derived contracts
         // pick up base-contract storage slots and getters in addition to
         // their own.
-        let mut emitted_slots: std::collections::HashSet<(U256, u32)> =
+        let mut emitted_symbols: std::collections::HashSet<String> =
             std::collections::HashSet::new();
         for state_variable in contract.compute_linearised_state_variables() {
-            let Some(&(slot, byte_offset)) = storage_layout.get(&state_variable.node_id()) else {
+            let Some(&(slot, byte_offset, location)) =
+                storage_layout.get(&state_variable.node_id())
+            else {
                 continue;
             };
-            if !emitted_slots.insert((slot, byte_offset)) {
-                // Distinct state variables may share a (slot, offset) only
-                // through inheritance re-linearisation; emit each symbol once.
+            // Distinct state variables may share a symbol only through
+            // inheritance re-linearisation; emit each once. A storage and a
+            // transient variable may legitimately share (slot, offset) — the
+            // location-aware symbol (e.g. `slot_0_0` vs `tslot_0_0`) keeps them
+            // distinct.
+            let symbol = Self::storage_symbol(slot, byte_offset, location);
+            if !emitted_symbols.insert(symbol.clone()) {
                 continue;
             }
             let element_type =
                 TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
             self.state.builder.emit_sol_state_var(
-                &Self::storage_symbol(slot, byte_offset),
+                &symbol,
                 slot,
                 byte_offset,
                 element_type,
@@ -134,13 +147,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         for state_variable in contract.compute_linearised_state_variables() {
             if matches!(state_variable.mutability(), StateVariableMutability::Constant) {
                 self.emit_constant_getter(&state_variable, &contract_body)?;
-            } else if let Some(&(slot, byte_offset)) =
+            } else if let Some(&(slot, byte_offset, location)) =
                 storage_layout.get(&state_variable.node_id())
             {
                 self.emit_state_variable_getter(
                     &state_variable,
                     slot,
                     byte_offset,
+                    location,
                     &contract_body,
                 )?;
             }
@@ -151,9 +165,20 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
     /// Builds the storage-variable symbol name for a `(slot, byte_offset)`
     /// location. Packed small-value variables share a slot but differ in
-    /// byte offset, so the offset is part of the symbol.
-    pub(crate) fn storage_symbol(slot: U256, byte_offset: u32) -> String {
-        format!("slot_{slot}_{byte_offset}")
+    /// byte offset, so the offset is part of the symbol. Transient variables
+    /// get a distinct `tslot_` prefix because transient and persistent storage
+    /// number their slots independently and may otherwise collide.
+    pub(crate) fn storage_symbol(
+        slot: U256,
+        byte_offset: u32,
+        location: solx_utils::DataLocation,
+    ) -> String {
+        let prefix = if matches!(location, solx_utils::DataLocation::Transient) {
+            "tslot"
+        } else {
+            "slot"
+        };
+        format!("{prefix}_{slot}_{byte_offset}")
     }
 
     /// Emits the auto-generated external getter for a `public constant` state
@@ -223,6 +248,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         state_variable: &StateVariableDefinition,
         slot: U256,
         byte_offset: u32,
+        location: solx_utils::DataLocation,
         contract_body: &melior::ir::BlockRef<'context, '_>,
     ) -> anyhow::Result<()> {
         let Some(AbiEntry::Function(abi)) = state_variable.compute_abi_entry() else {
@@ -251,9 +277,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let address_type = if declared_type.is_reference_type() {
             element_type
         } else {
-            builder
-                .types
-                .pointer(element_type, solx_utils::DataLocation::Storage)
+            builder.types.pointer(element_type, location)
         };
         let entry = builder.emit_sol_func(
             &signature,
@@ -264,7 +288,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             None,
             contract_body,
         );
-        let slot_name = Self::storage_symbol(slot, byte_offset);
+        let slot_name = Self::storage_symbol(slot, byte_offset, location);
         let storage_ref = builder.emit_sol_addr_of(&slot_name, address_type, &entry);
         let value = if declared_type.is_reference_type() {
             // The storage reference is the value the ABI encoder reads from.
@@ -303,12 +327,25 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ///
     /// Returns a mapping from state variable node ID to storage slot.
     /// Returns an empty map if the ABI is unavailable.
-    fn compute_storage_layout(contract: &ContractDefinition) -> HashMap<NodeId, (U256, u32)> {
-        let mut layout: HashMap<NodeId, (U256, u32)> = HashMap::new();
+    fn compute_storage_layout(contract: &ContractDefinition) -> StorageLayout {
+        use solx_utils::DataLocation;
+        let mut layout: StorageLayout = HashMap::new();
         if let Some(abi) = contract.compute_abi() {
             for item in abi.storage_layout().iter() {
                 let byte_offset = u32::try_from(item.offset()).unwrap_or(0);
-                layout.insert(item.node_id(), (item.slot(), byte_offset));
+                layout.insert(item.node_id(), (item.slot(), byte_offset, DataLocation::Storage));
+            }
+            // Transient state variables (`T transient x;`) live in a separate
+            // address space reached via TLOAD/TSTORE. Slang lays them out
+            // independently of persistent storage, so a transient slot may
+            // collide numerically with a storage slot; the `Transient` tag
+            // routes every access through transient pointers/symbols.
+            for item in abi.transient_storage_layout().iter() {
+                let byte_offset = u32::try_from(item.offset()).unwrap_or(0);
+                layout.insert(
+                    item.node_id(),
+                    (item.slot(), byte_offset, DataLocation::Transient),
+                );
             }
         }
         // Slang's ABI omits `immutable` state variables (they live in code,
@@ -318,7 +355,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // observable semantics (read after constructor write) survives.
         let mut next_slot: U256 = layout
             .values()
-            .map(|(slot, _)| *slot)
+            .filter(|(_, _, location)| !matches!(location, DataLocation::Transient))
+            .map(|(slot, _, _)| *slot)
             .max()
             .map(|max| max + U256::from(1))
             .unwrap_or(U256::from(0));
@@ -332,7 +370,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             if layout.contains_key(&state_variable.node_id()) {
                 continue;
             }
-            layout.insert(state_variable.node_id(), (next_slot, 0));
+            layout.insert(state_variable.node_id(), (next_slot, 0, DataLocation::Storage));
             next_slot += U256::from(1);
         }
         layout

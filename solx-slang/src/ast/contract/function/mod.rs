@@ -39,7 +39,7 @@ pub struct FunctionEmitter<'state, 'context> {
     /// Containing contract.
     contract: &'state ContractDefinition,
     /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, (U256, u32)>,
+    storage_layout: &'state HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>,
 }
 
 impl<'state, 'context> FunctionEmitter<'state, 'context> {
@@ -47,7 +47,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     pub fn new(
         state: &'state Context<'context>,
         contract: &'state ContractDefinition,
-        storage_layout: &'state HashMap<NodeId, (U256, u32)>,
+        storage_layout: &'state HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>,
     ) -> Self {
         Self {
             state,

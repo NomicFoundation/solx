@@ -432,4 +432,11 @@ impl<'context> TypeConversion<'context> {
     fn is_fixed_bytes_mlir_type(t: melior::ir::Type<'_>) -> bool {
         format!("{t}").starts_with("!sol.fixedbytes")
     }
+
+    /// Heuristic check for a Sol function-pointer type — internal
+    /// `!sol.func_ref<…>` or external `!sol.ext_func_ref<…>` — by textual form.
+    pub(crate) fn is_function_ref_mlir_type(t: melior::ir::Type<'_>) -> bool {
+        let text = format!("{t}");
+        text.starts_with("!sol.func_ref") || text.starts_with("!sol.ext_func_ref")
+    }
 }

@@ -25,9 +25,9 @@ enum AssignmentTarget<'context, 'block> {
     /// Covers local variables, function parameters, and the result of an
     /// `a[i]` / `m[k]` index-access expression on the left-hand side.
     Pointer(Value<'context, 'block>, Type<'context>),
-    /// State variable — storage slot, byte offset within the slot, and
-    /// declared element type.
-    Storage(U256, u32, Type<'context>),
+    /// State variable — storage slot, byte offset within the slot, declared
+    /// element type, and data location (`Storage` or `Transient`).
+    Storage(U256, u32, Type<'context>, solx_utils::DataLocation),
 }
 
 /// Resolved left-hand side of an assignment: either a value-typed location to
@@ -100,8 +100,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .emit_sol_load(*pointer, *element_type, &block)?;
                 (old, *element_type)
             }
-            AssignmentTarget::Storage(slot, byte_offset, element_type) => {
-                let old = self.emit_storage_load(*slot, *byte_offset, *element_type, &block)?;
+            AssignmentTarget::Storage(slot, byte_offset, element_type, location) => {
+                let old =
+                    self.emit_storage_load(*slot, *byte_offset, *element_type, *location, &block)?;
                 (old, *element_type)
             }
         };
@@ -145,7 +146,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let declared_type = state_variable.get_type().ok_or_else(|| {
                             anyhow::anyhow!("unresolved type for state variable: {name}")
                         })?;
-                        let &(slot, byte_offset) = self
+                        let &(slot, byte_offset, location) = self
                             .storage_layout
                             .get(&state_variable.node_id())
                             .ok_or_else(|| {
@@ -165,12 +166,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             let address_type = Self::address_type(
                                 &self.state.builder,
                                 element_type,
-                                solx_utils::DataLocation::Storage,
+                                location,
                                 &declared_type,
                             );
                             let storage_ref = self.state.builder.emit_sol_addr_of(
                                 &crate::ast::contract::ContractEmitter::storage_symbol(
-                                    slot, byte_offset,
+                                    slot, byte_offset, location,
                                 ),
                                 address_type,
                                 &block,
@@ -182,6 +183,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                                 slot,
                                 byte_offset,
                                 element_type,
+                                location,
                             )),
                             block,
                         ))
@@ -254,10 +256,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .emit_sol_store(stored_value, pointer, block);
                 stored_value
             }
-            LvalueTarget::Store(AssignmentTarget::Storage(slot, byte_offset, element_type)) => {
+            LvalueTarget::Store(AssignmentTarget::Storage(
+                slot,
+                byte_offset,
+                element_type,
+                location,
+            )) => {
                 let stored_value = TypeConversion::from_target_type(element_type, &self.state.builder)
                     .emit(value, &self.state.builder, block);
-                self.emit_storage_store(slot, byte_offset, stored_value, block);
+                self.emit_storage_store(slot, byte_offset, stored_value, location, block);
                 stored_value
             }
         }
