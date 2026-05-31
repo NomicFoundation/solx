@@ -314,6 +314,23 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 );
                 Ok((builder.emit_sol_constant(0, ui256, &block), block))
             }
+            "mcopy" => {
+                if arguments.len() != 3 {
+                    anyhow::bail!("yul mcopy needs 3 args");
+                }
+                let dst = to_signless(arguments[0], &block);
+                let src = to_signless(arguments[1], &block);
+                let size = to_signless(arguments[2], &block);
+                block.append_operation(
+                    YulMCopyOp::builder(ctx, loc)
+                        .dst(dst)
+                        .src(src)
+                        .size(size)
+                        .build()
+                        .into(),
+                );
+                Ok((builder.emit_sol_constant(0, ui256, &block), block))
+            }
             "sload" => {
                 if arguments.len() != 1 {
                     anyhow::bail!("yul sload needs 1 arg");
@@ -340,6 +357,39 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let val = to_signless(arguments[1], &block);
                 block.append_operation(
                     YulSStoreOp::builder(ctx, loc)
+                        .addr(addr)
+                        .val(val)
+                        .build()
+                        .into(),
+                );
+                Ok((builder.emit_sol_constant(0, ui256, &block), block))
+            }
+            "tload" => {
+                if arguments.len() != 1 {
+                    anyhow::bail!("yul tload needs 1 arg");
+                }
+                let addr = to_signless(arguments[0], &block);
+                let value = block
+                    .append_operation(
+                        YulTLoadOp::builder(ctx, loc)
+                            .addr(addr)
+                            .out(i256_signless)
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("yul tload produces one result")
+                    .into();
+                Ok((from_signless(value, &block), block))
+            }
+            "tstore" => {
+                if arguments.len() != 2 {
+                    anyhow::bail!("yul tstore needs 2 args");
+                }
+                let addr = to_signless(arguments[0], &block);
+                let val = to_signless(arguments[1], &block);
+                block.append_operation(
+                    YulTStoreOp::builder(ctx, loc)
                         .addr(addr)
                         .val(val)
                         .build()
