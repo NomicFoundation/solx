@@ -10,7 +10,6 @@ use melior::ir::ValueLike;
 use ruint::aliases::U256;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
-use slang_solidity_v2::ast::Expression;
 use solx_utils::DataLocation;
 
 use slang_solidity_v2::ast::ContractDefinition;
@@ -76,9 +75,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let Some(initializer) = state_variable.value() else {
                 continue;
             };
-            if matches!(initializer, Expression::ArrayExpression(_)) {
-                anyhow::bail!("array-literal state variable initializers are not yet supported");
-            }
             let declared_type = state_variable.get_type().ok_or_else(|| {
                 anyhow::anyhow!(
                     "unresolved type for state variable: {}",
