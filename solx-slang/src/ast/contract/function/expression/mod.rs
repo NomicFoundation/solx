@@ -24,6 +24,7 @@ use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Builder;
@@ -287,6 +288,37 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let name = identifier.name();
                 match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(state_variable)) => {
+                        // A contract-level `constant` state variable has no storage
+                        // slot — slang resolves it here (file-level constants go via
+                        // `Definition::Constant`). Foldable initializers are already
+                        // inlined as literals by the constant-folding path above; the
+                        // non-foldable ones (string / bytes literals) reach this arm.
+                        // Emit the initializer toward the declared type so that, e.g.,
+                        // a `bytes32 constant` string literal becomes a fixedbytes
+                        // constant rather than a memory string.
+                        if matches!(
+                            state_variable.mutability(),
+                            StateVariableMutability::Constant
+                        ) {
+                            let initializer = state_variable.value().ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "constant state variable {name} has no initializer"
+                                )
+                            })?;
+                            let declared_type = state_variable.get_type().ok_or_else(|| {
+                                anyhow::anyhow!(
+                                    "unresolved type for constant state variable: {name}"
+                                )
+                            })?;
+                            let target_type = TypeConversion::resolve_slang_type(
+                                &declared_type,
+                                None,
+                                &self.state.builder,
+                            );
+                            let (value, block) =
+                                self.emit_value_for_target(&initializer, target_type, block)?;
+                            return Ok((Some(value), block));
+                        }
                         let &(slot, byte_offset, location) = self
                             .storage_layout
                             .get(&state_variable.node_id())
