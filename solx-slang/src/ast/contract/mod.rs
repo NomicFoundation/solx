@@ -21,6 +21,8 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use melior::ir::BlockLike;
+
 use solx_mlir::Context;
 use solx_mlir::StateMutability;
 
@@ -283,10 +285,6 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let Some(AbiEntry::Function(abi)) = state_variable.compute_abi_entry() else {
             return Ok(());
         };
-        // Scalar getters only for now — indexed forms need sol.gep / sol.map.
-        if !abi.inputs().is_empty() {
-            return Ok(());
-        }
         let Some(signature) = state_variable.compute_canonical_signature() else {
             return Ok(());
         };
@@ -298,6 +296,43 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             anyhow::anyhow!("unresolved type for state variable getter")
         })?;
         let builder = &self.state.builder;
+
+        // Indexed getter for a value-element array: `x(uint256) -> element`.
+        // The base array reference is `gep`'d by the index argument and the
+        // element loaded, mirroring normal `array[i]` access. Mappings,
+        // struct / nested-reference elements, and multi-dimensional (multi-input)
+        // getters are still skipped (the selector then reverts).
+        if !abi.inputs().is_empty() {
+            let element_slang = match &declared_type {
+                SlangType::Array(array_type) => array_type.element_type(),
+                SlangType::FixedSizeArray(array_type) => array_type.element_type(),
+                _ => return Ok(()),
+            };
+            if abi.inputs().len() != 1 || element_slang.is_reference_type() {
+                return Ok(());
+            }
+            let container_type =
+                TypeConversion::resolve_state_variable_type(state_variable, builder)?;
+            let element_type =
+                TypeConversion::resolve_slang_type(&element_slang, Some(location), builder);
+            let entry = builder.emit_sol_func(
+                &signature,
+                std::slice::from_ref(&builder.types.ui256),
+                std::slice::from_ref(&element_type),
+                Some(selector),
+                StateMutability::View,
+                None,
+                contract_body,
+            );
+            let slot_name = Self::storage_symbol(slot, byte_offset, location);
+            let base = builder.emit_sol_addr_of(&slot_name, container_type, &entry);
+            let address =
+                builder.emit_sol_gep(base, entry.argument(0)?.into(), element_type, &entry);
+            let value = builder.emit_sol_load(address, element_type, &entry)?;
+            builder.emit_sol_return(&[value], &entry);
+            return Ok(());
+        }
+
         let element_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
         // A reference-typed state variable (`string`/`bytes`/array/struct) is
         // addressed by the reference type itself in storage; value types use
