@@ -148,9 +148,28 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     self.state
                         .builder
                         .emit_sol_store(zero, pointer, &function_entry_block);
+                } else if matches!(
+                    parameter.get_type(),
+                    Some(
+                        slang_solidity_v2::ast::Type::FixedSizeArray(_)
+                            | slang_solidity_v2::ast::Type::Struct(_)
+                    )
+                ) {
+                    // A named return of a memory aggregate (`T[n] memory`,
+                    // `S memory`) must point at a fresh zero-initialised
+                    // allocation, otherwise writes through `result[..]` hit an
+                    // uninitialised reference (and `return result` ABI-encodes
+                    // garbage). Mirrors variable_declaration's `needs_memory_alloc`.
+                    let allocated = self
+                        .state
+                        .builder
+                        .emit_sol_malloc(return_type, &function_entry_block);
+                    self.state
+                        .builder
+                        .emit_sol_store(allocated, pointer, &function_entry_block);
                 }
-                // Non-integer named returns are left uninitialised; tests that
-                // assign before reading still work.
+                // Other non-integer named returns are left uninitialised; tests
+                // that assign before reading still work.
                 environment.define_variable(identifier.name(), pointer, return_type);
                 return_slots.push(Some(pointer));
             }
