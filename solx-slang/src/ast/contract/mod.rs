@@ -299,44 +299,81 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         })?;
         let builder = &self.state.builder;
 
-        // Getter for a (possibly nested) value-result mapping: `m(K) -> V`,
-        // `m(K1, K2) -> V`, ... Each nesting level chains a `sol.map` over its key
-        // argument and the final value is loaded, mirroring `m[k1][k2]`.
+        // Getter for a (possibly nested) value-result array / mapping: `m(K)`,
+        // `a(uint256)`, `a(i, j)`, `m(k1, k2)`, mixed `m(k)[i]`, ... Each nesting
+        // level chains a `sol.map` (mappings) or a bounds-checked `sol.gep`
+        // (arrays) over its key/index argument; the final value is loaded.
         //
-        // **Array getters are intentionally skipped** (including arrays nested in
-        // mappings): solc's auto-generated array accessor bare-reverts (empty
-        // data) on an out-of-bounds index, but `sol.gep` emits a `Panic(0x32)`, so
-        // a slang array getter would diverge from solc / the stable pipelines on
-        // OOB (the semantic tests expect the bare revert). Reference-typed keys or
-        // results are also skipped (selector then reverts).
+        // Array levels emit an explicit `index < length` check that **bare-reverts**
+        // (`revert(0, 0)`) on out-of-bounds via a no-message `sol.require`, matching
+        // solc's auto-generated accessor — NOT `sol.gep`'s `Panic(0x32)`, which the
+        // semantic tests (expecting a bare `FAILURE`, i.e. empty revert data)
+        // reject. Reference-typed keys or results are skipped (selector reverts).
         if !abi.inputs().is_empty() {
-            // Per level: the key's input type and the `sol.map` result type (the
-            // inner mapping's reference for intermediate levels, a `!sol.ptr<V>`
-            // for the final value).
+            enum GetterLevel<'c> {
+                /// `sol.map` over a key; carries the mapped-slot reference type.
+                Mapping(Type<'c>),
+                /// Bounds-checked `sol.gep` over an index; carries the element type
+                /// and, for fixed arrays, the static size (dynamic arrays: `None`).
+                Array(Type<'c>, Option<u64>),
+            }
             let mut input_types: Vec<Type<'context>> = Vec::new();
-            let mut level_types: Vec<Type<'context>> = Vec::new();
+            let mut levels: Vec<GetterLevel<'context>> = Vec::new();
             let mut current = declared_type.clone();
-            while let SlangType::Mapping(mapping_type) = &current {
-                let key_slang = mapping_type.key_type();
-                if key_slang.is_reference_type() {
-                    return Ok(());
+            loop {
+                match &current {
+                    SlangType::Mapping(mapping_type) => {
+                        let key_slang = mapping_type.key_type();
+                        if key_slang.is_reference_type() {
+                            return Ok(());
+                        }
+                        let value_slang = mapping_type.value_type();
+                        let resolved_value = TypeConversion::resolve_slang_type(
+                            &value_slang,
+                            Some(location),
+                            builder,
+                        );
+                        // Intermediate containers are addressed by their reference;
+                        // a value terminal by a `!sol.ptr<V>`.
+                        let level_type = if value_slang.is_reference_type() {
+                            resolved_value
+                        } else {
+                            builder.types.pointer(resolved_value, location)
+                        };
+                        input_types.push(TypeConversion::resolve_slang_type(
+                            &key_slang,
+                            Some(location),
+                            builder,
+                        ));
+                        levels.push(GetterLevel::Mapping(level_type));
+                        current = value_slang;
+                    }
+                    SlangType::Array(array_type) => {
+                        let element_slang = array_type.element_type();
+                        let element_type = TypeConversion::resolve_slang_type(
+                            &element_slang,
+                            Some(location),
+                            builder,
+                        );
+                        input_types.push(builder.types.ui256);
+                        levels.push(GetterLevel::Array(element_type, None));
+                        current = element_slang;
+                    }
+                    SlangType::FixedSizeArray(array_type) => {
+                        let element_slang = array_type.element_type();
+                        let element_type = TypeConversion::resolve_slang_type(
+                            &element_slang,
+                            Some(location),
+                            builder,
+                        );
+                        input_types.push(builder.types.ui256);
+                        levels.push(GetterLevel::Array(element_type, Some(array_type.size() as u64)));
+                        current = element_slang;
+                    }
+                    _ => break,
                 }
-                let value_slang = mapping_type.value_type();
-                let resolved_value =
-                    TypeConversion::resolve_slang_type(&value_slang, Some(location), builder);
-                let level_type = if matches!(value_slang, SlangType::Mapping(_)) {
-                    resolved_value
-                } else {
-                    builder.types.pointer(resolved_value, location)
-                };
-                input_types
-                    .push(TypeConversion::resolve_slang_type(&key_slang, Some(location), builder));
-                level_types.push(level_type);
-                current = value_slang;
             }
             let result_slang = current;
-            // Only fully-mapping chains down to a value result (no array/struct
-            // anywhere) are handled; anything else falls through to revert.
             if input_types.is_empty()
                 || input_types.len() != abi.inputs().len()
                 || result_slang.is_reference_type()
@@ -358,9 +395,41 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             );
             let slot_name = Self::storage_symbol(slot, byte_offset, location);
             let mut base = builder.emit_sol_addr_of(&slot_name, container_type, &entry);
-            for (index, level_type) in level_types.iter().enumerate() {
+            for (index, level) in levels.iter().enumerate() {
                 let arg: Value<'context, '_> = entry.argument(index)?.into();
-                base = builder.emit_sol_map(base, arg, *level_type, &entry);
+                base = match level {
+                    GetterLevel::Mapping(level_type) => {
+                        builder.emit_sol_map(base, arg, *level_type, &entry)
+                    }
+                    GetterLevel::Array(element_type, fixed_size) => {
+                        // Bounds-check `index < length`; OOB → bare `revert(0, 0)`.
+                        let length = match fixed_size {
+                            Some(size) => builder.emit_sol_constant(
+                                *size as i64,
+                                builder.types.ui256,
+                                &entry,
+                            ),
+                            None => entry
+                                .append_operation(
+                                    solx_mlir::ods::sol::LengthOperation::builder(
+                                        builder.context,
+                                        builder.unknown_location,
+                                    )
+                                    .inp(base)
+                                    .len(builder.types.ui256)
+                                    .build()
+                                    .into(),
+                                )
+                                .result(0)
+                                .expect("sol.length produces one result")
+                                .into(),
+                        };
+                        let in_bounds =
+                            builder.emit_sol_cmp(arg, length, solx_mlir::CmpPredicate::Lt, &entry);
+                        builder.emit_sol_require(in_bounds, None, &[], false, &entry);
+                        builder.emit_sol_gep(base, arg, *element_type, &entry)
+                    }
+                };
             }
             let value = builder.emit_sol_load(base, result_type, &entry)?;
             builder.emit_sol_return(&[value], &entry);
