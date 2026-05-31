@@ -298,24 +298,23 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         })?;
         let builder = &self.state.builder;
 
-        // Single-input getter for a value-result array or mapping:
-        //   `array(uint256) -> element`, `mapping(K=>V)(K) -> V`.
-        // The base reference is indexed (`gep` for arrays, `map` for mappings)
-        // and the result loaded, mirroring `array[i]` / `map[k]`. Reference-typed
-        // results or keys, and multi-dimensional (multi-input) getters, are still
-        // skipped (the selector then reverts).
+        // Single-input getter for a value-result mapping: `mapping(K=>V)(K) -> V`.
+        // `map` indexes the base reference and the result is loaded, mirroring
+        // `map[k]`. **Array getters are intentionally skipped**: solc's
+        // auto-generated array accessor bare-reverts (empty data) on an
+        // out-of-bounds index, but `sol.gep` emits a `Panic(0x32)`, so a slang
+        // array getter would diverge from solc / the stable pipelines on OOB
+        // (the semantic tests expect the bare revert). Reference-typed keys or
+        // results, and multi-input getters, are also skipped (selector reverts).
         if !abi.inputs().is_empty() {
-            let (input_slang, result_slang) = match &declared_type {
-                SlangType::Array(array_type) => (None, array_type.element_type()),
-                SlangType::FixedSizeArray(array_type) => (None, array_type.element_type()),
-                SlangType::Mapping(mapping_type) => {
-                    (Some(mapping_type.key_type()), mapping_type.value_type())
-                }
-                _ => return Ok(()),
+            let SlangType::Mapping(mapping_type) = &declared_type else {
+                return Ok(());
             };
+            let key_slang = mapping_type.key_type();
+            let result_slang = mapping_type.value_type();
             if abi.inputs().len() != 1
                 || result_slang.is_reference_type()
-                || input_slang.as_ref().is_some_and(SlangType::is_reference_type)
+                || key_slang.is_reference_type()
             {
                 return Ok(());
             }
@@ -323,10 +322,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 TypeConversion::resolve_state_variable_type(state_variable, builder)?;
             let result_type =
                 TypeConversion::resolve_slang_type(&result_slang, Some(location), builder);
-            let input_type = match &input_slang {
-                Some(key) => TypeConversion::resolve_slang_type(key, Some(location), builder),
-                None => builder.types.ui256,
-            };
+            let input_type = TypeConversion::resolve_slang_type(&key_slang, Some(location), builder);
             let entry = builder.emit_sol_func(
                 &signature,
                 std::slice::from_ref(&input_type),
@@ -339,12 +335,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             let slot_name = Self::storage_symbol(slot, byte_offset, location);
             let base = builder.emit_sol_addr_of(&slot_name, container_type, &entry);
             let arg: Value<'context, '_> = entry.argument(0)?.into();
-            let address = if matches!(declared_type, SlangType::Mapping(_)) {
-                let value_ptr = builder.types.pointer(result_type, location);
-                builder.emit_sol_map(base, arg, value_ptr, &entry)
-            } else {
-                builder.emit_sol_gep(base, arg, result_type, &entry)
-            };
+            let value_ptr = builder.types.pointer(result_type, location);
+            let address = builder.emit_sol_map(base, arg, value_ptr, &entry);
             let value = builder.emit_sol_load(address, result_type, &entry)?;
             builder.emit_sol_return(&[value], &entry);
             return Ok(());
