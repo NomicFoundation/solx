@@ -137,10 +137,15 @@ called out inline (reference-type `delete`, and `operand_segment_sizes`).
    `members()` and uses the lone `unsafe` FFI `mlirSolGetEltType` (`member.rs:77-82`).
    Needs concrete expression-type locations + `StructType::member_types(loc)` /
    `member_index()`. (M)
-5. **Canonical signature for *internal* functions** — gated to externally-visible
-   functions, so internal fns fall back to AST text (`function/mod.rs:417-450`), a
-   name-mangling hazard: `a.b.T`/`c.d.T`→`T`, and `mapping(uint=>uint)`/`mapping(address=>uint)`
-   →`mapping`. Extend `compute_canonical_signature()` to internal/private. (S)
+5. **Canonical signature for *internal* functions** — **DONE** (solx consumption;
+   no slang change needed — `FunctionDefinition::compute_internal_signature()`
+   already exists at the pinned rev). `mlir_function_name` (`function/mod.rs`) now
+   derives internal/private symbols from `compute_internal_signature()` (slang's
+   `type_internal_name` per parameter) instead of AST text, removing the
+   name-mangling hazard (`a.b.T`/`c.d.T`→`T`, and `mapping(uint=>uint)`/
+   `mapping(address=>uint)`→`mapping`). Constructor/fallback/receive (no name) and
+   untypable callees keep the AST-text fallback; def + call sites both route through
+   `mlir_function_name`, so symbols stay consistent.
 6. **Library / `using-for` callable classification** — `library.rs:25-91` runs a
    bespoke CST `Visitor` inferring "library call" from `Internal`/`Private`
    visibility. Needs `is_library_function()` / a callable-kind API. (S–M)
@@ -198,9 +203,9 @@ melior's `BlockLike::parent_region()` — solx cleanup, delete the shim.
 - **melior** (smallest, self-contained, own test suite — fully verifiable): #1
   `operand_segment_sizes` (removes a silent-invalid-IR trap), #4 `from_words` (the
   C-API already exists), #2 naming knob, #3 rerun helper.
-- **slang** (binder depth): start with the additive accessors — #5 internal
-  canonical signatures, #8 payability/ordinal; the flagship #1/#3 and the #2 typing
-  bug are deeper type-system work.
+- **slang** (binder depth): the additive accessors — #5 internal canonical
+  signatures (**done**, solx-side consumption), #8 payability/ordinal (next); the
+  flagship #1/#3 and the #2 typing bug are deeper type-system work.
 - **solx-llvm** (each verify cycle is an LLVM rebuild): #1 `data_loc_cast`
   non-Memory unblocks the largest cluster; #2 `sol.delete` op closes reference
   `delete`; #8/#9 (`BytesCast` + C-FFI predicates) remove the load-bearing string
