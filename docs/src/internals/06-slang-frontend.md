@@ -61,13 +61,12 @@ miscompiling, except where noted under "semantic gaps" below.
 - `delete` of a state variable — structs, fixed/dynamic arrays, `bytes`/`string`,
   mappings, and value types — is supported (aggregates via the `sol.delete` op,
   which recursively clears the storage).
-- **Indexed public getters are not generated.** `emit_state_variable_getter`
-  (`contract/mod.rs:285`) emits only scalar (no-input) getters and silently skips
-  any getter with inputs, so the auto-generated accessor for `T[] public x`
-  (`x(uint256)`) or `mapping(K=>V) public m` (`m(K)`) is absent — calling its
-  selector reverts. This (not `delete` or `layout at N`) is what fails
-  `storageLayoutSpecifier/delete` and the array/mapping public-getter tests.
-  Needs a bounds-checked `sol.gep` + load (arrays) / `sol.map` + load (mappings).
+- **Indexed public getters** are generated for single-input, value-result
+  containers: `T[] public x` → `x(uint256)` (via `sol.gep` + load) and
+  `mapping(K=>V) public m` with value key/result → `m(K)` (via `sol.map` + load),
+  mirroring `x[i]` / `m[k]`. Still skipped (the selector reverts): reference-typed
+  keys (`bytes`/`string`) or results (struct/array values), multi-dimensional
+  arrays, and multi-level mappings (all need multi-input accessors).
 - `uintN[] memory` returns and reads of a fixed array-of-structs still miscompile
   (`storage/static_array_copy_cleanup`).
 - `verbatim` in inline assembly.
