@@ -29,15 +29,18 @@ called out inline (reference-type `delete`, and `operand_segment_sizes`).
    `call/mod.rs:107`). Fix: dispatch non-Memory dsts through `evm::Builder::genCopy`
    (already supports Storage), or at minimum `notifyMatchFailure`. **Blocks the
    largest array/struct/storage cluster.** (M, rebuild)
-2. **`delete` of reference-type storage needs a backend op** *(panel correction —
-   previously listed "already complete")*. The recursive `genClearStorageValue`
-   logic (`EVMUtil.cpp:1985-2118`) is a **local `std::function` lambda** scoped to
-   one lowering, not a reusable `evm::Builder` method, and there is **no
-   `Sol_DeleteOp`/`Sol_ClearOp`** in `SolOps.td`. `genMemAlloc` also asserts a
-   Memory data-location (`EVMUtil.cpp:1138` array, `:1224` struct), which is why
-   the frontend bails on array/struct `delete` (`arithmetic.rs:299-305`). Fix:
-   promote the lambda to an `evm::Builder` method + add a `sol.delete`/`sol.clear`
-   op. (M, rebuild) — *bytes/string `delete` already works via `sol.malloc`+`sol.copy`.*
+2. **`delete` of reference-type storage** — **DONE** (`[Sol] Add sol.delete op`).
+   `genClearStorageValue` was promoted from a `std::function` lambda to a reusable
+   `evm::Builder` method (pure refactor — array-tail clearing unchanged), and a
+   `Sol_DeleteOp` + `DeleteOpLowering` now lower `delete x` on aggregate storage
+   variables by recursively clearing every occupied slot (no `genMemAlloc` /
+   Memory-relocation needed — the op takes the Storage reference directly). The
+   frontend emits `sol.delete` for struct / fixed / dynamic arrays
+   (`arithmetic.rs`), keeping `bytes`/`string` on malloc+copy and mappings a
+   no-op. Suite +101 PASSED, 16 INVALID files resolved, zero PASSED→FAILED.
+   **Known gaps** (INVALID→FAILED, to investigate): `delete` of a fixed
+   array-of-structs (`storage/static_array_copy_cleanup`) and of a dynamic array
+   under `layout at N` (`storageLayoutSpecifier/delete`) still miscompile.
 3. **`sol.cast::fold` is disabled** — `SolOps.cpp:70-80` returns `{}` because
    `constFoldCastOp` does an unchecked `cast<IntegerAttr>` that fires on solx's
    signedness/width combos (self-documented in-tree: "~140 aborts"). Fix: a
