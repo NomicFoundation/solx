@@ -7,6 +7,7 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
+use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 
@@ -48,7 +49,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             &self.state.builder,
             &block,
         );
-        let rhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
+        // For exponentiation, the rhs (exponent) must be unsigned regardless
+        // of the result type — `sol.exp` / `sol.cexp` require `AnyUnsignedInteger`.
+        let rhs_target = if matches!(operator, Operator::Exponentiation) {
+            let rhs_width = solx_mlir::TypeFactory::integer_bit_width(rhs.r#type());
+            Type::from(IntegerType::unsigned(self.state.builder.context, rhs_width))
+        } else {
+            result_type
+        };
+        let rhs = TypeConversion::from_target_type(rhs_target, &self.state.builder).emit(
             rhs,
             &self.state.builder,
             &block,

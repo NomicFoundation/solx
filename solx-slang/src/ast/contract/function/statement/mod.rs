@@ -2,9 +2,11 @@
 //! Statement lowering to MLIR operations.
 //!
 
+pub mod assembly;
 pub mod control_flow;
 pub mod event;
 pub mod revert;
+pub mod try_statement;
 pub mod variable_declaration;
 
 use std::collections::HashMap;
@@ -46,6 +48,14 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     ///
     /// `true` by default. Set to `false` inside `unchecked {}` blocks.
     checked: bool,
+    /// Yul function definitions visible to the current assembly emission.
+    /// At call sites, we inline the body — `yul.func` cannot live inside
+    /// `sol.func` (not a `SymbolTable` region), and hoisting it to
+    /// `sol.contract` requires architectural changes we have not made.
+    pub(super) yul_functions:
+        HashMap<String, slang_solidity_v2::ast::YulFunctionDefinition>,
+    /// Depth counter used to abort runaway inlining of recursive yul fns.
+    pub(super) yul_inline_depth: HashMap<String, usize>,
 }
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -64,6 +74,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             storage_layout,
             return_types,
             checked: true,
+            yul_functions: HashMap::new(),
+            yul_inline_depth: HashMap::new(),
         }
     }
 
@@ -136,6 +148,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             Statement::RevertStatement(revert) => self.emit_revert(revert, block),
             Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
+            Statement::AssemblyStatement(assembly) => self.emit_assembly(assembly, block),
+            Statement::TryStatement(try_statement) => self.emit_try(try_statement, block),
             _ => anyhow::bail!(
                 "unsupported statement: {:?}",
                 std::mem::discriminant(statement)

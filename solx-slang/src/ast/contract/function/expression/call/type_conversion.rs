@@ -311,9 +311,30 @@ impl<'context> TypeConversion<'context> {
     where
         'context: 'block,
     {
+        use melior::ir::BlockLike;
         if value.r#type() == self.to_target_type(builder) {
             return value;
         }
+        // If the source value is a Sol enum, bridge it back to `ui256`
+        // via `sol.enum_cast` first; `sol.cast` requires an integer input.
+        let value = if Self::is_sol_enum(value.r#type()) {
+            block
+                .append_operation(
+                    solx_mlir::ods::sol::EnumCastOperation::builder(
+                        builder.context,
+                        builder.unknown_location,
+                    )
+                    .inp(value)
+                    .out(builder.types.ui256)
+                    .build()
+                    .into(),
+                )
+                .result(0)
+                .expect("sol.enum_cast always produces one result")
+                .into()
+        } else {
+            value
+        };
         match self {
             Self::Bool => {
                 let zero = builder.emit_sol_constant(0, value.r#type(), block);
@@ -332,5 +353,12 @@ impl<'context> TypeConversion<'context> {
             }
             Self::Cast(target_type) => builder.emit_sol_cast(value, target_type, block),
         }
+    }
+
+    /// Heuristic check for whether an MLIR type is a Sol `!sol.enum<N>` —
+    /// matches by its textual form since the C++ dialect does not expose
+    /// a typed detection FFI.
+    fn is_sol_enum(t: melior::ir::Type<'_>) -> bool {
+        format!("{t}").starts_with("!sol.enum")
     }
 }

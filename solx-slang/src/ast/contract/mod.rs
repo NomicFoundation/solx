@@ -87,6 +87,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         // TODO: emit declarations for inherited state variables once derived
         // contracts compile through this path.
+        let mut emitted_slots: std::collections::HashSet<U256> =
+            std::collections::HashSet::new();
         for member in contract.members().iter() {
             let ContractMember::StateVariableDefinition(state_variable) = member else {
                 continue;
@@ -94,6 +96,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };
+            if !emitted_slots.insert(*slot) {
+                // Multiple state variables can share the same slot when
+                // packed (e.g. several `uint8` fields). Emit `slot_N` only
+                // once; subsequent accesses resolve to the same symbol.
+                continue;
+            }
             let element_type =
                 TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
             self.state.builder.emit_sol_state_var(
