@@ -131,9 +131,9 @@ impl Frontend for Slang {
                 let text_range = diagnostic.text_range();
                 let source_location =
                     solx_standard_json::output::error::source_location::SourceLocation::new(
-                        file_identifier,
-                        text_range.start as isize,
-                        text_range.end as isize,
+                        file_identifier.to_owned(),
+                        text_range.start.utf8 as isize,
+                        text_range.end.utf8 as isize,
                     );
                 solx_standard_json::OutputError::new_error_with_data(
                     Some(file_identifier),
