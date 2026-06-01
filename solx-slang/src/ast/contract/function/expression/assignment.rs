@@ -170,6 +170,51 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Ok((result, block))
     }
 
+    /// Resolves a state-variable lvalue — bare `x` or contract-qualified `C.x`
+    /// (e.g. a function-pointer state variable) — to its storage target: a
+    /// reference copy for reference-typed storage, else a direct storage store.
+    /// `name` is used only for diagnostics.
+    fn resolve_state_variable_lvalue(
+        &self,
+        state_variable: &slang_solidity_v2::ast::StateVariableDefinition,
+        name: &str,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(LvalueTarget<'context, 'block>, BlockRef<'context, 'block>)> {
+        let declared_type = state_variable
+            .get_type()
+            .ok_or_else(|| anyhow::anyhow!("unresolved type for state variable: {name}"))?;
+        let &(slot, byte_offset, location) = self
+            .storage_layout
+            .get(&state_variable.node_id())
+            .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?;
+        let element_type =
+            TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
+        // Reference-typed storage (fixed/dynamic arrays, `string`, `bytes`,
+        // structs) is assigned by copying the RHS reference into the slot.
+        // Mappings are not assignable.
+        if declared_type.is_reference_type()
+            && !matches!(declared_type, slang_solidity_v2::ast::Type::Mapping(_))
+        {
+            let address_type =
+                Self::address_type(&self.state.builder, element_type, location, &declared_type);
+            let storage_ref = self.state.builder.emit_sol_addr_of(
+                &crate::ast::contract::ContractEmitter::storage_symbol(slot, byte_offset, location),
+                address_type,
+                &block,
+            );
+            return Ok((LvalueTarget::ReferenceCopy(storage_ref), block));
+        }
+        Ok((
+            LvalueTarget::Store(AssignmentTarget::Storage(
+                slot,
+                byte_offset,
+                element_type,
+                location,
+            )),
+            block,
+        ))
+    }
+
     /// Resolves an assignment left-hand side to a [`LvalueTarget`].
     fn resolve_lvalue(
         &self,
@@ -181,50 +226,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let name = identifier.name();
                 match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(state_variable)) => {
-                        let declared_type = state_variable.get_type().ok_or_else(|| {
-                            anyhow::anyhow!("unresolved type for state variable: {name}")
-                        })?;
-                        let &(slot, byte_offset, location) = self
-                            .storage_layout
-                            .get(&state_variable.node_id())
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("unregistered state variable: {name}")
-                            })?;
-                        let element_type = TypeConversion::resolve_slang_type(
-                            &declared_type,
-                            None,
-                            &self.state.builder,
-                        );
-                        // Reference-typed storage (fixed/dynamic arrays,
-                        // `string`, `bytes`, structs) is assigned by copying the
-                        // RHS reference into the slot. Mappings are not assignable.
-                        if declared_type.is_reference_type()
-                            && !matches!(declared_type, slang_solidity_v2::ast::Type::Mapping(_))
-                        {
-                            let address_type = Self::address_type(
-                                &self.state.builder,
-                                element_type,
-                                location,
-                                &declared_type,
-                            );
-                            let storage_ref = self.state.builder.emit_sol_addr_of(
-                                &crate::ast::contract::ContractEmitter::storage_symbol(
-                                    slot, byte_offset, location,
-                                ),
-                                address_type,
-                                &block,
-                            );
-                            return Ok((LvalueTarget::ReferenceCopy(storage_ref), block));
-                        }
-                        Ok((
-                            LvalueTarget::Store(AssignmentTarget::Storage(
-                                slot,
-                                byte_offset,
-                                element_type,
-                                location,
-                            )),
-                            block,
-                        ))
+                        self.resolve_state_variable_lvalue(&state_variable, &name, block)
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let (pointer, element_type) = self.environment.variable_with_type(&name);
@@ -253,18 +255,34 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 }
             }
             Expression::MemberAccessExpression(access) => {
-                let (address, element_type, block) = self
-                    .emit_struct_field_address(access, block)?
-                    .expect("slang validates a member-access lvalue resolves to a struct field");
-                if address.r#type() == element_type {
-                    // Reference-typed struct field addressed by reference.
-                    Ok((LvalueTarget::ReferenceCopy(address), block))
-                } else {
-                    Ok((
+                // A contract-qualified state-variable lvalue (`C.x = v`,
+                // notably a function-pointer state variable) is not a struct
+                // field; resolve it to its storage slot like the bare `x = v`.
+                if let Some((address, element_type, block)) =
+                    self.emit_struct_field_address(access, block)?
+                {
+                    if address.r#type() == element_type {
+                        // Reference-typed struct field addressed by reference.
+                        return Ok((LvalueTarget::ReferenceCopy(address), block));
+                    }
+                    return Ok((
                         LvalueTarget::Store(AssignmentTarget::Pointer(address, element_type)),
                         block,
-                    ))
+                    ));
                 }
+                if let Some(Definition::StateVariable(state_variable)) =
+                    access.member().resolve_to_definition()
+                {
+                    return self.resolve_state_variable_lvalue(
+                        &state_variable,
+                        &access.member().name(),
+                        block,
+                    );
+                }
+                anyhow::bail!(
+                    "unsupported member-access lvalue: {}",
+                    access.member().name()
+                )
             }
             Expression::FunctionCallExpression(call)
                 if matches!(

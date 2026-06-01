@@ -268,6 +268,31 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((Some(result), block));
         }
 
+        // A call through a contract-qualified function-pointer state variable
+        // (`C.x()` / `Base.x()`): the operand is the contract name and the
+        // member resolves to a state variable of function type. Load the
+        // pointer (via the qualified state-variable read) and call indirectly.
+        // Gating on operand-is-contract keeps this distinct from the
+        // `this.v(args)` external getter self-call, and it must precede the
+        // built-in member-access dispatch, which rejects the unknown member.
+        if let Expression::MemberAccessExpression(access) = &callee
+            && let Expression::Identifier(operand) = access.operand()
+            && matches!(operand.resolve_to_definition(), Some(Definition::Contract(_)))
+            && matches!(
+                access.member().resolve_to_definition(),
+                Some(Definition::StateVariable(_))
+            )
+            && let Some(function_slang_type) = callee.get_type()
+            && matches!(&function_slang_type, SlangType::Function(_))
+        {
+            return self.emit_indirect_call(
+                &callee,
+                &function_slang_type,
+                positional_arguments,
+                block,
+            );
+        }
+
         if let Some((value, block)) =
             self.try_emit_built_in_call(&callee, positional_arguments, block)?
         {
