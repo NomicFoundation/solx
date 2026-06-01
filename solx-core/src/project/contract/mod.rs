@@ -529,17 +529,14 @@ impl Contract {
                     solx_utils::CodeSegment::Deploy => bare_name.to_owned(),
                     solx_utils::CodeSegment::Runtime => runtime_identifier.clone(),
                 };
-                let dependencies = match code_segment {
-                    solx_utils::CodeSegment::Deploy => {
-                        let mut dependencies =
-                            solx_codegen_evm::Dependencies::new(code_identifier.as_str());
-                        dependencies.push(runtime_identifier, true);
-                        dependencies
-                    }
-                    solx_utils::CodeSegment::Runtime => {
-                        solx_codegen_evm::Dependencies::new(code_identifier.as_str())
-                    }
-                };
+                let mut dependencies =
+                    solx_codegen_evm::Dependencies::new(code_identifier.as_str());
+                if matches!(code_segment, solx_utils::CodeSegment::Deploy) {
+                    dependencies.push(runtime_identifier, true);
+                }
+                for cross_contract in mlir.dependencies.iter() {
+                    dependencies.push(cross_contract.clone(), false);
+                }
 
                 let melior_context = solx_mlir::Context::create_mlir_context();
                 let raw_llvm =
