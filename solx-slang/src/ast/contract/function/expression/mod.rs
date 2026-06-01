@@ -331,6 +331,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         );
                         Ok((Some(value), block))
                     }
+                    Some(Definition::Library(library)) => {
+                        // A library name used as a value (`address(L)`) is its
+                        // linked deploy address. The linker symbol is the
+                        // fully-qualified `file:Library` name (matching solc),
+                        // so `link_references` round-trips.
+                        let symbol =
+                            format!("{}:{}", library.get_file_id(), library.name().name());
+                        let value = self.state.builder.emit_sol_lib_addr(&symbol, &block);
+                        Ok((Some(value), block))
+                    }
                     None => anyhow::bail!("unresolved identifier: {name}"),
                     Some(_) => anyhow::bail!("unsupported identifier reference: {name}"),
                 }

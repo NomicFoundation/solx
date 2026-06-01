@@ -337,6 +337,40 @@ impl<'context> Builder<'context> {
             .into()
     }
 
+    /// Emits a `sol.lib_addr` yielding the linked deploy address of the
+    /// library identified by `name` — the fully-qualified `file:Library`
+    /// linker symbol (matching solc), which the linker resolves at link time.
+    ///
+    /// Built generically because the op's `name` `StrAttr` collides with the
+    /// melior builder's reserved `name`, so it has no generated setter.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
+    pub fn emit_sol_lib_addr<'block, B>(&self, name: &str, block: &B) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                melior::ir::operation::OperationBuilder::new(
+                    "sol.lib_addr",
+                    self.unknown_location,
+                )
+                .add_attributes(&[(
+                    melior::ir::Identifier::new(self.context, "name"),
+                    StringAttribute::new(self.context, name).into(),
+                )])
+                .add_results(&[self.types.sol_address])
+                .build()
+                .expect("valid sol.lib_addr"),
+            )
+            .result(0)
+            .expect("sol.lib_addr produces one result")
+            .into()
+    }
+
     /// Emits a `sol.revert` carrying an optional payload.
     ///
     /// `signature` doubles as the payload string: for custom errors

@@ -1801,6 +1801,36 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((status, ret_data, block))
     }
 
+    /// Resolves the low-level bare-call kind for a member-access callee
+    /// (`recv.call` / `recv.delegatecall` / `recv.staticcall`), or `None` if
+    /// the member is not a low-level call.
+    ///
+    /// slang resolves these to a built-in for a plain `address` receiver, but
+    /// fails to type a library-as-address receiver (`address(L).delegatecall`),
+    /// leaving the member unresolved. In that case fall back to the member
+    /// name — it is reserved for address low-level calls, and a user method of
+    /// the same name would resolve to a `Definition`, so the name fallback only
+    /// fires for a member that resolves to nothing at all.
+    fn resolve_bare_call_kind(access: &MemberAccessExpression) -> Option<BuiltIn> {
+        match access.member().resolve_to_built_in() {
+            Some(
+                kind @ (BuiltIn::AddressCall
+                | BuiltIn::AddressDelegatecall
+                | BuiltIn::AddressStaticcall),
+            ) => Some(kind),
+            Some(_) => None,
+            None if access.member().resolve_to_definition().is_none() => {
+                match access.member().name().as_str() {
+                    "call" => Some(BuiltIn::AddressCall),
+                    "delegatecall" => Some(BuiltIn::AddressDelegatecall),
+                    "staticcall" => Some(BuiltIn::AddressStaticcall),
+                    _ => None,
+                }
+            }
+            None => None,
+        }
+    }
+
     /// Tries to emit a multi-result bare call (`addr.call`, `addr.delegatecall`,
     /// or `addr.staticcall`) used as the right-hand side of tuple
     /// deconstruction. Returns `Ok(None)` if the callee is not a bare-call
@@ -1815,15 +1845,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let Expression::MemberAccessExpression(access) = call.operand() else {
             return Ok(None);
         };
-        let Some(kind) = access.member().resolve_to_built_in() else {
+        let Some(kind) = Self::resolve_bare_call_kind(&access) else {
             return Ok(None);
         };
-        if !matches!(
-            kind,
-            BuiltIn::AddressCall | BuiltIn::AddressDelegatecall | BuiltIn::AddressStaticcall
-        ) {
-            return Ok(None);
-        }
         let (status, ret_data, block) = self.emit_bare_call(&access, kind, arguments, block)?;
         Ok(Some((vec![status, ret_data], block)))
     }
@@ -2089,25 +2113,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             self.emit_sol_encode(&argument_values, Some(selector_bytes), false, &current_block);
 
         let builder = &self.expression_emitter.state.builder;
-        // `sol.lib_addr`'s `name` StrAttr has no melior-generated setter (the
-        // builder reserves `name`), so build the op generically.
-        let address = current_block
-            .append_operation(
-                melior::ir::operation::OperationBuilder::new(
-                    "sol.lib_addr",
-                    builder.unknown_location,
-                )
-                .add_attributes(&[(
-                    melior::ir::Identifier::new(builder.context, "name"),
-                    StringAttribute::new(builder.context, library_name).into(),
-                )])
-                .add_results(&[builder.types.sol_address])
-                .build()
-                .expect("valid sol.lib_addr"),
-            )
-            .result(0)
-            .expect("sol.lib_addr produces one result")
-            .into();
+        let address = builder.emit_sol_lib_addr(library_name, &current_block);
         let gas = current_block
             .append_operation(
                 GasLeftOperation::builder(builder.context, builder.unknown_location)
