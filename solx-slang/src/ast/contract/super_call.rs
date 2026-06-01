@@ -53,21 +53,34 @@ pub(super) struct SuperDispatch {
     pub virtual_redirect: HashMap<NodeId, NodeId>,
 }
 
-/// Visitor that records every `super.f` member access (the access node and the
-/// function its member lexically resolves to — used only for its signature).
+/// Visitor that records `super.f` and explicit base-call (`Base.f`) member
+/// accesses (the access node and the function its member resolves to).
 #[derive(Default)]
 struct SuperCallCollector {
-    calls: Vec<(NodeId, FunctionDefinition)>,
+    /// `super.f` accesses — the recorded function is the *lexical* resolution,
+    /// used only for its signature (the real target is re-resolved against the
+    /// most-derived linearisation).
+    super_calls: Vec<(NodeId, FunctionDefinition)>,
+    /// `Base.f` accesses where `Base` is a named contract — the recorded
+    /// function is the exact target (slang resolves the named base correctly,
+    /// even in a diamond).
+    base_calls: Vec<(NodeId, FunctionDefinition)>,
 }
 
 impl Visitor for SuperCallCollector {
     fn enter_member_access_expression(&mut self, node: &MemberAccessExpression) -> bool {
-        if matches!(node.operand(), Expression::SuperKeyword(_))
+        if matches!(node.operand(), Expression::SuperKeyword(_)) {
+            if let Some(Definition::Function(function)) = node.member().resolve_to_definition() {
+                self.super_calls.push((node.node_id(), function));
+            }
+        } else if let Expression::Identifier(operand) = node.operand()
+            && matches!(operand.resolve_to_definition(), Some(Definition::Contract(_)))
             && let Some(Definition::Function(function)) = node.member().resolve_to_definition()
         {
-            self.calls.push((node.node_id(), function));
+            // `Base.f(...)` — an explicit base-qualified internal call.
+            self.base_calls.push((node.node_id(), function));
         }
-        // Descend so nested `super` calls (e.g. `super.f(super.g())`) are found.
+        // Descend so nested calls (e.g. `super.f(super.g())`) are found.
         true
     }
 }
@@ -169,24 +182,68 @@ pub(super) fn build_super_dispatch(contract: &ContractDefinition) -> SuperDispat
         }
         let mut collector = SuperCallCollector::default();
         accept_function_definition(&function, &mut collector);
-        for (access_id, lexical_target) in collector.calls {
+        for (access_id, lexical_target) in collector.super_calls {
             let signature = FunctionEmitter::mlir_function_name(&lexical_target);
             let Some((target_index, target)) =
                 resolve_super_target(&mro, from_index, &signature)
             else {
                 continue;
             };
-            dispatch.redirect.insert(access_id, target.node_id());
-            if !most_derived_ids.contains(&target.node_id()) && shadowed_ids.insert(target.node_id())
-            {
-                let symbol = format!("{}.{signature}", mro[target_index].name().name());
-                dispatch.shadowed.push((symbol, target.clone()));
-            }
-            // Walk the target's body too: a base override that itself calls
-            // `super` pulls in the next link of the chain.
-            to_walk.push((target_index, target));
+            record_target(
+                &mut dispatch,
+                &mut shadowed_ids,
+                &mut to_walk,
+                &mro,
+                access_id,
+                target_index,
+                target,
+                &most_derived_ids,
+            );
+        }
+        for (access_id, target) in collector.base_calls {
+            // `Base.f` names the override exactly; use it directly. Its defining
+            // contract gives the qualified symbol and the index to walk from.
+            let Some(target_index) = defining_index(&mro, target.node_id()) else {
+                continue;
+            };
+            record_target(
+                &mut dispatch,
+                &mut shadowed_ids,
+                &mut to_walk,
+                &mro,
+                access_id,
+                target_index,
+                target,
+                &most_derived_ids,
+            );
         }
     }
 
     dispatch
+}
+
+/// Records a `super`/base-call target: adds the redirect, registers it as a
+/// shadowed override (with a contract-qualified symbol) when it is not the
+/// most-derived version, and enqueues its body for further `super`/base calls.
+#[allow(clippy::too_many_arguments)]
+fn record_target(
+    dispatch: &mut SuperDispatch,
+    shadowed_ids: &mut HashSet<NodeId>,
+    to_walk: &mut Vec<(usize, FunctionDefinition)>,
+    mro: &[ContractDefinition],
+    access_id: NodeId,
+    target_index: usize,
+    target: FunctionDefinition,
+    most_derived_ids: &HashSet<NodeId>,
+) {
+    dispatch.redirect.insert(access_id, target.node_id());
+    if !most_derived_ids.contains(&target.node_id()) && shadowed_ids.insert(target.node_id()) {
+        let symbol = format!(
+            "{}.{}",
+            mro[target_index].name().name(),
+            FunctionEmitter::mlir_function_name(&target)
+        );
+        dispatch.shadowed.push((symbol, target.clone()));
+    }
+    to_walk.push((target_index, target));
 }

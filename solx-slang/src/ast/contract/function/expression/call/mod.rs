@@ -182,40 +182,24 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((Some(result), block));
         }
 
-        // `super.f(args)` — an internal call that skips the current contract's
-        // own override and dispatches to the next implementation up the C3
-        // linearisation. The redirect (built against the most-derived contract's
-        // linearised bases) names the target node; this is correct even in a
-        // diamond, where slang's lexical resolution of `access.member()` would
-        // pick the wrong override. We emit a plain internal `sol.call` (no
-        // receiver) to that node's registered symbol.
+        // `super.f(args)` or `Base.f(args)` — an internal call that bypasses the
+        // most-derived override and dispatches to a specific base version. The
+        // redirect (built against the most-derived contract's C3 linearisation
+        // for `super`, or the named base for an explicit base call) names the
+        // target node; for `super` this is correct even in a diamond, where
+        // slang's lexical resolution would pick the wrong override. We emit a
+        // plain internal `sol.call` (no receiver) to that node's symbol.
         if let Expression::MemberAccessExpression(access) = &callee
-            && matches!(access.operand(), Expression::SuperKeyword(_))
-        {
-            let redirect_id = self
+            && let Some(target_id) = self
                 .expression_emitter
                 .state
                 .super_redirect
                 .get(&access.node_id())
-                .copied();
-            let setup = match redirect_id {
-                Some(target_id) => {
-                    self.emit_call_setup_by_id(target_id, positional_arguments, block)
-                }
-                // No redirect entry (e.g. a `super` call slang typed but the
-                // linearised re-resolution did not reach): fall back to the
-                // lexically-resolved target.
-                None => {
-                    let Some(Definition::Function(base_function)) =
-                        access.member().resolve_to_definition()
-                    else {
-                        anyhow::bail!("super member access does not resolve to a function");
-                    };
-                    self.emit_call_setup(&base_function, positional_arguments, block)
-                }
-            };
-            let (mlir_name, argument_values, return_types, current_block) =
-                setup.context("resolving super call")?;
+                .copied()
+        {
+            let (mlir_name, argument_values, return_types, current_block) = self
+                .emit_call_setup_by_id(target_id, positional_arguments, block)
+                .context("resolving super/base call")?;
             if return_types.is_empty() {
                 self.expression_emitter.state.builder.emit_sol_call(
                     mlir_name,
