@@ -308,13 +308,32 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                                 .expect("sol.enum_cast produces one result")
                                 .into()
                         } else {
-                            // Reference type variable (array/string/struct in
-                            // memory). Real Solidity rebinds to a fresh empty
-                            // instance, but our codegen has no analogue, so
-                            // we bail rather than emit a misleading store.
-                            anyhow::bail!(
-                                "delete on a non-integer local '{name}' is not yet supported"
-                            );
+                            // Reference-typed local: `delete` rebinds it to a
+                            // fresh zero value. Function pointers reset to the
+                            // default (zero) pointer; dynamic aggregates
+                            // (arrays / `bytes` / `string`) to a fresh empty
+                            // allocation (length 0); fixed aggregates (structs /
+                            // fixed arrays) to a zero-initialised allocation.
+                            match identifier.get_type() {
+                                Some(SlangType::Function(_)) => {
+                                    builder.emit_sol_default_func_constant(element_type, &block)
+                                }
+                                Some(
+                                    SlangType::Array(_)
+                                    | SlangType::String(_)
+                                    | SlangType::Bytes(_),
+                                ) => {
+                                    let zero_size =
+                                        builder.emit_sol_constant(0, builder.types.ui256, &block);
+                                    builder.emit_sol_malloc_sized(element_type, zero_size, &block)
+                                }
+                                Some(SlangType::FixedSizeArray(_) | SlangType::Struct(_)) => {
+                                    builder.emit_sol_malloc(element_type, &block)
+                                }
+                                _ => anyhow::bail!(
+                                    "delete on a non-integer local '{name}' is not yet supported"
+                                ),
+                            }
                         };
                         builder.emit_sol_store(zero, pointer, &block);
                         Ok((zero, block))
