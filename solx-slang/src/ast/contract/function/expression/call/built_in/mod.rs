@@ -69,6 +69,21 @@ pub(crate) use crate::ast::contract::ContractEmitter;
 pub(crate) use crate::ast::contract::function::expression::call::CallEmitter;
 pub(crate) use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
+/// Resolves the definition a member-access operand refers to, handling both a
+/// bare identifier (`MyEnum.VARIANT`, where the operand is `MyEnum`) and a
+/// qualified path (`C.MyEnum.VARIANT` / `base.MyEnum.VARIANT`, where the operand
+/// is itself a `C.MyEnum` member access). Used to find the enclosing enum of a
+/// qualified enum member.
+fn resolve_member_access_operand(operand: &Expression) -> Option<Definition> {
+    match operand {
+        Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+        Expression::MemberAccessExpression(member_access) => {
+            member_access.member().resolve_to_definition()
+        }
+        _ => None,
+    }
+}
+
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
     /// Tries to emit `callee(arguments)` as a Solidity built-in.
     ///
@@ -454,15 +469,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
 
         // `MyEnum.VARIANT` — emit the variant index as a ui256 constant and
-        // bridge to `!sol.enum<max>` via `sol.enum_cast`.
+        // bridge to `!sol.enum<max>` via `sol.enum_cast`. The receiver may be a
+        // bare enum name (`MyEnum.VARIANT`) or a qualified path whose operand is
+        // itself a member access (`C.MyEnum.VARIANT`, `base.MyEnum.VARIANT`).
         if arguments.is_none()
             && matches!(
                 access.member().resolve_to_definition(),
                 Some(slang_solidity_v2::ast::Definition::EnumMember(_))
             )
-            && let slang_solidity_v2::ast::Expression::Identifier(receiver) = access.operand()
             && let Some(slang_solidity_v2::ast::Definition::Enum(enum_definition)) =
-                receiver.resolve_to_definition()
+                resolve_member_access_operand(&access.operand())
         {
             let member_name = access.member().name();
             if let Some(index) = enum_definition
