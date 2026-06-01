@@ -11,11 +11,17 @@
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Type;
+use melior::ir::r#type::IntegerType;
 
+use slang_solidity_v2::ast::CatchClause;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TryStatement;
 
+use solx_mlir::CmpPredicate;
 use solx_mlir::ffi;
+use solx_mlir::ods::sol::DecodeOperation;
+use solx_mlir::ods::sol::GetReturnDataOperation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::CallEmitter;
@@ -98,63 +104,199 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.state.builder.emit_sol_yield(&end);
         }
 
-        // Failure region: run the first catch clause's body (if any).
+        // Failure region: dispatch the revert data to the matching catch clause
+        // by its 4-byte error selector. `catch Error(string)` matches
+        // 0x08c379a0 and `catch Panic(uint)` matches 0x4e487b71; the low-level
+        // `catch (bytes)` / parameter-less `catch {}` clause handles anything
+        // else (or runs unconditionally when there are no typed clauses).
         self.set_region(&else_region);
-        let else_entry = else_block;
-        let mut else_end = Some(else_entry);
-        if let Some(catch_clause) = try_statement.catch_clauses().iter().next() {
-            // Bind the catch error parameter from the failure-path revert data.
-            // The low-level form `catch (bytes memory s)` binds `s` to the raw
-            // returndata (materialised by `sol.get_returndata`). Typed forms
-            // (`catch Error(string r)`, `catch Panic(uint c)`) additionally need the
-            // returndata ABI-decoded past the 4-byte selector and are not yet bound.
-            if let Some(error) = catch_clause.error()
-                && let Some(parameter) = error.parameters().iter().next()
-                && let Some(name_identifier) = parameter.name()
+
+        let clauses: Vec<CatchClause> = try_statement.catch_clauses().iter().collect();
+        let mut typed: Vec<(i64, CatchClause)> = Vec::new();
+        let mut fallback: Option<CatchClause> = None;
+        for clause in clauses {
+            match clause
+                .error()
+                .and_then(|error| error.name())
+                .map(|name| name.name())
+                .as_deref()
             {
-                if error.name().is_some() {
-                    anyhow::bail!(
-                        "typed try/catch with a bound parameter (catch Error/Panic) \
-                         is not yet supported"
-                    );
-                }
-                let builder = &self.state.builder;
-                let parameter_type = parameter
-                    .get_type()
-                    .map(|slang_type| {
-                        TypeConversion::resolve_slang_type(
-                            &slang_type,
-                            Some(solx_utils::DataLocation::Memory),
-                            builder,
-                        )
-                    })
-                    .unwrap_or(builder.types.sol_string_memory);
-                let returndata = else_entry
-                    .append_operation(
-                        solx_mlir::ods::sol::GetReturnDataOperation::builder(
-                            builder.context,
-                            builder.unknown_location,
-                        )
-                        .addr(builder.types.string(solx_utils::DataLocation::Memory))
-                        .build()
-                        .into(),
-                    )
-                    .result(0)
-                    .expect("sol.get_returndata produces one result")
-                    .into();
-                let pointer = builder.emit_sol_alloca(parameter_type, &else_entry);
-                builder.emit_sol_store(returndata, pointer, &else_entry);
-                self.environment
-                    .define_variable(name_identifier.name(), pointer, parameter_type);
+                Some("Error") => typed.push((0x08c3_79a0, clause)),
+                Some("Panic") => typed.push((0x4e48_7b71, clause)),
+                _ => fallback = Some(clause),
             }
-            else_end = self.emit_block(catch_clause.body().statements(), else_entry)?;
         }
-        if let Some(end) = else_end {
-            self.state.builder.emit_sol_yield(&end);
+
+        let mut else_cursor = else_block;
+        if !typed.is_empty() {
+            let ui32 = Type::from(IntegerType::unsigned(self.state.builder.context, 32));
+            // selector = uint32(abi.decode(returndata, (bytes4))) — the error
+            // selector is the high 4 bytes of the first returndata word.
+            let selector = {
+                let builder = &self.state.builder;
+                let bytes = self.emit_returndata_decode(
+                    0,
+                    &[builder.types.fixed_bytes(4)],
+                    &else_cursor,
+                )[0];
+                builder.emit_sol_cast(bytes, ui32, &else_cursor)
+            };
+            for (selector_constant, clause) in &typed {
+                let (then_block, next_else, then_region, next_else_region) = {
+                    let builder = &self.state.builder;
+                    let expected = builder.emit_sol_constant(*selector_constant, ui32, &else_cursor);
+                    let matches =
+                        builder.emit_sol_cmp(selector, expected, CmpPredicate::Eq, &else_cursor);
+                    let (then_block, next_else) = builder.emit_sol_if(matches, &else_cursor);
+                    let then_region = ffi::block_parent_region(&then_block);
+                    let next_else_region = ffi::block_parent_region(&next_else);
+                    // The `sol.if` is the last op of `else_cursor`'s block; it
+                    // still needs a terminator (the structured-if op does not
+                    // terminate the enclosing block).
+                    builder.emit_sol_yield(&else_cursor);
+                    (then_block, next_else, then_region, next_else_region)
+                };
+                self.set_region(&then_region);
+                self.emit_typed_catch_clause(clause, then_block)?;
+                else_cursor = next_else;
+                self.set_region(&next_else_region);
+            }
         }
+
+        self.emit_fallback_catch_clause(fallback.as_ref(), else_cursor)?;
 
         self.region_pointer = saved_region;
         Ok(Some(current_block))
+    }
+
+    /// Materialises `returndata[start..]` and ABI-decodes it into `result_types`.
+    fn emit_returndata_decode(
+        &self,
+        start: i64,
+        result_types: &[Type<'context>],
+        block: &BlockRef<'context, 'block>,
+    ) -> Vec<melior::ir::Value<'context, 'block>> {
+        let builder = &self.state.builder;
+        let start_value = builder.emit_sol_constant(start, builder.types.ui256, block);
+        let returndata = block
+            .append_operation(
+                GetReturnDataOperation::builder(builder.context, builder.unknown_location)
+                    .start(start_value)
+                    .addr(builder.types.string(solx_utils::DataLocation::Memory))
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.get_returndata produces one result")
+            .into();
+        let operation = block.append_operation(
+            DecodeOperation::builder(builder.context, builder.unknown_location)
+                .addr(returndata)
+                .outs(result_types)
+                .build()
+                .into(),
+        );
+        (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index)
+                    .expect("sol.decode yields one result per requested type")
+                    .into()
+            })
+            .collect()
+    }
+
+    /// Emits a typed catch clause (`catch Error(string r)` / `catch Panic(uint c)`):
+    /// binds the parameter by ABI-decoding the revert data past the 4-byte
+    /// selector, then runs the body and yields.
+    fn emit_typed_catch_clause(
+        &mut self,
+        clause: &CatchClause,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<()> {
+        if let Some(error) = clause.error()
+            && let Some(parameter) = error.parameters().iter().next()
+            && let Some(name_identifier) = parameter.name()
+        {
+            let parameter_type = parameter
+                .get_type()
+                .map(|slang_type| {
+                    TypeConversion::resolve_slang_type(
+                        &slang_type,
+                        Some(solx_utils::DataLocation::Memory),
+                        &self.state.builder,
+                    )
+                })
+                .unwrap_or(self.state.builder.types.ui256);
+            let decoded = self.emit_returndata_decode(4, &[parameter_type], &block)[0];
+            let builder = &self.state.builder;
+            let pointer = builder.emit_sol_alloca(parameter_type, &block);
+            builder.emit_sol_store(decoded, pointer, &block);
+            self.environment
+                .define_variable(name_identifier.name(), pointer, parameter_type);
+        }
+        let end = self.emit_block(clause.body().statements(), block)?;
+        if let Some(end) = end {
+            self.state.builder.emit_sol_yield(&end);
+        }
+        Ok(())
+    }
+
+    /// Emits the fallback catch clause (low-level `catch (bytes memory s)` or
+    /// parameter-less `catch {}`), or an empty yield when there is none. The
+    /// low-level form binds the whole revert data.
+    fn emit_fallback_catch_clause(
+        &mut self,
+        clause: Option<&CatchClause>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<()> {
+        let Some(clause) = clause else {
+            self.state.builder.emit_sol_yield(&block);
+            return Ok(());
+        };
+        if let Some(error) = clause.error()
+            && let Some(parameter) = error.parameters().iter().next()
+            && let Some(name_identifier) = parameter.name()
+        {
+            let parameter_type = parameter
+                .get_type()
+                .map(|slang_type| {
+                    TypeConversion::resolve_slang_type(
+                        &slang_type,
+                        Some(solx_utils::DataLocation::Memory),
+                        &self.state.builder,
+                    )
+                })
+                .unwrap_or(self.state.builder.types.sol_string_memory);
+            let start_value =
+                self.state
+                    .builder
+                    .emit_sol_constant(0, self.state.builder.types.ui256, &block);
+            let returndata = block
+                .append_operation(
+                    GetReturnDataOperation::builder(
+                        self.state.builder.context,
+                        self.state.builder.unknown_location,
+                    )
+                    .start(start_value)
+                    .addr(self.state.builder.types.string(solx_utils::DataLocation::Memory))
+                    .build()
+                    .into(),
+                )
+                .result(0)
+                .expect("sol.get_returndata produces one result")
+                .into();
+            let builder = &self.state.builder;
+            let pointer = builder.emit_sol_alloca(parameter_type, &block);
+            builder.emit_sol_store(returndata, pointer, &block);
+            self.environment
+                .define_variable(name_identifier.name(), pointer, parameter_type);
+        }
+        let end = self.emit_block(clause.body().statements(), block)?;
+        if let Some(end) = end {
+            self.state.builder.emit_sol_yield(&end);
+        }
+        Ok(())
     }
 
     /// Fallback used when the try expression is not an external call we can
