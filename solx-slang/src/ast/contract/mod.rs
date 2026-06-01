@@ -189,6 +189,18 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             .emit_constructor(&contract_body)?;
         self.state.current_contract_type = None;
 
+        // A `public` state variable may `override` an inherited function: its
+        // auto-generated getter takes over the function's selector (and ABI
+        // entry). Slang still lists the overridden base function, which would
+        // emit a second function under the getter's `selector()` symbol
+        // (`redefinition of symbol`). Collect the getter selectors so the
+        // overridden function is skipped below; the getter (emitted later) wins.
+        let getter_selectors: std::collections::HashSet<u32> = contract
+            .compute_linearised_state_variables()
+            .iter()
+            .filter_map(|state_variable| state_variable.compute_selector())
+            .collect();
+
         // `compute_linearised_functions` walks the C3-linearised inheritance
         // chain so derived contracts pick up base-contract methods (subject
         // to override resolution).
@@ -197,6 +209,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 function.kind(),
                 FunctionKind::Constructor | FunctionKind::Modifier
             ) {
+                continue;
+            }
+            if let Some(selector) = function.compute_selector()
+                && getter_selectors.contains(&selector)
+            {
                 continue;
             }
             self.state.current_contract_type = Some(contract_type);
