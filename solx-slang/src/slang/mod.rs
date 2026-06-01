@@ -159,28 +159,37 @@ impl Frontend for Slang {
 
         let file_identifiers = unit.file_ids();
 
+        // File-level free functions are callable across imports (a contract may
+        // call a free function defined in another source file), so gather them
+        // from every file in the unit. Each contract emitter collects only the
+        // subset it actually reaches (resolved by node id) and emits those as
+        // internal functions, so handing it the full set is safe.
+        let free_functions: Vec<slang_solidity_v2::ast::FunctionDefinition> = file_identifiers
+            .iter()
+            .filter_map(|file_identifier| unit.file(file_identifier))
+            .flat_map(|file| {
+                file.ast()
+                    .members()
+                    .iter()
+                    .filter_map(|member| {
+                        if let slang_solidity_v2::ast::SourceUnitMember::FunctionDefinition(
+                            function,
+                        ) = member
+                        {
+                            Some(function)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
         for file_identifier in &file_identifiers {
             let Some(file) = unit.file(file_identifier) else {
                 continue;
             };
             let source_unit = file.ast();
-
-            // File-level free functions, callable by every contract in this
-            // unit. Collected once and handed to each contract emitter, which
-            // emits the ones it actually reaches as internal functions.
-            let free_functions: Vec<slang_solidity_v2::ast::FunctionDefinition> = source_unit
-                .members()
-                .iter()
-                .filter_map(|member| {
-                    if let slang_solidity_v2::ast::SourceUnitMember::FunctionDefinition(function) =
-                        member
-                    {
-                        Some(function)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
 
             for contract in source_unit.contracts() {
                 if contract.abstract_keyword().is_some() {
