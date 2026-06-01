@@ -69,12 +69,15 @@ struct SuperCallCollector {
 
 impl Visitor for SuperCallCollector {
     fn enter_member_access_expression(&mut self, node: &MemberAccessExpression) -> bool {
-        if matches!(node.operand(), Expression::SuperKeyword(_)) {
+        // Peel parenthesisation around the operand: `(super).f` / `(Base).f`
+        // are the same internal calls as `super.f` / `Base.f`.
+        let operand = unwrap_parens(node.operand());
+        if matches!(operand, Expression::SuperKeyword(_)) {
             if let Some(Definition::Function(function)) = node.member().resolve_to_definition() {
                 self.super_calls.push((node.node_id(), function));
             }
-        } else if let Expression::Identifier(operand) = node.operand()
-            && matches!(operand.resolve_to_definition(), Some(Definition::Contract(_)))
+        } else if let Expression::Identifier(identifier) = &operand
+            && matches!(identifier.resolve_to_definition(), Some(Definition::Contract(_)))
             && let Some(Definition::Function(function)) = node.member().resolve_to_definition()
         {
             // `Base.f(...)` — an explicit base-qualified internal call.
@@ -82,6 +85,24 @@ impl Visitor for SuperCallCollector {
         }
         // Descend so nested calls (e.g. `super.f(super.g())`) are found.
         true
+    }
+}
+
+/// Peels parenthesisation (single-element tuples) from an expression, so a
+/// parenthesised receiver (`(super).f`, `(Base).f`) is treated like the bare
+/// form.
+fn unwrap_parens(mut expression: Expression) -> Expression {
+    loop {
+        let inner = match &expression {
+            Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
+                tuple.items().iter().next().and_then(|item| item.expression())
+            }
+            _ => None,
+        };
+        match inner {
+            Some(next) => expression = next,
+            None => return expression,
+        }
     }
 }
 
