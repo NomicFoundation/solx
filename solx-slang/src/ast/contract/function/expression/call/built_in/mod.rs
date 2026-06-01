@@ -1025,6 +1025,25 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((Some(value), block));
         }
 
+        // `type(C).name` yields the contract/interface name as a `string memory`
+        // constant.
+        if let Some(BuiltIn::TypeName) = access.member().resolve_to_built_in()
+            && let Expression::TypeExpression(type_expression) = access.operand()
+            && let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name()
+            && let Some(type_name) = match identifier_path.resolve_to_definition() {
+                Some(Definition::Contract(contract)) => Some(contract.name().name()),
+                Some(Definition::Interface(interface)) => Some(interface.name().name()),
+                _ => None,
+            }
+        {
+            let value = self
+                .expression_emitter
+                .state
+                .builder
+                .emit_sol_string_lit(&type_name, &block);
+            return Ok((Some(value), block));
+        }
+
         let builder = &self.expression_emitter.state.builder;
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressBalance) => {
