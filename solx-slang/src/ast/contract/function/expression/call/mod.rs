@@ -92,6 +92,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return self.emit_built_in_member_access(access, Some(positional_arguments), block);
         }
 
+        if let Expression::NewExpression(_) = &callee {
+            return self.emit_new(call, positional_arguments, block);
+        }
+
         let Expression::Identifier(callee_identifier) = &callee else {
             anyhow::bail!("unsupported callee expression");
         };
@@ -202,6 +206,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         else {
             anyhow::bail!("only positional arguments supported");
         };
+
+        if let Some((values, block)) =
+            self.try_emit_bare_call_results(call, positional_arguments, block)?
+        {
+            return Ok((values, block));
+        }
 
         let Expression::Identifier(callee_identifier) = call.operand() else {
             anyhow::bail!("multi-result calls only support direct named function callees");
