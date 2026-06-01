@@ -607,13 +607,26 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 Ok((Some(value), current))
             }
             Expression::MemberAccessExpression(access) => {
-                // `C.stateVar` / `Base.stateVar` — a contract-qualified
-                // state-variable read (disambiguates from a shadowing local, and
-                // reaches an inherited `constant`). The operand is the contract
-                // *name*; `this.stateVar` (an external getter call) keeps its own
-                // path since its operand is the `this` keyword.
+                // A qualified state-variable / constant read whose operand is a
+                // *namespace* rather than a value:
+                //   - `C.stateVar` / `Base.stateVar` — contract-qualified (also
+                //     reaches an inherited `constant`, disambiguates a shadowing
+                //     local);
+                //   - `L.CONST` — library-qualified constant;
+                //   - `M.a` (`import "s1.sol" as M`) — an import-namespace-qualified
+                //     file-level constant.
+                // `this.stateVar` (an external getter call) keeps its own path
+                // since its operand is the `this` keyword, not a namespace name.
                 if let Expression::Identifier(operand) = access.operand()
-                    && matches!(operand.resolve_to_definition(), Some(Definition::Contract(_)))
+                    && matches!(
+                        operand.resolve_to_definition(),
+                        Some(
+                            Definition::Contract(_)
+                                | Definition::Library(_)
+                                | Definition::Import(_)
+                                | Definition::ImportedSymbol(_)
+                        )
+                    )
                 {
                     match access.member().resolve_to_definition() {
                         Some(Definition::StateVariable(state_variable)) => {
