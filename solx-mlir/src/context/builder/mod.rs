@@ -41,6 +41,7 @@ use crate::ods::sol::BreakOperation;
 use crate::ods::sol::BytesCastOperation;
 use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::CallOperation;
+use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::CastOperation;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConditionOperation;
@@ -1446,6 +1447,22 @@ impl<'context> Builder<'context> {
             }
             let as_160 = self.emit_sol_cast(value, ui160, block);
             return self.emit_sol_address_cast(as_160, to_type, block);
+        }
+        // Dynamic `bytes`/`string` → `bytesN`: take the leading N bytes via the
+        // dedicated op. `sol.bytes_cast` is integer/byte/fixedbytes-only and
+        // rejects a dynamic-bytes (`!sol.string`) operand, so route it here first.
+        if TypeFactory::is_sol_reference(src) && is_fixed_bytes(to_type) {
+            return block
+                .append_operation(
+                    DynBytesToFixedBytesOperation::builder(self.context, self.unknown_location)
+                        .inp(value)
+                        .out(to_type)
+                        .build()
+                        .into(),
+                )
+                .result(0)
+                .expect("sol.dyn_bytes_to_fixedbytes produces one result")
+                .into();
         }
         // byte / bytesN ↔ {byte, bytesN, integer}.
         if is_fixed_bytes(src) || is_fixed_bytes(to_type) || is_byte(src) || is_byte(to_type) {
