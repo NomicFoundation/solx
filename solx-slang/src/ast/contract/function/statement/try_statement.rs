@@ -103,21 +103,49 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let else_entry = else_block;
         let mut else_end = Some(else_entry);
         if let Some(catch_clause) = try_statement.catch_clauses().iter().next() {
-            // The catch error parameter (`catch Error(string r)`, `catch Panic(uint
-            // c)`, `catch (bytes memory s)`) is not yet bound: it requires the
-            // failure-path revert data (returndata) decoded to the parameter type,
-            // which solx has no builder-level access to today. Emitting the handler
-            // body that references it would hit the unregistered-local `unreachable!`
-            // and panic, so fail with a clear diagnostic instead. A handler with no
-            // error parameter (`catch { … }`) still runs.
-            if catch_clause
-                .error()
-                .is_some_and(|error| error.parameters().iter().next().is_some())
+            // Bind the catch error parameter from the failure-path revert data.
+            // The low-level form `catch (bytes memory s)` binds `s` to the raw
+            // returndata (materialised by `sol.get_returndata`). Typed forms
+            // (`catch Error(string r)`, `catch Panic(uint c)`) additionally need the
+            // returndata ABI-decoded past the 4-byte selector and are not yet bound.
+            if let Some(error) = catch_clause.error()
+                && let Some(parameter) = error.parameters().iter().next()
+                && let Some(name_identifier) = parameter.name()
             {
-                anyhow::bail!(
-                    "try/catch error-parameter binding is not yet supported \
-                     (catch Error/Panic/(bytes …))"
-                );
+                if error.name().is_some() {
+                    anyhow::bail!(
+                        "typed try/catch with a bound parameter (catch Error/Panic) \
+                         is not yet supported"
+                    );
+                }
+                let builder = &self.state.builder;
+                let parameter_type = parameter
+                    .get_type()
+                    .map(|slang_type| {
+                        TypeConversion::resolve_slang_type(
+                            &slang_type,
+                            Some(solx_utils::DataLocation::Memory),
+                            builder,
+                        )
+                    })
+                    .unwrap_or(builder.types.sol_string_memory);
+                let returndata = else_entry
+                    .append_operation(
+                        solx_mlir::ods::sol::GetReturnDataOperation::builder(
+                            builder.context,
+                            builder.unknown_location,
+                        )
+                        .addr(builder.types.string(solx_utils::DataLocation::Memory))
+                        .build()
+                        .into(),
+                    )
+                    .result(0)
+                    .expect("sol.get_returndata produces one result")
+                    .into();
+                let pointer = builder.emit_sol_alloca(parameter_type, &else_entry);
+                builder.emit_sol_store(returndata, pointer, &else_entry);
+                self.environment
+                    .define_variable(name_identifier.name(), pointer, parameter_type);
             }
             else_end = self.emit_block(catch_clause.body().statements(), else_entry)?;
         }
