@@ -83,6 +83,11 @@ pub(super) fn collect_library_functions(contract: &ContractDefinition) -> Vec<Fu
     let mut collected: HashMap<NodeId, FunctionDefinition> = HashMap::new();
     let mut walked: HashSet<NodeId> = HashSet::new();
     let mut to_walk: Vec<FunctionDefinition> = contract.compute_linearised_functions();
+    // The constructor is not part of the linearised function set, but it can
+    // call library functions too (`constructor() { L.f(); }`), so walk it.
+    if let Some(constructor) = contract.constructor() {
+        to_walk.push(constructor);
+    }
 
     while let Some(function) = to_walk.pop() {
         if !walked.insert(function.node_id()) {
