@@ -938,6 +938,47 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        // A namespace-qualified function reference in value position — `C.f`,
+        // `L.f`, `module.f` — is an internal function pointer (`sol.func_constant`),
+        // like a bare `f`. Gated on the operand being a contract/library/import
+        // qualifier (not a contract instance `obj.f`, which is external, nor
+        // `this.f` / `super.f`) and on the target having a registered signature
+        // (so a shadowed/virtual base reference falls through to the existing
+        // dispatch instead of pointing at the wrong, unregistered symbol).
+        let operand_is_namespace = matches!(
+            access.operand(),
+            Expression::Identifier(identifier) if matches!(
+                identifier.resolve_to_definition(),
+                Some(
+                    Definition::Contract(_)
+                        | Definition::Library(_)
+                        | Definition::Import(_)
+                        | Definition::ImportedSymbol(_)
+                )
+            )
+        );
+        if operand_is_namespace
+            && let Some(Definition::Function(function_definition)) =
+                access.member().resolve_to_definition()
+            && let Ok((mlir_name, parameter_types, return_types)) = self
+                .expression_emitter
+                .state
+                .resolve_function(function_definition.node_id())
+        {
+            let func_ref_type = self
+                .expression_emitter
+                .state
+                .builder
+                .types
+                .func_ref(parameter_types, return_types);
+            let mlir_name = mlir_name.to_owned();
+            let value = self.expression_emitter.state.builder.emit_sol_func_constant(
+                &mlir_name,
+                func_ref_type,
+                &block,
+            );
+            return Ok((value, block));
+        }
         let (value, block) = self.emit_built_in_member_access(access, None, block)?;
         Ok((
             value.expect("bare member access always produces a value"),
