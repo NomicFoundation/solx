@@ -45,6 +45,7 @@ pub(crate) use solx_mlir::ods::sol::DifficultyOperation;
 pub(crate) use solx_mlir::ods::sol::EcrecoverOperation;
 pub(crate) use solx_mlir::ods::sol::EncodeOperation;
 pub(crate) use solx_mlir::ods::sol::EnumCastOperation;
+pub(crate) use solx_mlir::ods::sol::ExtFuncAddrOperation;
 pub(crate) use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 pub(crate) use solx_mlir::ods::sol::GasLeftOperation;
 pub(crate) use solx_mlir::ods::sol::GasLimitOperation;
@@ -473,6 +474,32 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .expect("sol.enum_cast always produces one result")
                     .into();
                 return Ok((Some(value), block));
+            }
+        }
+
+        // `funcPtr.address` — the address component of an external function-pointer
+        // value (`C(addr).f.address`), pulled out of the `!sol.ext_func_ref` at
+        // runtime via `sol.ext_func_addr` (mirrors the `.selector` runtime arm).
+        if arguments.is_none()
+            && access.member().name() == "address"
+            && let Some(SlangType::Function(_)) = access.operand().get_type()
+        {
+            let (operand_value, block) =
+                self.expression_emitter.emit_value(&access.operand(), block)?;
+            if solx_mlir::TypeFactory::is_sol_ext_function_ref(operand_value.r#type()) {
+                let builder = &self.expression_emitter.state.builder;
+                let address = block
+                    .append_operation(
+                        ExtFuncAddrOperation::builder(builder.context, builder.unknown_location)
+                            .func(operand_value)
+                            .result(builder.types.sol_address)
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("sol.ext_func_addr always produces one result")
+                    .into();
+                return Ok((Some(address), block));
             }
         }
 
