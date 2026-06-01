@@ -330,7 +330,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // new expression. Options are evaluated for side effects but their
         // values do not yet thread through to the underlying op.
         if let Expression::CallOptionsExpression(call_options) = &callee {
-            let inner = call_options.operand();
+            // `(new C){value: v}(args)` / `(addr).call{...}(...)` parenthesise
+            // the option receiver, so peel single-element tuples here too.
+            let mut inner = call_options.operand();
+            loop {
+                let unwrapped = match &inner {
+                    Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
+                        tuple.items().iter().next().and_then(|item| item.expression())
+                    }
+                    _ => None,
+                };
+                match unwrapped {
+                    Some(expression) => inner = expression,
+                    None => break,
+                }
+            }
             if let Expression::MemberAccessExpression(access) = &inner {
                 let mut current_block = block;
                 let mut call_value = None;
