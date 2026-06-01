@@ -1233,22 +1233,56 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     Expression::Identifier(identifier) => identifier.resolve_to_definition(),
                     _ => None,
                 };
-                let Some(Definition::Function(function)) = function_definition else {
-                    anyhow::bail!("abi.encodeCall first argument must resolve to a function");
+                // The selector is statically known for a named function /
+                // getter, or pulled at runtime from a function-pointer value
+                // (`abi.encodeCall(fPointer, ...)` / `abi.encodeCall(x[0], ...)`)
+                // via `sol.ext_func_selector`.
+                let (selector_value, mut current) = match function_definition {
+                    Some(Definition::Function(function)) => {
+                        let selector_word = function.compute_selector().ok_or_else(|| {
+                            anyhow::anyhow!("abi.encodeCall function has no selector")
+                        })?;
+                        let selector_int = builder.emit_sol_constant(
+                            i64::from(selector_word),
+                            Type::from(IntegerType::unsigned(builder.context, 32)),
+                            &block,
+                        );
+                        let selector_value = builder.emit_sol_bytes_cast(
+                            selector_int,
+                            builder.types.fixed_bytes(4),
+                            &block,
+                        );
+                        (selector_value, block)
+                    }
+                    _ => {
+                        let (function_value, current) = self
+                            .expression_emitter
+                            .emit_value(&function_reference, block)?;
+                        anyhow::ensure!(
+                            solx_mlir::TypeFactory::is_sol_ext_function_ref(
+                                function_value.r#type()
+                            ),
+                            "abi.encodeCall first argument must resolve to a function"
+                        );
+                        let selector = current
+                            .append_operation(
+                                ExtFuncSelectorOperation::builder(
+                                    builder.context,
+                                    builder.unknown_location,
+                                )
+                                .func(function_value)
+                                .result(builder.types.fixed_bytes(4))
+                                .build()
+                                .into(),
+                            )
+                            .result(0)
+                            .expect("sol.ext_func_selector always produces one result")
+                            .into();
+                        (selector, current)
+                    }
                 };
-                let selector_word = function
-                    .compute_selector()
-                    .ok_or_else(|| anyhow::anyhow!("abi.encodeCall function has no selector"))?;
-                let selector_int = builder.emit_sol_constant(
-                    i64::from(selector_word),
-                    Type::from(IntegerType::unsigned(builder.context, 32)),
-                    &block,
-                );
-                let selector_value =
-                    builder.emit_sol_bytes_cast(selector_int, builder.types.fixed_bytes(4), &block);
                 // The second argument is the call-argument tuple (possibly empty).
                 let mut values = Vec::new();
-                let mut current = block;
                 if let Some(argument_tuple) = iter.next() {
                     match &argument_tuple {
                         Expression::TupleExpression(tuple) => {
