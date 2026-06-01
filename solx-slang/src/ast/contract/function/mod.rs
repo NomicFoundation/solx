@@ -72,18 +72,52 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         function: &FunctionDefinition,
         contract_body: &BlockRef<'context, '_>,
     ) -> anyhow::Result<String> {
+        self.emit_sol_inner(function, None, contract_body)
+    }
+
+    /// Emits `function` under the contract-qualified `symbol` with no public
+    /// selector. Used for shadowed base overrides reached only through `super`
+    /// (e.g. `B`'s `f()` when `D is B` overrides it): they must coexist with
+    /// the most-derived `f()` in the same module, so they cannot share its
+    /// symbol, and they are internal-only (no dispatch entry).
+    pub fn emit_sol_with_symbol(
+        &self,
+        function: &FunctionDefinition,
+        symbol: &str,
+        contract_body: &BlockRef<'context, '_>,
+    ) -> anyhow::Result<String> {
+        self.emit_sol_inner(function, Some(symbol), contract_body)
+    }
+
+    fn emit_sol_inner(
+        &self,
+        function: &FunctionDefinition,
+        symbol_override: Option<&str>,
+        contract_body: &BlockRef<'context, '_>,
+    ) -> anyhow::Result<String> {
         let Some(ref body) = function.body() else {
             // Abstract or interface function — no codegen needed.
-            return Ok(Self::mlir_function_name(function));
+            return Ok(symbol_override
+                .map(str::to_owned)
+                .unwrap_or_else(|| Self::mlir_function_name(function)));
         };
 
         let parameters = function.parameters();
-        let mlir_name = Self::mlir_function_name(function);
+        let mlir_name = symbol_override
+            .map(str::to_owned)
+            .unwrap_or_else(|| Self::mlir_function_name(function));
 
         let (mlir_parameter_types, result_types) =
             TypeConversion::resolve_function_types(function, &self.state.builder);
 
-        let selector = function.compute_selector();
+        // Shadowed base overrides share the most-derived function's selector;
+        // emitting it twice would duplicate the dispatch entry. They are only
+        // reachable internally through `super`, so they carry no selector.
+        let selector = if symbol_override.is_some() {
+            None
+        } else {
+            function.compute_selector()
+        };
 
         let state_mutability = Self::map_state_mutability(function);
 
