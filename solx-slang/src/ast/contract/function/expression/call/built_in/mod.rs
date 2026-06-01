@@ -1151,7 +1151,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             ) => {
                 let arguments = arguments.expect("bare call is a member-access call");
                 let (_status, _ret_data, block) =
-                    self.emit_bare_call(access, builtin, arguments, block)?;
+                    self.emit_bare_call(access, builtin, arguments, call_value, block)?;
                 Ok((None, block))
             }
             Some(BuiltIn::AbiEncode) => {
@@ -1757,6 +1757,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         access: &MemberAccessExpression,
         kind: BuiltIn,
         arguments: &PositionalArguments,
+        call_value: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(
         Value<'context, 'block>,
@@ -1783,7 +1784,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
         let operation: Operation = match kind {
             BuiltIn::AddressCall => {
-                let val = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                // `addr.call{value: v}(data)` forwards `v` as the CALL value;
+                // a plain `addr.call(data)` (no options) sends zero. Delegate-
+                // and staticcall cannot carry value, so they ignore it.
+                let val = call_value
+                    .unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &block));
                 BareCallOperation::builder(builder.context, builder.unknown_location)
                     .addr(addr)
                     .gas(gas)
@@ -1870,13 +1875,49 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
-        let Expression::MemberAccessExpression(access) = call.operand() else {
-            return Ok(None);
+        // `(bool, bytes) = recv.call{value: v}(data)` — peel an optional
+        // `{value: v}` call-options layer and forward `v` as the CALL value; a
+        // plain `recv.call(data)` carries no options.
+        //
+        // Resolve the bare-call KIND from the inner member access *before*
+        // emitting anything: a non-bare-call callee (e.g. an external
+        // `ins.f{value: x, gas: g()}(a)`) must leave the block untouched for the
+        // caller's fallback. Emitting the option values here would double-
+        // evaluate their side effects and corrupt the observable order.
+        let (access, options) = match call.operand() {
+            Expression::MemberAccessExpression(access) => (access, None),
+            Expression::CallOptionsExpression(call_options) => match call_options.operand() {
+                Expression::MemberAccessExpression(access) => (access, Some(call_options)),
+                // Not a bare-call shape → not applicable, caller falls back.
+                _ => return Ok(None),
+            },
+            _ => return Ok(None),
         };
         let Some(kind) = Self::resolve_bare_call_kind(&access) else {
             return Ok(None);
         };
-        let (status, ret_data, block) = self.emit_bare_call(&access, kind, arguments, block)?;
+
+        // Committed to the bare call: now evaluate the options (`{value: v}`
+        // captured as the CALL value, others for side effects only).
+        let mut current_block = block;
+        let mut call_value = None;
+        if let Some(call_options) = options {
+            for option in call_options.options().iter() {
+                let (value, next) = self
+                    .expression_emitter
+                    .emit_value(&option.value(), current_block)?;
+                current_block = next;
+                if option.name().name() == "value" {
+                    let builder = &self.expression_emitter.state.builder;
+                    call_value = Some(
+                        TypeConversion::from_target_type(builder.types.ui256, builder)
+                            .emit(value, builder, &current_block),
+                    );
+                }
+            }
+        }
+        let (status, ret_data, block) =
+            self.emit_bare_call(&access, kind, arguments, call_value, current_block)?;
         Ok(Some((vec![status, ret_data], block)))
     }
 
