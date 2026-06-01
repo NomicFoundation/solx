@@ -150,6 +150,25 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 );
                 (values, current)
             }
+            // `(a, b) = cond ? (x, y) : (z, w)` — both branches are tuples; emit
+            // one value per slot, selected by the condition. Mirrors the
+            // assignment and `return` paths' handling of conditional tuples.
+            Expression::ConditionalExpression(conditional) => {
+                match emitter.emit_conditional_tuple_values(conditional, block)? {
+                    Some((values, current)) => {
+                        anyhow::ensure!(
+                            values.len() == elements.len(),
+                            "tuple deconstruction arity mismatch: {} LHS slots vs {} conditional values",
+                            elements.len(),
+                            values.len(),
+                        );
+                        (values, current)
+                    }
+                    None => anyhow::bail!(
+                        "tuple deconstruction with this right-hand side shape is not yet supported"
+                    ),
+                }
+            }
             _ => anyhow::bail!(
                 "tuple deconstruction with this right-hand side shape is not yet supported"
             ),
