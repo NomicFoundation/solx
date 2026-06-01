@@ -159,6 +159,25 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 {
                     return self.emit_revert_call(call, block);
                 }
+                // A bare type-name or `super` reference used as a statement is
+                // only the type/keyword and has no value and no side effect —
+                // solc evaluates and discards it. Emit nothing. Besides
+                // `uint256;` / `super;`, an array-type expression `s[7][];`
+                // parses as an index access with neither index nor slice bounds
+                // (`a[i]` always has a start, `a[i:j]`/`a[:j]` a bound), so a
+                // bound-less index access is the `T[]` type form, not a value.
+                let is_type_or_super_noop = match &expression {
+                    Expression::ElementaryType(_)
+                    | Expression::TypeExpression(_)
+                    | Expression::SuperKeyword(_) => true,
+                    Expression::IndexAccessExpression(index_access) => {
+                        index_access.start().is_none() && index_access.end().is_none()
+                    }
+                    _ => false,
+                };
+                if is_type_or_super_noop {
+                    return Ok(Some(block));
+                }
                 let emitter = ExpressionEmitter::new(
                     self.state,
                     self.environment,
