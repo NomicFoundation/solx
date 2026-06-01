@@ -263,29 +263,21 @@ impl Frontend for Slang {
                 let evm_version = input_json.settings.evm_version.unwrap_or_default();
                 let mut context = solx_mlir::Context::new(&melior_context, evm_version);
 
-                // Library object emission is best-effort: each library has its
-                // own module, so a failure here must not fail the file's
-                // contracts (only `L.f(...)` external callers, already INVALID,
-                // depend on it). Skip the library on any error.
-                let emitted = (|| {
-                    let (library_name, method_identifiers) =
-                        crate::ast::contract::ContractEmitter::new(&mut context)
-                            .emit_library(&library)?;
-                    let runtime_code_identifier =
-                        format!("{library_name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX);
-                    let capture_sol_dialect =
-                        input_json.settings.output_selection.check_selection(
-                            file_identifier,
-                            Some(library_name.as_str()),
-                            solx_standard_json::InputSelector::MLIR,
-                        );
-                    let mlir_stages =
-                        context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
-                    anyhow::Ok((library_name, method_identifiers, mlir_stages))
-                })();
-                let Ok((library_name, method_identifiers, mlir_stages)) = emitted else {
-                    continue;
-                };
+                // A deployable library is emitted like a contract: its own
+                // module, errors propagated with `?`. An unsupported construct
+                // is an `unimplemented!` panic (not an error) and propagates the
+                // same way any contract's would — no special recovery.
+                let (library_name, method_identifiers) =
+                    crate::ast::contract::ContractEmitter::new(&mut context).emit_library(&library)?;
+                let runtime_code_identifier =
+                    format!("{library_name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX);
+                let capture_sol_dialect = input_json.settings.output_selection.check_selection(
+                    file_identifier,
+                    Some(library_name.as_str()),
+                    solx_standard_json::InputSelector::MLIR,
+                );
+                let mlir_stages =
+                    context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
 
                 output
                     .contracts

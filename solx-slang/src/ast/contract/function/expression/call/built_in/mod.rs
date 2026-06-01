@@ -1427,8 +1427,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                             .build()
                             .into()
                     }
-                    // TODO: split this catch-all so non-built-in member accesses (struct fields, etc.) and unimplemented built-ins surface distinct errors.
-                    _ => anyhow::bail!("unsupported member access: {}", access.member().name()),
+                    // An unrecognised member access is an unimplemented lowering
+                    // (not a program error): mark it with `unimplemented!`.
+                    // TODO: split this catch-all so non-built-in member accesses (struct fields, etc.) and unimplemented built-ins are distinct.
+                    _ => unimplemented!("member access lowering: {}", access.member().name()),
                 };
                 let value = block
                     .append_operation(operation)

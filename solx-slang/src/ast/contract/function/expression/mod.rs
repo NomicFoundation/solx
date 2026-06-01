@@ -644,8 +644,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::IndexAccessExpression(index_access) => {
                 self.emit_index_access(index_access, block)
             }
-            _ => anyhow::bail!(
-                "unsupported expression: {:?}",
+            // Unsupported lowering is a frontend capability gap, not a program
+            // error — mark it with `unimplemented!` rather than the error
+            // channel. (Speculative library emission sandboxes this panic; in a
+            // contract it surfaces as INVALID, exactly as the old `bail!` did.)
+            _ => unimplemented!(
+                "expression lowering: {:?}",
                 std::mem::discriminant(expression)
             ),
         }
