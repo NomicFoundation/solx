@@ -164,10 +164,20 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 return Ok((Some(result), block));
             }
 
-            let target_type = self
-                .expression_emitter
-                .resolve_slang_type(call.get_type())
-                .ok_or_else(|| anyhow::anyhow!("unresolved type conversion target"))?;
+            // Slang leaves some explicit conversions untyped (`call.get_type()`
+            // is `None`): a `bytes`/`string` conversion of a constant, an enum
+            // round-trip `uint256(E(x))`, etc. When the callee names an
+            // elementary type, reconstruct the target structurally from it
+            // (mirrors `abi.decode`'s untyped type-name handling).
+            let target_type = match self.expression_emitter.resolve_slang_type(call.get_type()) {
+                Some(target_type) => target_type,
+                None => match &callee {
+                    Expression::ElementaryType(elementary) => {
+                        self.resolve_abi_elementary_type(elementary)?
+                    }
+                    _ => anyhow::bail!("unresolved type conversion target"),
+                },
+            };
 
             // `emit_value_for_target` materializes a string literal directly as a
             // `fixedbytes<N>` constant when the target is `bytesN` (e.g.

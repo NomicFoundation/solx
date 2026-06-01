@@ -75,7 +75,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// Maps a Solidity elementary type keyword (`uint<N>`, `int<N>`, `bytes`,
     /// `bytes<N>`, `bool`, `address`, `string`) to its MLIR type, parsing the
     /// width from the keyword's source text (`uint`/`int` default to 256 bits).
-    fn resolve_abi_elementary_type(
+    pub(in crate::ast::contract::function::expression::call) fn resolve_abi_elementary_type(
         &self,
         elementary: &ElementaryType,
     ) -> anyhow::Result<Type<'context>> {
