@@ -13,6 +13,7 @@ use std::collections::HashSet;
 
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionVisibility;
 use slang_solidity_v2::ast::MemberAccessExpression;
@@ -37,7 +38,23 @@ impl Visitor for LibraryCallCollector {
         // inlined into the contract here. Library functions that *do* have a
         // selector are reached by delegatecall (a separate lowering); emitting
         // them here would collide with same-named contract functions.
-        if let Some(Definition::Function(function)) = node.member().resolve_to_definition()
+        //
+        // A direct `L.f(...)` (operand is a library/import qualifier) or a
+        // `using for` `x.f(...)` (operand is a value) is a genuine library call.
+        // A qualified base-contract call (`A.f(...)`), `super.f(...)` or
+        // `this.f(...)` also resolves to a no-selector function, but those are
+        // contract functions dispatched through the super/base/virtual
+        // mechanism; collecting them would emit a duplicate function symbol into
+        // the contract body (`redefinition of symbol`).
+        let operand_is_contract_or_keyword = match node.operand() {
+            Expression::Identifier(identifier) => {
+                matches!(identifier.resolve_to_definition(), Some(Definition::Contract(_)))
+            }
+            Expression::SuperKeyword(_) | Expression::ThisKeyword(_) => true,
+            _ => false,
+        };
+        if !operand_is_contract_or_keyword
+            && let Some(Definition::Function(function)) = node.member().resolve_to_definition()
             && matches!(
                 function.visibility(),
                 FunctionVisibility::Internal
