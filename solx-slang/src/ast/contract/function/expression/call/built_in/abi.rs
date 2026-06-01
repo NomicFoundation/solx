@@ -47,46 +47,38 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// Slang does not assign a semantic type to a type name used as an
     /// expression (its `get_type()` is `None`, and the enclosing `abi.decode`
     /// call is typed as a tuple of `Void`), so the type is reconstructed
-    /// structurally. Only elementary types are supported; arrays, mappings,
-    /// and user-defined types bail so the decode falls back to failing rather
-    /// than producing a wrong type.
-    fn resolve_abi_type_expression(
-        &self,
-        expression: &Expression,
-    ) -> anyhow::Result<Type<'context>> {
+    /// structurally. Only elementary types can be reconstructed; for an array,
+    /// mapping, or user-defined type this returns `None` so the caller falls
+    /// back to slang's own type rather than producing a wrong one. `None` means
+    /// "not reconstructible here" — a normal outcome, not an error.
+    fn resolve_abi_type_expression(&self, expression: &Expression) -> Option<Type<'context>> {
         match expression {
-            Expression::ElementaryType(elementary) => {
-                self.resolve_abi_elementary_type(elementary)
-            }
-            Expression::TypeExpression(type_expression) => {
-                match type_expression.type_name() {
-                    SlangTypeName::ElementaryType(elementary) => {
-                        self.resolve_abi_elementary_type(&elementary)
-                    }
-                    _ => anyhow::bail!(
-                        "abi.decode of arrays, mappings, and user-defined types is not yet supported"
-                    ),
+            Expression::ElementaryType(elementary) => self.resolve_abi_elementary_type(elementary),
+            Expression::TypeExpression(type_expression) => match type_expression.type_name() {
+                SlangTypeName::ElementaryType(elementary) => {
+                    self.resolve_abi_elementary_type(&elementary)
                 }
-            }
-            _ => anyhow::bail!("unsupported abi.decode type-list element"),
+                _ => None,
+            },
+            _ => None,
         }
     }
 
     /// Maps a Solidity elementary type keyword (`uint<N>`, `int<N>`, `bytes`,
     /// `bytes<N>`, `bool`, `address`, `string`) to its MLIR type, parsing the
     /// width from the keyword's source text (`uint`/`int` default to 256 bits).
+    /// Returns `None` for a type this frontend cannot represent (fixed-point) or
+    /// a malformed width, so the caller can fall back or surface the dead end.
     pub(in crate::ast::contract::function::expression::call) fn resolve_abi_elementary_type(
         &self,
         elementary: &ElementaryType,
-    ) -> anyhow::Result<Type<'context>> {
+    ) -> Option<Type<'context>> {
         let builder = &self.expression_emitter.state.builder;
-        let parse_width = |text: &str, prefix: &str| -> anyhow::Result<u32> {
+        let parse_width = |text: &str, prefix: &str| -> Option<u32> {
             match text.trim().strip_prefix(prefix) {
-                Some("") => Ok(256),
-                Some(digits) => digits
-                    .parse::<u32>()
-                    .map_err(|_| anyhow::anyhow!("invalid `{prefix}` width in `{text}`")),
-                None => anyhow::bail!("`{text}` is not a `{prefix}` type"),
+                Some("") => Some(256),
+                Some(digits) => digits.parse::<u32>().ok(),
+                None => None,
             }
         };
         let resolved = match elementary {
@@ -111,11 +103,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     builder.types.fixed_bytes(parse_width(text, "bytes")?)
                 }
             }
-            ElementaryType::FixedKeyword(_) | ElementaryType::UfixedKeyword(_) => {
-                anyhow::bail!("fixed-point types are not supported")
-            }
+            ElementaryType::FixedKeyword(_) | ElementaryType::UfixedKeyword(_) => return None,
         };
-        Ok(resolved)
+        Some(resolved)
     }
 
     /// Determines the MLIR result types of `abi.decode(payload, (T1, T2, …))`.
@@ -160,7 +150,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 // prior behaviour for 256-bit-word decodes such as user-defined
                 // value types.
                 if let Some(argument) = argument_types.get(index)
-                    && let Ok(resolved) = self.resolve_abi_type_expression(argument)
+                    && let Some(resolved) = self.resolve_abi_type_expression(argument)
                 {
                     return Ok(resolved);
                 }

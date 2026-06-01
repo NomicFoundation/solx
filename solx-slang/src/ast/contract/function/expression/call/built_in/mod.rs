@@ -362,8 +362,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         &self,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)>
-    {
+    ) -> anyhow::Result<
+        Option<(Value<'context, 'block>, Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)>,
+    > {
         // Unwrap an optional `{value: v}` call-options layer around the
         // member access.
         let callee = call.operand();
@@ -387,20 +388,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 }
                 match options.operand() {
                     Expression::MemberAccessExpression(access) => access,
-                    _ => anyhow::bail!("try call options operand is not a member access"),
+                    // Not a try-lowerable shape → not applicable, caller falls back.
+                    _ => return Ok(None),
                 }
             }
-            _ => anyhow::bail!("try expression is not an external member call"),
+            _ => return Ok(None),
         };
 
         let Some(slang_solidity_v2::ast::Definition::Function(function_definition)) =
             access.member().resolve_to_definition()
         else {
-            anyhow::bail!("try callee does not resolve to a function");
+            return Ok(None);
         };
-        let selector = function_definition
-            .compute_selector()
-            .ok_or_else(|| anyhow::anyhow!("try callee has no selector"))?;
+        let Some(selector) = function_definition.compute_selector() else {
+            return Ok(None);
+        };
         let (parameter_types, return_types) = TypeConversion::resolve_function_types(
             &function_definition,
             &self.expression_emitter.state.builder,
@@ -408,7 +410,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = call.arguments()
         else {
-            anyhow::bail!("try call uses non-positional arguments");
+            return Ok(None);
         };
 
         let (receiver_value, next) = self
@@ -442,7 +444,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             value,
             &current_block,
         )?;
-        Ok((status, results, current_block))
+        Ok(Some((status, results, current_block)))
     }
 
     /// As [`Self::emit_built_in_member_access`], but with an explicit external

@@ -64,11 +64,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 self.checked,
             );
             let call_emitter = CallEmitter::new(&emitter);
-            match call_emitter.emit_external_call_try(call, block) {
-                Ok(triple) => triple,
-                // Not an external call we can lower with try semantics — run
-                // the success body only.
-                Err(_) => return self.emit_try_success_only(try_statement, block),
+            // `None` = not a try-lowerable call shape (a normal outcome, not an
+            // error) — run the success body only.
+            match call_emitter.emit_external_call_try(call, block)? {
+                Some(triple) => triple,
+                None => return self.emit_try_success_only(try_statement, block),
             }
         };
 

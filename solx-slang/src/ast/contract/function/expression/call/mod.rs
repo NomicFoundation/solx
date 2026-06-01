@@ -252,9 +252,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let target_type = match self.expression_emitter.resolve_slang_type(call.get_type()) {
                 Some(target_type) => target_type,
                 None => match &callee {
-                    Expression::ElementaryType(elementary) => {
-                        self.resolve_abi_elementary_type(elementary)?
-                    }
+                    // Unlike `abi.decode` (which falls back to slang's type on a
+                    // `None`), a conversion has no fallback — an unrepresentable
+                    // elementary target is a dead end.
+                    Expression::ElementaryType(elementary) => self
+                        .resolve_abi_elementary_type(elementary)
+                        .unwrap_or_else(|| unimplemented!("conversion to elementary type")),
                     _ => unimplemented!("unresolved type conversion target"),
                 },
             };
