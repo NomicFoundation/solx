@@ -105,12 +105,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // ordinary internal functions.
         let library_functions = library::collect_library_functions(contract);
         for library_function in &library_functions {
-            let mlir_name = FunctionEmitter::mlir_function_name(library_function);
             let (parameter_types, return_types) =
                 TypeConversion::resolve_function_types(library_function, &self.state.builder);
             self.state.register_function_signature(
                 library_function.node_id(),
-                mlir_name,
+                Self::library_function_symbol(library_function),
                 parameter_types,
                 return_types,
             );
@@ -238,7 +237,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         for library_function in &library_functions {
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, Some(contract), &storage_layout)
-                .emit_sol(library_function, &contract_body)?;
+                .emit_sol_with_symbol(
+                    library_function,
+                    &Self::library_function_symbol(library_function),
+                    &contract_body,
+                )?;
             self.state.current_contract_type = None;
         }
 
@@ -683,6 +686,24 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         };
         builder.emit_sol_return(&[value], &entry);
         Ok(())
+    }
+
+    /// The symbol under which a collected internal library function is emitted
+    /// into the calling contract's body.
+    ///
+    /// It must not collide with a contract function — or another library's
+    /// function — of the same signature (`redefinition of symbol`), e.g. a
+    /// `library L { function f() internal ... }` reached from a contract that
+    /// also defines `f`. Qualify it with the function's globally-unique node id.
+    /// Library internals have no selector and are only ever resolved by node id
+    /// (`resolve_function` via `library_function_ids`), so the exact spelling is
+    /// immaterial — it just has to be unique.
+    fn library_function_symbol(function: &FunctionDefinition) -> String {
+        format!(
+            "{}#{:?}",
+            FunctionEmitter::mlir_function_name(function),
+            function.node_id()
+        )
     }
 
     /// Pre-registers all function signatures for call resolution before bodies
