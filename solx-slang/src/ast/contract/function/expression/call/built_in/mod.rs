@@ -1323,6 +1323,42 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((None, block));
         }
 
+        let (new_slot, element_type, block) = self.emit_push_slot(access, block)?;
+
+        let Some(value_argument) = value_argument else {
+            // `arr.push()` in value position yields the freshly-appended element.
+            // A value element (`uint[].push()`) is loaded from the slot (a fresh
+            // default); a reference element (`uint[][].push()`) is the slot
+            // reference itself, used to initialise a storage pointer.
+            let builder = &self.expression_emitter.state.builder;
+            if IntegerType::try_from(element_type).is_ok() {
+                let loaded = builder.emit_sol_load(new_slot, element_type, &block)?;
+                return Ok((Some(loaded), block));
+            }
+            return Ok((Some(new_slot), block));
+        };
+        let (value, block) = self.expression_emitter.emit_value(&value_argument, block)?;
+        let builder = &self.expression_emitter.state.builder;
+        let cast_value =
+            TypeConversion::from_target_type(element_type, builder).emit(value, builder, &block);
+        builder.emit_sol_store(cast_value, new_slot, &block);
+        Ok((None, block))
+    }
+
+    /// Emits `sol.push` for `arr.push()` / `bytes.push()`, returning the new
+    /// element's reference, its element type, and the continued block. Shared by
+    /// the value-returning push and the push-as-lvalue (`arr.push() = v`), where
+    /// the caller stores the right-hand side into the returned reference.
+    pub(crate) fn emit_push_slot(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, Type<'context>, BlockRef<'context, 'block>)> {
+        let base = access.operand();
+        let base_slang_type = base
+            .get_type()
+            .ok_or_else(|| anyhow::anyhow!("base of array push has no resolved type"))?;
+        let builder = &self.expression_emitter.state.builder;
         let (element_type, slang_location) = match &base_slang_type {
             SlangType::Array(array_type) => (
                 TypeConversion::resolve_slang_type(&array_type.element_type(), None, builder),
@@ -1344,15 +1380,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let (array_value, block) = self.expression_emitter.emit_value(&base, block)?;
         let address_type = builder.types.pointer(element_type, base_location);
         let new_slot = builder.emit_sol_push(array_value, address_type, &block);
-
-        let Some(value_argument) = value_argument else {
-            return Ok((Some(new_slot), block));
-        };
-        let (value, block) = self.expression_emitter.emit_value(&value_argument, block)?;
-        let cast_value =
-            TypeConversion::from_target_type(element_type, builder).emit(value, builder, &block);
-        builder.emit_sol_store(cast_value, new_slot, &block);
-        Ok((None, block))
+        Ok((new_slot, element_type, block))
     }
 
     /// Emits an intrinsic whose single operand is the receiver of a member

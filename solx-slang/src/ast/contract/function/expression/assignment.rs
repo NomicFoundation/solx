@@ -248,6 +248,34 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     ))
                 }
             }
+            Expression::FunctionCallExpression(call)
+                if matches!(
+                    &call.operand(),
+                    Expression::MemberAccessExpression(access)
+                        if matches!(
+                            access.member().resolve_to_built_in(),
+                            Some(slang_solidity_v2::ast::BuiltIn::ArrayPush)
+                        )
+                ) =>
+            {
+                // `arr.push() = v` — `push` appends a default element and returns
+                // a reference to it; resolve that reference as the lvalue so the
+                // right-hand side is stored into the freshly-appended slot
+                // (equivalent to `arr.push(v)`).
+                let Expression::MemberAccessExpression(access) = call.operand() else {
+                    unreachable!("guarded by the match arm")
+                };
+                let (new_slot, element_type, block) =
+                    CallEmitter::new(self).emit_push_slot(&access, block)?;
+                if new_slot.r#type() == element_type {
+                    Ok((LvalueTarget::ReferenceCopy(new_slot), block))
+                } else {
+                    Ok((
+                        LvalueTarget::Store(AssignmentTarget::Pointer(new_slot, element_type)),
+                        block,
+                    ))
+                }
+            }
             _ => anyhow::bail!(
                 "assignment target {:?} is not yet supported",
                 std::mem::discriminant(lvalue)
