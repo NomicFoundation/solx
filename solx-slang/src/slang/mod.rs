@@ -223,6 +223,77 @@ impl Frontend for Slang {
                         },
                     );
             }
+
+            // Libraries with `external`/`public` functions are deployed and
+            // reached by `delegatecall` (`L.f(...)`), so emit each as its own
+            // object — mirroring the contract emission above.
+            for member in source_unit.members().iter() {
+                let slang_solidity_v2::ast::SourceUnitMember::LibraryDefinition(library) = member
+                else {
+                    continue;
+                };
+
+                // Only libraries with `external`/`public` functions are deployed
+                // and `delegatecall`ed. Internal-only libraries are fully inlined
+                // into their callers (like solc, which emits no object for them);
+                // emitting one would make the tester try to deploy/link it.
+                let has_deployable_function = library.members().iter().any(|member| {
+                    matches!(&member,
+                        slang_solidity_v2::ast::ContractMember::FunctionDefinition(function)
+                            if matches!(
+                                function.visibility(),
+                                slang_solidity_v2::ast::FunctionVisibility::External
+                                    | slang_solidity_v2::ast::FunctionVisibility::Public
+                            ))
+                });
+                if !has_deployable_function {
+                    continue;
+                }
+
+                let melior_context = solx_mlir::Context::create_mlir_context();
+                let evm_version = input_json.settings.evm_version.unwrap_or_default();
+                let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+
+                // Library object emission is best-effort: each library has its
+                // own module, so a failure here must not fail the file's
+                // contracts (only `L.f(...)` external callers, already INVALID,
+                // depend on it). Skip the library on any error.
+                let emitted = (|| {
+                    let (library_name, method_identifiers) =
+                        crate::ast::contract::ContractEmitter::new(&mut context)
+                            .emit_library(&library)?;
+                    let runtime_code_identifier =
+                        format!("{library_name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX);
+                    let capture_sol_dialect =
+                        input_json.settings.output_selection.check_selection(
+                            file_identifier,
+                            Some(library_name.as_str()),
+                            solx_standard_json::InputSelector::MLIR,
+                        );
+                    let mlir_stages =
+                        context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
+                    anyhow::Ok((library_name, method_identifiers, mlir_stages))
+                })();
+                let Ok((library_name, method_identifiers, mlir_stages)) = emitted else {
+                    continue;
+                };
+
+                output
+                    .contracts
+                    .entry(file_identifier.to_string())
+                    .or_default()
+                    .insert(
+                        library_name,
+                        solx_standard_json::output::contract::Contract {
+                            mlir: Some(mlir_stages),
+                            evm: Some(solx_standard_json::output::contract::evm::EVM {
+                                method_identifiers: Some(method_identifiers),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        },
+                    );
+            }
         }
 
         Ok(output)

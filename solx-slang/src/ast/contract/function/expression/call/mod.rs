@@ -254,6 +254,31 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((Some(value), block));
         }
 
+        // External/public library call `L.f(args)` — a delegatecall to the
+        // linked library object. Internal library functions are inlined into
+        // the contract (handled by `try_emit_library_call` below); external /
+        // public ones are reached by delegatecall instead.
+        if let Expression::MemberAccessExpression(access) = &callee
+            && let Expression::Identifier(operand) = access.operand()
+            && let Some(Definition::Library(library)) = operand.resolve_to_definition()
+            && let Some(Definition::Function(function)) = access.member().resolve_to_definition()
+            && matches!(
+                function.visibility(),
+                slang_solidity_v2::ast::FunctionVisibility::External
+                    | slang_solidity_v2::ast::FunctionVisibility::Public
+            )
+        {
+            // The linker symbol is the fully-qualified `file:Library` name
+            // (matching solc), so `link_references` round-trips.
+            let library_symbol = format!("{}:{}", library.get_file_id(), library.name().name());
+            return self.emit_library_external_call(
+                &library_symbol,
+                &function,
+                positional_arguments,
+                block,
+            );
+        }
+
         // Internal library function call — direct `L.f(args)` or a `using for`
         // `x.f(args)`. Must precede the member-access built-in dispatch below:
         // that path's `this.f(args)` branch would otherwise consume `x.f(args)`

@@ -36,8 +36,10 @@ use self::storage_slot::StorageSlot;
 pub struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
-    /// Containing contract.
-    contract: &'state ContractDefinition,
+    /// Containing contract, when emitting a contract's functions. `None` for a
+    /// library's functions — libraries have no constructor / state variables /
+    /// inheritance, so the constructor-only uses of this field never run.
+    contract: Option<&'state ContractDefinition>,
     /// State variable node ID to storage slot mapping.
     storage_layout: &'state HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>,
 }
@@ -46,7 +48,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
     pub fn new(
         state: &'state Context<'context>,
-        contract: &'state ContractDefinition,
+        contract: Option<&'state ContractDefinition>,
         storage_layout: &'state HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>,
     ) -> Self {
         Self {
@@ -54,6 +56,14 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             contract,
             storage_layout,
         }
+    }
+
+    /// The containing contract; only valid when emitting a contract (not a
+    /// library). Constructor / state-variable / base-linearisation code calls
+    /// this — none of which runs for a library.
+    fn contract(&self) -> &'state ContractDefinition {
+        self.contract
+            .expect("contract context required (constructor / state-variable emission)")
     }
 
     /// Emits a `sol.func` for the given function definition into the given
@@ -219,7 +229,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         if matches!(function.kind(), FunctionKind::Constructor) {
             let emitter =
                 ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
-            current_block = emitter.emit_state_var_initializers(self.contract, current_block)?;
+            current_block = emitter.emit_state_var_initializers(self.contract(), current_block)?;
         }
 
         // Collect modifier bodies that wrap this function (`function f() onlyOwner {...}`).
@@ -339,7 +349,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Panics if an entry block is not attached to a region, which is
     /// unreachable because `emit_sol_func` always creates a region.
     pub fn emit_constructor(&self, contract_body: &BlockRef<'context, '_>) -> anyhow::Result<()> {
-        let derived_constructor = self.contract.constructor();
+        let derived_constructor = self.contract().constructor();
 
         // The deployed constructor takes the derived contract's constructor
         // parameters (if any).
@@ -385,7 +395,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut current_block = {
             let emitter =
                 ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
-            emitter.emit_state_var_initializers(self.contract, entry)?
+            emitter.emit_state_var_initializers(self.contract(), entry)?
         };
 
         // Run base-contract constructor bodies in C3 order (most-base first),
@@ -394,7 +404,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // reverse to get base-first ordering.
         let region = entry.parent_region().expect("entry block has a region");
         let return_types: [Type<'context>; 0] = [];
-        let mut bases = self.contract.compute_linearised_bases();
+        let mut bases = self.contract().compute_linearised_bases();
         bases.reverse();
         let mut terminated = false;
         for base in bases.iter() {
@@ -408,7 +418,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             // constructors with their own parameters need argument values
             // supplied through inheritance specifiers, which we do not yet
             // thread through — skip running their bodies in that case.
-            let is_self = base_contract.node_id() == self.contract.node_id();
+            let is_self = base_contract.node_id() == self.contract().node_id();
             if !is_self && !base_constructor.parameters().is_empty() {
                 continue;
             }

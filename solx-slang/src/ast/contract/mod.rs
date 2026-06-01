@@ -8,12 +8,14 @@ mod free_function;
 mod library;
 mod super_call;
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use ruint::aliases::U256;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::LibraryDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -183,7 +185,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
 
         self.state.current_contract_type = Some(contract_type);
-        FunctionEmitter::new(self.state, contract, &storage_layout)
+        FunctionEmitter::new(self.state, Some(contract), &storage_layout)
             .emit_constructor(&contract_body)?;
         self.state.current_contract_type = None;
 
@@ -198,7 +200,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 continue;
             }
             self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, contract, &storage_layout)
+            FunctionEmitter::new(self.state, Some(contract), &storage_layout)
                 .emit_sol(&function, &contract_body)?;
             self.state.current_contract_type = None;
         }
@@ -209,7 +211,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // (or only reach non-overridden inherited functions) emit nothing extra.
         for (symbol, function) in &super_dispatch.shadowed {
             self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, contract, &storage_layout)
+            FunctionEmitter::new(self.state, Some(contract), &storage_layout)
                 .emit_sol_with_symbol(function, symbol, &contract_body)?;
             self.state.current_contract_type = None;
         }
@@ -218,7 +220,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // body so the `sol.call`s above resolve.
         for library_function in &library_functions {
             self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, contract, &storage_layout)
+            FunctionEmitter::new(self.state, Some(contract), &storage_layout)
                 .emit_sol(library_function, &contract_body)?;
             self.state.current_contract_type = None;
         }
@@ -226,7 +228,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // Emit the collected free functions so their `sol.call`s resolve.
         for free in &reached_free_functions {
             self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, contract, &storage_layout)
+            FunctionEmitter::new(self.state, Some(contract), &storage_layout)
                 .emit_sol(free, &contract_body)?;
             self.state.current_contract_type = None;
         }
@@ -248,6 +250,82 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
 
         Ok(())
+    }
+
+    /// Emits a `sol.contract` (kind `Library`) for a library definition so it
+    /// can be deployed and `delegatecall`ed by `L.f(...)` callers. Libraries
+    /// have no inheritance, state, or constructor, so this is a flat emission of
+    /// the library's functions — `external`/`public` ones get selectors (and a
+    /// dispatcher), `internal` ones lower as ordinary functions reachable from
+    /// them. Returns the library name and its external method-identifier table.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any function body contains unsupported constructs.
+    pub fn emit_library(
+        &mut self,
+        library: &LibraryDefinition,
+    ) -> anyhow::Result<(String, BTreeMap<String, String>)> {
+        let library_name = library.name().name();
+        let functions: Vec<FunctionDefinition> = library
+            .members()
+            .iter()
+            .filter_map(|member| match member {
+                ContractMember::FunctionDefinition(function)
+                    if matches!(function.kind(), FunctionKind::Regular) =>
+                {
+                    Some(function)
+                }
+                _ => None,
+            })
+            .collect();
+
+        // Pre-register every function so calls between the library's functions
+        // resolve before any body is emitted.
+        for function in &functions {
+            let mlir_name = FunctionEmitter::mlir_function_name(function);
+            let (parameter_types, return_types) =
+                TypeConversion::resolve_function_types(function, &self.state.builder);
+            self.state.register_function_signature(
+                function.node_id(),
+                mlir_name,
+                parameter_types,
+                return_types,
+            );
+        }
+
+        let storage_layout = StorageLayout::new();
+        let library_type = self.state.builder.types.contract(&library_name, false);
+        let module_body = self.state.module.body();
+        let contract_body = self.state.builder.emit_sol_contract(
+            &library_name,
+            // Emit as a plain contract: the `Library` kind triggers the
+            // library-address self-reference (an immutable) the slang path does
+            // not set up. A `delegatecall`ed library object only needs the
+            // external-function dispatcher, which the contract kind provides.
+            solx_mlir::ContractKind::Contract,
+            &module_body,
+        );
+
+        for function in &functions {
+            self.state.current_contract_type = Some(library_type);
+            FunctionEmitter::new(self.state, None, &storage_layout)
+                .emit_sol(function, &contract_body)?;
+            self.state.current_contract_type = None;
+        }
+
+        let mut method_identifiers = BTreeMap::new();
+        for function in &functions {
+            let Some(signature) = function.compute_canonical_signature() else {
+                continue;
+            };
+            let Some(selector) = function.compute_selector() else {
+                continue;
+            };
+            method_identifiers.insert(signature, format!("{selector:08x}"));
+        }
+
+        Ok((library_name, method_identifiers))
     }
 
     /// Builds the storage-variable symbol name for a `(slot, byte_offset)`
