@@ -88,6 +88,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // contract-qualified symbols (below).
         let super_dispatch = super_call::build_super_dispatch(contract);
         self.state.super_redirect = super_dispatch.redirect.clone();
+        self.state.virtual_redirect = super_dispatch.virtual_redirect.clone();
 
         self.pre_register_functions(contract, &super_dispatch.shadowed);
 

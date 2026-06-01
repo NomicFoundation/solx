@@ -60,6 +60,12 @@ pub struct Context<'context> {
     /// linearised bases and records the result here. Empty unless the contract
     /// uses `super`.
     pub super_redirect: HashMap<NodeId, NodeId>,
+    /// Virtual dispatch redirect: maps an overridden base function's node id to
+    /// the most-derived override of the same signature. A plain internal call
+    /// resolving (lexically) to a shadowed base function is routed through this
+    /// so it reaches the override, matching Solidity's virtual semantics. Empty
+    /// unless the contract overrides an inherited function.
+    pub virtual_redirect: HashMap<NodeId, NodeId>,
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
@@ -179,6 +185,7 @@ impl<'context> Context<'context> {
             function_signatures: HashMap::new(),
             library_function_ids: HashSet::new(),
             super_redirect: HashMap::new(),
+            virtual_redirect: HashMap::new(),
             builder: Builder::new(context),
             current_contract_type: None,
             dependencies: RefCell::new(Vec::new()),

@@ -789,7 +789,20 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         &'a [melior::ir::Type<'context>],
         BlockRef<'context, 'block>,
     )> {
-        self.emit_call_setup_by_id(function_definition.node_id(), positional_arguments, block)
+        // Virtual dispatch: a call resolving (lexically) to an overridden base
+        // function is routed to the most-derived override. The redirect only
+        // contains shadowed-override nodes, so non-virtual callees are
+        // unaffected. `super` deliberately bypasses this (it calls
+        // `emit_call_setup_by_id` directly with the linearised target).
+        let node_id = function_definition.node_id();
+        let call_id = self
+            .expression_emitter
+            .state
+            .virtual_redirect
+            .get(&node_id)
+            .copied()
+            .unwrap_or(node_id);
+        self.emit_call_setup_by_id(call_id, positional_arguments, block)
     }
 
     /// Like [`Self::emit_call_setup`] but resolves the callee by its AST node

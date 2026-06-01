@@ -35,8 +35,8 @@ use slang_solidity_v2::ast::visitor::accept_function_definition;
 
 use crate::ast::contract::function::FunctionEmitter;
 
-/// The result of re-resolving a contract's `super` calls against its C3
-/// linearisation.
+/// The result of re-resolving a contract's `super` and virtual calls against
+/// its C3 linearisation.
 #[derive(Default)]
 pub(super) struct SuperDispatch {
     /// `super` member-access node id -> target function node id.
@@ -45,6 +45,12 @@ pub(super) struct SuperDispatch {
     /// contract-qualified symbol they must be emitted under (deduplicated by
     /// node id). These are emitted internal-only (no selector).
     pub shadowed: Vec<(String, FunctionDefinition)>,
+    /// Virtual dispatch: a plain internal call resolving (lexically) to an
+    /// overridden base function must reach the most-derived override. Maps each
+    /// shadowed base function node id -> the most-derived function node id of
+    /// the same signature. Unlike `super`, no extra emission is needed (the
+    /// most-derived version is already emitted with its selector).
+    pub virtual_redirect: HashMap<NodeId, NodeId>,
 }
 
 /// Visitor that records every `super.f` member access (the access node and the
@@ -115,6 +121,31 @@ pub(super) fn build_super_dispatch(contract: &ContractDefinition) -> SuperDispat
         .collect();
 
     let mut dispatch = SuperDispatch::default();
+
+    // Virtual dispatch: map every shadowed (overridden) base function to the
+    // most-derived implementation of its signature, so a plain `g()` call in a
+    // base body reaches the override. The most-derived version of each
+    // signature is exactly the one kept by `compute_linearised_functions`.
+    let mut most_derived_by_signature: HashMap<String, NodeId> = HashMap::new();
+    for function in contract.compute_linearised_functions() {
+        most_derived_by_signature
+            .entry(FunctionEmitter::mlir_function_name(&function))
+            .or_insert_with(|| function.node_id());
+    }
+    for base_contract in &mro {
+        for function in base_contract.functions() {
+            let node_id = function.node_id();
+            if function.body().is_none() || most_derived_ids.contains(&node_id) {
+                continue;
+            }
+            if let Some(&target) =
+                most_derived_by_signature.get(&FunctionEmitter::mlir_function_name(&function))
+                && target != node_id
+            {
+                dispatch.virtual_redirect.insert(node_id, target);
+            }
+        }
+    }
     let mut shadowed_ids: HashSet<NodeId> = HashSet::new();
     let mut walked: HashSet<NodeId> = HashSet::new();
 
