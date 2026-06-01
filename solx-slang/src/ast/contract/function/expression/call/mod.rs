@@ -268,29 +268,47 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((Some(result), block));
         }
 
-        // A call through a contract-qualified function-pointer state variable
-        // (`C.x()` / `Base.x()`): the operand is the contract name and the
-        // member resolves to a state variable of function type. Load the
-        // pointer (via the qualified state-variable read) and call indirectly.
-        // Gating on operand-is-contract keeps this distinct from the
-        // `this.v(args)` external getter self-call, and it must precede the
-        // built-in member-access dispatch, which rejects the unknown member.
+        // A call through a function-pointer member that is dispatched
+        // indirectly: a contract-qualified func-ptr state variable (`C.x()` /
+        // `Base.x()`) or a struct-field func-ptr (`s.x()` / `t[0].x()`). The
+        // callee's type is a function type; load the pointer (via the qualified
+        // state-variable read or struct-field read) and call indirectly. Must
+        // precede the built-in member-access dispatch, which rejects the
+        // unknown member.
+        //
+        // Restricted to these two shapes — a contract-qualified state variable,
+        // or a member of a struct value — so the external getter self-call
+        // (`this.v(args)`) and genuine external/library method calls (member
+        // resolves to a function definition, operand is a contract/address)
+        // keep their own dispatch.
         if let Expression::MemberAccessExpression(access) = &callee
-            && let Expression::Identifier(operand) = access.operand()
-            && matches!(operand.resolve_to_definition(), Some(Definition::Contract(_)))
-            && matches!(
-                access.member().resolve_to_definition(),
-                Some(Definition::StateVariable(_))
-            )
             && let Some(function_slang_type) = callee.get_type()
             && matches!(&function_slang_type, SlangType::Function(_))
         {
-            return self.emit_indirect_call(
-                &callee,
-                &function_slang_type,
-                positional_arguments,
-                block,
+            let qualified_state_var = matches!(
+                access.operand(),
+                Expression::Identifier(operand)
+                    if matches!(operand.resolve_to_definition(), Some(Definition::Contract(_)))
+            ) && matches!(
+                access.member().resolve_to_definition(),
+                Some(Definition::StateVariable(_))
             );
+            // A struct-field func-ptr — the operand is a struct value and the
+            // member is a field (not a `using`-attached library function, which
+            // resolves to a function definition and dispatches as a call).
+            let struct_field = matches!(access.operand().get_type(), Some(SlangType::Struct(_)))
+                && !matches!(
+                    access.member().resolve_to_definition(),
+                    Some(Definition::Function(_))
+                );
+            if qualified_state_var || struct_field {
+                return self.emit_indirect_call(
+                    &callee,
+                    &function_slang_type,
+                    positional_arguments,
+                    block,
+                );
+            }
         }
 
         if let Some((value, block)) =
