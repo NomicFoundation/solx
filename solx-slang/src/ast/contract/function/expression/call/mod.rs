@@ -92,7 +92,23 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             anyhow::bail!("only positional arguments supported");
         };
 
-        let callee = call.operand();
+        // Unwrap a parenthesised callee: `(data.pop)()` / `(f)(x)` parse the
+        // callee as a single-element tuple, so peel any such tuples before
+        // dispatch (the member-access, pop, and indirect-call branches below
+        // expect the bare callee).
+        let mut callee = call.operand();
+        loop {
+            let inner = match &callee {
+                Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
+                    tuple.items().iter().next().and_then(|item| item.expression())
+                }
+                _ => None,
+            };
+            match inner {
+                Some(expression) => callee = expression,
+                None => break,
+            }
+        }
 
         // A single-field struct constructor `S(x)` is reported as a "type
         // conversion" by slang's CST heuristic (the callee is a type name), but
