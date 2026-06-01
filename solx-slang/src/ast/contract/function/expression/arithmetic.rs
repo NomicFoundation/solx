@@ -47,6 +47,45 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 rhs.r#type()
             }
         });
+
+        // `sol.and/or/xor/shl/shr` are integer-only, but Solidity allows them on
+        // `bytesN` / `byte` (bitwise on the raw bytes). Bridge the fixed-bytes
+        // operand(s) through the equivalent unsigned integer `ui(8*N)` and cast
+        // the result back. Shift amounts are plain integers, so only the shifted
+        // value is bridged on the rhs.
+        let is_shift = matches!(operator, Operator::ShiftLeft | Operator::ShiftRight);
+        let is_bitwise =
+            is_shift || matches!(operator, Operator::BitwiseAnd | Operator::BitwiseOr | Operator::BitwiseXor);
+        if is_bitwise
+            && let Some(width) = solx_mlir::TypeFactory::fixed_bytes_width(result_type)
+                .or_else(|| solx_mlir::TypeFactory::is_sol_byte(result_type).then_some(1))
+        {
+            let builder = &self.state.builder;
+            let int_type = Type::from(IntegerType::unsigned(builder.context, 8 * width));
+            let lhs_fb = TypeConversion::from_target_type(result_type, builder).emit(lhs, builder, &block);
+            let lhs_int = builder.emit_sol_cast(lhs_fb, int_type, &block);
+            let rhs_int = if is_shift {
+                // The shift amount is an integer; resize it to the bridge width.
+                TypeConversion::from_target_type(int_type, builder).emit(rhs, builder, &block)
+            } else {
+                let rhs_fb = TypeConversion::from_target_type(result_type, builder).emit(rhs, builder, &block);
+                builder.emit_sol_cast(rhs_fb, int_type, &block)
+            };
+            let result_int: Value<'context, 'block> = block
+                .append_operation(operator.emit_sol_binary_operation(
+                    self.checked,
+                    builder.context,
+                    builder.unknown_location,
+                    lhs_int,
+                    rhs_int,
+                ))
+                .result(0)
+                .expect("binary operation always produces one result")
+                .into();
+            let result = builder.emit_sol_cast(result_int, result_type, &block);
+            return Ok((result, block));
+        }
+
         let lhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
             lhs,
             &self.state.builder,
@@ -111,19 +150,32 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let operand_type = target_type.unwrap_or_else(|| value.r#type());
                 let value = TypeConversion::from_target_type(operand_type, &self.state.builder)
                     .emit(value, &self.state.builder, &block);
-                let result = block
+                // `sol.not` is integer-only; for `bytesN` / `byte` bridge through
+                // the equivalent unsigned integer `ui(8*N)` and cast back.
+                let builder = &self.state.builder;
+                let fixed_width = solx_mlir::TypeFactory::fixed_bytes_width(operand_type)
+                    .or_else(|| solx_mlir::TypeFactory::is_sol_byte(operand_type).then_some(1));
+                let (value, restore_type) = match fixed_width {
+                    Some(width) => {
+                        let int_type = Type::from(IntegerType::unsigned(builder.context, 8 * width));
+                        (builder.emit_sol_cast(value, int_type, &block), Some(operand_type))
+                    }
+                    None => (value, None),
+                };
+                let result: Value<'context, 'block> = block
                     .append_operation(
-                        NotOperation::builder(
-                            self.state.builder.context,
-                            self.state.builder.unknown_location,
-                        )
-                        .value(value)
-                        .build()
-                        .into(),
+                        NotOperation::builder(builder.context, builder.unknown_location)
+                            .value(value)
+                            .build()
+                            .into(),
                     )
                     .result(0)
                     .expect("sol.not always produces one result")
                     .into();
+                let result = match restore_type {
+                    Some(fixed) => builder.emit_sol_cast(result, fixed, &block),
+                    None => result,
+                };
                 Ok((result, block))
             }
             Operator::Not => {
