@@ -267,6 +267,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 slang_solidity_v2::ast::FunctionVisibility::External
                     | slang_solidity_v2::ast::FunctionVisibility::Public
             )
+            // Only ABI-callable functions delegatecall; `public` library
+            // functions with non-ABI params (storage/mapping) have no selector
+            // and are inlined as internal library calls instead.
+            && function.compute_selector().is_some()
         {
             // The linker symbol is the fully-qualified `file:Library` name
             // (matching solc), so `link_references` round-trips.

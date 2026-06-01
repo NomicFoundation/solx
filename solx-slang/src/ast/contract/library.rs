@@ -29,19 +29,23 @@ struct LibraryCallCollector {
 
 impl Visitor for LibraryCallCollector {
     fn enter_member_access_expression(&mut self, node: &MemberAccessExpression) -> bool {
-        // Any member access whose member resolves to an `internal`/`private`
-        // function is a library call — either a direct `L.f(...)` or a
-        // `using for` `x.f(...)`. Internal contract methods are never reached
-        // through member access (only `super.f`, an inherited function that is
-        // filtered out by node id in `collect_library_functions`). `public`/
-        // `external` library functions are reached by delegatecall — a separate
-        // lowering — and emitting them here would collide with same-named
-        // contract functions.
+        // A member access whose member resolves to a library function with no
+        // external selector is an internal library call — `internal`/`private`
+        // functions, but also `public` ones with non-ABI-encodable parameters
+        // (a `storage` / `mapping` argument), which solc calls internally
+        // (passing the slot) rather than by `delegatecall`. Either way they are
+        // inlined into the contract here. Library functions that *do* have a
+        // selector are reached by delegatecall (a separate lowering); emitting
+        // them here would collide with same-named contract functions.
         if let Some(Definition::Function(function)) = node.member().resolve_to_definition()
             && matches!(
                 function.visibility(),
-                FunctionVisibility::Internal | FunctionVisibility::Private
+                FunctionVisibility::Internal
+                    | FunctionVisibility::Private
+                    | FunctionVisibility::Public
+                    | FunctionVisibility::External
             )
+            && function.compute_selector().is_none()
         {
             self.functions.push(function);
         }
