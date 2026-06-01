@@ -1022,18 +1022,26 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             );
             return Ok((value, block));
         }
-        // `data.pop;` / `data.push;` written as a bare expression (no call) is a
-        // no-op reference to the bound built-in — solc evaluates and discards it
-        // without performing the action (these built-ins are not first-class
-        // function values, so the result is never used). Returning a placeholder
-        // avoids both performing the pop/push and the value-expected panic below
-        // (`emit_built_in_member_access` would otherwise emit the pop/push op and
-        // then yield no value).
+        // A bare reference to a function-like built-in member written without a
+        // call — `data.pop;`, `data.push;`, `abi.encode;` and friends — is a
+        // no-op in Solidity: solc evaluates and discards the bound-function
+        // value without performing the action. Returning a placeholder avoids
+        // both performing the action (pop/push) and the panics the built-in
+        // dispatch would otherwise hit on the missing call (`.expect` on the
+        // absent arguments, or "bare member access always produces a value").
+        // Value-typed built-ins (`block.timestamp`, `msg.sender`) yield a value
+        // and emit normally below.
         if matches!(
             access.member().resolve_to_built_in(),
             Some(
                 slang_solidity_v2::ast::BuiltIn::ArrayPop
                     | slang_solidity_v2::ast::BuiltIn::ArrayPush
+                    | slang_solidity_v2::ast::BuiltIn::AbiEncode
+                    | slang_solidity_v2::ast::BuiltIn::AbiEncodePacked
+                    | slang_solidity_v2::ast::BuiltIn::AbiEncodeWithSelector
+                    | slang_solidity_v2::ast::BuiltIn::AbiEncodeWithSignature
+                    | slang_solidity_v2::ast::BuiltIn::AbiEncodeCall
+                    | slang_solidity_v2::ast::BuiltIn::AbiDecode
             )
         ) {
             let builder = &self.expression_emitter.state.builder;
