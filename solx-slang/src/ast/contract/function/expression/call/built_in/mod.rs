@@ -1153,35 +1153,63 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let mut iter = arguments.iter();
                 let signature_expression =
                     iter.next().expect("slang validates non-empty arguments");
-                let Expression::StringExpression(string_expression) = signature_expression else {
-                    anyhow::bail!(
-                        "abi.encodeWithSignature with a non-literal signature is not yet supported"
-                    );
+                // The 4-byte selector is the high bytes of keccak256(signature):
+                // folded at compile time for a string literal, or computed at
+                // runtime (`bytes4(keccak256(sig))`) for a dynamic signature.
+                let (selector_value, mut current) = match &signature_expression {
+                    Expression::StringExpression(string_expression) => {
+                        let signature_bytes = string_expression.value();
+                        let hash = solx_utils::Keccak256Hash::from_slice(&signature_bytes);
+                        let selector_bytes: [u8; 4] = hash.as_bytes()[..4]
+                            .try_into()
+                            .expect("keccak256 always yields 32 bytes");
+                        let selector_word = u32::from_be_bytes(selector_bytes);
+                        let selector_int = builder.emit_sol_constant(
+                            i64::from(selector_word),
+                            Type::from(IntegerType::unsigned(builder.context, 32)),
+                            &block,
+                        );
+                        let selector_value = block
+                            .append_operation(
+                                BytesCastOperation::builder(
+                                    builder.context,
+                                    builder.unknown_location,
+                                )
+                                .inp(selector_int)
+                                .out(builder.types.fixed_bytes(4))
+                                .build()
+                                .into(),
+                            )
+                            .result(0)
+                            .expect("sol.bytes_cast always produces one result")
+                            .into();
+                        (selector_value, block)
+                    }
+                    _ => {
+                        let (signature_value, current) = self
+                            .expression_emitter
+                            .emit_value(&signature_expression, block)?;
+                        let hash = current
+                            .append_operation(
+                                Keccak256Operation::builder(
+                                    builder.context,
+                                    builder.unknown_location,
+                                )
+                                .addr(signature_value)
+                                .result(builder.types.fixed_bytes(32))
+                                .build()
+                                .into(),
+                            )
+                            .result(0)
+                            .expect("keccak256 always produces one result")
+                            .into();
+                        let selector_value =
+                            TypeConversion::from_target_type(builder.types.fixed_bytes(4), builder)
+                                .emit(hash, builder, &current);
+                        (selector_value, current)
+                    }
                 };
-                let signature_bytes = string_expression.value();
-                let hash = solx_utils::Keccak256Hash::from_slice(&signature_bytes);
-                let selector_bytes: [u8; 4] = hash.as_bytes()[..4]
-                    .try_into()
-                    .expect("keccak256 always yields 32 bytes");
-                let selector_word = u32::from_be_bytes(selector_bytes);
-                let selector_int = builder.emit_sol_constant(
-                    i64::from(selector_word),
-                    Type::from(IntegerType::unsigned(builder.context, 32)),
-                    &block,
-                );
-                let selector_value = block
-                    .append_operation(
-                        BytesCastOperation::builder(builder.context, builder.unknown_location)
-                            .inp(selector_int)
-                            .out(builder.types.fixed_bytes(4))
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("sol.bytes_cast always produces one result")
-                    .into();
                 let mut values = Vec::with_capacity(arguments.len() - 1);
-                let mut current = block;
                 for argument in iter {
                     let (value, next) = self.expression_emitter.emit_value(&argument, current)?;
                     values.push(value);
