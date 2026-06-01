@@ -51,6 +51,8 @@ pub(crate) use solx_mlir::ods::sol::XorOperation;
 pub(crate) use solx_mlir::ods::yul::AddressOperation as YulAddressOp;
 pub(crate) use solx_mlir::ods::yul::BalanceOperation as YulBalanceOp;
 pub(crate) use solx_mlir::ods::yul::CallOperation as YulCallOp;
+pub(crate) use solx_mlir::ods::yul::Create2Operation as YulCreate2Op;
+pub(crate) use solx_mlir::ods::yul::CreateOperation as YulCreateOp;
 pub(crate) use solx_mlir::ods::yul::DelegateCallOperation as YulDelegateCallOp;
 pub(crate) use solx_mlir::ods::yul::LogOperation as YulLogOp;
 pub(crate) use solx_mlir::ods::yul::StaticCallOperation as YulStaticCallOp;

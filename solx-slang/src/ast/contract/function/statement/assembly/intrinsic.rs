@@ -919,6 +919,52 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 );
                 Ok((builder.emit_sol_constant(0, ui256, &block), block))
             }
+            "create" => {
+                if arguments.len() != 3 {
+                    anyhow::bail!("yul create needs 3 args");
+                }
+                let val = to_signless(arguments[0], &block);
+                let addr = to_signless(arguments[1], &block);
+                let size = to_signless(arguments[2], &block);
+                let value = block
+                    .append_operation(
+                        YulCreateOp::builder(ctx, loc)
+                            .val(val)
+                            .addr(addr)
+                            .size(size)
+                            .out(i256_signless)
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("yul create produces one result")
+                    .into();
+                Ok((from_signless(value, &block), block))
+            }
+            "create2" => {
+                if arguments.len() != 4 {
+                    anyhow::bail!("yul create2 needs 4 args");
+                }
+                let val = to_signless(arguments[0], &block);
+                let addr = to_signless(arguments[1], &block);
+                let size = to_signless(arguments[2], &block);
+                let salt = to_signless(arguments[3], &block);
+                let value = block
+                    .append_operation(
+                        YulCreate2Op::builder(ctx, loc)
+                            .val(val)
+                            .addr(addr)
+                            .size(size)
+                            .salt(salt)
+                            .out(i256_signless)
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("yul create2 produces one result")
+                    .into();
+                Ok((from_signless(value, &block), block))
+            }
             _ => anyhow::bail!("unsupported yul intrinsic: {name}"),
         }
     }
