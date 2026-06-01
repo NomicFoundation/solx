@@ -123,8 +123,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             arguments.next().is_none(),
             "revert accepts at most one argument"
         );
-        let signature: String = match message_argument {
-            None => String::new(),
+        match message_argument {
+            None => {
+                self.state.builder.emit_sol_revert("", &[], false, &block);
+                Ok(Some(block))
+            }
             Some(Expression::StringExpression(string_expression)) => {
                 let message = String::from_utf8(string_expression.value())
                     .map_err(|_| anyhow::anyhow!("revert message contains invalid UTF-8"))?;
@@ -132,14 +135,31 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     !message.is_empty(),
                     "revert(\"\") would emit ambiguous bytecode under the current Sol dialect; use revert() for no-data revert"
                 );
-                message
+                self.state
+                    .builder
+                    .emit_sol_revert(&message, &[], false, &block);
+                Ok(Some(block))
             }
-            Some(_) => anyhow::bail!("revert message must be a string literal"),
-        };
-        self.state
-            .builder
-            .emit_sol_revert(&signature, &[], false, &block);
-        Ok(Some(block))
+            // A non-literal message (`revert(someStringExpr)`) is evaluated at
+            // runtime and ABI-encoded under the `Error(string)` selector, exactly
+            // like `require(cond, expr)` — emit the value coerced to
+            // `string<Memory>` and revert with data.
+            Some(expression) => {
+                let emitter = ExpressionEmitter::new(
+                    self.state,
+                    self.environment,
+                    self.storage_layout,
+                    self.checked,
+                );
+                let (message_value, block) = emitter.emit_value(&expression, block)?;
+                let builder = &self.state.builder;
+                let string_memory_type = builder.types.string(solx_utils::DataLocation::Memory);
+                let message_value = TypeConversion::from_target_type(string_memory_type, builder)
+                    .emit(message_value, builder, &block);
+                builder.emit_sol_revert("Error(string)", &[message_value], true, &block);
+                Ok(Some(block))
+            }
+        }
     }
 
     /// Orders named revert arguments by the custom error's parameter declaration order.
