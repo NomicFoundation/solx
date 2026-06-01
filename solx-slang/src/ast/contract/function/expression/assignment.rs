@@ -381,6 +381,24 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 );
                 (values, current)
             }
+            // `(a, b) = cond ? (x, y) : (z, w)` — a conditional with tuple
+            // branches yields one value per component.
+            Expression::ConditionalExpression(conditional) => {
+                let (values, current) = self
+                    .emit_conditional_tuple_values(conditional, block)?
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "tuple assignment with this right-hand side shape is not yet supported"
+                        )
+                    })?;
+                anyhow::ensure!(
+                    values.len() == items.len(),
+                    "tuple assignment arity mismatch: {} LHS slots vs {} conditional values",
+                    items.len(),
+                    values.len(),
+                );
+                (values, current)
+            }
             _ => anyhow::bail!("tuple assignment with this right-hand side shape is not yet supported"),
         };
 

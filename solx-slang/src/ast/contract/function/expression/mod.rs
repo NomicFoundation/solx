@@ -662,6 +662,73 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
     }
 
+    /// Emits a conditional whose branches are tuples
+    /// (`cond ? (a, b) : (c, d)`) as a vector of selected values — one `sol.if`
+    /// over per-component result slots, mirroring the single-value conditional.
+    ///
+    /// Returns `Ok(None)` when the branches are not both tuples of equal,
+    /// non-zero arity with resolvable element types, so callers fall through to
+    /// their existing handling.
+    pub fn emit_conditional_tuple_values(
+        &self,
+        conditional: &slang_solidity_v2::ast::ConditionalExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        let (
+            Expression::TupleExpression(true_tuple),
+            Expression::TupleExpression(false_tuple),
+        ) = (conditional.true_expression(), conditional.false_expression())
+        else {
+            return Ok(None);
+        };
+        let true_items: Vec<Expression> = true_tuple
+            .items()
+            .iter()
+            .filter_map(|item| item.expression())
+            .collect();
+        let false_items: Vec<Expression> = false_tuple
+            .items()
+            .iter()
+            .filter_map(|item| item.expression())
+            .collect();
+        if true_items.is_empty() || true_items.len() != false_items.len() {
+            return Ok(None);
+        }
+        let mut result_types = Vec::with_capacity(true_items.len());
+        for item in &true_items {
+            let Some(item_type) = self.resolve_slang_type(item.get_type()) else {
+                return Ok(None);
+            };
+            result_types.push(item_type);
+        }
+
+        let (condition_value, block) = self.emit_value(&conditional.operand(), block)?;
+        let condition_boolean = self.emit_is_nonzero(condition_value, &block);
+        let slots: Vec<Value<'context, 'block>> = result_types
+            .iter()
+            .map(|&result_type| self.state.builder.emit_sol_alloca(result_type, &block))
+            .collect();
+        let (then_block, else_block) = self.state.builder.emit_sol_if(condition_boolean, &block);
+
+        for (branch_block, items) in [(then_block, &true_items), (else_block, &false_items)] {
+            let mut current = branch_block;
+            for (index, item) in items.iter().enumerate() {
+                let (value, next) = self.emit_value(item, current)?;
+                current = next;
+                let cast = TypeConversion::from_target_type(result_types[index], &self.state.builder)
+                    .emit(value, &self.state.builder, &current);
+                self.state.builder.emit_sol_store(cast, slots[index], &current);
+            }
+            self.state.builder.emit_sol_yield(&current);
+        }
+
+        let mut values = Vec::with_capacity(slots.len());
+        for (index, &slot) in slots.iter().enumerate() {
+            values.push(self.state.builder.emit_sol_load(slot, result_types[index], &block)?);
+        }
+        Ok(Some((values, block)))
+    }
+
     /// Emits a `sol.cmp ne 0` producing `i1` from a value.
     ///
     /// Short-circuits when the value is already `i1` (e.g. from `sol.cmp`),

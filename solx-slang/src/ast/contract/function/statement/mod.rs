@@ -278,13 +278,23 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             (values, current)
         } else if self.return_types.len() > 1 {
-            // A single expression that yields more than one value can only be a
-            // tuple-returning call, e.g. `return f();` or `return _s.reverse();`.
+            // A single expression that yields more than one value is either a
+            // tuple-returning call (`return f();` / `return _s.reverse();`) or a
+            // conditional with tuple branches (`return c ? (1, 2) : (3, 4);`).
             // Emit every result so the `yul.func_return` arity matches.
-            let Expression::FunctionCallExpression(call) = &expression else {
-                anyhow::bail!("multi-value return from a non-call expression is not supported");
-            };
-            CallEmitter::new(&emitter).emit_function_call_results(call, block)?
+            match &expression {
+                Expression::FunctionCallExpression(call) => {
+                    CallEmitter::new(&emitter).emit_function_call_results(call, block)?
+                }
+                Expression::ConditionalExpression(conditional) => emitter
+                    .emit_conditional_tuple_values(conditional, block)?
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("multi-value return from a non-call expression is not supported")
+                    })?,
+                _ => anyhow::bail!(
+                    "multi-value return from a non-call expression is not supported"
+                ),
+            }
         } else {
             let (value, block) = match self.return_types.first() {
                 Some(&return_type) => {
