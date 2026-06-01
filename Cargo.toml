@@ -99,8 +99,9 @@ features = [
 [workspace.dependencies.slang_solidity_v2]
 git = "https://github.com/NomicFoundation/slang.git"
 # TODO: pin to a release tag instead of a revision.
-# Temporary: points at feat-v2-display-node-id, which consolidates the
-# exp-struct-getter-abi work (slang#1801 af822aba + the multi-output getter ABI
-# fix), the NodeId Display impl, and the `using`-attached-function import-alias
-# resolution fix, until those land upstream.
-rev = "3298c09dc15f689ab78cae7b1983d94e8b6c95ac"
+# Temporary: points at feat-v2-display-node-id, rebased linear on slang main.
+# Carries the patches not yet upstreamed — the `using`-attached-function
+# import-alias resolution fix, the multi-output (tuple) getter ABI expansion,
+# and the hex-literal integer-value fix. (The NodeId Display impl landed
+# upstream as slang#1803 and was dropped from the branch on rebase.)
+rev = "fcb96378a6442bd67503c4d2721cac9353197963"

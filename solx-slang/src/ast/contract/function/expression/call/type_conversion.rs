@@ -56,7 +56,7 @@ impl<'context> TypeConversion<'context> {
             )),
             SlangType::Address(_) => builder.types.sol_address,
             SlangType::Literal(literal_type) => match literal_type.kind() {
-                LiteralKind::Address => builder.types.sol_address,
+                LiteralKind::Address { .. } => builder.types.sol_address,
                 LiteralKind::Integer { value } => {
                     let bits = Self::integer_bits_required(&value) as usize;
                     let bits = bits
