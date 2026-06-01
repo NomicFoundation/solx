@@ -287,70 +287,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::Identifier(identifier) => {
                 let name = identifier.name();
                 match identifier.resolve_to_definition() {
-                    Some(Definition::StateVariable(state_variable)) => {
-                        // A contract-level `constant` state variable has no storage
-                        // slot — slang resolves it here (file-level constants go via
-                        // `Definition::Constant`). Foldable initializers are already
-                        // inlined as literals by the constant-folding path above; the
-                        // non-foldable ones (string / bytes literals) reach this arm.
-                        // Emit the initializer toward the declared type so that, e.g.,
-                        // a `bytes32 constant` string literal becomes a fixedbytes
-                        // constant rather than a memory string.
-                        if matches!(
-                            state_variable.mutability(),
-                            StateVariableMutability::Constant
-                        ) {
-                            let initializer = state_variable.value().ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "constant state variable {name} has no initializer"
-                                )
-                            })?;
-                            let declared_type = state_variable.get_type().ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "unresolved type for constant state variable: {name}"
-                                )
-                            })?;
-                            let target_type = TypeConversion::resolve_slang_type(
-                                &declared_type,
-                                None,
-                                &self.state.builder,
-                            );
-                            let (value, block) =
-                                self.emit_value_for_target(&initializer, target_type, block)?;
-                            return Ok((Some(value), block));
-                        }
-                        let &(slot, byte_offset, location) = self
-                            .storage_layout
-                            .get(&state_variable.node_id())
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("unregistered state variable: {name}")
-                            })?;
-                        let declared_type = state_variable.get_type().ok_or_else(|| {
-                            anyhow::anyhow!("unresolved type for state variable: {name}")
-                        })?;
-                        let element_type = TypeConversion::resolve_slang_type(
-                            &declared_type,
-                            None,
-                            &self.state.builder,
-                        );
-                        let address = self.state.builder.emit_sol_addr_of(
-                            &crate::ast::contract::ContractEmitter::storage_symbol(
-                                slot, byte_offset, location,
-                            ),
-                            Self::address_type(
-                                &self.state.builder,
-                                element_type,
-                                location,
-                                &declared_type,
-                            ),
-                            &block,
-                        );
-                        let value =
-                            self.state
-                                .builder
-                                .emit_sol_load(address, element_type, &block)?;
-                        Ok((Some(value), block))
-                    }
+                    Some(Definition::StateVariable(state_variable)) => self
+                        .emit_state_variable_read(&state_variable, block)
+                        .map(|(value, block)| (Some(value), block)),
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let (pointer, element_type) = self.environment.variable_with_type(&name);
                         let value =
@@ -644,6 +583,32 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 Ok((Some(value), current))
             }
             Expression::MemberAccessExpression(access) => {
+                // `C.stateVar` / `Base.stateVar` — a contract-qualified
+                // state-variable read (disambiguates from a shadowing local, and
+                // reaches an inherited `constant`). The operand is the contract
+                // *name*; `this.stateVar` (an external getter call) keeps its own
+                // path since its operand is the `this` keyword.
+                if let Expression::Identifier(operand) = access.operand()
+                    && matches!(operand.resolve_to_definition(), Some(Definition::Contract(_)))
+                {
+                    match access.member().resolve_to_definition() {
+                        Some(Definition::StateVariable(state_variable)) => {
+                            return self
+                                .emit_state_variable_read(&state_variable, block)
+                                .map(|(value, block)| (Some(value), block));
+                        }
+                        // An inherited `constant` accessed as `A.x` resolves to a
+                        // `Constant`; emit its initializer (foldable ones are
+                        // already inlined by the constant-folding path).
+                        Some(Definition::Constant(constant)) => {
+                            let initializer = constant.value().ok_or_else(|| {
+                                anyhow::anyhow!("constant has no initializer")
+                            })?;
+                            return self.emit(&initializer, block);
+                        }
+                        _ => {}
+                    }
+                }
                 if let Some((value, block)) = self.emit_struct_field(access, block)? {
                     Ok((Some(value), block))
                 } else {
@@ -660,6 +625,48 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 std::mem::discriminant(expression)
             ),
         }
+    }
+
+    /// Reads a contract state variable's value: a `constant` folds to its
+    /// initializer (emitted toward the declared type, so a `bytes32 constant`
+    /// string literal becomes a fixedbytes constant), otherwise the storage slot
+    /// is loaded. Shared by a bare identifier reference and a contract-qualified
+    /// `C.stateVar` access (the latter disambiguates from a shadowing local).
+    fn emit_state_variable_read(
+        &self,
+        state_variable: &slang_solidity_v2::ast::StateVariableDefinition,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let declared_type = state_variable
+            .get_type()
+            .ok_or_else(|| anyhow::anyhow!("unresolved type for state variable"))?;
+        if matches!(
+            state_variable.mutability(),
+            StateVariableMutability::Constant
+        ) {
+            let initializer = state_variable
+                .value()
+                .ok_or_else(|| anyhow::anyhow!("constant state variable has no initializer"))?;
+            let target_type =
+                TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
+            return self.emit_value_for_target(&initializer, target_type, block);
+        }
+        let &(slot, byte_offset, location) = self
+            .storage_layout
+            .get(&state_variable.node_id())
+            .ok_or_else(|| anyhow::anyhow!("unregistered state variable"))?;
+        let element_type =
+            TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
+        let address = self.state.builder.emit_sol_addr_of(
+            &crate::ast::contract::ContractEmitter::storage_symbol(slot, byte_offset, location),
+            Self::address_type(&self.state.builder, element_type, location, &declared_type),
+            &block,
+        );
+        let value = self
+            .state
+            .builder
+            .emit_sol_load(address, element_type, &block)?;
+        Ok((value, block))
     }
 
     /// Emits a conditional whose branches are tuples
