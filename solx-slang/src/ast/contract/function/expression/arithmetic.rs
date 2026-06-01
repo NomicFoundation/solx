@@ -236,6 +236,44 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         .emit_sol_store(zero, address, &block);
                     return Ok((zero, block));
                 }
+                // `delete s.field` resets the addressed struct field: scalars
+                // store zero, enums store their zero variant, and reference-typed
+                // fields (nested arrays / structs / bytes in storage) recurse
+                // through `sol.delete`.
+                if let Expression::MemberAccessExpression(access) = operand
+                    && let Some((address, element_type, block)) =
+                        self.emit_struct_field_address(access, block)?
+                {
+                    let builder = &self.state.builder;
+                    if solx_mlir::TypeFactory::is_sol_reference(element_type) {
+                        builder.emit_sol_delete(address, &block);
+                        let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                        return Ok((placeholder, block));
+                    }
+                    let zero = if melior::ir::r#type::IntegerType::try_from(element_type).is_ok() {
+                        builder.emit_sol_constant(0, element_type, &block)
+                    } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
+                        let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                        block
+                            .append_operation(
+                                solx_mlir::ods::sol::EnumCastOperation::builder(
+                                    builder.context,
+                                    builder.unknown_location,
+                                )
+                                .inp(raw)
+                                .out(element_type)
+                                .build()
+                                .into(),
+                            )
+                            .result(0)
+                            .expect("sol.enum_cast produces one result")
+                            .into()
+                    } else {
+                        builder.emit_sol_constant(0, element_type, &block)
+                    };
+                    builder.emit_sol_store(zero, address, &block);
+                    return Ok((zero, block));
+                }
                 // `delete x` resets `x` to its type's zero value. For the
                 // experimental branch only scalar identifiers are supported —
                 // reference-type deletion (arrays, mappings, structs) needs
