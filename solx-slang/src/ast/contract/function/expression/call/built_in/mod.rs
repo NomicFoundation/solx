@@ -911,6 +911,30 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((results.into_iter().next(), current_block));
         }
 
+        // `type(E).min` / `type(E).max` for an enum `E` are the first / last
+        // enumerator (ordinals `0` and `member_count - 1`), as an enum value.
+        if let Some(builtin @ (BuiltIn::TypeEnumMin | BuiltIn::TypeEnumMax)) =
+            access.member().resolve_to_built_in()
+            && let Expression::TypeExpression(type_expression) = access.operand()
+            && let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name()
+            && let Some(Definition::Enum(enum_definition)) =
+                identifier_path.resolve_to_definition()
+            && let Some(result_type) = self
+                .expression_emitter
+                .resolve_slang_type(access.get_type())
+        {
+            let member_count = enum_definition.members().iter().count();
+            let ordinal = match builtin {
+                BuiltIn::TypeEnumMin => 0,
+                BuiltIn::TypeEnumMax => member_count.saturating_sub(1) as i64,
+                _ => unreachable!("matched TypeEnumMin/TypeEnumMax above"),
+            };
+            let builder = &self.expression_emitter.state.builder;
+            let int_value = builder.emit_sol_constant(ordinal, builder.types.ui256, &block);
+            let enum_value = builder.emit_sol_enum_cast(int_value, result_type, &block);
+            return Ok((Some(enum_value), block));
+        }
+
         // `type(T).min` / `type(T).max` are compile-time integer constants.
         if let Some(builtin @ (BuiltIn::TypeMin | BuiltIn::TypeMax)) =
             access.member().resolve_to_built_in()
