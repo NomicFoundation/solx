@@ -10,10 +10,6 @@ use melior::ir::ValueLike;
 use ruint::aliases::U256;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
-use solx_utils::DataLocation;
-
-use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Expression;
 use solx_utils::DataLocation;
 

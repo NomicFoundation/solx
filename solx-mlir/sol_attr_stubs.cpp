@@ -12,6 +12,7 @@
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/IR/BuiltinTypes.h"
 #include "mlir-c/IR.h"
+#include "mlir-c/BuiltinAttributes.h"
 #include "mlir/CAPI/IR.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
