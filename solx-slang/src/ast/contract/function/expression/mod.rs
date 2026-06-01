@@ -312,9 +312,23 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         // than the identifier's slang type, which reports
                         // `ext_func_ref` for a public function (visibility
                         // `Public`) and would mismatch the internal-pointer target.
+                        //
+                        // A pointer to a `virtual` function binds to the
+                        // most-derived override (`ptr = g` in a base body, with
+                        // the deployed contract overriding `g`), so apply the
+                        // virtual redirect to the target node exactly as a call
+                        // does — the lexical base version is shadowed and thus
+                        // unregistered when compiling the derived contract.
+                        let node_id = function_definition.node_id();
+                        let target_id = self
+                            .state
+                            .virtual_redirect
+                            .get(&node_id)
+                            .copied()
+                            .unwrap_or(node_id);
                         let (mlir_name, parameter_types, return_types) = self
                             .state
-                            .resolve_function(function_definition.node_id())
+                            .resolve_function(target_id)
                             .map_err(|_| {
                                 anyhow::anyhow!("unregistered function pointer: {name}")
                             })?;
