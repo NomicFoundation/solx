@@ -128,22 +128,25 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 self.state.builder.emit_sol_revert("", &[], false, &block);
                 Ok(Some(block))
             }
-            Some(Expression::StringExpression(string_expression)) => {
+            // A non-empty string literal bakes the message into the op as the
+            // `Error(string)` payload (no runtime encoding). An *empty* literal
+            // (`revert("")`) is NOT a no-data revert — it still emits
+            // `Error("")` (selector + an empty string) — so it falls through to
+            // the data path below, where an empty `string<Memory>` is encoded.
+            Some(Expression::StringExpression(string_expression))
+                if !string_expression.value().is_empty() =>
+            {
                 let message = String::from_utf8(string_expression.value())
                     .map_err(|_| anyhow::anyhow!("revert message contains invalid UTF-8"))?;
-                anyhow::ensure!(
-                    !message.is_empty(),
-                    "revert(\"\") would emit ambiguous bytecode under the current Sol dialect; use revert() for no-data revert"
-                );
                 self.state
                     .builder
                     .emit_sol_revert(&message, &[], false, &block);
                 Ok(Some(block))
             }
-            // A non-literal message (`revert(someStringExpr)`) is evaluated at
-            // runtime and ABI-encoded under the `Error(string)` selector, exactly
-            // like `require(cond, expr)` — emit the value coerced to
-            // `string<Memory>` and revert with data.
+            // A non-literal message (`revert(someStringExpr)`) or an empty literal
+            // is evaluated at runtime and ABI-encoded under the `Error(string)`
+            // selector, exactly like `require(cond, expr)` — emit the value
+            // coerced to `string<Memory>` and revert with data.
             Some(expression) => {
                 let emitter = ExpressionEmitter::new(
                     self.state,
