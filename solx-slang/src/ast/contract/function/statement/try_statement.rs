@@ -22,6 +22,9 @@ use solx_mlir::CmpPredicate;
 use solx_mlir::ffi;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::GetReturnDataOperation;
+use solx_mlir::ods::yul::ReturnDataCopyOperation as YulReturnDataCopyOp;
+use solx_mlir::ods::yul::ReturnDataSizeOperation as YulReturnDataSizeOp;
+use solx_mlir::ods::yul::RevertOperation as YulRevertOp;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::CallEmitter;
@@ -251,7 +254,40 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<()> {
         let Some(clause) = clause else {
-            self.state.builder.emit_sol_yield(&block);
+            // No catch clause matched the revert selector (only typed clauses,
+            // none of which applied): propagate by re-reverting the exact
+            // revert data. `yul.revert` is not a terminator, so a dead
+            // `sol.yield` follows to terminate the structured region.
+            let builder = &self.state.builder;
+            let i256 = Type::from(IntegerType::new(builder.context, 256));
+            let size = block
+                .append_operation(
+                    YulReturnDataSizeOp::builder(builder.context, builder.unknown_location)
+                        .out(i256)
+                        .build()
+                        .into(),
+                )
+                .result(0)
+                .expect("yul.returndatasize produces one result")
+                .into();
+            let zero_unsigned = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            let zero = builder.emit_sol_cast(zero_unsigned, i256, &block);
+            block.append_operation(
+                YulReturnDataCopyOp::builder(builder.context, builder.unknown_location)
+                    .dst(zero)
+                    .src(zero)
+                    .size(size)
+                    .build()
+                    .into(),
+            );
+            block.append_operation(
+                YulRevertOp::builder(builder.context, builder.unknown_location)
+                    .addr(zero)
+                    .size(size)
+                    .build()
+                    .into(),
+            );
+            builder.emit_sol_yield(&block);
             return Ok(());
         };
         if let Some(error) = clause.error()
