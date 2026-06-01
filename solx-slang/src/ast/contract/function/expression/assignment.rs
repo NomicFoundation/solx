@@ -49,6 +49,24 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let left = assign.left_operand();
 
+        // A parenthesised single-element tuple LHS (`(x) = v`, or nested
+        // `(((x))) = v`) is a decayed tuple — semantically `x = v`. Peel all such
+        // tuples so it resolves as a scalar lvalue rather than taking the
+        // tuple-assignment path (which expects a tuple/call right-hand side).
+        let mut left = left;
+        loop {
+            let inner = match &left {
+                Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
+                    tuple.items().iter().next().and_then(|item| item.expression())
+                }
+                _ => None,
+            };
+            match inner {
+                Some(expression) => left = expression,
+                None => break,
+            }
+        }
+
         // `(a, b, ...) = rhs` — tuple / destructuring assignment. Only the plain
         // `=` operator is valid on a tuple left-hand side.
         if let Expression::TupleExpression(tuple) = &left
