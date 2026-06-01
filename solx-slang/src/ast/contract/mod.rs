@@ -103,7 +103,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // not part of `compute_linearised_functions`, so pre-register them and
         // emit their bodies into this contract's module below — they lower like
         // ordinary internal functions.
-        let library_functions = library::collect_library_functions(contract);
+        let library_functions = library::collect_library_functions(contract, free_functions);
         for library_function in &library_functions {
             let (parameter_types, return_types) =
                 TypeConversion::resolve_function_types(library_function, &self.state.builder);
