@@ -87,6 +87,62 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return self.emit_named_function_call(&function_definition, named_arguments, block);
         }
 
+        // Named-argument calls/constructors with a member-access callee:
+        // `Lib.S({...})` (a contract/library-qualified struct constructor) and
+        // `x.f({...})` / `L.f({...})` (using-for / direct internal-library call).
+        // A parenthesised callee `(x.f)({...})` wraps the member access in
+        // single-element tuples, so peel those first.
+        if let ArgumentsDeclaration::NamedArguments(named_arguments) = &call.arguments() {
+            let mut callee = call.operand();
+            loop {
+                let inner = match &callee {
+                    Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
+                        tuple.items().iter().next().and_then(|item| item.expression())
+                    }
+                    _ => None,
+                };
+                match inner {
+                    Some(expression) => callee = expression,
+                    None => break,
+                }
+            }
+            if let Expression::MemberAccessExpression(access) = &callee {
+                match access.member().resolve_to_definition() {
+                    Some(Definition::Struct(struct_definition)) => {
+                        let result_type = self
+                            .expression_emitter
+                            .resolve_slang_type(call.get_type())
+                            .ok_or_else(|| {
+                                anyhow::anyhow!("unresolved struct constructor type")
+                            })?;
+                        return self
+                            .emit_named_struct_constructor(
+                                &struct_definition,
+                                result_type,
+                                named_arguments,
+                                block,
+                            )
+                            .map(|(value, block)| (Some(value), block));
+                    }
+                    Some(Definition::Function(function_definition))
+                        if self
+                            .expression_emitter
+                            .state
+                            .library_function_ids
+                            .contains(&function_definition.node_id()) =>
+                    {
+                        return self.emit_named_member_call(
+                            access,
+                            &function_definition,
+                            named_arguments,
+                            block,
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
         else {
             anyhow::bail!("only positional arguments supported");
@@ -701,6 +757,89 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let parameter_name = parameter
                 .name()
                 .ok_or_else(|| anyhow::anyhow!("named call to a function with an unnamed parameter"))?
+                .name();
+            let argument = named_arguments
+                .iter()
+                .find(|argument| argument.name().name() == parameter_name)
+                .ok_or_else(|| anyhow::anyhow!("named call missing argument `{parameter_name}`"))?;
+            let (value, next_block) = self
+                .expression_emitter
+                .emit_value(&argument.value(), current_block)?;
+            argument_values.push(value);
+            current_block = next_block;
+        }
+
+        let (mlir_name, parameter_types, return_types) = self
+            .expression_emitter
+            .state
+            .resolve_function(function_definition.node_id())?;
+        let builder = &self.expression_emitter.state.builder;
+        for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
+            *value = TypeConversion::from_target_type(param_type, builder).emit(
+                *value,
+                builder,
+                &current_block,
+            );
+        }
+        let results =
+            builder.emit_sol_call_results(mlir_name, &argument_values, return_types, &current_block)?;
+        Ok((results.into_iter().next(), current_block))
+    }
+
+    /// Emits a named-argument internal-library call onto a member-access callee
+    /// — `x.f({...})` (`using for`) or `L.f({...})` (direct). The named
+    /// arguments are matched to the function's parameters by name and reordered
+    /// to declaration order; for the `using for` form the receiver is prepended
+    /// as the implicit `self` and the named arguments cover the remaining
+    /// parameters. Mirrors [`Self::try_emit_library_call`] but for named args.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a parameter is unnamed, an argument for a parameter
+    /// is missing, or argument emission / signature resolution fails.
+    fn emit_named_member_call(
+        &self,
+        access: &MemberAccessExpression,
+        function_definition: &FunctionDefinition,
+        named_arguments: &slang_solidity_v2::ast::NamedArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        // A namespace qualifier (`L.f`, import alias) contributes no `self`; a
+        // value receiver (`x.f`) is the implicit `self` first argument.
+        let receiver_is_qualifier = matches!(
+            access.operand(),
+            Expression::Identifier(identifier)
+                if matches!(
+                    identifier.resolve_to_definition(),
+                    Some(
+                        Definition::Library(_)
+                            | Definition::Import(_)
+                            | Definition::ImportedSymbol(_)
+                    )
+                )
+        );
+
+        let parameters: Vec<_> = function_definition.parameters().iter().collect();
+        let mut argument_values = Vec::new();
+        let mut current_block = block;
+        // The named arguments name the explicit parameters; for `using for` the
+        // first parameter is the receiver-supplied `self`, so skip it here.
+        let named_parameters = if receiver_is_qualifier {
+            &parameters[..]
+        } else {
+            let (self_value, next) = self
+                .expression_emitter
+                .emit_value(&access.operand(), current_block)?;
+            argument_values.push(self_value);
+            current_block = next;
+            &parameters[1..]
+        };
+        for parameter in named_parameters {
+            let parameter_name = parameter
+                .name()
+                .ok_or_else(|| {
+                    anyhow::anyhow!("named call to a library function with an unnamed parameter")
+                })?
                 .name();
             let argument = named_arguments
                 .iter()
