@@ -648,6 +648,69 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((Some(value), current_block));
         }
 
+        // `this.v(args)` — an external call to a public state variable's
+        // auto-generated getter (`v` a mapping/array/scalar). Like `this.f(args)`
+        // it CALLs the contract's own address with the getter's selector; the
+        // signature is reconstructed from the variable (single-level shapes).
+        if let Some(arguments) = arguments
+            && matches!(access.operand(), Expression::ThisKeyword(_))
+            && let Some(Definition::StateVariable(state_variable)) =
+                access.member().resolve_to_definition()
+            && let Some(selector) = state_variable.compute_selector()
+            && let Some((parameter_types, return_types)) = self.getter_signature(&state_variable)
+        {
+            let mut argument_values = Vec::with_capacity(arguments.len());
+            let mut current_block = block;
+            for argument in arguments.iter() {
+                let (value, next) = self
+                    .expression_emitter
+                    .emit_value(&argument, current_block)?;
+                argument_values.push(value);
+                current_block = next;
+            }
+            let builder = &self.expression_emitter.state.builder;
+            for (value, param_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
+                *value = TypeConversion::from_target_type(*param_type, builder).emit(
+                    *value,
+                    builder,
+                    &current_block,
+                );
+            }
+            let contract_type = self
+                .expression_emitter
+                .state
+                .current_contract_type
+                .ok_or_else(|| anyhow::anyhow!("sol.this emitted outside a contract"))?;
+            let this_value = current_block
+                .append_operation(
+                    ThisOperation::builder(builder.context, builder.unknown_location)
+                        .addr(contract_type)
+                        .build()
+                        .into(),
+                )
+                .result(0)
+                .expect("sol.this always produces one result")
+                .into();
+            let address = builder.emit_sol_address_cast(
+                this_value,
+                builder.types.sol_address,
+                &current_block,
+            );
+            let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
+            let callee =
+                builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &current_block);
+            let value = call_value
+                .unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &current_block));
+            let results = builder.emit_sol_ext_icall(
+                callee,
+                &argument_values,
+                &return_types,
+                value,
+                &current_block,
+            )?;
+            return Ok((results.into_iter().next(), current_block));
+        }
+
         // `this.f(args)` is a genuine external call in Solidity (CALL to the
         // contract's own address), so it populates returndata and runs the
         // dispatcher. Emit a real `sol.ext_icall` rather than the local-call
@@ -1286,6 +1349,58 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .builder
             .emit_sol_pop(array_value, &block);
         Ok((None, block))
+    }
+
+    /// Derives the `(parameter_types, return_types)` of a public state
+    /// variable's auto-generated getter for the common single-level shapes — a
+    /// scalar value (`x() -> T`), a single value-keyed mapping (`m(K) -> V`), or
+    /// a single value-element array (`a(uint256) -> E`). Returns `None` for
+    /// nested or reference-typed shapes, which fall through to the existing
+    /// dispatch rather than emitting a wrong signature.
+    fn getter_signature(
+        &self,
+        state_variable: &slang_solidity_v2::ast::StateVariableDefinition,
+    ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)> {
+        let declared_type = state_variable.get_type()?;
+        let builder = &self.expression_emitter.state.builder;
+        match &declared_type {
+            SlangType::Mapping(mapping_type) => {
+                let key = mapping_type.key_type();
+                let value = mapping_type.value_type();
+                if key.is_reference_type() || value.is_reference_type() {
+                    return None;
+                }
+                Some((
+                    vec![TypeConversion::resolve_slang_type(&key, None, builder)],
+                    vec![TypeConversion::resolve_slang_type(&value, None, builder)],
+                ))
+            }
+            SlangType::Array(array_type) => {
+                let element = array_type.element_type();
+                if element.is_reference_type() {
+                    return None;
+                }
+                Some((
+                    vec![builder.types.ui256],
+                    vec![TypeConversion::resolve_slang_type(&element, None, builder)],
+                ))
+            }
+            SlangType::FixedSizeArray(array_type) => {
+                let element = array_type.element_type();
+                if element.is_reference_type() {
+                    return None;
+                }
+                Some((
+                    vec![builder.types.ui256],
+                    vec![TypeConversion::resolve_slang_type(&element, None, builder)],
+                ))
+            }
+            other if !other.is_reference_type() => Some((
+                Vec::new(),
+                vec![TypeConversion::resolve_slang_type(other, None, builder)],
+            )),
+            _ => None,
+        }
     }
 
     /// Emits `arr.push(x)` / `arr.push()` / `bytes.push()` as `sol.push`,
