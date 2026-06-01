@@ -145,7 +145,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
         else {
-            anyhow::bail!("only positional arguments supported");
+            unimplemented!("only positional arguments supported");
         };
 
         // Unwrap a parenthesised callee: `(data.pop)()` / `(f)(x)` parse the
@@ -255,7 +255,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     Expression::ElementaryType(elementary) => {
                         self.resolve_abi_elementary_type(elementary)?
                     }
-                    _ => anyhow::bail!("unresolved type conversion target"),
+                    _ => unimplemented!("unresolved type conversion target"),
                 },
             };
 
@@ -508,7 +508,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     block,
                 );
             }
-            anyhow::bail!("unsupported callee expression");
+            unimplemented!("unsupported callee expression");
         };
         let function_definition = match callee_identifier.resolve_to_definition() {
             Some(Definition::Function(function_definition)) => function_definition,
@@ -544,7 +544,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     block,
                 );
             }
-            _ => anyhow::bail!(
+            _ => unimplemented!(
                 "callee '{}' does not resolve to a function",
                 callee_identifier.name()
             ),
@@ -590,7 +590,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
         // Derive parameter and result types from the pointer's function type.
         let SlangType::Function(function_type) = function_slang_type else {
-            anyhow::bail!("indirect-call callee is not a function type");
+            unreachable!("indirect-call callee is not a function type");
         };
         let builder = &self.expression_emitter.state.builder;
         let parameter_types: Vec<Type<'context>> = function_type
@@ -979,7 +979,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
         else {
-            anyhow::bail!("only positional arguments supported");
+            unimplemented!("only positional arguments supported");
         };
 
         if let Some((values, block)) =
@@ -1016,12 +1016,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
 
         let Expression::Identifier(callee_identifier) = call.operand() else {
-            anyhow::bail!("multi-result calls only support direct named function callees");
+            unimplemented!("multi-result calls only support direct named function callees");
         };
         let Some(Definition::Function(function_definition)) =
             callee_identifier.resolve_to_definition()
         else {
-            anyhow::bail!(
+            unimplemented!(
                 "callee '{}' does not resolve to a function",
                 callee_identifier.name()
             );

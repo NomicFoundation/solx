@@ -40,7 +40,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         macro_rules! binop {
             ($op:ident) => {{
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul {} needs 2 args", name);
+                    unreachable!("yul {} needs 2 args", name);
                 }
                 let value = block
                     .append_operation(
@@ -73,7 +73,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             "div" => {
                 // Yul `div(x, 0)` returns 0 (no revert), unlike `sol.div`.
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul div needs 2 args");
+                    unreachable!("yul div needs 2 args");
                 }
                 let dividend = to_signless(arguments[0], &block);
                 let divisor = to_signless(arguments[1], &block);
@@ -94,7 +94,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             "mod" => {
                 // Yul `mod(x, 0)` returns 0 (no revert), unlike `sol.mod`.
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul mod needs 2 args");
+                    unreachable!("yul mod needs 2 args");
                 }
                 let value_arg = to_signless(arguments[0], &block);
                 let mod_arg = to_signless(arguments[1], &block);
@@ -117,7 +117,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             "xor" => binop!(XorOperation),
             "shl" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul shl needs 2 args");
+                    unreachable!("yul shl needs 2 args");
                 }
                 let value = block
                     .append_operation(
@@ -134,7 +134,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "shr" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul shr needs 2 args");
+                    unreachable!("yul shr needs 2 args");
                 }
                 let value = block
                     .append_operation(
@@ -151,7 +151,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "exp" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul exp needs 2 args");
+                    unreachable!("yul exp needs 2 args");
                 }
                 let value = block
                     .append_operation(
@@ -200,7 +200,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "iszero" => {
                 if arguments.len() != 1 {
-                    anyhow::bail!("yul iszero needs 1 arg");
+                    unreachable!("yul iszero needs 1 arg");
                 }
                 let zero = builder.emit_sol_constant(0, ui256, &block);
                 let cmp = builder.emit_sol_cmp(arguments[0], zero, CmpPredicate::Eq, &block);
@@ -264,7 +264,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             "gas" => ctx_intrinsic!(GasLeftOperation, val, ui256),
             "blockhash" => {
                 if arguments.len() != 1 {
-                    anyhow::bail!("yul blockhash needs 1 arg");
+                    unreachable!("yul blockhash needs 1 arg");
                 }
                 let value = block
                     .append_operation(
@@ -283,7 +283,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "mload" => {
                 if arguments.len() != 1 {
-                    anyhow::bail!("yul mload needs 1 arg");
+                    unreachable!("yul mload needs 1 arg");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let value = block
@@ -301,7 +301,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "mstore" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul mstore needs 2 args");
+                    unreachable!("yul mstore needs 2 args");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let val = to_signless(arguments[1], &block);
@@ -316,7 +316,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "mcopy" => {
                 if arguments.len() != 3 {
-                    anyhow::bail!("yul mcopy needs 3 args");
+                    unreachable!("yul mcopy needs 3 args");
                 }
                 let dst = to_signless(arguments[0], &block);
                 let src = to_signless(arguments[1], &block);
@@ -333,7 +333,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "sload" => {
                 if arguments.len() != 1 {
-                    anyhow::bail!("yul sload needs 1 arg");
+                    unreachable!("yul sload needs 1 arg");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let value = block
@@ -351,7 +351,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "sstore" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul sstore needs 2 args");
+                    unreachable!("yul sstore needs 2 args");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let val = to_signless(arguments[1], &block);
@@ -366,7 +366,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "tload" => {
                 if arguments.len() != 1 {
-                    anyhow::bail!("yul tload needs 1 arg");
+                    unreachable!("yul tload needs 1 arg");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let value = block
@@ -384,7 +384,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "tstore" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul tstore needs 2 args");
+                    unreachable!("yul tstore needs 2 args");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let val = to_signless(arguments[1], &block);
@@ -399,7 +399,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "keccak256" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul keccak256 needs 2 args");
+                    unreachable!("yul keccak256 needs 2 args");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let size = to_signless(arguments[1], &block);
@@ -439,7 +439,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "calldataload" => {
                 if arguments.len() != 1 {
-                    anyhow::bail!("yul calldataload needs 1 arg");
+                    unreachable!("yul calldataload needs 1 arg");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let value = block
@@ -490,7 +490,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "mstore8" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul mstore8 needs 2 args");
+                    unreachable!("yul mstore8 needs 2 args");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let val = to_signless(arguments[1], &block);
@@ -501,7 +501,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "return" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul return needs 2 args");
+                    unreachable!("yul return needs 2 args");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let size = to_signless(arguments[1], &block);
@@ -512,7 +512,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "revert" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul revert needs 2 args");
+                    unreachable!("yul revert needs 2 args");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let size = to_signless(arguments[1], &block);
@@ -531,7 +531,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "not" => {
                 if arguments.len() != 1 {
-                    anyhow::bail!("yul not needs 1 arg");
+                    unreachable!("yul not needs 1 arg");
                 }
                 let v = to_signless(arguments[0], &block);
                 let value = block
@@ -545,7 +545,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "byte" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul byte needs 2 args");
+                    unreachable!("yul byte needs 2 args");
                 }
                 let idx = to_signless(arguments[0], &block);
                 let val = to_signless(arguments[1], &block);
@@ -565,7 +565,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "signextend" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul signextend needs 2 args");
+                    unreachable!("yul signextend needs 2 args");
                 }
                 let val = to_signless(arguments[0], &block);
                 let off = to_signless(arguments[1], &block);
@@ -585,7 +585,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "sdiv" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul sdiv needs 2 args");
+                    unreachable!("yul sdiv needs 2 args");
                 }
                 let dividend = to_signless(arguments[0], &block);
                 let divisor = to_signless(arguments[1], &block);
@@ -605,7 +605,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "smod" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul smod needs 2 args");
+                    unreachable!("yul smod needs 2 args");
                 }
                 let value_arg = to_signless(arguments[0], &block);
                 let mod_arg = to_signless(arguments[1], &block);
@@ -625,7 +625,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "sar" => {
                 if arguments.len() != 2 {
-                    anyhow::bail!("yul sar needs 2 args");
+                    unreachable!("yul sar needs 2 args");
                 }
                 let shift = to_signless(arguments[0], &block);
                 let val = to_signless(arguments[1], &block);
@@ -645,7 +645,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "addmod" => {
                 if arguments.len() != 3 {
-                    anyhow::bail!("yul addmod needs 3 args");
+                    unreachable!("yul addmod needs 3 args");
                 }
                 let x = to_signless(arguments[0], &block);
                 let y = to_signless(arguments[1], &block);
@@ -667,7 +667,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "mulmod" => {
                 if arguments.len() != 3 {
-                    anyhow::bail!("yul mulmod needs 3 args");
+                    unreachable!("yul mulmod needs 3 args");
                 }
                 let x = to_signless(arguments[0], &block);
                 let y = to_signless(arguments[1], &block);
@@ -689,7 +689,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "balance" => {
                 if arguments.len() != 1 {
-                    anyhow::bail!("yul balance needs 1 arg");
+                    unreachable!("yul balance needs 1 arg");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let value = block
@@ -707,7 +707,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "extcodesize" => {
                 if arguments.len() != 1 {
-                    anyhow::bail!("yul extcodesize needs 1 arg");
+                    unreachable!("yul extcodesize needs 1 arg");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let value = block
@@ -725,7 +725,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "extcodehash" => {
                 if arguments.len() != 1 {
-                    anyhow::bail!("yul extcodehash needs 1 arg");
+                    unreachable!("yul extcodehash needs 1 arg");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let value = block
@@ -743,7 +743,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "calldatacopy" => {
                 if arguments.len() != 3 {
-                    anyhow::bail!("yul calldatacopy needs 3 args");
+                    unreachable!("yul calldatacopy needs 3 args");
                 }
                 let dst = to_signless(arguments[0], &block);
                 let src = to_signless(arguments[1], &block);
@@ -760,7 +760,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "codecopy" => {
                 if arguments.len() != 3 {
-                    anyhow::bail!("yul codecopy needs 3 args");
+                    unreachable!("yul codecopy needs 3 args");
                 }
                 let dst = to_signless(arguments[0], &block);
                 let src = to_signless(arguments[1], &block);
@@ -777,7 +777,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "returndatacopy" => {
                 if arguments.len() != 3 {
-                    anyhow::bail!("yul returndatacopy needs 3 args");
+                    unreachable!("yul returndatacopy needs 3 args");
                 }
                 let dst = to_signless(arguments[0], &block);
                 let src = to_signless(arguments[1], &block);
@@ -794,7 +794,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "call" => {
                 if arguments.len() != 7 {
-                    anyhow::bail!("yul call needs 7 args");
+                    unreachable!("yul call needs 7 args");
                 }
                 let gas = to_signless(arguments[0], &block);
                 let address = to_signless(arguments[1], &block);
@@ -824,7 +824,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "staticcall" => {
                 if arguments.len() != 6 {
-                    anyhow::bail!("yul staticcall needs 6 args");
+                    unreachable!("yul staticcall needs 6 args");
                 }
                 let gas = to_signless(arguments[0], &block);
                 let address = to_signless(arguments[1], &block);
@@ -852,7 +852,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "delegatecall" => {
                 if arguments.len() != 6 {
-                    anyhow::bail!("yul delegatecall needs 6 args");
+                    unreachable!("yul delegatecall needs 6 args");
                 }
                 let gas = to_signless(arguments[0], &block);
                 let address = to_signless(arguments[1], &block);
@@ -881,7 +881,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             "pop" => {
                 // Pop the argument off (discard); yul `pop(x)` returns nothing.
                 if arguments.len() != 1 {
-                    anyhow::bail!("yul pop needs 1 arg");
+                    unreachable!("yul pop needs 1 arg");
                 }
                 Ok((builder.emit_sol_constant(0, ui256, &block), block))
             }
@@ -897,11 +897,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 // `verbatim_<n>i_<m>o` injects opaque raw EVM bytecode; returning
                 // an argument unchanged would silently drop it. (The suffixed
                 // forms also reach the unsupported-intrinsic bail below.)
-                anyhow::bail!("verbatim is not yet supported in inline assembly")
+                unimplemented!("verbatim inline assembly")
             }
             "log0" | "log1" | "log2" | "log3" | "log4" => {
                 if arguments.len() < 2 {
-                    anyhow::bail!("yul {name} needs at least 2 args");
+                    unreachable!("yul {name} needs at least 2 args");
                 }
                 let addr = to_signless(arguments[0], &block);
                 let size = to_signless(arguments[1], &block);
@@ -921,7 +921,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "create" => {
                 if arguments.len() != 3 {
-                    anyhow::bail!("yul create needs 3 args");
+                    unreachable!("yul create needs 3 args");
                 }
                 let val = to_signless(arguments[0], &block);
                 let addr = to_signless(arguments[1], &block);
@@ -943,7 +943,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             "create2" => {
                 if arguments.len() != 4 {
-                    anyhow::bail!("yul create2 needs 4 args");
+                    unreachable!("yul create2 needs 4 args");
                 }
                 let val = to_signless(arguments[0], &block);
                 let addr = to_signless(arguments[1], &block);
@@ -965,7 +965,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     .into();
                 Ok((from_signless(value, &block), block))
             }
-            _ => anyhow::bail!("unsupported yul intrinsic: {name}"),
+            _ => unimplemented!("yul intrinsic: {name}"),
         }
     }
 }

@@ -147,10 +147,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 // call to a user-defined yul function with matching arity.
                 if variables.len() != 1 {
                     let YulExpression::YulFunctionCallExpression(call) = &expression else {
-                        anyhow::bail!("multi-value yul assignment requires a call RHS");
+                        unreachable!("multi-value yul assignment requires a call RHS");
                     };
                     let YulExpression::YulPath(callee_path) = call.operand() else {
-                        anyhow::bail!("multi-value yul assignment RHS has non-path callee");
+                        unreachable!("multi-value yul assignment RHS has non-path callee");
                     };
                     let callee = callee_path
                         .iter()
@@ -158,7 +158,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                         .ok_or_else(|| anyhow::anyhow!("empty yul callee path"))?
                         .name();
                     if !self.yul_functions.contains_key(&callee) {
-                        anyhow::bail!("multi-value yul assignment RHS is not a user-defined function");
+                        unimplemented!("multi-value yul assignment RHS is not a user-defined function");
                     }
                     let mut arguments = Vec::new();
                     let mut current = block;
@@ -169,7 +169,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     }
                     let (values, current) =
                         self.emit_yul_user_call_multi(&callee, &arguments, current)?;
-                    anyhow::ensure!(
+                    assert!(
                         values.len() == variables.len(),
                         "yul assignment arity mismatch: {} targets vs {} results",
                         variables.len(),
@@ -227,10 +227,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                             // Multi-let only supported when the RHS is a call
                             // to a user-defined yul function.
                             let YulExpression::YulFunctionCallExpression(call) = &expression else {
-                                anyhow::bail!("multi-variable yul let requires a call RHS");
+                                unreachable!("multi-variable yul let requires a call RHS");
                             };
                             let YulExpression::YulPath(path) = call.operand() else {
-                                anyhow::bail!("multi-variable yul let RHS has non-path callee");
+                                unreachable!("multi-variable yul let RHS has non-path callee");
                             };
                             let name = path
                                 .iter()
@@ -238,7 +238,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                                 .ok_or_else(|| anyhow::anyhow!("empty yul callee path"))?
                                 .name();
                             if !self.yul_functions.contains_key(&name) {
-                                anyhow::bail!(
+                                unimplemented!(
                                     "multi-variable yul let RHS is not a user-defined function"
                                 );
                             }
@@ -252,7 +252,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                             let (values, next) =
                                 self.emit_yul_user_call_multi(&name, &arguments, current)?;
                             current = next;
-                            anyhow::ensure!(
+                            assert!(
                                 values.len() == variable_count,
                                 "yul let arity mismatch: {} variables vs {} call results",
                                 variable_count,
@@ -488,7 +488,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 )?;
                 Ok(current)
             }
-            _ => anyhow::bail!(
+            _ => unimplemented!(
                 "unsupported yul statement: {:?}",
                 std::mem::discriminant(statement)
             ),
@@ -754,7 +754,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             YulExpression::YulFunctionCallExpression(call) => {
                 let operand = call.operand();
                 let YulExpression::YulPath(path) = operand else {
-                    anyhow::bail!("unsupported yul callee");
+                    unimplemented!("unsupported yul callee");
                 };
                 let name = path
                     .iter()
@@ -802,7 +802,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let depth = self.yul_inline_depth.entry(name.to_string()).or_insert(0);
         if *depth >= 1 {
-            anyhow::bail!("recursive yul function `{name}` cannot be inlined");
+            unimplemented!("recursive yul function `{name}` cannot be inlined");
         }
         *depth += 1;
         let definition = self
@@ -820,7 +820,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .returns()
             .map(|names| names.iter().map(|identifier| identifier.name()).collect())
             .unwrap_or_default();
-        anyhow::ensure!(
+        assert!(
             arguments.len() == parameter_names.len(),
             "yul call `{name}` arity mismatch: {} args vs {} params",
             arguments.len(),
@@ -903,7 +903,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let depth = self.yul_inline_depth.entry(name.to_string()).or_insert(0);
         if *depth >= 1 {
-            anyhow::bail!("recursive yul function `{name}` cannot be inlined");
+            unimplemented!("recursive yul function `{name}` cannot be inlined");
         }
         *depth += 1;
         let definition = self
@@ -921,7 +921,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .returns()
             .map(|names| names.iter().map(|identifier| identifier.name()).collect())
             .unwrap_or_default();
-        anyhow::ensure!(
+        assert!(
             arguments.len() == parameter_names.len(),
             "yul call `{name}` arity mismatch: {} args vs {} params",
             arguments.len(),

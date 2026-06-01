@@ -355,8 +355,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let value = self.state.builder.emit_sol_lib_addr(&symbol, &block);
                         Ok((Some(value), block))
                     }
-                    None => anyhow::bail!("unresolved identifier: {name}"),
-                    Some(_) => anyhow::bail!("unsupported identifier reference: {name}"),
+                    None => unreachable!("unresolved identifier: {name}"),
+                    Some(_) => unimplemented!("unsupported identifier reference: {name}"),
                 }
             }
             Expression::AssignmentExpression(assign) => self
@@ -490,7 +490,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::TupleExpression(tuple) => {
                 let items = tuple.items();
                 // TODO: support multi-value tuples (e.g. tuple deconstruction)
-                anyhow::ensure!(items.len() == 1, "multi-value tuples not yet supported");
+                assert!(items.len() == 1, "multi-value tuples not yet supported");
                 let item = items.iter().next().expect("length checked to be 1 above");
                 let inner = item
                     .expression()
@@ -555,7 +555,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let element_slang_type = match &result_slang_type {
                     SlangType::FixedSizeArray(fixed_array_type) => fixed_array_type.element_type(),
                     SlangType::Array(array_type) => array_type.element_type(),
-                    _ => anyhow::bail!(
+                    _ => unimplemented!(
                         "array literal has unexpected result type: {:?}",
                         std::mem::discriminant(&result_slang_type)
                     ),

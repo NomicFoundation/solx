@@ -44,7 +44,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let Some(Definition::Event(event_definition)) =
             emit_statement.event().resolve_to_definition()
         else {
-            anyhow::bail!("emit target does not resolve to an event definition");
+            unreachable!("emit target does not resolve to an event definition");
         };
         let parameters = event_definition.parameters();
         let ordered_arguments = match &emit_statement.arguments() {
@@ -55,7 +55,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 Self::order_named_event_arguments(named, &parameters)?
             }
         };
-        anyhow::ensure!(
+        assert!(
             ordered_arguments.len() == parameters.len(),
             "event argument count {} does not match parameter count {}",
             ordered_arguments.len(),
@@ -161,7 +161,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     entry.insert(argument.value());
                 }
                 Entry::Occupied(entry) => {
-                    anyhow::bail!("duplicate named event argument `{}`", entry.key());
+                    unreachable!("duplicate named event argument `{}`", entry.key());
                 }
             }
         }
@@ -180,7 +180,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             ordered_arguments.push(argument);
         }
 
-        anyhow::ensure!(
+        assert!(
             arguments.is_empty(),
             "unknown named event argument(s): {}",
             arguments

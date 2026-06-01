@@ -1282,7 +1282,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         let (function_value, current) = self
                             .expression_emitter
                             .emit_value(&function_reference, block)?;
-                        anyhow::ensure!(
+                        assert!(
                             solx_mlir::TypeFactory::is_sol_ext_function_ref(
                                 function_value.r#type()
                             ),
@@ -1706,7 +1706,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((Some(address), block));
         }
         let Some(SlangType::Contract(contract_type)) = slang_type else {
-            anyhow::bail!("new expression has no resolved type or unsupported new target");
+            unimplemented!("new expression has no resolved type or unsupported new target");
         };
         let Definition::Contract(contract_definition) = contract_type.definition() else {
             unreachable!("Slang ContractType always references a Contract definition");
@@ -2024,7 +2024,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let ArgumentsDeclaration::PositionalArguments(error_arguments) =
                 error_call.arguments()
             else {
-                anyhow::bail!("named arguments in a `require` custom error are not supported");
+                unimplemented!("named arguments in a `require` custom error are not supported");
             };
             let (mut argument_values, block) =
                 self.emit_argument_values(&error_arguments, block)?;

@@ -130,7 +130,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             // The value path (`emit_index_access`) intercepts slices; reaching
             // here means a slice was used as an assignment target, which is
             // not valid Solidity (calldata slices are read-only).
-            anyhow::bail!("a calldata slice `a[i:j]` is not assignable");
+            unreachable!("a calldata slice `a[i:j]` is not assignable");
         }
 
         let base = index_access.operand();
@@ -192,7 +192,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 unreachable!("slang should not surface Inherited at an index-access base")
             }
             Some(other) => Ok(DataLocation::from_slang(other, None)),
-            None => anyhow::bail!(
+            None => unimplemented!(
                 "index access on a value-typed base is not yet wired: {:?}",
                 std::mem::discriminant(base_type)
             ),

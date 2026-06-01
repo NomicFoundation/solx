@@ -121,7 +121,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let (values, current) = match &expression {
             Expression::TupleExpression(tuple) => {
                 let items = tuple.items();
-                anyhow::ensure!(
+                assert!(
                     items.len() == elements.len(),
                     "tuple deconstruction arity mismatch: {} LHS slots vs {} RHS values",
                     elements.len(),
@@ -142,7 +142,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Expression::FunctionCallExpression(call) => {
                 let call_emitter = CallEmitter::new(&emitter);
                 let (values, current) = call_emitter.emit_function_call_results(call, block)?;
-                anyhow::ensure!(
+                assert!(
                     values.len() == elements.len(),
                     "tuple deconstruction arity mismatch: {} LHS slots vs {} call results",
                     elements.len(),
@@ -156,7 +156,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Expression::ConditionalExpression(conditional) => {
                 match emitter.emit_conditional_tuple_values(conditional, block)? {
                     Some((values, current)) => {
-                        anyhow::ensure!(
+                        assert!(
                             values.len() == elements.len(),
                             "tuple deconstruction arity mismatch: {} LHS slots vs {} conditional values",
                             elements.len(),
@@ -164,12 +164,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                         );
                         (values, current)
                     }
-                    None => anyhow::bail!(
+                    None => unimplemented!(
                         "tuple deconstruction with this right-hand side shape is not yet supported"
                     ),
                 }
             }
-            _ => anyhow::bail!(
+            _ => unimplemented!(
                 "tuple deconstruction with this right-hand side shape is not yet supported"
             ),
         };

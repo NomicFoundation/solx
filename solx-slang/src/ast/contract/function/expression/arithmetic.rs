@@ -279,7 +279,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 // reference-type deletion (arrays, mappings, structs) needs
                 // dedicated lowering.
                 let Expression::Identifier(identifier) = operand else {
-                    anyhow::bail!("unsupported delete operand");
+                    unimplemented!("unsupported delete operand");
                 };
                 let name = identifier.name();
                 match identifier.resolve_to_definition() {
@@ -330,7 +330,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                                 Some(SlangType::FixedSizeArray(_) | SlangType::Struct(_)) => {
                                     builder.emit_sol_malloc(element_type, &block)
                                 }
-                                _ => anyhow::bail!(
+                                _ => unimplemented!(
                                     "delete on a non-integer local '{name}' is not yet supported"
                                 ),
                             }
@@ -431,7 +431,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                                         builder.emit_sol_constant(0, builder.types.ui256, &block);
                                     return Ok((placeholder, block));
                                 }
-                                _ => anyhow::bail!(
+                                _ => unimplemented!(
                                     "delete of a reference-type storage variable is not yet supported"
                                 ),
                             }
@@ -462,7 +462,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             // recursive zeroing, not yet implemented. Fail cleanly
                             // rather than storing a type-mismatched `ui256(0)` into
                             // a reference-typed slot (which the verifier rejects).
-                            anyhow::bail!(
+                            unimplemented!(
                                 "delete of a reference-type storage variable is not yet supported"
                             );
                         } else {
@@ -473,10 +473,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         self.emit_storage_store(slot, byte_offset, zero, location, &block);
                         Ok((zero, block))
                     }
-                    _ => anyhow::bail!("unsupported delete target: {name}"),
+                    _ => unimplemented!("unsupported delete target: {name}"),
                 }
             }
-            _ => anyhow::bail!("unsupported prefix operator: {operator:?}"),
+            _ => unimplemented!("unsupported prefix operator: {operator:?}"),
         }
     }
 
@@ -554,7 +554,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
 
         let Expression::Identifier(identifier) = effective else {
-            anyhow::bail!("unsupported operand for {operator:?}");
+            unimplemented!("unsupported operand for {operator:?}");
         };
         let name = identifier.name();
 
@@ -605,8 +605,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 self.state.builder.emit_sol_store(new_value, pointer, block);
                 Ok((old, new_value))
             }
-            None => anyhow::bail!("unresolved identifier: {name}"),
-            Some(_) => anyhow::bail!("unsupported operand for {operator:?}: {name}"),
+            None => unreachable!("unresolved identifier: {name}"),
+            Some(_) => unimplemented!("unsupported operand for {operator:?}: {name}"),
         }
     }
 }

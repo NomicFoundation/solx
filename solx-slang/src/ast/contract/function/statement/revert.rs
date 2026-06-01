@@ -55,7 +55,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 return Ok(Some(block));
             }
             Some(Definition::Error(error)) => error,
-            Some(_) => anyhow::bail!("revert target does not resolve to an error definition"),
+            Some(_) => unreachable!("revert target does not resolve to an error definition"),
         };
         let signature = error.compute_canonical_signature().ok_or_else(|| {
             anyhow::anyhow!(
@@ -115,11 +115,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
         else {
-            anyhow::bail!("only positional arguments supported");
+            unimplemented!("only positional arguments supported");
         };
         let mut arguments = positional_arguments.iter();
         let message_argument = arguments.next();
-        anyhow::ensure!(
+        assert!(
             arguments.next().is_none(),
             "revert accepts at most one argument"
         );
@@ -177,7 +177,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     entry.insert(argument.value());
                 }
                 Entry::Occupied(entry) => {
-                    anyhow::bail!("duplicate named revert argument `{}`", entry.key());
+                    unreachable!("duplicate named revert argument `{}`", entry.key());
                 }
             }
         }
@@ -196,7 +196,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             ordered_arguments.push(argument);
         }
 
-        anyhow::ensure!(
+        assert!(
             arguments.is_empty(),
             "unknown named revert argument(s): {}",
             arguments

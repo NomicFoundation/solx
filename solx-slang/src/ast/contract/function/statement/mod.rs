@@ -234,7 +234,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
             Statement::AssemblyStatement(assembly) => self.emit_assembly(assembly, block),
             Statement::TryStatement(try_statement) => self.emit_try(try_statement, block),
-            _ => anyhow::bail!(
+            _ => unimplemented!(
                 "unsupported statement: {:?}",
                 std::mem::discriminant(statement)
             ),
@@ -336,7 +336,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     .ok_or_else(|| {
                         anyhow::anyhow!("multi-value return from a non-call expression is not supported")
                     })?,
-                _ => anyhow::bail!(
+                _ => unimplemented!(
                     "multi-value return from a non-call expression is not supported"
                 ),
             }

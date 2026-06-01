@@ -108,7 +108,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         // the operator, and writes back — so it needs a value-typed, loadable
         // target. Reference types are never the LHS of a compound operator.
         let LvalueTarget::Store(store_target) = target else {
-            anyhow::bail!("compound assignment to a reference-typed lvalue is not supported");
+            unimplemented!("compound assignment to a reference-typed lvalue is not supported");
         };
         let operator = match assign.operator() {
             ast::AssignmentExpressionOperator::AmpersandEqual(_) => Operator::BitwiseAnd,
@@ -236,7 +236,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         ))
                     }
                     None => unreachable!("slang resolves every identifier reference"),
-                    Some(_) => anyhow::bail!(
+                    Some(_) => unimplemented!(
                         "assignment to non-variable definition '{name}' is not yet supported"
                     ),
                 }
@@ -279,7 +279,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         block,
                     );
                 }
-                anyhow::bail!(
+                unimplemented!(
                     "unsupported member-access lvalue: {}",
                     access.member().name()
                 )
@@ -312,7 +312,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     ))
                 }
             }
-            _ => anyhow::bail!(
+            _ => unimplemented!(
                 "assignment target {:?} is not yet supported",
                 std::mem::discriminant(lvalue)
             ),
@@ -403,7 +403,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let lhs_leaves = Self::flatten_tuple_lvalues(tuple);
                 let (values, current) =
                     CallEmitter::new(self).emit_function_call_results(call, block)?;
-                anyhow::ensure!(
+                assert!(
                     values.len() == lhs_leaves.len(),
                     "tuple assignment arity mismatch: {} LHS slots vs {} call results",
                     lhs_leaves.len(),
@@ -420,7 +420,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             "tuple assignment with this right-hand side shape is not yet supported"
                         )
                     })?;
-                anyhow::ensure!(
+                assert!(
                     values.len() == lhs_leaves.len(),
                     "tuple assignment arity mismatch: {} LHS slots vs {} conditional values",
                     lhs_leaves.len(),
@@ -428,7 +428,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 );
                 (Self::zip_assignments(lhs_leaves, values), current)
             }
-            _ => anyhow::bail!("tuple assignment with this right-hand side shape is not yet supported"),
+            _ => unimplemented!("tuple assignment with this right-hand side shape is not yet supported"),
         };
 
         let mut last_stored = None;
@@ -458,7 +458,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<Vec<(Option<Expression>, Expression)>> {
         let lhs_items = lhs.items();
         let rhs_items = rhs.items();
-        anyhow::ensure!(
+        assert!(
             lhs_items.len() == rhs_items.len(),
             "tuple assignment arity mismatch: {} LHS slots vs {} RHS values",
             lhs_items.len(),
