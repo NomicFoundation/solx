@@ -1022,6 +1022,25 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             );
             return Ok((value, block));
         }
+        // `data.pop;` / `data.push;` written as a bare expression (no call) is a
+        // no-op reference to the bound built-in — solc evaluates and discards it
+        // without performing the action (these built-ins are not first-class
+        // function values, so the result is never used). Returning a placeholder
+        // avoids both performing the pop/push and the value-expected panic below
+        // (`emit_built_in_member_access` would otherwise emit the pop/push op and
+        // then yield no value).
+        if matches!(
+            access.member().resolve_to_built_in(),
+            Some(
+                slang_solidity_v2::ast::BuiltIn::ArrayPop
+                    | slang_solidity_v2::ast::BuiltIn::ArrayPush
+            )
+        ) {
+            let builder = &self.expression_emitter.state.builder;
+            let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            return Ok((placeholder, block));
+        }
+
         let (value, block) = self.emit_built_in_member_access(access, None, block)?;
         Ok((
             value.expect("bare member access always produces a value"),
