@@ -184,6 +184,32 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     self.storage_layout,
                     self.checked,
                 );
+                // A discarded tuple-branched conditional `(c ? (1, 2) : (3, 4));`
+                // has no single value to emit, but its condition (and the
+                // selected branch) may have side effects. Emit it through the
+                // tuple path and discard the results; fall through to the normal
+                // value emission for single-valued conditionals. The statement
+                // is usually parenthesised (`(... ? ... : ...);`), which parses
+                // as a single-element tuple, so peel those first.
+                let mut unwrapped = expression_statement.expression();
+                loop {
+                    let inner = match &unwrapped {
+                        Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
+                            tuple.items().iter().next().and_then(|item| item.expression())
+                        }
+                        _ => None,
+                    };
+                    match inner {
+                        Some(next) => unwrapped = next,
+                        None => break,
+                    }
+                }
+                if let Expression::ConditionalExpression(conditional) = &unwrapped
+                    && let Some((_, block)) =
+                        emitter.emit_conditional_tuple_values(conditional, block)?
+                {
+                    return Ok(Some(block));
+                }
                 let (_, block) = emitter.emit(&expression, block)?;
                 Ok(Some(block))
             }
