@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::FunctionDefinition;
 
 use solx_mlir::Context;
 
@@ -39,10 +40,11 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
     pub fn emit(
         &mut self,
         contract: &ContractDefinition,
+        free_functions: &[FunctionDefinition],
     ) -> anyhow::Result<(String, BTreeMap<String, String>)> {
         let name = contract.name().name();
         let mut emitter = ContractEmitter::new(self.state);
-        emitter.emit(contract)?;
+        emitter.emit(contract, free_functions)?;
 
         let mut method_identifiers = BTreeMap::new();
         // Walk the inheritance-linearised function list so derived

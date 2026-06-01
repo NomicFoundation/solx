@@ -4,6 +4,7 @@
 
 /// Function definition lowering to Sol dialect MLIR.
 pub mod function;
+mod free_function;
 mod library;
 mod super_call;
 
@@ -79,7 +80,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ///
     /// Returns an error if any function body or constructor initializer
     /// contains unsupported constructs.
-    pub fn emit(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
+    pub fn emit(
+        &mut self,
+        contract: &ContractDefinition,
+        free_functions: &[FunctionDefinition],
+    ) -> anyhow::Result<()> {
         let contract_name = contract.name().name();
 
         // Re-resolve `super` calls against the C3 linearisation (slang resolves
@@ -110,6 +115,24 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
         self.state.library_function_ids =
             library_functions.iter().map(|f| f.node_id()).collect();
+
+        // Free functions (`f(...)` declared at file level) called by the
+        // contract, transitively. Like library internals, they are not in the
+        // linearised set, so pre-register and emit them into this module where
+        // they lower as ordinary internal functions.
+        let reached_free_functions =
+            free_function::collect_free_functions(contract, free_functions);
+        for free in &reached_free_functions {
+            let mlir_name = FunctionEmitter::mlir_function_name(free);
+            let (parameter_types, return_types) =
+                TypeConversion::resolve_function_types(free, &self.state.builder);
+            self.state.register_function_signature(
+                free.node_id(),
+                mlir_name,
+                parameter_types,
+                return_types,
+            );
+        }
 
         let storage_layout = Self::compute_storage_layout(contract);
 
@@ -197,6 +220,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, contract, &storage_layout)
                 .emit_sol(library_function, &contract_body)?;
+            self.state.current_contract_type = None;
+        }
+
+        // Emit the collected free functions so their `sol.call`s resolve.
+        for free in &reached_free_functions {
+            self.state.current_contract_type = Some(contract_type);
+            FunctionEmitter::new(self.state, contract, &storage_layout)
+                .emit_sol(free, &contract_body)?;
             self.state.current_contract_type = None;
         }
 

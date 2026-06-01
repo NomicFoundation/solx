@@ -165,6 +165,23 @@ impl Frontend for Slang {
             };
             let source_unit = file.ast();
 
+            // File-level free functions, callable by every contract in this
+            // unit. Collected once and handed to each contract emitter, which
+            // emits the ones it actually reaches as internal functions.
+            let free_functions: Vec<slang_solidity_v2::ast::FunctionDefinition> = source_unit
+                .members()
+                .iter()
+                .filter_map(|member| {
+                    if let slang_solidity_v2::ast::SourceUnitMember::FunctionDefinition(function) =
+                        member
+                    {
+                        Some(function)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
             for contract in source_unit.contracts() {
                 if contract.abstract_keyword().is_some() {
                     continue;
@@ -175,7 +192,8 @@ impl Frontend for Slang {
                 let evm_version = input_json.settings.evm_version.unwrap_or_default();
                 let mut context = solx_mlir::Context::new(&melior_context, evm_version);
                 let mut emitter = AstEmitter::new(&mut context);
-                let (contract_name, method_identifiers) = emitter.emit(&contract)?;
+                let (contract_name, method_identifiers) =
+                    emitter.emit(&contract, &free_functions)?;
 
                 let runtime_code_identifier = format!(
                     "{contract_name}{}",
