@@ -207,10 +207,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             // `E(x)` (integer -> enum): slang surfaces no call type for this
             // conversion, and it lowers to `sol.enum_cast` (not `sol.cast`).
             // Detect an enum callee, coerce the argument to `ui256`, and bridge.
-            if let Expression::Identifier(callee_identifier) = &callee
-                && let Some(Definition::Enum(enum_definition)) =
+            // The callee may be a bare `E` or a qualified `L.E` / `C.E` (a
+            // library- or contract-nested enum), so resolve either form.
+            let enum_conversion_target = match &callee {
+                Expression::Identifier(callee_identifier) => {
                     callee_identifier.resolve_to_definition()
-            {
+                }
+                Expression::MemberAccessExpression(access) => {
+                    access.member().resolve_to_definition()
+                }
+                _ => None,
+            };
+            if let Some(Definition::Enum(enum_definition)) = enum_conversion_target {
                 let (value, block) = self.expression_emitter.emit_value(&first, block)?;
                 let builder = &self.expression_emitter.state.builder;
                 let member_count = enum_definition.members().iter().count();
