@@ -169,7 +169,13 @@ pub(super) fn build_super_dispatch(contract: &ContractDefinition) -> SuperDispat
     for base_contract in &mro {
         for function in base_contract.functions() {
             let node_id = function.node_id();
-            if function.body().is_none() || most_derived_ids.contains(&node_id) {
+            // Abstract (bodyless) base declarations are redirected too: a call
+            // resolving lexically to an abstract `a()` in a base must reach the
+            // most-derived concrete override. Unlike `super` targets (which are
+            // emitted), the virtual redirect only re-routes the call, so a
+            // bodyless source node is fine — we only skip the most-derived node
+            // itself, which needs no redirect.
+            if most_derived_ids.contains(&node_id) {
                 continue;
             }
             if let Some(&target) =
