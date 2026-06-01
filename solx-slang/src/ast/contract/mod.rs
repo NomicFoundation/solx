@@ -8,11 +8,9 @@ mod library;
 mod super_call;
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use ruint::aliases::U256;
 use slang_solidity_v2::abi::AbiEntry;
-use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Definition;
@@ -84,11 +82,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     pub fn emit(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
         let contract_name = contract.name().name();
 
-        // Functions reached through `super`; shadowed overrides among them are
-        // emitted internal-only under contract-qualified symbols (below).
-        let super_target_ids = super_call::collect_super_target_ids(contract);
+        // Re-resolve `super` calls against the C3 linearisation (slang resolves
+        // them lexically, which is wrong in a diamond). The redirect drives the
+        // call site; the shadowed base overrides are emitted internal-only under
+        // contract-qualified symbols (below).
+        let super_dispatch = super_call::build_super_dispatch(contract);
+        self.state.super_redirect = super_dispatch.redirect.clone();
 
-        self.pre_register_functions(contract, &super_target_ids);
+        self.pre_register_functions(contract, &super_dispatch.shadowed);
 
         // Internal library functions called by the contract (`L.f(...)`) are
         // not part of `compute_linearised_functions`, so pre-register them and
@@ -182,10 +183,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // contract-qualified, selector-less symbols. Bounded to functions a
         // `super` call actually targets, so contracts that don't use `super`
         // (or only reach non-overridden inherited functions) emit nothing extra.
-        for (symbol, function) in Self::shadowed_super_overrides(contract, &super_target_ids) {
+        for (symbol, function) in &super_dispatch.shadowed {
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, contract, &storage_layout)
-                .emit_sol_with_symbol(&function, &symbol, &contract_body)?;
+                .emit_sol_with_symbol(function, symbol, &contract_body)?;
             self.state.current_contract_type = None;
         }
 
@@ -558,13 +559,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     }
 
     /// Pre-registers all function signatures for call resolution before bodies
-    /// are emitted. `super_target_ids` are the functions reached via `super`;
-    /// shadowed base overrides among them are registered under contract-qualified
-    /// symbols so `super` calls resolve to a distinct internal function.
+    /// are emitted. `shadowed` are the base overrides reached through `super`,
+    /// registered under contract-qualified symbols so `super` calls resolve to
+    /// a distinct internal function from the most-derived version.
     fn pre_register_functions(
         &mut self,
         contract: &ContractDefinition,
-        super_target_ids: &HashSet<NodeId>,
+        shadowed: &[(String, FunctionDefinition)],
     ) {
         for function in contract.compute_linearised_functions() {
             if matches!(
@@ -585,65 +586,16 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             );
         }
 
-        for (symbol, function) in Self::shadowed_super_overrides(contract, super_target_ids) {
+        for (symbol, function) in shadowed {
             let (parameter_types, return_types) =
-                TypeConversion::resolve_function_types(&function, &self.state.builder);
+                TypeConversion::resolve_function_types(function, &self.state.builder);
             self.state.register_function_signature(
                 function.node_id(),
-                symbol,
+                symbol.clone(),
                 parameter_types,
                 return_types,
             );
         }
-    }
-
-    /// Returns the shadowed base-override functions reached through `super`
-    /// (those filtered out of the C3-linearised set because a more-derived
-    /// contract overrides them) paired with their contract-qualified symbol.
-    /// These are emitted internal-only (no selector) so `super.f()` can target
-    /// a distinct function from the most-derived `f()`. Empty unless the
-    /// contract calls `super` into an overridden function.
-    fn shadowed_super_overrides(
-        contract: &ContractDefinition,
-        super_target_ids: &HashSet<NodeId>,
-    ) -> Vec<(String, FunctionDefinition)> {
-        if super_target_ids.is_empty() {
-            return Vec::new();
-        }
-        let most_derived: HashSet<NodeId> = contract
-            .compute_linearised_functions()
-            .iter()
-            .map(|function| function.node_id())
-            .collect();
-        let mut overrides = Vec::new();
-        let mut seen: HashSet<NodeId> = HashSet::new();
-        for base in contract.compute_linearised_bases() {
-            let ContractBase::Contract(base_contract) = base else {
-                continue;
-            };
-            let base_name = base_contract.name().name();
-            for function in base_contract.functions() {
-                if matches!(
-                    function.kind(),
-                    FunctionKind::Constructor | FunctionKind::Modifier
-                ) {
-                    continue;
-                }
-                let node_id = function.node_id();
-                // Skip non-`super` targets and the most-derived versions (those
-                // are already registered/emitted under their plain symbol).
-                if !super_target_ids.contains(&node_id) || most_derived.contains(&node_id) {
-                    continue;
-                }
-                if !seen.insert(node_id) {
-                    continue;
-                }
-                let symbol =
-                    format!("{base_name}.{}", FunctionEmitter::mlir_function_name(&function));
-                overrides.push((symbol, function));
-            }
-        }
-        overrides
     }
 
     /// Computes the storage layout using slang-solidity's ABI computation.

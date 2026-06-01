@@ -53,6 +53,13 @@ pub struct Context<'context> {
     /// contract's own member/inherited functions. Frontends set this before
     /// emitting function bodies.
     pub library_function_ids: HashSet<NodeId>,
+    /// Redirect for `super` calls: maps a `super` member-access node id to the
+    /// function node id it dispatches to under the most-derived contract's C3
+    /// linearisation. Slang resolves `super` lexically, which is wrong in a
+    /// diamond, so the frontend pre-resolves every `super` call against the
+    /// linearised bases and records the result here. Empty unless the contract
+    /// uses `super`.
+    pub super_redirect: HashMap<NodeId, NodeId>,
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
@@ -171,6 +178,7 @@ impl<'context> Context<'context> {
             module,
             function_signatures: HashMap::new(),
             library_function_ids: HashSet::new(),
+            super_redirect: HashMap::new(),
             builder: Builder::new(context),
             current_contract_type: None,
             dependencies: RefCell::new(Vec::new()),

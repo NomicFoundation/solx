@@ -1,19 +1,29 @@
 //!
-//! Collection of base-override functions reached through `super`.
+//! Resolution of `super` calls against the C3 linearisation.
 //!
 //! `super.f(...)` dispatches to the next implementation of `f` up the C3
-//! linearisation, skipping the current contract's own override. When the
-//! target is a *non-overridden* inherited function it is already part of the
-//! linearised set (and emitted with its selector); when it is a *shadowed*
-//! override (a base version that a more-derived contract overrides) it is
-//! filtered out of `compute_linearised_functions` and never emitted. This
-//! module walks a contract's functions (transitively through the `super`
-//! targets they reach) and returns the node ids of every function reached via
-//! `super`, so the contract emitter can register and emit the shadowed ones
-//! under contract-qualified, selector-less symbols.
+//! linearisation of the *most-derived* contract being compiled — not the
+//! contract in which the call lexically appears. In a diamond (`D is B, C`,
+//! both `is A`) `C`'s `super.f()` must reach `B.f` when `D` is deployed, even
+//! though `C` alone would reach `A.f`. Slang's binder resolves `super.f`
+//! lexically, so it cannot see `B` from inside `C`.
+//!
+//! This module re-resolves every `super` call against the most-derived
+//! contract's linearised bases and produces:
+//!   * a redirect map (`super` member-access node id -> target function node
+//!     id) consumed at the call site, and
+//!   * the shadowed base overrides reached this way, paired with a
+//!     contract-qualified, selector-less symbol, so the contract emitter can
+//!     register and emit them as distinct internal functions.
+//!
+//! Targets are matched by signature ([`FunctionEmitter::mlir_function_name`])
+//! and must be *implemented* (have a body), so an unimplemented interface /
+//! abstract declaration is skipped exactly like solc's `super`.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 
+use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
@@ -23,11 +33,25 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::visitor::Visitor;
 use slang_solidity_v2::ast::visitor::accept_function_definition;
 
-/// Visitor that records every `super.f` member access whose member resolves to
-/// a function definition.
+use crate::ast::contract::function::FunctionEmitter;
+
+/// The result of re-resolving a contract's `super` calls against its C3
+/// linearisation.
+#[derive(Default)]
+pub(super) struct SuperDispatch {
+    /// `super` member-access node id -> target function node id.
+    pub redirect: HashMap<NodeId, NodeId>,
+    /// Shadowed base overrides reached through `super`, paired with the
+    /// contract-qualified symbol they must be emitted under (deduplicated by
+    /// node id). These are emitted internal-only (no selector).
+    pub shadowed: Vec<(String, FunctionDefinition)>,
+}
+
+/// Visitor that records every `super.f` member access (the access node and the
+/// function its member lexically resolves to — used only for its signature).
 #[derive(Default)]
 struct SuperCallCollector {
-    targets: Vec<FunctionDefinition>,
+    calls: Vec<(NodeId, FunctionDefinition)>,
 }
 
 impl Visitor for SuperCallCollector {
@@ -35,34 +59,103 @@ impl Visitor for SuperCallCollector {
         if matches!(node.operand(), Expression::SuperKeyword(_))
             && let Some(Definition::Function(function)) = node.member().resolve_to_definition()
         {
-            self.targets.push(function);
+            self.calls.push((node.node_id(), function));
         }
         // Descend so nested `super` calls (e.g. `super.f(super.g())`) are found.
         true
     }
 }
 
-/// Returns the node ids of every function reached through `super` from
-/// `contract`'s functions, including those reached only through other
-/// `super`-targeted functions (a base override whose own body calls `super`).
-pub(super) fn collect_super_target_ids(contract: &ContractDefinition) -> HashSet<NodeId> {
-    let mut collected: HashSet<NodeId> = HashSet::new();
-    let mut walked: HashSet<NodeId> = HashSet::new();
-    let mut to_walk: Vec<FunctionDefinition> = contract.compute_linearised_functions();
+/// Returns the mro index of the contract that lexically defines `node_id`
+/// (the contract whose own `functions()` contains it), if any.
+fn defining_index(mro: &[ContractDefinition], node_id: NodeId) -> Option<usize> {
+    mro.iter().position(|contract| {
+        contract
+            .functions()
+            .iter()
+            .any(|function| function.node_id() == node_id)
+    })
+}
 
-    while let Some(function) = to_walk.pop() {
+/// Finds the `super` target of signature `signature` for a call appearing in a
+/// function defined at `from_index`: the first *implemented* function with that
+/// signature in a strictly more-base contract (`mro[from_index + 1 ..]`).
+fn resolve_super_target(
+    mro: &[ContractDefinition],
+    from_index: usize,
+    signature: &str,
+) -> Option<(usize, FunctionDefinition)> {
+    for (index, contract) in mro.iter().enumerate().skip(from_index + 1) {
+        for function in contract.functions() {
+            if function.body().is_some()
+                && FunctionEmitter::mlir_function_name(&function) == signature
+            {
+                return Some((index, function));
+            }
+        }
+    }
+    None
+}
+
+/// Re-resolves every `super` call reachable from `contract`'s functions and
+/// constructor against its C3 linearisation.
+pub(super) fn build_super_dispatch(contract: &ContractDefinition) -> SuperDispatch {
+    let mro: Vec<ContractDefinition> = contract
+        .compute_linearised_bases()
+        .into_iter()
+        .filter_map(|base| match base {
+            ContractBase::Contract(base_contract) => Some(base_contract),
+            ContractBase::Interface(_) => None,
+        })
+        .collect();
+    let most_derived_ids: HashSet<NodeId> = contract
+        .compute_linearised_functions()
+        .iter()
+        .map(|function| function.node_id())
+        .collect();
+
+    let mut dispatch = SuperDispatch::default();
+    let mut shadowed_ids: HashSet<NodeId> = HashSet::new();
+    let mut walked: HashSet<NodeId> = HashSet::new();
+
+    // Seed with every function the most-derived contract actually runs (its
+    // linearised functions and the constructors along the chain), each tagged
+    // with the mro index of the contract whose body it is.
+    let mut to_walk: Vec<(usize, FunctionDefinition)> = Vec::new();
+    for function in contract.compute_linearised_functions() {
+        let index = defining_index(&mro, function.node_id()).unwrap_or(0);
+        to_walk.push((index, function));
+    }
+    for (index, base_contract) in mro.iter().enumerate() {
+        if let Some(constructor) = base_contract.constructor() {
+            to_walk.push((index, constructor));
+        }
+    }
+
+    while let Some((from_index, function)) = to_walk.pop() {
         if !walked.insert(function.node_id()) {
             continue;
         }
         let mut collector = SuperCallCollector::default();
         accept_function_definition(&function, &mut collector);
-        for target in collector.targets {
-            if collected.insert(target.node_id()) {
-                // Newly seen — walk its body too so a `super`-reached override
-                // that itself calls `super` pulls in the next base version.
-                to_walk.push(target);
+        for (access_id, lexical_target) in collector.calls {
+            let signature = FunctionEmitter::mlir_function_name(&lexical_target);
+            let Some((target_index, target)) =
+                resolve_super_target(&mro, from_index, &signature)
+            else {
+                continue;
+            };
+            dispatch.redirect.insert(access_id, target.node_id());
+            if !most_derived_ids.contains(&target.node_id()) && shadowed_ids.insert(target.node_id())
+            {
+                let symbol = format!("{}.{signature}", mro[target_index].name().name());
+                dispatch.shadowed.push((symbol, target.clone()));
             }
+            // Walk the target's body too: a base override that itself calls
+            // `super` pulls in the next link of the chain.
+            to_walk.push((target_index, target));
         }
     }
-    collected
+
+    dispatch
 }

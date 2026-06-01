@@ -184,22 +184,38 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
         // `super.f(args)` — an internal call that skips the current contract's
         // own override and dispatches to the next implementation up the C3
-        // linearisation. Slang's binder resolves `access.member()` to the base
-        // function definition; we emit a plain internal `sol.call` (no receiver)
-        // to that node's registered symbol. Targets that are non-overridden
-        // inherited functions are already registered via the linearised set;
-        // shadowed base overrides are registered separately below.
+        // linearisation. The redirect (built against the most-derived contract's
+        // linearised bases) names the target node; this is correct even in a
+        // diamond, where slang's lexical resolution of `access.member()` would
+        // pick the wrong override. We emit a plain internal `sol.call` (no
+        // receiver) to that node's registered symbol.
         if let Expression::MemberAccessExpression(access) = &callee
             && matches!(access.operand(), Expression::SuperKeyword(_))
         {
-            let Some(Definition::Function(base_function)) =
-                access.member().resolve_to_definition()
-            else {
-                anyhow::bail!("super member access does not resolve to a function");
+            let redirect_id = self
+                .expression_emitter
+                .state
+                .super_redirect
+                .get(&access.node_id())
+                .copied();
+            let setup = match redirect_id {
+                Some(target_id) => {
+                    self.emit_call_setup_by_id(target_id, positional_arguments, block)
+                }
+                // No redirect entry (e.g. a `super` call slang typed but the
+                // linearised re-resolution did not reach): fall back to the
+                // lexically-resolved target.
+                None => {
+                    let Some(Definition::Function(base_function)) =
+                        access.member().resolve_to_definition()
+                    else {
+                        anyhow::bail!("super member access does not resolve to a function");
+                    };
+                    self.emit_call_setup(&base_function, positional_arguments, block)
+                }
             };
-            let (mlir_name, argument_values, return_types, current_block) = self
-                .emit_call_setup(&base_function, positional_arguments, block)
-                .context("resolving super call")?;
+            let (mlir_name, argument_values, return_types, current_block) =
+                setup.context("resolving super call")?;
             if return_types.is_empty() {
                 self.expression_emitter.state.builder.emit_sol_call(
                     mlir_name,
@@ -773,14 +789,30 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         &'a [melior::ir::Type<'context>],
         BlockRef<'context, 'block>,
     )> {
+        self.emit_call_setup_by_id(function_definition.node_id(), positional_arguments, block)
+    }
+
+    /// Like [`Self::emit_call_setup`] but resolves the callee by its AST node
+    /// id directly. Used for `super` dispatch, where the redirect names the
+    /// target node (the lexically-resolved member would be the wrong override
+    /// in a diamond).
+    fn emit_call_setup_by_id<'a>(
+        &'a self,
+        definition_id: slang_solidity_v2::ast::NodeId,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        &'a str,
+        Vec<Value<'context, 'block>>,
+        &'a [melior::ir::Type<'context>],
+        BlockRef<'context, 'block>,
+    )> {
         // Resolve the signature first so each argument can be emitted toward
         // its declared parameter type — notably so a string literal in a
         // `bytesN` parameter becomes a fixedbytes constant rather than a memory
         // string (see `emit_value_for_target`).
-        let (mlir_name, parameter_types, return_types) = self
-            .expression_emitter
-            .state
-            .resolve_function(function_definition.node_id())?;
+        let (mlir_name, parameter_types, return_types) =
+            self.expression_emitter.state.resolve_function(definition_id)?;
 
         let mut argument_values = Vec::new();
         let mut current_block = block;
