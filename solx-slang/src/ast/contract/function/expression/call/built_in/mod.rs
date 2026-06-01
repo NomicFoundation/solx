@@ -439,6 +439,20 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         call_value: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        // `T.wrap` / `T.unwrap` referenced without a call (a discarded
+        // `(MyInt).wrap;` statement). The call forms are handled in the call
+        // dispatch; a bare reference is a no-op, so yield a placeholder.
+        if arguments.is_none()
+            && matches!(
+                access.member().resolve_to_built_in(),
+                Some(slang_solidity_v2::ast::BuiltIn::Wrap | slang_solidity_v2::ast::BuiltIn::Unwrap)
+            )
+        {
+            let builder = &self.expression_emitter.state.builder;
+            let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            return Ok((Some(placeholder), block));
+        }
+
         // `MyEnum.VARIANT` — emit the variant index as a ui256 constant and
         // bridge to `!sol.enum<max>` via `sol.enum_cast`.
         if arguments.is_none()

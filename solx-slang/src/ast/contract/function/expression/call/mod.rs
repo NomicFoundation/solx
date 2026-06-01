@@ -218,6 +218,30 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((Some(result), current_block));
         }
 
+        // `T.wrap(x)` / `T.unwrap(x)` on a user-defined value type. A UDVT lowers
+        // to its underlying type, so both directions are an identity conversion;
+        // emit the argument coerced to the call's result type.
+        if let Expression::MemberAccessExpression(access) = &callee
+            && matches!(
+                access.member().resolve_to_built_in(),
+                Some(slang_solidity_v2::ast::BuiltIn::Wrap | slang_solidity_v2::ast::BuiltIn::Unwrap)
+            )
+        {
+            let argument = positional_arguments
+                .iter()
+                .next()
+                .ok_or_else(|| anyhow::anyhow!("wrap/unwrap requires one argument"))?;
+            let (value, block) = self.expression_emitter.emit_value(&argument, block)?;
+            let result = match self.expression_emitter.resolve_slang_type(call.get_type()) {
+                Some(result_type) => {
+                    let builder = &self.expression_emitter.state.builder;
+                    TypeConversion::from_target_type(result_type, builder).emit(value, builder, &block)
+                }
+                None => value,
+            };
+            return Ok((Some(result), block));
+        }
+
         if let Some((value, block)) =
             self.try_emit_built_in_call(&callee, positional_arguments, block)?
         {
