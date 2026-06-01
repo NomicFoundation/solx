@@ -1161,6 +1161,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             );
             return Ok((value, block));
         }
+        // `M.L` / `module.L` — a namespace-qualified library reference in value
+        // position (e.g. `address(M.L)`) is the library's linked deploy address,
+        // like a bare `L` (`address(L)`). The linker symbol is the
+        // fully-qualified `file:Library` name.
+        if operand_is_namespace
+            && let Some(Definition::Library(library)) = access.member().resolve_to_definition()
+        {
+            let symbol = format!("{}:{}", library.get_file_id(), library.name().name());
+            let value = self
+                .expression_emitter
+                .state
+                .builder
+                .emit_sol_lib_addr(&symbol, &block);
+            return Ok((value, block));
+        }
         // A bare reference to a function-like built-in member written without a
         // call — `data.pop;`, `data.push;`, `abi.encode;` and friends — is a
         // no-op in Solidity: solc evaluates and discards the bound-function
