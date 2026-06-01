@@ -111,11 +111,15 @@ impl Visitor for LibraryCallCollector {
 /// is deduplicated by node id and contains no contract-own or free functions.
 ///
 /// `free_functions` is the source unit's full set of free functions; they are
-/// collected and emitted separately (under their plain name), so excluding
-/// them here avoids registering the same node under two different symbols.
+/// collected and emitted separately, so excluding them here avoids registering
+/// the same node under two different symbols. `extra_roots` are additional
+/// function bodies to walk that are not part of the linearised set — the
+/// shadowed base overrides reached only through `super` (emitted into this
+/// module), which may make library calls (`L.f(...)`) of their own.
 pub(super) fn collect_library_functions(
     contract: &ContractDefinition,
     free_functions: &[FunctionDefinition],
+    extra_roots: &[FunctionDefinition],
 ) -> Vec<FunctionDefinition> {
     let own: HashSet<NodeId> = contract
         .compute_linearised_functions()
@@ -136,6 +140,9 @@ pub(super) fn collect_library_functions(
     if let Some(constructor) = contract.constructor() {
         to_walk.push(constructor);
     }
+    // Shadowed base overrides reached through `super` are emitted into this
+    // module too, so library calls in their bodies must be collected.
+    to_walk.extend(extra_roots.iter().cloned());
 
     while let Some(function) = to_walk.pop() {
         if !walked.insert(function.node_id()) {

@@ -43,11 +43,15 @@ impl Visitor for FreeCallCollector<'_> {
 
 /// Returns the free functions reachable from `contract`'s own functions and
 /// constructor, including those reached only through other free functions.
-/// `free_functions` is the source unit's full set of free functions. The result
-/// is deduplicated by node id.
+/// `free_functions` is the source unit's full set of free functions.
+/// `extra_roots` are additional function bodies to walk that are not part of
+/// the linearised set — the shadowed base overrides reached only through
+/// `super` (which are emitted into this module and may call free functions of
+/// their own). The result is deduplicated by node id.
 pub(super) fn collect_free_functions(
     contract: &ContractDefinition,
     free_functions: &[FunctionDefinition],
+    extra_roots: &[FunctionDefinition],
 ) -> Vec<FunctionDefinition> {
     let free_ids: HashSet<NodeId> = free_functions.iter().map(|f| f.node_id()).collect();
     if free_ids.is_empty() {
@@ -60,6 +64,7 @@ pub(super) fn collect_free_functions(
     if let Some(constructor) = contract.constructor() {
         to_walk.push(constructor);
     }
+    to_walk.extend(extra_roots.iter().cloned());
 
     while let Some(function) = to_walk.pop() {
         if !walked.insert(function.node_id()) {

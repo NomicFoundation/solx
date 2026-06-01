@@ -99,11 +99,22 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         self.pre_register_functions(contract, &super_dispatch.shadowed);
 
+        // Shadowed base overrides reached through `super` are emitted into this
+        // module (below) but are not in the linearised set, so the library- and
+        // free-function collectors must also walk their bodies to register the
+        // internals they call.
+        let shadowed_functions: Vec<FunctionDefinition> = super_dispatch
+            .shadowed
+            .iter()
+            .map(|(_, function)| function.clone())
+            .collect();
+
         // Internal library functions called by the contract (`L.f(...)`) are
         // not part of `compute_linearised_functions`, so pre-register them and
         // emit their bodies into this contract's module below — they lower like
         // ordinary internal functions.
-        let library_functions = library::collect_library_functions(contract, free_functions);
+        let library_functions =
+            library::collect_library_functions(contract, free_functions, &shadowed_functions);
         for library_function in &library_functions {
             let (parameter_types, return_types) =
                 TypeConversion::resolve_function_types(library_function, &self.state.builder);
@@ -121,15 +132,26 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // contract, transitively. Like library internals, they are not in the
         // linearised set, so pre-register and emit them into this module where
         // they lower as ordinary internal functions.
-        let reached_free_functions =
-            free_function::collect_free_functions(contract, free_functions);
+        //
+        // A free function reached through an import-namespace member access
+        // (`import "a.sol" as M; M.f(...)`) is also collected by the library
+        // collector (its operand is an import qualifier, not a contract). When
+        // the same function is *also* called bare (`f(...)`), it lands in both
+        // sets; emitting it on both paths would now collide, since the library
+        // and free symbols are both the node-id-qualified form. The library
+        // emission already covers it (same symbol, same body), so drop the
+        // duplicate here.
+        let reached_free_functions: Vec<FunctionDefinition> =
+            free_function::collect_free_functions(contract, free_functions, &shadowed_functions)
+                .into_iter()
+                .filter(|free| !self.state.library_function_ids.contains(&free.node_id()))
+                .collect();
         for free in &reached_free_functions {
-            let mlir_name = FunctionEmitter::mlir_function_name(free);
             let (parameter_types, return_types) =
                 TypeConversion::resolve_function_types(free, &self.state.builder);
             self.state.register_function_signature(
                 free.node_id(),
-                mlir_name,
+                Self::free_function_symbol(free),
                 parameter_types,
                 return_types,
             );
@@ -245,11 +267,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             self.state.current_contract_type = None;
         }
 
-        // Emit the collected free functions so their `sol.call`s resolve.
+        // Emit the collected free functions so their `sol.call`s resolve. Each
+        // is emitted under its node-id-qualified symbol (see
+        // `free_function_symbol`) so two file-level functions of the same name
+        // and signature — reachable together when one is imported under an
+        // alias — do not collide on a single MLIR symbol.
         for free in &reached_free_functions {
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, Some(contract), &storage_layout)
-                .emit_sol(free, &contract_body)?;
+                .emit_sol_with_symbol(free, &Self::free_function_symbol(free), &contract_body)?;
             self.state.current_contract_type = None;
         }
 
@@ -699,6 +725,23 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// (`resolve_function` via `library_function_ids`), so the exact spelling is
     /// immaterial — it just has to be unique.
     fn library_function_symbol(function: &FunctionDefinition) -> String {
+        format!(
+            "{}#{:?}",
+            FunctionEmitter::mlir_function_name(function),
+            function.node_id()
+        )
+    }
+
+    /// The MLIR symbol for a file-level free function emitted into a contract
+    /// module. Two distinct free functions may share a name and signature when
+    /// one is imported under an alias (`import {f as g} from "..."`, or
+    /// `import "..." as M` exposing `M.f` alongside a local `f`) and both are
+    /// reachable from the same contract — e.g. one from a derived function and
+    /// the other from a base override reached via `super`. Free functions have
+    /// no selector and are only ever resolved by node id (`resolve_function`),
+    /// so qualifying the symbol with the globally-unique node id keeps the two
+    /// distinct without affecting call resolution.
+    fn free_function_symbol(function: &FunctionDefinition) -> String {
         format!(
             "{}#{:?}",
             FunctionEmitter::mlir_function_name(function),
