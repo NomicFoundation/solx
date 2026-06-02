@@ -37,6 +37,36 @@ use self::statement::StatementEmitter;
 /// runs.
 type ModifierStageParams<'context, 'env> = Vec<(String, Value<'context, 'env>, Type<'context>)>;
 
+/// The resolved MLIR signature of a function: its symbol name, parameter and
+/// result types, the original parameter count, public selector, mutability,
+/// and MLIR kind. In modifier-body mode `mlir_parameter_types` is extended with
+/// the result types (the threaded-in shared return values); `parameter_count`
+/// always holds the pre-extension count. A shadowed base override carries no
+/// `selector` (it shares the most-derived function's dispatch entry).
+struct InnerSignature<'context> {
+    mlir_name: String,
+    mlir_parameter_types: Vec<Type<'context>>,
+    result_types: Vec<Type<'context>>,
+    parameter_count: usize,
+    selector: Option<u32>,
+    state_mutability: StateMutability,
+    mlir_kind: Option<solx_mlir::FunctionKind>,
+}
+
+/// The non-mutable inputs to emitting a modifier-wrapped function body: the
+/// function, the resolved signature pieces it needs, and the contract / entry
+/// blocks. The mutable emission state (environment, return slots, current
+/// block) is threaded as separate `&mut` / by-value parameters.
+#[derive(Clone, Copy)]
+struct ModifiedBody<'a, 'context, 'block> {
+    function: &'a FunctionDefinition,
+    mlir_name: &'a str,
+    mlir_parameter_types: &'a [Type<'context>],
+    result_types: &'a [Type<'context>],
+    contract_body: &'a BlockRef<'context, 'block>,
+    function_entry_block: &'a BlockRef<'context, 'block>,
+}
+
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
@@ -124,49 +154,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 .unwrap_or_else(|| Self::mlir_function_name(function)));
         };
 
-        let parameters = function.parameters();
-        let mlir_name = symbol_override
-            .map(str::to_owned)
-            .unwrap_or_else(|| Self::mlir_function_name(function));
-
-        let (mlir_parameter_types, result_types) =
-            TypeConversion::resolve_function_types(function, &self.state.builder);
-
-        // A `$body` emission takes the wrapping function's current return values
-        // as extra trailing parameters and threads them back out as its
-        // results, so the named return variables are *shared* across the
-        // modifier chain and repeated `_;` invocations (matching solc): a
-        // modifier-argument side effect (`m(x = 2)`) and accumulation across
-        // multiple `_` both survive into the final result.
-        let parameter_count = mlir_parameter_types.len();
-        let mlir_parameter_types: Vec<Type<'context>> = if as_modifier_body {
-            mlir_parameter_types
-                .iter()
-                .chain(result_types.iter())
-                .copied()
-                .collect()
-        } else {
-            mlir_parameter_types
-        };
-
-        // Shadowed base overrides share the most-derived function's selector;
-        // emitting it twice would duplicate the dispatch entry. They are only
-        // reachable internally through `super`, so they carry no selector.
-        let selector = if symbol_override.is_some() {
-            None
-        } else {
-            function.compute_selector()
-        };
-
-        let state_mutability = Self::map_state_mutability(function);
-
-        let mlir_kind = match function.kind() {
-            FunctionKind::Constructor => Some(solx_mlir::FunctionKind::Constructor),
-            FunctionKind::Fallback => Some(solx_mlir::FunctionKind::Fallback),
-            FunctionKind::Receive => Some(solx_mlir::FunctionKind::Receive),
-            FunctionKind::Regular => None,
-            FunctionKind::Modifier => unreachable!("modifiers are filtered before emission"),
-        };
+        let InnerSignature {
+            mlir_name,
+            mlir_parameter_types,
+            result_types,
+            parameter_count,
+            selector,
+            state_mutability,
+            mlir_kind,
+        } = self.resolve_inner_signature(function, symbol_override, as_modifier_body);
 
         let function_entry_block = self.state.builder.emit_sol_func(
             &mlir_name,
@@ -181,93 +177,21 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut environment = Environment::new();
 
         // Create allocas for parameters and bind to environment.
-        for (index, parameter) in parameters.iter().enumerate() {
-            let parameter_name = parameter
-                .name()
-                .map(|id| id.name())
-                .unwrap_or_else(|| "_".to_owned());
-            let parameter_type = mlir_parameter_types[index];
-            let parameter_value: Value<'context, '_> = function_entry_block.argument(index)?.into();
-            let pointer = self
-                .state
-                .builder
-                .emit_sol_alloca(parameter_type, &function_entry_block);
-            self.state
-                .builder
-                .emit_sol_store(parameter_value, pointer, &function_entry_block);
+        self.bind_parameters(
+            function,
+            &mlir_parameter_types,
+            &function_entry_block,
+            &mut environment,
+        )?;
 
-            environment.define_variable(parameter_name, pointer, parameter_type);
-        }
-
-        let mut return_slots: Vec<Option<Value<'context, '_>>> = Vec::new();
-        if let Some(returns) = function.returns() {
-            for (index, parameter) in returns.iter().enumerate() {
-                let return_type = result_types[index];
-                // `$body` emission: every return (named or not) gets a slot
-                // initialised from the threaded-in value (the block argument
-                // after the regular parameters), so the shared return state is
-                // observable and survives an empty body or a partial `_` reach.
-                if as_modifier_body {
-                    let pointer = self
-                        .state
-                        .builder
-                        .emit_sol_alloca(return_type, &function_entry_block);
-                    let incoming: Value<'context, '_> = function_entry_block
-                        .argument(parameter_count + index)?
-                        .into();
-                    self.state
-                        .builder
-                        .emit_sol_store(incoming, pointer, &function_entry_block);
-                    if let Some(identifier) = parameter.name() {
-                        environment.define_variable(identifier.name(), pointer, return_type);
-                    }
-                    return_slots.push(Some(pointer));
-                    continue;
-                }
-                let Some(identifier) = parameter.name() else {
-                    return_slots.push(None);
-                    continue;
-                };
-                let pointer = self
-                    .state
-                    .builder
-                    .emit_sol_alloca(return_type, &function_entry_block);
-                // TODO: replace with a typed-zero helper covering address, fixed-bytes, and
-                // memory-resident types (e.g. `0x60` for empty `string`/`bytes` memory).
-                if IntegerType::try_from(return_type).is_ok() {
-                    let zero =
-                        self.state
-                            .builder
-                            .emit_sol_constant(0, return_type, &function_entry_block);
-                    self.state
-                        .builder
-                        .emit_sol_store(zero, pointer, &function_entry_block);
-                } else if matches!(
-                    parameter.get_type(),
-                    Some(
-                        slang_solidity_v2::ast::Type::FixedSizeArray(_)
-                            | slang_solidity_v2::ast::Type::Struct(_)
-                    )
-                ) {
-                    // A named return of a memory aggregate (`T[n] memory`,
-                    // `S memory`) must point at a fresh zero-initialised
-                    // allocation, otherwise writes through `result[..]` hit an
-                    // uninitialised reference (and `return result` ABI-encodes
-                    // garbage). Mirrors variable_declaration's `needs_memory_alloc`.
-                    let allocated = self
-                        .state
-                        .builder
-                        .emit_sol_malloc(return_type, &function_entry_block);
-                    self.state
-                        .builder
-                        .emit_sol_store(allocated, pointer, &function_entry_block);
-                }
-                // Other non-integer named returns are left uninitialised; tests
-                // that assign before reading still work.
-                environment.define_variable(identifier.name(), pointer, return_type);
-                return_slots.push(Some(pointer));
-            }
-        }
+        let mut return_slots = self.init_return_slots(
+            function,
+            &result_types,
+            parameter_count,
+            as_modifier_body,
+            &function_entry_block,
+            &mut environment,
+        )?;
 
         let region = function_entry_block
             .parent_region()
@@ -315,58 +239,22 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 }
             }
         } else {
-            // Emit the wrapped function body as a separate internal `sol.func`
-            // so a `return` inside it resumes the modifier tail rather than
-            // exiting the whole function (Solidity: `return` does not skip a
-            // modifier's post-`_` code). The innermost `_;` placeholder calls
-            // it and captures its results into the return slots; the modifier
-            // stages themselves stay inlined.
-            let body_symbol = format!("{mlir_name}$body");
-            self.emit_sol_inner(function, Some(body_symbol.as_str()), contract_body, true)?;
-
-            // Unnamed returns carry no slot, but the body call's results must be
-            // captured somewhere the epilogue can read them back — allocate a
-            // (zero-initialised) slot for each so `return X` in the body
-            // propagates X out, and a never-reached `_` yields the zero default.
-            for (index, slot) in return_slots.iter_mut().enumerate() {
-                if slot.is_none() {
-                    let return_type = result_types[index];
-                    let pointer = self
-                        .state
-                        .builder
-                        .emit_sol_alloca(return_type, &function_entry_block);
-                    if IntegerType::try_from(return_type).is_ok() {
-                        let zero = self.state.builder.emit_sol_constant(
-                            0,
-                            return_type,
-                            &function_entry_block,
-                        );
-                        self.state.builder.emit_sol_store(zero, pointer, &function_entry_block);
-                    }
-                    *slot = Some(pointer);
-                }
-            }
-
-            let forward_params: Vec<Value<'context, '_>> = (0..mlir_parameter_types.len())
-                .map(|index| function_entry_block.argument(index).map(Into::into))
-                .collect::<Result<_, _>>()?;
-
-            let mut emitter = StatementEmitter::new(
-                self.state,
+            let frame = ModifiedBody {
+                function,
+                mlir_name: &mlir_name,
+                mlir_parameter_types: &mlir_parameter_types,
+                result_types: &result_types,
+                contract_body,
+                function_entry_block: &function_entry_block,
+            };
+            match self.emit_modified_body(
+                &frame,
                 &mut environment,
-                &region,
-                self.storage_layout,
-                &result_types,
-                &return_slots,
-            );
-            emitter.modifier_stages = modifier_stages;
-            emitter.modifier_stage_params = modifier_stage_params;
-            emitter.modifier_body_call = Some(ModifierBodyCall {
-                symbol: body_symbol,
-                forward_params,
-                return_slots: return_slots.clone(),
-            });
-            match emitter.emit_modifier_chain(current_block)? {
+                &mut return_slots,
+                modifier_stages,
+                modifier_stage_params,
+                current_block,
+            )? {
                 Some(next) => current_block = next,
                 None => terminated = true,
             }
@@ -377,6 +265,260 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         Ok(mlir_name)
+    }
+
+    /// Resolves the MLIR signature for `function` — symbol, types, selector,
+    /// mutability, and kind. See [`InnerSignature`] for field meanings,
+    /// including the modifier-body parameter extension and the shadowed-override
+    /// selector suppression.
+    fn resolve_inner_signature(
+        &self,
+        function: &FunctionDefinition,
+        symbol_override: Option<&str>,
+        as_modifier_body: bool,
+    ) -> InnerSignature<'context> {
+        let mlir_name = symbol_override
+            .map(str::to_owned)
+            .unwrap_or_else(|| Self::mlir_function_name(function));
+
+        let (mlir_parameter_types, result_types) =
+            TypeConversion::resolve_function_types(function, &self.state.builder);
+
+        // A `$body` emission takes the wrapping function's current return values
+        // as extra trailing parameters and threads them back out as its
+        // results, so the named return variables are *shared* across the
+        // modifier chain and repeated `_;` invocations (matching solc): a
+        // modifier-argument side effect (`m(x = 2)`) and accumulation across
+        // multiple `_` both survive into the final result.
+        let parameter_count = mlir_parameter_types.len();
+        let mlir_parameter_types: Vec<Type<'context>> = if as_modifier_body {
+            mlir_parameter_types
+                .iter()
+                .chain(result_types.iter())
+                .copied()
+                .collect()
+        } else {
+            mlir_parameter_types
+        };
+
+        // Shadowed base overrides share the most-derived function's selector;
+        // emitting it twice would duplicate the dispatch entry. They are only
+        // reachable internally through `super`, so they carry no selector.
+        let selector = if symbol_override.is_some() {
+            None
+        } else {
+            function.compute_selector()
+        };
+
+        let state_mutability = Self::map_state_mutability(function);
+
+        let mlir_kind = match function.kind() {
+            FunctionKind::Constructor => Some(solx_mlir::FunctionKind::Constructor),
+            FunctionKind::Fallback => Some(solx_mlir::FunctionKind::Fallback),
+            FunctionKind::Receive => Some(solx_mlir::FunctionKind::Receive),
+            FunctionKind::Regular => None,
+            FunctionKind::Modifier => unreachable!("modifiers are filtered before emission"),
+        };
+
+        InnerSignature {
+            mlir_name,
+            mlir_parameter_types,
+            result_types,
+            parameter_count,
+            selector,
+            state_mutability,
+            mlir_kind,
+        }
+    }
+
+    /// Allocates a stack slot for each parameter, stores the incoming argument
+    /// value into it, and binds the slot to the parameter name in `environment`.
+    fn bind_parameters<'block>(
+        &self,
+        function: &FunctionDefinition,
+        parameter_types: &[Type<'context>],
+        entry_block: &BlockRef<'context, 'block>,
+        environment: &mut Environment<'context, 'block>,
+    ) -> anyhow::Result<()> {
+        for (index, parameter) in function.parameters().iter().enumerate() {
+            let parameter_name = parameter
+                .name()
+                .map(|id| id.name())
+                .unwrap_or_else(|| "_".to_owned());
+            let parameter_type = parameter_types[index];
+            let parameter_value: Value<'context, 'block> = entry_block.argument(index)?.into();
+            let pointer = self
+                .state
+                .builder
+                .emit_sol_alloca(parameter_type, entry_block);
+            self.state
+                .builder
+                .emit_sol_store(parameter_value, pointer, entry_block);
+            environment.define_variable(parameter_name, pointer, parameter_type);
+        }
+        Ok(())
+    }
+
+    /// Allocates and binds a stack slot for each return value. In modifier-body
+    /// mode every return (named or not) is initialised from the corresponding
+    /// threaded-in block argument; otherwise a named return is zero-initialised
+    /// (integers) or pointed at a fresh memory allocation (memory aggregates),
+    /// and an unnamed return gets no slot. Returns the per-return slots (`None`
+    /// for an unnamed return outside modifier-body mode).
+    fn init_return_slots<'block>(
+        &self,
+        function: &FunctionDefinition,
+        result_types: &[Type<'context>],
+        parameter_count: usize,
+        as_modifier_body: bool,
+        entry_block: &BlockRef<'context, 'block>,
+        environment: &mut Environment<'context, 'block>,
+    ) -> anyhow::Result<Vec<Option<Value<'context, 'block>>>> {
+        let mut return_slots: Vec<Option<Value<'context, 'block>>> = Vec::new();
+        if let Some(returns) = function.returns() {
+            for (index, parameter) in returns.iter().enumerate() {
+                let return_type = result_types[index];
+                // `$body` emission: every return (named or not) gets a slot
+                // initialised from the threaded-in value (the block argument
+                // after the regular parameters), so the shared return state is
+                // observable and survives an empty body or a partial `_` reach.
+                if as_modifier_body {
+                    let pointer = self
+                        .state
+                        .builder
+                        .emit_sol_alloca(return_type, entry_block);
+                    let incoming: Value<'context, 'block> =
+                        entry_block.argument(parameter_count + index)?.into();
+                    self.state
+                        .builder
+                        .emit_sol_store(incoming, pointer, entry_block);
+                    if let Some(identifier) = parameter.name() {
+                        environment.define_variable(identifier.name(), pointer, return_type);
+                    }
+                    return_slots.push(Some(pointer));
+                    continue;
+                }
+                let Some(identifier) = parameter.name() else {
+                    return_slots.push(None);
+                    continue;
+                };
+                let pointer = self
+                    .state
+                    .builder
+                    .emit_sol_alloca(return_type, entry_block);
+                // TODO: replace with a typed-zero helper covering address, fixed-bytes, and
+                // memory-resident types (e.g. `0x60` for empty `string`/`bytes` memory).
+                if IntegerType::try_from(return_type).is_ok() {
+                    let zero =
+                        self.state
+                            .builder
+                            .emit_sol_constant(0, return_type, entry_block);
+                    self.state
+                        .builder
+                        .emit_sol_store(zero, pointer, entry_block);
+                } else if matches!(
+                    parameter.get_type(),
+                    Some(
+                        slang_solidity_v2::ast::Type::FixedSizeArray(_)
+                            | slang_solidity_v2::ast::Type::Struct(_)
+                    )
+                ) {
+                    // A named return of a memory aggregate (`T[n] memory`,
+                    // `S memory`) must point at a fresh zero-initialised
+                    // allocation, otherwise writes through `result[..]` hit an
+                    // uninitialised reference (and `return result` ABI-encodes
+                    // garbage). Mirrors variable_declaration's `needs_memory_alloc`.
+                    let allocated = self
+                        .state
+                        .builder
+                        .emit_sol_malloc(return_type, entry_block);
+                    self.state
+                        .builder
+                        .emit_sol_store(allocated, pointer, entry_block);
+                }
+                // Other non-integer named returns are left uninitialised; tests
+                // that assign before reading still work.
+                environment.define_variable(identifier.name(), pointer, return_type);
+                return_slots.push(Some(pointer));
+            }
+        }
+        Ok(return_slots)
+    }
+
+    /// Emits a modifier-wrapped function body. The wrapped body is materialised
+    /// as a separate internal `sol.func` (so a `return` resumes the modifier
+    /// tail rather than exiting the whole function); the innermost `_;`
+    /// placeholder calls it and captures its results into the return slots,
+    /// while the modifier stages stay inlined. Returns the block execution
+    /// falls through to, or `None` if the chain terminated the block.
+    fn emit_modified_body<'a, 'block>(
+        &self,
+        frame: &ModifiedBody<'a, 'context, 'block>,
+        environment: &mut Environment<'context, 'block>,
+        return_slots: &mut Vec<Option<Value<'context, 'block>>>,
+        modifier_stages: Vec<slang_solidity_v2::ast::Statements>,
+        modifier_stage_params: Vec<ModifierStageParams<'context, 'block>>,
+        current_block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        let ModifiedBody {
+            function,
+            mlir_name,
+            mlir_parameter_types,
+            result_types,
+            contract_body,
+            function_entry_block,
+        } = *frame;
+        let region = function_entry_block
+            .parent_region()
+            .expect("entry block belongs to a region");
+
+        let body_symbol = format!("{mlir_name}$body");
+        self.emit_sol_inner(function, Some(body_symbol.as_str()), contract_body, true)?;
+
+        // Unnamed returns carry no slot, but the body call's results must be
+        // captured somewhere the epilogue can read them back — allocate a
+        // (zero-initialised) slot for each so `return X` in the body
+        // propagates X out, and a never-reached `_` yields the zero default.
+        for (index, slot) in return_slots.iter_mut().enumerate() {
+            if slot.is_none() {
+                let return_type = result_types[index];
+                let pointer = self
+                    .state
+                    .builder
+                    .emit_sol_alloca(return_type, function_entry_block);
+                if IntegerType::try_from(return_type).is_ok() {
+                    let zero =
+                        self.state
+                            .builder
+                            .emit_sol_constant(0, return_type, function_entry_block);
+                    self.state
+                        .builder
+                        .emit_sol_store(zero, pointer, function_entry_block);
+                }
+                *slot = Some(pointer);
+            }
+        }
+
+        let forward_params: Vec<Value<'context, 'block>> = (0..mlir_parameter_types.len())
+            .map(|index| function_entry_block.argument(index).map(Into::into))
+            .collect::<Result<_, _>>()?;
+
+        let mut emitter = StatementEmitter::new(
+            self.state,
+            environment,
+            &region,
+            self.storage_layout,
+            result_types,
+            return_slots.as_slice(),
+        );
+        emitter.modifier_stages = modifier_stages;
+        emitter.modifier_stage_params = modifier_stage_params;
+        emitter.modifier_body_call = Some(ModifierBodyCall {
+            symbol: body_symbol,
+            forward_params,
+            return_slots: return_slots.clone(),
+        });
+        emitter.emit_modifier_chain(current_block)
     }
 
     /// Emits the contract's constructor as a `sol.func`.
@@ -491,6 +633,29 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mro_node_ids: std::collections::HashSet<NodeId> =
             mro.iter().map(|contract| contract.node_id()).collect();
 
+        current_block = self.bind_base_constructor_scopes(
+            &mro,
+            &mro_node_ids,
+            &mut scopes,
+            &mut bound_scopes,
+            current_block,
+        )?;
+        self.emit_constructor_bodies(&mro, &mut scopes, &bound_scopes, &entry, current_block)
+    }
+
+    /// Binds every base constructor's parameters into per-contract scopes by
+    /// evaluating the base-argument expressions (`Base(args)` / `is Base(args)`)
+    /// in C3-linearisation order, populating `scopes` and recording in
+    /// `bound_scopes` which bases were successfully bound. Returns the block
+    /// reached after evaluating all (possibly side-effecting) arguments.
+    fn bind_base_constructor_scopes<'block>(
+        &self,
+        mro: &[ContractDefinition],
+        mro_node_ids: &std::collections::HashSet<NodeId>,
+        scopes: &mut HashMap<NodeId, Environment<'context, 'block>>,
+        bound_scopes: &mut std::collections::HashSet<NodeId>,
+        mut current_block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<BlockRef<'context, 'block>> {
         for contract in mro.iter() {
             // A contract whose constructor takes no externally-supplied
             // parameters (the common case — most inheritance passes no
@@ -498,9 +663,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             // evaluates its own base-argument expressions in a fresh empty
             // scope. A contract with parameters was already bound above, walking
             // most-derived first, so this leaves that scope untouched.
-            scopes
-                .entry(contract.node_id())
-                .or_insert_with(Environment::new);
+            scopes.entry(contract.node_id()).or_default();
 
             // Gather (linearised base contract, argument expressions) for this
             // contract's base invocations: its constructor's modifier-style list
@@ -514,7 +677,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         continue;
                     };
                     if let Some(base_contract) =
-                        Self::match_linearised_base(&invocation.name(), &mro, &mro_node_ids)
+                        Self::match_linearised_base(&invocation.name(), mro, mro_node_ids)
                     {
                         base_argument_specs.push((base_contract, arguments));
                     }
@@ -525,7 +688,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     continue;
                 };
                 if let Some(base_contract) =
-                    Self::match_linearised_base(&inheritance.type_name(), &mro, &mro_node_ids)
+                    Self::match_linearised_base(&inheritance.type_name(), mro, mro_node_ids)
                 {
                     base_argument_specs.push((base_contract, arguments));
                 }
@@ -615,7 +778,21 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 scopes.entry(base_id).or_insert(base_environment);
             }
         }
+        Ok(current_block)
+    }
 
+    /// Emits each (linearised) constructor body base-first, each in its own
+    /// parameter scope and dispatching any constructor modifiers, then finishes
+    /// the constructor with a `sol.return` unless a body already terminated the
+    /// block.
+    fn emit_constructor_bodies<'block>(
+        &self,
+        mro: &[ContractDefinition],
+        scopes: &mut HashMap<NodeId, Environment<'context, 'block>>,
+        bound_scopes: &std::collections::HashSet<NodeId>,
+        entry: &BlockRef<'context, 'block>,
+        mut current_block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<()> {
         // Run constructor bodies base-first (reverse of most-derived order),
         // each in its own parameter scope. A base whose constructor takes no
         // arguments was never bound above, so it gets a fresh empty scope.
@@ -638,9 +815,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             {
                 continue;
             }
-            let environment = scopes
-                .entry(contract.node_id())
-                .or_insert_with(Environment::new);
+            let environment = scopes.entry(contract.node_id()).or_default();
             environment.enter_scope();
 
             // A constructor may carry modifiers (`constructor() mod1`). They are
