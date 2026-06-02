@@ -237,11 +237,21 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // here but resolve to a contract, not a modifier — skip those.
         let mut modifier_stages: Vec<slang_solidity_v2::ast::Statements> = Vec::new();
         for invocation in function.modifier_invocations().iter() {
-            let Some(slang_solidity_v2::ast::Definition::Modifier(modifier_definition)) =
+            let Some(slang_solidity_v2::ast::Definition::Modifier(resolved_modifier)) =
                 invocation.name().resolve_to_definition()
             else {
                 continue;
             };
+            // Virtual modifier dispatch: a modifier may be declared `virtual`
+            // (and even left abstract/bodyless) in a base and `override`-n in a
+            // derived contract. Slang resolves the invocation lexically to the
+            // base declaration, so re-resolve to the most-derived same-named
+            // modifier with a body across the contract's C3 linearisation,
+            // mirroring virtual function dispatch. For a non-overridden modifier
+            // this finds the same definition, so behaviour is unchanged.
+            let modifier_definition = self
+                .resolve_modifier_override(&invocation, &resolved_modifier)
+                .unwrap_or(resolved_modifier);
             let Some(modifier_body) = modifier_definition.body() else {
                 continue;
             };
@@ -458,6 +468,51 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     ///
     /// Uses slang's ABI canonical types when available (external functions),
     /// falls back to AST-based type names for internal/private functions.
+    /// Resolves a modifier to its most-derived override in the contract's C3
+    /// linearisation, by name and requiring a body (mirroring virtual function
+    /// dispatch). A `virtual` modifier may be declared abstract in a base and
+    /// `override`-n in a derived contract; the lexical resolution of an
+    /// invocation picks the base declaration, so re-resolve against the
+    /// linearised bases (most-derived first).
+    ///
+    /// Returns `None` (keep the lexical resolution) when:
+    /// - the invocation is qualified (`Base.m`), which explicitly names a
+    ///   specific modifier and bypasses virtual dispatch; or
+    /// - the resolved modifier is not part of this contract's hierarchy — e.g.
+    ///   a library modifier reached through `using L for *`, which must not be
+    ///   virtual-dispatched against the using contract's own same-named modifier.
+    fn resolve_modifier_override(
+        &self,
+        invocation: &slang_solidity_v2::ast::ModifierInvocation,
+        resolved: &FunctionDefinition,
+    ) -> Option<FunctionDefinition> {
+        if invocation.name().len() > 1 {
+            return None;
+        }
+        let name = resolved.name()?.unparse().to_owned();
+        let resolved_id = resolved.node_id();
+        let mro_modifiers: Vec<FunctionDefinition> = self
+            .contract()
+            .compute_linearised_bases()
+            .into_iter()
+            .filter_map(|base| match base {
+                slang_solidity_v2::ast::ContractBase::Contract(contract) => Some(contract),
+                slang_solidity_v2::ast::ContractBase::Interface(_) => None,
+            })
+            .flat_map(|contract| contract.modifiers())
+            .collect();
+        if !mro_modifiers
+            .iter()
+            .any(|modifier| modifier.node_id() == resolved_id)
+        {
+            return None;
+        }
+        mro_modifiers.into_iter().find(|modifier| {
+            modifier.body().is_some()
+                && modifier.name().is_some_and(|n| n.unparse() == name.as_str())
+        })
+    }
+
     pub fn mlir_function_name(function: &FunctionDefinition) -> String {
         let name = Self::mlir_base_name(function);
 
