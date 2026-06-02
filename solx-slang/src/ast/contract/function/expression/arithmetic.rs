@@ -222,223 +222,218 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .into();
                 Ok((result, block))
             }
-            Operator::Delete => {
-                // `delete m[k]` / `delete arr[i]` resets the indexed element.
-                if let Expression::IndexAccessExpression(index_access) = operand {
-                    let (address, element_type, block) =
-                        self.emit_index_access_address(index_access, block)?;
-                    let zero = self
-                        .state
-                        .builder
-                        .emit_sol_constant(0, element_type, &block);
-                    self.state
-                        .builder
-                        .emit_sol_store(zero, address, &block);
-                    return Ok((zero, block));
-                }
-                // `delete s.field` resets the addressed struct field: scalars
-                // store zero, enums store their zero variant, and reference-typed
-                // fields (nested arrays / structs / bytes in storage) recurse
-                // through `sol.delete`.
-                if let Expression::MemberAccessExpression(access) = operand
-                    && let Some((address, element_type, block)) =
-                        self.emit_struct_field_address(access, block)?
-                {
-                    let builder = &self.state.builder;
-                    if solx_mlir::TypeFactory::is_sol_reference(element_type) {
-                        builder.emit_sol_delete(address, &block);
-                        let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
-                        return Ok((placeholder, block));
-                    }
-                    let zero = if melior::ir::r#type::IntegerType::try_from(element_type).is_ok() {
-                        builder.emit_sol_constant(0, element_type, &block)
-                    } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
-                        let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
-                        builder.emit_sol_enum_cast(raw, element_type, &block)
-                    } else {
-                        builder.emit_sol_constant(0, element_type, &block)
-                    };
-                    builder.emit_sol_store(zero, address, &block);
-                    return Ok((zero, block));
-                }
-                // `delete x` resets `x` to its type's zero value. For the
-                // experimental branch only scalar identifiers are supported —
-                // reference-type deletion (arrays, mappings, structs) needs
-                // dedicated lowering.
-                let Expression::Identifier(identifier) = operand else {
-                    unimplemented!("delete of a non-identifier operand");
-                };
-                let name = identifier.name();
-                match identifier.resolve_to_definition() {
-                    Some(Definition::Variable(_) | Definition::Parameter(_)) => {
-                        let (pointer, element_type) =
-                            self.environment.variable_with_type(&name);
-                        let builder = &self.state.builder;
-                        let zero = if melior::ir::r#type::IntegerType::try_from(element_type)
-                            .is_ok()
-                        {
-                            builder.emit_sol_constant(0, element_type, &block)
-                        } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
-                            let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
-                            builder.emit_sol_enum_cast(raw, element_type, &block)
-                        } else {
-                            // Reference-typed local: `delete` rebinds it to a
-                            // fresh zero value. Function pointers reset to the
-                            // default (zero) pointer; dynamic aggregates
-                            // (arrays / `bytes` / `string`) to a fresh empty
-                            // allocation (length 0); fixed aggregates (structs /
-                            // fixed arrays) to a zero-initialised allocation.
-                            match identifier.get_type() {
-                                Some(SlangType::Function(_)) => {
-                                    builder.emit_sol_default_func_constant(element_type, &block)
-                                }
-                                Some(
-                                    SlangType::Array(_)
-                                    | SlangType::String(_)
-                                    | SlangType::Bytes(_),
-                                ) => {
-                                    let zero_size =
-                                        builder.emit_sol_constant(0, builder.types.ui256, &block);
-                                    builder.emit_sol_malloc_sized(element_type, zero_size, &block)
-                                }
-                                Some(SlangType::FixedSizeArray(_) | SlangType::Struct(_)) => {
-                                    builder.emit_sol_malloc(element_type, &block)
-                                }
-                                _ => unimplemented!(
-                                    "delete on a non-integer local '{name}' is not yet supported"
-                                ),
-                            }
-                        };
-                        builder.emit_sol_store(zero, pointer, &block);
-                        Ok((zero, block))
-                    }
-                    Some(Definition::StateVariable(state_variable)) => {
-                        let (slot, byte_offset, location) = *self
-                            .storage_layout
-                            .get(&state_variable.node_id())
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("unregistered state variable: {name}")
-                            })?;
-                        let element_type = TypeConversion::resolve_state_variable_type(
-                            &state_variable,
-                            &self.state.builder,
-                        )?;
-                        // `sol.constant 0` requires an integer type. For
-                        // enums, build a ui256 zero and bridge it to the
-                        // enum type via `sol.enum_cast` before storing.
-                        let builder = &self.state.builder;
-
-                        // `delete x` on a reference-typed storage variable
-                        // (array / struct / string / bytes) resets it to its
-                        // default by copying a freshly allocated, zero-initialised
-                        // memory aggregate of the same type into the slot.
-                        // `sol.copy` writes the storage destination and clears the
-                        // previous tail for dynamic aggregates. `delete` on a
-                        // mapping is a no-op in Solidity.
-                        if solx_mlir::TypeFactory::is_sol_reference(element_type) {
-                            let declared_type = state_variable.get_type().ok_or_else(|| {
-                                anyhow::anyhow!("unresolved type for state variable: {name}")
-                            })?;
-                            match &declared_type {
-                                // `delete` on a mapping is a no-op in Solidity.
-                                SlangType::Mapping(_) => {
-                                    let placeholder =
-                                        builder.emit_sol_constant(0, builder.types.ui256, &block);
-                                    return Ok((placeholder, block));
-                                }
-                                // Dynamic `bytes`/`string` reset to empty: copy a
-                                // freshly allocated zero-length memory buffer into the
-                                // slot. `sol.copy` writes the storage destination and
-                                // clears the previous tail.
-                                SlangType::Bytes(_) | SlangType::String(_) => {
-                                    let memory_type = TypeConversion::resolve_slang_type(
-                                        &declared_type,
-                                        Some(solx_utils::DataLocation::Memory),
-                                        builder,
-                                    );
-                                    let zero_size =
-                                        builder.emit_sol_constant(0, builder.types.ui256, &block);
-                                    let default_value = builder
-                                        .emit_sol_malloc_sized(memory_type, zero_size, &block);
-                                    let address = builder.emit_sol_addr_of(
-                                        &crate::ast::contract::ContractEmitter::storage_symbol(
-                                            slot,
-                                            byte_offset,
-                                            location,
-                                        ),
-                                        Self::address_type(
-                                            builder,
-                                            element_type,
-                                            location,
-                                            &declared_type,
-                                        ),
-                                        &block,
-                                    );
-                                    builder.emit_sol_copy(default_value, address, &block);
-                                    let placeholder =
-                                        builder.emit_sol_constant(0, builder.types.ui256, &block);
-                                    return Ok((placeholder, block));
-                                }
-                                // Arrays and structs: `sol.delete` recursively
-                                // clears every storage slot the aggregate occupies
-                                // (matching solc's deep delete — dynamic members
-                                // reset to empty, nested aggregates recurse).
-                                SlangType::Struct(_)
-                                | SlangType::Array(_)
-                                | SlangType::FixedSizeArray(_) => {
-                                    let address = builder.emit_sol_addr_of(
-                                        &crate::ast::contract::ContractEmitter::storage_symbol(
-                                            slot,
-                                            byte_offset,
-                                            location,
-                                        ),
-                                        Self::address_type(
-                                            builder,
-                                            element_type,
-                                            location,
-                                            &declared_type,
-                                        ),
-                                        &block,
-                                    );
-                                    builder.emit_sol_delete(address, &block);
-                                    let placeholder =
-                                        builder.emit_sol_constant(0, builder.types.ui256, &block);
-                                    return Ok((placeholder, block));
-                                }
-                                _ => unimplemented!(
-                                    "delete of a reference-type storage variable is not yet supported"
-                                ),
-                            }
-                        }
-
-                        let zero = if melior::ir::r#type::IntegerType::try_from(element_type)
-                            .is_ok()
-                        {
-                            builder.emit_sol_constant(0, element_type, &block)
-                        } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
-                            let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
-                            builder.emit_sol_enum_cast(raw, element_type, &block)
-                        } else if solx_mlir::TypeFactory::is_sol_reference(element_type) {
-                            // Array / struct / string / bytes / mapping need
-                            // recursive zeroing, not yet implemented. Fail cleanly
-                            // rather than storing a type-mismatched `ui256(0)` into
-                            // a reference-typed slot (which the verifier rejects).
-                            unimplemented!(
-                                "delete of a reference-type storage variable is not yet supported"
-                            );
-                        } else {
-                            // Word-sized types (e.g. function pointers) zero
-                            // correctly with a plain `ui256(0)` store.
-                            builder.emit_sol_constant(0, builder.types.ui256, &block)
-                        };
-                        self.emit_storage_store(slot, byte_offset, zero, location, &block);
-                        Ok((zero, block))
-                    }
-                    _ => unimplemented!("unsupported delete target: {name}"),
-                }
-            }
+            Operator::Delete => self.emit_delete(operand, block),
             _ => unimplemented!("unsupported prefix operator: {operator:?}"),
         }
+    }
+
+    /// Emits `delete <operand>`, resetting the target to its type's zero value.
+    /// Indexed elements (`delete m[k]` / `delete arr[i]`) and struct fields
+    /// (`delete s.field`) reset in place; a bare identifier dispatches to the
+    /// local-variable or state-variable handler.
+    fn emit_delete(
+        &self,
+        operand: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        // `delete m[k]` / `delete arr[i]` resets the indexed element.
+        if let Expression::IndexAccessExpression(index_access) = operand {
+            let (address, element_type, block) =
+                self.emit_index_access_address(index_access, block)?;
+            let zero = self.state.builder.emit_sol_constant(0, element_type, &block);
+            self.state.builder.emit_sol_store(zero, address, &block);
+            return Ok((zero, block));
+        }
+        // `delete s.field` resets the addressed struct field: scalars store
+        // zero, enums store their zero variant, and reference-typed fields
+        // (nested arrays / structs / bytes in storage) recurse through
+        // `sol.delete`.
+        if let Expression::MemberAccessExpression(access) = operand
+            && let Some((address, element_type, block)) =
+                self.emit_struct_field_address(access, block)?
+        {
+            let builder = &self.state.builder;
+            if solx_mlir::TypeFactory::is_sol_reference(element_type) {
+                builder.emit_sol_delete(address, &block);
+                let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                return Ok((placeholder, block));
+            }
+            let zero = if melior::ir::r#type::IntegerType::try_from(element_type).is_ok() {
+                builder.emit_sol_constant(0, element_type, &block)
+            } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
+                let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                builder.emit_sol_enum_cast(raw, element_type, &block)
+            } else {
+                builder.emit_sol_constant(0, element_type, &block)
+            };
+            builder.emit_sol_store(zero, address, &block);
+            return Ok((zero, block));
+        }
+        // `delete x` resets `x` to its type's zero value; reference-type
+        // deletion needs storage-class-specific lowering, so dispatch on the
+        // resolved definition.
+        let Expression::Identifier(identifier) = operand else {
+            unimplemented!("delete of a non-identifier operand");
+        };
+        let name = identifier.name();
+        match identifier.resolve_to_definition() {
+            Some(Definition::Variable(_) | Definition::Parameter(_)) => {
+                self.emit_delete_local_variable(&name, identifier.get_type(), block)
+            }
+            Some(Definition::StateVariable(state_variable)) => {
+                self.emit_delete_state_variable(&state_variable, &name, block)
+            }
+            _ => unimplemented!("unsupported delete target: {name}"),
+        }
+    }
+
+    /// Emits `delete x` for a local variable / parameter, rebinding it to its
+    /// type's zero value: integers to `0`, enums to their zero variant,
+    /// function pointers to the default pointer, dynamic aggregates (arrays /
+    /// `bytes` / `string`) to a fresh empty allocation, and fixed aggregates
+    /// (structs / fixed arrays) to a zero-initialised allocation.
+    fn emit_delete_local_variable(
+        &self,
+        name: &str,
+        slang_type: Option<SlangType>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let (pointer, element_type) = self.environment.variable_with_type(name);
+        let builder = &self.state.builder;
+        let zero = if melior::ir::r#type::IntegerType::try_from(element_type).is_ok() {
+            builder.emit_sol_constant(0, element_type, &block)
+        } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
+            let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            builder.emit_sol_enum_cast(raw, element_type, &block)
+        } else {
+            // Reference-typed local: `delete` rebinds it to a fresh zero value.
+            // Function pointers reset to the default (zero) pointer; dynamic
+            // aggregates (arrays / `bytes` / `string`) to a fresh empty
+            // allocation (length 0); fixed aggregates (structs / fixed arrays)
+            // to a zero-initialised allocation.
+            match slang_type {
+                Some(SlangType::Function(_)) => {
+                    builder.emit_sol_default_func_constant(element_type, &block)
+                }
+                Some(SlangType::Array(_) | SlangType::String(_) | SlangType::Bytes(_)) => {
+                    let zero_size = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                    builder.emit_sol_malloc_sized(element_type, zero_size, &block)
+                }
+                Some(SlangType::FixedSizeArray(_) | SlangType::Struct(_)) => {
+                    builder.emit_sol_malloc(element_type, &block)
+                }
+                _ => unimplemented!(
+                    "delete on a non-integer local '{name}' is not yet supported"
+                ),
+            }
+        };
+        builder.emit_sol_store(zero, pointer, &block);
+        Ok((zero, block))
+    }
+
+    /// Emits `delete x` for a state variable, resetting its storage to the
+    /// default. Reference types (array / struct / `string` / `bytes`) reset by
+    /// copying a fresh zero-initialised aggregate or recursing through
+    /// `sol.delete`; `delete` on a mapping is a no-op; value types and enums
+    /// store a zero word (enums bridged through `sol.enum_cast`).
+    fn emit_delete_state_variable(
+        &self,
+        state_variable: &slang_solidity_v2::ast::StateVariableDefinition,
+        name: &str,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let (slot, byte_offset, location) = *self
+            .storage_layout
+            .get(&state_variable.node_id())
+            .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?;
+        let element_type =
+            TypeConversion::resolve_state_variable_type(state_variable, &self.state.builder)?;
+        // `sol.constant 0` requires an integer type. For enums, build a ui256
+        // zero and bridge it to the enum type via `sol.enum_cast` before storing.
+        let builder = &self.state.builder;
+
+        // `delete x` on a reference-typed storage variable (array / struct /
+        // string / bytes) resets it to its default by copying a freshly
+        // allocated, zero-initialised memory aggregate of the same type into the
+        // slot. `sol.copy` writes the storage destination and clears the previous
+        // tail for dynamic aggregates. `delete` on a mapping is a no-op.
+        if solx_mlir::TypeFactory::is_sol_reference(element_type) {
+            let declared_type = state_variable.get_type().ok_or_else(|| {
+                anyhow::anyhow!("unresolved type for state variable: {name}")
+            })?;
+            match &declared_type {
+                // `delete` on a mapping is a no-op in Solidity.
+                SlangType::Mapping(_) => {
+                    let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                    return Ok((placeholder, block));
+                }
+                // Dynamic `bytes`/`string` reset to empty: copy a freshly
+                // allocated zero-length memory buffer into the slot. `sol.copy`
+                // writes the storage destination and clears the previous tail.
+                SlangType::Bytes(_) | SlangType::String(_) => {
+                    let memory_type = TypeConversion::resolve_slang_type(
+                        &declared_type,
+                        Some(solx_utils::DataLocation::Memory),
+                        builder,
+                    );
+                    let zero_size = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                    let default_value =
+                        builder.emit_sol_malloc_sized(memory_type, zero_size, &block);
+                    let address = builder.emit_sol_addr_of(
+                        &crate::ast::contract::ContractEmitter::storage_symbol(
+                            slot,
+                            byte_offset,
+                            location,
+                        ),
+                        Self::address_type(builder, element_type, location, &declared_type),
+                        &block,
+                    );
+                    builder.emit_sol_copy(default_value, address, &block);
+                    let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                    return Ok((placeholder, block));
+                }
+                // Arrays and structs: `sol.delete` recursively clears every
+                // storage slot the aggregate occupies (matching solc's deep
+                // delete — dynamic members reset to empty, nested aggregates
+                // recurse).
+                SlangType::Struct(_) | SlangType::Array(_) | SlangType::FixedSizeArray(_) => {
+                    let address = builder.emit_sol_addr_of(
+                        &crate::ast::contract::ContractEmitter::storage_symbol(
+                            slot,
+                            byte_offset,
+                            location,
+                        ),
+                        Self::address_type(builder, element_type, location, &declared_type),
+                        &block,
+                    );
+                    builder.emit_sol_delete(address, &block);
+                    let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                    return Ok((placeholder, block));
+                }
+                _ => unimplemented!(
+                    "delete of a reference-type storage variable is not yet supported"
+                ),
+            }
+        }
+
+        let zero = if melior::ir::r#type::IntegerType::try_from(element_type).is_ok() {
+            builder.emit_sol_constant(0, element_type, &block)
+        } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
+            let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            builder.emit_sol_enum_cast(raw, element_type, &block)
+        } else if solx_mlir::TypeFactory::is_sol_reference(element_type) {
+            // Array / struct / string / bytes / mapping need recursive zeroing,
+            // not yet implemented. Fail cleanly rather than storing a
+            // type-mismatched `ui256(0)` into a reference-typed slot (which the
+            // verifier rejects).
+            unimplemented!("delete of a reference-type storage variable is not yet supported");
+        } else {
+            // Word-sized types (e.g. function pointers) zero correctly with a
+            // plain `ui256(0)` store.
+            builder.emit_sol_constant(0, builder.types.ui256, &block)
+        };
+        self.emit_storage_store(slot, byte_offset, zero, location, &block);
+        Ok((zero, block))
     }
 
     /// Loads, increments or decrements, stores, and returns `(old, new)`.
