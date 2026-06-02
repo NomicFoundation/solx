@@ -416,19 +416,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             return Ok(());
         };
 
-        let value = match &initializer {
-            Expression::DecimalNumberExpression(decimal) => decimal.integer_value(),
-            Expression::HexNumberExpression(hex) => hex.integer_value(),
-            _ => initializer.get_type().and_then(|slang_type| match slang_type {
-                SlangType::Literal(literal) => match literal.kind() {
-                    LiteralKind::Integer { value } => Some(value),
-                    LiteralKind::HexInteger { value, .. } => Some(value),
-                    _ => None,
-                },
-                _ => None,
-            }),
-        };
-        let Some(value) = value else {
+        let Some(value) = Self::fold_constant_int(&initializer) else {
             return Ok(());
         };
 
@@ -446,6 +434,77 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let constant = builder.emit_constant(&value, element_type, &entry);
         builder.emit_sol_return(&[constant], &entry);
         Ok(())
+    }
+
+    /// Folds a compile-time-constant initializer to its integer value, for
+    /// `public constant` getter emission.
+    ///
+    /// Handles integer / hex literals, references to other constants, UDVT
+    /// `wrap` / `unwrap`, and elementary / UDVT type conversions (`int224(x)`,
+    /// `T(x)`) — all identities on the underlying integer of an in-range
+    /// constant. Returns `None` for anything else (the getter is then left
+    /// ungenerated rather than emitted with a wrong value).
+    fn fold_constant_int(expression: &Expression) -> Option<num_bigint::BigInt> {
+        match expression {
+            Expression::DecimalNumberExpression(decimal) => decimal.integer_value(),
+            Expression::HexNumberExpression(hex) => hex.integer_value(),
+            Expression::Identifier(identifier) => match identifier.resolve_to_definition() {
+                Some(Definition::StateVariable(state_variable)) => {
+                    Self::fold_constant_int(&state_variable.value()?)
+                }
+                Some(Definition::Constant(constant)) => {
+                    Self::fold_constant_int(&constant.value()?)
+                }
+                _ => None,
+            },
+            Expression::MemberAccessExpression(access) => {
+                match access.member().resolve_to_definition() {
+                    Some(Definition::StateVariable(state_variable)) => {
+                        Self::fold_constant_int(&state_variable.value()?)
+                    }
+                    Some(Definition::Constant(constant)) => {
+                        Self::fold_constant_int(&constant.value()?)
+                    }
+                    _ => None,
+                }
+            }
+            Expression::FunctionCallExpression(call) => {
+                let slang_solidity_v2::ast::ArgumentsDeclaration::PositionalArguments(positional) =
+                    call.arguments()
+                else {
+                    return None;
+                };
+                let mut arguments = positional.iter();
+                let argument = arguments.next()?;
+                if arguments.next().is_some() {
+                    return None;
+                }
+                let is_wrap_unwrap = matches!(
+                    &call.operand(),
+                    Expression::MemberAccessExpression(member)
+                        if matches!(
+                            member.member().resolve_to_built_in(),
+                            Some(
+                                slang_solidity_v2::ast::BuiltIn::Wrap
+                                    | slang_solidity_v2::ast::BuiltIn::Unwrap
+                            )
+                        )
+                );
+                if is_wrap_unwrap || call.is_type_conversion() {
+                    Self::fold_constant_int(&argument)
+                } else {
+                    None
+                }
+            }
+            _ => expression.get_type().and_then(|slang_type| match slang_type {
+                SlangType::Literal(literal) => match literal.kind() {
+                    LiteralKind::Integer { value } => Some(value),
+                    LiteralKind::HexInteger { value, .. } => Some(value),
+                    _ => None,
+                },
+                _ => None,
+            }),
+        }
     }
 
     /// Emits the auto-generated external getter for a public state variable.
