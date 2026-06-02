@@ -5,7 +5,11 @@
 use super::*;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
-    #[allow(clippy::too_many_lines)]
+    // A flat per-opcode dispatch: one `match name` arm per Yul/EVM intrinsic,
+    // each a thin op emission (mostly via the `binop!` / `ctx_intrinsic!`
+    // macros). The line count and cognitive complexity are inherent to the
+    // opcode count, not nested logic, so both are allowed rather than split.
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     pub(super) fn emit_yul_intrinsic(
         &self,
         name: &str,

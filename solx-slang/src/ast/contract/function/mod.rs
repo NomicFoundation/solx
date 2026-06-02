@@ -32,6 +32,11 @@ use self::expression::call::type_conversion::TypeConversion;
 use self::statement::ModifierBodyCall;
 use self::statement::StatementEmitter;
 
+/// One modifier stage's bound parameters: `(name, value, type)` for each
+/// parameter the modifier binds before its body (and any `_;` placeholder)
+/// runs.
+type ModifierStageParams<'context, 'env> = Vec<(String, Value<'context, 'env>, Type<'context>)>;
+
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
@@ -865,12 +870,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         mut block: BlockRef<'context, 'env>,
     ) -> anyhow::Result<(
         Vec<slang_solidity_v2::ast::Statements>,
-        Vec<Vec<(String, Value<'context, 'env>, Type<'context>)>>,
+        Vec<ModifierStageParams<'context, 'env>>,
         BlockRef<'context, 'env>,
     )> {
         let mut modifier_stages: Vec<slang_solidity_v2::ast::Statements> = Vec::new();
-        let mut modifier_params: Vec<Vec<(String, Value<'context, 'env>, Type<'context>)>> =
-            Vec::new();
+        let mut modifier_params: Vec<ModifierStageParams<'context, 'env>> = Vec::new();
         for invocation in function.modifier_invocations().iter() {
             let resolved_modifier = match invocation.name().resolve_to_definition() {
                 Some(slang_solidity_v2::ast::Definition::Modifier(modifier)) => modifier,
@@ -891,7 +895,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 )) => positional.iter().collect(),
                 _ => Vec::new(),
             };
-            let mut stage_params: Vec<(String, Value<'context, 'env>, Type<'context>)> = Vec::new();
+            let mut stage_params: ModifierStageParams<'context, 'env> = Vec::new();
             for (parameter, argument) in modifier_definition
                 .parameters()
                 .iter()
