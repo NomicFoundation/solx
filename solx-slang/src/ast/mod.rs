@@ -8,7 +8,6 @@ pub mod contract;
 use std::collections::BTreeMap;
 
 use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 
@@ -59,16 +58,19 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
             };
             method_identifiers.insert(signature, format!("{selector:08x}"));
         }
-        for contract_member in contract.members().iter() {
-            if let ContractMember::StateVariableDefinition(state_variable) = contract_member {
-                let Some(signature) = state_variable.compute_canonical_signature() else {
-                    continue;
-                };
-                let Some(selector) = state_variable.compute_selector() else {
-                    continue;
-                };
-                method_identifiers.insert(signature, format!("{selector:08x}"));
-            }
+        // Walk the inheritance-linearised state-variable list (not just this
+        // contract's own members) so derived contracts expose inherited
+        // `public` getters in their ABI — mirroring the function loop above.
+        // The getter code itself is already emitted over the same linearised
+        // set (see `emit_state_variable_getters`).
+        for state_variable in contract.compute_linearised_state_variables() {
+            let Some(signature) = state_variable.compute_canonical_signature() else {
+                continue;
+            };
+            let Some(selector) = state_variable.compute_selector() else {
+                continue;
+            };
+            method_identifiers.insert(signature, format!("{selector:08x}"));
         }
 
         Ok((name, method_identifiers))
