@@ -149,16 +149,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // ordinary internal functions.
         let library_functions =
             library::collect_library_functions(contract, free_functions, &shadowed_functions);
-        for library_function in &library_functions {
-            let (parameter_types, return_types) =
-                TypeConversion::resolve_function_types(library_function, &self.state.builder);
-            self.state.register_function_signature(
-                library_function.node_id(),
-                Self::node_id_qualified_symbol(library_function),
-                parameter_types,
-                return_types,
-            );
-        }
+        self.register_function_signatures(&library_functions);
         self.state.library_function_ids =
             library_functions.iter().map(|f| f.node_id()).collect();
 
@@ -180,16 +171,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .into_iter()
                 .filter(|free| !self.state.library_function_ids.contains(&free.node_id()))
                 .collect();
-        for free in &reached_free_functions {
-            let (parameter_types, return_types) =
-                TypeConversion::resolve_function_types(free, &self.state.builder);
-            self.state.register_function_signature(
-                free.node_id(),
-                Self::node_id_qualified_symbol(free),
-                parameter_types,
-                return_types,
-            );
-        }
+        self.register_function_signatures(&reached_free_functions);
 
         let storage_layout = Self::compute_storage_layout(contract);
 
@@ -208,36 +190,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             &module_body,
         );
 
-        // Walk the C3-linearised state-variable list so derived contracts
-        // pick up base-contract storage slots and getters in addition to
-        // their own.
-        let mut emitted_symbols: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
-        for state_variable in contract.compute_linearised_state_variables() {
-            let Some(&(slot, byte_offset, location)) =
-                storage_layout.get(&state_variable.node_id())
-            else {
-                continue;
-            };
-            // Distinct state variables may share a symbol only through
-            // inheritance re-linearisation; emit each once. A storage and a
-            // transient variable may legitimately share (slot, offset) — the
-            // location-aware symbol (e.g. `slot_0_0` vs `tslot_0_0`) keeps them
-            // distinct.
-            let symbol = Self::storage_symbol(slot, byte_offset, location);
-            if !emitted_symbols.insert(symbol.clone()) {
-                continue;
-            }
-            let element_type =
-                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
-            self.state.builder.emit_sol_state_var(
-                &symbol,
-                slot,
-                byte_offset,
-                element_type,
-                &contract_body,
-            );
-        }
+        self.emit_state_variables(contract, &storage_layout, &contract_body)?;
 
         self.state.current_contract_type = Some(contract_type);
         FunctionEmitter::new(self.state, Some(contract), &storage_layout)
@@ -313,9 +266,74 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             self.state.current_contract_type = None;
         }
 
+        self.emit_state_variable_getters(contract, &storage_layout, &contract_body)?;
+
+        Ok(())
+    }
+
+    /// Registers each function's `(symbol, parameter types, return types)`
+    /// signature with the lowering state under its node-id-qualified symbol.
+    /// Shared by the library- and free-function pre-registration passes.
+    fn register_function_signatures(&mut self, functions: &[FunctionDefinition]) {
+        for function in functions {
+            let (parameter_types, return_types) =
+                TypeConversion::resolve_function_types(function, &self.state.builder);
+            self.state.register_function_signature(
+                function.node_id(),
+                Self::node_id_qualified_symbol(function),
+                parameter_types,
+                return_types,
+            );
+        }
+    }
+
+    /// Emits a `sol.state_var` for each (C3-linearised) storage / transient
+    /// state variable so derived contracts pick up base-contract slots too.
+    /// A symbol shared only through inheritance re-linearisation is emitted
+    /// once; the location-aware symbol keeps a storage and a transient variable
+    /// that share `(slot, offset)` distinct.
+    fn emit_state_variables(
+        &self,
+        contract: &ContractDefinition,
+        storage_layout: &StorageLayout,
+        contract_body: &melior::ir::BlockRef<'context, '_>,
+    ) -> anyhow::Result<()> {
+        let mut emitted_symbols: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for state_variable in contract.compute_linearised_state_variables() {
+            let Some(&(slot, byte_offset, location)) =
+                storage_layout.get(&state_variable.node_id())
+            else {
+                continue;
+            };
+            let symbol = Self::storage_symbol(slot, byte_offset, location);
+            if !emitted_symbols.insert(symbol.clone()) {
+                continue;
+            }
+            let element_type =
+                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
+            self.state.builder.emit_sol_state_var(
+                &symbol,
+                slot,
+                byte_offset,
+                element_type,
+                contract_body,
+            );
+        }
+        Ok(())
+    }
+
+    /// Emits each (C3-linearised) state variable's auto-generated accessor: a
+    /// folded getter for `constant`s, otherwise the storage getter at its slot.
+    fn emit_state_variable_getters(
+        &self,
+        contract: &ContractDefinition,
+        storage_layout: &StorageLayout,
+        contract_body: &melior::ir::BlockRef<'context, '_>,
+    ) -> anyhow::Result<()> {
         for state_variable in contract.compute_linearised_state_variables() {
             if matches!(state_variable.mutability(), StateVariableMutability::Constant) {
-                self.emit_constant_getter(&state_variable, &contract_body)?;
+                self.emit_constant_getter(&state_variable, contract_body)?;
             } else if let Some(&(slot, byte_offset, location)) =
                 storage_layout.get(&state_variable.node_id())
             {
@@ -324,11 +342,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     slot,
                     byte_offset,
                     location,
-                    &contract_body,
+                    contract_body,
                 )?;
             }
         }
-
         Ok(())
     }
 
