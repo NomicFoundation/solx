@@ -29,6 +29,7 @@ use solx_mlir::StateMutability;
 
 use self::expression::ExpressionEmitter;
 use self::expression::call::type_conversion::TypeConversion;
+use self::statement::ModifierBodyCall;
 use self::statement::StatementEmitter;
 use self::storage_slot::StorageSlot;
 
@@ -82,7 +83,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         function: &FunctionDefinition,
         contract_body: &BlockRef<'context, '_>,
     ) -> anyhow::Result<String> {
-        self.emit_sol_inner(function, None, contract_body)
+        self.emit_sol_inner(function, None, contract_body, false)
     }
 
     /// Emits `function` under the contract-qualified `symbol` with no public
@@ -96,14 +97,21 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         symbol: &str,
         contract_body: &BlockRef<'context, '_>,
     ) -> anyhow::Result<String> {
-        self.emit_sol_inner(function, Some(symbol), contract_body)
+        self.emit_sol_inner(function, Some(symbol), contract_body, false)
     }
 
+    /// Emits `function`'s lowering.
+    ///
+    /// `as_modifier_body` emits just the function body (no selector, no
+    /// modifier wrapping) under `symbol_override` — used to materialise the
+    /// wrapped body of a modified function as a separate internal `sol.func`
+    /// (see the modifier-chain handling below).
     fn emit_sol_inner(
         &self,
         function: &FunctionDefinition,
         symbol_override: Option<&str>,
         contract_body: &BlockRef<'context, '_>,
+        as_modifier_body: bool,
     ) -> anyhow::Result<String> {
         let Some(ref body) = function.body() else {
             // Abstract or interface function — no codegen needed.
@@ -119,6 +127,23 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         let (mlir_parameter_types, result_types) =
             TypeConversion::resolve_function_types(function, &self.state.builder);
+
+        // A `$body` emission takes the wrapping function's current return values
+        // as extra trailing parameters and threads them back out as its
+        // results, so the named return variables are *shared* across the
+        // modifier chain and repeated `_;` invocations (matching solc): a
+        // modifier-argument side effect (`m(x = 2)`) and accumulation across
+        // multiple `_` both survive into the final result.
+        let parameter_count = mlir_parameter_types.len();
+        let mlir_parameter_types: Vec<Type<'context>> = if as_modifier_body {
+            mlir_parameter_types
+                .iter()
+                .chain(result_types.iter())
+                .copied()
+                .collect()
+        } else {
+            mlir_parameter_types
+        };
 
         // Shadowed base overrides share the most-derived function's selector;
         // emitting it twice would duplicate the dispatch entry. They are only
@@ -173,11 +198,32 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut return_slots: Vec<Option<Value<'context, '_>>> = Vec::new();
         if let Some(returns) = function.returns() {
             for (index, parameter) in returns.iter().enumerate() {
+                let return_type = result_types[index];
+                // `$body` emission: every return (named or not) gets a slot
+                // initialised from the threaded-in value (the block argument
+                // after the regular parameters), so the shared return state is
+                // observable and survives an empty body or a partial `_` reach.
+                if as_modifier_body {
+                    let pointer = self
+                        .state
+                        .builder
+                        .emit_sol_alloca(return_type, &function_entry_block);
+                    let incoming: Value<'context, '_> = function_entry_block
+                        .argument(parameter_count + index)?
+                        .into();
+                    self.state
+                        .builder
+                        .emit_sol_store(incoming, pointer, &function_entry_block);
+                    if let Some(identifier) = parameter.name() {
+                        environment.define_variable(identifier.name(), pointer, return_type);
+                    }
+                    return_slots.push(Some(pointer));
+                    continue;
+                }
                 let Some(identifier) = parameter.name() else {
                     return_slots.push(None);
                     continue;
                 };
-                let return_type = result_types[index];
                 let pointer = self
                     .state
                     .builder
@@ -225,8 +271,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut current_block = function_entry_block;
 
         // State variable initializers run at the top of the constructor body,
-        // before any user-written statements.
-        if matches!(function.kind(), FunctionKind::Constructor) {
+        // before any user-written statements. The wrapping modified function
+        // already runs them, so a `$body` emission must not run them again.
+        if matches!(function.kind(), FunctionKind::Constructor) && !as_modifier_body {
             let emitter =
                 ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
             current_block = emitter.emit_state_var_initializers(self.contract(), current_block)?;
@@ -236,7 +283,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // Base-constructor invocations (`constructor() Base(arg)`) also appear
         // here but resolve to a contract, not a modifier — skip those.
         let mut modifier_stages: Vec<slang_solidity_v2::ast::Statements> = Vec::new();
-        for invocation in function.modifier_invocations().iter() {
+        // In `as_modifier_body` mode the modifier stages are emitted by the
+        // wrapping call; this emission is just the raw body, so collect none.
+        let modifier_invocations: Vec<slang_solidity_v2::ast::ModifierInvocation> =
+            if as_modifier_body {
+                Vec::new()
+            } else {
+                function.modifier_invocations().iter().collect()
+            };
+        for invocation in modifier_invocations {
             let Some(slang_solidity_v2::ast::Definition::Modifier(resolved_modifier)) =
                 invocation.name().resolve_to_definition()
             else {
@@ -318,9 +373,42 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 }
             }
         } else {
-            // The wrapped function body is the final stage; `_;` placeholders
-            // step through `modifier_stages`.
-            modifier_stages.push(body.statements());
+            // Emit the wrapped function body as a separate internal `sol.func`
+            // so a `return` inside it resumes the modifier tail rather than
+            // exiting the whole function (Solidity: `return` does not skip a
+            // modifier's post-`_` code). The innermost `_;` placeholder calls
+            // it and captures its results into the return slots; the modifier
+            // stages themselves stay inlined.
+            let body_symbol = format!("{mlir_name}$body");
+            self.emit_sol_inner(function, Some(body_symbol.as_str()), contract_body, true)?;
+
+            // Unnamed returns carry no slot, but the body call's results must be
+            // captured somewhere the epilogue can read them back — allocate a
+            // (zero-initialised) slot for each so `return X` in the body
+            // propagates X out, and a never-reached `_` yields the zero default.
+            for (index, slot) in return_slots.iter_mut().enumerate() {
+                if slot.is_none() {
+                    let return_type = result_types[index];
+                    let pointer = self
+                        .state
+                        .builder
+                        .emit_sol_alloca(return_type, &function_entry_block);
+                    if IntegerType::try_from(return_type).is_ok() {
+                        let zero = self.state.builder.emit_sol_constant(
+                            0,
+                            return_type,
+                            &function_entry_block,
+                        );
+                        self.state.builder.emit_sol_store(zero, pointer, &function_entry_block);
+                    }
+                    *slot = Some(pointer);
+                }
+            }
+
+            let forward_params: Vec<Value<'context, '_>> = (0..mlir_parameter_types.len())
+                .map(|index| function_entry_block.argument(index).map(Into::into))
+                .collect::<Result<_, _>>()?;
+
             let mut emitter = StatementEmitter::new(
                 self.state,
                 &mut environment,
@@ -329,6 +417,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 &result_types,
             );
             emitter.modifier_stages = modifier_stages;
+            emitter.modifier_body_call = Some(ModifierBodyCall {
+                symbol: body_symbol,
+                forward_params,
+                return_slots: return_slots.clone(),
+            });
             match emitter.emit_modifier_chain(current_block)? {
                 Some(next) => current_block = next,
                 None => terminated = true,

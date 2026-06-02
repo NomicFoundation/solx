@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::Type;
+use melior::ir::Value;
 use ruint::aliases::U256;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
@@ -27,6 +28,21 @@ use solx_mlir::Environment;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::storage_slot::StorageSlot;
+
+/// How the innermost `_;` placeholder of a modified function reaches the
+/// wrapped function body: the body is emitted as a separate internal
+/// `sol.func` (so its `return` resumes the modifier tail), and the placeholder
+/// emits a call to `symbol` forwarding `forward_params`, storing the call's
+/// results into `return_slots`.
+pub(super) struct ModifierBodyCall<'context, 'block> {
+    /// Symbol of the internal `sol.func` holding the wrapped body.
+    pub(super) symbol: String,
+    /// The wrapping function's parameters, forwarded to the body call.
+    pub(super) forward_params: Vec<Value<'context, 'block>>,
+    /// The wrapping function's return slots; the body call's results are
+    /// stored here so the modifier tail and epilogue observe them.
+    pub(super) return_slots: Vec<Option<Value<'context, 'block>>>,
+}
 
 /// Lowers Solidity statements to MLIR operations with control flow.
 ///
@@ -64,6 +80,10 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     pub(super) modifier_stages: Vec<Statements>,
     /// Index of the next stage to emit when a `_;` placeholder is hit.
     pub(super) modifier_stage_index: usize,
+    /// When set, the innermost `_;` placeholder calls the wrapped body function
+    /// instead of inlining it (so `return` resumes the modifier tail). Only set
+    /// on the emitter driving a modified function's modifier chain.
+    pub(super) modifier_body_call: Option<ModifierBodyCall<'context, 'block>>,
 }
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -86,6 +106,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             yul_inline_depth: HashMap::new(),
             modifier_stages: Vec::new(),
             modifier_stage_index: 0,
+            modifier_body_call: None,
         }
     }
 
@@ -100,6 +121,39 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let stage = self.modifier_stage_index;
         let Some(statements) = self.modifier_stages.get(stage).cloned() else {
+            // Past the last modifier stage: invoke the wrapped function body.
+            // It is a separate internal `sol.func`, so its `return` returns
+            // here (resuming the modifier tail) rather than exiting the whole
+            // function. Capture its results into the shared return slots.
+            if let Some(body_call) = &self.modifier_body_call {
+                // Forward the regular parameters plus the *current* return
+                // values (loaded fresh, so a modifier-argument side effect and
+                // earlier `_` results thread in); capture the call's results
+                // back into the slots so the shared return state is updated.
+                let mut operands = body_call.forward_params.clone();
+                for (slot, &return_type) in
+                    body_call.return_slots.iter().zip(self.return_types)
+                {
+                    if let Some(pointer) = slot {
+                        operands.push(self.state.builder.emit_sol_load(
+                            *pointer,
+                            return_type,
+                            &block,
+                        )?);
+                    }
+                }
+                let results = self.state.builder.emit_sol_call_results(
+                    &body_call.symbol,
+                    &operands,
+                    self.return_types,
+                    &block,
+                )?;
+                for (slot, value) in body_call.return_slots.iter().zip(results) {
+                    if let Some(pointer) = slot {
+                        self.state.builder.emit_sol_store(value, *pointer, &block);
+                    }
+                }
+            }
             return Ok(Some(block));
         };
         self.modifier_stage_index = stage + 1;
