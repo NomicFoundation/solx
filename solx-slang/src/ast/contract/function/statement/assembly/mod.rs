@@ -17,8 +17,10 @@ pub(crate) use num_bigint::BigInt;
 pub(crate) use num_traits::Num;
 pub(crate) use slang_solidity_v2::ast::AssemblyStatement;
 pub(crate) use slang_solidity_v2::ast::Definition;
+pub(crate) use slang_solidity_v2::ast::YulBlock;
 pub(crate) use slang_solidity_v2::ast::YulExpression;
 pub(crate) use slang_solidity_v2::ast::YulLiteral;
+pub(crate) use slang_solidity_v2::ast::YulPath;
 pub(crate) use slang_solidity_v2::ast::YulStatement;
 pub(crate) use solx_mlir::CmpPredicate;
 pub(crate) use solx_mlir::ods::sol::AddOperation;
@@ -130,6 +132,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         Ok(Some(current_block))
     }
 
+    // A flat per-statement dispatch: one `match statement` arm per
+    // [`YulStatement`] variant. The arms vary in size because Yul constructs
+    // do (a multi-target `let` carries more than a `break`), but the function
+    // does one thing — route a statement to its lowering. The repeated region
+    // body loop is factored into `emit_yul_region_statements`, so the residual
+    // length and branching are inherent to the variant count, not nesting.
+    #[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
     fn emit_yul_statement(
         &mut self,
         statement: &YulStatement,
@@ -302,19 +311,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
                 let saved_region = self.region_pointer;
                 self.set_region(&then_region);
-                let mut then_current = then_block;
-                let mut then_terminated = false;
-                for inner in if_statement.body().statements().iter() {
-                    if Self::is_terminating_yul_statement(&inner) {
-                        then_current = self.emit_yul_statement(&inner, then_current)?;
-                        then_terminated = true;
-                        break;
-                    }
-                    then_current = self.emit_yul_statement(&inner, then_current)?;
-                }
-                if !then_terminated {
-                    self.state.builder.emit_sol_yield(&then_current);
-                }
+                self.emit_yul_region_statements(&if_statement.body(), then_block)?;
                 self.region_pointer = saved_region;
                 let _ = else_region;
                 self.state.builder.emit_sol_yield(&else_block);
@@ -367,35 +364,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
                 // Body region.
                 self.set_region(&body_region);
-                let mut body_current = body_block;
-                let mut body_terminated = false;
-                for inner in for_statement.body().statements().iter() {
-                    if Self::is_terminating_yul_statement(&inner) {
-                        body_current = self.emit_yul_statement(&inner, body_current)?;
-                        body_terminated = true;
-                        break;
-                    }
-                    body_current = self.emit_yul_statement(&inner, body_current)?;
-                }
-                if !body_terminated {
-                    self.state.builder.emit_sol_yield(&body_current);
-                }
+                self.emit_yul_region_statements(&for_statement.body(), body_block)?;
 
                 // Step (iterator) region.
                 self.set_region(&step_region);
-                let mut step_current = step_block;
-                let mut step_terminated = false;
-                for inner in for_statement.iterator().statements().iter() {
-                    if Self::is_terminating_yul_statement(&inner) {
-                        step_current = self.emit_yul_statement(&inner, step_current)?;
-                        step_terminated = true;
-                        break;
-                    }
-                    step_current = self.emit_yul_statement(&inner, step_current)?;
-                }
-                if !step_terminated {
-                    self.state.builder.emit_sol_yield(&step_current);
-                }
+                self.emit_yul_region_statements(&for_statement.iterator(), step_block)?;
 
                 self.region_pointer = saved_region;
                 self.environment.exit_scope();
@@ -487,6 +460,31 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         }
     }
 
+    /// Emits the statements of one structured Yul region body — an `if` branch
+    /// or a `for`/`switch` body — into `block`. Emits each statement in order,
+    /// stopping after the first terminator, then closes the region with a
+    /// `sol.yield` unless a terminator already closed it. Returns the block the
+    /// region ends in.
+    fn emit_yul_region_statements(
+        &mut self,
+        body: &YulBlock,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+        let mut current = block;
+        let mut terminated = false;
+        for inner in body.statements().iter() {
+            current = self.emit_yul_statement(&inner, current)?;
+            if Self::is_terminating_yul_statement(&inner) {
+                terminated = true;
+                break;
+            }
+        }
+        if !terminated {
+            self.state.builder.emit_sol_yield(&current);
+        }
+        Ok(current)
+    }
+
     fn emit_yul_switch_chain(
         &mut self,
         selector: Value<'context, 'block>,
@@ -523,19 +521,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             let then_region = then_block.parent_region().expect("block belongs to a region");
 
             self.set_region(&then_region);
-            let mut then_current = then_block;
-            let mut then_terminated = false;
-            for inner in case.body().statements().iter() {
-                if Self::is_terminating_yul_statement(&inner) {
-                    then_current = self.emit_yul_statement(&inner, then_current)?;
-                    then_terminated = true;
-                    break;
-                }
-                then_current = self.emit_yul_statement(&inner, then_current)?;
-            }
-            if !then_terminated {
-                self.state.builder.emit_sol_yield(&then_current);
-            }
+            self.emit_yul_region_statements(&case.body(), then_block)?;
 
             // The next case (or default) goes into THIS sol.if's else block.
             let else_region = else_block.parent_region().expect("block belongs to a region");
@@ -543,19 +529,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             else_blocks.push(else_block);
             current = else_block;
         }
-        // Inside the deepest else: emit the default body, then yield.
-        let mut default_terminated = false;
+        // Inside the deepest else: emit the default body, then yield. A
+        // default body that terminates closes its own block; otherwise (or
+        // when there is no default) we yield the deepest else explicitly.
         if let Some(default_body) = default_body {
-            for inner in default_body.statements().iter() {
-                if Self::is_terminating_yul_statement(&inner) {
-                    current = self.emit_yul_statement(&inner, current)?;
-                    default_terminated = true;
-                    break;
-                }
-                current = self.emit_yul_statement(&inner, current)?;
-            }
-        }
-        if !default_terminated {
+            self.emit_yul_region_statements(default_body, current)?;
+        } else {
             self.state.builder.emit_sol_yield(&current);
         }
         // Each non-deepest else block hosts the nested sol.if AND needs a
@@ -576,160 +555,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         match expression {
             YulExpression::YulLiteral(literal) => {
+                let big = Self::yul_literal_to_word(literal)?;
                 let builder = &self.state.builder;
-                let ui256 = builder.types.ui256;
-                let big = match literal {
-                    YulLiteral::TrueKeyword(_) => BigInt::from(1u32),
-                    YulLiteral::FalseKeyword(_) => BigInt::from(0u32),
-                    YulLiteral::DecimalLiteral(decimal) => BigInt::from_str_radix(
-                        decimal.unparse().trim(),
-                        10,
-                    )
-                    .map_err(|error| anyhow::anyhow!("yul decimal literal parse: {error}"))?,
-                    YulLiteral::HexLiteral(hex) => {
-                        let text = hex.unparse();
-                        let hex_digits = text
-                            .trim()
-                            .strip_prefix("0x")
-                            .or_else(|| text.trim().strip_prefix("0X"))
-                            .unwrap_or(text.trim());
-                        BigInt::from_str_radix(hex_digits, 16)
-                            .map_err(|error| anyhow::anyhow!("yul hex literal parse: {error}"))?
-                    }
-                    YulLiteral::StringLiteral(string_literal) => {
-                        // Pack the string bytes into a 32-byte big-endian word
-                        // (left-aligned, zero-padded on the right). Solidity
-                        // string escapes are processed before packing.
-                        let raw = string_literal.unparse();
-                        let body_text = raw
-                            .trim()
-                            .trim_start_matches(['"', '\''])
-                            .trim_end_matches(['"', '\'']);
-                        let bytes = Self::decode_solidity_string_escapes(body_text);
-                        let mut padded = [0u8; 32];
-                        let copy_len = bytes.len().min(32);
-                        padded[..copy_len].copy_from_slice(&bytes[..copy_len]);
-                        BigInt::from_bytes_be(num_bigint::Sign::Plus, &padded)
-                    }
-                    YulLiteral::HexStringLiteral(hex_string) => {
-                        // `hex"1234"` → bytes [0x12, 0x34], placed at the
-                        // most-significant end of the 32-byte word
-                        // (left-aligned), zero-padded on the right.
-                        let text = hex_string.unparse();
-                        let trimmed = text
-                            .trim()
-                            .trim_start_matches("hex")
-                            .trim()
-                            .trim_start_matches(['"', '\''])
-                            .trim_end_matches(['"', '\'']);
-                        let clean: String =
-                            trimmed.chars().filter(|c| c.is_ascii_hexdigit()).collect();
-                        // Each pair of hex digits is one byte.
-                        let mut bytes = Vec::with_capacity(clean.len() / 2);
-                        let bytes_chars: Vec<char> = clean.chars().collect();
-                        let mut i = 0;
-                        while i + 1 < bytes_chars.len() {
-                            let hi = bytes_chars[i].to_digit(16).unwrap_or(0) as u8;
-                            let lo = bytes_chars[i + 1].to_digit(16).unwrap_or(0) as u8;
-                            bytes.push((hi << 4) | lo);
-                            i += 2;
-                        }
-                        let mut padded = [0u8; 32];
-                        let copy_len = bytes.len().min(32);
-                        padded[..copy_len].copy_from_slice(&bytes[..copy_len]);
-                        BigInt::from_bytes_be(num_bigint::Sign::Plus, &padded)
-                    }
-                };
-                let constant = builder.emit_constant(&big, ui256, &block);
+                let constant = builder.emit_constant(&big, builder.types.ui256, &block);
                 Ok((constant, block))
             }
-            YulExpression::YulPath(path) => {
-                let identifier = path
-                    .iter()
-                    .next()
-                    .ok_or_else(|| anyhow::anyhow!("empty yul path"))?;
-                let name = identifier.name();
-                // A Solidity constant referenced in assembly (`assembly { x := C }`)
-                // resolves to `Definition::Constant`, not a yul/local variable.
-                // Emit its initializer value (widened to a 256-bit word) rather
-                // than looking it up as a local, which would hit
-                // `variable_with_type`'s unreachable. Multi-element paths
-                // (`x.slot` / `x.offset`) keep the existing handling.
-                if path.len() == 1
-                    && let Some(Definition::Constant(constant)) =
-                        identifier.resolve_to_definition()
-                {
-                    let initializer = constant.value().ok_or_else(|| {
-                        anyhow::anyhow!("constant {name} has no initializer")
-                    })?;
-                    let emitter = ExpressionEmitter::new(
-                        self.state,
-                        self.environment,
-                        self.storage_layout,
-                        self.checked,
-                    );
-                    let (value, block) = emitter.emit(&initializer, block)?;
-                    let value = value.ok_or_else(|| {
-                        anyhow::anyhow!("constant {name} initializer produced no value")
-                    })?;
-                    let builder = &self.state.builder;
-                    let ui256 = builder.types.ui256;
-                    let widened = if value.r#type() == ui256 {
-                        value
-                    } else {
-                        builder.emit_sol_cast(value, ui256, &block)
-                    };
-                    return Ok((widened, block));
-                }
-                // `stateVar.slot` / `stateVar.offset` in assembly resolves to the
-                // storage slot number / in-slot byte offset from the storage
-                // layout. The path is `[stateVar, slot|offset]`.
-                if path.len() == 2 {
-                    let parts: Vec<_> = path.iter().collect();
-                    let member = parts[1].name();
-                    if (member == "slot" || member == "offset")
-                        && let Some(Definition::StateVariable(state_variable)) =
-                            parts[0].resolve_to_definition()
-                    {
-                        let &(slot, byte_offset, _location) = self
-                            .storage_layout
-                            .get(&state_variable.node_id())
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "unregistered state variable: {}",
-                                    parts[0].name()
-                                )
-                            })?;
-                        let builder = &self.state.builder;
-                        let ui256 = builder.types.ui256;
-                        let value = if member == "slot" {
-                            let slot_big =
-                                BigInt::from_bytes_be(num_bigint::Sign::Plus, &slot.to_be_bytes_vec());
-                            builder.emit_constant(&slot_big, ui256, &block)
-                        } else {
-                            builder.emit_sol_constant(i64::from(byte_offset), ui256, &block)
-                        };
-                        return Ok((value, block));
-                    }
-                }
-                let (pointer, element_type) = self.environment.variable_with_type(&name);
-                let value = self
-                    .state
-                    .builder
-                    .emit_sol_load(pointer, element_type, &block)?;
-                let builder = &self.state.builder;
-                let ui256 = builder.types.ui256;
-                let cast = if value.r#type() == ui256 {
-                    value
-                } else if solx_mlir::TypeFactory::is_sol_enum(value.r#type()) {
-                    // Enum-typed variables bridge to ui256 via `sol.enum_cast`;
-                    // `sol.cast` rejects non-integer enum operands.
-                    builder.emit_sol_enum_cast(value, ui256, &block)
-                } else {
-                    builder.emit_sol_cast(value, ui256, &block)
-                };
-                Ok((cast, block))
-            }
+            YulExpression::YulPath(path) => self.emit_yul_path(path, block),
             YulExpression::YulFunctionCallExpression(call) => {
                 let operand = call.operand();
                 let YulExpression::YulPath(path) = operand else {
@@ -757,6 +588,170 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 }
             }
         }
+    }
+
+    /// Decodes a Yul literal to the 256-bit word it denotes: booleans to 0/1,
+    /// decimal/hex numbers parsed directly, and string / `hex"..."` literals
+    /// packed left-aligned into the word (zero-padded on the right).
+    fn yul_literal_to_word(literal: &YulLiteral) -> anyhow::Result<BigInt> {
+        Ok(match literal {
+            YulLiteral::TrueKeyword(_) => BigInt::from(1u32),
+            YulLiteral::FalseKeyword(_) => BigInt::from(0u32),
+            YulLiteral::DecimalLiteral(decimal) => BigInt::from_str_radix(
+                decimal.unparse().trim(),
+                10,
+            )
+            .map_err(|error| anyhow::anyhow!("yul decimal literal parse: {error}"))?,
+            YulLiteral::HexLiteral(hex) => {
+                let text = hex.unparse();
+                let hex_digits = text
+                    .trim()
+                    .strip_prefix("0x")
+                    .or_else(|| text.trim().strip_prefix("0X"))
+                    .unwrap_or(text.trim());
+                BigInt::from_str_radix(hex_digits, 16)
+                    .map_err(|error| anyhow::anyhow!("yul hex literal parse: {error}"))?
+            }
+            YulLiteral::StringLiteral(string_literal) => {
+                // Pack the string bytes into a 32-byte big-endian word
+                // (left-aligned, zero-padded on the right). Solidity
+                // string escapes are processed before packing.
+                let raw = string_literal.unparse();
+                let body_text = raw
+                    .trim()
+                    .trim_start_matches(['"', '\''])
+                    .trim_end_matches(['"', '\'']);
+                let bytes = Self::decode_solidity_string_escapes(body_text);
+                let mut padded = [0u8; 32];
+                let copy_len = bytes.len().min(32);
+                padded[..copy_len].copy_from_slice(&bytes[..copy_len]);
+                BigInt::from_bytes_be(num_bigint::Sign::Plus, &padded)
+            }
+            YulLiteral::HexStringLiteral(hex_string) => {
+                // `hex"1234"` → bytes [0x12, 0x34], placed at the
+                // most-significant end of the 32-byte word
+                // (left-aligned), zero-padded on the right.
+                let text = hex_string.unparse();
+                let trimmed = text
+                    .trim()
+                    .trim_start_matches("hex")
+                    .trim()
+                    .trim_start_matches(['"', '\''])
+                    .trim_end_matches(['"', '\'']);
+                let clean: String =
+                    trimmed.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+                // Each pair of hex digits is one byte.
+                let mut bytes = Vec::with_capacity(clean.len() / 2);
+                let bytes_chars: Vec<char> = clean.chars().collect();
+                let mut i = 0;
+                while i + 1 < bytes_chars.len() {
+                    let hi = bytes_chars[i].to_digit(16).unwrap_or(0) as u8;
+                    let lo = bytes_chars[i + 1].to_digit(16).unwrap_or(0) as u8;
+                    bytes.push((hi << 4) | lo);
+                    i += 2;
+                }
+                let mut padded = [0u8; 32];
+                let copy_len = bytes.len().min(32);
+                padded[..copy_len].copy_from_slice(&bytes[..copy_len]);
+                BigInt::from_bytes_be(num_bigint::Sign::Plus, &padded)
+            }
+        })
+    }
+
+    /// Lowers a Yul path expression to a 256-bit value. A single-segment path
+    /// resolves to a Solidity constant's widened initializer, a local/yul
+    /// variable's loaded value, or — as `x.slot` / `x.offset` — a state
+    /// variable's storage slot number / in-slot byte offset.
+    fn emit_yul_path(
+        &mut self,
+        path: &YulPath,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let identifier = path
+            .iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("empty yul path"))?;
+        let name = identifier.name();
+        // A Solidity constant referenced in assembly (`assembly { x := C }`)
+        // resolves to `Definition::Constant`, not a yul/local variable.
+        // Emit its initializer value (widened to a 256-bit word) rather
+        // than looking it up as a local, which would hit
+        // `variable_with_type`'s unreachable. Multi-element paths
+        // (`x.slot` / `x.offset`) keep the existing handling.
+        if path.len() == 1
+            && let Some(Definition::Constant(constant)) =
+                identifier.resolve_to_definition()
+        {
+            let initializer = constant.value().ok_or_else(|| {
+                anyhow::anyhow!("constant {name} has no initializer")
+            })?;
+            let emitter = ExpressionEmitter::new(
+                self.state,
+                self.environment,
+                self.storage_layout,
+                self.checked,
+            );
+            let (value, block) = emitter.emit(&initializer, block)?;
+            let value = value.ok_or_else(|| {
+                anyhow::anyhow!("constant {name} initializer produced no value")
+            })?;
+            let builder = &self.state.builder;
+            let ui256 = builder.types.ui256;
+            let widened = if value.r#type() == ui256 {
+                value
+            } else {
+                builder.emit_sol_cast(value, ui256, &block)
+            };
+            return Ok((widened, block));
+        }
+        // `stateVar.slot` / `stateVar.offset` in assembly resolves to the
+        // storage slot number / in-slot byte offset from the storage
+        // layout. The path is `[stateVar, slot|offset]`.
+        if path.len() == 2 {
+            let parts: Vec<_> = path.iter().collect();
+            let member = parts[1].name();
+            if (member == "slot" || member == "offset")
+                && let Some(Definition::StateVariable(state_variable)) =
+                    parts[0].resolve_to_definition()
+            {
+                let &(slot, byte_offset, _location) = self
+                    .storage_layout
+                    .get(&state_variable.node_id())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "unregistered state variable: {}",
+                            parts[0].name()
+                        )
+                    })?;
+                let builder = &self.state.builder;
+                let ui256 = builder.types.ui256;
+                let value = if member == "slot" {
+                    let slot_big =
+                        BigInt::from_bytes_be(num_bigint::Sign::Plus, &slot.to_be_bytes_vec());
+                    builder.emit_constant(&slot_big, ui256, &block)
+                } else {
+                    builder.emit_sol_constant(i64::from(byte_offset), ui256, &block)
+                };
+                return Ok((value, block));
+            }
+        }
+        let (pointer, element_type) = self.environment.variable_with_type(&name);
+        let value = self
+            .state
+            .builder
+            .emit_sol_load(pointer, element_type, &block)?;
+        let builder = &self.state.builder;
+        let ui256 = builder.types.ui256;
+        let cast = if value.r#type() == ui256 {
+            value
+        } else if solx_mlir::TypeFactory::is_sol_enum(value.r#type()) {
+            // Enum-typed variables bridge to ui256 via `sol.enum_cast`;
+            // `sol.cast` rejects non-integer enum operands.
+            builder.emit_sol_enum_cast(value, ui256, &block)
+        } else {
+            builder.emit_sol_cast(value, ui256, &block)
+        };
+        Ok((cast, block))
     }
 
     /// Returns true for yul statements that produce a real MLIR block
