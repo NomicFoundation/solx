@@ -357,9 +357,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits a tuple / destructuring assignment `(a, b, ...) = rhs`.
     ///
     /// Solidity evaluates the entire right-hand side before performing any
-    /// assignment (so e.g. `(a, b) = (b, a)` swaps), so all RHS values are
-    /// materialised first, then stored into the LHS components left to right.
-    /// Blank components (`(, b) = ...`) discard their value.
+    /// assignment (so e.g. `(a, b) = (b, a)` swaps value types), so all RHS
+    /// values are materialised first. The LHS lvalue addresses are then resolved
+    /// left-to-right (against the pre-assignment state), and the components are
+    /// stored RIGHT-TO-LEFT — invisible for value types, but reproducing
+    /// Solidity's storage-aggregate quirks (a storage `(x, y) = (y, x)` swap does
+    /// not work). Blank components (`(, b) = ...`) discard their value.
     fn emit_tuple_assignment(
         &self,
         tuple: &slang_solidity_v2::ast::TupleExpression,
@@ -431,10 +434,27 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             _ => unimplemented!("tuple assignment with this right-hand side shape is not yet supported"),
         };
 
-        let mut last_stored = None;
+        // Resolve every LHS lvalue address first, left-to-right, so an index or
+        // length is read against the PRE-assignment state: `(s[1], s) = (...)`
+        // computes `&s[1]` while `s` still has its original length, rather than
+        // after `s` is reassigned and shrunk
+        // (array/copying/cleanup_during_multi_element_per_slot_copy).
+        let mut targets = Vec::with_capacity(assignments.len());
         for (lvalue, value) in assignments {
             let (target, next) = self.resolve_lvalue(&lvalue, block)?;
             block = next;
+            targets.push((target, value));
+        }
+
+        // Then store the components RIGHT-TO-LEFT. For value-typed slots the RHS
+        // values are already materialised, so the order is irrelevant; for
+        // storage AGGREGATES the RHS "value" is a live storage reference (not a
+        // copy), so a right-to-left store reproduces Solidity's documented quirk
+        // that a storage swap does not work: `(x, y) = (y, x)` runs `y = x` then
+        // `x = y`, leaving both equal to the original `x`
+        // (various/swap_in_storage_overwrite).
+        let mut last_stored = None;
+        for (target, value) in targets.into_iter().rev() {
             last_stored = Some(self.store_to_lvalue(target, value, &block));
         }
 
