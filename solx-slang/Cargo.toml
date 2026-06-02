@@ -24,3 +24,12 @@ solx-core = { path = "../solx-core", features = ["mlir"] }
 solx-mlir = { path = "../solx-mlir" }
 solx-standard-json = { path = "../solx-standard-json", features = ["mlir"] }
 solx-utils = { path = "../solx-utils", features = ["slang"] }
+
+# Complexity bar for the lowering code: no god functions, no wide-arg signatures.
+# Defaults (7 args / 100 lines) are the enforced thresholds. `missing_docs` is
+# kept as the active `-W` rustflag in `.cargo/config.toml`; private-item docs are
+# intentionally NOT required here (would flood the WIP frontend).
+[lints.clippy]
+too_many_arguments = "warn"
+too_many_lines = "warn"
+cognitive_complexity = "warn"

@@ -677,7 +677,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             None => vec![result_type],
         };
         let entry = builder.emit_sol_func(
-            &signature,
+            signature,
             &input_types,
             &result_types,
             Some(selector),
