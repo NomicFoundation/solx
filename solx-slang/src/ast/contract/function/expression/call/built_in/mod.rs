@@ -436,10 +436,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             current_block = next;
         }
         let builder = &self.expression_emitter.state.builder;
-        for (value, param_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
-            *value = TypeConversion::from_target_type(*param_type, builder)
-                .emit(*value, builder, &current_block);
-        }
+        self.coerce_arguments(&mut argument_values, &parameter_types, &current_block);
         let address =
             builder.emit_sol_address_cast(receiver_value, builder.types.sol_address, &current_block);
         let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
@@ -765,13 +762,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 current_block = next;
             }
             let builder = &self.expression_emitter.state.builder;
-            for (value, param_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
-                *value = TypeConversion::from_target_type(*param_type, builder).emit(
-                    *value,
-                    builder,
-                    &current_block,
-                );
-            }
+            self.coerce_arguments(&mut argument_values, &parameter_types, &current_block);
             let contract_type = self
                 .expression_emitter
                 .state
@@ -836,10 +827,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     current_block = next;
                 }
                 let builder = &self.expression_emitter.state.builder;
-                for (value, param_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
-                    *value = TypeConversion::from_target_type(*param_type, builder)
-                        .emit(*value, builder, &current_block);
-                }
+                self.coerce_arguments(&mut argument_values, &parameter_types, &current_block);
                 // `this` as an address.
                 let contract_type = self
                     .expression_emitter
@@ -906,10 +894,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     current_block = next;
                 }
                 let builder = &self.expression_emitter.state.builder;
-                for (value, param_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
-                    let conversion = TypeConversion::from_target_type(*param_type, builder);
-                    *value = conversion.emit(*value, builder, &current_block);
-                }
+                self.coerce_arguments(&mut argument_values, &parameter_types, &current_block);
                 let result = builder.emit_sol_call(
                     &mlir_name,
                     &argument_values,
@@ -955,11 +940,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 argument_values.push(value);
                 current_block = next;
             }
-            let builder = &self.expression_emitter.state.builder;
-            for (value, param_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
-                *value = TypeConversion::from_target_type(*param_type, builder)
-                    .emit(*value, builder, &current_block);
-            }
+            self.coerce_arguments(&mut argument_values, &parameter_types, &current_block);
             let results = self.emit_external_call(
                 receiver_value,
                 selector,
@@ -2198,10 +2179,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             current_block = next;
         }
         let builder = &self.expression_emitter.state.builder;
-        for (value, param_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
-            *value = TypeConversion::from_target_type(*param_type, builder)
-                .emit(*value, builder, &current_block);
-        }
+        self.coerce_arguments(&mut argument_values, &parameter_types, &current_block);
         let address = builder.emit_sol_address_cast(
             receiver_value,
             builder.types.sol_address,

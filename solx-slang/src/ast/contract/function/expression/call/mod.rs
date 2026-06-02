@@ -737,10 +737,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             current_block = next;
         }
         let builder = &self.expression_emitter.state.builder;
-        for (value, parameter_type) in argument_values.iter_mut().zip(parameter_types.iter()) {
-            *value = TypeConversion::from_target_type(*parameter_type, builder)
-                .emit(*value, builder, &current_block);
-        }
+        self.coerce_arguments(&mut argument_values, &parameter_types, &current_block);
 
         // External function pointers dispatch through a real CALL
         // (`sol.ext_icall`); internal ones through `sol.icall`.
@@ -926,13 +923,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .state
             .resolve_function(function_definition.node_id())?;
         let builder = &self.expression_emitter.state.builder;
-        for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
-            *value = TypeConversion::from_target_type(param_type, builder).emit(
-                *value,
-                builder,
-                &current_block,
-            );
-        }
+        self.coerce_arguments(&mut argument_values, parameter_types, &current_block);
         let results =
             builder.emit_sol_call_results(mlir_name, &argument_values, return_types, &current_block)?;
         Ok((results.into_iter().next(), current_block))
@@ -1009,13 +1000,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .state
             .resolve_function(function_definition.node_id())?;
         let builder = &self.expression_emitter.state.builder;
-        for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
-            *value = TypeConversion::from_target_type(param_type, builder).emit(
-                *value,
-                builder,
-                &current_block,
-            );
-        }
+        self.coerce_arguments(&mut argument_values, parameter_types, &current_block);
         let results =
             builder.emit_sol_call_results(mlir_name, &argument_values, return_types, &current_block)?;
         Ok((results.into_iter().next(), current_block))
@@ -1089,13 +1074,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
 
         let builder = &self.expression_emitter.state.builder;
-        for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
-            *value = TypeConversion::from_target_type(parameter_type, builder).emit(
-                *value,
-                builder,
-                &current_block,
-            );
-        }
+        self.coerce_arguments(&mut argument_values, parameter_types, &current_block);
         let results = builder.emit_sol_call_results(
             mlir_name,
             &argument_values,
@@ -1292,13 +1271,25 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             current_block = next_block;
         }
 
-        let builder = &self.expression_emitter.state.builder;
-        for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
-            let conversion = TypeConversion::from_target_type(param_type, builder);
-            *value = conversion.emit(*value, builder, &current_block);
-        }
+        self.coerce_arguments(&mut argument_values, parameter_types, &current_block);
 
         Ok((mlir_name, argument_values, return_types, current_block))
+    }
+
+    /// Casts each evaluated argument value in place to its declared parameter
+    /// type. Arguments beyond `parameter_types` (e.g. a variadic tail) keep
+    /// their evaluated type — the zip stops at the shorter sequence.
+    fn coerce_arguments(
+        &self,
+        argument_values: &mut [Value<'context, 'block>],
+        parameter_types: &[Type<'context>],
+        block: &BlockRef<'context, 'block>,
+    ) {
+        let builder = &self.expression_emitter.state.builder;
+        for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
+            *value = TypeConversion::from_target_type(parameter_type, builder)
+                .emit(*value, builder, block);
+        }
     }
 
     /// Emits a bare member access expression (e.g. `tx.origin`, `msg.sender`).
