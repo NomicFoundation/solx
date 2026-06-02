@@ -436,6 +436,29 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Ok((zero, block))
     }
 
+    /// Computes `old + 1` / `old - 1` for a `++` / `--`, typed to
+    /// `element_type` and respecting the emitter's checked-arithmetic mode.
+    fn emit_inc_dec_step(
+        &self,
+        old: Value<'context, 'block>,
+        element_type: Type<'context>,
+        operator: Operator,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        let one = self.state.builder.emit_sol_constant(1, element_type, block);
+        block
+            .append_operation(operator.emit_sol_binary_operation(
+                self.checked,
+                self.state.builder.context,
+                self.state.builder.unknown_location,
+                old,
+                one,
+            ))
+            .result(0)
+            .expect("binary operation always produces one result")
+            .into()
+    }
+
     /// Loads, increments or decrements, stores, and returns `(old, new)`.
     ///
     /// Handles both local variables and state variables via
@@ -466,18 +489,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .state
                 .builder
                 .emit_sol_load(address, element_type, &block)?;
-            let one = self.state.builder.emit_sol_constant(1, element_type, &block);
-            let new_value = block
-                .append_operation(operator.emit_sol_binary_operation(
-                    self.checked,
-                    self.state.builder.context,
-                    self.state.builder.unknown_location,
-                    old,
-                    one,
-                ))
-                .result(0)
-                .expect("binary operation always produces one result")
-                .into();
+            let new_value = self.emit_inc_dec_step(old, element_type, operator, &block);
             self.state
                 .builder
                 .emit_sol_store(new_value, address, &block);
@@ -491,18 +503,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .state
                 .builder
                 .emit_sol_load(address, element_type, &block)?;
-            let one = self.state.builder.emit_sol_constant(1, element_type, &block);
-            let new_value = block
-                .append_operation(operator.emit_sol_binary_operation(
-                    self.checked,
-                    self.state.builder.context,
-                    self.state.builder.unknown_location,
-                    old,
-                    one,
-                ))
-                .result(0)
-                .expect("binary operation always produces one result")
-                .into();
+            let new_value = self.emit_inc_dec_step(old, element_type, operator, &block);
             self.state
                 .builder
                 .emit_sol_store(new_value, address, &block);
@@ -525,18 +526,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     &self.state.builder,
                 )?;
                 let old = self.emit_storage_load(slot, byte_offset, element_type, location, block)?;
-                let one = self.state.builder.emit_sol_constant(1, element_type, block);
-                let new_value = block
-                    .append_operation(operator.emit_sol_binary_operation(
-                        self.checked,
-                        self.state.builder.context,
-                        self.state.builder.unknown_location,
-                        old,
-                        one,
-                    ))
-                    .result(0)
-                    .expect("binary operation always produces one result")
-                    .into();
+                let new_value = self.emit_inc_dec_step(old, element_type, operator, block);
                 self.emit_storage_store(slot, byte_offset, new_value, location, block);
                 Ok((old, new_value))
             }
@@ -546,18 +536,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .state
                     .builder
                     .emit_sol_load(pointer, element_type, block)?;
-                let typed_one = self.state.builder.emit_sol_constant(1, element_type, block);
-                let new_value = block
-                    .append_operation(operator.emit_sol_binary_operation(
-                        self.checked,
-                        self.state.builder.context,
-                        self.state.builder.unknown_location,
-                        old,
-                        typed_one,
-                    ))
-                    .result(0)
-                    .expect("binary operation always produces one result")
-                    .into();
+                let new_value = self.emit_inc_dec_step(old, element_type, operator, block);
                 self.state.builder.emit_sol_store(new_value, pointer, block);
                 Ok((old, new_value))
             }
