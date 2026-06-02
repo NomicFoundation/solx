@@ -657,6 +657,22 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::IndexAccessExpression(index_access) => {
                 self.emit_index_access(index_access, block)
             }
+            Expression::CallOptionsExpression(call_options) => {
+                // A function pointer carrying call options, used as a *value*
+                // rather than being called here — e.g. `this.g{gas: 42}.address`
+                // / `.selector`, where the options don't affect the address or
+                // selector. The options are call-time parameters; as a value the
+                // expression is the underlying function pointer. Evaluate each
+                // option for its side effects, then yield the operand. (A genuine
+                // call `fp{value: v}()` is handled in the call dispatch, which
+                // threads `value` into the call instead of discarding it.)
+                let mut current = block;
+                for option in call_options.options().iter() {
+                    let (_value, next) = self.emit_value(&option.value(), current)?;
+                    current = next;
+                }
+                self.emit(&call_options.operand(), current)
+            }
             // Unsupported lowering is a frontend capability gap, not a program
             // error — mark it with `unimplemented!` rather than the error
             // channel. (Speculative library emission sandboxes this panic; in a

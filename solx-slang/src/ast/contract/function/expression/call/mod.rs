@@ -492,6 +492,37 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 }
                 return self.emit_new(call, positional_arguments, current_block);
             }
+            // A function-pointer expression carrying call options — e.g.
+            // `arr[i]{value: v}()` / `[a, b][0]{value: v}()`. Capture `{value}`
+            // and dispatch as an indirect call, threading the value in (other
+            // options are evaluated for their side effects only).
+            if let Some(function_slang_type) = inner.get_type()
+                && matches!(function_slang_type, SlangType::Function(_))
+            {
+                let mut current_block = block;
+                let mut call_value = None;
+                for option in call_options.options().iter() {
+                    let (value, next) = self
+                        .expression_emitter
+                        .emit_value(&option.value(), current_block)?;
+                    current_block = next;
+                    if option.name().name() == "value" {
+                        let builder = &self.expression_emitter.state.builder;
+                        call_value = Some(
+                            TypeConversion::from_target_type(builder.types.ui256, builder)
+                                .emit(value, builder, &current_block),
+                        );
+                    }
+                }
+                let (results, current_block) = self.emit_indirect_call_results(
+                    &inner,
+                    &function_slang_type,
+                    positional_arguments,
+                    call_value,
+                    current_block,
+                )?;
+                return Ok((results.into_iter().next(), current_block));
+            }
         }
 
         if let Expression::NewExpression(_) = &callee {
@@ -588,6 +619,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         callee: &Expression,
         function_slang_type: &SlangType,
         positional_arguments: &PositionalArguments,
+        call_value: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         // Load the function-pointer value.
@@ -630,12 +662,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // External function pointers dispatch through a real CALL
         // (`sol.ext_icall`); internal ones through `sol.icall`.
         let results = if function_type.is_externally_visible() {
-            let zero_value = builder.emit_sol_constant(0, builder.types.ui256, &current_block);
+            // `fp{value: v}(args)` forwards `v`; a plain `fp(args)` sends zero.
+            let value = call_value.unwrap_or_else(|| {
+                builder.emit_sol_constant(0, builder.types.ui256, &current_block)
+            });
             builder.emit_sol_ext_icall(
                 callee_value,
                 &argument_values,
                 &result_types,
-                zero_value,
+                value,
                 &current_block,
             )?
         } else {
@@ -657,6 +692,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             callee,
             function_slang_type,
             positional_arguments,
+            None,
             block,
         )?;
         Ok((results.into_iter().next(), block))
@@ -1075,6 +1111,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                             &callee,
                             &function_slang_type,
                             positional_arguments,
+                            None,
                             block,
                         )
                     }
@@ -1093,6 +1130,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     &callee,
                     &function_slang_type,
                     positional_arguments,
+                    None,
                     block,
                 )
             }
