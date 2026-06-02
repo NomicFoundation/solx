@@ -61,6 +61,11 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     storage_layout: &'state HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>,
     /// The function's declared return types, for `emit_return` to cast to.
     return_types: &'state [Type<'context>],
+    /// The function's named-return alloca pointers, parallel to `return_types`
+    /// (`None` for an unnamed return). A bare `return;` loads these — the
+    /// current values of the named returns — instead of returning no operands,
+    /// matching the fall-off-the-end epilogue. Empty for a void function.
+    return_slots: &'state [Option<Value<'context, 'block>>],
     /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
     ///
     /// `true` by default. Set to `false` inside `unchecked {}` blocks.
@@ -103,6 +108,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         region: &Region<'context>,
         storage_layout: &'state HashMap<NodeId, (U256, u32, solx_utils::DataLocation)>,
         return_types: &'state [Type<'context>],
+        return_slots: &'state [Option<Value<'context, 'block>>],
     ) -> Self {
         Self {
             state,
@@ -110,6 +116,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             region_pointer: region as *const Region<'context>,
             storage_layout,
             return_types,
+            return_slots,
             checked: true,
             yul_functions: HashMap::new(),
             yul_inline_depth: HashMap::new(),
@@ -374,7 +381,27 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let Some(expression) = return_statement.expression() else {
-            self.state.builder.emit_sol_return(&[], &block);
+            // A bare `return;` returns the current values of the named returns
+            // (zero for unnamed/unset slots), so its `sol.return` arity matches
+            // the enclosing function — exactly like the fall-off-the-end
+            // epilogue. This matters when the `return;` lives in an inlined
+            // modifier stage of a value-returning function (`mod { ... return; }`
+            // around `f() returns (uint)`): a bare 0-operand return would fail
+            // verification. A void function has no slots and returns nothing.
+            let mut values: Vec<Value<'context, 'block>> =
+                Vec::with_capacity(self.return_types.len());
+            for (index, result_type) in self.return_types.iter().enumerate() {
+                let value = match self.return_slots.get(index).copied().flatten() {
+                    Some(pointer) => self.state.builder.emit_sol_load(
+                        pointer,
+                        *result_type,
+                        &block,
+                    )?,
+                    None => self.state.builder.emit_sol_constant(0, *result_type, &block),
+                };
+                values.push(value);
+            }
+            self.state.builder.emit_sol_return(&values, &block);
             return Ok(None);
         };
 

@@ -300,6 +300,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     &region,
                     self.storage_layout,
                     &result_types,
+                    &return_slots,
                 );
                 match emitter.emit(&statement, current_block)? {
                     Some(next) => current_block = next,
@@ -352,6 +353,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 &region,
                 self.storage_layout,
                 &result_types,
+                &return_slots,
             );
             emitter.modifier_stages = modifier_stages;
             emitter.modifier_stage_params = modifier_stage_params;
@@ -638,6 +640,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         &region,
                         self.storage_layout,
                         &return_types,
+                        &[],
                     );
                     match emitter.emit(&statement, current_block)? {
                         Some(next) => current_block = next,
@@ -661,6 +664,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     &region,
                     self.storage_layout,
                     &return_types,
+                    &[],
                 );
                 emitter.modifier_stages = modifier_stages;
                 emitter.modifier_stage_params = modifier_stage_params;
