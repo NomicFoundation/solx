@@ -534,19 +534,73 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let declared_type = state_variable.get_type().ok_or_else(|| {
             anyhow::anyhow!("unresolved type for state variable getter")
         })?;
-        let builder = &self.state.builder;
-
-        // Getter for a (possibly nested) value-result array / mapping: `m(K)`,
-        // `a(uint256)`, `a(i, j)`, `m(k1, k2)`, mixed `m(k)[i]`, ... Each nesting
-        // level chains a `sol.map` (mappings) or a bounds-checked `sol.gep`
-        // (arrays) over its key/index argument; the final value is loaded.
-        //
-        // Array levels emit an explicit `index < length` check that **bare-reverts**
-        // (`revert(0, 0)`) on out-of-bounds via a no-message `sol.require`, matching
-        // solc's auto-generated accessor — NOT `sol.gep`'s `Panic(0x32)`, which the
-        // semantic tests (expecting a bare `FAILURE`, i.e. empty revert data)
-        // reject. Reference-typed keys or results are skipped (selector reverts).
+        // A getter with arguments indexes a mapping / array state variable; a
+        // no-argument getter for a `public` struct returns a flattened member
+        // tuple (falling back to the scalar getter when the struct has no
+        // returnable members); everything else is a scalar / reference getter.
         if !abi.inputs().is_empty() {
+            return self.emit_indexed_getter(
+                state_variable,
+                abi.inputs().len(),
+                &signature,
+                selector,
+                &declared_type,
+                slot,
+                byte_offset,
+                location,
+                contract_body,
+            );
+        }
+        if self.emit_struct_getter(
+            state_variable,
+            &signature,
+            selector,
+            &declared_type,
+            slot,
+            byte_offset,
+            location,
+            contract_body,
+        )? {
+            return Ok(());
+        }
+        self.emit_scalar_getter(
+            state_variable,
+            &signature,
+            selector,
+            &declared_type,
+            slot,
+            byte_offset,
+            location,
+            contract_body,
+        )
+    }
+
+    /// Emits the indexed getter for a mapping / array state variable: `m(k)`,
+    /// `a(uint256)`, `a(i, j)`, `m(k1, k2)`, mixed `m(k)[i]`, ... Each nesting
+    /// level chains a `sol.map` (mappings) or a bounds-checked `sol.gep`
+    /// (arrays) over its key/index argument; the final value is loaded.
+    ///
+    /// Array levels emit an explicit `index < length` check that **bare-reverts**
+    /// (`revert(0, 0)`) on out-of-bounds via a no-message `sol.require`, matching
+    /// solc's auto-generated accessor — NOT `sol.gep`'s `Panic(0x32)`, which the
+    /// semantic tests (expecting a bare `FAILURE`, i.e. empty revert data)
+    /// reject. Reference-typed keys or results are skipped (the getter is left
+    /// ungenerated rather than emitted incorrectly).
+    #[allow(clippy::too_many_arguments)]
+    fn emit_indexed_getter(
+        &self,
+        state_variable: &StateVariableDefinition,
+        abi_input_count: usize,
+        signature: &str,
+        selector: u32,
+        declared_type: &SlangType,
+        slot: U256,
+        byte_offset: u32,
+        location: solx_utils::DataLocation,
+        contract_body: &melior::ir::BlockRef<'context, '_>,
+    ) -> anyhow::Result<()> {
+        let builder = &self.state.builder;
+        {
             enum GetterLevel<'c> {
                 /// `sol.map` over a key; carries the mapped-slot reference type.
                 Mapping(Type<'c>),
@@ -617,7 +671,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
             }
             let result_slang = current;
-            if input_types.is_empty() || input_types.len() != abi.inputs().len() {
+            if input_types.is_empty() || input_types.len() != abi_input_count {
                 return Ok(());
             }
             let container_type =
@@ -730,20 +784,34 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     builder.emit_sol_return(&[value], &entry);
                 }
             }
-            return Ok(());
+            Ok(())
         }
+    }
 
-        // A no-argument getter for a `public` struct state variable returns the
-        // struct's value/string/bytes members as a FLATTENED tuple (omitting
-        // mapping/array/nested-struct members), matching solc — not the struct
-        // as a single value (which would ABI-encode with a spurious outer tuple
-        // offset). Mapping/array struct getters are handled in the input block
-        // above; this is the bare `S public x` case (no getter arguments).
-        if let SlangType::Struct(struct_type) = &declared_type
+    /// Emits the no-argument getter for a `public` struct state variable: it
+    /// returns the struct's value/`string`/`bytes` members as a FLATTENED tuple
+    /// (omitting mapping/array/nested-struct members), matching solc — not the
+    /// struct as a single value (which would ABI-encode with a spurious outer
+    /// tuple offset). Returns `Ok(true)` when the getter was emitted, `Ok(false)`
+    /// when the variable is not such a struct (or its members yield no plan), so
+    /// the caller falls back to the scalar getter.
+    fn emit_struct_getter(
+        &self,
+        state_variable: &StateVariableDefinition,
+        signature: &str,
+        selector: u32,
+        declared_type: &SlangType,
+        slot: U256,
+        byte_offset: u32,
+        location: solx_utils::DataLocation,
+        contract_body: &melior::ir::BlockRef<'context, '_>,
+    ) -> anyhow::Result<bool> {
+        let builder = &self.state.builder;
+        if let SlangType::Struct(struct_type) = declared_type
             && let Definition::Struct(struct_definition) = struct_type.definition()
         {
             let struct_mlir_type =
-                TypeConversion::resolve_slang_type(&declared_type, Some(location), builder);
+                TypeConversion::resolve_slang_type(declared_type, Some(location), builder);
             if let Some(plan) =
                 Self::struct_getter_plan(&struct_definition, struct_mlir_type, builder)
             {
@@ -752,7 +820,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 let container_type =
                     TypeConversion::resolve_state_variable_type(state_variable, builder)?;
                 let entry = builder.emit_sol_func(
-                    &signature,
+                    signature,
                     &[],
                     &result_types,
                     Some(selector),
@@ -779,22 +847,41 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     )?);
                 }
                 builder.emit_sol_return(&values, &entry);
-                return Ok(());
+                return Ok(true);
             }
         }
+        Ok(false)
+    }
 
+    /// Emits the scalar / reference-typed getter: `T public name;` becomes
+    /// `function name() external view returns (T)` reading slot `slot`. A value
+    /// type loads through a `!sol.ptr<T, Storage>`; a reference type
+    /// (`string`/`bytes`/array/struct) is addressed by the reference type
+    /// itself, matching the address type the initializer uses so the
+    /// `sol.addr_of` symbol stays consistent.
+    fn emit_scalar_getter(
+        &self,
+        state_variable: &StateVariableDefinition,
+        signature: &str,
+        selector: u32,
+        declared_type: &SlangType,
+        slot: U256,
+        byte_offset: u32,
+        location: solx_utils::DataLocation,
+        contract_body: &melior::ir::BlockRef<'context, '_>,
+    ) -> anyhow::Result<()> {
+        let builder = &self.state.builder;
         let element_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
         // A reference-typed state variable (`string`/`bytes`/array/struct) is
         // addressed by the reference type itself in storage; value types use
-        // a `!sol.ptr<T, Storage>`. Matching the address type the initializer
-        // uses keeps the `sol.addr_of` symbol consistent.
+        // a `!sol.ptr<T, Storage>`.
         let address_type = if declared_type.is_reference_type() {
             element_type
         } else {
             builder.types.pointer(element_type, location)
         };
         let entry = builder.emit_sol_func(
-            &signature,
+            signature,
             &[],
             std::slice::from_ref(&element_type),
             Some(selector),
