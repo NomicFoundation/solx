@@ -139,6 +139,106 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         self.emit_identifier_or_indirect_call(call, &callee, positional_arguments, block)
     }
 
+    /// Emits a bare member access expression (e.g. `tx.origin`, `msg.sender`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the member access is not a recognized EVM intrinsic.
+    pub fn emit_member_access(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        // A namespace-qualified function reference in value position — `C.f`,
+        // `L.f`, `module.f` — is an internal function pointer (`sol.func_constant`),
+        // like a bare `f`. Gated on the operand being a contract/library/import
+        // qualifier (not a contract instance `obj.f`, which is external, nor
+        // `this.f` / `super.f`) and on the target having a registered signature
+        // (so a shadowed/virtual base reference falls through to the existing
+        // dispatch instead of pointing at the wrong, unregistered symbol).
+        let operand_is_namespace = matches!(
+            access.operand(),
+            Expression::Identifier(identifier) if matches!(
+                identifier.resolve_to_definition(),
+                Some(
+                    Definition::Contract(_)
+                        | Definition::Library(_)
+                        | Definition::Import(_)
+                        | Definition::ImportedSymbol(_)
+                )
+            )
+        );
+        if operand_is_namespace
+            && let Some(Definition::Function(function_definition)) =
+                access.member().resolve_to_definition()
+            && let Ok((mlir_name, parameter_types, return_types)) = self
+                .expression_emitter
+                .state
+                .resolve_function(function_definition.node_id())
+        {
+            let func_ref_type = self
+                .expression_emitter
+                .state
+                .builder
+                .types
+                .func_ref(parameter_types, return_types);
+            let mlir_name = mlir_name.to_owned();
+            let value = self.expression_emitter.state.builder.emit_sol_func_constant(
+                &mlir_name,
+                func_ref_type,
+                &block,
+            );
+            return Ok((value, block));
+        }
+        // `M.L` / `module.L` — a namespace-qualified library reference in value
+        // position (e.g. `address(M.L)`) is the library's linked deploy address,
+        // like a bare `L` (`address(L)`). The linker symbol is the
+        // fully-qualified `file:Library` name.
+        if operand_is_namespace
+            && let Some(Definition::Library(library)) = access.member().resolve_to_definition()
+        {
+            let symbol = format!("{}:{}", library.get_file_id(), library.name().name());
+            let value = self
+                .expression_emitter
+                .state
+                .builder
+                .emit_sol_lib_addr(&symbol, &block);
+            return Ok((value, block));
+        }
+        // A bare reference to a function-like built-in member written without a
+        // call — `data.pop;`, `data.push;`, `abi.encode;` and friends — is a
+        // no-op in Solidity: solc evaluates and discards the bound-function
+        // value without performing the action. Returning a placeholder avoids
+        // both performing the action (pop/push) and the panics the built-in
+        // dispatch would otherwise hit on the missing call (`.expect` on the
+        // absent arguments, or "bare member access always produces a value").
+        // Value-typed built-ins (`block.timestamp`, `msg.sender`) yield a value
+        // and emit normally below.
+        if matches!(
+            access.member().resolve_to_built_in(),
+            Some(
+                slang_solidity_v2::ast::BuiltIn::ArrayPop
+                    | slang_solidity_v2::ast::BuiltIn::ArrayPush
+                    | slang_solidity_v2::ast::BuiltIn::AbiEncode
+                    | slang_solidity_v2::ast::BuiltIn::AbiEncodePacked
+                    | slang_solidity_v2::ast::BuiltIn::AbiEncodeWithSelector
+                    | slang_solidity_v2::ast::BuiltIn::AbiEncodeWithSignature
+                    | slang_solidity_v2::ast::BuiltIn::AbiEncodeCall
+                    | slang_solidity_v2::ast::BuiltIn::AbiDecode
+            )
+        ) {
+            let builder = &self.expression_emitter.state.builder;
+            let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            return Ok((placeholder, block));
+        }
+
+        let (value, block) = self.emit_built_in_member_access(access, None, block)?;
+        Ok((
+            value.expect("bare member access always produces a value"),
+            block,
+        ))
+    }
+
     /// Emits a call written with named arguments — `f({b: 2, a: 1})`,
     /// `S({field: value})`, `Lib.S({...})`, or `x.f({...})` / `L.f({...})`.
     ///
@@ -1288,103 +1388,4 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((call_value, current_block))
     }
 
-    /// Emits a bare member access expression (e.g. `tx.origin`, `msg.sender`).
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the member access is not a recognized EVM intrinsic.
-    pub fn emit_member_access(
-        &self,
-        access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        // A namespace-qualified function reference in value position — `C.f`,
-        // `L.f`, `module.f` — is an internal function pointer (`sol.func_constant`),
-        // like a bare `f`. Gated on the operand being a contract/library/import
-        // qualifier (not a contract instance `obj.f`, which is external, nor
-        // `this.f` / `super.f`) and on the target having a registered signature
-        // (so a shadowed/virtual base reference falls through to the existing
-        // dispatch instead of pointing at the wrong, unregistered symbol).
-        let operand_is_namespace = matches!(
-            access.operand(),
-            Expression::Identifier(identifier) if matches!(
-                identifier.resolve_to_definition(),
-                Some(
-                    Definition::Contract(_)
-                        | Definition::Library(_)
-                        | Definition::Import(_)
-                        | Definition::ImportedSymbol(_)
-                )
-            )
-        );
-        if operand_is_namespace
-            && let Some(Definition::Function(function_definition)) =
-                access.member().resolve_to_definition()
-            && let Ok((mlir_name, parameter_types, return_types)) = self
-                .expression_emitter
-                .state
-                .resolve_function(function_definition.node_id())
-        {
-            let func_ref_type = self
-                .expression_emitter
-                .state
-                .builder
-                .types
-                .func_ref(parameter_types, return_types);
-            let mlir_name = mlir_name.to_owned();
-            let value = self.expression_emitter.state.builder.emit_sol_func_constant(
-                &mlir_name,
-                func_ref_type,
-                &block,
-            );
-            return Ok((value, block));
-        }
-        // `M.L` / `module.L` — a namespace-qualified library reference in value
-        // position (e.g. `address(M.L)`) is the library's linked deploy address,
-        // like a bare `L` (`address(L)`). The linker symbol is the
-        // fully-qualified `file:Library` name.
-        if operand_is_namespace
-            && let Some(Definition::Library(library)) = access.member().resolve_to_definition()
-        {
-            let symbol = format!("{}:{}", library.get_file_id(), library.name().name());
-            let value = self
-                .expression_emitter
-                .state
-                .builder
-                .emit_sol_lib_addr(&symbol, &block);
-            return Ok((value, block));
-        }
-        // A bare reference to a function-like built-in member written without a
-        // call — `data.pop;`, `data.push;`, `abi.encode;` and friends — is a
-        // no-op in Solidity: solc evaluates and discards the bound-function
-        // value without performing the action. Returning a placeholder avoids
-        // both performing the action (pop/push) and the panics the built-in
-        // dispatch would otherwise hit on the missing call (`.expect` on the
-        // absent arguments, or "bare member access always produces a value").
-        // Value-typed built-ins (`block.timestamp`, `msg.sender`) yield a value
-        // and emit normally below.
-        if matches!(
-            access.member().resolve_to_built_in(),
-            Some(
-                slang_solidity_v2::ast::BuiltIn::ArrayPop
-                    | slang_solidity_v2::ast::BuiltIn::ArrayPush
-                    | slang_solidity_v2::ast::BuiltIn::AbiEncode
-                    | slang_solidity_v2::ast::BuiltIn::AbiEncodePacked
-                    | slang_solidity_v2::ast::BuiltIn::AbiEncodeWithSelector
-                    | slang_solidity_v2::ast::BuiltIn::AbiEncodeWithSignature
-                    | slang_solidity_v2::ast::BuiltIn::AbiEncodeCall
-                    | slang_solidity_v2::ast::BuiltIn::AbiDecode
-            )
-        ) {
-            let builder = &self.expression_emitter.state.builder;
-            let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
-            return Ok((placeholder, block));
-        }
-
-        let (value, block) = self.emit_built_in_member_access(access, None, block)?;
-        Ok((
-            value.expect("bare member access always produces a value"),
-            block,
-        ))
-    }
 }
