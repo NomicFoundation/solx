@@ -280,88 +280,16 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         // Collect modifier bodies that wrap this function (`function f() onlyOwner {...}`).
-        // Base-constructor invocations (`constructor() Base(arg)`) also appear
-        // here but resolve to a contract, not a modifier — skip those.
-        let mut modifier_stages: Vec<slang_solidity_v2::ast::Statements> = Vec::new();
         // In `as_modifier_body` mode the modifier stages are emitted by the
         // wrapping call; this emission is just the raw body, so collect none.
-        let modifier_invocations: Vec<slang_solidity_v2::ast::ModifierInvocation> =
-            if as_modifier_body {
-                Vec::new()
-            } else {
-                function.modifier_invocations().iter().collect()
-            };
-        for invocation in modifier_invocations {
-            // A plain modifier resolves directly; a namespace-qualified path
-            // (`M.M.C.m`) does not resolve to a definition, so match its final
-            // segment against the contract's modifiers (mirrors
-            // `match_linearised_base` for qualified base paths). A base-
-            // constructor invocation resolves to a Contract and has no matching
-            // modifier name, so it is correctly skipped here (it is handled in
-            // `emit_constructor`).
-            let resolved_modifier = match invocation.name().resolve_to_definition() {
-                Some(slang_solidity_v2::ast::Definition::Modifier(modifier)) => modifier,
-                _ => match self.resolve_qualified_modifier(&invocation) {
-                    Some(modifier) => modifier,
-                    None => continue,
-                },
-            };
-            // Virtual modifier dispatch: a modifier may be declared `virtual`
-            // (and even left abstract/bodyless) in a base and `override`-n in a
-            // derived contract. Slang resolves the invocation lexically to the
-            // base declaration, so re-resolve to the most-derived same-named
-            // modifier with a body across the contract's C3 linearisation,
-            // mirroring virtual function dispatch. For a non-overridden modifier
-            // this finds the same definition, so behaviour is unchanged.
-            let modifier_definition = self
-                .resolve_modifier_override(&invocation, &resolved_modifier)
-                .unwrap_or(resolved_modifier);
-            let Some(modifier_body) = modifier_definition.body() else {
-                continue;
-            };
-            // Bind modifier parameters by evaluating the invocation arguments
-            // in the function's entry scope.
-            let argument_expressions: Vec<Expression> = match invocation.arguments() {
-                Some(slang_solidity_v2::ast::ArgumentsDeclaration::PositionalArguments(
-                    positional,
-                )) => positional.iter().collect(),
-                _ => Vec::new(),
-            };
-            for (parameter, argument) in modifier_definition
-                .parameters()
-                .iter()
-                .zip(argument_expressions)
-            {
-                let Some(identifier) = parameter.name() else {
-                    continue;
-                };
-                let parameter_type = parameter
-                    .get_type()
-                    .map(|slang_type| {
-                        TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
-                    })
-                    .unwrap_or_else(|| self.state.builder.types.ui256);
-                let (value, next_block) = {
-                    let emitter = ExpressionEmitter::new(
-                        self.state,
-                        &environment,
-                        self.storage_layout,
-                        true,
-                    );
-                    emitter.emit_value(&argument, current_block)?
-                };
-                current_block = next_block;
-                let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder)
-                    .emit(value, &self.state.builder, &current_block);
-                let pointer = self
-                    .state
-                    .builder
-                    .emit_sol_alloca(parameter_type, &current_block);
-                self.state.builder.emit_sol_store(cast, pointer, &current_block);
-                environment.define_variable(identifier.name(), pointer, parameter_type);
-            }
-            modifier_stages.push(modifier_body.statements());
-        }
+        let modifier_stages: Vec<slang_solidity_v2::ast::Statements> = if as_modifier_body {
+            Vec::new()
+        } else {
+            let (stages, next_block) =
+                self.collect_modifier_stages(function, &mut environment, current_block)?;
+            current_block = next_block;
+            stages
+        };
 
         let mut terminated = false;
         if modifier_stages.is_empty() {
@@ -690,7 +618,40 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 .entry(contract.node_id())
                 .or_insert_with(Environment::new);
             environment.enter_scope();
-            for statement in body.statements().iter() {
+
+            // A constructor may carry modifiers (`constructor() mod1`). They are
+            // virtually dispatched against the *deployed* contract (`self`), so
+            // an overridden modifier runs its most-derived body even while a base
+            // constructor executes. Base-constructor invocations in the same
+            // list (`Base(args)`) do not resolve to a modifier and are dropped by
+            // `collect_modifier_stages` (their arguments were already bound above).
+            let (mut modifier_stages, next_block) =
+                self.collect_modifier_stages(&base_constructor, environment, current_block)?;
+            current_block = next_block;
+
+            if modifier_stages.is_empty() {
+                for statement in body.statements().iter() {
+                    let mut emitter = StatementEmitter::new(
+                        self.state,
+                        environment,
+                        &region,
+                        self.storage_layout,
+                        &return_types,
+                    );
+                    match emitter.emit(&statement, current_block)? {
+                        Some(next) => current_block = next,
+                        None => {
+                            terminated = true;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // The wrapped constructor body is the final stage: the innermost
+                // modifier's `_;` placeholder runs it inline. A constructor has
+                // no return value, so — unlike a modified regular function — the
+                // body need not be a separate `sol.func` to carry results back.
+                modifier_stages.push(body.statements());
                 let mut emitter = StatementEmitter::new(
                     self.state,
                     environment,
@@ -698,14 +659,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     self.storage_layout,
                     &return_types,
                 );
-                match emitter.emit(&statement, current_block)? {
+                emitter.modifier_stages = modifier_stages;
+                match emitter.emit_modifier_chain(current_block)? {
                     Some(next) => current_block = next,
-                    None => {
-                        terminated = true;
-                        break;
-                    }
+                    None => terminated = true,
                 }
             }
+
             environment.exit_scope();
             if terminated {
                 break;
@@ -845,6 +805,81 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 modifier.body().is_some()
                     && modifier.name().is_some_and(|n| n.unparse() == modifier_name)
             })
+    }
+
+    /// Resolves the modifier invocations on `function` to their (virtually
+    /// dispatched) modifier bodies, binding each modifier's parameters into
+    /// `environment` by evaluating the invocation arguments in `block`.
+    ///
+    /// Returns the ordered modifier-body statement stages (outermost modifier
+    /// first) to inline around the wrapped function body, and the block after
+    /// the argument evaluations. A plain modifier resolves directly; a
+    /// namespace-qualified path (`M.M.C.m`) resolves via its final segment
+    /// (see [`Self::resolve_qualified_modifier`]). Each is then re-dispatched
+    /// to its most-derived override (see [`Self::resolve_modifier_override`]).
+    /// Invocations that do not resolve to a modifier — notably base-constructor
+    /// calls `constructor() Base(args)` — are skipped, so this is safe to call
+    /// on a constructor whose invocation list mixes modifiers and base calls.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a modifier-argument expression cannot be lowered.
+    fn collect_modifier_stages<'env>(
+        &self,
+        function: &FunctionDefinition,
+        environment: &mut Environment<'context, 'env>,
+        mut block: BlockRef<'context, 'env>,
+    ) -> anyhow::Result<(Vec<slang_solidity_v2::ast::Statements>, BlockRef<'context, 'env>)> {
+        let mut modifier_stages: Vec<slang_solidity_v2::ast::Statements> = Vec::new();
+        for invocation in function.modifier_invocations().iter() {
+            let resolved_modifier = match invocation.name().resolve_to_definition() {
+                Some(slang_solidity_v2::ast::Definition::Modifier(modifier)) => modifier,
+                _ => match self.resolve_qualified_modifier(&invocation) {
+                    Some(modifier) => modifier,
+                    None => continue,
+                },
+            };
+            let modifier_definition = self
+                .resolve_modifier_override(&invocation, &resolved_modifier)
+                .unwrap_or(resolved_modifier);
+            let Some(modifier_body) = modifier_definition.body() else {
+                continue;
+            };
+            let argument_expressions: Vec<Expression> = match invocation.arguments() {
+                Some(slang_solidity_v2::ast::ArgumentsDeclaration::PositionalArguments(
+                    positional,
+                )) => positional.iter().collect(),
+                _ => Vec::new(),
+            };
+            for (parameter, argument) in modifier_definition
+                .parameters()
+                .iter()
+                .zip(argument_expressions)
+            {
+                let Some(identifier) = parameter.name() else {
+                    continue;
+                };
+                let parameter_type = parameter
+                    .get_type()
+                    .map(|slang_type| {
+                        TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
+                    })
+                    .unwrap_or_else(|| self.state.builder.types.ui256);
+                let (value, next_block) = {
+                    let emitter =
+                        ExpressionEmitter::new(self.state, &*environment, self.storage_layout, true);
+                    emitter.emit_value(&argument, block)?
+                };
+                block = next_block;
+                let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder)
+                    .emit(value, &self.state.builder, &block);
+                let pointer = self.state.builder.emit_sol_alloca(parameter_type, &block);
+                self.state.builder.emit_sol_store(cast, pointer, &block);
+                environment.define_variable(identifier.name(), pointer, parameter_type);
+            }
+            modifier_stages.push(modifier_body.statements());
+        }
+        Ok((modifier_stages, block))
     }
 
     pub fn mlir_function_name(function: &FunctionDefinition) -> String {
