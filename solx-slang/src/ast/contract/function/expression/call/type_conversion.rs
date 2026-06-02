@@ -36,6 +36,13 @@ impl<'context> TypeConversion<'context> {
     /// type's Slang location is `Inherited` (struct-field-relative). Top-level
     /// callers pass `None`; the `Struct` arm sets it to the parent struct's
     /// location for the duration of member resolution.
+    // A flat structural type map: one arm per `SlangType` variant, each
+    // independently constructing the MLIR type (recursing for sub-types). Its
+    // length is inherent to the number of Solidity type variants, not nested
+    // logic — the only nested arm (literal kinds) is extracted into
+    // `resolve_literal_type` — so it is allowed rather than scattered into a
+    // dozen trivial per-variant methods.
+    #[allow(clippy::too_many_lines)]
     pub fn resolve_slang_type(
         slang_type: &SlangType,
         inherited_location: Option<solx_utils::DataLocation>,
@@ -55,37 +62,9 @@ impl<'context> TypeConversion<'context> {
                 solx_utils::BIT_LENGTH_BOOLEAN as u32,
             )),
             SlangType::Address(_) => builder.types.sol_address,
-            SlangType::Literal(literal_type) => match literal_type.kind() {
-                LiteralKind::Address { .. } => builder.types.sol_address,
-                LiteralKind::Integer { value } => {
-                    let bits = Self::integer_bits_required(&value) as usize;
-                    let bits = bits
-                        .next_multiple_of(solx_utils::BIT_LENGTH_BYTE)
-                        .max(solx_utils::BIT_LENGTH_BYTE);
-                    let bits = u32::try_from(bits).expect("bit size fits in 32 bits");
-                    if value.is_negative() {
-                        Type::from(IntegerType::signed(builder.context, bits))
-                    } else {
-                        Type::from(IntegerType::unsigned(builder.context, bits))
-                    }
-                }
-                LiteralKind::HexInteger { bytes, .. } => {
-                    let bits = bytes * solx_utils::BIT_LENGTH_BYTE as u32;
-                    Type::from(IntegerType::unsigned(builder.context, bits))
-                }
-                LiteralKind::String { .. } => {
-                    builder.types.string(solx_utils::DataLocation::Memory)
-                }
-                LiteralKind::HexString { bytes } => builder
-                    .types
-                    .fixed_bytes(bytes.try_into().expect("hex string length fits in u32")),
-                LiteralKind::Rational { .. } => {
-                    // Sentinel: rationals only show up as compile-time
-                    // intermediates; downstream code that actually consumes
-                    // them will still fail, but the panic itself is gone.
-                    builder.types.ui256
-                }
-            },
+            SlangType::Literal(literal_type) => {
+                Self::resolve_literal_type(literal_type.kind(), builder)
+            }
             SlangType::String(string_type) => {
                 let location = solx_utils::DataLocation::from_slang(
                     string_type.location(),
@@ -247,6 +226,47 @@ impl<'context> TypeConversion<'context> {
                 // The (reserved-but-unimplemented) fixed-point types have no
                 // MLIR lowering yet. Return ui256 as a sentinel so the
                 // resolver is total; code that consumes them still fails.
+                builder.types.ui256
+            }
+        }
+    }
+
+    /// Resolves a literal expression's mobile type from its `LiteralKind`: the
+    /// narrowest integer type holding an integer/hex literal, `address` for an
+    /// address literal, memory `string` / fixed `bytesN` for string literals,
+    /// and a `ui256` sentinel for rationals (compile-time intermediates only).
+    fn resolve_literal_type(
+        kind: LiteralKind,
+        builder: &solx_mlir::Builder<'context>,
+    ) -> Type<'context> {
+        match kind {
+            LiteralKind::Address { .. } => builder.types.sol_address,
+            LiteralKind::Integer { value } => {
+                let bits = Self::integer_bits_required(&value) as usize;
+                let bits = bits
+                    .next_multiple_of(solx_utils::BIT_LENGTH_BYTE)
+                    .max(solx_utils::BIT_LENGTH_BYTE);
+                let bits = u32::try_from(bits).expect("bit size fits in 32 bits");
+                if value.is_negative() {
+                    Type::from(IntegerType::signed(builder.context, bits))
+                } else {
+                    Type::from(IntegerType::unsigned(builder.context, bits))
+                }
+            }
+            LiteralKind::HexInteger { bytes, .. } => {
+                let bits = bytes * solx_utils::BIT_LENGTH_BYTE as u32;
+                Type::from(IntegerType::unsigned(builder.context, bits))
+            }
+            LiteralKind::String { .. } => {
+                builder.types.string(solx_utils::DataLocation::Memory)
+            }
+            LiteralKind::HexString { bytes } => builder
+                .types
+                .fixed_bytes(bytes.try_into().expect("hex string length fits in u32")),
+            LiteralKind::Rational { .. } => {
+                // Sentinel: rationals only show up as compile-time
+                // intermediates; downstream code that actually consumes
+                // them will still fail, but the panic itself is gone.
                 builder.types.ui256
             }
         }
