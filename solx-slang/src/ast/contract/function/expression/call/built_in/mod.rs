@@ -94,6 +94,30 @@ fn is_static_call_mutability(function: &slang_solidity_v2::ast::FunctionDefiniti
     )
 }
 
+/// The specification of an external contract call (`sol.ext_icall`): the callee
+/// (`receiver`, cast to `address`), its `selector` and ABI (`parameter_types` /
+/// `return_types`), the evaluated `argument_values`, the forwarded wei
+/// `call_value` (zero when `None`), and whether it lowers to `STATICCALL`.
+/// Bundled so the call emitter takes one spec plus the target block rather than
+/// eight parameters.
+#[derive(Clone, Copy)]
+struct ExternalCall<'a, 'context, 'block> {
+    /// The callee, cast to an `address` before the call.
+    receiver: Value<'context, 'block>,
+    /// The callee's 4-byte function selector.
+    selector: u32,
+    /// The callee's parameter types (drive ABI encoding of the arguments).
+    parameter_types: &'a [Type<'context>],
+    /// The callee's return types (drive ABI decoding of the results).
+    return_types: &'a [Type<'context>],
+    /// The already-evaluated, coerced argument values.
+    argument_values: &'a [Value<'context, 'block>],
+    /// The forwarded wei value; `None` lowers to a zero constant.
+    call_value: Option<Value<'context, 'block>>,
+    /// `true` lowers to `STATICCALL` (a `view`/`pure` callee).
+    static_call: bool,
+}
+
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
     /// Tries to emit `callee(arguments)` as a Solidity built-in.
     ///
@@ -449,15 +473,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// decoded result values.
     fn emit_external_call(
         &self,
-        receiver: Value<'context, 'block>,
-        selector: u32,
-        parameter_types: &[Type<'context>],
-        return_types: &[Type<'context>],
-        argument_values: &[Value<'context, 'block>],
-        call_value: Option<Value<'context, 'block>>,
-        static_call: bool,
+        call: &ExternalCall<'_, 'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Vec<Value<'context, 'block>>> {
+        let ExternalCall {
+            receiver,
+            selector,
+            parameter_types,
+            return_types,
+            argument_values,
+            call_value,
+            static_call,
+        } = *call;
         let builder = &self.expression_emitter.state.builder;
         let address = builder.emit_sol_address_cast(receiver, builder.types.sol_address, block);
         let ext_ref_type = builder.types.ext_func_ref(parameter_types, return_types);

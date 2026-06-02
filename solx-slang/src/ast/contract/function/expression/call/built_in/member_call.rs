@@ -53,13 +53,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .expect("sol.this always produces one result")
                 .into();
             let results = self.emit_external_call(
-                this_value,
-                selector,
-                &parameter_types,
-                &return_types,
-                &argument_values,
-                call_value,
-                false,
+                &ExternalCall {
+                    receiver: this_value,
+                    selector,
+                    parameter_types: &parameter_types,
+                    return_types: &return_types,
+                    argument_values: &argument_values,
+                    call_value,
+                    static_call: false,
+                },
                 &current_block,
             )?;
             return Ok(Some((results.into_iter().next(), current_block)));
@@ -119,13 +121,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .expect("sol.this always produces one result")
                     .into();
                 let results = self.emit_external_call(
-                    this_value,
-                    selector,
-                    &parameter_types,
-                    &return_types,
-                    &argument_values,
-                    call_value,
-                    is_static_call_mutability(&function_definition),
+                    &ExternalCall {
+                        receiver: this_value,
+                        selector,
+                        parameter_types: &parameter_types,
+                        return_types: &return_types,
+                        argument_values: &argument_values,
+                        call_value,
+                        static_call: is_static_call_mutability(&function_definition),
+                    },
                     &current_block,
                 )?;
                 return Ok(Some((results.into_iter().next(), current_block)));
@@ -216,13 +220,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             self.coerce_arguments(&mut argument_values, &parameter_types, &current_block);
             let results = self.emit_external_call(
-                receiver_value,
-                selector,
-                &parameter_types,
-                &return_types,
-                &argument_values,
-                call_value,
-                is_static_call_mutability(&function_definition),
+                &ExternalCall {
+                    receiver: receiver_value,
+                    selector,
+                    parameter_types: &parameter_types,
+                    return_types: &return_types,
+                    argument_values: &argument_values,
+                    call_value,
+                    static_call: is_static_call_mutability(&function_definition),
+                },
                 &current_block,
             )?;
             return Ok(Some((results.into_iter().next(), current_block)));
@@ -255,13 +261,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .expression_emitter
                 .emit_value(&access.operand(), block)?;
             let results = self.emit_external_call(
-                receiver_value,
-                selector,
-                &[],
-                &return_types,
-                &[],
-                None,
-                false,
+                &ExternalCall {
+                    receiver: receiver_value,
+                    selector,
+                    parameter_types: &[],
+                    return_types: &return_types,
+                    argument_values: &[],
+                    call_value: None,
+                    static_call: false,
+                },
                 &current_block,
             )?;
             return Ok(Some((results.into_iter().next(), current_block)));
