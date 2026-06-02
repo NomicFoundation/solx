@@ -712,43 +712,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok(None)
     }
 
-    /// As [`Self::emit_built_in_member_access`], but with an explicit external
-    /// call `value` (from `f{value: v}()` call options).
-    pub fn emit_built_in_member_access_with_value(
+    /// `this.v(args)` — an external call to a public state variable's
+    /// auto-generated getter (`v` a mapping/array/scalar). Like `this.f(args)`
+    /// it CALLs the contract's own address with the getter's selector; the
+    /// signature is reconstructed from the variable (single-level shapes).
+    fn try_emit_this_getter_call(
         &self,
         access: &MemberAccessExpression,
         arguments: Option<&PositionalArguments>,
         call_value: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        if let Some(result) = self.try_emit_wrap_unwrap_reference(access, arguments, block)? {
-            return Ok(result);
-        }
-
-        if let Some(result) = self.try_emit_address_action_reference(access, arguments, block)? {
-            return Ok(result);
-        }
-
-        if let Some(result) = self.try_emit_enum_variant(access, arguments, block)? {
-            return Ok(result);
-        }
-
-        if let Some(result) = self.try_emit_function_pointer_address(access, arguments, block)? {
-            return Ok(result);
-        }
-
-        if let Some(result) = self.try_emit_selector(access, arguments, block)? {
-            return Ok(result);
-        }
-
-        if let Some(result) = self.try_emit_external_function_pointer(access, arguments, block)? {
-            return Ok(result);
-        }
-
-        // `this.v(args)` — an external call to a public state variable's
-        // auto-generated getter (`v` a mapping/array/scalar). Like `this.f(args)`
-        // it CALLs the contract's own address with the getter's selector; the
-        // signature is reconstructed from the variable (single-level shapes).
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if let Some(arguments) = arguments
             && matches!(access.operand(), Expression::ThisKeyword(_))
             && let Some(Definition::StateVariable(state_variable)) =
@@ -806,13 +780,22 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 false,
                 &current_block,
             )?;
-            return Ok((results.into_iter().next(), current_block));
+            return Ok(Some((results.into_iter().next(), current_block)));
         }
+        Ok(None)
+    }
 
-        // `this.f(args)` is a genuine external call in Solidity (CALL to the
-        // contract's own address), so it populates returndata and runs the
-        // dispatcher. Emit a real `sol.ext_icall` rather than the local-call
-        // shortcut below — tests that inspect `returndatasize()` rely on this.
+    /// `this.f(args)` is a genuine external call in Solidity (CALL to the
+    /// contract's own address), so it populates returndata and runs the
+    /// dispatcher. Emit a real `sol.ext_icall` rather than the local-call
+    /// shortcut below — tests that inspect `returndatasize()` rely on this.
+    fn try_emit_this_external_call(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        call_value: Option<Value<'context, 'block>>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if let Some(arguments) = arguments
             && matches!(access.operand(), slang_solidity_v2::ast::Expression::ThisKeyword(_))
             && let Some(slang_solidity_v2::ast::Definition::Function(function_definition)) =
@@ -879,15 +862,23 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     is_static_call_mutability(&function_definition),
                     &current_block,
                 )?;
-                return Ok((results.into_iter().next(), current_block));
+                return Ok(Some((results.into_iter().next(), current_block)));
             }
         }
+        Ok(None)
+    }
 
-        // Experimental: `this.f(args)` / `b.f(args)` whose member resolves to a
-        // function already registered in the current context is lowered as a
-        // local `sol.call` instead of a true external call. Skips real
-        // external-call semantics (gas stipend, reentrancy guards) but is good
-        // enough for tests whose behaviour does not depend on those.
+    /// Experimental: `this.f(args)` / `b.f(args)` whose member resolves to a
+    /// function already registered in the current context is lowered as a
+    /// local `sol.call` instead of a true external call. Skips real
+    /// external-call semantics (gas stipend, reentrancy guards) but is good
+    /// enough for tests whose behaviour does not depend on those.
+    fn try_emit_local_call(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if let Some(arguments) = arguments
             && let Some(slang_solidity_v2::ast::Definition::Function(function_definition)) =
                 access.member().resolve_to_definition()
@@ -921,15 +912,24 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     &return_types,
                     &current_block,
                 )?;
-                return Ok((result, current_block));
+                return Ok(Some((result, current_block)));
             }
         }
+        Ok(None)
+    }
 
-        // External call to another contract/interface instance:
-        // `ICounter(addr).f(args)` / `instance.f(args)` where the member
-        // resolves to a function not defined in (registered for) the current
-        // contract. Evaluate the operand as the target address and emit a
-        // real `sol.ext_icall`.
+    /// External call to another contract/interface instance:
+    /// `ICounter(addr).f(args)` / `instance.f(args)` where the member
+    /// resolves to a function not defined in (registered for) the current
+    /// contract. Evaluate the operand as the target address and emit a
+    /// real `sol.ext_icall`.
+    fn try_emit_external_instance_call(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        call_value: Option<Value<'context, 'block>>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if let Some(arguments) = arguments
             && let Some(slang_solidity_v2::ast::Definition::Function(function_definition)) =
                 access.member().resolve_to_definition()
@@ -975,13 +975,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 is_static_call_mutability(&function_definition),
                 &current_block,
             )?;
-            return Ok((results.into_iter().next(), current_block));
+            return Ok(Some((results.into_iter().next(), current_block)));
         }
+        Ok(None)
+    }
 
-        // External call to a public state variable's auto-generated getter:
-        // `instance.value()` where `value` is a scalar `public` state var on
-        // another contract. (Mapping/array getters with key args are not
-        // handled here.)
+    /// External call to a public state variable's auto-generated getter:
+    /// `instance.value()` where `value` is a scalar `public` state var on
+    /// another contract. (Mapping/array getters with key args are not
+    /// handled here.)
+    fn try_emit_external_getter_call(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if let Some(arguments) = arguments
             && arguments.is_empty()
             && let Some(slang_solidity_v2::ast::Definition::StateVariable(state_variable)) =
@@ -1008,11 +1016,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let zero = builder.emit_sol_constant(0, builder.types.ui256, &current_block);
             let results =
                 builder.emit_sol_ext_icall(callee, &[], &return_types, zero, false, &current_block)?;
-            return Ok((results.into_iter().next(), current_block));
+            return Ok(Some((results.into_iter().next(), current_block)));
         }
+        Ok(None)
+    }
 
-        // `type(E).min` / `type(E).max` for an enum `E` are the first / last
-        // enumerator (ordinals `0` and `member_count - 1`), as an enum value.
+    /// `type(E).min` / `type(E).max` for an enum `E` are the first / last
+    /// enumerator (ordinals `0` and `member_count - 1`), as an enum value.
+    fn try_emit_type_enum_min_max(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if let Some(builtin @ (BuiltIn::TypeEnumMin | BuiltIn::TypeEnumMax)) =
             access.member().resolve_to_built_in()
             && let Expression::TypeExpression(type_expression) = access.operand()
@@ -1032,10 +1047,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let builder = &self.expression_emitter.state.builder;
             let int_value = builder.emit_sol_constant(ordinal, builder.types.ui256, &block);
             let enum_value = builder.emit_sol_enum_cast(int_value, result_type, &block);
-            return Ok((Some(enum_value), block));
+            return Ok(Some((Some(enum_value), block)));
         }
+        Ok(None)
+    }
 
-        // `type(T).min` / `type(T).max` are compile-time integer constants.
+    /// `type(T).min` / `type(T).max` are compile-time integer constants.
+    fn try_emit_type_min_max(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if let Some(builtin @ (BuiltIn::TypeMin | BuiltIn::TypeMax)) =
             access.member().resolve_to_built_in()
             && let Some(result_type) = self
@@ -1063,14 +1085,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .state
                     .builder
                     .emit_constant(&value, result_type, &block);
-            return Ok((Some(value), block));
+            return Ok(Some((Some(value), block)));
         }
+        Ok(None)
+    }
 
-        // `type(I).interfaceId` is a compile-time `bytes4` constant: the
-        // EIP-165 interface identifier, defined as the XOR of the selectors of
-        // the functions declared *directly* within the interface `I`. Inherited
-        // functions are deliberately excluded (matching solc), so we iterate
-        // the interface's own members rather than its linearised functions.
+    /// `type(I).interfaceId` is a compile-time `bytes4` constant: the
+    /// EIP-165 interface identifier, defined as the XOR of the selectors of
+    /// the functions declared *directly* within the interface `I`. Inherited
+    /// functions are deliberately excluded (matching solc), so we iterate
+    /// the interface's own members rather than its linearised functions.
+    fn try_emit_type_interface_id(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if let Some(BuiltIn::TypeInterfaceId) = access.member().resolve_to_built_in()
             && let Expression::TypeExpression(type_expression) = access.operand()
             && let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name()
@@ -1099,14 +1128,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             );
             let value =
                 builder.emit_sol_bytes_cast(integer, builder.types.fixed_bytes(4), &block);
-            return Ok((Some(value), block));
+            return Ok(Some((Some(value), block)));
         }
+        Ok(None)
+    }
 
-        // `type(C).creationCode` / `type(C).runtimeCode` yield the contract's
-        // deploy / deployed bytecode as `bytes memory`, lowered to
-        // `sol.object_code` referencing the object by name (`C` for creation,
-        // `C_deployed` for runtime). The reference is registered as a linker
-        // dependency so the assembler pulls the object in (as `new C()` does).
+    /// `type(C).creationCode` / `type(C).runtimeCode` yield the contract's
+    /// deploy / deployed bytecode as `bytes memory`, lowered to
+    /// `sol.object_code` referencing the object by name (`C` for creation,
+    /// `C_deployed` for runtime). The reference is registered as a linker
+    /// dependency so the assembler pulls the object in (as `new C()` does).
+    fn try_emit_type_code(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if let Some(builtin @ (BuiltIn::TypeCreationCode | BuiltIn::TypeRuntimeCode)) =
             access.member().resolve_to_built_in()
             && let Expression::TypeExpression(type_expression) = access.operand()
@@ -1146,11 +1182,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .result(0)
                 .expect("sol.object_code always produces one result")
                 .into();
-            return Ok((Some(value), block));
+            return Ok(Some((Some(value), block)));
         }
+        Ok(None)
+    }
 
-        // `type(C).name` yields the contract/interface name as a `string memory`
-        // constant.
+    /// `type(C).name` yields the contract/interface name as a `string memory`
+    /// constant.
+    fn try_emit_type_name(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if let Some(BuiltIn::TypeName) = access.member().resolve_to_built_in()
             && let Expression::TypeExpression(type_expression) = access.operand()
             && let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name()
@@ -1165,7 +1208,88 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .state
                 .builder
                 .emit_sol_string_lit(&type_name, &block);
-            return Ok((Some(value), block));
+            return Ok(Some((Some(value), block)));
+        }
+        Ok(None)
+    }
+
+    /// As [`Self::emit_built_in_member_access`], but with an explicit external
+    /// call `value` (from `f{value: v}()` call options).
+    pub fn emit_built_in_member_access_with_value(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        call_value: Option<Value<'context, 'block>>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        if let Some(result) = self.try_emit_wrap_unwrap_reference(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_address_action_reference(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_enum_variant(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_function_pointer_address(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_selector(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_external_function_pointer(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) =
+            self.try_emit_this_getter_call(access, arguments, call_value, block)?
+        {
+            return Ok(result);
+        }
+
+        if let Some(result) =
+            self.try_emit_this_external_call(access, arguments, call_value, block)?
+        {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_local_call(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) =
+            self.try_emit_external_instance_call(access, arguments, call_value, block)?
+        {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_external_getter_call(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_type_enum_min_max(access, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_type_min_max(access, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_type_interface_id(access, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_type_code(access, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_type_name(access, block)? {
+            return Ok(result);
         }
 
         let builder = &self.expression_emitter.state.builder;
