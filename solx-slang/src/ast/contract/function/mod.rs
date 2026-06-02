@@ -44,12 +44,19 @@ type ModifierStageParams<'context, 'env> = Vec<(String, Value<'context, 'env>, T
 /// always holds the pre-extension count. A shadowed base override carries no
 /// `selector` (it shares the most-derived function's dispatch entry).
 struct InnerSignature<'context> {
+    /// The function's MLIR symbol name.
     mlir_name: String,
+    /// Parameter types — extended with the result types in modifier-body mode.
     mlir_parameter_types: Vec<Type<'context>>,
+    /// Result (return) types.
     result_types: Vec<Type<'context>>,
+    /// Parameter count before any modifier-body extension.
     parameter_count: usize,
+    /// Public ABI selector, or `None` for a shadowed override / `$body` emission.
     selector: Option<u32>,
+    /// State mutability (`pure` / `view` / `payable` / non-payable).
     state_mutability: StateMutability,
+    /// MLIR kind (constructor / fallback / receive), or `None` for a regular function.
     mlir_kind: Option<solx_mlir::FunctionKind>,
 }
 
@@ -59,11 +66,17 @@ struct InnerSignature<'context> {
 /// block) is threaded as separate `&mut` / by-value parameters.
 #[derive(Clone, Copy)]
 struct ModifiedBody<'a, 'context, 'block> {
+    /// The function whose modifier-wrapped body is being emitted.
     function: &'a FunctionDefinition,
+    /// The wrapping function's MLIR symbol (the `$body` symbol derives from it).
     mlir_name: &'a str,
+    /// The wrapping function's parameter types (size the forwarded arguments).
     mlir_parameter_types: &'a [Type<'context>],
+    /// The function's result types (size the captured return slots).
     result_types: &'a [Type<'context>],
+    /// The enclosing contract body block, where the `$body` `sol.func` is emitted.
     contract_body: &'a BlockRef<'context, 'block>,
+    /// The wrapping function's entry block — source of forwarded arguments and slots.
     function_entry_block: &'a BlockRef<'context, 'block>,
 }
 

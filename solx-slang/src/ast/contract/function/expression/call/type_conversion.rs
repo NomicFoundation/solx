@@ -272,6 +272,9 @@ impl<'context> TypeConversion<'context> {
         }
     }
 
+    /// The minimum integer width (in bits) needed to hold `value` — its mobile
+    /// type's bit width: unsigned for non-negative values, signed (two's
+    /// complement) for negative ones.
     // TODO: Remove when nomicFoundation/slang#1793 is merged and we can instead
     // depend on `LiteralType::mobile_type()` for literal type conversion.
     fn integer_bits_required(value: &BigInt) -> u32 {

@@ -24,7 +24,9 @@ use slang_solidity_v2::ast::visitor::accept_function_definition;
 /// Visitor that records every `f(...)` call whose callee is a plain identifier
 /// resolving to one of the source unit's free functions.
 struct FreeCallCollector<'a> {
+    /// Node ids of the source unit's free functions to match call callees against.
     free_ids: &'a HashSet<NodeId>,
+    /// The free functions reached by the visited calls, in discovery order.
     reached: Vec<FunctionDefinition>,
 }
 
