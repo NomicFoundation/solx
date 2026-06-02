@@ -470,6 +470,30 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((Some(placeholder), block));
         }
 
+        // `addr.transfer` / `addr.send` / `addr.call` (and `delegatecall` /
+        // `staticcall`) referenced WITHOUT a call — e.g. a discarded
+        // `payable(this).transfer;` statement — is a member reference, not the
+        // transfer/call action (which the call dispatch handles). Evaluate the
+        // operand for its side effects and yield a placeholder.
+        if arguments.is_none()
+            && matches!(
+                access.member().resolve_to_built_in(),
+                Some(
+                    slang_solidity_v2::ast::BuiltIn::AddressTransfer
+                        | slang_solidity_v2::ast::BuiltIn::AddressSend
+                        | slang_solidity_v2::ast::BuiltIn::AddressCall
+                        | slang_solidity_v2::ast::BuiltIn::AddressDelegatecall
+                        | slang_solidity_v2::ast::BuiltIn::AddressStaticcall
+                )
+            )
+        {
+            let (_operand, block) =
+                self.expression_emitter.emit_value(&access.operand(), block)?;
+            let builder = &self.expression_emitter.state.builder;
+            let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            return Ok((Some(placeholder), block));
+        }
+
         // `MyEnum.VARIANT` — emit the variant index as a ui256 constant and
         // bridge to `!sol.enum<max>` via `sol.enum_cast`. The receiver may be a
         // bare enum name (`MyEnum.VARIANT`) or a qualified path whose operand is

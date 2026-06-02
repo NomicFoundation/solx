@@ -102,6 +102,6 @@ git = "https://github.com/NomicFoundation/slang.git"
 # Temporary: points at feat-v2-display-node-id, rebased linear on slang main.
 # Carries the patches not yet upstreamed — the `using`-attached-function
 # import-alias resolution fix, the multi-output (tuple) getter ABI expansion,
-# and the hex-literal integer-value fix. (The NodeId Display impl landed
-# upstream as slang#1803 and was dropped from the branch on rebase.)
-rev = "fcb96378a6442bd67503c4d2721cac9353197963"
+# the hex-literal integer-value fix, and `payable(this)` typing as
+# `address payable`. (The NodeId Display impl landed upstream as slang#1803.)
+rev = "ab4466e9d306891f0df652e717d009215b8ee0b6"
