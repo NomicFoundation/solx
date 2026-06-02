@@ -527,6 +527,19 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 }
             }
 
+            // solc evaluates base-constructor arguments in C3-linearisation
+            // order (most-derived base first), not source order: `D is A, B, C`
+            // with `B(f(2)) C(f(4)) A(f(6))` evaluates C, B, A (4, 2, 6). Sort
+            // the specs by each base's MRO index so a side-effecting argument
+            // (see modifiers/evaluation_order) runs in the right order. Pure
+            // arguments are order-insensitive, so this is invisible to the
+            // value-only base-ctor tests.
+            base_argument_specs.sort_by_key(|(base, _)| {
+                mro.iter()
+                    .position(|contract| contract.node_id() == base.node_id())
+                    .unwrap_or(usize::MAX)
+            });
+
             // Evaluate the arguments in this contract's scope and build each
             // base's parameter scope. The immutable borrow of the evaluating
             // scope must end before the new scopes are inserted, so collect
@@ -550,6 +563,20 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     for (parameter, argument) in
                         base_constructor.parameters().iter().zip(arguments.iter())
                     {
+                        // Evaluate the argument even when the parameter is
+                        // unnamed (`constructor(uint)`) — the evaluation may
+                        // have side effects (`Base(f(x))`) that must still run,
+                        // in base-linearisation order (modifiers/evaluation_order).
+                        let (value, next_block) = {
+                            let emitter = ExpressionEmitter::new(
+                                self.state,
+                                evaluating_scope,
+                                self.storage_layout,
+                                true,
+                            );
+                            emitter.emit_value(argument, current_block)?
+                        };
+                        current_block = next_block;
                         let Some(identifier) = parameter.name() else {
                             continue;
                         };
@@ -563,16 +590,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                                 )
                             })
                             .unwrap_or_else(|| self.state.builder.types.ui256);
-                        let (value, next_block) = {
-                            let emitter = ExpressionEmitter::new(
-                                self.state,
-                                evaluating_scope,
-                                self.storage_layout,
-                                true,
-                            );
-                            emitter.emit_value(argument, current_block)?
-                        };
-                        current_block = next_block;
                         let cast = TypeConversion::from_target_type(
                             parameter_type,
                             &self.state.builder,
@@ -881,6 +898,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 .iter()
                 .zip(argument_expressions)
             {
+                // Evaluate the argument even when the parameter is unnamed
+                // (`modifier m(uint) {...}`) — the evaluation may have side
+                // effects (`m(f(x))`) that must still run.
+                let (value, next_block) = {
+                    let emitter =
+                        ExpressionEmitter::new(self.state, environment, self.storage_layout, true);
+                    emitter.emit_value(&argument, block)?
+                };
+                block = next_block;
                 let Some(identifier) = parameter.name() else {
                     continue;
                 };
@@ -890,12 +916,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
                     })
                     .unwrap_or_else(|| self.state.builder.types.ui256);
-                let (value, next_block) = {
-                    let emitter =
-                        ExpressionEmitter::new(self.state, environment, self.storage_layout, true);
-                    emitter.emit_value(&argument, block)?
-                };
-                block = next_block;
                 let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder)
                     .emit(value, &self.state.builder, &block);
                 let pointer = self.state.builder.emit_sol_alloca(parameter_type, &block);
