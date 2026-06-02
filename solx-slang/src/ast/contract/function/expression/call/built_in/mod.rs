@@ -496,6 +496,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
     /// As [`Self::emit_built_in_member_access`], but with an explicit external
     /// call `value` (from `f{value: v}()` call options).
+    ///
+    /// Tries each specialised member-access handler in turn (wrap/unwrap, enum
+    /// variant, function pointers, this/local/external calls, type queries),
+    /// then falls back to the per-built-in intrinsic dispatch.
     pub fn emit_built_in_member_access_with_value(
         &self,
         access: &MemberAccessExpression,
@@ -573,6 +577,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(result);
         }
 
+        self.emit_built_in_member_intrinsic(access, arguments, call_value, block)
+    }
+
+    /// Dispatches a built-in member access to its intrinsic emitter once the
+    /// specialised handlers in [`Self::emit_built_in_member_access_with_value`]
+    /// have declined: address members (`balance`/`codehash`/`code`/`length`,
+    /// `send`/`transfer`, bare calls), `abi.encode*`, array `push`/`pop`, and
+    /// the environment globals.
+    fn emit_built_in_member_intrinsic(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        call_value: Option<Value<'context, 'block>>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let builder = &self.expression_emitter.state.builder;
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressBalance) => {
@@ -611,41 +630,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }),
             Some(BuiltIn::AddressSend) => {
                 let arguments = arguments.expect("send is a member-access call");
-                let (addr, block) = self
-                    .expression_emitter
-                    .emit_value(&access.operand(), block)?;
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let value = block
-                    .append_operation(
-                        SendOperation::builder(builder.context, builder.unknown_location)
-                            .addr(addr)
-                            .val(values[0])
-                            .status(builder.types.i1)
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("send always produces one result")
-                    .into();
-                Ok((Some(value), block))
+                self.emit_address_send(access, arguments, block)
             }
             Some(BuiltIn::AddressTransfer) => {
                 let arguments = arguments.expect("transfer is a member-access call");
-                let (addr, block) = self
-                    .expression_emitter
-                    .emit_value(&access.operand(), block)?;
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                // `sol.transfer` takes the wei amount as `ui256`; a narrow
-                // literal (`transfer(1 wei)`) must be widened.
-                let amount = builder.emit_sol_cast(values[0], builder.types.ui256, &block);
-                block.append_operation(
-                    TransferOperation::builder(builder.context, builder.unknown_location)
-                        .addr(addr)
-                        .val(amount)
-                        .build()
-                        .into(),
-                );
-                Ok((None, block))
+                self.emit_address_transfer(access, arguments, block)
             }
             Some(
                 builtin @ (BuiltIn::AddressCall
@@ -679,263 +668,346 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             Some(BuiltIn::AbiEncodeWithSignature) => {
                 let arguments = arguments.expect("abi.encodeWithSignature is a member-access call");
-                let mut iter = arguments.iter();
-                let signature_expression =
-                    iter.next().expect("slang validates non-empty arguments");
-                // The 4-byte selector is the high bytes of keccak256(signature):
-                // folded at compile time for a string literal, or computed at
-                // runtime (`bytes4(keccak256(sig))`) for a dynamic signature.
-                let (selector_value, mut current) = match &signature_expression {
-                    Expression::StringExpression(string_expression) => {
-                        let signature_bytes = string_expression.value();
-                        let hash = solx_utils::Keccak256Hash::from_slice(&signature_bytes);
-                        let selector_bytes: [u8; 4] = hash.as_bytes()[..4]
-                            .try_into()
-                            .expect("keccak256 always yields 32 bytes");
-                        let selector_word = u32::from_be_bytes(selector_bytes);
-                        let selector_int = builder.emit_sol_constant(
-                            i64::from(selector_word),
-                            Type::from(IntegerType::unsigned(builder.context, 32)),
-                            &block,
-                        );
-                        let selector_value = builder.emit_sol_bytes_cast(
-                            selector_int,
-                            builder.types.fixed_bytes(4),
-                            &block,
-                        );
-                        (selector_value, block)
-                    }
-                    _ => {
-                        let (signature_value, current) = self
-                            .expression_emitter
-                            .emit_value(&signature_expression, block)?;
-                        let hash = current
-                            .append_operation(
-                                Keccak256Operation::builder(
-                                    builder.context,
-                                    builder.unknown_location,
-                                )
-                                .addr(signature_value)
-                                .result(builder.types.fixed_bytes(32))
-                                .build()
-                                .into(),
-                            )
-                            .result(0)
-                            .expect("keccak256 always produces one result")
-                            .into();
-                        let selector_value =
-                            TypeConversion::from_target_type(builder.types.fixed_bytes(4), builder)
-                                .emit(hash, builder, &current);
-                        (selector_value, current)
-                    }
-                };
-                let mut values = Vec::with_capacity(arguments.len() - 1);
-                for argument in iter {
-                    let (value, next) = self.expression_emitter.emit_value(&argument, current)?;
-                    values.push(value);
-                    current = next;
-                }
-                let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
-                Ok((Some(result), current))
+                self.emit_abi_encode_with_signature(arguments, block)
             }
             Some(BuiltIn::AbiEncodeCall) => {
-                // `abi.encodeCall(f, (args...))` == the function's 4-byte
-                // selector followed by the ABI-encoded argument tuple.
                 let arguments = arguments.expect("abi.encodeCall is a member-access call");
-                let mut iter = arguments.iter();
-                let function_reference = iter
-                    .next()
-                    .expect("abi.encodeCall takes a function and an argument tuple");
-                let function_definition = match &function_reference {
-                    Expression::MemberAccessExpression(member_access) => {
-                        member_access.member().resolve_to_definition()
-                    }
-                    Expression::Identifier(identifier) => identifier.resolve_to_definition(),
-                    _ => None,
-                };
-                // The selector is statically known for a named function /
-                // getter, or pulled at runtime from a function-pointer value
-                // (`abi.encodeCall(fPointer, ...)` / `abi.encodeCall(x[0], ...)`)
-                // via `sol.ext_func_selector`.
-                let (selector_value, mut current) = match function_definition {
-                    Some(Definition::Function(function)) => {
-                        let selector_word = function.compute_selector().ok_or_else(|| {
-                            anyhow::anyhow!("abi.encodeCall function has no selector")
-                        })?;
-                        let selector_int = builder.emit_sol_constant(
-                            i64::from(selector_word),
-                            Type::from(IntegerType::unsigned(builder.context, 32)),
-                            &block,
-                        );
-                        let selector_value = builder.emit_sol_bytes_cast(
-                            selector_int,
-                            builder.types.fixed_bytes(4),
-                            &block,
-                        );
-                        (selector_value, block)
-                    }
-                    _ => {
-                        let (function_value, current) = self
-                            .expression_emitter
-                            .emit_value(&function_reference, block)?;
-                        assert!(
-                            solx_mlir::TypeFactory::is_sol_ext_function_ref(
-                                function_value.r#type()
-                            ),
-                            "abi.encodeCall first argument must resolve to a function"
-                        );
-                        let selector = current
-                            .append_operation(
-                                ExtFuncSelectorOperation::builder(
-                                    builder.context,
-                                    builder.unknown_location,
-                                )
-                                .func(function_value)
-                                .result(builder.types.fixed_bytes(4))
-                                .build()
-                                .into(),
-                            )
-                            .result(0)
-                            .expect("sol.ext_func_selector always produces one result")
-                            .into();
-                        (selector, current)
-                    }
-                };
-                // The second argument is the call-argument tuple (possibly empty).
-                let mut values = Vec::new();
-                if let Some(argument_tuple) = iter.next() {
-                    match &argument_tuple {
-                        Expression::TupleExpression(tuple) => {
-                            for item in tuple.items().iter() {
-                                if let Some(inner) = item.expression() {
-                                    let (value, next) =
-                                        self.expression_emitter.emit_value(&inner, current)?;
-                                    values.push(value);
-                                    current = next;
-                                }
-                            }
-                        }
-                        other => {
-                            let (value, next) =
-                                self.expression_emitter.emit_value(other, current)?;
-                            values.push(value);
-                            current = next;
-                        }
-                    }
-                }
-                let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
-                Ok((Some(result), current))
+                self.emit_abi_encode_call(arguments, block)
             }
             Some(BuiltIn::ArrayPop) => self.emit_array_pop(access, block),
             Some(BuiltIn::ArrayPush) => {
                 let arguments = arguments.expect("array push is a member-access call");
                 self.emit_array_push(access, arguments, block)
             }
-            resolved => {
-                let operation = match resolved {
-                    Some(BuiltIn::TxOrigin) => {
-                        OriginOperation::builder(builder.context, builder.unknown_location)
-                            .addr(builder.types.sol_address)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::TxGasPrice) => {
-                        GasPriceOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::MsgSender) => {
-                        CallerOperation::builder(builder.context, builder.unknown_location)
-                            .addr(builder.types.sol_address)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::MsgValue) => {
-                        CallValueOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::BlockTimestamp) => {
-                        TimestampOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::BlockNumber) => {
-                        BlockNumberOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::BlockCoinbase) => {
-                        CoinbaseOperation::builder(builder.context, builder.unknown_location)
-                            .addr(builder.types.sol_address)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::BlockChainid) => {
-                        ChainIdOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::BlockBasefee) => {
-                        BaseFeeOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::BlockGaslimit) => {
-                        GasLimitOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::BlockBlobbasefee) => {
-                        BlobBaseFeeOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::BlockDifficulty) => {
-                        DifficultyOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::BlockPrevrandao) => {
-                        PrevRandaoOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::MsgSig) => {
-                        SigOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.fixed_bytes(4))
-                            .build()
-                            .into()
-                    }
-                    Some(BuiltIn::MsgData) => {
-                        GetCallDataOperation::builder(builder.context, builder.unknown_location)
-                            .addr(builder.types.string(solx_utils::DataLocation::CallData))
-                            .build()
-                            .into()
-                    }
-                    // An unrecognised member access is an unimplemented lowering
-                    // (not a program error): mark it with `unimplemented!`.
-                    // TODO: split this catch-all so non-built-in member accesses (struct fields, etc.) and unimplemented built-ins are distinct.
-                    _ => unimplemented!("member access lowering: {}", access.member().name()),
-                };
-                let value = block
-                    .append_operation(operation)
+            resolved => self.emit_environment_global(resolved, access, block),
+        }
+    }
+
+    /// Emits `address.send(amount)` (`sol.send`): forwards `amount` wei and
+    /// returns a `bool` success status without reverting on failure.
+    fn emit_address_send(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let builder = &self.expression_emitter.state.builder;
+        let (addr, block) = self
+            .expression_emitter
+            .emit_value(&access.operand(), block)?;
+        let (values, block) = self.emit_argument_values(arguments, block)?;
+        let value = block
+            .append_operation(
+                SendOperation::builder(builder.context, builder.unknown_location)
+                    .addr(addr)
+                    .val(values[0])
+                    .status(builder.types.i1)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("send always produces one result")
+            .into();
+        Ok((Some(value), block))
+    }
+
+    /// Emits `address.transfer(amount)` (`sol.transfer`): reverts on failure.
+    /// The wei amount is widened to `ui256` — a narrow literal such as
+    /// `transfer(1 wei)` must be widened.
+    fn emit_address_transfer(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let builder = &self.expression_emitter.state.builder;
+        let (addr, block) = self
+            .expression_emitter
+            .emit_value(&access.operand(), block)?;
+        let (values, block) = self.emit_argument_values(arguments, block)?;
+        let amount = builder.emit_sol_cast(values[0], builder.types.ui256, &block);
+        block.append_operation(
+            TransferOperation::builder(builder.context, builder.unknown_location)
+                .addr(addr)
+                .val(amount)
+                .build()
+                .into(),
+        );
+        Ok((None, block))
+    }
+
+    /// Emits a nullary environment / global intrinsic that takes no operand —
+    /// `tx.origin`, `tx.gasprice`, `msg.sender`/`msg.value`/`msg.sig`/`msg.data`,
+    /// and the `block.*` globals. `resolved` is the built-in the member access
+    /// resolved to; an unrecognised access is an unimplemented lowering (not a
+    /// program error), so it is marked with `unimplemented!`.
+    fn emit_environment_global(
+        &self,
+        resolved: Option<BuiltIn>,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let builder = &self.expression_emitter.state.builder;
+        let operation = match resolved {
+            Some(BuiltIn::TxOrigin) => {
+                OriginOperation::builder(builder.context, builder.unknown_location)
+                    .addr(builder.types.sol_address)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::TxGasPrice) => {
+                GasPriceOperation::builder(builder.context, builder.unknown_location)
+                    .val(builder.types.ui256)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::MsgSender) => {
+                CallerOperation::builder(builder.context, builder.unknown_location)
+                    .addr(builder.types.sol_address)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::MsgValue) => {
+                CallValueOperation::builder(builder.context, builder.unknown_location)
+                    .val(builder.types.ui256)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::BlockTimestamp) => {
+                TimestampOperation::builder(builder.context, builder.unknown_location)
+                    .val(builder.types.ui256)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::BlockNumber) => {
+                BlockNumberOperation::builder(builder.context, builder.unknown_location)
+                    .val(builder.types.ui256)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::BlockCoinbase) => {
+                CoinbaseOperation::builder(builder.context, builder.unknown_location)
+                    .addr(builder.types.sol_address)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::BlockChainid) => {
+                ChainIdOperation::builder(builder.context, builder.unknown_location)
+                    .val(builder.types.ui256)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::BlockBasefee) => {
+                BaseFeeOperation::builder(builder.context, builder.unknown_location)
+                    .val(builder.types.ui256)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::BlockGaslimit) => {
+                GasLimitOperation::builder(builder.context, builder.unknown_location)
+                    .val(builder.types.ui256)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::BlockBlobbasefee) => {
+                BlobBaseFeeOperation::builder(builder.context, builder.unknown_location)
+                    .val(builder.types.ui256)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::BlockDifficulty) => {
+                DifficultyOperation::builder(builder.context, builder.unknown_location)
+                    .val(builder.types.ui256)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::BlockPrevrandao) => {
+                PrevRandaoOperation::builder(builder.context, builder.unknown_location)
+                    .val(builder.types.ui256)
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::MsgSig) => {
+                SigOperation::builder(builder.context, builder.unknown_location)
+                    .val(builder.types.fixed_bytes(4))
+                    .build()
+                    .into()
+            }
+            Some(BuiltIn::MsgData) => {
+                GetCallDataOperation::builder(builder.context, builder.unknown_location)
+                    .addr(builder.types.string(solx_utils::DataLocation::CallData))
+                    .build()
+                    .into()
+            }
+            // An unrecognised member access is an unimplemented lowering
+            // (not a program error): mark it with `unimplemented!`.
+            // TODO: split this catch-all so non-built-in member accesses (struct fields, etc.) and unimplemented built-ins are distinct.
+            _ => unimplemented!("member access lowering: {}", access.member().name()),
+        };
+        let value = block
+            .append_operation(operation)
+            .result(0)
+            .expect("intrinsic always produces one result")
+            .into();
+        Ok((Some(value), block))
+    }
+
+    /// Emits `abi.encodeWithSignature(sig, args...)`: the 4-byte selector is the
+    /// high bytes of `keccak256(sig)` — folded at compile time for a string
+    /// literal, or computed at runtime (`bytes4(keccak256(sig))`) for a dynamic
+    /// signature — followed by the ABI-encoded arguments.
+    fn emit_abi_encode_with_signature(
+        &self,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let builder = &self.expression_emitter.state.builder;
+        let mut iter = arguments.iter();
+        let signature_expression = iter.next().expect("slang validates non-empty arguments");
+        let (selector_value, mut current) = match &signature_expression {
+            Expression::StringExpression(string_expression) => {
+                let signature_bytes = string_expression.value();
+                let hash = solx_utils::Keccak256Hash::from_slice(&signature_bytes);
+                let selector_bytes: [u8; 4] = hash.as_bytes()[..4]
+                    .try_into()
+                    .expect("keccak256 always yields 32 bytes");
+                let selector_word = u32::from_be_bytes(selector_bytes);
+                let selector_int = builder.emit_sol_constant(
+                    i64::from(selector_word),
+                    Type::from(IntegerType::unsigned(builder.context, 32)),
+                    &block,
+                );
+                let selector_value = builder.emit_sol_bytes_cast(
+                    selector_int,
+                    builder.types.fixed_bytes(4),
+                    &block,
+                );
+                (selector_value, block)
+            }
+            _ => {
+                let (signature_value, current) = self
+                    .expression_emitter
+                    .emit_value(&signature_expression, block)?;
+                let hash = current
+                    .append_operation(
+                        Keccak256Operation::builder(
+                            builder.context,
+                            builder.unknown_location,
+                        )
+                        .addr(signature_value)
+                        .result(builder.types.fixed_bytes(32))
+                        .build()
+                        .into(),
+                    )
                     .result(0)
-                    .expect("intrinsic always produces one result")
+                    .expect("keccak256 always produces one result")
                     .into();
-                Ok((Some(value), block))
+                let selector_value =
+                    TypeConversion::from_target_type(builder.types.fixed_bytes(4), builder)
+                        .emit(hash, builder, &current);
+                (selector_value, current)
+            }
+        };
+        let mut values = Vec::with_capacity(arguments.len() - 1);
+        for argument in iter {
+            let (value, next) = self.expression_emitter.emit_value(&argument, current)?;
+            values.push(value);
+            current = next;
+        }
+        let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
+        Ok((Some(result), current))
+    }
+
+    /// Emits `abi.encodeCall(f, (args...))`: the function's 4-byte selector
+    /// followed by the ABI-encoded argument tuple. The selector is statically
+    /// known for a named function / getter, or pulled at runtime from a
+    /// function-pointer value (`abi.encodeCall(fPointer, ...)`) via
+    /// `sol.ext_func_selector`. The second argument is the call-argument tuple
+    /// (possibly empty).
+    fn emit_abi_encode_call(
+        &self,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let builder = &self.expression_emitter.state.builder;
+        let mut iter = arguments.iter();
+        let function_reference = iter
+            .next()
+            .expect("abi.encodeCall takes a function and an argument tuple");
+        let function_definition = match &function_reference {
+            Expression::MemberAccessExpression(member_access) => {
+                member_access.member().resolve_to_definition()
+            }
+            Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+            _ => None,
+        };
+        let (selector_value, mut current) = match function_definition {
+            Some(Definition::Function(function)) => {
+                let selector_word = function.compute_selector().ok_or_else(|| {
+                    anyhow::anyhow!("abi.encodeCall function has no selector")
+                })?;
+                let selector_int = builder.emit_sol_constant(
+                    i64::from(selector_word),
+                    Type::from(IntegerType::unsigned(builder.context, 32)),
+                    &block,
+                );
+                let selector_value = builder.emit_sol_bytes_cast(
+                    selector_int,
+                    builder.types.fixed_bytes(4),
+                    &block,
+                );
+                (selector_value, block)
+            }
+            _ => {
+                let (function_value, current) = self
+                    .expression_emitter
+                    .emit_value(&function_reference, block)?;
+                assert!(
+                    solx_mlir::TypeFactory::is_sol_ext_function_ref(
+                        function_value.r#type()
+                    ),
+                    "abi.encodeCall first argument must resolve to a function"
+                );
+                let selector = current
+                    .append_operation(
+                        ExtFuncSelectorOperation::builder(
+                            builder.context,
+                            builder.unknown_location,
+                        )
+                        .func(function_value)
+                        .result(builder.types.fixed_bytes(4))
+                        .build()
+                        .into(),
+                    )
+                    .result(0)
+                    .expect("sol.ext_func_selector always produces one result")
+                    .into();
+                (selector, current)
+            }
+        };
+        let mut values = Vec::new();
+        if let Some(argument_tuple) = iter.next() {
+            match &argument_tuple {
+                Expression::TupleExpression(tuple) => {
+                    for item in tuple.items().iter() {
+                        if let Some(inner) = item.expression() {
+                            let (value, next) =
+                                self.expression_emitter.emit_value(&inner, current)?;
+                            values.push(value);
+                            current = next;
+                        }
+                    }
+                }
+                other => {
+                    let (value, next) =
+                        self.expression_emitter.emit_value(other, current)?;
+                    values.push(value);
+                    current = next;
+                }
             }
         }
+        let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
+        Ok((Some(result), current))
     }
 
     /// Derives the `(parameter_types, return_types)` of a public state
