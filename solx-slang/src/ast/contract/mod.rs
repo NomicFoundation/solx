@@ -502,9 +502,6 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 match &current {
                     SlangType::Mapping(mapping_type) => {
                         let key_slang = mapping_type.key_type();
-                        if key_slang.is_reference_type() {
-                            return Ok(());
-                        }
                         let value_slang = mapping_type.value_type();
                         let resolved_value = TypeConversion::resolve_slang_type(
                             &value_slang,
@@ -518,11 +515,20 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         } else {
                             builder.types.pointer(resolved_value, location)
                         };
-                        input_types.push(TypeConversion::resolve_slang_type(
-                            &key_slang,
-                            Some(location),
-                            builder,
-                        ));
+                        // A reference-typed key (`string` / `bytes`) is an ABI
+                        // input decoded into memory. slang reports the key with
+                        // the mapping's storage location, so build the memory
+                        // string/bytes type directly rather than resolving it
+                        // (which would yield a *storage* string the ABI decoder
+                        // can't produce — it would hash the calldata offset, not
+                        // the key bytes). `sol.map` hashes the key bytes for the
+                        // slot, matching the constructor's `x["abc"]` write.
+                        let key_type = if key_slang.is_reference_type() {
+                            builder.types.string(solx_utils::DataLocation::Memory)
+                        } else {
+                            TypeConversion::resolve_slang_type(&key_slang, Some(location), builder)
+                        };
+                        input_types.push(key_type);
                         levels.push(GetterLevel::Mapping(level_type));
                         current = value_slang;
                     }
