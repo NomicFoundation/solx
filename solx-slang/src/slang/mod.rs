@@ -68,6 +68,129 @@ impl Slang {
 
         Ok(builder.build())
     }
+
+    /// Records the compilation unit's diagnostics as standard-JSON errors,
+    /// mapping each diagnostic's file id and text range to a source location.
+    fn record_diagnostics(
+        unit: &CompilationUnit,
+        input_json: &solx_standard_json::Input,
+        output: &mut solx_standard_json::Output,
+    ) {
+        output
+            .errors
+            .extend(unit.diagnostics().iter().map(|diagnostic| {
+                let file_identifier = diagnostic.file_id();
+                let text_range = diagnostic.text_range();
+                let source_location =
+                    solx_standard_json::output::error::source_location::SourceLocation::new(
+                        file_identifier,
+                        text_range.start as isize,
+                        text_range.end as isize,
+                    );
+                solx_standard_json::OutputError::new_error_with_data(
+                    Some(file_identifier),
+                    None,
+                    diagnostic.message(),
+                    Some(source_location),
+                    Some(&input_json.sources),
+                )
+            }));
+    }
+
+    /// Collects the resolved source contents into a path→code map, recording a
+    /// standard-JSON error for any source whose content is unavailable.
+    fn collect_sources(
+        input_json: &solx_standard_json::Input,
+        output: &mut solx_standard_json::Output,
+    ) -> BTreeMap<String, String> {
+        let mut sources = BTreeMap::new();
+        for (path, source) in input_json.sources.iter() {
+            let Some(source_code) = source.content() else {
+                output
+                    .errors
+                    .push(solx_standard_json::OutputError::new_error_with_data(
+                        Some(path.as_str()),
+                        None,
+                        "Source content is unavailable.",
+                        Some(SourceLocation::new(
+                            path.to_owned(),
+                            SourceLocation::UNKNOWN_OFFSET,
+                            SourceLocation::UNKNOWN_OFFSET,
+                        )),
+                        Some(&input_json.sources),
+                    ));
+                continue;
+            };
+            sources.insert(path.clone(), source_code.to_owned());
+        }
+        sources
+    }
+
+    /// Gathers every file-level free function in the unit. Free functions are
+    /// callable across imports, so each contract emitter is handed the full set
+    /// and collects only the subset it actually reaches (resolved by node id).
+    fn gather_free_functions(
+        unit: &CompilationUnit,
+    ) -> Vec<slang_solidity_v2::ast::FunctionDefinition> {
+        unit.file_ids()
+            .iter()
+            .filter_map(|file_identifier| unit.file(file_identifier))
+            .flat_map(|file| {
+                file.ast()
+                    .members()
+                    .iter()
+                    .filter_map(|member| {
+                        if let slang_solidity_v2::ast::SourceUnitMember::FunctionDefinition(
+                            function,
+                        ) = member
+                        {
+                            Some(function)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    /// Finalises a freshly-emitted object's module and records its MLIR stages
+    /// and method identifiers under `(file_identifier, name)` in the output.
+    /// Shared by the contract and deployable-library emission paths.
+    fn record_object(
+        context: solx_mlir::Context<'_>,
+        name: String,
+        method_identifiers: BTreeMap<String, String>,
+        input_json: &solx_standard_json::Input,
+        file_identifier: &str,
+        output: &mut solx_standard_json::Output,
+    ) -> anyhow::Result<()> {
+        let runtime_code_identifier =
+            format!("{name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX);
+        let capture_sol_dialect = input_json.settings.output_selection.check_selection(
+            file_identifier,
+            Some(name.as_str()),
+            solx_standard_json::InputSelector::MLIR,
+        );
+        let mlir_stages =
+            context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
+        output
+            .contracts
+            .entry(file_identifier.to_string())
+            .or_default()
+            .insert(
+                name,
+                solx_standard_json::output::contract::Contract {
+                    mlir: Some(mlir_stages),
+                    evm: Some(solx_standard_json::output::contract::evm::EVM {
+                        method_identifiers: Some(method_identifiers),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            );
+        Ok(())
+    }
 }
 
 impl Frontend for Slang {
@@ -101,48 +224,10 @@ impl Frontend for Slang {
             return Ok(output);
         }
 
-        let mut sources = BTreeMap::new();
-        for (path, source) in input_json.sources.iter() {
-            let Some(source_code) = source.content() else {
-                output
-                    .errors
-                    .push(solx_standard_json::OutputError::new_error_with_data(
-                        Some(path.as_str()),
-                        None,
-                        "Source content is unavailable.",
-                        Some(SourceLocation::new(
-                            path.to_owned(),
-                            SourceLocation::UNKNOWN_OFFSET,
-                            SourceLocation::UNKNOWN_OFFSET,
-                        )),
-                        Some(&input_json.sources),
-                    ));
-                continue;
-            };
-            sources.insert(path.clone(), source_code.to_owned());
-        }
-
+        let sources = Self::collect_sources(input_json, &mut output);
         let unit = self.compile(sources)?;
 
-        output
-            .errors
-            .extend(unit.diagnostics().iter().map(|diagnostic| {
-                let file_identifier = diagnostic.file_id();
-                let text_range = diagnostic.text_range();
-                let source_location =
-                    solx_standard_json::output::error::source_location::SourceLocation::new(
-                        file_identifier,
-                        text_range.start as isize,
-                        text_range.end as isize,
-                    );
-                solx_standard_json::OutputError::new_error_with_data(
-                    Some(file_identifier),
-                    None,
-                    diagnostic.message(),
-                    Some(source_location),
-                    Some(&input_json.sources),
-                )
-            }));
+        Self::record_diagnostics(&unit, input_json, &mut output);
 
         for file_identifier in &unit.file_ids() {
             if let Some(output_source) = output.sources.get_mut(file_identifier) {
@@ -158,32 +243,7 @@ impl Frontend for Slang {
         }
 
         let file_identifiers = unit.file_ids();
-
-        // File-level free functions are callable across imports (a contract may
-        // call a free function defined in another source file), so gather them
-        // from every file in the unit. Each contract emitter collects only the
-        // subset it actually reaches (resolved by node id) and emits those as
-        // internal functions, so handing it the full set is safe.
-        let free_functions: Vec<slang_solidity_v2::ast::FunctionDefinition> = file_identifiers
-            .iter()
-            .filter_map(|file_identifier| unit.file(file_identifier))
-            .flat_map(|file| {
-                file.ast()
-                    .members()
-                    .iter()
-                    .filter_map(|member| {
-                        if let slang_solidity_v2::ast::SourceUnitMember::FunctionDefinition(
-                            function,
-                        ) = member
-                        {
-                            Some(function)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect();
+        let free_functions = Self::gather_free_functions(&unit);
 
         for file_identifier in &file_identifiers {
             let Some(file) = unit.file(file_identifier) else {
@@ -204,33 +264,14 @@ impl Frontend for Slang {
                 let (contract_name, method_identifiers) =
                     emitter.emit(&contract, &free_functions)?;
 
-                let runtime_code_identifier = format!(
-                    "{contract_name}{}",
-                    solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX
-                );
-                let capture_sol_dialect = input_json.settings.output_selection.check_selection(
+                Self::record_object(
+                    context,
+                    contract_name,
+                    method_identifiers,
+                    input_json,
                     file_identifier,
-                    Some(contract_name.as_str()),
-                    solx_standard_json::InputSelector::MLIR,
-                );
-                let mlir_stages =
-                    context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
-
-                output
-                    .contracts
-                    .entry(file_identifier.to_string())
-                    .or_default()
-                    .insert(
-                        contract_name,
-                        solx_standard_json::output::contract::Contract {
-                            mlir: Some(mlir_stages),
-                            evm: Some(solx_standard_json::output::contract::evm::EVM {
-                                method_identifiers: Some(method_identifiers),
-                                ..Default::default()
-                            }),
-                            ..Default::default()
-                        },
-                    );
+                    &mut output,
+                )?;
             }
 
             // Libraries with `external`/`public` functions are deployed and
@@ -269,31 +310,14 @@ impl Frontend for Slang {
                 // same way any contract's would — no special recovery.
                 let (library_name, method_identifiers) =
                     crate::ast::contract::ContractEmitter::new(&mut context).emit_library(&library)?;
-                let runtime_code_identifier =
-                    format!("{library_name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX);
-                let capture_sol_dialect = input_json.settings.output_selection.check_selection(
+                Self::record_object(
+                    context,
+                    library_name,
+                    method_identifiers,
+                    input_json,
                     file_identifier,
-                    Some(library_name.as_str()),
-                    solx_standard_json::InputSelector::MLIR,
-                );
-                let mlir_stages =
-                    context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
-
-                output
-                    .contracts
-                    .entry(file_identifier.to_string())
-                    .or_default()
-                    .insert(
-                        library_name,
-                        solx_standard_json::output::contract::Contract {
-                            mlir: Some(mlir_stages),
-                            evm: Some(solx_standard_json::output::contract::evm::EVM {
-                                method_identifiers: Some(method_identifiers),
-                                ..Default::default()
-                            }),
-                            ..Default::default()
-                        },
-                    );
+                    &mut output,
+                )?;
             }
         }
 
