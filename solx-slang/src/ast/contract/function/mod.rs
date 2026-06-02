@@ -292,10 +292,19 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 function.modifier_invocations().iter().collect()
             };
         for invocation in modifier_invocations {
-            let Some(slang_solidity_v2::ast::Definition::Modifier(resolved_modifier)) =
-                invocation.name().resolve_to_definition()
-            else {
-                continue;
+            // A plain modifier resolves directly; a namespace-qualified path
+            // (`M.M.C.m`) does not resolve to a definition, so match its final
+            // segment against the contract's modifiers (mirrors
+            // `match_linearised_base` for qualified base paths). A base-
+            // constructor invocation resolves to a Contract and has no matching
+            // modifier name, so it is correctly skipped here (it is handled in
+            // `emit_constructor`).
+            let resolved_modifier = match invocation.name().resolve_to_definition() {
+                Some(slang_solidity_v2::ast::Definition::Modifier(modifier)) => modifier,
+                _ => match self.resolve_qualified_modifier(&invocation) {
+                    Some(modifier) => modifier,
+                    None => continue,
+                },
             };
             // Virtual modifier dispatch: a modifier may be declared `virtual`
             // (and even left abstract/bodyless) in a base and `override`-n in a
@@ -807,6 +816,35 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             modifier.body().is_some()
                 && modifier.name().is_some_and(|n| n.unparse() == name.as_str())
         })
+    }
+
+    /// Resolves a namespace-qualified modifier invocation (`M.M.C.m`) to its
+    /// modifier definition. Such paths do not resolve to a definition directly
+    /// (like qualified base paths — see [`Self::match_linearised_base`]), so the
+    /// final path segment (the modifier name) is matched against the contract's
+    /// C3-linearised modifiers, preferring the most-derived one with a body.
+    ///
+    /// Returns `None` when no modifier of that name exists — in particular for a
+    /// base-constructor invocation (whose final segment is a contract name), so
+    /// the caller correctly leaves it to `emit_constructor`.
+    fn resolve_qualified_modifier(
+        &self,
+        invocation: &slang_solidity_v2::ast::ModifierInvocation,
+    ) -> Option<FunctionDefinition> {
+        let last_segment = invocation.name().iter().last()?;
+        let modifier_name = last_segment.unparse();
+        self.contract()
+            .compute_linearised_bases()
+            .into_iter()
+            .filter_map(|base| match base {
+                slang_solidity_v2::ast::ContractBase::Contract(contract) => Some(contract),
+                slang_solidity_v2::ast::ContractBase::Interface(_) => None,
+            })
+            .flat_map(|contract| contract.modifiers())
+            .find(|modifier| {
+                modifier.body().is_some()
+                    && modifier.name().is_some_and(|n| n.unparse() == modifier_name)
+            })
     }
 
     pub fn mlir_function_name(function: &FunctionDefinition) -> String {
