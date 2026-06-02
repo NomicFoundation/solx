@@ -848,6 +848,21 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.environment
                 .define_variable(return_name.clone(), pointer, ui256);
         }
+        // Functions nested in this body are visible throughout it regardless
+        // of textual order (yul hoists functions) — register them for the
+        // duration of this inlined frame so calls to them resolve instead of
+        // falling through to the intrinsic table.
+        let mut hoisted_functions: Vec<String> = Vec::new();
+        for inner in definition.body().statements().iter() {
+            if let YulStatement::YulFunctionDefinition(nested) = inner {
+                let nested_name = nested.name().name();
+                if !self.yul_functions.contains_key(&nested_name) {
+                    self.yul_functions
+                        .insert(nested_name.clone(), nested.clone());
+                    hoisted_functions.push(nested_name);
+                }
+            }
+        }
         let body_block = {
             let mut current = block;
             for inner in definition.body().statements().iter() {
@@ -868,6 +883,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             current
         };
+        for nested_name in &hoisted_functions {
+            self.yul_functions.remove(nested_name);
+        }
         let mut return_values: Vec<Value<'context, 'block>> =
             Vec::with_capacity(return_names.len());
         for return_name in return_names.iter() {
@@ -951,6 +969,18 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.environment
                 .define_variable(return_name.clone(), pointer, ui256);
         }
+        // Hoist nested function definitions (forward-visible within the body).
+        let mut hoisted_functions: Vec<String> = Vec::new();
+        for inner in definition.body().statements().iter() {
+            if let YulStatement::YulFunctionDefinition(nested) = inner {
+                let nested_name = nested.name().name();
+                if !self.yul_functions.contains_key(&nested_name) {
+                    self.yul_functions
+                        .insert(nested_name.clone(), nested.clone());
+                    hoisted_functions.push(nested_name);
+                }
+            }
+        }
         let body_block = {
             let mut current = block;
             for inner in definition.body().statements().iter() {
@@ -970,6 +1000,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             current
         };
+        for nested_name in &hoisted_functions {
+            self.yul_functions.remove(nested_name);
+        }
         // Read return values; for the multi-result case yul tuple semantics
         // call for separate values, but our intrinsic surface returns one
         // ui256. We pick the first return slot if any, else a constant 0.
