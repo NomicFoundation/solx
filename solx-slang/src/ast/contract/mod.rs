@@ -571,51 +571,30 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             // all-value structs are handled here; a returnable string/bytes/function
             // member needs storage→memory handling we don't do yet, so such a getter
             // is skipped (left ungenerated) rather than emitted incorrectly.
-            let struct_plan: Option<Vec<(u64, Type<'context>)>> = match &result_slang {
+            // Each plan entry is `(member_index, gep_type, result_type)`. For a
+            // value member the two types are identical (`sol.gep` yields a
+            // pointer, `sol.load` reads the value). For a `string`/`bytes` member
+            // the gep yields the storage reference and the result is a *memory*
+            // string, so `sol.load` copies storage→memory — a multi-value return
+            // ABI-encodes a memory string correctly, whereas a raw storage
+            // reference would be mis-wrapped.
+            let struct_plan: Option<Vec<(u64, Type<'context>, Type<'context>)>> = match &result_slang
+            {
                 SlangType::Struct(struct_type) => {
                     let Definition::Struct(struct_definition) = struct_type.definition() else {
                         return Ok(());
                     };
-                    let mut plan = Vec::new();
-                    for (member_index, member) in struct_definition.members().iter().enumerate() {
-                        match member.get_type() {
-                            Some(
-                                SlangType::Mapping(_)
-                                | SlangType::Array(_)
-                                | SlangType::FixedSizeArray(_)
-                                | SlangType::Struct(_),
-                            ) => continue,
-                            Some(_) => {}
-                            None => return Ok(()),
-                        }
-                        // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
-                        // `sol::getEltType` for the struct field at `member_index`
-                        // (which mirrors the AST member index, including skipped
-                        // members, exactly as `emit_struct_field_address` does).
-                        let member_type = unsafe {
-                            Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
-                                result_type.to_raw(),
-                                member_index as u64,
-                            ))
-                        };
-                        if solx_mlir::TypeFactory::is_sol_reference(member_type)
-                            || solx_mlir::TypeFactory::is_sol_function_ref(member_type)
-                        {
-                            return Ok(());
-                        }
-                        plan.push((member_index as u64, member_type));
+                    match Self::struct_getter_plan(&struct_definition, result_type, builder) {
+                        Some(plan) => Some(plan),
+                        None => return Ok(()),
                     }
-                    if plan.is_empty() {
-                        return Ok(());
-                    }
-                    Some(plan)
                 }
                 // Other reference results (`string`/`bytes`/array) aren't handled yet.
                 _ if result_slang.is_reference_type() => return Ok(()),
                 _ => None,
             };
             let result_types: Vec<Type<'context>> = match &struct_plan {
-                Some(plan) => plan.iter().map(|(_, member_type)| *member_type).collect(),
+                Some(plan) => plan.iter().map(|(_, _, result_type)| *result_type).collect(),
                 None => vec![result_type],
             };
             let entry = builder.emit_sol_func(
@@ -667,9 +646,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             }
             match &struct_plan {
                 Some(plan) => {
-                    // Expand the struct at `base` into its value-member tuple.
+                    // Expand the struct at `base` into its returnable-member tuple.
                     let mut values = Vec::new();
-                    for (member_index, member_type) in plan {
+                    for (member_index, member_type, result_member_type) in plan {
                         let index_value = builder.emit_sol_constant(
                             *member_index as i64,
                             builder.types.ui64,
@@ -677,7 +656,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         );
                         let address =
                             builder.emit_sol_gep(base, index_value, *member_type, &entry);
-                        values.push(builder.emit_sol_load(address, *member_type, &entry)?);
+                        values.push(Self::read_getter_member(
+                            builder,
+                            address,
+                            *member_type,
+                            *result_member_type,
+                            &entry,
+                        )?);
                     }
                     builder.emit_sol_return(&values, &entry);
                 }
@@ -687,6 +672,56 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
             }
             return Ok(());
+        }
+
+        // A no-argument getter for a `public` struct state variable returns the
+        // struct's value/string/bytes members as a FLATTENED tuple (omitting
+        // mapping/array/nested-struct members), matching solc — not the struct
+        // as a single value (which would ABI-encode with a spurious outer tuple
+        // offset). Mapping/array struct getters are handled in the input block
+        // above; this is the bare `S public x` case (no getter arguments).
+        if let SlangType::Struct(struct_type) = &declared_type
+            && let Definition::Struct(struct_definition) = struct_type.definition()
+        {
+            let struct_mlir_type =
+                TypeConversion::resolve_slang_type(&declared_type, Some(location), builder);
+            if let Some(plan) =
+                Self::struct_getter_plan(&struct_definition, struct_mlir_type, builder)
+            {
+                let result_types: Vec<Type<'context>> =
+                    plan.iter().map(|(_, _, result_type)| *result_type).collect();
+                let container_type =
+                    TypeConversion::resolve_state_variable_type(state_variable, builder)?;
+                let entry = builder.emit_sol_func(
+                    &signature,
+                    &[],
+                    &result_types,
+                    Some(selector),
+                    StateMutability::View,
+                    None,
+                    contract_body,
+                );
+                let slot_name = Self::storage_symbol(slot, byte_offset, location);
+                let base = builder.emit_sol_addr_of(&slot_name, container_type, &entry);
+                let mut values = Vec::new();
+                for (member_index, member_type, result_member_type) in &plan {
+                    let index_value = builder.emit_sol_constant(
+                        *member_index as i64,
+                        builder.types.ui64,
+                        &entry,
+                    );
+                    let address = builder.emit_sol_gep(base, index_value, *member_type, &entry);
+                    values.push(Self::read_getter_member(
+                        builder,
+                        address,
+                        *member_type,
+                        *result_member_type,
+                        &entry,
+                    )?);
+                }
+                builder.emit_sol_return(&values, &entry);
+                return Ok(());
+            }
         }
 
         let element_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
@@ -718,6 +753,88 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         };
         builder.emit_sol_return(&[value], &entry);
         Ok(())
+    }
+
+    /// Builds the member-expansion plan for a `public` struct getter, mirroring
+    /// solc's auto-accessor: value and `string`/`bytes` members are returned as
+    /// a flattened tuple; mapping / array / nested-struct members are omitted.
+    ///
+    /// Each entry is `(member_index, gep_type, result_type)`. For a value member
+    /// the two types match (gep → pointer, load → value). For a `string`/`bytes`
+    /// member the gep yields the storage reference and the result is a *memory*
+    /// string, so `sol.load` copies storage→memory (a multi-value return
+    /// ABI-encodes a memory string correctly; a raw storage reference is
+    /// mis-wrapped). Returns `None` when the getter cannot be generated — a
+    /// member with no resolved type, a non-string/bytes reference (function
+    /// pointer / unexpanded aggregate), or an empty plan.
+    ///
+    /// `struct_mlir_type` is the resolved (storage-located) struct type, whose
+    /// element types `mlirSolGetEltType` indexes by AST member position.
+    fn struct_getter_plan(
+        struct_definition: &slang_solidity_v2::ast::StructDefinition,
+        struct_mlir_type: Type<'context>,
+        builder: &solx_mlir::Builder<'context>,
+    ) -> Option<Vec<(u64, Type<'context>, Type<'context>)>> {
+        let mut plan = Vec::new();
+        for (member_index, member) in struct_definition.members().iter().enumerate() {
+            let is_string_or_bytes = match member.get_type() {
+                Some(
+                    SlangType::Mapping(_)
+                    | SlangType::Array(_)
+                    | SlangType::FixedSizeArray(_)
+                    | SlangType::Struct(_),
+                ) => continue,
+                Some(SlangType::String(_) | SlangType::Bytes(_)) => true,
+                Some(_) => false,
+                None => return None,
+            };
+            // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
+            // `sol::getEltType` for the struct field at `member_index` (which
+            // mirrors the AST member index, including skipped members, exactly
+            // as `emit_struct_field_address` does).
+            let member_type = unsafe {
+                Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
+                    struct_mlir_type.to_raw(),
+                    member_index as u64,
+                ))
+            };
+            let result_member_type = if is_string_or_bytes {
+                builder.types.string(solx_utils::DataLocation::Memory)
+            } else if solx_mlir::TypeFactory::is_sol_reference(member_type)
+                || solx_mlir::TypeFactory::is_sol_function_ref(member_type)
+            {
+                return None;
+            } else {
+                member_type
+            };
+            plan.push((member_index as u64, member_type, result_member_type));
+        }
+        if plan.is_empty() {
+            return None;
+        }
+        Some(plan)
+    }
+
+    /// Reads one struct-getter member from its in-storage address (the `sol.gep`
+    /// result) into the value returned to the ABI encoder.
+    ///
+    /// A value member (`member_type == result_member_type`) loads its value. A
+    /// `string`/`bytes` member's gep yields the storage reference, which is
+    /// converted to the memory result type — a storage→memory copy, exactly as
+    /// returning a storage `string` as `string memory` does (`emit_return`).
+    fn read_getter_member<'block>(
+        builder: &solx_mlir::Builder<'context>,
+        address: Value<'context, 'block>,
+        member_type: Type<'context>,
+        result_member_type: Type<'context>,
+        block: &melior::ir::BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Value<'context, 'block>> {
+        if member_type == result_member_type {
+            builder.emit_sol_load(address, result_member_type, block)
+        } else {
+            Ok(TypeConversion::from_target_type(result_member_type, builder)
+                .emit(address, builder, block))
+        }
     }
 
     /// The symbol under which a collected internal library function is emitted
