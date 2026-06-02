@@ -120,7 +120,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 TypeConversion::resolve_function_types(library_function, &self.state.builder);
             self.state.register_function_signature(
                 library_function.node_id(),
-                Self::library_function_symbol(library_function),
+                Self::node_id_qualified_symbol(library_function),
                 parameter_types,
                 return_types,
             );
@@ -151,7 +151,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 TypeConversion::resolve_function_types(free, &self.state.builder);
             self.state.register_function_signature(
                 free.node_id(),
-                Self::free_function_symbol(free),
+                Self::node_id_qualified_symbol(free),
                 parameter_types,
                 return_types,
             );
@@ -261,7 +261,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             FunctionEmitter::new(self.state, Some(contract), &storage_layout)
                 .emit_sol_with_symbol(
                     library_function,
-                    &Self::library_function_symbol(library_function),
+                    &Self::node_id_qualified_symbol(library_function),
                     &contract_body,
                 )?;
             self.state.current_contract_type = None;
@@ -275,7 +275,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         for free in &reached_free_functions {
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, Some(contract), &storage_layout)
-                .emit_sol_with_symbol(free, &Self::free_function_symbol(free), &contract_body)?;
+                .emit_sol_with_symbol(free, &Self::node_id_qualified_symbol(free), &contract_body)?;
             self.state.current_contract_type = None;
         }
 
@@ -896,34 +896,22 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
     }
 
-    /// The symbol under which a collected internal library function is emitted
-    /// into the calling contract's body.
+    /// The MLIR symbol for an internal function emitted into a contract module
+    /// that carries no selector and is resolved purely by node id — a collected
+    /// library internal or a file-level free function.
     ///
-    /// It must not collide with a contract function — or another library's
-    /// function — of the same signature (`redefinition of symbol`), e.g. a
+    /// Two such functions can share a name and signature: a
     /// `library L { function f() internal ... }` reached from a contract that
-    /// also defines `f`. Qualify it with the function's globally-unique node id.
-    /// Library internals have no selector and are only ever resolved by node id
-    /// (`resolve_function` via `library_function_ids`), so the exact spelling is
-    /// immaterial — it just has to be unique.
-    fn library_function_symbol(function: &FunctionDefinition) -> String {
-        format!(
-            "{}#{:?}",
-            FunctionEmitter::mlir_function_name(function),
-            function.node_id()
-        )
-    }
-
-    /// The MLIR symbol for a file-level free function emitted into a contract
-    /// module. Two distinct free functions may share a name and signature when
-    /// one is imported under an alias (`import {f as g} from "..."`, or
-    /// `import "..." as M` exposing `M.f` alongside a local `f`) and both are
-    /// reachable from the same contract — e.g. one from a derived function and
-    /// the other from a base override reached via `super`. Free functions have
-    /// no selector and are only ever resolved by node id (`resolve_function`),
-    /// so qualifying the symbol with the globally-unique node id keeps the two
-    /// distinct without affecting call resolution.
-    fn free_function_symbol(function: &FunctionDefinition) -> String {
+    /// also defines `f`, or two free functions where one is imported under an
+    /// alias (`import {f as g} from "..."`, or `import "..." as M` exposing
+    /// `M.f` alongside a local `f`) and both are reachable from the same
+    /// contract (e.g. one from a derived function, the other from a base
+    /// override reached via `super`). Qualifying with the function's
+    /// globally-unique node id keeps them distinct (no `redefinition of
+    /// symbol`); since these are only ever resolved by node id
+    /// (`resolve_function`, via `library_function_ids` for libraries), the exact
+    /// spelling is immaterial.
+    fn node_id_qualified_symbol(function: &FunctionDefinition) -> String {
         format!(
             "{}#{:?}",
             FunctionEmitter::mlir_function_name(function),

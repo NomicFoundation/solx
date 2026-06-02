@@ -19,7 +19,6 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TryStatement;
 
 use solx_mlir::CmpPredicate;
-use solx_mlir::ffi;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::GetReturnDataOperation;
 use solx_mlir::ods::yul::ReturnDataCopyOperation as YulReturnDataCopyOp;
@@ -73,8 +72,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         };
 
         let (then_block, else_block) = self.state.builder.emit_sol_if(status, &current_block);
-        let then_region = ffi::block_parent_region(&then_block);
-        let else_region = ffi::block_parent_region(&else_block);
+        let then_region = then_block.parent_region().expect("block belongs to a region");
+        let else_region = else_block.parent_region().expect("block belongs to a region");
         let saved_region = self.region_pointer;
 
         // Success region: bind declared returns from the call results, run body.
@@ -151,8 +150,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     let matches =
                         builder.emit_sol_cmp(selector, expected, CmpPredicate::Eq, &else_cursor);
                     let (then_block, next_else) = builder.emit_sol_if(matches, &else_cursor);
-                    let then_region = ffi::block_parent_region(&then_block);
-                    let next_else_region = ffi::block_parent_region(&next_else);
+                    let then_region = then_block.parent_region().expect("block belongs to a region");
+                    let next_else_region = next_else.parent_region().expect("block belongs to a region");
                     // The `sol.if` is the last op of `else_cursor`'s block; it
                     // still needs a terminator (the structured-if op does not
                     // terminate the enclosing block).

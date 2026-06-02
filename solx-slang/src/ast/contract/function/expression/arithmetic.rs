@@ -254,20 +254,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         builder.emit_sol_constant(0, element_type, &block)
                     } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
                         let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
-                        block
-                            .append_operation(
-                                solx_mlir::ods::sol::EnumCastOperation::builder(
-                                    builder.context,
-                                    builder.unknown_location,
-                                )
-                                .inp(raw)
-                                .out(element_type)
-                                .build()
-                                .into(),
-                            )
-                            .result(0)
-                            .expect("sol.enum_cast produces one result")
-                            .into()
+                        builder.emit_sol_enum_cast(raw, element_type, &block)
                     } else {
                         builder.emit_sol_constant(0, element_type, &block)
                     };
@@ -279,7 +266,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 // reference-type deletion (arrays, mappings, structs) needs
                 // dedicated lowering.
                 let Expression::Identifier(identifier) = operand else {
-                    unimplemented!("unsupported delete operand");
+                    unimplemented!("delete of a non-identifier operand");
                 };
                 let name = identifier.name();
                 match identifier.resolve_to_definition() {
@@ -293,20 +280,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             builder.emit_sol_constant(0, element_type, &block)
                         } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
                             let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
-                            block
-                                .append_operation(
-                                    solx_mlir::ods::sol::EnumCastOperation::builder(
-                                        builder.context,
-                                        builder.unknown_location,
-                                    )
-                                    .inp(raw)
-                                    .out(element_type)
-                                    .build()
-                                    .into(),
-                                )
-                                .result(0)
-                                .expect("sol.enum_cast produces one result")
-                                .into()
+                            builder.emit_sol_enum_cast(raw, element_type, &block)
                         } else {
                             // Reference-typed local: `delete` rebinds it to a
                             // fresh zero value. Function pointers reset to the
@@ -443,20 +417,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             builder.emit_sol_constant(0, element_type, &block)
                         } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
                             let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
-                            block
-                                .append_operation(
-                                    solx_mlir::ods::sol::EnumCastOperation::builder(
-                                        builder.context,
-                                        builder.unknown_location,
-                                    )
-                                    .inp(raw)
-                                    .out(element_type)
-                                    .build()
-                                    .into(),
-                                )
-                                .result(0)
-                                .expect("sol.enum_cast produces one result")
-                                .into()
+                            builder.emit_sol_enum_cast(raw, element_type, &block)
                         } else if solx_mlir::TypeFactory::is_sol_reference(element_type) {
                             // Array / struct / string / bytes / mapping need
                             // recursive zeroing, not yet implemented. Fail cleanly

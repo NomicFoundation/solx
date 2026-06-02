@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 
 use solx_mlir::Context;
@@ -71,5 +72,31 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         }
 
         Ok((name, method_identifiers))
+    }
+}
+
+/// Extension methods on Slang's [`Expression`] AST node.
+pub(crate) trait ExpressionExt {
+    /// Peels redundant parenthesisation — single-element tuples — to a
+    /// fixpoint, so a parenthesised expression (`(x)`, `((x))`, `(super)`) is
+    /// treated like its bare inner form, mirroring how solc discards redundant
+    /// parentheses. Returns the expression unchanged when it is not so wrapped.
+    fn unwrap_parens(self) -> Self;
+}
+
+impl ExpressionExt for Expression {
+    fn unwrap_parens(mut self) -> Self {
+        loop {
+            let inner = match &self {
+                Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
+                    tuple.items().iter().next().and_then(|item| item.expression())
+                }
+                _ => None,
+            };
+            match inner {
+                Some(next) => self = next,
+                None => return self,
+            }
+        }
     }
 }

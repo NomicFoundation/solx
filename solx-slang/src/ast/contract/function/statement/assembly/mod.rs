@@ -22,7 +22,6 @@ pub(crate) use slang_solidity_v2::ast::YulExpression;
 pub(crate) use slang_solidity_v2::ast::YulLiteral;
 pub(crate) use slang_solidity_v2::ast::YulStatement;
 pub(crate) use solx_mlir::CmpPredicate;
-pub(crate) use solx_mlir::ffi;
 pub(crate) use solx_mlir::ods::sol::AddOperation;
 pub(crate) use solx_mlir::ods::sol::AndOperation;
 pub(crate) use solx_mlir::ods::sol::BaseFeeOperation;
@@ -301,8 +300,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let condition_boolean =
                     builder.emit_sol_cmp(cond_ui256, zero, CmpPredicate::Ne, &block);
                 let (then_block, else_block) = builder.emit_sol_if(condition_boolean, &block);
-                let then_region = ffi::block_parent_region(&then_block);
-                let else_region = ffi::block_parent_region(&else_block);
+                let then_region = then_block.parent_region().expect("block belongs to a region");
+                let else_region = else_block.parent_region().expect("block belongs to a region");
 
                 let saved_region = self.region_pointer;
                 self.set_region(&then_region);
@@ -346,9 +345,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
                 let (cond_block, body_block, step_block) =
                     self.state.builder.emit_sol_for(&current);
-                let cond_region = ffi::block_parent_region(&cond_block);
-                let body_region = ffi::block_parent_region(&body_block);
-                let step_region = ffi::block_parent_region(&step_block);
+                let cond_region = cond_block.parent_region().expect("block belongs to a region");
+                let body_region = body_block.parent_region().expect("block belongs to a region");
+                let step_region = step_block.parent_region().expect("block belongs to a region");
 
                 let saved_region = self.region_pointer;
 
@@ -528,7 +527,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             let condition =
                 builder.emit_sol_cmp(selector, literal_value, CmpPredicate::Eq, &current);
             let (then_block, else_block) = builder.emit_sol_if(condition, &current);
-            let then_region = ffi::block_parent_region(&then_block);
+            let then_region = then_block.parent_region().expect("block belongs to a region");
 
             self.set_region(&then_region);
             let mut then_current = then_block;
@@ -546,7 +545,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
 
             // The next case (or default) goes into THIS sol.if's else block.
-            let else_region = ffi::block_parent_region(&else_block);
+            let else_region = else_block.parent_region().expect("block belongs to a region");
             self.set_region(&else_region);
             else_blocks.push(else_block);
             current = else_block;
@@ -732,20 +731,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 } else if solx_mlir::TypeFactory::is_sol_enum(value.r#type()) {
                     // Enum-typed variables bridge to ui256 via `sol.enum_cast`;
                     // `sol.cast` rejects non-integer enum operands.
-                    block
-                        .append_operation(
-                            solx_mlir::ods::sol::EnumCastOperation::builder(
-                                builder.context,
-                                builder.unknown_location,
-                            )
-                            .inp(value)
-                            .out(ui256)
-                            .build()
-                            .into(),
-                        )
-                        .result(0)
-                        .expect("sol.enum_cast produces one result")
-                        .into()
+                    builder.emit_sol_enum_cast(value, ui256, &block)
                 } else {
                     builder.emit_sol_cast(value, ui256, &block)
                 };

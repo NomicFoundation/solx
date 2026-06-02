@@ -11,9 +11,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// payload and must already be of `!sol.fixed_bytes<4>` type. `packed`
     /// emits the ABI-packed encoding (no per-element padding).
     ///
-    /// Sets `operand_segment_sizes` manually because melior's ODS-generated
-    /// builder does not synthesize the attribute for `AttrSizedOperandSegments`
-    /// ops; the dialect verifier rejects the op without it.
+    /// `operand_segment_sizes` is synthesized by melior's ODS-generated builder
+    /// for this `AttrSizedOperandSegments` op, so it is not set here.
     pub(super) fn emit_sol_encode(
         &self,
         ins: &[Value<'context, 'block>],

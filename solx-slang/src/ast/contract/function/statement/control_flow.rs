@@ -2,6 +2,7 @@
 //! Control flow statement lowering: if/else, for, while, do-while.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::RegionLike;
 use slang_solidity_v2::ast::ForStatementCondition;
@@ -35,8 +36,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let (then_block, else_block) = self.state.builder.emit_sol_if(condition_boolean, &block);
 
         // Get the inner regions for creating blocks in the right scope.
-        let then_region = solx_mlir::ffi::block_parent_region(&then_block);
-        let else_region = solx_mlir::ffi::block_parent_region(&else_block);
+        let then_region = then_block.parent_region().expect("block belongs to a region");
+        let else_region = else_block.parent_region().expect("block belongs to a region");
 
         // Emit then body.
         let saved_region = self.region_pointer;
@@ -107,7 +108,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         };
 
         let (condition_block, body_block, step_block) = self.state.builder.emit_sol_for(&block);
-        let body_region = solx_mlir::ffi::block_parent_region(&body_block);
+        let body_region = body_block.parent_region().expect("block belongs to a region");
         let saved_region = self.region_pointer;
 
         // Condition region.
@@ -172,7 +173,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let (condition_block, body_block) = self.state.builder.emit_sol_while(&block);
-        let body_region = solx_mlir::ffi::block_parent_region(&body_block);
+        let body_region = body_block.parent_region().expect("block belongs to a region");
         let saved_region = self.region_pointer;
 
         // Condition region.
@@ -212,7 +213,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let (body_block, condition_block) = self.state.builder.emit_sol_do_while(&block);
-        let body_region = solx_mlir::ffi::block_parent_region(&body_block);
+        let body_region = body_block.parent_region().expect("block belongs to a region");
         let saved_region = self.region_pointer;
 
         // Body region (executes first).

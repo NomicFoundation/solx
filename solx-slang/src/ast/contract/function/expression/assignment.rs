@@ -12,6 +12,7 @@ use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 
+use crate::ast::ExpressionExt;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -53,19 +54,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         // `(((x))) = v`) is a decayed tuple — semantically `x = v`. Peel all such
         // tuples so it resolves as a scalar lvalue rather than taking the
         // tuple-assignment path (which expects a tuple/call right-hand side).
-        let mut left = left;
-        loop {
-            let inner = match &left {
-                Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
-                    tuple.items().iter().next().and_then(|item| item.expression())
-                }
-                _ => None,
-            };
-            match inner {
-                Some(expression) => left = expression,
-                None => break,
-            }
-        }
+        let left = left.unwrap_parens();
 
         // `(a, b, ...) = rhs` — tuple / destructuring assignment. Only the plain
         // `=` operator is valid on a tuple left-hand side.

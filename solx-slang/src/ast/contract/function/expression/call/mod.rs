@@ -6,7 +6,6 @@ pub mod built_in;
 pub mod type_conversion;
 
 use anyhow::Context as _;
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -21,6 +20,7 @@ use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_utils::DataLocation;
 
+use crate::ast::ExpressionExt;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 
 use self::type_conversion::TypeConversion;
@@ -93,19 +93,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // A parenthesised callee `(x.f)({...})` wraps the member access in
         // single-element tuples, so peel those first.
         if let ArgumentsDeclaration::NamedArguments(named_arguments) = &call.arguments() {
-            let mut callee = call.operand();
-            loop {
-                let inner = match &callee {
-                    Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
-                        tuple.items().iter().next().and_then(|item| item.expression())
-                    }
-                    _ => None,
-                };
-                match inner {
-                    Some(expression) => callee = expression,
-                    None => break,
-                }
-            }
+            let callee = call.operand().unwrap_parens();
             if let Expression::MemberAccessExpression(access) = &callee {
                 match access.member().resolve_to_definition() {
                     Some(Definition::Struct(struct_definition)) => {
@@ -152,19 +140,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // callee as a single-element tuple, so peel any such tuples before
         // dispatch (the member-access, pop, and indirect-call branches below
         // expect the bare callee).
-        let mut callee = call.operand();
-        loop {
-            let inner = match &callee {
-                Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
-                    tuple.items().iter().next().and_then(|item| item.expression())
-                }
-                _ => None,
-            };
-            match inner {
-                Some(expression) => callee = expression,
-                None => break,
-            }
-        }
+        let callee = call.operand().unwrap_parens();
 
         // A single-field struct constructor `S(x)` is reported as a "type
         // conversion" by slang's CST heuristic (the callee is a type name), but
@@ -222,25 +198,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let (value, block) = self.expression_emitter.emit_value(&first, block)?;
                 let builder = &self.expression_emitter.state.builder;
                 let member_count = enum_definition.members().iter().count();
-                let max = u8::try_from(member_count.saturating_sub(1))
-                    .expect("enum member count fits in u8");
-                let enum_type = builder.types.enumeration(max.into());
+                let enum_type = builder.types.enumeration_for_member_count(member_count);
                 let raw = TypeConversion::from_target_type(builder.types.ui256, builder)
                     .emit(value, builder, &block);
-                let result = block
-                    .append_operation(
-                        solx_mlir::ods::sol::EnumCastOperation::builder(
-                            builder.context,
-                            builder.unknown_location,
-                        )
-                        .inp(raw)
-                        .out(enum_type)
-                        .build()
-                        .into(),
-                    )
-                    .result(0)
-                    .expect("sol.enum_cast always produces one result")
-                    .into();
+                let result = builder.emit_sol_enum_cast(raw, enum_type, &block);
                 return Ok((Some(result), block));
             }
 
@@ -442,19 +403,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         if let Expression::CallOptionsExpression(call_options) = &callee {
             // `(new C){value: v}(args)` / `(addr).call{...}(...)` parenthesise
             // the option receiver, so peel single-element tuples here too.
-            let mut inner = call_options.operand();
-            loop {
-                let unwrapped = match &inner {
-                    Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
-                        tuple.items().iter().next().and_then(|item| item.expression())
-                    }
-                    _ => None,
-                };
-                match unwrapped {
-                    Some(expression) => inner = expression,
-                    None => break,
-                }
-            }
+            let inner = call_options.operand().unwrap_parens();
             if let Expression::MemberAccessExpression(access) = &inner {
                 let mut current_block = block;
                 let mut call_value = None;

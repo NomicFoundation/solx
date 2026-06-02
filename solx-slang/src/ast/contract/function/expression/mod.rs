@@ -487,8 +487,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Expression::TupleExpression(tuple) => {
                 let items = tuple.items();
-                // TODO: support multi-value tuples (e.g. tuple deconstruction)
-                assert!(items.len() == 1, "multi-value tuples not yet supported");
+                if items.len() != 1 {
+                    unimplemented!("multi-value tuple expression");
+                }
                 let item = items.iter().next().expect("length checked to be 1 above");
                 let inner = item
                     .expression()

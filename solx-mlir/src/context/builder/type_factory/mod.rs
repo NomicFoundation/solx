@@ -304,6 +304,15 @@ impl<'context> TypeFactory<'context> {
         unsafe { Type::from_raw(crate::ffi::solxCreateEnumType(self.context.to_raw(), max)) }
     }
 
+    /// Creates a `sol::EnumType` sized for an enum with `member_count` members.
+    /// Solidity caps enums at 256 members, so the maximum valid enumerator
+    /// index (`member_count - 1`) always fits in a `u8`.
+    pub fn enumeration_for_member_count(&self, member_count: usize) -> Type<'context> {
+        let max = u8::try_from(member_count.saturating_sub(1))
+            .expect("enum member count fits in u8");
+        self.enumeration(max.into())
+    }
+
     /// Creates a `sol::FuncRefType` for an internal function pointer with the
     /// given parameter and result types.
     pub fn func_ref(

@@ -32,7 +32,6 @@ pub(crate) use solx_mlir::ods::sol::BaseFeeOperation;
 pub(crate) use solx_mlir::ods::sol::BlobBaseFeeOperation;
 pub(crate) use solx_mlir::ods::sol::BlockHashOperation;
 pub(crate) use solx_mlir::ods::sol::BlockNumberOperation;
-pub(crate) use solx_mlir::ods::sol::BytesCastOperation;
 pub(crate) use solx_mlir::ods::sol::CallValueOperation;
 pub(crate) use solx_mlir::ods::sol::CallerOperation;
 pub(crate) use solx_mlir::ods::sol::ChainIdOperation;
@@ -44,7 +43,6 @@ pub(crate) use solx_mlir::ods::sol::DecodeOperation;
 pub(crate) use solx_mlir::ods::sol::DifficultyOperation;
 pub(crate) use solx_mlir::ods::sol::EcrecoverOperation;
 pub(crate) use solx_mlir::ods::sol::EncodeOperation;
-pub(crate) use solx_mlir::ods::sol::EnumCastOperation;
 pub(crate) use solx_mlir::ods::sol::ExtFuncAddrOperation;
 pub(crate) use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 pub(crate) use solx_mlir::ods::sol::GasLeftOperation;
@@ -459,18 +457,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok(Some((status, results, current_block)))
     }
 
-    /// As [`Self::emit_built_in_member_access`], but with an explicit external
-    /// call `value` (from `f{value: v}()` call options).
-    pub fn emit_built_in_member_access_with_value(
+    /// `T.wrap` / `T.unwrap` referenced without a call (a discarded
+    /// `(MyInt).wrap;` statement). The call forms are handled in the call
+    /// dispatch; a bare reference is a no-op, so yield a placeholder.
+    fn try_emit_wrap_unwrap_reference(
         &self,
         access: &MemberAccessExpression,
         arguments: Option<&PositionalArguments>,
-        call_value: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        // `T.wrap` / `T.unwrap` referenced without a call (a discarded
-        // `(MyInt).wrap;` statement). The call forms are handled in the call
-        // dispatch; a bare reference is a no-op, so yield a placeholder.
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if arguments.is_none()
             && matches!(
                 access.member().resolve_to_built_in(),
@@ -479,14 +474,22 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         {
             let builder = &self.expression_emitter.state.builder;
             let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
-            return Ok((Some(placeholder), block));
+            return Ok(Some((Some(placeholder), block)));
         }
+        Ok(None)
+    }
 
-        // `addr.transfer` / `addr.send` / `addr.call` (and `delegatecall` /
-        // `staticcall`) referenced WITHOUT a call — e.g. a discarded
-        // `payable(this).transfer;` statement — is a member reference, not the
-        // transfer/call action (which the call dispatch handles). Evaluate the
-        // operand for its side effects and yield a placeholder.
+    /// `addr.transfer` / `addr.send` / `addr.call` (and `delegatecall` /
+    /// `staticcall`) referenced WITHOUT a call — e.g. a discarded
+    /// `payable(this).transfer;` statement — is a member reference, not the
+    /// transfer/call action (which the call dispatch handles). Evaluate the
+    /// operand for its side effects and yield a placeholder.
+    fn try_emit_address_action_reference(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if arguments.is_none()
             && matches!(
                 access.member().resolve_to_built_in(),
@@ -503,13 +506,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 self.expression_emitter.emit_value(&access.operand(), block)?;
             let builder = &self.expression_emitter.state.builder;
             let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
-            return Ok((Some(placeholder), block));
+            return Ok(Some((Some(placeholder), block)));
         }
+        Ok(None)
+    }
 
-        // `MyEnum.VARIANT` — emit the variant index as a ui256 constant and
-        // bridge to `!sol.enum<max>` via `sol.enum_cast`. The receiver may be a
-        // bare enum name (`MyEnum.VARIANT`) or a qualified path whose operand is
-        // itself a member access (`C.MyEnum.VARIANT`, `base.MyEnum.VARIANT`).
+    /// `MyEnum.VARIANT` — emit the variant index as a ui256 constant and
+    /// bridge to `!sol.enum<max>` via `sol.enum_cast`. The receiver may be a
+    /// bare enum name (`MyEnum.VARIANT`) or a qualified path whose operand is
+    /// itself a member access (`C.MyEnum.VARIANT`, `base.MyEnum.VARIANT`).
+    fn try_emit_enum_variant(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if arguments.is_none()
             && matches!(
                 access.member().resolve_to_definition(),
@@ -525,29 +536,26 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .position(|member| member.name() == member_name)
             {
                 let builder = &self.expression_emitter.state.builder;
-                let max_member = enum_definition.members().iter().count().saturating_sub(1);
-                let max = u8::try_from(max_member).expect("enum member count fits in u8");
-                let enum_type = builder.types.enumeration(max.into());
+                let member_count = enum_definition.members().iter().count();
+                let enum_type = builder.types.enumeration_for_member_count(member_count);
                 let raw =
                     builder.emit_sol_constant(index as i64, builder.types.ui256, &block);
-                let value = block
-                    .append_operation(
-                        EnumCastOperation::builder(builder.context, builder.unknown_location)
-                            .inp(raw)
-                            .out(enum_type)
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("sol.enum_cast always produces one result")
-                    .into();
-                return Ok((Some(value), block));
+                let value = builder.emit_sol_enum_cast(raw, enum_type, &block);
+                return Ok(Some((Some(value), block)));
             }
         }
+        Ok(None)
+    }
 
-        // `funcPtr.address` — the address component of an external function-pointer
-        // value (`C(addr).f.address`), pulled out of the `!sol.ext_func_ref` at
-        // runtime via `sol.ext_func_addr` (mirrors the `.selector` runtime arm).
+    /// `funcPtr.address` — the address component of an external function-pointer
+    /// value (`C(addr).f.address`), pulled out of the `!sol.ext_func_ref` at
+    /// runtime via `sol.ext_func_addr` (mirrors the `.selector` runtime arm).
+    fn try_emit_function_pointer_address(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if arguments.is_none()
             && access.member().name() == "address"
             && let Some(SlangType::Function(_)) = access.operand().get_type()
@@ -567,19 +575,27 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .result(0)
                     .expect("sol.ext_func_addr always produces one result")
                     .into();
-                return Ok((Some(address), block));
+                return Ok(Some((Some(address), block)));
             }
         }
+        Ok(None)
+    }
 
-        // `f.selector` / `E.selector` / `this.x.selector` — compile-time
-        // selector constant, with the base resolving to a function, error,
-        // event, or public state variable. A user library function may also be
-        // named `selector` (attached via `using`); that is always a call, so
-        // the `arguments.is_none()` guard excludes it, and we additionally
-        // refuse a `selector` member that resolves to a user function for the
-        // contrived case of taking such a bound function as a value. Function,
-        // error, and getter selectors are 4-byte (`bytes4`); event selectors
-        // are the full 32-byte keccak topic hash (`bytes32`).
+    /// `f.selector` / `E.selector` / `this.x.selector` — compile-time
+    /// selector constant, with the base resolving to a function, error,
+    /// event, or public state variable. A user library function may also be
+    /// named `selector` (attached via `using`); that is always a call, so
+    /// the `arguments.is_none()` guard excludes it, and we additionally
+    /// refuse a `selector` member that resolves to a user function for the
+    /// contrived case of taking such a bound function as a value. Function,
+    /// error, and getter selectors are 4-byte (`bytes4`); event selectors
+    /// are the full 32-byte keccak topic hash (`bytes32`).
+    fn try_emit_selector(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if arguments.is_none()
             && access.member().name() == "selector"
             && !matches!(
@@ -627,7 +643,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let integer = builder.emit_constant(&value, integer_type, &block);
                 let value =
                     builder.emit_sol_bytes_cast(integer, builder.types.fixed_bytes(width_bytes), &block);
-                return Ok((Some(value), block));
+                return Ok(Some((Some(value), block)));
             }
             // Fall back to a runtime selector extraction when the operand is an
             // external function-pointer VALUE rather than a statically-known
@@ -655,13 +671,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         .result(0)
                         .expect("sol.ext_func_selector always produces one result")
                         .into();
-                    return Ok((Some(selector), block));
+                    return Ok(Some((Some(selector), block)));
                 }
             }
         }
+        Ok(None)
+    }
 
-        // `this.f` / `obj.f` used as a value (no call) is an external
-        // function pointer: `sol.ext_func_constant(addr, selector)`.
+    /// `this.f` / `obj.f` used as a value (no call) is an external
+    /// function pointer: `sol.ext_func_constant(addr, selector)`.
+    fn try_emit_external_function_pointer(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if arguments.is_none()
             && let Some(slang_solidity_v2::ast::Definition::Function(function_definition)) =
                 access.member().resolve_to_definition()
@@ -683,7 +707,42 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
             let value =
                 builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &current_block);
-            return Ok((Some(value), current_block));
+            return Ok(Some((Some(value), current_block)));
+        }
+        Ok(None)
+    }
+
+    /// As [`Self::emit_built_in_member_access`], but with an explicit external
+    /// call `value` (from `f{value: v}()` call options).
+    pub fn emit_built_in_member_access_with_value(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+        call_value: Option<Value<'context, 'block>>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        if let Some(result) = self.try_emit_wrap_unwrap_reference(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_address_action_reference(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_enum_variant(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_function_pointer_address(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_selector(access, arguments, block)? {
+            return Ok(result);
+        }
+
+        if let Some(result) = self.try_emit_external_function_pointer(access, arguments, block)? {
+            return Ok(result);
         }
 
         // `this.v(args)` — an external call to a public state variable's
@@ -1234,20 +1293,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                             Type::from(IntegerType::unsigned(builder.context, 32)),
                             &block,
                         );
-                        let selector_value = block
-                            .append_operation(
-                                BytesCastOperation::builder(
-                                    builder.context,
-                                    builder.unknown_location,
-                                )
-                                .inp(selector_int)
-                                .out(builder.types.fixed_bytes(4))
-                                .build()
-                                .into(),
-                            )
-                            .result(0)
-                            .expect("sol.bytes_cast always produces one result")
-                            .into();
+                        let selector_value = builder.emit_sol_bytes_cast(
+                            selector_int,
+                            builder.types.fixed_bytes(4),
+                            &block,
+                        );
                         (selector_value, block)
                     }
                     _ => {

@@ -33,6 +33,7 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::visitor::Visitor;
 use slang_solidity_v2::ast::visitor::accept_function_definition;
 
+use crate::ast::ExpressionExt;
 use crate::ast::contract::function::FunctionEmitter;
 
 /// The result of re-resolving a contract's `super` and virtual calls against
@@ -71,7 +72,7 @@ impl Visitor for SuperCallCollector {
     fn enter_member_access_expression(&mut self, node: &MemberAccessExpression) -> bool {
         // Peel parenthesisation around the operand: `(super).f` / `(Base).f`
         // are the same internal calls as `super.f` / `Base.f`.
-        let operand = unwrap_parens(node.operand());
+        let operand = node.operand().unwrap_parens();
         if matches!(operand, Expression::SuperKeyword(_)) {
             if let Some(Definition::Function(function)) = node.member().resolve_to_definition() {
                 self.super_calls.push((node.node_id(), function));
@@ -85,24 +86,6 @@ impl Visitor for SuperCallCollector {
         }
         // Descend so nested calls (e.g. `super.f(super.g())`) are found.
         true
-    }
-}
-
-/// Peels parenthesisation (single-element tuples) from an expression, so a
-/// parenthesised receiver (`(super).f`, `(Base).f`) is treated like the bare
-/// form.
-fn unwrap_parens(mut expression: Expression) -> Expression {
-    loop {
-        let inner = match &expression {
-            Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
-                tuple.items().iter().next().and_then(|item| item.expression())
-            }
-            _ => None,
-        };
-        match inner {
-            Some(next) => expression = next,
-            None => return expression,
-        }
     }
 }
 

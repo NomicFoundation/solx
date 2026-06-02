@@ -1303,6 +1303,25 @@ impl<'context> Builder<'context> {
             .into()
     }
 
+    /// Emits `sol.gas` yielding all remaining gas as a `ui256` — the default
+    /// gas forwarded by an external call without an explicit `{gas: ...}`.
+    fn emit_sol_gas_left<'block, B>(&self, block: &B) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                GasLeftOperation::builder(self.context, self.unknown_location)
+                    .val(self.types.ui256)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.gas always produces one result")
+            .into()
+    }
+
     /// Emits a `sol.ext_icall` (external call through an external function
     /// reference), forwarding all remaining gas and the given `value`.
     /// Returns the decoded result values.
@@ -1325,16 +1344,7 @@ impl<'context> Builder<'context> {
     {
         // Forward all remaining gas (`gas()` / `gasleft()`), the default for
         // an external call without an explicit `{gas: ...}` option.
-        let gas: Value<'context, 'block> = block
-            .append_operation(
-                GasLeftOperation::builder(self.context, self.unknown_location)
-                    .val(self.types.ui256)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.gas always produces one result")
-            .into();
+        let gas: Value<'context, 'block> = self.emit_sol_gas_left(block);
         // `sol.ext_icall` results are `(i1 status, decoded-returns...)`. We
         // prepend the status type and drop it from the values we hand back —
         // a non-try call reverts internally on failure, so the status is
@@ -1381,16 +1391,7 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let gas: Value<'context, 'block> = block
-            .append_operation(
-                GasLeftOperation::builder(self.context, self.unknown_location)
-                    .val(self.types.ui256)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.gas always produces one result")
-            .into();
+        let gas: Value<'context, 'block> = self.emit_sol_gas_left(block);
         let mut out_types = Vec::with_capacity(result_types.len() + 1);
         out_types.push(self.types.i1);
         out_types.extend_from_slice(result_types);

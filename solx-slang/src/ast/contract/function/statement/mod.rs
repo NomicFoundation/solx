@@ -21,6 +21,7 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Statement;
 use slang_solidity_v2::ast::Statements;
 
+use crate::ast::ExpressionExt;
 use crate::ast::contract::function::expression::call::CallEmitter;
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -276,19 +277,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 // value emission for single-valued conditionals. The statement
                 // is usually parenthesised (`(... ? ... : ...);`), which parses
                 // as a single-element tuple, so peel those first.
-                let mut unwrapped = expression_statement.expression();
-                loop {
-                    let inner = match &unwrapped {
-                        Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
-                            tuple.items().iter().next().and_then(|item| item.expression())
-                        }
-                        _ => None,
-                    };
-                    match inner {
-                        Some(next) => unwrapped = next,
-                        None => break,
-                    }
-                }
+                let unwrapped = expression_statement.expression().unwrap_parens();
                 if let Expression::ConditionalExpression(conditional) = &unwrapped
                     && let Some((_, block)) =
                         emitter.emit_conditional_tuple_values(conditional, block)?

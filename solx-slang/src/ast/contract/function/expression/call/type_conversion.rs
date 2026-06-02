@@ -196,11 +196,7 @@ impl<'context> TypeConversion<'context> {
                     _ => unreachable!("Slang EnumType always references an Enum definition"),
                 };
                 let member_count = enum_definition.members().iter().count();
-                // Solidity caps enums at 256 members, so the max enumerator
-                // index always fits in a `u8`.
-                let max = u8::try_from(member_count.saturating_sub(1))
-                    .expect("enum member count fits in u8");
-                builder.types.enumeration(max.into())
+                builder.types.enumeration_for_member_count(member_count)
             }
             SlangType::UserDefinedValue(udvt) => {
                 let target_type = udvt
@@ -346,27 +342,13 @@ impl<'context> TypeConversion<'context> {
     where
         'context: 'block,
     {
-        use melior::ir::BlockLike;
         if value.r#type() == self.to_target_type(builder) {
             return value;
         }
         // If the source value is a Sol enum, bridge it back to `ui256`
         // via `sol.enum_cast` first; `sol.cast` requires an integer input.
         let value = if solx_mlir::TypeFactory::is_sol_enum(value.r#type()) {
-            block
-                .append_operation(
-                    solx_mlir::ods::sol::EnumCastOperation::builder(
-                        builder.context,
-                        builder.unknown_location,
-                    )
-                    .inp(value)
-                    .out(builder.types.ui256)
-                    .build()
-                    .into(),
-                )
-                .result(0)
-                .expect("sol.enum_cast always produces one result")
-                .into()
+            builder.emit_sol_enum_cast(value, builder.types.ui256, block)
         } else {
             value
         };
