@@ -53,82 +53,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        // Named-argument struct constructors (`S({field: value, ...})`) are
-        // translated by mapping each declared member to the value with the
-        // matching name, then delegating to the normal struct-constructor
-        // emission path.
-        if let ArgumentsDeclaration::NamedArguments(named_arguments) = &call.arguments()
-            && let Expression::Identifier(callee_identifier) = call.operand()
-            && let Some(Definition::Struct(struct_definition)) =
-                callee_identifier.resolve_to_definition()
-        {
-            let result_type = self
-                .expression_emitter
-                .resolve_slang_type(call.get_type())
-                .ok_or_else(|| anyhow::anyhow!("unresolved struct constructor type"))?;
-            return self
-                .emit_named_struct_constructor(
-                    &struct_definition,
-                    result_type,
-                    named_arguments,
-                    block,
-                )
-                .map(|(value, block)| (Some(value), block));
-        }
-
-        // Named-argument calls to a directly-named function (`f({b: 2, a: 1})`)
-        // reorder the arguments to the callee's declared parameter order and
-        // dispatch as an ordinary positional call.
-        if let ArgumentsDeclaration::NamedArguments(named_arguments) = &call.arguments()
-            && let Expression::Identifier(callee_identifier) = call.operand()
-            && let Some(Definition::Function(function_definition)) =
-                callee_identifier.resolve_to_definition()
-        {
-            return self.emit_named_function_call(&function_definition, named_arguments, block);
-        }
-
-        // Named-argument calls/constructors with a member-access callee:
-        // `Lib.S({...})` (a contract/library-qualified struct constructor) and
-        // `x.f({...})` / `L.f({...})` (using-for / direct internal-library call).
-        // A parenthesised callee `(x.f)({...})` wraps the member access in
-        // single-element tuples, so peel those first.
+        // Named-argument calls (`f({a: 1})`, `S({x: 1})`, `L.f({...})`) are
+        // dispatched separately; everything below handles positional arguments.
         if let ArgumentsDeclaration::NamedArguments(named_arguments) = &call.arguments() {
-            let callee = call.operand().unwrap_parens();
-            if let Expression::MemberAccessExpression(access) = &callee {
-                match access.member().resolve_to_definition() {
-                    Some(Definition::Struct(struct_definition)) => {
-                        let result_type = self
-                            .expression_emitter
-                            .resolve_slang_type(call.get_type())
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("unresolved struct constructor type")
-                            })?;
-                        return self
-                            .emit_named_struct_constructor(
-                                &struct_definition,
-                                result_type,
-                                named_arguments,
-                                block,
-                            )
-                            .map(|(value, block)| (Some(value), block));
-                    }
-                    Some(Definition::Function(function_definition))
-                        if self
-                            .expression_emitter
-                            .state
-                            .library_function_ids
-                            .contains(&function_definition.node_id()) =>
-                    {
-                        return self.emit_named_member_call(
-                            access,
-                            &function_definition,
-                            named_arguments,
-                            block,
-                        );
-                    }
-                    _ => {}
-                }
-            }
+            return self.emit_named_call(call, named_arguments, block);
         }
 
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
@@ -142,201 +70,26 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // expect the bare callee).
         let callee = call.operand().unwrap_parens();
 
-        // A single-field struct constructor `S(x)` is reported as a "type
-        // conversion" by slang's CST heuristic (the callee is a type name), but
-        // it must build a struct via `emit_struct_constructor` — not cast the
-        // argument to the struct type (which `sol.cast` rejects: it is
-        // integer-only). Multi-field structs have >1 argument and already skip
-        // this branch; route the single-field case to the `Definition::Struct`
-        // dispatch below.
-        //
-        // Restrict this to a value-typed field: when the sole field is a
-        // reference type (nested struct / array), `emit_struct_constructor`
-        // emits a `sol.copy` the backend cannot yet lower (EVMUtil.cpp NYI for
-        // copying aggregate members). Those keep the existing type-conversion
-        // path to avoid a compile regression — they were already mis-compiled
-        // (wrong value) rather than failing to compile.
-        let callee_is_struct_constructor = match &callee {
-            Expression::Identifier(identifier) => {
-                match identifier.resolve_to_definition() {
-                    Some(Definition::Struct(struct_definition)) => struct_definition
-                        .members()
-                        .iter()
-                        .next()
-                        .and_then(|member| member.get_type())
-                        .is_some_and(|field_type| !field_type.is_reference_type()),
-                    _ => false,
-                }
-            }
-            _ => false,
-        };
-
-        if call.is_type_conversion()
-            && positional_arguments.len() == 1
-            && !callee_is_struct_constructor
+        if let Some(result) =
+            self.try_emit_type_conversion(call, &callee, positional_arguments, block)?
         {
-            let first = positional_arguments
-                .iter()
-                .next()
-                .expect("len checked to be 1 above");
-
-            // `E(x)` (integer -> enum): slang surfaces no call type for this
-            // conversion, and it lowers to `sol.enum_cast` (not `sol.cast`).
-            // Detect an enum callee, coerce the argument to `ui256`, and bridge.
-            // The callee may be a bare `E` or a qualified `L.E` / `C.E` (a
-            // library- or contract-nested enum), so resolve either form.
-            let enum_conversion_target = match &callee {
-                Expression::Identifier(callee_identifier) => {
-                    callee_identifier.resolve_to_definition()
-                }
-                Expression::MemberAccessExpression(access) => {
-                    access.member().resolve_to_definition()
-                }
-                _ => None,
-            };
-            if let Some(Definition::Enum(enum_definition)) = enum_conversion_target {
-                let (value, block) = self.expression_emitter.emit_value(&first, block)?;
-                let builder = &self.expression_emitter.state.builder;
-                let member_count = enum_definition.members().iter().count();
-                let enum_type = builder.types.enumeration_for_member_count(member_count);
-                let raw = TypeConversion::from_target_type(builder.types.ui256, builder)
-                    .emit(value, builder, &block);
-                let result = builder.emit_sol_enum_cast(raw, enum_type, &block);
-                return Ok((Some(result), block));
-            }
-
-            // Slang leaves some explicit conversions untyped (`call.get_type()`
-            // is `None`): a `bytes`/`string` conversion of a constant, an enum
-            // round-trip `uint256(E(x))`, etc. When the callee names an
-            // elementary type, reconstruct the target structurally from it
-            // (mirrors `abi.decode`'s untyped type-name handling).
-            let target_type = match self.expression_emitter.resolve_slang_type(call.get_type()) {
-                Some(target_type) => target_type,
-                None => match &callee {
-                    // Unlike `abi.decode` (which falls back to slang's type on a
-                    // `None`), a conversion has no fallback — an unrepresentable
-                    // elementary target is a dead end.
-                    Expression::ElementaryType(elementary) => self
-                        .resolve_abi_elementary_type(elementary)
-                        .unwrap_or_else(|| unimplemented!("conversion to elementary type")),
-                    _ => unimplemented!("unresolved type conversion target"),
-                },
-            };
-
-            // `emit_value_for_target` materializes a string literal directly as a
-            // `fixedbytes<N>` constant when the target is `bytesN` (e.g.
-            // `bytes32("abc")`); `sol.bytes_cast` rejects a dynamic-string
-            // operand, so a plain `emit_value` would fail here.
-            let (value, block) = self
-                .expression_emitter
-                .emit_value_for_target(&first, target_type, block)?;
-            let builder = &self.expression_emitter.state.builder;
-            let result =
-                TypeConversion::from_target_type(target_type, builder).emit(value, builder, &block);
-            return Ok((Some(result), block));
+            return Ok(result);
         }
 
-        // `super.f(args)` or `Base.f(args)` — an internal call that bypasses the
-        // most-derived override and dispatches to a specific base version. The
-        // redirect (built against the most-derived contract's C3 linearisation
-        // for `super`, or the named base for an explicit base call) names the
-        // target node; for `super` this is correct even in a diamond, where
-        // slang's lexical resolution would pick the wrong override. We emit a
-        // plain internal `sol.call` (no receiver) to that node's symbol.
-        if let Expression::MemberAccessExpression(access) = &callee
-            && let Some(target_id) = self
-                .expression_emitter
-                .state
-                .super_redirect
-                .get(&access.node_id())
-                .copied()
-        {
-            let (mlir_name, argument_values, return_types, current_block) = self
-                .emit_call_setup_by_id(target_id, positional_arguments, block)
-                .context("resolving super/base call")?;
-            if return_types.is_empty() {
-                self.expression_emitter.state.builder.emit_sol_call(
-                    mlir_name,
-                    &argument_values,
-                    &[],
-                    &current_block,
-                )?;
-                return Ok((None, current_block));
-            }
-            let result = self
-                .expression_emitter
-                .state
-                .builder
-                .emit_sol_call(mlir_name, &argument_values, return_types, &current_block)?
-                .expect("function call always produces at least one result");
-            return Ok((Some(result), current_block));
+        if let Some(result) = self.try_emit_super_call(&callee, positional_arguments, block)? {
+            return Ok(result);
         }
 
-        // `T.wrap(x)` / `T.unwrap(x)` on a user-defined value type. A UDVT lowers
-        // to its underlying type, so both directions are an identity conversion;
-        // emit the argument coerced to the call's result type.
-        if let Expression::MemberAccessExpression(access) = &callee
-            && matches!(
-                access.member().resolve_to_built_in(),
-                Some(slang_solidity_v2::ast::BuiltIn::Wrap | slang_solidity_v2::ast::BuiltIn::Unwrap)
-            )
+        if let Some(result) =
+            self.try_emit_udvt_wrap_unwrap(call, &callee, positional_arguments, block)?
         {
-            let argument = positional_arguments
-                .iter()
-                .next()
-                .ok_or_else(|| anyhow::anyhow!("wrap/unwrap requires one argument"))?;
-            let (value, block) = self.expression_emitter.emit_value(&argument, block)?;
-            let result = match self.expression_emitter.resolve_slang_type(call.get_type()) {
-                Some(result_type) => {
-                    let builder = &self.expression_emitter.state.builder;
-                    TypeConversion::from_target_type(result_type, builder).emit(value, builder, &block)
-                }
-                None => value,
-            };
-            return Ok((Some(result), block));
+            return Ok(result);
         }
 
-        // A call through a function-pointer member that is dispatched
-        // indirectly: a contract-qualified func-ptr state variable (`C.x()` /
-        // `Base.x()`) or a struct-field func-ptr (`s.x()` / `t[0].x()`). The
-        // callee's type is a function type; load the pointer (via the qualified
-        // state-variable read or struct-field read) and call indirectly. Must
-        // precede the built-in member-access dispatch, which rejects the
-        // unknown member.
-        //
-        // Restricted to these two shapes — a contract-qualified state variable,
-        // or a member of a struct value — so the external getter self-call
-        // (`this.v(args)`) and genuine external/library method calls (member
-        // resolves to a function definition, operand is a contract/address)
-        // keep their own dispatch.
-        if let Expression::MemberAccessExpression(access) = &callee
-            && let Some(function_slang_type) = callee.get_type()
-            && matches!(&function_slang_type, SlangType::Function(_))
+        if let Some(result) =
+            self.try_emit_function_pointer_member_call(&callee, positional_arguments, block)?
         {
-            let qualified_state_var = matches!(
-                access.operand(),
-                Expression::Identifier(operand)
-                    if matches!(operand.resolve_to_definition(), Some(Definition::Contract(_)))
-            ) && matches!(
-                access.member().resolve_to_definition(),
-                Some(Definition::StateVariable(_))
-            );
-            // A struct-field func-ptr — the operand is a struct value and the
-            // member is a field (not a `using`-attached library function, which
-            // resolves to a function definition and dispatches as a call).
-            let struct_field = matches!(access.operand().get_type(), Some(SlangType::Struct(_)))
-                && !matches!(
-                    access.member().resolve_to_definition(),
-                    Some(Definition::Function(_))
-                );
-            if qualified_state_var || struct_field {
-                return self.emit_indirect_call(
-                    &callee,
-                    &function_slang_type,
-                    positional_arguments,
-                    block,
-                );
-            }
+            return Ok(result);
         }
 
         if let Some((value, block)) =
@@ -351,33 +104,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((Some(value), block));
         }
 
-        // External/public library call `L.f(args)` — a delegatecall to the
-        // linked library object. Internal library functions are inlined into
-        // the contract (handled by `try_emit_library_call` below); external /
-        // public ones are reached by delegatecall instead.
-        if let Expression::MemberAccessExpression(access) = &callee
-            && let Expression::Identifier(operand) = access.operand()
-            && let Some(Definition::Library(library)) = operand.resolve_to_definition()
-            && let Some(Definition::Function(function)) = access.member().resolve_to_definition()
-            && matches!(
-                function.visibility(),
-                slang_solidity_v2::ast::FunctionVisibility::External
-                    | slang_solidity_v2::ast::FunctionVisibility::Public
-            )
-            // Only ABI-callable functions delegatecall; `public` library
-            // functions with non-ABI params (storage/mapping) have no selector
-            // and are inlined as internal library calls instead.
-            && function.compute_selector().is_some()
+        if let Some(result) =
+            self.try_emit_library_external_call(&callee, positional_arguments, block)?
         {
-            // The linker symbol is the fully-qualified `file:Library` name
-            // (matching solc), so `link_references` round-trips.
-            let library_symbol = format!("{}:{}", library.get_file_id(), library.name().name());
-            return self.emit_library_external_call(
-                &library_symbol,
-                &function,
-                positional_arguments,
-                block,
-            );
+            return Ok(result);
         }
 
         // Internal library function call — direct `L.f(args)` or a `using for`
@@ -396,96 +126,500 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return self.emit_built_in_member_access(access, Some(positional_arguments), block);
         }
 
-        // `addr.call{value: v, gas: g}(data)` and friends — unwrap the
-        // `CallOptionsExpression` and route to the inner member access /
-        // new expression. Options are evaluated for side effects but their
-        // values do not yet thread through to the underlying op.
-        if let Expression::CallOptionsExpression(call_options) = &callee {
-            // `(new C){value: v}(args)` / `(addr).call{...}(...)` parenthesise
-            // the option receiver, so peel single-element tuples here too.
-            let inner = call_options.operand().unwrap_parens();
-            if let Expression::MemberAccessExpression(access) = &inner {
-                let mut current_block = block;
-                let mut call_value = None;
-                for option in call_options.options().iter() {
-                    let value_expression = option.value();
-                    let (value, next) = self
-                        .expression_emitter
-                        .emit_value(&value_expression, current_block)?;
-                    current_block = next;
-                    // Capture `{value: v}` to forward as the external call's
-                    // wei value; other options (gas, salt) are evaluated for
-                    // side effects only.
-                    if option.name().name() == "value" {
-                        let builder = &self.expression_emitter.state.builder;
-                        let cast = TypeConversion::from_target_type(builder.types.ui256, builder)
-                            .emit(value, builder, &current_block);
-                        call_value = Some(cast);
-                    }
-                }
-                return self.emit_built_in_member_access_with_value(
-                    access,
-                    Some(positional_arguments),
-                    call_value,
-                    current_block,
-                );
-            }
-            if let Expression::NewExpression(_) = &inner {
-                let mut current_block = block;
-                for option in call_options.options().iter() {
-                    let value_expression = option.value();
-                    let (_value, next) = self
-                        .expression_emitter
-                        .emit_value(&value_expression, current_block)?;
-                    current_block = next;
-                }
-                return self.emit_new(call, positional_arguments, current_block);
-            }
-            // A function-pointer expression carrying call options — e.g.
-            // `arr[i]{value: v}()` / `[a, b][0]{value: v}()`. Capture `{value}`
-            // and dispatch as an indirect call, threading the value in (other
-            // options are evaluated for their side effects only).
-            if let Some(function_slang_type) = inner.get_type()
-                && matches!(function_slang_type, SlangType::Function(_))
-            {
-                let mut current_block = block;
-                let mut call_value = None;
-                for option in call_options.options().iter() {
-                    let (value, next) = self
-                        .expression_emitter
-                        .emit_value(&option.value(), current_block)?;
-                    current_block = next;
-                    if option.name().name() == "value" {
-                        let builder = &self.expression_emitter.state.builder;
-                        call_value = Some(
-                            TypeConversion::from_target_type(builder.types.ui256, builder)
-                                .emit(value, builder, &current_block),
-                        );
-                    }
-                }
-                let (results, current_block) = self.emit_indirect_call_results(
-                    &inner,
-                    &function_slang_type,
-                    positional_arguments,
-                    call_value,
-                    current_block,
-                )?;
-                return Ok((results.into_iter().next(), current_block));
-            }
+        if let Some(result) =
+            self.try_emit_call_options(&callee, call, positional_arguments, block)?
+        {
+            return Ok(result);
         }
 
         if let Expression::NewExpression(_) = &callee {
             return self.emit_new(call, positional_arguments, block);
         }
 
-        let Expression::Identifier(callee_identifier) = &callee else {
-            // Non-identifier callee (e.g. `arr[i]()` array of function
-            // pointers). If it has function-pointer type, call indirectly.
+        self.emit_identifier_or_indirect_call(call, &callee, positional_arguments, block)
+    }
+
+    /// Emits a call written with named arguments — `f({b: 2, a: 1})`,
+    /// `S({field: value})`, `Lib.S({...})`, or `x.f({...})` / `L.f({...})`.
+    ///
+    /// Resolves the callee to a struct constructor, a directly-named function,
+    /// or a member-access library call and delegates to the matching emitter.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a delegated emitter fails. Panics (`unimplemented!`)
+    /// when the named-argument callee is not one of those supported shapes.
+    fn emit_named_call(
+        &self,
+        call: &FunctionCallExpression,
+        named_arguments: &slang_solidity_v2::ast::NamedArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        // `S({field: value, ...})` — map each declared member to the value with
+        // the matching name and delegate to the struct-constructor path.
+        if let Expression::Identifier(callee_identifier) = call.operand()
+            && let Some(Definition::Struct(struct_definition)) =
+                callee_identifier.resolve_to_definition()
+        {
+            let result_type = self
+                .expression_emitter
+                .resolve_slang_type(call.get_type())
+                .ok_or_else(|| anyhow::anyhow!("unresolved struct constructor type"))?;
+            return self
+                .emit_named_struct_constructor(
+                    &struct_definition,
+                    result_type,
+                    named_arguments,
+                    block,
+                )
+                .map(|(value, block)| (Some(value), block));
+        }
+
+        // `f({b: 2, a: 1})` — reorder to the callee's declared parameter order
+        // and dispatch as an ordinary positional call.
+        if let Expression::Identifier(callee_identifier) = call.operand()
+            && let Some(Definition::Function(function_definition)) =
+                callee_identifier.resolve_to_definition()
+        {
+            return self.emit_named_function_call(&function_definition, named_arguments, block);
+        }
+
+        // Member-access callee: `Lib.S({...})` (a qualified struct constructor)
+        // or `x.f({...})` / `L.f({...})` (using-for / direct internal-library
+        // call). A parenthesised callee `(x.f)({...})` wraps the member access
+        // in single-element tuples, so peel those first.
+        let callee = call.operand().unwrap_parens();
+        if let Expression::MemberAccessExpression(access) = &callee {
+            match access.member().resolve_to_definition() {
+                Some(Definition::Struct(struct_definition)) => {
+                    let result_type = self
+                        .expression_emitter
+                        .resolve_slang_type(call.get_type())
+                        .ok_or_else(|| anyhow::anyhow!("unresolved struct constructor type"))?;
+                    return self
+                        .emit_named_struct_constructor(
+                            &struct_definition,
+                            result_type,
+                            named_arguments,
+                            block,
+                        )
+                        .map(|(value, block)| (Some(value), block));
+                }
+                Some(Definition::Function(function_definition))
+                    if self
+                        .expression_emitter
+                        .state
+                        .library_function_ids
+                        .contains(&function_definition.node_id()) =>
+                {
+                    return self.emit_named_member_call(
+                        access,
+                        &function_definition,
+                        named_arguments,
+                        block,
+                    );
+                }
+                _ => {}
+            }
+        }
+
+        unimplemented!("only positional arguments supported");
+    }
+
+    /// Emits an explicit type conversion `T(x)` — an enum cast `E(x)`
+    /// (`sol.enum_cast`) or an elementary/UDVT conversion (`sol.cast` /
+    /// `sol.bytes_cast`). Returns `None` when the call is not a single-argument
+    /// type conversion, or is really a single-field struct constructor `S(x)`
+    /// (which slang's CST heuristic reports as a conversion), so the caller
+    /// falls through to ordinary dispatch.
+    fn try_emit_type_conversion(
+        &self,
+        call: &FunctionCallExpression,
+        callee: &Expression,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        // A single-field struct constructor `S(x)` is reported as a "type
+        // conversion" by slang's CST heuristic (the callee is a type name), but
+        // it must build a struct via `emit_struct_constructor` — not cast the
+        // argument to the struct type (which `sol.cast` rejects: it is
+        // integer-only). Multi-field structs have >1 argument and already skip
+        // this branch; route the single-field case to the `Definition::Struct`
+        // dispatch.
+        //
+        // Restrict this to a value-typed field: when the sole field is a
+        // reference type (nested struct / array), `emit_struct_constructor`
+        // emits a `sol.copy` the backend cannot yet lower (EVMUtil.cpp NYI for
+        // copying aggregate members). Those keep the type-conversion path to
+        // avoid a compile regression — they were already mis-compiled (wrong
+        // value) rather than failing to compile.
+        let callee_is_struct_constructor = match callee {
+            Expression::Identifier(identifier) => match identifier.resolve_to_definition() {
+                Some(Definition::Struct(struct_definition)) => struct_definition
+                    .members()
+                    .iter()
+                    .next()
+                    .and_then(|member| member.get_type())
+                    .is_some_and(|field_type| !field_type.is_reference_type()),
+                _ => false,
+            },
+            _ => false,
+        };
+
+        if !call.is_type_conversion()
+            || positional_arguments.len() != 1
+            || callee_is_struct_constructor
+        {
+            return Ok(None);
+        }
+
+        let first = positional_arguments
+            .iter()
+            .next()
+            .expect("len checked to be 1 above");
+
+        // `E(x)` (integer -> enum): slang surfaces no call type for this
+        // conversion, and it lowers to `sol.enum_cast` (not `sol.cast`). Detect
+        // an enum callee, coerce the argument to `ui256`, and bridge. The callee
+        // may be a bare `E` or a qualified `L.E` / `C.E` (a library- or
+        // contract-nested enum), so resolve either form.
+        let enum_conversion_target = match callee {
+            Expression::Identifier(callee_identifier) => callee_identifier.resolve_to_definition(),
+            Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
+            _ => None,
+        };
+        if let Some(Definition::Enum(enum_definition)) = enum_conversion_target {
+            let (value, block) = self.expression_emitter.emit_value(&first, block)?;
+            let builder = &self.expression_emitter.state.builder;
+            let member_count = enum_definition.members().iter().count();
+            let enum_type = builder.types.enumeration_for_member_count(member_count);
+            let raw = TypeConversion::from_target_type(builder.types.ui256, builder)
+                .emit(value, builder, &block);
+            let result = builder.emit_sol_enum_cast(raw, enum_type, &block);
+            return Ok(Some((Some(result), block)));
+        }
+
+        // Slang leaves some explicit conversions untyped (`call.get_type()` is
+        // `None`): a `bytes`/`string` conversion of a constant, an enum
+        // round-trip `uint256(E(x))`, etc. When the callee names an elementary
+        // type, reconstruct the target structurally from it (mirrors
+        // `abi.decode`'s untyped type-name handling).
+        let target_type = match self.expression_emitter.resolve_slang_type(call.get_type()) {
+            Some(target_type) => target_type,
+            None => match callee {
+                // Unlike `abi.decode` (which falls back to slang's type on a
+                // `None`), a conversion has no fallback — an unrepresentable
+                // elementary target is a dead end.
+                Expression::ElementaryType(elementary) => self
+                    .resolve_abi_elementary_type(elementary)
+                    .unwrap_or_else(|| unimplemented!("conversion to elementary type")),
+                _ => unimplemented!("unresolved type conversion target"),
+            },
+        };
+
+        // `emit_value_for_target` materializes a string literal directly as a
+        // `fixedbytes<N>` constant when the target is `bytesN` (e.g.
+        // `bytes32("abc")`); `sol.bytes_cast` rejects a dynamic-string operand,
+        // so a plain `emit_value` would fail here.
+        let (value, block) = self
+            .expression_emitter
+            .emit_value_for_target(&first, target_type, block)?;
+        let builder = &self.expression_emitter.state.builder;
+        let result =
+            TypeConversion::from_target_type(target_type, builder).emit(value, builder, &block);
+        Ok(Some((Some(result), block)))
+    }
+
+    /// Emits a `super.f(args)` / `Base.f(args)` call — an internal call that
+    /// bypasses the most-derived override and dispatches to a specific base
+    /// version. The redirect (the most-derived contract's C3 linearisation for
+    /// `super`, or the named base for an explicit base call) names the target
+    /// node; for `super` this is correct even in a diamond, where slang's
+    /// lexical resolution would pick the wrong override. Emits a plain internal
+    /// `sol.call` (no receiver) to that node's symbol. Returns `None` when the
+    /// callee is not a redirected member access.
+    fn try_emit_super_call(
+        &self,
+        callee: &Expression,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        let Expression::MemberAccessExpression(access) = callee else {
+            return Ok(None);
+        };
+        let Some(target_id) = self
+            .expression_emitter
+            .state
+            .super_redirect
+            .get(&access.node_id())
+            .copied()
+        else {
+            return Ok(None);
+        };
+
+        let (mlir_name, argument_values, return_types, current_block) = self
+            .emit_call_setup_by_id(target_id, positional_arguments, block)
+            .context("resolving super/base call")?;
+        if return_types.is_empty() {
+            self.expression_emitter.state.builder.emit_sol_call(
+                mlir_name,
+                &argument_values,
+                &[],
+                &current_block,
+            )?;
+            return Ok(Some((None, current_block)));
+        }
+        let result = self
+            .expression_emitter
+            .state
+            .builder
+            .emit_sol_call(mlir_name, &argument_values, return_types, &current_block)?
+            .expect("function call always produces at least one result");
+        Ok(Some((Some(result), current_block)))
+    }
+
+    /// Emits a UDVT `T.wrap(x)` / `T.unwrap(x)` conversion. A user-defined value
+    /// type lowers to its underlying type, so both directions are an identity
+    /// conversion; the argument is emitted coerced to the call's result type.
+    /// Returns `None` when the callee is not a wrap/unwrap member access.
+    fn try_emit_udvt_wrap_unwrap(
+        &self,
+        call: &FunctionCallExpression,
+        callee: &Expression,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        let Expression::MemberAccessExpression(access) = callee else {
+            return Ok(None);
+        };
+        if !matches!(
+            access.member().resolve_to_built_in(),
+            Some(slang_solidity_v2::ast::BuiltIn::Wrap | slang_solidity_v2::ast::BuiltIn::Unwrap)
+        ) {
+            return Ok(None);
+        }
+
+        let argument = positional_arguments
+            .iter()
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("wrap/unwrap requires one argument"))?;
+        let (value, block) = self.expression_emitter.emit_value(&argument, block)?;
+        let result = match self.expression_emitter.resolve_slang_type(call.get_type()) {
+            Some(result_type) => {
+                let builder = &self.expression_emitter.state.builder;
+                TypeConversion::from_target_type(result_type, builder).emit(value, builder, &block)
+            }
+            None => value,
+        };
+        Ok(Some((Some(result), block)))
+    }
+
+    /// Emits a call through a function-pointer member dispatched indirectly: a
+    /// contract-qualified func-ptr state variable (`C.x()` / `Base.x()`) or a
+    /// struct-field func-ptr (`s.x()` / `t[0].x()`). The callee's type is a
+    /// function type; the pointer is loaded (via the qualified state-variable
+    /// read or struct-field read) and called indirectly. Must precede the
+    /// built-in member-access dispatch, which rejects the unknown member.
+    ///
+    /// Restricted to those two shapes so the external getter self-call
+    /// (`this.v(args)`) and genuine external/library method calls keep their own
+    /// dispatch. Returns `None` for any other callee.
+    fn try_emit_function_pointer_member_call(
+        &self,
+        callee: &Expression,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        let Expression::MemberAccessExpression(access) = callee else {
+            return Ok(None);
+        };
+        let Some(function_slang_type) = callee.get_type() else {
+            return Ok(None);
+        };
+        if !matches!(&function_slang_type, SlangType::Function(_)) {
+            return Ok(None);
+        }
+
+        let qualified_state_var = matches!(
+            access.operand(),
+            Expression::Identifier(operand)
+                if matches!(operand.resolve_to_definition(), Some(Definition::Contract(_)))
+        ) && matches!(
+            access.member().resolve_to_definition(),
+            Some(Definition::StateVariable(_))
+        );
+        // A struct-field func-ptr — the operand is a struct value and the member
+        // is a field (not a `using`-attached library function, which resolves to
+        // a function definition and dispatches as a call).
+        let struct_field = matches!(access.operand().get_type(), Some(SlangType::Struct(_)))
+            && !matches!(
+                access.member().resolve_to_definition(),
+                Some(Definition::Function(_))
+            );
+        if !qualified_state_var && !struct_field {
+            return Ok(None);
+        }
+
+        self.emit_indirect_call(callee, &function_slang_type, positional_arguments, block)
+            .map(Some)
+    }
+
+    /// Emits an external/public library call `L.f(args)` — a delegatecall to the
+    /// linked library object. Internal library functions are inlined into the
+    /// contract (see [`Self::try_emit_library_call`]); external/public ones are
+    /// reached by delegatecall instead. Only ABI-callable functions delegatecall;
+    /// `public` library functions with non-ABI params (storage/mapping) have no
+    /// selector and are inlined as internal calls. Returns `None` when the callee
+    /// is not such a call.
+    fn try_emit_library_external_call(
+        &self,
+        callee: &Expression,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        if let Expression::MemberAccessExpression(access) = callee
+            && let Expression::Identifier(operand) = access.operand()
+            && let Some(Definition::Library(library)) = operand.resolve_to_definition()
+            && let Some(Definition::Function(function)) = access.member().resolve_to_definition()
+            && matches!(
+                function.visibility(),
+                slang_solidity_v2::ast::FunctionVisibility::External
+                    | slang_solidity_v2::ast::FunctionVisibility::Public
+            )
+            && function.compute_selector().is_some()
+        {
+            // The linker symbol is the fully-qualified `file:Library` name
+            // (matching solc), so `link_references` round-trips.
+            let library_symbol = format!("{}:{}", library.get_file_id(), library.name().name());
+            return self
+                .emit_library_external_call(&library_symbol, &function, positional_arguments, block)
+                .map(Some);
+        }
+        Ok(None)
+    }
+
+    /// Emits a call carrying call options — `addr.call{value: v, gas: g}(data)`,
+    /// `(new C){value: v}(args)`, `fp{value: v}(args)`. Unwraps the
+    /// `CallOptionsExpression`, evaluates the options for their side effects, and
+    /// routes to the inner member access / new expression / indirect call,
+    /// forwarding the `{value:}` option where the underlying op accepts it.
+    /// Returns `None` when the callee is not a call-options expression (or its
+    /// inner receiver is unsupported).
+    fn try_emit_call_options(
+        &self,
+        callee: &Expression,
+        call: &FunctionCallExpression,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        let Expression::CallOptionsExpression(call_options) = callee else {
+            return Ok(None);
+        };
+        // `(new C){value: v}(args)` / `(addr).call{...}(...)` parenthesise the
+        // option receiver, so peel single-element tuples here too.
+        let inner = call_options.operand().unwrap_parens();
+        if let Expression::MemberAccessExpression(access) = &inner {
+            let mut current_block = block;
+            let mut call_value = None;
+            for option in call_options.options().iter() {
+                let value_expression = option.value();
+                let (value, next) = self
+                    .expression_emitter
+                    .emit_value(&value_expression, current_block)?;
+                current_block = next;
+                // Capture `{value: v}` to forward as the external call's wei
+                // value; other options (gas, salt) are evaluated for side
+                // effects only.
+                if option.name().name() == "value" {
+                    let builder = &self.expression_emitter.state.builder;
+                    let cast = TypeConversion::from_target_type(builder.types.ui256, builder)
+                        .emit(value, builder, &current_block);
+                    call_value = Some(cast);
+                }
+            }
+            return self
+                .emit_built_in_member_access_with_value(
+                    access,
+                    Some(positional_arguments),
+                    call_value,
+                    current_block,
+                )
+                .map(Some);
+        }
+        if let Expression::NewExpression(_) = &inner {
+            let mut current_block = block;
+            for option in call_options.options().iter() {
+                let value_expression = option.value();
+                let (_value, next) = self
+                    .expression_emitter
+                    .emit_value(&value_expression, current_block)?;
+                current_block = next;
+            }
+            return self
+                .emit_new(call, positional_arguments, current_block)
+                .map(Some);
+        }
+        // A function-pointer expression carrying call options — e.g.
+        // `arr[i]{value: v}()` / `[a, b][0]{value: v}()`. Capture `{value}` and
+        // dispatch as an indirect call, threading the value in (other options
+        // are evaluated for their side effects only).
+        if let Some(function_slang_type) = inner.get_type()
+            && matches!(function_slang_type, SlangType::Function(_))
+        {
+            let mut current_block = block;
+            let mut call_value = None;
+            for option in call_options.options().iter() {
+                let (value, next) = self
+                    .expression_emitter
+                    .emit_value(&option.value(), current_block)?;
+                current_block = next;
+                if option.name().name() == "value" {
+                    let builder = &self.expression_emitter.state.builder;
+                    call_value = Some(
+                        TypeConversion::from_target_type(builder.types.ui256, builder)
+                            .emit(value, builder, &current_block),
+                    );
+                }
+            }
+            let (results, current_block) = self.emit_indirect_call_results(
+                &inner,
+                &function_slang_type,
+                positional_arguments,
+                call_value,
+                current_block,
+            )?;
+            return Ok(Some((results.into_iter().next(), current_block)));
+        }
+        Ok(None)
+    }
+
+    /// Resolves an identifier (or non-identifier function-pointer) callee and
+    /// emits the call. A named function emits a direct `sol.call`; a struct name
+    /// builds a struct literal; a function-typed variable/parameter/state
+    /// variable (or a non-identifier expression of function type) dispatches
+    /// indirectly via `sol.icall`. This is the terminal dispatch step, reached
+    /// once the built-in, library, and call-option paths have been ruled out.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if signature resolution or argument emission fails.
+    /// Panics (`unimplemented!`) if the callee resolves to none of the supported
+    /// definitions.
+    fn emit_identifier_or_indirect_call(
+        &self,
+        call: &FunctionCallExpression,
+        callee: &Expression,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let Expression::Identifier(callee_identifier) = callee else {
+            // Non-identifier callee (e.g. `arr[i]()` array of function pointers).
+            // If it has function-pointer type, call indirectly.
             if let Some(function_slang_type) = callee.get_type()
                 && matches!(&function_slang_type, SlangType::Function(_))
             {
                 return self.emit_indirect_call(
-                    &callee,
+                    callee,
                     &function_slang_type,
                     positional_arguments,
                     block,
@@ -521,7 +655,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .get_type()
                     .ok_or_else(|| anyhow::anyhow!("unresolved function-pointer type"))?;
                 return self.emit_indirect_call(
-                    &callee,
+                    callee,
                     &function_slang_type,
                     positional_arguments,
                     block,
