@@ -282,13 +282,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // Collect modifier bodies that wrap this function (`function f() onlyOwner {...}`).
         // In `as_modifier_body` mode the modifier stages are emitted by the
         // wrapping call; this emission is just the raw body, so collect none.
-        let modifier_stages: Vec<slang_solidity_v2::ast::Statements> = if as_modifier_body {
-            Vec::new()
+        let (modifier_stages, modifier_stage_params) = if as_modifier_body {
+            (Vec::new(), Vec::new())
         } else {
-            let (stages, next_block) =
-                self.collect_modifier_stages(function, &mut environment, current_block)?;
+            let (stages, params, next_block) =
+                self.collect_modifier_stages(function, &environment, current_block)?;
             current_block = next_block;
-            stages
+            (stages, params)
         };
 
         let mut terminated = false;
@@ -354,6 +354,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 &result_types,
             );
             emitter.modifier_stages = modifier_stages;
+            emitter.modifier_stage_params = modifier_stage_params;
             emitter.modifier_body_call = Some(ModifierBodyCall {
                 symbol: body_symbol,
                 forward_params,
@@ -625,7 +626,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             // constructor executes. Base-constructor invocations in the same
             // list (`Base(args)`) do not resolve to a modifier and are dropped by
             // `collect_modifier_stages` (their arguments were already bound above).
-            let (mut modifier_stages, next_block) =
+            let (mut modifier_stages, mut modifier_stage_params, next_block) =
                 self.collect_modifier_stages(&base_constructor, environment, current_block)?;
             current_block = next_block;
 
@@ -651,7 +652,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 // modifier's `_;` placeholder runs it inline. A constructor has
                 // no return value, so — unlike a modified regular function — the
                 // body need not be a separate `sol.func` to carry results back.
+                // The body stage carries no modifier parameters of its own.
                 modifier_stages.push(body.statements());
+                modifier_stage_params.push(Vec::new());
                 let mut emitter = StatementEmitter::new(
                     self.state,
                     environment,
@@ -660,6 +663,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     &return_types,
                 );
                 emitter.modifier_stages = modifier_stages;
+                emitter.modifier_stage_params = modifier_stage_params;
                 match emitter.emit_modifier_chain(current_block)? {
                     Some(next) => current_block = next,
                     None => terminated = true,
@@ -808,15 +812,25 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     }
 
     /// Resolves the modifier invocations on `function` to their (virtually
-    /// dispatched) modifier bodies, binding each modifier's parameters into
-    /// `environment` by evaluating the invocation arguments in `block`.
+    /// dispatched) modifier bodies, evaluating each invocation's arguments in
+    /// `environment` (the clean function scope) and storing them into fresh
+    /// per-invocation allocas.
     ///
-    /// Returns the ordered modifier-body statement stages (outermost modifier
-    /// first) to inline around the wrapped function body, and the block after
-    /// the argument evaluations. A plain modifier resolves directly; a
-    /// namespace-qualified path (`M.M.C.m`) resolves via its final segment
-    /// (see [`Self::resolve_qualified_modifier`]). Each is then re-dispatched
-    /// to its most-derived override (see [`Self::resolve_modifier_override`]).
+    /// Returns, in source order (outermost modifier first): the modifier-body
+    /// statement stages to inline around the wrapped function body, the parallel
+    /// per-stage parameter bindings (`(name, pointer, type)`, to be bound in a
+    /// scope local to each stage — see [`StatementEmitter::modifier_stage_params`]),
+    /// and the block after the argument evaluations.
+    ///
+    /// Arguments are evaluated against `environment` *without* registering any
+    /// modifier parameter, so an argument referencing a name (`mod(x)`) resolves
+    /// to the function's variable rather than a sibling modifier's parameter, and
+    /// the same modifier applied repeatedly keeps a distinct binding per use.
+    ///
+    /// A plain modifier resolves directly; a namespace-qualified path
+    /// (`M.M.C.m`) resolves via its final segment (see
+    /// [`Self::resolve_qualified_modifier`]). Each is then re-dispatched to its
+    /// most-derived override (see [`Self::resolve_modifier_override`]).
     /// Invocations that do not resolve to a modifier — notably base-constructor
     /// calls `constructor() Base(args)` — are skipped, so this is safe to call
     /// on a constructor whose invocation list mixes modifiers and base calls.
@@ -827,10 +841,16 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     fn collect_modifier_stages<'env>(
         &self,
         function: &FunctionDefinition,
-        environment: &mut Environment<'context, 'env>,
+        environment: &Environment<'context, 'env>,
         mut block: BlockRef<'context, 'env>,
-    ) -> anyhow::Result<(Vec<slang_solidity_v2::ast::Statements>, BlockRef<'context, 'env>)> {
+    ) -> anyhow::Result<(
+        Vec<slang_solidity_v2::ast::Statements>,
+        Vec<Vec<(String, Value<'context, 'env>, Type<'context>)>>,
+        BlockRef<'context, 'env>,
+    )> {
         let mut modifier_stages: Vec<slang_solidity_v2::ast::Statements> = Vec::new();
+        let mut modifier_params: Vec<Vec<(String, Value<'context, 'env>, Type<'context>)>> =
+            Vec::new();
         for invocation in function.modifier_invocations().iter() {
             let resolved_modifier = match invocation.name().resolve_to_definition() {
                 Some(slang_solidity_v2::ast::Definition::Modifier(modifier)) => modifier,
@@ -851,6 +871,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 )) => positional.iter().collect(),
                 _ => Vec::new(),
             };
+            let mut stage_params: Vec<(String, Value<'context, 'env>, Type<'context>)> = Vec::new();
             for (parameter, argument) in modifier_definition
                 .parameters()
                 .iter()
@@ -867,7 +888,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     .unwrap_or_else(|| self.state.builder.types.ui256);
                 let (value, next_block) = {
                     let emitter =
-                        ExpressionEmitter::new(self.state, &*environment, self.storage_layout, true);
+                        ExpressionEmitter::new(self.state, environment, self.storage_layout, true);
                     emitter.emit_value(&argument, block)?
                 };
                 block = next_block;
@@ -875,11 +896,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     .emit(value, &self.state.builder, &block);
                 let pointer = self.state.builder.emit_sol_alloca(parameter_type, &block);
                 self.state.builder.emit_sol_store(cast, pointer, &block);
-                environment.define_variable(identifier.name(), pointer, parameter_type);
+                stage_params.push((identifier.name(), pointer, parameter_type));
             }
             modifier_stages.push(modifier_body.statements());
+            modifier_params.push(stage_params);
         }
-        Ok((modifier_stages, block))
+        Ok((modifier_stages, modifier_params, block))
     }
 
     pub fn mlir_function_name(function: &FunctionDefinition) -> String {

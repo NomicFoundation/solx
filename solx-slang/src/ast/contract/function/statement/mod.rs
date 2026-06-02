@@ -78,6 +78,15 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     /// next stage. Empty when the function has no modifiers (the body is
     /// emitted directly by `FunctionEmitter`).
     pub(super) modifier_stages: Vec<Statements>,
+    /// Per-stage modifier parameters, parallel to `modifier_stages`. Stage `i`'s
+    /// parameters are bound in a dedicated scope that brackets the whole stage
+    /// (including the nested `_;`), and only while stage `i` is emitted, so the
+    /// same modifier applied several times with different arguments
+    /// (`mod(2) mod(5) mod(x)`) gets a distinct binding per use, and a modifier
+    /// parameter never leaks into a sibling invocation's argument scope. Each
+    /// entry is `(name, alloca pointer, element type)`; the pointer's store
+    /// already holds the argument value (evaluated in the clean function scope).
+    pub(super) modifier_stage_params: Vec<Vec<(String, Value<'context, 'block>, Type<'context>)>>,
     /// Index of the next stage to emit when a `_;` placeholder is hit.
     pub(super) modifier_stage_index: usize,
     /// When set, the innermost `_;` placeholder calls the wrapped body function
@@ -105,6 +114,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             yul_functions: HashMap::new(),
             yul_inline_depth: HashMap::new(),
             modifier_stages: Vec::new(),
+            modifier_stage_params: Vec::new(),
             modifier_stage_index: 0,
             modifier_body_call: None,
         }
@@ -157,7 +167,21 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             return Ok(Some(block));
         };
         self.modifier_stage_index = stage + 1;
+        // Bind this stage's modifier parameters in a scope that brackets the
+        // whole stage — including the nested `_;` that emits the next stage —
+        // so each invocation of a repeated modifier sees its own arguments and
+        // the binding is gone once the stage (and its tail after `_;`) unwinds.
+        let params = self
+            .modifier_stage_params
+            .get(stage)
+            .cloned()
+            .unwrap_or_default();
+        self.environment.enter_scope();
+        for (name, pointer, element_type) in params {
+            self.environment.define_variable(name, pointer, element_type);
+        }
         let result = self.emit_block(statements, block);
+        self.environment.exit_scope();
         self.modifier_stage_index = stage;
         result
     }
