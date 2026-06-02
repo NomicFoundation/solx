@@ -132,6 +132,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     ///
     /// Returns an error if the callee is a built-in but its arguments are
     /// malformed (e.g. non-string `require` message).
+    // A flat per-built-in dispatch: one `match built_in` arm per [`BuiltIn`]
+    // variant, each a thin op emission of the same shape (eval args, build one
+    // operation, return its result). The line count is inherent to the number
+    // of built-ins, not nested logic, so it is allowed rather than split.
+    #[allow(clippy::too_many_lines)]
     pub fn try_emit_built_in_call(
         &self,
         callee: &Expression,
