@@ -31,6 +31,40 @@ use crate::ast::contract::function::expression::call::type_conversion::TypeConve
 use crate::ast::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
+    /// Binds a `try`'s declared `returns (...)` from the decoded call `results`
+    /// — each cast to its declared type — into the current (success-region)
+    /// scope. Unnamed returns and missing results are skipped.
+    fn bind_try_returns(
+        &mut self,
+        try_statement: &TryStatement,
+        results: &[melior::ir::Value<'context, 'block>],
+        then_entry: &BlockRef<'context, 'block>,
+    ) {
+        let Some(parameters) = try_statement.returns() else {
+            return;
+        };
+        for (parameter, result) in parameters.iter().zip(results.iter()) {
+            let Some(identifier) = parameter.name() else {
+                continue;
+            };
+            let parameter_type = parameter
+                .get_type()
+                .map(|slang_type| {
+                    TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
+                })
+                .unwrap_or_else(|| self.state.builder.types.ui256);
+            let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder)
+                .emit(*result, &self.state.builder, then_entry);
+            let pointer = self
+                .state
+                .builder
+                .emit_sol_alloca(parameter_type, then_entry);
+            self.state.builder.emit_sol_store(cast, pointer, then_entry);
+            self.environment
+                .define_variable(identifier.name(), pointer, parameter_type);
+        }
+    }
+
     /// Lowers a `try` statement.
     pub fn emit_try(
         &mut self,
@@ -79,28 +113,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         // Success region: bind declared returns from the call results, run body.
         self.set_region(&then_region);
         let then_entry = then_block;
-        if let Some(parameters) = try_statement.returns() {
-            for (parameter, result) in parameters.iter().zip(results.iter()) {
-                let Some(identifier) = parameter.name() else {
-                    continue;
-                };
-                let parameter_type = parameter
-                    .get_type()
-                    .map(|slang_type| {
-                        TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
-                    })
-                    .unwrap_or_else(|| self.state.builder.types.ui256);
-                let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder)
-                    .emit(*result, &self.state.builder, &then_entry);
-                let pointer = self
-                    .state
-                    .builder
-                    .emit_sol_alloca(parameter_type, &then_entry);
-                self.state.builder.emit_sol_store(cast, pointer, &then_entry);
-                self.environment
-                    .define_variable(identifier.name(), pointer, parameter_type);
-            }
-        }
+        self.bind_try_returns(try_statement, &results, &then_entry);
         let then_end = self.emit_block(try_statement.body().statements(), then_entry)?;
         if let Some(end) = then_end {
             self.state.builder.emit_sol_yield(&end);
