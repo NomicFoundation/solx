@@ -580,13 +580,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// callee expression evaluates to a `func_ref` value (an identifier
     /// naming a function-typed variable, an array element `arr[i]`, etc.)
     /// which drives a `sol.icall`.
-    fn emit_indirect_call(
+    /// Emits an indirect (function-pointer) call, returning every result value
+    /// in declaration order. Shared by the single-result [`Self::emit_indirect_call`]
+    /// and the multi-result tuple-deconstruction path.
+    fn emit_indirect_call_results(
         &self,
         callee: &Expression,
         function_slang_type: &SlangType,
         positional_arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         // Load the function-pointer value.
         let (callee_value, mut current_block) =
             self.expression_emitter.emit_value(callee, block)?;
@@ -638,7 +641,25 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         } else {
             builder.emit_sol_icall(callee_value, &argument_values, &result_types, &current_block)?
         };
-        Ok((results.into_iter().next(), current_block))
+        Ok((results, current_block))
+    }
+
+    /// Single-result indirect call: keeps the first result value (or `None` in
+    /// a void context). Delegates to [`Self::emit_indirect_call_results`].
+    fn emit_indirect_call(
+        &self,
+        callee: &Expression,
+        function_slang_type: &SlangType,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let (results, block) = self.emit_indirect_call_results(
+            callee,
+            function_slang_type,
+            positional_arguments,
+            block,
+        )?;
+        Ok((results.into_iter().next(), block))
     }
 
     /// Emits a struct-literal constructor `S(a, b, c)` in memory.
@@ -1018,28 +1039,65 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((results, block));
         }
 
-        let Expression::Identifier(callee_identifier) = call.operand() else {
-            unimplemented!("multi-result calls only support direct named function callees");
-        };
-        let Some(Definition::Function(function_definition)) =
-            callee_identifier.resolve_to_definition()
-        else {
-            unimplemented!(
-                "callee '{}' does not resolve to a function",
-                callee_identifier.name()
-            );
-        };
-
-        let (mlir_name, argument_values, return_types, current_block) = self
-            .emit_call_setup(&function_definition, positional_arguments, block)
-            .with_context(|| format!("resolving callee '{}'", callee_identifier.name()))?;
-
-        let results = self
-            .expression_emitter
-            .state
-            .builder
-            .emit_sol_call_results(mlir_name, &argument_values, return_types, &current_block)?;
-        Ok((results, current_block))
+        let callee = call.operand();
+        match &callee {
+            Expression::Identifier(callee_identifier) => {
+                match callee_identifier.resolve_to_definition() {
+                    // A direct named function: emit the call, keep every result.
+                    Some(Definition::Function(function_definition)) => {
+                        let (mlir_name, argument_values, return_types, current_block) = self
+                            .emit_call_setup(&function_definition, positional_arguments, block)
+                            .with_context(|| {
+                                format!("resolving callee '{}'", callee_identifier.name())
+                            })?;
+                        let results =
+                            self.expression_emitter.state.builder.emit_sol_call_results(
+                                mlir_name,
+                                &argument_values,
+                                return_types,
+                                &current_block,
+                            )?;
+                        Ok((results, current_block))
+                    }
+                    // `(a, b, …) = fp(args)` where `fp` is a function-pointer
+                    // variable/parameter/state-variable returning a tuple:
+                    // dispatch indirectly, mirroring the single-result path but
+                    // keeping every result.
+                    Some(
+                        Definition::Variable(_)
+                        | Definition::Parameter(_)
+                        | Definition::StateVariable(_),
+                    ) => {
+                        let function_slang_type = callee_identifier.get_type().ok_or_else(|| {
+                            anyhow::anyhow!("unresolved function-pointer type")
+                        })?;
+                        self.emit_indirect_call_results(
+                            &callee,
+                            &function_slang_type,
+                            positional_arguments,
+                            block,
+                        )
+                    }
+                    _ => unimplemented!(
+                        "callee '{}' does not resolve to a function",
+                        callee_identifier.name()
+                    ),
+                }
+            }
+            // Non-identifier callee of function type (e.g. `arr[i]()` returning
+            // a tuple) — an indirect call.
+            _ if matches!(callee.get_type(), Some(SlangType::Function(_))) => {
+                let function_slang_type =
+                    callee.get_type().expect("function type checked above");
+                self.emit_indirect_call_results(
+                    &callee,
+                    &function_slang_type,
+                    positional_arguments,
+                    block,
+                )
+            }
+            _ => unimplemented!("multi-result calls only support direct named function callees"),
+        }
     }
 
     /// Emits argument values for a named call, resolves the callee's MLIR
