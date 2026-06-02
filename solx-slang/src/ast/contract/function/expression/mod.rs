@@ -646,6 +646,21 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         _ => {}
                     }
                 }
+                // `(...).T` where the member resolves to nothing and the access
+                // has no value type — a discarded type/namespace member reference
+                // (e.g. the statement `(cond ? M : M).D;`, where slang can't type
+                // a namespace-valued conditional, so `.D` does not resolve). It
+                // has no runtime value: evaluate the operand for its side effects
+                // and yield none. A value context would surface as
+                // "expression produced no value" rather than be silently dropped.
+                if access.member().resolve_to_definition().is_none()
+                    && access.member().resolve_to_built_in().is_none()
+                    && access.get_type().is_none()
+                {
+                    let block =
+                        self.emit_discarded_operand_side_effects(&access.operand(), block)?;
+                    return Ok((None, block));
+                }
                 if let Some((value, block)) = self.emit_struct_field(access, block)? {
                     Ok((Some(value), block))
                 } else {
@@ -681,6 +696,36 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 "expression lowering: {:?}",
                 std::mem::discriminant(expression)
             ),
+        }
+    }
+
+    /// Emits the side effects of the operand of a *discarded* type/namespace
+    /// member reference (`(cond ? M : M).D;`). A value-typed operand is emitted
+    /// and its result discarded; a namespace/type operand carries no runtime
+    /// value, so only an embedded side effect (e.g. an assignment in a `?:`
+    /// condition) is observable — recurse through parentheses and emit a
+    /// conditional's condition.
+    fn emit_discarded_operand_side_effects(
+        &self,
+        expression: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+        if expression.get_type().is_some() {
+            let (_value, block) = self.emit_value(expression, block)?;
+            return Ok(block);
+        }
+        match expression {
+            Expression::TupleExpression(tuple) if tuple.items().len() == 1 => {
+                match tuple.items().iter().next().and_then(|item| item.expression()) {
+                    Some(inner) => self.emit_discarded_operand_side_effects(&inner, block),
+                    None => Ok(block),
+                }
+            }
+            Expression::ConditionalExpression(conditional) => {
+                let (_value, block) = self.emit_value(&conditional.operand(), block)?;
+                Ok(block)
+            }
+            _ => Ok(block),
         }
     }
 
