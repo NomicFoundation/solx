@@ -200,6 +200,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// # Errors
     ///
     /// Returns an error if the expression contains unsupported constructs.
+    // A flat per-expression dispatch: one `match expression` arm per
+    // [`Expression`] variant, most delegating to a dedicated `emit_*` method.
+    // The length is inherent to the variant count, not nesting; the one
+    // genuinely-nested sub-algorithm (an internal function-pointer value) is
+    // factored into `emit_internal_function_pointer`.
+    #[allow(clippy::too_many_lines)]
     pub fn emit(
         &self,
         expression: &Expression,
@@ -301,47 +307,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             .ok_or_else(|| anyhow::anyhow!("constant {name} has no initializer"))?;
                         self.emit(&initializer, block)
                     }
-                    Some(Definition::Function(function_definition)) => {
-                        // A bare function name used as a value is always an
-                        // *internal* function pointer (`sol.func_constant`) — an
-                        // external pointer requires `this.f`. Build the
-                        // `!sol.func_ref` type from the declared signature rather
-                        // than the identifier's slang type, which reports
-                        // `ext_func_ref` for a public function (visibility
-                        // `Public`) and would mismatch the internal-pointer target.
-                        //
-                        // A pointer to a `virtual` function binds to the
-                        // most-derived override (`ptr = g` in a base body, with
-                        // the deployed contract overriding `g`), so apply the
-                        // virtual redirect to the target node exactly as a call
-                        // does — the lexical base version is shadowed and thus
-                        // unregistered when compiling the derived contract.
-                        let node_id = function_definition.node_id();
-                        let target_id = self
-                            .state
-                            .virtual_redirect
-                            .get(&node_id)
-                            .copied()
-                            .unwrap_or(node_id);
-                        let (mlir_name, parameter_types, return_types) = self
-                            .state
-                            .resolve_function(target_id)
-                            .map_err(|_| {
-                                anyhow::anyhow!("unregistered function pointer: {name}")
-                            })?;
-                        let func_ref_type = self
-                            .state
-                            .builder
-                            .types
-                            .func_ref(parameter_types, return_types);
-                        let mlir_name = mlir_name.to_owned();
-                        let value = self.state.builder.emit_sol_func_constant(
-                            &mlir_name,
-                            func_ref_type,
-                            &block,
-                        );
-                        Ok((Some(value), block))
-                    }
+                    Some(Definition::Function(function_definition)) => self
+                        .emit_internal_function_pointer(&function_definition, &name, block)
+                        .map(|(value, block)| (Some(value), block)),
                     Some(Definition::Library(library)) => {
                         // A library name used as a value (`address(L)`) is its
                         // linked deploy address. The linker symbol is the
@@ -695,6 +663,48 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 std::mem::discriminant(expression)
             ),
         }
+    }
+
+    /// Emits a bare function name used as a value: always an *internal*
+    /// function pointer (`sol.func_constant`) — an external pointer requires
+    /// `this.f`. The `!sol.func_ref` type is built from the declared signature
+    /// rather than the identifier's slang type, which reports `ext_func_ref`
+    /// for a public function (visibility `Public`) and would mismatch the
+    /// internal-pointer target.
+    ///
+    /// A pointer to a `virtual` function binds to the most-derived override
+    /// (`ptr = g` in a base body, with the deployed contract overriding `g`),
+    /// so the virtual redirect is applied to the target node exactly as a call
+    /// does — the lexical base version is shadowed and thus unregistered when
+    /// compiling the derived contract.
+    fn emit_internal_function_pointer(
+        &self,
+        function_definition: &slang_solidity_v2::ast::FunctionDefinition,
+        name: &str,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let node_id = function_definition.node_id();
+        let target_id = self
+            .state
+            .virtual_redirect
+            .get(&node_id)
+            .copied()
+            .unwrap_or(node_id);
+        let (mlir_name, parameter_types, return_types) = self
+            .state
+            .resolve_function(target_id)
+            .map_err(|_| anyhow::anyhow!("unregistered function pointer: {name}"))?;
+        let func_ref_type = self
+            .state
+            .builder
+            .types
+            .func_ref(parameter_types, return_types);
+        let mlir_name = mlir_name.to_owned();
+        let value =
+            self.state
+                .builder
+                .emit_sol_func_constant(&mlir_name, func_ref_type, &block);
+        Ok((value, block))
     }
 
     /// Emits the side effects of the operand of a *discarded* type/namespace
