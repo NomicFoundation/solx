@@ -274,31 +274,21 @@ impl Frontend for Slang {
                 )?;
             }
 
-            // Libraries with `external`/`public` functions are deployed and
-            // reached by `delegatecall` (`L.f(...)`), so emit each as its own
-            // object — mirroring the contract emission above.
+            // Emit every library as its own object, including internal-only
+            // ones. solc emits a (call-protected stub) object for every library
+            // regardless of visibility, and the test harness's `// library:`
+            // directive deploys and links it by name — so the object must exist
+            // in the build artifacts even when all functions are `internal`.
+            // (Internal functions are inlined into their callers; the backend
+            // DCEs the unreferenced standalone copies in the library's own
+            // object, leaving solc's empty dispatcher + call-protection stub.)
+            // The object is flagged `is_library` so the harness excludes it when
+            // selecting the main contract.
             for member in source_unit.members().iter() {
                 let slang_solidity_v2::ast::SourceUnitMember::LibraryDefinition(library) = member
                 else {
                     continue;
                 };
-
-                // Only libraries with `external`/`public` functions are deployed
-                // and `delegatecall`ed. Internal-only libraries are fully inlined
-                // into their callers (like solc, which emits no object for them);
-                // emitting one would make the tester try to deploy/link it.
-                let has_deployable_function = library.members().iter().any(|member| {
-                    matches!(&member,
-                        slang_solidity_v2::ast::ContractMember::FunctionDefinition(function)
-                            if matches!(
-                                function.visibility(),
-                                slang_solidity_v2::ast::FunctionVisibility::External
-                                    | slang_solidity_v2::ast::FunctionVisibility::Public
-                            ))
-                });
-                if !has_deployable_function {
-                    continue;
-                }
 
                 let melior_context = solx_mlir::Context::create_mlir_context();
                 let evm_version = input_json.settings.evm_version.unwrap_or_default();

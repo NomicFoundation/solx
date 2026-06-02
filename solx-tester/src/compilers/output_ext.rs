@@ -69,12 +69,31 @@ pub fn get_last_contract(
 
             // TODO: Slang frontend produces a CST instead of the solc AST, so
             // `last_contract_name` cannot extract the name from the AST
-            // `nodes` array. Fall back to the contracts map directly.
+            // `nodes` array. Fall back to the contracts map directly — but
+            // prefer a non-library object. solc selects the main contract by
+            // source order; the (name-sorted) Slang output would otherwise
+            // mis-pick an alphabetically-later `library` (emitted as its own
+            // object) as the main contract.
             #[cfg(feature = "slang-ast")]
-            for (path, _source) in sources.iter().rev() {
-                if let Some(contracts) = output.contracts.get(path) {
-                    if let Some((name, _)) = contracts.last_key_value() {
-                        return Ok(format!("{path}:{name}"));
+            {
+                let library_names = collect_library_names(sources);
+                for (path, _source) in sources.iter().rev() {
+                    if let Some(contracts) = output.contracts.get(path) {
+                        if let Some((name, _)) = contracts
+                            .iter()
+                            .rev()
+                            .find(|(name, _)| !library_names.contains(name.as_str()))
+                        {
+                            return Ok(format!("{path}:{name}"));
+                        }
+                    }
+                }
+                // Library-only sources: fall back to any object.
+                for (path, _source) in sources.iter().rev() {
+                    if let Some(contracts) = output.contracts.get(path) {
+                        if let Some((name, _)) = contracts.last_key_value() {
+                            return Ok(format!("{path}:{name}"));
+                        }
                     }
                 }
             }
@@ -176,4 +195,36 @@ fn last_contract_name(
         )
         .next_back()
         .ok_or_else(|| anyhow::anyhow!("The last contract not found in the AST"))
+}
+
+///
+/// Collects the names of all top-level `library` definitions across `sources`.
+///
+/// The main contract is never a library, but the Slang frontend emits each
+/// library as its own object and the Slang output is a name-sorted map — so the
+/// fallback main-contract heuristic would otherwise mis-pick an alphabetically
+/// later library. This lightweight scan strips `//` line comments and matches
+/// `library <identifier>` adjacency, which covers the Solidity semantic-test
+/// corpus (the Slang frontend lacks a solc AST to consult instead).
+///
+#[cfg(feature = "slang-ast")]
+fn collect_library_names(sources: &[(String, String)]) -> std::collections::HashSet<String> {
+    let mut names = std::collections::HashSet::new();
+    for (_path, source) in sources.iter() {
+        for line in source.lines() {
+            let code = line.split("//").next().unwrap_or("");
+            let tokens: Vec<&str> = code
+                .split(|character: char| {
+                    !(character.is_alphanumeric() || character == '_' || character == '$')
+                })
+                .filter(|token| !token.is_empty())
+                .collect();
+            for window in tokens.windows(2) {
+                if window[0] == "library" {
+                    names.insert(window[1].to_owned());
+                }
+            }
+        }
+    }
+    names
 }

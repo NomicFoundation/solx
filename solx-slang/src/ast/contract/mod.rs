@@ -364,18 +364,41 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         library: &LibraryDefinition,
     ) -> anyhow::Result<(String, BTreeMap<String, String>)> {
         let library_name = library.name().name();
-        let functions: Vec<FunctionDefinition> = library
-            .members()
-            .iter()
-            .filter_map(|member| match member {
+        // A delegatecalled library object dispatches only its `external` /
+        // `public` functions; `internal` / `private` functions and modifiers are
+        // inlined into their callers, so they are not part of the library's own
+        // object. A library with no externally-visible function is therefore
+        // emitted as an empty, call-protected stub — matching solc, and avoiding
+        // standalone emission of inlined-only helpers that assume a caller
+        // context (e.g. a storage-parameter modifier), which would otherwise
+        // panic. The stub still exists in the build artifacts so the harness's
+        // `// library:` directive can deploy and link it.
+        let has_deployable_function = library.members().iter().any(|member| {
+            matches!(member,
                 ContractMember::FunctionDefinition(function)
-                    if matches!(function.kind(), FunctionKind::Regular) =>
-                {
-                    Some(function)
-                }
-                _ => None,
-            })
-            .collect();
+                    if matches!(function.kind(), FunctionKind::Regular)
+                        && matches!(
+                            function.visibility(),
+                            slang_solidity_v2::ast::FunctionVisibility::External
+                                | slang_solidity_v2::ast::FunctionVisibility::Public
+                        ))
+        });
+        let functions: Vec<FunctionDefinition> = if has_deployable_function {
+            library
+                .members()
+                .iter()
+                .filter_map(|member| match member {
+                    ContractMember::FunctionDefinition(function)
+                        if matches!(function.kind(), FunctionKind::Regular) =>
+                    {
+                        Some(function)
+                    }
+                    _ => None,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         // Pre-register every function so calls between the library's functions
         // resolve before any body is emitted.
