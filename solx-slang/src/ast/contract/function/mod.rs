@@ -31,7 +31,6 @@ use self::expression::ExpressionEmitter;
 use self::expression::call::type_conversion::TypeConversion;
 use self::statement::ModifierBodyCall;
 use self::statement::StatementEmitter;
-use self::storage_slot::StorageSlot;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub struct FunctionEmitter<'state, 'context> {
@@ -928,6 +927,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         Ok((modifier_stages, modifier_params, block))
     }
 
+    /// Returns the unique MLIR symbol name for a function — its base name plus a
+    /// parenthesised parameter-type list. ABI-callable functions use ABI type
+    /// names; internal/private functions use slang's internal signature;
+    /// constructor / fallback / receive and untypeable callees fall back to AST
+    /// type text. Every definition and call site routes through this, so the
+    /// symbol stays consistent.
     pub fn mlir_function_name(function: &FunctionDefinition) -> String {
         let name = Self::mlir_base_name(function);
 

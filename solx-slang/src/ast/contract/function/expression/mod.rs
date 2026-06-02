@@ -35,7 +35,6 @@ use solx_mlir::ods::sol::ThisOperation;
 use solx_utils::DataLocation;
 
 use self::call::type_conversion::TypeConversion;
-use crate::ast::contract::function::storage_slot::StorageSlot;
 
 /// Lowers Solidity expressions to MLIR SSA values.
 pub struct ExpressionEmitter<'state, 'context, 'block> {

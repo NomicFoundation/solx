@@ -17,7 +17,6 @@ use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::expression::operator::Operator;
-use crate::ast::contract::function::storage_slot::StorageSlot;
 
 /// Assignment target resolved from the Slang binder.
 enum AssignmentTarget<'context, 'block> {

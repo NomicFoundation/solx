@@ -249,7 +249,6 @@ impl<'context> TypeConversion<'context> {
                 // resolver is total; code that consumes them still fails.
                 builder.types.ui256
             }
-            _ => unimplemented!("unsupported Slang type"),
         }
     }
 

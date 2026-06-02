@@ -28,7 +28,6 @@ use solx_mlir::Environment;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::contract::function::storage_slot::StorageSlot;
 
 /// How the innermost `_;` placeholder of a modified function reaches the
 /// wrapped function body: the body is emitted as a separate internal
@@ -308,10 +307,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
             Statement::AssemblyStatement(assembly) => self.emit_assembly(assembly, block),
             Statement::TryStatement(try_statement) => self.emit_try(try_statement, block),
-            _ => unimplemented!(
-                "unsupported statement: {:?}",
-                std::mem::discriminant(statement)
-            ),
         }
     }
 

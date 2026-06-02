@@ -9,7 +9,6 @@
 
 pub(crate) use melior::ir::BlockLike;
 pub(crate) use melior::ir::BlockRef;
-pub(crate) use melior::ir::RegionLike;
 pub(crate) use melior::ir::Type;
 pub(crate) use melior::ir::Value;
 pub(crate) use melior::ir::ValueLike;
@@ -32,12 +31,10 @@ pub(crate) use solx_mlir::ods::sol::CallerOperation;
 pub(crate) use solx_mlir::ods::sol::ChainIdOperation;
 pub(crate) use solx_mlir::ods::sol::CoinbaseOperation;
 pub(crate) use solx_mlir::ods::sol::DifficultyOperation;
-pub(crate) use solx_mlir::ods::sol::DivOperation;
 pub(crate) use solx_mlir::ods::sol::ExpOperation;
 pub(crate) use solx_mlir::ods::sol::GasLeftOperation;
 pub(crate) use solx_mlir::ods::sol::GasLimitOperation;
 pub(crate) use solx_mlir::ods::sol::GasPriceOperation;
-pub(crate) use solx_mlir::ods::sol::ModOperation;
 pub(crate) use solx_mlir::ods::sol::MulOperation;
 pub(crate) use solx_mlir::ods::sol::OrOperation;
 pub(crate) use solx_mlir::ods::sol::OriginOperation;
@@ -487,10 +484,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 )?;
                 Ok(current)
             }
-            _ => unimplemented!(
-                "unsupported yul statement: {:?}",
-                std::mem::discriminant(statement)
-            ),
         }
     }
 

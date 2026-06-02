@@ -37,7 +37,6 @@ use solx_mlir::StateMutability;
 
 use self::function::FunctionEmitter;
 use self::function::expression::call::type_conversion::TypeConversion;
-use self::function::storage_slot::StorageSlot;
 
 /// Maps each state variable's node ID to its storage location: the slot, the
 /// byte offset within the slot, and the data location (persistent `Storage`
