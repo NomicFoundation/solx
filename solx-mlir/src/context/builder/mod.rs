@@ -324,6 +324,35 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
+        self.emit_sol_string_lit_bytes(value.as_bytes(), block)
+    }
+
+    /// Emits a `sol.string_lit` constant from raw bytes (result `!sol.string<Memory>`).
+    ///
+    /// `hex"…"`, escaped, and `\x..` string literals decode to arbitrary byte
+    /// sequences that need not be valid UTF-8 (e.g. `hex"12_34_5678_9A"` ends
+    /// in `0x9A`). MLIR's `StringAttr` stores its payload by length, so the
+    /// bytes are carried through verbatim; routing through a `&str` and `char`
+    /// conversion instead re-encodes every byte ≥ 0x80 as multi-byte UTF-8 and
+    /// corrupts the value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
+    pub fn emit_sol_string_lit_bytes<'block, B>(
+        &self,
+        bytes: &[u8],
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        // SAFETY: the `&str` is only consumed by `StringAttribute::new`, which
+        // hands it to `StringRef::new` — that reads `.as_bytes().as_ptr()` and
+        // `.len()` and never assumes UTF-8 validity. No other code observes it
+        // as a Rust string, so non-UTF-8 bytes are sound here.
+        let value = unsafe { std::str::from_utf8_unchecked(bytes) };
         block
             .append_operation(
                 StringLitOperation::builder(self.context, self.unknown_location)

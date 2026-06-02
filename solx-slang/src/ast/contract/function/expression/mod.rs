@@ -274,14 +274,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 Ok((Some(value), block))
             }
             Expression::StringExpression(string_expression) => {
+                // `hex"…"`/escaped string literals decode to arbitrary bytes
+                // that need not be valid UTF-8 (e.g. `hex"…9A"`); emit them
+                // verbatim rather than round-tripping through a `&str`, which
+                // re-encodes bytes ≥ 0x80 as multi-byte UTF-8 and corrupts them.
                 let bytes = string_expression.value();
-                // `hex"…"` literals decode to arbitrary bytes; treat them
-                // as raw bytes rather than UTF-8 strings.
-                let text = match std::str::from_utf8(&bytes) {
-                    Ok(text) => text.to_owned(),
-                    Err(_) => bytes.iter().map(|b| *b as char).collect::<String>(),
-                };
-                let value = self.state.builder.emit_sol_string_lit(&text, &block);
+                let value = self.state.builder.emit_sol_string_lit_bytes(&bytes, &block);
                 Ok((Some(value), block))
             }
             Expression::Identifier(identifier) => {
