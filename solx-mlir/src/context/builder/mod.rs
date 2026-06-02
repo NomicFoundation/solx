@@ -1316,6 +1316,7 @@ impl<'context> Builder<'context> {
         operands: &[Value<'context, 'block>],
         result_types: &[Type<'context>],
         value: Value<'context, 'block>,
+        static_call: bool,
         block: &B,
     ) -> anyhow::Result<Vec<Value<'context, 'block>>>
     where
@@ -1341,16 +1342,18 @@ impl<'context> Builder<'context> {
         let mut out_types = Vec::with_capacity(result_types.len() + 1);
         out_types.push(self.types.i1);
         out_types.extend_from_slice(result_types);
-        let operation = block.append_operation(
-            ExtICallOperation::builder(self.context, self.unknown_location)
-                .outs(&out_types)
-                .callee(callee)
-                .callee_operands(operands)
-                .gas(gas)
-                .value(value)
-                .build()
-                .into(),
-        );
+        // A call to a `view`/`pure` function lowers to `STATICCALL`, which
+        // reverts if the callee attempts a state change (matching solc).
+        let mut operation_builder = ExtICallOperation::builder(self.context, self.unknown_location)
+            .outs(&out_types)
+            .callee(callee)
+            .callee_operands(operands)
+            .gas(gas)
+            .value(value);
+        if static_call {
+            operation_builder = operation_builder.static_call(Attribute::unit(self.context));
+        }
+        let operation = block.append_operation(operation_builder.build().into());
         let mut results = Vec::with_capacity(result_types.len());
         for index in 0..result_types.len() {
             results.push(operation.result(index + 1)?.into());

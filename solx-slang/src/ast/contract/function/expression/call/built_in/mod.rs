@@ -84,6 +84,18 @@ fn resolve_member_access_operand(operand: &Expression) -> Option<Definition> {
     }
 }
 
+/// Whether an external call to `function` lowers to `STATICCALL`: a `view` or
+/// `pure` callee. The static type of the callee at the call site decides this
+/// (e.g. a call through a `view` interface method), so it reverts if the callee
+/// attempts a state change — matching solc.
+fn is_static_call_mutability(function: &slang_solidity_v2::ast::FunctionDefinition) -> bool {
+    matches!(
+        function.mutability(),
+        slang_solidity_v2::ast::FunctionMutability::View
+            | slang_solidity_v2::ast::FunctionMutability::Pure
+    )
+}
+
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
     /// Tries to emit `callee(arguments)` as a Solidity built-in.
     ///
@@ -732,6 +744,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 &argument_values,
                 &return_types,
                 value,
+                false,
                 &current_block,
             )?;
             return Ok((results.into_iter().next(), current_block));
@@ -804,6 +817,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     &argument_values,
                     &return_types,
                     value,
+                    is_static_call_mutability(&function_definition),
                     &current_block,
                 )?;
                 return Ok((results.into_iter().next(), current_block));
@@ -899,6 +913,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 &argument_values,
                 &return_types,
                 value,
+                is_static_call_mutability(&function_definition),
                 &current_block,
             )?;
             return Ok((results.into_iter().next(), current_block));
@@ -933,7 +948,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &current_block);
             let zero = builder.emit_sol_constant(0, builder.types.ui256, &current_block);
             let results =
-                builder.emit_sol_ext_icall(callee, &[], &return_types, zero, &current_block)?;
+                builder.emit_sol_ext_icall(callee, &[], &return_types, zero, false, &current_block)?;
             return Ok((results.into_iter().next(), current_block));
         }
 
@@ -2030,11 +2045,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &current_block);
         let value = call_value
             .unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &current_block));
+        // A call to a `view`/`pure` function uses `STATICCALL`: the static type
+        // of the callee determines this (e.g. calling through a `view` interface
+        // method), so it reverts if the callee mutates state, matching solc.
+        let static_call = is_static_call_mutability(&function_definition);
         let results = builder.emit_sol_ext_icall(
             callee_ref,
             &argument_values,
             &return_types,
             value,
+            static_call,
             &current_block,
         )?;
         Ok(Some((results, current_block)))

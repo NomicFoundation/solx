@@ -671,6 +671,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 &argument_values,
                 &result_types,
                 value,
+                false,
                 &current_block,
             )?
         } else {
