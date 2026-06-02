@@ -383,19 +383,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let access = match &callee {
             Expression::MemberAccessExpression(access) => access.clone(),
             Expression::CallOptionsExpression(options) => {
-                for option in options.options().iter() {
-                    let (value, next) = self
-                        .expression_emitter
-                        .emit_value(&option.value(), current_block)?;
-                    current_block = next;
-                    if option.name().name() == "value" {
-                        let builder = &self.expression_emitter.state.builder;
-                        call_value = Some(
-                            TypeConversion::from_target_type(builder.types.ui256, builder)
-                                .emit(value, builder, &current_block),
-                        );
-                    }
-                }
+                (call_value, current_block) = self.capture_call_value(options, current_block)?;
                 match options.operand() {
                     Expression::MemberAccessExpression(access) => access,
                     // Not a try-lowerable shape → not applicable, caller falls back.
@@ -2089,19 +2077,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let mut current_block = block;
         let mut call_value = None;
         if let Some(call_options) = options {
-            for option in call_options.options().iter() {
-                let (value, next) = self
-                    .expression_emitter
-                    .emit_value(&option.value(), current_block)?;
-                current_block = next;
-                if option.name().name() == "value" {
-                    let builder = &self.expression_emitter.state.builder;
-                    call_value = Some(
-                        TypeConversion::from_target_type(builder.types.ui256, builder)
-                            .emit(value, builder, &current_block),
-                    );
-                }
-            }
+            (call_value, current_block) = self.capture_call_value(&call_options, current_block)?;
         }
         let (status, ret_data, block) =
             self.emit_bare_call(&access, kind, arguments, call_value, current_block)?;
@@ -2134,19 +2110,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let access = match call.operand() {
             Expression::MemberAccessExpression(access) => access,
             Expression::CallOptionsExpression(options) => {
-                for option in options.options().iter() {
-                    let (value, next) = self
-                        .expression_emitter
-                        .emit_value(&option.value(), current_block)?;
-                    current_block = next;
-                    if option.name().name() == "value" {
-                        let builder = &self.expression_emitter.state.builder;
-                        call_value = Some(
-                            TypeConversion::from_target_type(builder.types.ui256, builder)
-                                .emit(value, builder, &current_block),
-                        );
-                    }
-                }
+                (call_value, current_block) = self.capture_call_value(&options, current_block)?;
                 match options.operand() {
                     Expression::MemberAccessExpression(access) => access,
                     _ => return Ok(None),

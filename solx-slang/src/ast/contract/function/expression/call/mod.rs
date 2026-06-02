@@ -519,24 +519,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // option receiver, so peel single-element tuples here too.
         let inner = call_options.operand().unwrap_parens();
         if let Expression::MemberAccessExpression(access) = &inner {
-            let mut current_block = block;
-            let mut call_value = None;
-            for option in call_options.options().iter() {
-                let value_expression = option.value();
-                let (value, next) = self
-                    .expression_emitter
-                    .emit_value(&value_expression, current_block)?;
-                current_block = next;
-                // Capture `{value: v}` to forward as the external call's wei
-                // value; other options (gas, salt) are evaluated for side
-                // effects only.
-                if option.name().name() == "value" {
-                    let builder = &self.expression_emitter.state.builder;
-                    let cast = TypeConversion::from_target_type(builder.types.ui256, builder)
-                        .emit(value, builder, &current_block);
-                    call_value = Some(cast);
-                }
-            }
+            let (call_value, current_block) = self.capture_call_value(call_options, block)?;
             return self
                 .emit_built_in_member_access_with_value(
                     access,
@@ -566,21 +549,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         if let Some(function_slang_type) = inner.get_type()
             && matches!(function_slang_type, SlangType::Function(_))
         {
-            let mut current_block = block;
-            let mut call_value = None;
-            for option in call_options.options().iter() {
-                let (value, next) = self
-                    .expression_emitter
-                    .emit_value(&option.value(), current_block)?;
-                current_block = next;
-                if option.name().name() == "value" {
-                    let builder = &self.expression_emitter.state.builder;
-                    call_value = Some(
-                        TypeConversion::from_target_type(builder.types.ui256, builder)
-                            .emit(value, builder, &current_block),
-                    );
-                }
-            }
+            let (call_value, current_block) = self.capture_call_value(call_options, block)?;
             let (results, current_block) = self.emit_indirect_call_results(
                 &inner,
                 &function_slang_type,
@@ -1290,6 +1259,33 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             *value = TypeConversion::from_target_type(parameter_type, builder)
                 .emit(*value, builder, block);
         }
+    }
+
+    /// Evaluates a `{value: v, gas: g, salt: s, ...}` call-option list for its
+    /// side effects in source order, returning the `value:` option coerced to
+    /// `ui256` — the wei value to forward — when present. Other options (gas,
+    /// salt) are evaluated but not otherwise threaded through to the call.
+    fn capture_call_value(
+        &self,
+        call_options: &slang_solidity_v2::ast::CallOptionsExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let mut current_block = block;
+        let mut call_value = None;
+        for option in call_options.options().iter() {
+            let (value, next) = self
+                .expression_emitter
+                .emit_value(&option.value(), current_block)?;
+            current_block = next;
+            if option.name().name() == "value" {
+                let builder = &self.expression_emitter.state.builder;
+                call_value = Some(
+                    TypeConversion::from_target_type(builder.types.ui256, builder)
+                        .emit(value, builder, &current_block),
+                );
+            }
+        }
+        Ok((call_value, current_block))
     }
 
     /// Emits a bare member access expression (e.g. `tx.origin`, `msg.sender`).
