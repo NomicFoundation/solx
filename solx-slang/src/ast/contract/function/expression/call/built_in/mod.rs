@@ -457,6 +457,31 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok(Some((status, results, current_block)))
     }
 
+    /// Emits an external call (`sol.ext_icall`) to `receiver` (cast to an
+    /// address) through a `sol.ext_func_constant` built from `selector` and the
+    /// callee's parameter/return types. `call_value` is the forwarded wei value
+    /// (zero when `None`); `static_call` lowers to `STATICCALL`. Returns the
+    /// decoded result values.
+    fn emit_external_call(
+        &self,
+        receiver: Value<'context, 'block>,
+        selector: u32,
+        parameter_types: &[Type<'context>],
+        return_types: &[Type<'context>],
+        argument_values: &[Value<'context, 'block>],
+        call_value: Option<Value<'context, 'block>>,
+        static_call: bool,
+        block: &BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Vec<Value<'context, 'block>>> {
+        let builder = &self.expression_emitter.state.builder;
+        let address = builder.emit_sol_address_cast(receiver, builder.types.sol_address, block);
+        let ext_ref_type = builder.types.ext_func_ref(parameter_types, return_types);
+        let callee = builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, block);
+        let value =
+            call_value.unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, block));
+        builder.emit_sol_ext_icall(callee, argument_values, return_types, value, static_call, block)
+    }
+
     /// `T.wrap` / `T.unwrap` referenced without a call (a discarded
     /// `(MyInt).wrap;` statement). The call forms are handled in the call
     /// dispatch; a bare reference is a no-op, so yield a placeholder.
@@ -762,21 +787,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .result(0)
                 .expect("sol.this always produces one result")
                 .into();
-            let address = builder.emit_sol_address_cast(
+            let results = self.emit_external_call(
                 this_value,
-                builder.types.sol_address,
-                &current_block,
-            );
-            let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
-            let callee =
-                builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &current_block);
-            let value = call_value
-                .unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &current_block));
-            let results = builder.emit_sol_ext_icall(
-                callee,
-                &argument_values,
+                selector,
+                &parameter_types,
                 &return_types,
-                value,
+                &argument_values,
+                call_value,
                 false,
                 &current_block,
             )?;
@@ -839,26 +856,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .result(0)
                     .expect("sol.this always produces one result")
                     .into();
-                let address = builder.emit_sol_address_cast(
+                let results = self.emit_external_call(
                     this_value,
-                    builder.types.sol_address,
-                    &current_block,
-                );
-                let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
-                let callee = builder.emit_sol_ext_func_constant(
-                    address,
                     selector,
-                    ext_ref_type,
-                    &current_block,
-                );
-                let value = call_value.unwrap_or_else(|| {
-                    builder.emit_sol_constant(0, builder.types.ui256, &current_block)
-                });
-                let results = builder.emit_sol_ext_icall(
-                    callee,
-                    &argument_values,
+                    &parameter_types,
                     &return_types,
-                    value,
+                    &argument_values,
+                    call_value,
                     is_static_call_mutability(&function_definition),
                     &current_block,
                 )?;
@@ -956,22 +960,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 *value = TypeConversion::from_target_type(*param_type, builder)
                     .emit(*value, builder, &current_block);
             }
-            let address = builder.emit_sol_address_cast(
+            let results = self.emit_external_call(
                 receiver_value,
-                builder.types.sol_address,
-                &current_block,
-            );
-            let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
-            let callee =
-                builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &current_block);
-            let value = call_value.unwrap_or_else(|| {
-                builder.emit_sol_constant(0, builder.types.ui256, &current_block)
-            });
-            let results = builder.emit_sol_ext_icall(
-                callee,
-                &argument_values,
+                selector,
+                &parameter_types,
                 &return_types,
-                value,
+                &argument_values,
+                call_value,
                 is_static_call_mutability(&function_definition),
                 &current_block,
             )?;
@@ -1004,18 +999,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let (receiver_value, current_block) = self
                 .expression_emitter
                 .emit_value(&access.operand(), block)?;
-            let builder = &self.expression_emitter.state.builder;
-            let address = builder.emit_sol_address_cast(
+            let results = self.emit_external_call(
                 receiver_value,
-                builder.types.sol_address,
+                selector,
+                &[],
+                &return_types,
+                &[],
+                None,
+                false,
                 &current_block,
-            );
-            let ext_ref_type = builder.types.ext_func_ref(&[], &return_types);
-            let callee =
-                builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &current_block);
-            let zero = builder.emit_sol_constant(0, builder.types.ui256, &current_block);
-            let results =
-                builder.emit_sol_ext_icall(callee, &[], &return_types, zero, false, &current_block)?;
+            )?;
             return Ok(Some((results.into_iter().next(), current_block)));
         }
         Ok(None)
