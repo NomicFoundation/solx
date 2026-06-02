@@ -80,6 +80,17 @@ struct ModifiedBody<'a, 'context, 'block> {
     function_entry_block: &'a BlockRef<'context, 'block>,
 }
 
+/// Which form of a function `emit_sol_inner` lowers.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BodyKind {
+    /// A normal function emission: public selector and modifier wrapping.
+    Function,
+    /// The unwrapped body of a modified function, emitted as a separate internal
+    /// `sol.func` (the `$body` symbol) — no selector, no modifier wrapping, with
+    /// the return values threaded in as trailing parameters.
+    ModifierBody,
+}
+
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
@@ -130,7 +141,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         function: &FunctionDefinition,
         contract_body: &BlockRef<'context, '_>,
     ) -> anyhow::Result<String> {
-        self.emit_sol_inner(function, None, contract_body, false)
+        self.emit_sol_inner(function, None, contract_body, BodyKind::Function)
     }
 
     /// Emits `function` under the contract-qualified `symbol` with no public
@@ -144,12 +155,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         symbol: &str,
         contract_body: &BlockRef<'context, '_>,
     ) -> anyhow::Result<String> {
-        self.emit_sol_inner(function, Some(symbol), contract_body, false)
+        self.emit_sol_inner(function, Some(symbol), contract_body, BodyKind::Function)
     }
 
     /// Emits `function`'s lowering.
     ///
-    /// `as_modifier_body` emits just the function body (no selector, no
+    /// [`BodyKind::ModifierBody`] emits just the function body (no selector, no
     /// modifier wrapping) under `symbol_override` — used to materialise the
     /// wrapped body of a modified function as a separate internal `sol.func`
     /// (see the modifier-chain handling below).
@@ -158,7 +169,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         function: &FunctionDefinition,
         symbol_override: Option<&str>,
         contract_body: &BlockRef<'context, '_>,
-        as_modifier_body: bool,
+        body_kind: BodyKind,
     ) -> anyhow::Result<String> {
         let Some(ref body) = function.body() else {
             // Abstract or interface function — no codegen needed.
@@ -175,7 +186,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             selector,
             state_mutability,
             mlir_kind,
-        } = self.resolve_inner_signature(function, symbol_override, as_modifier_body);
+        } = self.resolve_inner_signature(function, symbol_override, body_kind);
 
         let function_entry_block = self.state.builder.emit_sol_func(
             &mlir_name,
@@ -201,7 +212,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             function,
             &result_types,
             parameter_count,
-            as_modifier_body,
+            body_kind,
             &function_entry_block,
             &mut environment,
         )?;
@@ -214,16 +225,16 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // State variable initializers run at the top of the constructor body,
         // before any user-written statements. The wrapping modified function
         // already runs them, so a `$body` emission must not run them again.
-        if matches!(function.kind(), FunctionKind::Constructor) && !as_modifier_body {
+        if matches!(function.kind(), FunctionKind::Constructor) && body_kind == BodyKind::Function {
             let emitter =
                 ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
             current_block = emitter.emit_state_var_initializers(self.contract(), current_block)?;
         }
 
         // Collect modifier bodies that wrap this function (`function f() onlyOwner {...}`).
-        // In `as_modifier_body` mode the modifier stages are emitted by the
-        // wrapping call; this emission is just the raw body, so collect none.
-        let (modifier_stages, modifier_stage_params) = if as_modifier_body {
+        // In modifier-body mode the modifier stages are emitted by the wrapping
+        // call; this emission is just the raw body, so collect none.
+        let (modifier_stages, modifier_stage_params) = if body_kind == BodyKind::ModifierBody {
             (Vec::new(), Vec::new())
         } else {
             let (stages, params, next_block) =
@@ -288,7 +299,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         &self,
         function: &FunctionDefinition,
         symbol_override: Option<&str>,
-        as_modifier_body: bool,
+        body_kind: BodyKind,
     ) -> InnerSignature<'context> {
         let mlir_name = symbol_override
             .map(str::to_owned)
@@ -304,7 +315,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // modifier-argument side effect (`m(x = 2)`) and accumulation across
         // multiple `_` both survive into the final result.
         let parameter_count = mlir_parameter_types.len();
-        let mlir_parameter_types: Vec<Type<'context>> = if as_modifier_body {
+        let mlir_parameter_types: Vec<Type<'context>> = if body_kind == BodyKind::ModifierBody {
             mlir_parameter_types
                 .iter()
                 .chain(result_types.iter())
@@ -383,7 +394,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         function: &FunctionDefinition,
         result_types: &[Type<'context>],
         parameter_count: usize,
-        as_modifier_body: bool,
+        body_kind: BodyKind,
         entry_block: &BlockRef<'context, 'block>,
         environment: &mut Environment<'context, 'block>,
     ) -> anyhow::Result<Vec<Option<Value<'context, 'block>>>> {
@@ -395,7 +406,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 // initialised from the threaded-in value (the block argument
                 // after the regular parameters), so the shared return state is
                 // observable and survives an empty body or a partial `_` reach.
-                if as_modifier_body {
+                if body_kind == BodyKind::ModifierBody {
                     let pointer = self
                         .state
                         .builder
@@ -486,7 +497,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .expect("entry block belongs to a region");
 
         let body_symbol = format!("{mlir_name}$body");
-        self.emit_sol_inner(function, Some(body_symbol.as_str()), contract_body, true)?;
+        self.emit_sol_inner(function, Some(body_symbol.as_str()), contract_body, BodyKind::ModifierBody)?;
 
         // Unnamed returns carry no slot, but the body call's results must be
         // captured somewhere the epilogue can read them back — allocate a

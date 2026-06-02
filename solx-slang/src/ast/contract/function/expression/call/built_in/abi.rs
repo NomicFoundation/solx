@@ -8,8 +8,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// Emits a `sol.encode` operation producing a `bytes memory` payload.
     ///
     /// `selector`, when present, is prepended as the first 4 bytes of the
-    /// payload and must already be of `!sol.fixed_bytes<4>` type. `packed`
-    /// emits the ABI-packed encoding (no per-element padding).
+    /// payload and must already be of `!sol.fixed_bytes<4>` type. `mode`
+    /// selects standard or packed (`abi.encodePacked`, no per-element padding)
+    /// encoding.
     ///
     /// `operand_segment_sizes` is synthesized by melior's ODS-generated builder
     /// for this `AttrSizedOperandSegments` op, so it is not set here.
@@ -17,7 +18,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         &self,
         ins: &[Value<'context, 'block>],
         selector: Option<Value<'context, 'block>>,
-        packed: bool,
+        mode: EncodeMode,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let builder = &self.expression_emitter.state.builder;
@@ -27,7 +28,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         if let Some(selector_value) = selector {
             op_builder = op_builder.selector(selector_value);
         }
-        if packed {
+        if mode == EncodeMode::Packed {
             op_builder = op_builder.packed(Attribute::unit(builder.context));
         }
         // `operand_segment_sizes` ([ins.len(), selector?]) is synthesized by the

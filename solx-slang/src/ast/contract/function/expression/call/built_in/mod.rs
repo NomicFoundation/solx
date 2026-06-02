@@ -118,6 +118,16 @@ struct ExternalCall<'a, 'context, 'block> {
     static_call: bool,
 }
 
+/// How `abi.encode*` lays out its arguments.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum EncodeMode {
+    /// Standard ABI encoding — 32-byte-padded head/tail (`abi.encode`,
+    /// `abi.encodeWithSelector`, `abi.encodeCall`).
+    Standard,
+    /// Tightly packed encoding with no padding (`abi.encodePacked`).
+    Packed,
+}
+
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
     /// Tries to emit `callee(arguments)` as a Solidity built-in.
     ///
@@ -654,13 +664,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             Some(BuiltIn::AbiEncode) => {
                 let arguments = arguments.expect("abi.encode is a member-access call");
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let result = self.emit_sol_encode(&values, None, false, &block);
+                let result = self.emit_sol_encode(&values, None, EncodeMode::Standard, &block);
                 Ok((Some(result), block))
             }
             Some(BuiltIn::AbiEncodePacked) => {
                 let arguments = arguments.expect("abi.encodePacked is a member-access call");
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let result = self.emit_sol_encode(&values, None, true, &block);
+                let result = self.emit_sol_encode(&values, None, EncodeMode::Packed, &block);
                 Ok((Some(result), block))
             }
             Some(BuiltIn::AbiEncodeWithSelector) => {
@@ -668,7 +678,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let (mut values, block) = self.emit_argument_values(arguments, block)?;
                 let selector =
                     builder.emit_sol_cast(values.remove(0), builder.types.fixed_bytes(4), &block);
-                let result = self.emit_sol_encode(&values, Some(selector), false, &block);
+                let result = self.emit_sol_encode(&values, Some(selector), EncodeMode::Standard, &block);
                 Ok((Some(result), block))
             }
             Some(BuiltIn::AbiEncodeWithSignature) => {
@@ -919,7 +929,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             values.push(value);
             current = next;
         }
-        let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
+        let result = self.emit_sol_encode(&values, Some(selector_value), EncodeMode::Standard, &current);
         Ok((Some(result), current))
     }
 
@@ -1011,7 +1021,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 }
             }
         }
-        let result = self.emit_sol_encode(&values, Some(selector_value), false, &current);
+        let result = self.emit_sol_encode(&values, Some(selector_value), EncodeMode::Standard, &current);
         Ok((Some(result), current))
     }
 

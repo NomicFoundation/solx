@@ -58,7 +58,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let selector_bytes =
             builder.emit_sol_cast(selector_unsigned, builder.types.fixed_bytes(4), &current_block);
         let calldata =
-            self.emit_sol_encode(&argument_values, Some(selector_bytes), false, &current_block);
+            self.emit_sol_encode(&argument_values, Some(selector_bytes), EncodeMode::Standard, &current_block);
 
         let builder = &self.expression_emitter.state.builder;
         let address = builder.emit_sol_lib_addr(library_name, &current_block);
