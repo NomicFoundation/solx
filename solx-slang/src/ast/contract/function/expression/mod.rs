@@ -4,6 +4,8 @@
 
 /// Function and built-in call lowering.
 pub mod call;
+/// Literal expression lowering.
+pub mod literal;
 
 use std::collections::HashMap;
 
@@ -60,12 +62,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     pub fn emit(
         &self,
         expression: &Expression,
-        _block: BlockRef<'context, 'block>,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        unimplemented!(
-            "expression lowering: {:?}",
-            std::mem::discriminant(expression)
-        )
+        match expression {
+            Expression::DecimalNumberExpression(decimal) => {
+                Ok((Some(self.emit_decimal(decimal, &block)), block))
+            }
+            Expression::HexNumberExpression(hex) => Ok((Some(self.emit_hex(hex, &block)), block)),
+            Expression::TrueKeyword(_) => Ok((Some(self.emit_boolean(true, &block)), block)),
+            Expression::FalseKeyword(_) => Ok((Some(self.emit_boolean(false, &block)), block)),
+            _ => unimplemented!(
+                "expression lowering: {:?}",
+                std::mem::discriminant(expression)
+            ),
+        }
     }
 
     /// Emits MLIR for an expression that must produce a value.

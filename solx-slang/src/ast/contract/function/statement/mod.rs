@@ -2,6 +2,9 @@
 //! Statement lowering to MLIR operations.
 //!
 
+/// Return statement lowering.
+pub mod return_statement;
+
 use std::collections::HashMap;
 
 use melior::ir::BlockRef;
@@ -19,9 +22,6 @@ use crate::ast::contract::function::storage_slot::StorageSlot;
 ///
 /// Returns `Some(block)` as the continuation block, or `None` when control
 /// flow has been terminated (by `return`, `break`, or `continue`).
-// TODO(skeleton): fields are read as the statement domains are filled in; the
-// allow is removed field-by-field as each domain lands.
-#[allow(dead_code)]
 pub struct StatementEmitter<'state, 'context, 'block> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
@@ -29,6 +29,8 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     environment: &'state mut Environment<'context, 'block>,
     /// The current region for creating new blocks, stored as a raw pointer to
     /// allow switching between Sol op regions without lifetime conflicts.
+    // TODO(rebuild): read once the control-flow domain (loops, branches) lands.
+    #[allow(dead_code)]
     region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
     storage_layout: &'state HashMap<NodeId, StorageSlot>,
@@ -70,11 +72,16 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     pub fn emit(
         &mut self,
         statement: &Statement,
-        _block: BlockRef<'context, 'block>,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        unimplemented!(
-            "statement lowering: {:?}",
-            std::mem::discriminant(statement)
-        )
+        match statement {
+            Statement::ReturnStatement(return_statement) => {
+                self.emit_return(return_statement, block)
+            }
+            _ => unimplemented!(
+                "statement lowering: {:?}",
+                std::mem::discriminant(statement)
+            ),
+        }
     }
 }
