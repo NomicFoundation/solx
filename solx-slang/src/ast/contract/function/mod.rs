@@ -456,16 +456,31 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         Ok(return_slots)
     }
 
-    /// Emits a modifier-wrapped function body. The wrapped body is materialised
-    /// as a separate internal `sol.func` (so a `return` resumes the modifier
-    /// tail rather than exiting the whole function); the innermost `_;`
-    /// placeholder calls it and captures its results into the return slots,
-    /// while the modifier stages stay inlined. Returns the block execution
-    /// falls through to, or `None` if the chain terminated the block.
+    /// Emits a modifier-wrapped function as a chain of internal `sol.func`s.
+    ///
+    /// Each modifier stage and the wrapped body become their own `sol.func`
+    /// (`f$mod0`, `f$mod1`, …, `f$body`), so a `return` inside a modifier emits a
+    /// `sol.return` from *that* stage's frame and the parent stage's `_;` call
+    /// site resumes its tail — matching Solidity, where `return` leaves only the
+    /// current modifier (an inlined stage would instead exit the whole function).
+    ///
+    /// Argument threading (the historically thorny part): the wrapping function
+    /// `f` evaluates every modifier's arguments once, in source order, in its own
+    /// scope (already done by `collect_modifier_stages`, whose bound slots are
+    /// loaded here), and calls `f$mod0` passing `[all modifier arguments ++ f's
+    /// parameters ++ current return values]`. Stage `i` binds its own modifier's
+    /// parameters from the leading arguments and forwards the rest — the
+    /// downstream modifiers' arguments followed by `f`'s parameters — to the next
+    /// stage at `_;`, which is exactly what that stage binds. The shared return
+    /// values thread through as trailing parameters, so a modifier-argument side
+    /// effect and accumulation across repeated `_;` survive into the result.
+    ///
+    /// Returns the block `f` falls through to (always `Some`, since `f`'s body is
+    /// just the outermost-stage call).
     fn emit_modified_body<'a, 'block>(
         &self,
         frame: &ModifiedBody<'a, 'context, 'block>,
-        environment: &mut Environment<'context, 'block>,
+        _environment: &mut Environment<'context, 'block>,
         return_slots: &mut Vec<Option<Value<'context, 'block>>>,
         modifier_stages: Vec<slang_solidity_v2::ast::Statements>,
         modifier_stage_params: Vec<ModifierStageParams<'context, 'block>>,
@@ -479,17 +494,16 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             contract_body,
             function_entry_block,
         } = *frame;
-        let region = function_entry_block
-            .parent_region()
-            .expect("entry block belongs to a region");
 
+        // The wrapped body is the innermost func, reached by the last modifier's
+        // `_;`. It takes `f`'s parameters plus the threaded-in return values
+        // (`BodyKind::ModifierBody`).
         let body_symbol = format!("{mlir_name}$body");
         self.emit_sol_inner(function, Some(body_symbol.as_str()), contract_body, BodyKind::ModifierBody)?;
 
-        // Unnamed returns carry no slot, but the body call's results must be
-        // captured somewhere the epilogue can read them back — allocate a
-        // (zero-initialised) slot for each so `return X` in the body
-        // propagates X out, and a never-reached `_` yields the zero default.
+        // Every return needs a slot so the chain's results can be captured and
+        // read back by the epilogue; an unnamed return gets a zero-initialised
+        // one (a never-reached `_;` then yields the zero default).
         for (index, slot) in return_slots.iter_mut().enumerate() {
             if slot.is_none() {
                 let return_type = result_types[index];
@@ -510,26 +524,176 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             }
         }
 
-        let forward_params: Vec<Value<'context, 'block>> = (0..mlir_parameter_types.len())
+        // `f`'s own parameters, forwarded unchanged down the chain to the body.
+        let function_parameters: Vec<Value<'context, 'block>> = (0..mlir_parameter_types.len())
             .map(|index| function_entry_block.argument(index).map(Into::into))
             .collect::<Result<_, _>>()?;
 
+        // Emit each stage as its own `sol.func`. Stage `i`'s `_;` calls stage
+        // `i + 1` (or `$body` for the last). Stage `i`'s "downstream" parameters
+        // are every later modifier's argument types followed by `f`'s parameter
+        // types — exactly what the next stage binds, so the forward aligns.
+        let stage_count = modifier_stages.len();
+        let stage_symbols: Vec<String> =
+            (0..stage_count).map(|index| format!("{mlir_name}$mod{index}")).collect();
+        let stage_argument_types: Vec<Vec<Type<'context>>> = modifier_stage_params
+            .iter()
+            .map(|params| params.iter().map(|(_, _, parameter_type)| *parameter_type).collect())
+            .collect();
+        for index in 0..stage_count {
+            let next_symbol = if index + 1 < stage_count {
+                stage_symbols[index + 1].as_str()
+            } else {
+                body_symbol.as_str()
+            };
+            let downstream_types: Vec<Type<'context>> = stage_argument_types[index + 1..]
+                .iter()
+                .flatten()
+                .copied()
+                .chain(mlir_parameter_types.iter().copied())
+                .collect();
+            self.emit_modifier_stage_func(
+                stage_symbols[index].as_str(),
+                &modifier_stages[index],
+                &modifier_stage_params[index],
+                &downstream_types,
+                result_types,
+                next_symbol,
+                contract_body,
+            )?;
+        }
+
+        // `f`'s body: call the outermost stage with [all modifier arguments ++
+        // f's parameters ++ current return values], capture the results back into
+        // the shared return slots, and fall through to `f`'s epilogue.
+        let mut call_arguments: Vec<Value<'context, 'block>> = Vec::new();
+        for params in &modifier_stage_params {
+            for (_, pointer, parameter_type) in params {
+                call_arguments.push(self.state.builder.emit_sol_load(
+                    *pointer,
+                    *parameter_type,
+                    &current_block,
+                )?);
+            }
+        }
+        call_arguments.extend(function_parameters);
+        for (slot, &return_type) in return_slots.iter().zip(result_types) {
+            if let Some(pointer) = slot {
+                call_arguments.push(self.state.builder.emit_sol_load(
+                    *pointer,
+                    return_type,
+                    &current_block,
+                )?);
+            }
+        }
+        let results = self.state.builder.emit_sol_call_results(
+            stage_symbols[0].as_str(),
+            &call_arguments,
+            result_types,
+            &current_block,
+        )?;
+        for (slot, value) in return_slots.iter().zip(results) {
+            if let Some(pointer) = slot {
+                self.state.builder.emit_sol_store(value, *pointer, &current_block);
+            }
+        }
+        Ok(Some(current_block))
+    }
+
+    /// Emits one modifier stage as an internal `sol.func`, parameterised by
+    /// `[this modifier's arguments ++ `downstream_types` ++ threaded return
+    /// values]`. It binds the modifier's parameters from the leading arguments,
+    /// runs the modifier body — whose `_;` calls `next_symbol`, forwarding the
+    /// downstream values plus the current return values, and whose `return`
+    /// emits a `sol.return` from this frame (resuming the caller's `_;` tail) —
+    /// and finishes with the default epilogue when the body falls through.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_modifier_stage_func(
+        &self,
+        stage_symbol: &str,
+        modifier_body: &slang_solidity_v2::ast::Statements,
+        modifier_params: &ModifierStageParams<'context, '_>,
+        downstream_types: &[Type<'context>],
+        result_types: &[Type<'context>],
+        next_symbol: &str,
+        contract_body: &BlockRef<'context, '_>,
+    ) -> anyhow::Result<()> {
+        let parameter_types: Vec<Type<'context>> = modifier_params
+            .iter()
+            .map(|(_, _, parameter_type)| *parameter_type)
+            .chain(downstream_types.iter().copied())
+            .chain(result_types.iter().copied())
+            .collect();
+
+        let entry = self.state.builder.emit_sol_func(
+            stage_symbol,
+            &parameter_types,
+            result_types,
+            None,
+            StateMutability::NonPayable,
+            None,
+            contract_body,
+        );
+        let region = entry
+            .parent_region()
+            .expect("entry block belongs to a region");
+
+        // Bind this modifier's parameters from the leading arguments.
+        let mut environment = Environment::new();
+        for (index, (name, _, parameter_type)) in modifier_params.iter().enumerate() {
+            let value: Value<'context, '_> = entry.argument(index)?.into();
+            let pointer = self.state.builder.emit_sol_alloca(*parameter_type, &entry);
+            self.state.builder.emit_sol_store(value, pointer, &entry);
+            environment.define_variable(name.clone(), pointer, *parameter_type);
+        }
+
+        // Downstream values (later modifiers' arguments ++ `f`'s parameters) are
+        // forwarded verbatim to the next stage at `_;`.
+        let downstream_offset = modifier_params.len();
+        let forward_params: Vec<Value<'context, '_>> = (0..downstream_types.len())
+            .map(|index| entry.argument(downstream_offset + index).map(Into::into))
+            .collect::<Result<_, _>>()?;
+
+        // Return slots, initialised from the threaded-in trailing arguments.
+        let return_offset = modifier_params.len() + downstream_types.len();
+        let mut return_slots: Vec<Option<Value<'context, '_>>> =
+            Vec::with_capacity(result_types.len());
+        for (index, &return_type) in result_types.iter().enumerate() {
+            let pointer = self.state.builder.emit_sol_alloca(return_type, &entry);
+            let incoming: Value<'context, '_> = entry.argument(return_offset + index)?.into();
+            self.state.builder.emit_sol_store(incoming, pointer, &entry);
+            return_slots.push(Some(pointer));
+        }
+
         let mut emitter = StatementEmitter::new(
             self.state,
-            environment,
+            &mut environment,
             &region,
             self.storage_layout,
             result_types,
             return_slots.as_slice(),
         );
-        emitter.modifier_stages = modifier_stages;
-        emitter.modifier_stage_params = modifier_stage_params;
         emitter.modifier_body_call = Some(ModifierBodyCall {
-            symbol: body_symbol,
+            symbol: next_symbol.to_owned(),
             forward_params,
             return_slots: return_slots.clone(),
         });
-        emitter.emit_modifier_chain(current_block)
+
+        let mut current_block = entry;
+        let mut terminated = false;
+        for statement in modifier_body.iter() {
+            match emitter.emit(&statement, current_block)? {
+                Some(next) => current_block = next,
+                None => {
+                    terminated = true;
+                    break;
+                }
+            }
+        }
+        if !terminated {
+            self.emit_default_return(result_types, return_slots.as_slice(), &current_block);
+        }
+        Ok(())
     }
 
     /// Emits the contract's constructor as a `sol.func`.
