@@ -89,6 +89,9 @@ impl EthereumTest {
         if !mode.check_ethereum_tests_params(&self.test.params) {
             return None;
         }
+        if !mode.check_pragmas(&self.test.sources) {
+            return None;
+        }
         Some(())
     }
 
