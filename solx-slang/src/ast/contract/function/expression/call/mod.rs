@@ -76,6 +76,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(result);
         }
 
+        if let Some(result) =
+            self.try_emit_array_type_conversion(call, &callee, positional_arguments, block)?
+        {
+            return Ok(result);
+        }
+
         if let Some(result) = self.try_emit_super_call(&callee, positional_arguments, block)? {
             return Ok(result);
         }
@@ -332,6 +338,47 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// type conversion, or is really a single-field struct constructor `S(x)`
     /// (which slang's CST heuristic reports as a conversion), so the caller
     /// falls through to ordinary dispatch.
+    /// Emits an array-type conversion `T[](x)` — e.g. `uint256[](calldataSlice)`,
+    /// most often to read `.length` / an element off a calldata slice. The callee
+    /// `T[]` parses as an index-access on a type with empty brackets (no index,
+    /// no `:`), which slang does NOT report via `is_type_conversion` (that covers
+    /// only elementary / `type(C)` callees). It is an identity / data-location
+    /// cast of the sole argument to the array type. Returns `None` when the
+    /// callee is a real `x[i]` / `x[i:j]` access or the target type is unknown.
+    fn try_emit_array_type_conversion(
+        &self,
+        call: &FunctionCallExpression,
+        callee: &Expression,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        let Expression::IndexAccessExpression(array_type) = callee else {
+            return Ok(None);
+        };
+        // A bare `T[]` (empty brackets, no index and no slice `:`) is an array
+        // type-name used as a conversion, not an `x[i]` / `x[i:j]` access.
+        if array_type.start().is_some() || array_type.end().is_some() || array_type.is_slice() {
+            return Ok(None);
+        }
+        if positional_arguments.len() != 1 {
+            return Ok(None);
+        }
+        let Some(target_type) = self.expression_emitter.resolve_slang_type(call.get_type()) else {
+            return Ok(None);
+        };
+        let argument = positional_arguments
+            .iter()
+            .next()
+            .expect("len checked to be 1 above");
+        let (value, block) = self
+            .expression_emitter
+            .emit_value_for_target(&argument, target_type, block)?;
+        let builder = &self.expression_emitter.state.builder;
+        let result =
+            TypeConversion::from_target_type(target_type, builder).emit(value, builder, &block);
+        Ok(Some((Some(result), block)))
+    }
+
     fn try_emit_type_conversion(
         &self,
         call: &FunctionCallExpression,
