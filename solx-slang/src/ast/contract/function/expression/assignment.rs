@@ -2,7 +2,6 @@
 //! Assignment expression lowering.
 //!
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
