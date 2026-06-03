@@ -14,6 +14,8 @@ pub mod comparison;
 pub mod identifier;
 /// Literal expression lowering.
 pub mod literal;
+/// State variable storage access.
+pub mod storage;
 
 use std::collections::HashMap;
 
