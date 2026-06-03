@@ -30,6 +30,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let input = input_values[0];
 
         let builder = &self.expression_emitter.state.builder;
+        // The bare-call data buffer must live in memory; a `bytes` argument
+        // sourced from storage/calldata (`addr.call(savedData)`) is copied into
+        // memory first (`sol.bare_call`'s `inp` rejects a non-memory operand).
+        let input = TypeConversion::from_target_type(builder.types.sol_string_memory, builder)
+            .emit(input, builder, &block);
         let gas = block
             .append_operation(
                 GasLeftOperation::builder(builder.context, builder.unknown_location)
