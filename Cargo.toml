@@ -105,4 +105,4 @@ git = "https://github.com/NomicFoundation/slang.git"
 # the hex-literal integer-value fix, `payable(this)` typing as
 # `address payable`, modulo on rational literals, and rational array-size
 # truncation. (The NodeId Display impl landed upstream as slang#1803.)
-rev = "f11efd2074fb4fc9af7033551bb10dc5c47204f7"
+rev = "b97d70bb1cacee1d88d12332c44611f743e244ab"
