@@ -35,7 +35,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let base = access.operand();
         let base_slang_type = base
             .get_type()
-            .ok_or_else(|| anyhow::anyhow!("base of array push has no resolved type"))?;
+            .expect("base of array push has no resolved type");
         let value_argument = arguments.iter().next();
         let builder = &self.expression_emitter.state.builder;
 
@@ -92,7 +92,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let base = access.operand();
         let base_slang_type = base
             .get_type()
-            .ok_or_else(|| anyhow::anyhow!("base of array push has no resolved type"))?;
+            .expect("base of array push has no resolved type");
         let builder = &self.expression_emitter.state.builder;
         let (element_type, slang_location) = match &base_slang_type {
             SlangType::Array(array_type) => (

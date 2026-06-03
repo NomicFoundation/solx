@@ -23,7 +23,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             TypeConversion::resolve_function_types(function, &self.expression_emitter.state.builder);
         let selector = function
             .compute_selector()
-            .ok_or_else(|| anyhow::anyhow!("library function '{library_name}' has no selector"))?;
+            .expect("library function has no selector");
 
         // Evaluate and coerce the arguments to the declared parameter types. A
         // `using`-for value receiver (`x.f(args)`) is the implicit first

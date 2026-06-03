@@ -378,7 +378,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let value = values
                     .into_iter()
                     .next()
-                    .ok_or_else(|| anyhow::anyhow!("abi.decode produced no value"))?;
+                    .expect("abi.decode produced no value");
                 Ok(Some((value, block)))
             }
             // `string.concat(...)` / `bytes.concat(...)` lower to `sol.concat`,
@@ -412,7 +412,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let target_type = self
                     .expression_emitter
                     .resolve_slang_type(call.get_type())
-                    .ok_or_else(|| anyhow::anyhow!("unresolved wrap/unwrap result type"))?;
+                    .expect("unresolved wrap/unwrap result type");
                 let builder = &self.expression_emitter.state.builder;
                 let value = TypeConversion::from_target_type(target_type, builder)
                     .emit(value, builder, &block);

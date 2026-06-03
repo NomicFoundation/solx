@@ -315,10 +315,9 @@ impl<'context> TypeConversion<'context> {
         state_variable: &StateVariableDefinition,
         builder: &solx_mlir::Builder<'context>,
     ) -> anyhow::Result<Type<'context>> {
-        let name = state_variable.name().name();
         let slang_type = state_variable
             .get_type()
-            .ok_or_else(|| anyhow::anyhow!("unresolved type for state variable: {name}"))?;
+            .expect("unresolved type for state variable");
         // State variables live in storage, so reference-typed members (string /
         // bytes / array / struct) default to the `Storage` location rather than
         // `Memory` when their own location is `Inherited`.

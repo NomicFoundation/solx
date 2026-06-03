@@ -77,7 +77,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (value, block) = self.emit(expression, block)?;
-        let value = value.ok_or_else(|| anyhow::anyhow!("expression produced no value"))?;
+        let value = value.expect("expression produced no value");
         Ok((value, block))
     }
 
@@ -264,7 +264,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let contract_type = self
                     .state
                     .current_contract_type
-                    .ok_or_else(|| anyhow::anyhow!("sol.this emitted outside a contract"))?;
+                    .expect("sol.this emitted outside a contract");
                 let operation = ThisOperation::builder(
                     self.state.builder.context,
                     self.state.builder.unknown_location,
@@ -304,7 +304,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     Some(Definition::Constant(constant)) => {
                         let initializer = constant
                             .value()
-                            .ok_or_else(|| anyhow::anyhow!("constant {name} has no initializer"))?;
+                            .expect("constant has no initializer");
                         self.emit(&initializer, block)
                     }
                     Some(Definition::Function(function_definition)) => self
@@ -460,7 +460,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let item = items.iter().next().expect("length checked to be 1 above");
                 let inner = item
                     .expression()
-                    .ok_or_else(|| anyhow::anyhow!("empty tuple element"))?;
+                    .expect("empty tuple element");
                 self.emit(&inner, block)
             }
             Expression::ConditionalExpression(conditional) => {
@@ -749,14 +749,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let declared_type = state_variable
             .get_type()
-            .ok_or_else(|| anyhow::anyhow!("unresolved type for state variable"))?;
+            .expect("unresolved type for state variable");
         if matches!(
             state_variable.mutability(),
             StateVariableMutability::Constant
         ) {
             let initializer = state_variable
                 .value()
-                .ok_or_else(|| anyhow::anyhow!("constant state variable has no initializer"))?;
+                .expect("constant state variable has no initializer");
             let target_type =
                 TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
             return self.emit_value_for_target(&initializer, target_type, block);
@@ -764,7 +764,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let &(slot, byte_offset, location) = self
             .storage_layout
             .get(&state_variable.node_id())
-            .ok_or_else(|| anyhow::anyhow!("unregistered state variable"))?;
+            .expect("unregistered state variable");
         let element_type =
             TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
         let address = self.state.builder.emit_sol_addr_of(

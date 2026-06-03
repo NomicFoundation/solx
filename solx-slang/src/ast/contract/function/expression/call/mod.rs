@@ -270,7 +270,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let result_type = self
                 .expression_emitter
                 .resolve_slang_type(call.get_type())
-                .ok_or_else(|| anyhow::anyhow!("unresolved struct constructor type"))?;
+                .expect("unresolved struct constructor type");
             return self
                 .emit_named_struct_constructor(
                     &struct_definition,
@@ -301,7 +301,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     let result_type = self
                         .expression_emitter
                         .resolve_slang_type(call.get_type())
-                        .ok_or_else(|| anyhow::anyhow!("unresolved struct constructor type"))?;
+                        .expect("unresolved struct constructor type");
                     return self
                         .emit_named_struct_constructor(
                             &struct_definition,
@@ -549,7 +549,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let argument = positional_arguments
             .iter()
             .next()
-            .ok_or_else(|| anyhow::anyhow!("wrap/unwrap requires one argument"))?;
+            .expect("wrap/unwrap requires one argument");
         let (value, block) = self.expression_emitter.emit_value(&argument, block)?;
         let result = match self.expression_emitter.resolve_slang_type(call.get_type()) {
             Some(result_type) => {
@@ -801,7 +801,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let result_type = self
                     .expression_emitter
                     .resolve_slang_type(call.get_type())
-                    .ok_or_else(|| anyhow::anyhow!("unresolved struct constructor type"))?;
+                    .expect("unresolved struct constructor type");
                 return self
                     .emit_struct_constructor(
                         &struct_definition,
@@ -821,7 +821,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             ) => {
                 let function_slang_type = callee_identifier
                     .get_type()
-                    .ok_or_else(|| anyhow::anyhow!("unresolved function-pointer type"))?;
+                    .expect("unresolved function-pointer type");
                 return self.emit_indirect_call(
                     callee,
                     &function_slang_type,
@@ -1073,12 +1073,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         for parameter in function_definition.parameters().iter() {
             let parameter_name = parameter
                 .name()
-                .ok_or_else(|| anyhow::anyhow!("named call to a function with an unnamed parameter"))?
+                .expect("named call to a function with an unnamed parameter")
                 .name();
             let argument = named_arguments
                 .iter()
                 .find(|argument| argument.name().name() == parameter_name)
-                .ok_or_else(|| anyhow::anyhow!("named call missing argument `{parameter_name}`"))?;
+                .expect("named call missing argument");
             let (value, next_block) = self
                 .expression_emitter
                 .emit_value(&argument.value(), current_block)?;
@@ -1155,7 +1155,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let argument = named_arguments
                 .iter()
                 .find(|argument| argument.name().name() == parameter_name)
-                .ok_or_else(|| anyhow::anyhow!("named call missing argument `{parameter_name}`"))?;
+                .expect("named call missing argument");
             let (value, next_block) = self
                 .expression_emitter
                 .emit_value(&argument.value(), current_block)?;

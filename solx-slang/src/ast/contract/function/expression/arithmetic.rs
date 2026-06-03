@@ -412,7 +412,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 self.emit_delete_local_variable(&name, identifier.get_type(), block)
             }
             Some(Definition::StateVariable(state_variable)) => {
-                self.emit_delete_state_variable(&state_variable, &name, block)
+                self.emit_delete_state_variable(&state_variable, block)
             }
             _ => unimplemented!("unsupported delete target: {name}"),
         }
@@ -470,13 +470,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     fn emit_delete_state_variable(
         &self,
         state_variable: &slang_solidity_v2::ast::StateVariableDefinition,
-        name: &str,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (slot, byte_offset, location) = *self
             .storage_layout
             .get(&state_variable.node_id())
-            .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?;
+            .expect("unregistered state variable");
         let element_type =
             TypeConversion::resolve_state_variable_type(state_variable, &self.state.builder)?;
         // `sol.constant 0` requires an integer type. For enums, build a ui256
@@ -490,7 +489,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         // tail for dynamic aggregates. `delete` on a mapping is a no-op.
         if solx_mlir::TypeFactory::is_sol_reference(element_type) {
             let declared_type = state_variable.get_type().ok_or_else(|| {
-                anyhow::anyhow!("unresolved type for state variable: {name}")
+                anyhow::anyhow!("unresolved type for state variable")
             })?;
             match &declared_type {
                 // `delete` on a mapping is a no-op in Solidity.
@@ -651,7 +650,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let (slot, byte_offset, location) = *self
                     .storage_layout
                     .get(&state_variable.node_id())
-                    .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?;
+                    .expect("unregistered state variable");
                 let element_type = TypeConversion::resolve_state_variable_type(
                     &state_variable,
                     &self.state.builder,

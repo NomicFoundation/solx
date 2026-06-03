@@ -66,7 +66,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .members()
             .iter()
             .position(|member| member.name().name() == member_name)
-            .ok_or_else(|| anyhow::anyhow!("unknown struct member: {member_name}"))?;
+            .expect("unknown struct member");
 
         let (base_value, block) = self.emit_value(&base, block)?;
         let builder = &self.state.builder;

@@ -405,7 +405,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             for item in items.iter() {
                 let inner = item
                     .expression()
-                    .ok_or_else(|| anyhow::anyhow!("empty tuple element in return"))?;
+                    .expect("empty tuple element in return");
                 let (value, next) = emitter.emit_value(&inner, current)?;
                 values.push(value);
                 current = next;

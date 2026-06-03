@@ -159,7 +159,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .expect("slang validates a[i] has an index expression");
         let base_type = base
             .get_type()
-            .ok_or_else(|| anyhow::anyhow!("base of index access has no resolved type"))?;
+            .expect("base of index access has no resolved type");
         let result_type = index_access
             .get_type()
             .expect("slang types every index-access expression");

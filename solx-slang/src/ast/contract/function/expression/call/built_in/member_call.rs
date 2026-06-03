@@ -41,7 +41,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .expression_emitter
                 .state
                 .current_contract_type
-                .ok_or_else(|| anyhow::anyhow!("sol.this emitted outside a contract"))?;
+                .expect("sol.this emitted outside a contract");
             let this_value = current_block
                 .append_operation(
                     ThisOperation::builder(builder.context, builder.unknown_location)
@@ -111,7 +111,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .expression_emitter
                     .state
                     .current_contract_type
-                    .ok_or_else(|| anyhow::anyhow!("sol.this emitted outside a contract"))?;
+                    .expect("sol.this emitted outside a contract");
                 let this_value = current_block
                     .append_operation(
                         ThisOperation::builder(builder.context, builder.unknown_location)

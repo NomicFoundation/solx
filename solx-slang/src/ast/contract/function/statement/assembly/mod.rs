@@ -160,7 +160,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     let callee = callee_path
                         .iter()
                         .next()
-                        .ok_or_else(|| anyhow::anyhow!("empty yul callee path"))?
+                        .expect("empty yul callee path")
                         .name();
                     if !self.yul_functions.contains_key(&callee) {
                         unimplemented!("multi-value yul assignment RHS is not a user-defined function");
@@ -184,7 +184,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                         let name = path
                             .iter()
                             .next()
-                            .ok_or_else(|| anyhow::anyhow!("empty yul lvalue path"))?
+                            .expect("empty yul lvalue path")
                             .name();
                         let (pointer, element_type) = self.environment.variable_with_type(&name);
                         let builder = &self.state.builder;
@@ -205,7 +205,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let name = path
                     .iter()
                     .next()
-                    .ok_or_else(|| anyhow::anyhow!("empty yul lvalue path"))?
+                    .expect("empty yul lvalue path")
                     .name();
                 let (pointer, element_type) = self.environment.variable_with_type(&name);
                 let builder = &self.state.builder;
@@ -240,7 +240,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                             let name = path
                                 .iter()
                                 .next()
-                                .ok_or_else(|| anyhow::anyhow!("empty yul callee path"))?
+                                .expect("empty yul callee path")
                                 .name();
                             if !self.yul_functions.contains_key(&name) {
                                 unimplemented!(
@@ -569,7 +569,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let name = path
                     .iter()
                     .next()
-                    .ok_or_else(|| anyhow::anyhow!("empty yul function path"))?
+                    .expect("empty yul function path")
                     .name();
                 // Yul evaluates arguments right-to-left.
                 let argument_nodes: Vec<_> = call.arguments().iter().collect();
@@ -670,7 +670,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let identifier = path
             .iter()
             .next()
-            .ok_or_else(|| anyhow::anyhow!("empty yul path"))?;
+            .expect("empty yul path");
         let name = identifier.name();
         // A Solidity constant referenced in assembly (`assembly { x := C }`)
         // resolves to `Definition::Constant`, not a yul/local variable.
@@ -783,7 +783,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .yul_functions
             .get(name)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("yul function `{name}` not registered"))?;
+            .expect("yul function not registered");
 
         let parameter_names: Vec<String> = definition
             .parameters()
@@ -902,7 +902,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .yul_functions
             .get(name)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("yul function `{name}` not registered"))?;
+            .expect("yul function not registered");
 
         let parameter_names: Vec<String> = definition
             .parameters()

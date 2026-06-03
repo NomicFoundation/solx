@@ -144,20 +144,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Resolves a state-variable lvalue — bare `x` or contract-qualified `C.x`
     /// (e.g. a function-pointer state variable) — to its storage target: a
     /// reference copy for reference-typed storage, else a direct storage store.
-    /// `name` is used only for diagnostics.
     fn resolve_state_variable_lvalue(
         &self,
         state_variable: &slang_solidity_v2::ast::StateVariableDefinition,
-        name: &str,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(LvalueTarget<'context, 'block>, BlockRef<'context, 'block>)> {
         let declared_type = state_variable
             .get_type()
-            .ok_or_else(|| anyhow::anyhow!("unresolved type for state variable: {name}"))?;
+            .expect("unresolved type for state variable");
         let &(slot, byte_offset, location) = self
             .storage_layout
             .get(&state_variable.node_id())
-            .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?;
+            .expect("unregistered state variable");
         let element_type =
             TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
         // Reference-typed storage (fixed/dynamic arrays, `string`, `bytes`,
@@ -197,7 +195,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let name = identifier.name();
                 match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(state_variable)) => {
-                        self.resolve_state_variable_lvalue(&state_variable, &name, block)
+                        self.resolve_state_variable_lvalue(&state_variable, block)
                     }
                     Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                         let (pointer, element_type) = self.environment.variable_with_type(&name);
@@ -244,11 +242,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 if let Some(Definition::StateVariable(state_variable)) =
                     access.member().resolve_to_definition()
                 {
-                    return self.resolve_state_variable_lvalue(
-                        &state_variable,
-                        &access.member().name(),
-                        block,
-                    );
+                    return self.resolve_state_variable_lvalue(&state_variable, block);
                 }
                 unimplemented!(
                     "unsupported member-access lvalue: {}",
@@ -460,7 +454,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let lhs_expression = lhs_item.expression();
             let rhs_expression = rhs_item
                 .expression()
-                .ok_or_else(|| anyhow::anyhow!("empty tuple element on RHS of assignment"))?;
+                .expect("empty tuple element on RHS of assignment");
             match (&lhs_expression, &rhs_expression) {
                 (
                     Some(Expression::TupleExpression(lhs_nested)),
