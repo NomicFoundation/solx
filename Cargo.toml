@@ -103,6 +103,7 @@ git = "https://github.com/NomicFoundation/slang.git"
 # Carries the patches not yet upstreamed — the `using`-attached-function
 # import-alias resolution fix, the multi-output (tuple) getter ABI expansion,
 # the hex-literal integer-value fix, `payable(this)` typing as
-# `address payable`, modulo on rational literals, and rational array-size
-# truncation. (The NodeId Display impl landed upstream as slang#1803.)
-rev = "b97d70bb1cacee1d88d12332c44611f743e244ab"
+# `address payable`, modulo on rational literals, rational array-size
+# truncation, and reference-type (`bytes`/`string`) constants typed as
+# memory. (The NodeId Display impl landed upstream as slang#1803.)
+rev = "0ac877d805526f67ab2a1fc035b9300d541d25b7"
