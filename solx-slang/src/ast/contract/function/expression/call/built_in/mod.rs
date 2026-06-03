@@ -242,10 +242,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             BuiltIn::Sha256 if arguments.len() == 1 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
                 let builder = &self.expression_emitter.state.builder;
+                // Like `keccak256`, the `sha256` precompile hashes a memory
+                // buffer; coerce a calldata/storage `bytes` argument to memory.
+                let data = TypeConversion::from_target_type(
+                    builder.types.sol_string_memory,
+                    builder,
+                )
+                .emit(values[0], builder, &block);
                 let value = block
                     .append_operation(
                         Sha256Operation::builder(builder.context, builder.unknown_location)
-                            .data(values[0])
+                            .data(data)
                             .result(builder.types.fixed_bytes(32))
                             .build()
                             .into(),
@@ -258,10 +265,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             BuiltIn::Ripemd160 if arguments.len() == 1 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
                 let builder = &self.expression_emitter.state.builder;
+                // Like `keccak256`, the `ripemd160` precompile hashes a memory
+                // buffer; coerce a calldata/storage `bytes` argument to memory.
+                let data = TypeConversion::from_target_type(
+                    builder.types.sol_string_memory,
+                    builder,
+                )
+                .emit(values[0], builder, &block);
                 let value = block
                     .append_operation(
                         Ripemd160Operation::builder(builder.context, builder.unknown_location)
-                            .data(values[0])
+                            .data(data)
                             .result(builder.types.fixed_bytes(20))
                             .build()
                             .into(),
@@ -932,6 +946,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let (signature_value, current) = self
                     .expression_emitter
                     .emit_value(&signature_expression, block)?;
+                // `keccak256` hashes a memory buffer; a signature string held in
+                // storage/calldata (`abi.encodeWithSignature(xstor, ...)`) is a
+                // reference, not a memory buffer. Coerce it first (no-op when
+                // already memory) — mirrors the `keccak256` builtin.
+                let signature_value = TypeConversion::from_target_type(
+                    builder.types.sol_string_memory,
+                    builder,
+                )
+                .emit(signature_value, builder, &current);
                 let hash = current
                     .append_operation(
                         Keccak256Operation::builder(
