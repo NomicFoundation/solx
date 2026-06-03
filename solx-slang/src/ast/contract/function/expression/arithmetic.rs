@@ -15,6 +15,10 @@ use slang_solidity_v2::ast::ExponentiationExpression;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MultiplicativeExpression;
 use slang_solidity_v2::ast::MultiplicativeExpressionOperator;
+use slang_solidity_v2::ast::PostfixExpression;
+use slang_solidity_v2::ast::PostfixExpressionOperator;
+use slang_solidity_v2::ast::PrefixExpression;
+use slang_solidity_v2::ast::PrefixExpressionOperator;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::ods::sol::AddOperation;
@@ -236,5 +240,74 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .expect("arithmetic operation produces one result")
             .into();
         Ok((value, block))
+    }
+
+    /// Lowers a postfix step (`x++`, `x--`), yielding the value before the step.
+    pub(super) fn emit_postfix(
+        &self,
+        expression: &PostfixExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let operation = match expression.operator() {
+            PostfixExpressionOperator::PlusPlus(_) => ArithmeticOperation::Add,
+            PostfixExpressionOperator::MinusMinus(_) => ArithmeticOperation::Subtract,
+        };
+        let (old, _new, block) =
+            self.emit_increment_decrement(operation, &expression.operand(), block)?;
+        Ok((old, block))
+    }
+
+    /// Lowers a prefix step (`++x`, `--x`), yielding the value after the step.
+    ///
+    /// The other prefix operators (`!`, `~`, unary `-`, `delete`) are lowered
+    /// by later domains.
+    pub(super) fn emit_prefix(
+        &self,
+        expression: &PrefixExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let operation = match expression.operator() {
+            PrefixExpressionOperator::PlusPlus(_) => ArithmeticOperation::Add,
+            PrefixExpressionOperator::MinusMinus(_) => ArithmeticOperation::Subtract,
+            _ => unimplemented!("prefix operator lowering"),
+        };
+        let (_old, new, block) =
+            self.emit_increment_decrement(operation, &expression.operand(), block)?;
+        Ok((new, block))
+    }
+
+    /// Emits a `±1` read-modify-write of an lvalue, returning both the value
+    /// before the step and the value after it.
+    fn emit_increment_decrement(
+        &self,
+        operation: ArithmeticOperation,
+        operand: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        Value<'context, 'block>,
+        Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    )> {
+        let lvalue = self.resolve_lvalue(operand);
+        let element_type = lvalue.element_type();
+        let old = self.emit_lvalue_load(&lvalue, &block)?;
+        let one = self
+            .state
+            .builder
+            .emit_sol_constant(1, element_type, &block);
+        let operation = operation.build(
+            self.checked,
+            self.state.builder.context,
+            self.state.builder.unknown_location,
+            old,
+            one,
+        );
+        let new = block
+            .append_operation(operation)
+            .result(0)
+            .expect("step operation produces one result")
+            .into();
+        self.emit_lvalue_store(&lvalue, new, &block);
+        Ok((old, new, block))
     }
 }

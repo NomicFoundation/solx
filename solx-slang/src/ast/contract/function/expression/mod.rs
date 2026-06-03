@@ -14,6 +14,8 @@ pub mod comparison;
 pub mod identifier;
 /// Literal expression lowering.
 pub mod literal;
+/// Assignable locations (lvalues).
+pub mod lvalue;
 /// State variable storage access.
 pub mod storage;
 
@@ -101,6 +103,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Expression::AssignmentExpression(assignment) => {
                 self.emit_assignment(assignment, block).map(some_value)
+            }
+            Expression::PostfixExpression(expression) => {
+                self.emit_postfix(expression, block).map(some_value)
+            }
+            Expression::PrefixExpression(expression) => {
+                self.emit_prefix(expression, block).map(some_value)
             }
             _ => unimplemented!(
                 "expression lowering: {:?}",
