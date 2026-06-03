@@ -2,8 +2,12 @@
 //! Statement lowering to MLIR operations.
 //!
 
+/// Expression statement lowering.
+pub mod expression_statement;
 /// Return statement lowering.
 pub mod return_statement;
+/// Local variable declaration statement lowering.
+pub mod variable_declaration;
 
 use std::collections::HashMap;
 
@@ -75,6 +79,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         match statement {
+            Statement::VariableDeclarationStatement(declaration) => {
+                self.emit_variable_declaration(declaration, block)
+            }
+            Statement::ExpressionStatement(statement) => {
+                self.emit_expression_statement(statement, block)
+            }
             Statement::ReturnStatement(return_statement) => {
                 self.emit_return(return_statement, block)
             }

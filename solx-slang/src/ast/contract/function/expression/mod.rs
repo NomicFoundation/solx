@@ -4,6 +4,8 @@
 
 /// Binary arithmetic expression lowering.
 pub mod arithmetic;
+/// Assignment expression lowering.
+pub mod assignment;
 /// Function and built-in call lowering.
 pub mod call;
 /// Comparison expression lowering.
@@ -94,6 +96,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Expression::InequalityExpression(expression) => {
                 self.emit_inequality(expression, block).map(some_value)
+            }
+            Expression::AssignmentExpression(assignment) => {
+                self.emit_assignment(assignment, block).map(some_value)
             }
             _ => unimplemented!(
                 "expression lowering: {:?}",
