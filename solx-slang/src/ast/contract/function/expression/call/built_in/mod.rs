@@ -546,10 +546,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(result);
         }
 
-        if let Some(result) =
+        if let Some((values, block)) =
             self.try_emit_this_getter_call(access, arguments, call_value, block)?
         {
-            return Ok(result);
+            return Ok((values.into_iter().next(), block));
         }
 
         if let Some(result) =
@@ -1068,6 +1068,33 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     vec![builder.types.ui256],
                     vec![TypeConversion::resolve_slang_type(&element, None, builder)],
                 ))
+            }
+            SlangType::Struct(struct_type) => {
+                // A public struct variable's getter takes no arguments and
+                // returns the struct's value / `string` / `bytes` members as a
+                // flattened tuple (omitting mapping / array / nested-struct
+                // members), using the very plan the getter is emitted from — so
+                // the external call decodes exactly what `s()` returns.
+                let slang_solidity_v2::ast::Definition::Struct(struct_definition) =
+                    struct_type.definition()
+                else {
+                    return None;
+                };
+                let struct_mlir_type = TypeConversion::resolve_slang_type(
+                    &declared_type,
+                    Some(solx_utils::DataLocation::Storage),
+                    builder,
+                );
+                let plan = crate::ast::contract::ContractEmitter::struct_getter_plan(
+                    &struct_definition,
+                    struct_mlir_type,
+                    builder,
+                )?;
+                let return_types = plan
+                    .iter()
+                    .map(|(_, _, result_type)| *result_type)
+                    .collect();
+                Some((Vec::new(), return_types))
             }
             other if !other.is_reference_type() => Some((
                 Vec::new(),

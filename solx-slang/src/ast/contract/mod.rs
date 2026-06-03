@@ -1009,7 +1009,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ///
     /// `struct_mlir_type` is the resolved (storage-located) struct type, whose
     /// element types `mlirSolGetEltType` indexes by AST member position.
-    fn struct_getter_plan(
+    pub(crate) fn struct_getter_plan(
         struct_definition: &slang_solidity_v2::ast::StructDefinition,
         struct_mlir_type: Type<'context>,
         builder: &solx_mlir::Builder<'context>,

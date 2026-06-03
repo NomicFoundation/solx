@@ -18,7 +18,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: Option<&PositionalArguments>,
         call_value: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+    ) -> anyhow::Result<Option<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
         if let Some(arguments) = arguments
             && matches!(access.operand(), Expression::ThisKeyword(_))
             && let Some(Definition::StateVariable(state_variable)) =
@@ -64,7 +64,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 },
                 &current_block,
             )?;
-            return Ok(Some((results.into_iter().next(), current_block)));
+            // Return every decoded value (a struct getter returns the flattened
+            // member tuple); single-result callers take the first.
+            return Ok(Some((results, current_block)));
         }
         Ok(None)
     }

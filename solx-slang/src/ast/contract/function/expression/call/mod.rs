@@ -1197,6 +1197,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((results, block));
         }
 
+        // `(a, , b) = this.s()` — a public struct variable's getter returns its
+        // members as a flattened tuple. Emit the external self-call and keep
+        // every value (the single-result path takes only the first).
+        if let Expression::MemberAccessExpression(access) = call.operand()
+            && let Some((values, block)) =
+                self.try_emit_this_getter_call(&access, Some(positional_arguments), None, block)?
+        {
+            return Ok((values, block));
+        }
+
         // `(a, b) = recv.f(args)` / `this.f(args)` — a genuine external contract
         // call returning a tuple. Bare calls, `abi.decode`, and library calls
         // are already handled above, so any remaining member-access callee that
