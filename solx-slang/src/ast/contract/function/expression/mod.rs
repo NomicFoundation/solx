@@ -2,8 +2,14 @@
 //! Expression lowering to MLIR SSA values.
 //!
 
+/// Binary arithmetic expression lowering.
+pub mod arithmetic;
 /// Function and built-in call lowering.
 pub mod call;
+/// Comparison expression lowering.
+pub mod comparison;
+/// Identifier expression lowering.
+pub mod identifier;
 /// Literal expression lowering.
 pub mod literal;
 
@@ -71,6 +77,24 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::HexNumberExpression(hex) => Ok((Some(self.emit_hex(hex, &block)), block)),
             Expression::TrueKeyword(_) => Ok((Some(self.emit_boolean(true, &block)), block)),
             Expression::FalseKeyword(_) => Ok((Some(self.emit_boolean(false, &block)), block)),
+            Expression::Identifier(identifier) => {
+                self.emit_identifier(identifier, block).map(some_value)
+            }
+            Expression::AdditiveExpression(expression) => {
+                self.emit_additive(expression, block).map(some_value)
+            }
+            Expression::MultiplicativeExpression(expression) => {
+                self.emit_multiplicative(expression, block).map(some_value)
+            }
+            Expression::ExponentiationExpression(expression) => {
+                self.emit_exponentiation(expression, block).map(some_value)
+            }
+            Expression::EqualityExpression(expression) => {
+                self.emit_equality(expression, block).map(some_value)
+            }
+            Expression::InequalityExpression(expression) => {
+                self.emit_inequality(expression, block).map(some_value)
+            }
             _ => unimplemented!(
                 "expression lowering: {:?}",
                 std::mem::discriminant(expression)
@@ -113,4 +137,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
         Ok(block)
     }
+}
+
+/// Adapts a value-producing emission result to the optional-value shape
+/// [`ExpressionEmitter::emit`] returns, for `Result::map` in its dispatch.
+fn some_value<'context, 'block>(
+    (value, block): (Value<'context, 'block>, BlockRef<'context, 'block>),
+) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+    (Some(value), block)
 }
