@@ -48,12 +48,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             && let Expression::Identifier(callee) = error_call.operand()
             && let Some(Definition::Error(error_definition)) = callee.resolve_to_definition()
         {
-            let signature = error_definition.compute_canonical_signature().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "cannot compute canonical signature for error `{}`",
-                    error_definition.name().name()
-                )
-            })?;
+            let signature = error_definition
+                .compute_canonical_signature()
+                .expect("cannot compute canonical signature for error");
             let ArgumentsDeclaration::PositionalArguments(error_arguments) =
                 error_call.arguments()
             else {

@@ -1010,9 +1010,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         };
         let (selector_value, mut current) = match function_definition {
             Some(Definition::Function(function)) => {
-                let selector_word = function.compute_selector().ok_or_else(|| {
-                    anyhow::anyhow!("abi.encodeCall function has no selector")
-                })?;
+                let selector_word = function.compute_selector().expect("abi.encodeCall function has no selector");
                 let selector_int = builder.emit_sol_constant(
                     i64::from(selector_word),
                     Type::from(IntegerType::unsigned(builder.context, 32)),

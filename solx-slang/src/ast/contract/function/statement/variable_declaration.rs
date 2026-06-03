@@ -153,9 +153,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let mut values = Vec::with_capacity(items.len());
                 let mut current = block;
                 for item in items.iter() {
-                    let inner = item.expression().ok_or_else(|| {
-                        anyhow::anyhow!("empty tuple element on RHS of deconstruction")
-                    })?;
+                    let inner = item.expression().expect("empty tuple element on RHS of deconstruction");
                     let (value, next) = emitter.emit_value(&inner, current)?;
                     values.push(value);
                     current = next;

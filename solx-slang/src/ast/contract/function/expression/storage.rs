@@ -69,12 +69,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let Some(initializer) = state_variable.value() else {
                 continue;
             };
-            let declared_type = state_variable.get_type().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "unresolved type for state variable: {}",
-                    state_variable.name().name()
-                )
-            })?;
+            let declared_type = state_variable
+                .get_type()
+                .expect("unresolved type for state variable");
             let builder = &self.state.builder;
             let element_type = TypeConversion::resolve_slang_type(&declared_type, None, builder);
             let (value, next_block) = self.emit_value(&initializer, block)?;

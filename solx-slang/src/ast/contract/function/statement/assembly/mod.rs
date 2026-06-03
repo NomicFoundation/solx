@@ -682,9 +682,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             && let Some(Definition::Constant(constant)) =
                 identifier.resolve_to_definition()
         {
-            let initializer = constant.value().ok_or_else(|| {
-                anyhow::anyhow!("constant {name} has no initializer")
-            })?;
+            let initializer = constant.value().expect("constant has no initializer");
             let emitter = ExpressionEmitter::new(
                 self.state,
                 self.environment,
@@ -692,9 +690,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 self.checked,
             );
             let (value, block) = emitter.emit(&initializer, block)?;
-            let value = value.ok_or_else(|| {
-                anyhow::anyhow!("constant {name} initializer produced no value")
-            })?;
+            let value = value.expect("constant initializer produced no value");
             let builder = &self.state.builder;
             let ui256 = builder.types.ui256;
             let widened = if value.r#type() == ui256 {
@@ -717,12 +713,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let &(slot, byte_offset, _location) = self
                     .storage_layout
                     .get(&state_variable.node_id())
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "unregistered state variable: {}",
-                            parts[0].name()
-                        )
-                    })?;
+                    .expect("unregistered state variable");
                 let builder = &self.state.builder;
                 let ui256 = builder.types.ui256;
                 let value = if member == "slot" {

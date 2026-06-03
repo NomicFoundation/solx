@@ -634,9 +634,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             return Ok(());
         };
 
-        let declared_type = state_variable.get_type().ok_or_else(|| {
-            anyhow::anyhow!("unresolved type for state variable getter")
-        })?;
+        let declared_type = state_variable.get_type().expect("unresolved type for state variable getter");
         let frame = GetterAbi {
             state_variable,
             signature: &signature,

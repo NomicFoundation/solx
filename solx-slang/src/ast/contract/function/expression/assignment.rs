@@ -383,11 +383,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let lhs_leaves = Self::flatten_tuple_lvalues(tuple);
                 let (values, current) = self
                     .emit_conditional_tuple_values(conditional, block)?
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "tuple assignment with this right-hand side shape is not yet supported"
-                        )
-                    })?;
+                    .unwrap_or_else(|| unimplemented!("tuple assignment with this right-hand side shape is not yet supported"));
                 assert!(
                     values.len() == lhs_leaves.len(),
                     "tuple assignment arity mismatch: {} LHS slots vs {} conditional values",

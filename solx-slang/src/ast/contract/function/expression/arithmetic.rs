@@ -488,9 +488,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         // slot. `sol.copy` writes the storage destination and clears the previous
         // tail for dynamic aggregates. `delete` on a mapping is a no-op.
         if solx_mlir::TypeFactory::is_sol_reference(element_type) {
-            let declared_type = state_variable.get_type().ok_or_else(|| {
-                anyhow::anyhow!("unresolved type for state variable")
-            })?;
+            let declared_type = state_variable.get_type().expect("unresolved type for state variable");
             match &declared_type {
                 // `delete` on a mapping is a no-op in Solidity.
                 SlangType::Mapping(_) => {

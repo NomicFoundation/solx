@@ -422,9 +422,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 }
                 Expression::ConditionalExpression(conditional) => emitter
                     .emit_conditional_tuple_values(conditional, block)?
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("multi-value return from a non-call expression is not supported")
-                    })?,
+                    .unwrap_or_else(|| unimplemented!("multi-value return from a non-call expression is not supported")),
                 _ => unimplemented!(
                     "multi-value return from a non-call expression is not supported"
                 ),

@@ -57,12 +57,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Some(Definition::Error(error)) => error,
             Some(_) => unreachable!("revert target does not resolve to an error definition"),
         };
-        let signature = error.compute_canonical_signature().ok_or_else(|| {
-            anyhow::anyhow!(
-                "cannot compute canonical signature for error `{}`",
-                error.name().name()
-            )
-        })?;
+        let signature = error
+            .compute_canonical_signature()
+            .expect("cannot compute canonical signature for error");
         let parameters = error.parameters();
         let mut evaluated = match revert.arguments() {
             ArgumentsDeclaration::PositionalArguments(positional) => {
@@ -186,13 +183,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         for parameter in error_parameters.iter() {
             let parameter_name = parameter
                 .name()
-                .ok_or_else(|| {
-                    anyhow::anyhow!("cannot match named revert argument to unnamed error parameter")
-                })?
+                .expect("cannot match named revert argument to unnamed error parameter")
                 .name();
-            let argument = arguments.remove(&parameter_name).ok_or_else(|| {
-                anyhow::anyhow!("missing named revert argument `{parameter_name}`")
-            })?;
+            let argument = arguments.remove(&parameter_name).expect("missing named revert argument");
             ordered_arguments.push(argument);
         }
 

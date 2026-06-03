@@ -104,9 +104,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Some(
                 event_definition
                     .compute_canonical_signature()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("cannot compute canonical signature for event")
-                    })?,
+                    .expect("cannot compute canonical signature for event"),
             )
         };
         self.append_sol_emit(
@@ -170,13 +168,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         for parameter in event_parameters.iter() {
             let parameter_name = parameter
                 .name()
-                .ok_or_else(|| {
-                    anyhow::anyhow!("cannot match named event argument to unnamed event parameter")
-                })?
+                .expect("cannot match named event argument to unnamed event parameter")
                 .name();
-            let argument = arguments.remove(&parameter_name).ok_or_else(|| {
-                anyhow::anyhow!("missing named event argument `{parameter_name}`")
-            })?;
+            let argument = arguments.remove(&parameter_name).expect("missing named event argument");
             ordered_arguments.push(argument);
         }
 

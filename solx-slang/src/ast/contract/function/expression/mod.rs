@@ -224,12 +224,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
         match expression {
             Expression::DecimalNumberExpression(decimal_number) => {
-                let value = decimal_number.integer_value().ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "decimal literal cannot be lowered: it must evaluate to an integer \
-                         after applying any units"
-                    )
-                })?;
+                let value = decimal_number.integer_value().expect("decimal literal cannot be lowered: it must evaluate to an integer \
+                         after applying any units");
                 let result_type = self
                     .resolve_slang_type(decimal_number.get_type())
                     .expect("binder types every decimal literal node");
@@ -308,7 +304,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         self.emit(&initializer, block)
                     }
                     Some(Definition::Function(function_definition)) => self
-                        .emit_internal_function_pointer(&function_definition, &name, block)
+                        .emit_internal_function_pointer(&function_definition, block)
                         .map(|(value, block)| (Some(value), block)),
                     Some(Definition::Library(library)) => {
                         // A library name used as a value (`address(L)`) is its
@@ -604,9 +600,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         // `Constant`; emit its initializer (foldable ones are
                         // already inlined by the constant-folding path).
                         Some(Definition::Constant(constant)) => {
-                            let initializer = constant.value().ok_or_else(|| {
-                                anyhow::anyhow!("constant has no initializer")
-                            })?;
+                            let initializer = constant.value().expect("constant has no initializer");
                             return self.emit(&initializer, block);
                         }
                         _ => {}
@@ -680,7 +674,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     fn emit_internal_function_pointer(
         &self,
         function_definition: &slang_solidity_v2::ast::FunctionDefinition,
-        name: &str,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let node_id = function_definition.node_id();
@@ -693,7 +686,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (mlir_name, parameter_types, return_types) = self
             .state
             .resolve_function(target_id)
-            .map_err(|_| anyhow::anyhow!("unregistered function pointer: {name}"))?;
+            .expect("unregistered function pointer");
         let func_ref_type = self
             .state
             .builder

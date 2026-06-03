@@ -1017,11 +1017,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let argument = named_arguments
                 .iter()
                 .find(|argument| argument.name().name() == member_name)
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "named struct constructor missing field {member_name}",
-                    )
-                })?;
+                .expect("named struct constructor missing field");
             let field_slang_type = member.get_type().expect("slang types every struct member");
             let field_type = TypeConversion::resolve_slang_type(
                 &field_slang_type,
@@ -1148,9 +1144,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         for parameter in named_parameters {
             let parameter_name = parameter
                 .name()
-                .ok_or_else(|| {
-                    anyhow::anyhow!("named call to a library function with an unnamed parameter")
-                })?
+                .expect("named call to a library function with an unnamed parameter")
                 .name();
             let argument = named_arguments
                 .iter()
@@ -1345,9 +1339,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         | Definition::Parameter(_)
                         | Definition::StateVariable(_),
                     ) => {
-                        let function_slang_type = callee_identifier.get_type().ok_or_else(|| {
-                            anyhow::anyhow!("unresolved function-pointer type")
-                        })?;
+                        let function_slang_type = callee_identifier.get_type().expect("unresolved function-pointer type");
                         self.emit_indirect_call_results(
                             &callee,
                             &function_slang_type,
