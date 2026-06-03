@@ -145,3 +145,14 @@ pub fn binary_operator(operator: Operator) -> Option<UserDefinedOperator> {
         _ => return None,
     })
 }
+
+/// Maps a prefix [`Operator`] to the unary [`UserDefinedOperator`] it could be
+/// bound to, or `None` for prefix operators that cannot be user-defined
+/// (`!`, `++`, `--`, `delete`).
+pub fn unary_operator(operator: Operator) -> Option<UserDefinedOperator> {
+    Some(match operator {
+        Operator::Subtract => UserDefinedOperator::Neg,
+        Operator::BitwiseNot => UserDefinedOperator::BitNot,
+        _ => return None,
+    })
+}

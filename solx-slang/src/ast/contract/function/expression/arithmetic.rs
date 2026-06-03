@@ -10,6 +10,7 @@ use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::CmpPredicate;
@@ -160,28 +161,71 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             return Ok(None);
         };
 
+        let (lhs, rhs, block) = self.emit_binary_operands(left, right, block)?;
+        let result = self.emit_operator_call(function_id, vec![lhs, rhs], &block)?;
+        Ok(Some((result, block)))
+    }
+
+    /// Dispatches a prefix operation to a user-defined operator function when
+    /// the operand is a user-defined value type with a binding for `operator`
+    /// (a unary `using {f as -}` / `using {f as ~}`). Returns `None` when no
+    /// such binding applies, leaving the caller to emit native negation.
+    fn try_emit_user_defined_unary_operator(
+        &self,
+        operator: Operator,
+        operand: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
+        let Some(user_operator) = operator_binding::unary_operator(operator) else {
+            return Ok(None);
+        };
+        let Some(SlangType::UserDefinedValue(udvt_type)) = operand.get_type() else {
+            return Ok(None);
+        };
+        let Definition::UserDefinedValueType(udvt_definition) = udvt_type.definition() else {
+            return Ok(None);
+        };
+        let Some(&function_id) = self
+            .state
+            .operator_bindings
+            .get(&(udvt_definition.node_id(), user_operator))
+        else {
+            return Ok(None);
+        };
+
+        let (value, block) = self.emit_value(operand, block)?;
+        let result = self.emit_operator_call(function_id, vec![value], &block)?;
+        Ok(Some((result, block)))
+    }
+
+    /// Resolves the bound operator function `function_id` and emits a call to it
+    /// with the already-evaluated `argument_values`, each coerced to its
+    /// parameter type. Returns the operator's single result value.
+    fn emit_operator_call(
+        &self,
+        function_id: NodeId,
+        mut argument_values: Vec<Value<'context, 'block>>,
+        block: &BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Value<'context, 'block>> {
         let (mlir_name, parameter_types, return_types) =
             self.state.resolve_function(function_id)?;
-        let (lhs, rhs, block) = self.emit_binary_operands(left, right, block)?;
-        let mut argument_values = [lhs, rhs];
         for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
             *value = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
                 *value,
                 &self.state.builder,
-                &block,
+                block,
             );
         }
         let results = self.state.builder.emit_sol_call_results(
             mlir_name,
             &argument_values,
             return_types,
-            &block,
+            block,
         )?;
-        let result = results
+        Ok(results
             .into_iter()
             .next()
-            .expect("a user-defined binary operator returns one value");
-        Ok(Some((result, block)))
+            .expect("a user-defined operator returns one value"))
     }
 
     /// Emits postfix `++` or `--` (returns the old value).
@@ -206,6 +250,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        // A `-`/`~` prefix on a user-defined-value-type operand bound via
+        // `using {f as -} for T global;` dispatches to the bound function.
+        if let Some(result) = self.try_emit_user_defined_unary_operator(operator, operand, block)? {
+            return Ok(result);
+        }
+
         match operator {
             Operator::Increment | Operator::Decrement => {
                 let (_old, new_value) = self.emit_increment_decrement(operand, operator, &block)?;
