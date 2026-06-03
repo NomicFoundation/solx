@@ -61,16 +61,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let (new_slot, element_type, block) = self.emit_push_slot(access, block)?;
 
         let Some(value_argument) = value_argument else {
-            // `arr.push()` in value position yields the freshly-appended element.
-            // A value element (`uint[].push()`) is loaded from the slot (a fresh
-            // default); a reference element (`uint[][].push()`) is the slot
-            // reference itself, used to initialise a storage pointer.
+            // `arr.push()` in value position yields the freshly-appended
+            // element. `sol.load` reads a value element (`uint[].push()`) as a
+            // fresh default, and yields a reference element
+            // (`uint[][].push()` / a struct element) as the canonical storage
+            // reference — the same dual behaviour as an index access `a[i]`, so
+            // `S storage s = array.push()` binds an identical reference type
+            // (the raw slot pointer would mis-cast in the consumer).
             let builder = &self.expression_emitter.state.builder;
-            if IntegerType::try_from(element_type).is_ok() {
-                let loaded = builder.emit_sol_load(new_slot, element_type, &block)?;
-                return Ok((Some(loaded), block));
-            }
-            return Ok((Some(new_slot), block));
+            let loaded = builder.emit_sol_load(new_slot, element_type, &block)?;
+            return Ok((Some(loaded), block));
         };
         let (value, block) = self.expression_emitter.emit_value(&value_argument, block)?;
         let builder = &self.expression_emitter.state.builder;
