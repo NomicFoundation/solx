@@ -103,6 +103,17 @@ impl Mode {
     /// Checks if the mode is compatible with the Ethereum tests params.
     ///
     pub fn check_ethereum_tests_params(&self, params: &solx_solc_test_adapter::Params) -> bool {
+        // The Slang frontend has no ABI coder v1. Slang parses `pragma abicoder
+        // v1` but models no v1 semantics — the pragma is an inert AST node, and
+        // Slang's bindings, type-checker, and ABI computation are all
+        // version-agnostic — so solx-slang always emits v2. `ABIEncoderV1Only`
+        // tests exercise v1-specific behavior that can never reproduce under the
+        // Slang pipeline, so skip them entirely (the `via_ir` branch below
+        // already excludes them for the Yul pipeline).
+        #[cfg(feature = "slang-ast")]
+        if params.abi_encoder_v1_only == solx_solc_test_adapter::ABIEncoderV1Only::True {
+            return false;
+        }
         if self.via_ir {
             params.compile_via_yul != solx_solc_test_adapter::CompileViaYul::False
                 && params.abi_encoder_v1_only != solx_solc_test_adapter::ABIEncoderV1Only::True
