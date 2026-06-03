@@ -5,8 +5,6 @@
 use super::*;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
-    /// Emits a Yul/EVM intrinsic call `name(arguments)` as its operation,
-    /// returning the produced value and the block to continue in.
     // A flat per-opcode dispatch: one `match name` arm per Yul/EVM intrinsic,
     // each a thin op emission (mostly via the `binop!` / `ctx_intrinsic!`
     // macros). The line count and cognitive complexity are inherent to the

@@ -132,8 +132,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         Ok(Some(current_block))
     }
 
-    /// Lowers one Yul statement into `block`, returning the block execution
-    /// continues in.
     // A flat per-statement dispatch: one `match statement` arm per
     // [`YulStatement`] variant. The arms vary in size because Yul constructs
     // do (a multi-target `let` carries more than a `break`), but the function
@@ -487,8 +485,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         Ok(current)
     }
 
-    /// Lowers a Yul `switch` into a chain of nested `sol.if`s — one per value
-    /// case (comparing the selector), with the default body in the deepest else.
     fn emit_yul_switch_chain(
         &mut self,
         selector: Value<'context, 'block>,
@@ -552,8 +548,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         Ok(())
     }
 
-    /// Lowers one Yul expression into `block`, returning its value and the
-    /// block to continue in.
     fn emit_yul_expression(
         &mut self,
         expression: &YulExpression,

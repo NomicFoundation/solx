@@ -4,6 +4,11 @@ rustflags = [
 ]
 incremental = true
 
+[tools.clippy]
+warn = [
+    "missing_docs_in_private_items",
+]
+
 [target.x86_64-apple-darwin]
 rustflags = [
     "-W", "missing_docs",

@@ -10,7 +10,6 @@ use slang_solidity_v2::compilation::CompilationBuilderConfig;
 
 /// Provides file reading and import resolution for the Slang compilation builder.
 pub struct CompilationConfig {
-    /// Source file path → contents, satisfying the builder's reads and imports.
     sources: BTreeMap<String, String>,
 }
 

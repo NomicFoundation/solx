@@ -30,8 +30,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         }
     }
 
-    /// Lowers a single-variable declaration (`T x = e;` or `T x;`): allocates
-    /// the slot, binds it, and stores the (possibly defaulted) initializer.
     fn emit_single_typed_declaration(
         &mut self,
         declaration: &SingleTypedDeclaration,
@@ -105,8 +103,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         Ok(Some(block))
     }
 
-    /// Lowers a multi-variable tuple declaration (`(T a, U b) = f();`),
-    /// destructuring the right-hand tuple into each declared slot.
     fn emit_multi_typed_declaration(
         &mut self,
         declaration: &MultiTypedDeclaration,

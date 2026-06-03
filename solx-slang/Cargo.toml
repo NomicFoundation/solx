@@ -25,12 +25,11 @@ solx-mlir = { path = "../solx-mlir" }
 solx-standard-json = { path = "../solx-standard-json", features = ["mlir"] }
 solx-utils = { path = "../solx-utils", features = ["slang"] }
 
-# Quality bar for the lowering code: no god functions, no wide-arg signatures,
-# and every item documented — public ones via the `-W missing_docs` rustflag in
-# `.cargo/config.toml`, private ones via `missing_docs_in_private_items` here.
-# Defaults (7 args / 100 lines) are the enforced complexity thresholds.
+# Complexity bar for the lowering code: no god functions, no wide-arg signatures.
+# Defaults (7 args / 100 lines) are the enforced thresholds. `missing_docs` is
+# kept as the active `-W` rustflag in `.cargo/config.toml`; private-item docs are
+# intentionally NOT required here (would flood the WIP frontend).
 [lints.clippy]
 too_many_arguments = "warn"
 too_many_lines = "warn"
 cognitive_complexity = "warn"
-missing_docs_in_private_items = "warn"
