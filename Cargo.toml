@@ -105,6 +105,6 @@ git = "https://github.com/NomicFoundation/slang.git"
 # the hex-literal integer-value fix, `payable(this)` typing as
 # `address payable`, modulo on rational literals, rational array-size
 # truncation, reference-type (`bytes`/`string`) constants typed as memory,
-# and the `is_slice` flag distinguishing `x[a:]` from `x[a]`. (The NodeId
-# Display impl landed upstream as slang#1803.)
-rev = "d97335c3f72c7bcb70597e7e800895bfe8961b84"
+# the `is_slice` flag distinguishing `x[a:]` from `x[a]`, and string-slice
+# typing. (The NodeId Display impl landed upstream as slang#1803.)
+rev = "ae9375c9388da3801f464a6c9629dc9a48cb8b51"
