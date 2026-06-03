@@ -116,6 +116,13 @@ pub struct Context<'context> {
     /// bound function — which carries its own checked/unchecked context — instead
     /// of native arithmetic. Empty unless the unit defines operator bindings.
     pub operator_bindings: HashMap<(NodeId, UserDefinedOperator), NodeId>,
+    /// Maps an external/public library function's definition id to the linker
+    /// symbol of its enclosing library (`file_id:LibraryName`). Lets a
+    /// `using`-for value-receiver call to a selector-carrying library function
+    /// (`x.f(args)`) resolve the delegatecall target the same way an explicit
+    /// `L.f(args)` does — slang exposes no enclosing-library accessor on a
+    /// resolved function, so the frontend precomputes this from the unit.
+    pub library_function_symbols: HashMap<NodeId, String>,
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
@@ -237,6 +244,7 @@ impl<'context> Context<'context> {
             super_redirect: HashMap::new(),
             virtual_redirect: HashMap::new(),
             operator_bindings: HashMap::new(),
+            library_function_symbols: HashMap::new(),
             builder: Builder::new(context),
             current_contract_type: None,
             dependencies: RefCell::new(Vec::new()),

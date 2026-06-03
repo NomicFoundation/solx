@@ -592,7 +592,59 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             // (matching solc), so `link_references` round-trips.
             let library_symbol = format!("{}:{}", library.get_file_id(), library.name().name());
             return self
-                .emit_library_external_call(&library_symbol, &function, positional_arguments, block)
+                .emit_library_external_call(
+                    &library_symbol,
+                    &function,
+                    positional_arguments,
+                    None,
+                    block,
+                )
+                .map(Some);
+        }
+        // `using D for T; x.f(args)` — a value receiver attaching a
+        // selector-carrying public/external library function. The receiver
+        // becomes the implicit `self` first argument; the delegatecall target
+        // is f's enclosing library, looked up by definition id (slang exposes no
+        // enclosing-library accessor on a resolved function). A namespace
+        // operand (`L.f` / `M.f` / `C.f`) or `this`/`super` is NOT a value
+        // receiver — those are handled above or are contract dispatch — so
+        // exclude them to avoid prepending a non-value as `self`.
+        if let Expression::MemberAccessExpression(access) = callee
+            && !matches!(
+                access.operand(),
+                Expression::Identifier(identifier)
+                    if matches!(
+                        identifier.resolve_to_definition(),
+                        Some(
+                            Definition::Library(_)
+                                | Definition::Contract(_)
+                                | Definition::Import(_)
+                                | Definition::ImportedSymbol(_)
+                        )
+                    )
+            )
+            && !matches!(
+                access.operand(),
+                Expression::ThisKeyword(_) | Expression::SuperKeyword(_)
+            )
+            && let Some(Definition::Function(function)) = access.member().resolve_to_definition()
+            && function.compute_selector().is_some()
+            && let Some(library_symbol) = self
+                .expression_emitter
+                .state
+                .library_function_symbols
+                .get(&function.node_id())
+                .cloned()
+        {
+            let receiver = access.operand();
+            return self
+                .emit_library_external_call(
+                    &library_symbol,
+                    &function,
+                    positional_arguments,
+                    Some(&receiver),
+                    block,
+                )
                 .map(Some);
         }
         Ok(None)

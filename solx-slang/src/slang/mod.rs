@@ -154,6 +154,43 @@ impl Slang {
             .collect()
     }
 
+    /// Maps every `external`/`public` library function's definition id to its
+    /// enclosing library's linker symbol (`file_id:LibraryName`). A `using`-for
+    /// value-receiver call to such a function (`x.f(args)`) delegatecalls the
+    /// same target an explicit `L.f(args)` does, but slang exposes no
+    /// enclosing-library accessor on a resolved function — so precompute it once
+    /// per unit and hand it to every contract emitter.
+    fn gather_library_function_symbols(
+        unit: &CompilationUnit,
+    ) -> std::collections::HashMap<slang_solidity_v2::ast::NodeId, String> {
+        let mut symbols = std::collections::HashMap::new();
+        for file_identifier in unit.file_ids().iter() {
+            let Some(file) = unit.file(file_identifier) else {
+                continue;
+            };
+            for member in file.ast().members().iter() {
+                let slang_solidity_v2::ast::SourceUnitMember::LibraryDefinition(library) = member
+                else {
+                    continue;
+                };
+                let symbol = format!("{}:{}", library.get_file_id(), library.name().name());
+                for library_member in library.members().iter() {
+                    if let slang_solidity_v2::ast::ContractMember::FunctionDefinition(function) =
+                        library_member
+                        && matches!(
+                            function.visibility(),
+                            slang_solidity_v2::ast::FunctionVisibility::External
+                                | slang_solidity_v2::ast::FunctionVisibility::Public
+                        )
+                    {
+                        symbols.insert(function.node_id(), symbol.clone());
+                    }
+                }
+            }
+        }
+        symbols
+    }
+
     /// Finalises a freshly-emitted object's module and records its MLIR stages
     /// and method identifiers under `(file_identifier, name)` in the output.
     /// Shared by the contract and deployable-library emission paths.
@@ -245,6 +282,7 @@ impl Frontend for Slang {
         let file_identifiers = unit.file_ids();
         let free_functions = Self::gather_free_functions(&unit);
         let operator_bindings = crate::ast::operator_binding::OperatorBindings::gather(&unit);
+        let library_function_symbols = Self::gather_library_function_symbols(&unit);
 
         for file_identifier in &file_identifiers {
             let Some(file) = unit.file(file_identifier) else {
@@ -263,7 +301,12 @@ impl Frontend for Slang {
                 let mut context = solx_mlir::Context::new(&melior_context, evm_version);
                 let mut emitter = AstEmitter::new(&mut context);
                 let (contract_name, method_identifiers) =
-                    emitter.emit(&contract, &free_functions, &operator_bindings)?;
+                    emitter.emit(
+                    &contract,
+                    &free_functions,
+                    &operator_bindings,
+                    &library_function_symbols,
+                )?;
 
                 Self::record_object(
                     context,

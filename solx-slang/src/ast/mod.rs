@@ -45,10 +45,16 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],
         operator_bindings: &OperatorBindings,
+        library_function_symbols: &std::collections::HashMap<slang_solidity_v2::ast::NodeId, String>,
     ) -> anyhow::Result<(String, BTreeMap<String, String>)> {
         let name = contract.name().name();
         let mut emitter = ContractEmitter::new(self.state);
-        emitter.emit(contract, free_functions, operator_bindings)?;
+        emitter.emit(
+            contract,
+            free_functions,
+            operator_bindings,
+            library_function_symbols,
+        )?;
 
         let mut method_identifiers = BTreeMap::new();
         // Walk the inheritance-linearised function list so derived

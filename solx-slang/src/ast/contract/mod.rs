@@ -123,9 +123,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],
         operator_bindings: &OperatorBindings,
+        library_function_symbols: &std::collections::HashMap<slang_solidity_v2::ast::NodeId, String>,
     ) -> anyhow::Result<()> {
         let contract_name = contract.name().name();
         self.state.operator_bindings = operator_bindings.map.clone();
+        self.state.library_function_symbols = library_function_symbols.clone();
 
         // Re-resolve `super` calls against the C3 linearisation (slang resolves
         // them lexically, which is wrong in a diamond). The redirect drives the

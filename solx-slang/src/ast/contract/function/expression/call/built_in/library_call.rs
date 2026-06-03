@@ -16,6 +16,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         library_name: &str,
         function: &slang_solidity_v2::ast::FunctionDefinition,
         arguments: &PositionalArguments,
+        self_receiver: Option<&slang_solidity_v2::ast::Expression>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let (parameter_types, return_types) =
@@ -24,11 +25,37 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .compute_selector()
             .ok_or_else(|| anyhow::anyhow!("library function '{library_name}' has no selector"))?;
 
-        // Evaluate and coerce the arguments to the declared parameter types.
-        let mut argument_values = Vec::with_capacity(arguments.iter().count());
+        // Evaluate and coerce the arguments to the declared parameter types. A
+        // `using`-for value receiver (`x.f(args)`) is the implicit first
+        // argument (`self`); the explicit arguments then map to the remaining
+        // parameters (offset by one).
+        let mut argument_values = Vec::new();
         let mut current_block = block;
+        let argument_offset = if let Some(receiver) = self_receiver {
+            let (value, next) = match parameter_types.first() {
+                Some(&parameter_type) => self.expression_emitter.emit_value_for_target(
+                    receiver,
+                    parameter_type,
+                    current_block,
+                )?,
+                None => self.expression_emitter.emit_value(receiver, current_block)?,
+            };
+            let builder = &self.expression_emitter.state.builder;
+            let value = match parameter_types.first() {
+                Some(&parameter_type) => {
+                    TypeConversion::from_target_type(parameter_type, builder).emit(value, builder, &next)
+                }
+                None => value,
+            };
+            argument_values.push(value);
+            current_block = next;
+            1
+        } else {
+            0
+        };
         for (index, argument) in arguments.iter().enumerate() {
-            let (value, next) = match parameter_types.get(index) {
+            let parameter_index = index + argument_offset;
+            let (value, next) = match parameter_types.get(parameter_index) {
                 Some(&parameter_type) => self.expression_emitter.emit_value_for_target(
                     &argument,
                     parameter_type,
@@ -37,7 +64,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 None => self.expression_emitter.emit_value(&argument, current_block)?,
             };
             let builder = &self.expression_emitter.state.builder;
-            let value = match parameter_types.get(index) {
+            let value = match parameter_types.get(parameter_index) {
                 Some(&parameter_type) => {
                     TypeConversion::from_target_type(parameter_type, builder).emit(value, builder, &next)
                 }
