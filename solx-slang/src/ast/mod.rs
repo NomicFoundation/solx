@@ -4,6 +4,8 @@
 
 /// Contract definition lowering to Sol dialect MLIR.
 pub mod contract;
+/// User-defined operator bindings (`using {f as op} for T global;`).
+pub mod operator_binding;
 
 use std::collections::BTreeMap;
 
@@ -14,6 +16,7 @@ use slang_solidity_v2::ast::FunctionDefinition;
 use solx_mlir::Context;
 
 use self::contract::ContractEmitter;
+use self::operator_binding::OperatorBindings;
 
 /// Walks a Slang AST and lowers a single contract definition to MLIR.
 pub struct AstEmitter<'state, 'context> {
@@ -41,10 +44,11 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         &mut self,
         contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],
+        operator_bindings: &OperatorBindings,
     ) -> anyhow::Result<(String, BTreeMap<String, String>)> {
         let name = contract.name().name();
         let mut emitter = ContractEmitter::new(self.state);
-        emitter.emit(contract, free_functions)?;
+        emitter.emit(contract, free_functions, operator_bindings)?;
 
         let mut method_identifiers = BTreeMap::new();
         // Walk the inheritance-linearised function list so derived

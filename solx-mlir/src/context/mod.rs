@@ -33,6 +33,49 @@ use crate::llvm_module::RawLlvmModule;
 use self::builder::Builder;
 use self::function::Function;
 
+/// A Solidity operator that can be bound to a function via a
+/// `using {f as op} for T global;` directive (user-defined operators).
+///
+/// Used as the operator component of [`Context::operator_bindings`]'s key.
+/// Binary `-` ([`Self::Sub`]) and unary `-` ([`Self::Neg`]) are distinct
+/// variants because the same `-` token binds to a two-parameter function as a
+/// subtraction operator and to a one-parameter function as a negation operator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UserDefinedOperator {
+    /// Binary `+`.
+    Add,
+    /// Binary `-`.
+    Sub,
+    /// Binary `*`.
+    Mul,
+    /// Binary `/`.
+    Div,
+    /// Binary `%`.
+    Rem,
+    /// Binary `&`.
+    BitAnd,
+    /// Binary `|`.
+    BitOr,
+    /// Binary `^`.
+    BitXor,
+    /// Binary `==`.
+    Eq,
+    /// Binary `!=`.
+    Ne,
+    /// Binary `<`.
+    Lt,
+    /// Binary `<=`.
+    Le,
+    /// Binary `>`.
+    Gt,
+    /// Binary `>=`.
+    Ge,
+    /// Unary `-`.
+    Neg,
+    /// Unary `~`.
+    BitNot,
+}
+
 /// Accumulated MLIR state threaded through the AST visitors.
 ///
 /// Owns a `melior::ir::Module` being populated and provides helpers for
@@ -66,6 +109,13 @@ pub struct Context<'context> {
     /// so it reaches the override, matching Solidity's virtual semantics. Empty
     /// unless the contract overrides an inherited function.
     pub virtual_redirect: HashMap<NodeId, NodeId>,
+    /// User-defined operator bindings: maps `(udvt_definition_id, operator)` to
+    /// the node id of the bound function. Populated by the frontend from
+    /// file-level `using {f as op} for T global;` directives so that a binary or
+    /// unary operation on a user-defined-value-type operand dispatches to the
+    /// bound function — which carries its own checked/unchecked context — instead
+    /// of native arithmetic. Empty unless the unit defines operator bindings.
+    pub operator_bindings: HashMap<(NodeId, UserDefinedOperator), NodeId>,
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
@@ -186,6 +236,7 @@ impl<'context> Context<'context> {
             library_function_ids: HashSet::new(),
             super_redirect: HashMap::new(),
             virtual_redirect: HashMap::new(),
+            operator_bindings: HashMap::new(),
             builder: Builder::new(context),
             current_contract_type: None,
             dependencies: RefCell::new(Vec::new()),

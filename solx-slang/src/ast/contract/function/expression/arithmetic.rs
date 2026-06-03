@@ -19,6 +19,7 @@ use solx_mlir::ods::sol::SubOperation;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::expression::operator::Operator;
+use crate::ast::operator_binding;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits a binary arithmetic Sol dialect operation.
@@ -34,6 +35,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        // A binary operator on a user-defined-value-type operand bound via
+        // `using {f as op} for T global;` dispatches to the bound function
+        // (which carries its own checked context), not native arithmetic.
+        if let Some(result) =
+            self.try_emit_user_defined_binary_operator(left, right, operator, block)?
+        {
+            return Ok(result);
+        }
+
         // Solidity evaluates subexpressions left-to-right; `emit_binary_operands`
         // preserves that order while materializing a string literal paired with
         // a `bytesN` / `byte` operand as a fixedbytes/byte constant.
@@ -116,6 +126,62 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .expect("binary operation always produces one result")
             .into();
         Ok((value, block))
+    }
+
+    /// Dispatches a binary operation to a user-defined operator function when
+    /// the left operand is a user-defined value type with a binding for
+    /// `operator` (`using {f as op} for T global;`). Returns `None` when no such
+    /// binding applies, leaving the caller to emit native arithmetic.
+    ///
+    /// The bound function is a free function carrying its own checked/unchecked
+    /// context, so this correctly reproduces e.g. an `unchecked` operator body
+    /// invoked from a checked caller.
+    fn try_emit_user_defined_binary_operator(
+        &self,
+        left: &Expression,
+        right: &Expression,
+        operator: Operator,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
+        let Some(user_operator) = operator_binding::binary_operator(operator) else {
+            return Ok(None);
+        };
+        let Some(SlangType::UserDefinedValue(udvt_type)) = left.get_type() else {
+            return Ok(None);
+        };
+        let Definition::UserDefinedValueType(udvt_definition) = udvt_type.definition() else {
+            return Ok(None);
+        };
+        let Some(&function_id) = self
+            .state
+            .operator_bindings
+            .get(&(udvt_definition.node_id(), user_operator))
+        else {
+            return Ok(None);
+        };
+
+        let (mlir_name, parameter_types, return_types) =
+            self.state.resolve_function(function_id)?;
+        let (lhs, rhs, block) = self.emit_binary_operands(left, right, block)?;
+        let mut argument_values = [lhs, rhs];
+        for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
+            *value = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
+                *value,
+                &self.state.builder,
+                &block,
+            );
+        }
+        let results = self.state.builder.emit_sol_call_results(
+            mlir_name,
+            &argument_values,
+            return_types,
+            &block,
+        )?;
+        let result = results
+            .into_iter()
+            .next()
+            .expect("a user-defined binary operator returns one value");
+        Ok(Some((result, block)))
     }
 
     /// Emits postfix `++` or `--` (returns the old value).

@@ -10,6 +10,7 @@ mod super_call;
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use ruint::aliases::U256;
 use slang_solidity_v2::abi::AbiEntry;
@@ -37,6 +38,7 @@ use solx_mlir::StateMutability;
 
 use self::function::FunctionEmitter;
 use self::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::operator_binding::OperatorBindings;
 
 /// Maps each state variable's node ID to its storage location: the slot, the
 /// byte offset within the slot, and the data location (persistent `Storage`
@@ -120,8 +122,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         &mut self,
         contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],
+        operator_bindings: &OperatorBindings,
     ) -> anyhow::Result<()> {
         let contract_name = contract.name().name();
+        self.state.operator_bindings = operator_bindings.map.clone();
 
         // Re-resolve `super` calls against the C3 linearisation (slang resolves
         // them lexically, which is wrong in a diamond). The redirect drives the
@@ -166,11 +170,27 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // and free symbols are both the node-id-qualified form. The library
         // emission already covers it (same symbol, same body), so drop the
         // duplicate here.
-        let reached_free_functions: Vec<FunctionDefinition> =
+        let mut reached_free_functions: Vec<FunctionDefinition> =
             free_function::collect_free_functions(contract, free_functions, &shadowed_functions)
                 .into_iter()
                 .filter(|free| !self.state.library_function_ids.contains(&free.node_id()))
                 .collect();
+
+        // Operator functions bound via `using {f as op} for T global;` are free
+        // functions that the reachability walk misses — they are never called by
+        // name, only invoked through an operator (`a + b`). Append the ones not
+        // already reached so their dispatched `sol.call`s resolve. They lower as
+        // ordinary internal functions; the backend DCEs any left unused.
+        let already_reached: HashSet<NodeId> = reached_free_functions
+            .iter()
+            .map(|function| function.node_id())
+            .chain(self.state.library_function_ids.iter().copied())
+            .collect();
+        for function in &operator_bindings.functions {
+            if !already_reached.contains(&function.node_id()) {
+                reached_free_functions.push(function.clone());
+            }
+        }
         self.register_function_signatures(&reached_free_functions);
 
         let storage_layout = Self::compute_storage_layout(contract);
