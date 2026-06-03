@@ -1127,6 +1127,16 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let name = Self::mlir_base_name(function);
 
         if let Some(AbiEntry::Function(abi_function)) = function.compute_abi_entry() {
+            // Prefer the canonical ABI signature: a struct parameter expands to
+            // its component tuple (`a((uint256))`) rather than collapsing to the
+            // ABI-JSON `tuple`, so two overloads taking different structs do not
+            // alias onto one MLIR symbol (`redefinition of symbol 'a(tuple)'`).
+            // For non-struct parameters this is identical to the input type
+            // names below. Falls back to those names if slang cannot form the
+            // canonical signature.
+            if let Some(signature) = function.compute_canonical_signature() {
+                return signature;
+            }
             let inputs = abi_function.inputs();
             let types: Vec<&str> = inputs.iter().map(|input| input.type_name()).collect();
             return format!("{name}({})", types.join(","));
