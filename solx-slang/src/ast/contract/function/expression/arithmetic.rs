@@ -269,6 +269,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let operation = match expression.operator() {
             PrefixExpressionOperator::PlusPlus(_) => ArithmeticOperation::Add,
             PrefixExpressionOperator::MinusMinus(_) => ArithmeticOperation::Subtract,
+            // `!` is a logical operator, lowered by its own domain.
+            PrefixExpressionOperator::Bang(_) => {
+                return self.emit_not(&expression.operand(), block);
+            }
             _ => unimplemented!("prefix operator lowering"),
         };
         let (_old, new, block) =

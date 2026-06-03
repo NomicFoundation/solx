@@ -10,10 +10,14 @@ pub mod assignment;
 pub mod call;
 /// Comparison expression lowering.
 pub mod comparison;
+/// Conditional (ternary) expression lowering.
+pub mod conditional;
 /// Identifier expression lowering.
 pub mod identifier;
 /// Literal expression lowering.
 pub mod literal;
+/// Short-circuit logical expression lowering.
+pub mod logical;
 /// Assignable locations (lvalues).
 pub mod lvalue;
 /// State variable storage access.
@@ -110,6 +114,23 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::PrefixExpression(expression) => {
                 self.emit_prefix(expression, block).map(some_value)
             }
+            Expression::ConditionalExpression(conditional) => {
+                self.emit_conditional(conditional, block).map(some_value)
+            }
+            Expression::AndExpression(expression) => self
+                .emit_and(
+                    &expression.left_operand(),
+                    &expression.right_operand(),
+                    block,
+                )
+                .map(some_value),
+            Expression::OrExpression(expression) => self
+                .emit_or(
+                    &expression.left_operand(),
+                    &expression.right_operand(),
+                    block,
+                )
+                .map(some_value),
             _ => unimplemented!(
                 "expression lowering: {:?}",
                 std::mem::discriminant(expression)
