@@ -12,6 +12,7 @@ use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::SliceOperation;
 use solx_utils::DataLocation;
 
@@ -30,12 +31,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         index_access: &IndexAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        // Calldata slice `a[start:end]` produces a sub-array VALUE (not an
-        // element address), lowered to `sol.slice`. Only the explicit-end forms
-        // (`a[i:j]`, `a[:j]`) are unambiguously slices in the AST; `a[i:]` is
-        // indistinguishable from the index `a[i]` (both are `end == None`), so
-        // it falls through to the element-access path below.
-        if index_access.end().is_some() {
+        // A slice `a[start:end]` produces a sub-array VALUE (not an element
+        // address), lowered to `sol.slice`. `is_slice()` (the colon-presence
+        // flag) covers every form — `a[i:j]`, `a[:j]`, and crucially `a[i:]`,
+        // which is otherwise indistinguishable from the index `a[i]` (both have
+        // `end() == None`).
+        if index_access.is_slice() {
             return self
                 .emit_slice(index_access, block)
                 .map(|(value, block)| (Some(value), block));
@@ -58,9 +59,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a calldata slice `a[start:end]` as a `sol.slice` value. `start`
-    /// defaults to `0` when omitted (`a[:j]`); `end` is always present here
-    /// because the caller only routes the `end == Some` forms through this
-    /// path. Indices are widened to `ui256`.
+    /// defaults to `0` when omitted (`a[:j]`); `end` defaults to the array
+    /// length when omitted (`a[i:]`), via `sol.length`. Indices are widened to
+    /// `ui256`.
     fn emit_slice(
         &self,
         index_access: &IndexAccessExpression,
@@ -81,12 +82,31 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 (zero, block)
             }
         };
-        let end_expression = index_access
-            .end()
-            .expect("emit_slice is only reached when the slice has an explicit end");
-        let (end_value, block) = self.emit_value(&end_expression, block)?;
-        let end_value = TypeConversion::from_target_type(ui256, &self.state.builder)
-            .emit(end_value, &self.state.builder, &block);
+        let (end_value, block) = match index_access.end() {
+            Some(end_expression) => {
+                let (value, block) = self.emit_value(&end_expression, block)?;
+                let value = TypeConversion::from_target_type(ui256, &self.state.builder)
+                    .emit(value, &self.state.builder, &block);
+                (value, block)
+            }
+            None => {
+                // Open-ended slice `a[start:]` runs to the end of the array;
+                // its upper bound is the operand's length.
+                let builder = &self.state.builder;
+                let length = block
+                    .append_operation(
+                        LengthOperation::builder(builder.context, builder.unknown_location)
+                            .inp(base_value)
+                            .len(ui256)
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("sol.length always produces one result")
+                    .into();
+                (length, block)
+            }
+        };
         let result_type = TypeConversion::resolve_slang_type(
             &index_access
                 .get_type()
@@ -126,7 +146,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Type<'context>,
         BlockRef<'context, 'block>,
     )> {
-        if index_access.end().is_some() {
+        if index_access.is_slice() {
             // The value path (`emit_index_access`) intercepts slices; reaching
             // here means a slice was used as an assignment target, which is
             // not valid Solidity (calldata slices are read-only).
