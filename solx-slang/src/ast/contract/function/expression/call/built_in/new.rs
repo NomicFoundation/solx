@@ -58,9 +58,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 Some(&size_value) => {
                     let size = TypeConversion::from_target_type(builder.types.ui256, builder)
                         .emit(size_value, builder, &block);
-                    builder.emit_sol_malloc_sized(result_type, size, &block)
+                    // `new T[](n)` / `new bytes(n)` are zeroed per Solidity.
+                    builder.emit_sol_malloc_sized_zeroed(result_type, size, &block)
                 }
-                None => builder.emit_sol_malloc(result_type, &block),
+                None => builder.emit_sol_malloc_zeroed(result_type, &block),
             };
             return Ok((Some(address), block));
         }

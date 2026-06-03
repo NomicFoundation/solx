@@ -104,7 +104,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         } else if needs_fixed_alloc {
             // Allocate a fresh zero-initialised aggregate in memory and bind
             // the variable to it.
-            let allocated = emitter.state.builder.emit_sol_malloc(declared_type, &block);
+            let allocated = emitter.state.builder.emit_sol_malloc_zeroed(declared_type, &block);
             emitter.state.builder.emit_sol_store(allocated, pointer, &block);
         } else if needs_dynamic_alloc {
             // Allocate an empty (length-0) dynamic `string` / `bytes` buffer.

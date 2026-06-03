@@ -851,6 +851,62 @@ impl<'context> Builder<'context> {
             .into()
     }
 
+    /// Like [`Self::emit_sol_malloc`] but zero-initialises the allocation. Use
+    /// for an aggregate whose contents are NOT immediately overwritten — an
+    /// uninitialised fixed-size memory array / struct local or return value —
+    /// where Solidity's default value requires the bytes to read as zero. The
+    /// `zero_init` flag drives a memset in the backend allocator (a plain
+    /// `sol.malloc` reuses dirty memory, e.g. left over from a `keccak`).
+    pub fn emit_sol_malloc_zeroed<'block, B>(
+        &self,
+        result_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                MallocOperation::builder(self.context, self.unknown_location)
+                    .addr(result_type)
+                    .zero_init(Attribute::unit(self.context))
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.malloc always produces one result")
+            .into()
+    }
+
+    /// Like [`Self::emit_sol_malloc_sized`] but zero-initialises the elements.
+    /// `new T[](n)` / `new bytes(n)` allocate a fresh dynamic memory aggregate
+    /// that Solidity guarantees is zeroed; a plain `sol.malloc` would expose
+    /// dirty memory (e.g. a preceding mapping-key `keccak`).
+    pub fn emit_sol_malloc_sized_zeroed<'block, B>(
+        &self,
+        result_type: Type<'context>,
+        size: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                MallocOperation::builder(self.context, self.unknown_location)
+                    .addr(result_type)
+                    .size(size)
+                    .zero_init(Attribute::unit(self.context))
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.malloc always produces one result")
+            .into()
+    }
+
     /// Emits a `sol.copy` between two references.
     ///
     /// Use for source-level assignments that cross data locations (e.g. a

@@ -442,7 +442,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     let allocated = self
                         .state
                         .builder
-                        .emit_sol_malloc(return_type, entry_block);
+                        .emit_sol_malloc_zeroed(return_type, entry_block);
                     self.state
                         .builder
                         .emit_sol_store(allocated, pointer, entry_block);
