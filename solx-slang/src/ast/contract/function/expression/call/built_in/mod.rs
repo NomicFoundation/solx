@@ -724,11 +724,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .expression_emitter
             .emit_value(&access.operand(), block)?;
         let (values, block) = self.emit_argument_values(arguments, block)?;
+        // The wei amount is `ui256`; a narrow literal such as `send(0)` keeps
+        // its source type (ui8), but `sol.send` requires a ui256 value. Widen
+        // it, mirroring `emit_address_transfer`.
+        let amount = builder.emit_sol_cast(values[0], builder.types.ui256, &block);
         let value = block
             .append_operation(
                 SendOperation::builder(builder.context, builder.unknown_location)
                     .addr(addr)
-                    .val(values[0])
+                    .val(amount)
                     .status(builder.types.i1)
                     .build()
                     .into(),
