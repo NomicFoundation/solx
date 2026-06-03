@@ -59,11 +59,28 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
         });
 
-        // `sol.and/or/xor/shl/shr` are integer-only, but Solidity allows them on
-        // `bytesN` / `byte` (bitwise on the raw bytes). Bridge the fixed-bytes
-        // operand(s) through the equivalent unsigned integer `ui(8*N)` and cast
-        // the result back. Shift amounts are plain integers, so only the shifted
-        // value is bridged on the rhs.
+        let value = self.emit_value_binary_operation(operator, lhs, rhs, result_type, &block);
+        Ok((value, block))
+    }
+
+    /// Emits a binary `operator` over already-materialized `lhs`/`rhs` values,
+    /// producing a value of `result_type`. Shared by [`Self::emit_binary_op`]
+    /// (the expression path) and the compound-assignment path so both get the
+    /// fixed-bytes bitwise bridge below.
+    ///
+    /// `sol.and/or/xor/shl/shr` are integer-only, but Solidity allows them on
+    /// `bytesN` / `byte` (bitwise on the raw bytes). Bridge the fixed-bytes
+    /// operand(s) through the equivalent unsigned integer `ui(8*N)` and cast
+    /// the result back. Shift amounts are plain integers, so only the shifted
+    /// value is bridged on the rhs.
+    pub fn emit_value_binary_operation(
+        &self,
+        operator: Operator,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        result_type: Type<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
         let is_shift = matches!(operator, Operator::ShiftLeft | Operator::ShiftRight);
         let is_bitwise =
             is_shift || matches!(operator, Operator::BitwiseAnd | Operator::BitwiseOr | Operator::BitwiseXor);
@@ -73,14 +90,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         {
             let builder = &self.state.builder;
             let int_type = Type::from(IntegerType::unsigned(builder.context, 8 * width));
-            let lhs_fb = TypeConversion::from_target_type(result_type, builder).emit(lhs, builder, &block);
-            let lhs_int = builder.emit_sol_cast(lhs_fb, int_type, &block);
+            let lhs_fb = TypeConversion::from_target_type(result_type, builder).emit(lhs, builder, block);
+            let lhs_int = builder.emit_sol_cast(lhs_fb, int_type, block);
             let rhs_int = if is_shift {
                 // The shift amount is an integer; resize it to the bridge width.
-                TypeConversion::from_target_type(int_type, builder).emit(rhs, builder, &block)
+                TypeConversion::from_target_type(int_type, builder).emit(rhs, builder, block)
             } else {
-                let rhs_fb = TypeConversion::from_target_type(result_type, builder).emit(rhs, builder, &block);
-                builder.emit_sol_cast(rhs_fb, int_type, &block)
+                let rhs_fb = TypeConversion::from_target_type(result_type, builder).emit(rhs, builder, block);
+                builder.emit_sol_cast(rhs_fb, int_type, block)
             };
             let result_int: Value<'context, 'block> = block
                 .append_operation(operator.emit_sol_binary_operation(
@@ -93,14 +110,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .result(0)
                 .expect("binary operation always produces one result")
                 .into();
-            let result = builder.emit_sol_cast(result_int, result_type, &block);
-            return Ok((result, block));
+            return builder.emit_sol_cast(result_int, result_type, block);
         }
 
         let lhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
             lhs,
             &self.state.builder,
-            &block,
+            block,
         );
         // For exponentiation, the rhs (exponent) must be unsigned regardless
         // of the result type — `sol.exp` / `sol.cexp` require `AnyUnsignedInteger`.
@@ -113,9 +129,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let rhs = TypeConversion::from_target_type(rhs_target, &self.state.builder).emit(
             rhs,
             &self.state.builder,
-            &block,
+            block,
         );
-        let value = block
+        block
             .append_operation(operator.emit_sol_binary_operation(
                 self.checked,
                 self.state.builder.context,
@@ -125,8 +141,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             ))
             .result(0)
             .expect("binary operation always produces one result")
-            .into();
-        Ok((value, block))
+            .into()
     }
 
     /// Dispatches a binary operation to a user-defined operator function when

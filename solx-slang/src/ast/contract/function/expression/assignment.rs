@@ -133,27 +133,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
         };
         let (rhs, block) = self.emit_value(&assign.right_operand(), block)?;
-        let old = TypeConversion::from_target_type(target_type, &self.state.builder).emit(
-            old,
-            &self.state.builder,
-            &block,
-        );
-        let rhs = TypeConversion::from_target_type(target_type, &self.state.builder).emit(
-            rhs,
-            &self.state.builder,
-            &block,
-        );
-        let result = block
-            .append_operation(operator.emit_sol_binary_operation(
-                self.checked,
-                self.state.builder.context,
-                self.state.builder.unknown_location,
-                old,
-                rhs,
-            ))
-            .result(0)
-            .expect("binary operation always produces one result")
-            .into();
+        // Route through the shared expression-path emission so a compound
+        // bitwise op on `bytesN`/byte (`b |= x`) gets the same fixed-bytes →
+        // integer bridge — `sol.or`/`and`/`xor`/shifts are integer-only and
+        // reject byte operands. It coerces both operands to `target_type`.
+        let result = self.emit_value_binary_operation(operator, old, rhs, target_type, &block);
         let result = self.store_to_lvalue(LvalueTarget::Store(store_target), result, &block);
         Ok((result, block))
     }
