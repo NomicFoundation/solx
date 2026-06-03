@@ -435,6 +435,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 return_types,
             );
         }
+        // A within-library `using`-for self-call (`x.f()` where `f` is a sibling
+        // attached to `x`'s type) or member-syntax sibling call dispatches
+        // through `try_emit_library_call`, which gates on `library_function_ids`.
+        // Populate it with the library's own functions so such calls route to an
+        // internal call (receiver passed as `self`) rather than the external
+        // contract-method path (which would address-cast the value receiver).
+        self.state.library_function_ids = functions.iter().map(|f| f.node_id()).collect();
 
         let storage_layout = StorageLayout::new();
         let library_type = self.state.builder.types.contract(&library_name, false);
