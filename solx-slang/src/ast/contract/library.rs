@@ -37,6 +37,13 @@ struct LibraryCallCollector {
     /// resolve to a free function, which the caller filters out (it is emitted
     /// separately under its plain name) to avoid a double registration.
     bare_functions: Vec<FunctionDefinition>,
+    /// Every function reached by a bare-identifier reference, regardless of
+    /// context. The caller walks the *free* functions among these for the
+    /// library calls they make (`function fu() { L.inter(); }`) — those would
+    /// otherwise be missed, as free functions are not in the contract's own
+    /// walk set. The free functions themselves are not collected here (they are
+    /// emitted separately under their own name).
+    reached: Vec<FunctionDefinition>,
     /// Whether the function being walked is itself a library function, so a
     /// bare-identifier callee resolves to a sibling library function.
     inside_library: bool,
@@ -52,12 +59,17 @@ impl Visitor for LibraryCallCollector {
         // are inlined here; selector-bearing ones are reached by delegatecall.
         // Member-qualified references (`L.f`) are handled by
         // `enter_member_access_expression`.
-        if self.inside_library
-            && let Expression::Identifier(identifier) = node
+        if let Expression::Identifier(identifier) = node
             && let Some(Definition::Function(function)) = identifier.resolve_to_definition()
-            && function.compute_selector().is_none()
         {
-            self.bare_functions.push(function);
+            // A bare-identifier sibling call inside a library body (no external
+            // selector) is an internal library function inlined here.
+            if self.inside_library && function.compute_selector().is_none() {
+                self.bare_functions.push(function.clone());
+            }
+            // Record every bare reference so the caller can walk a reached free
+            // function's body for the library calls it makes.
+            self.reached.push(function);
         }
         // Descend so nested references are also recorded.
         true
@@ -176,6 +188,18 @@ pub(super) fn collect_library_functions(
                 // sibling calls are collected when walked.
                 library_ids.insert(library_function.node_id());
                 to_walk.push(library_function);
+            }
+        }
+
+        // Walk reached free functions for the library calls *they* make, without
+        // collecting them — free functions are emitted separately under their
+        // own name (see `collect_free_functions`). This catches `function fu() {
+        // L.inter(); }` called as `fu()` from the contract.
+        for reached_function in collector.reached {
+            if free_ids.contains(&reached_function.node_id())
+                && !walked.contains(&reached_function.node_id())
+            {
+                to_walk.push(reached_function);
             }
         }
     }
