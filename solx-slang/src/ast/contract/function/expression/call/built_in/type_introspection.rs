@@ -137,15 +137,20 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 identifier_path.resolve_to_definition()
         {
             let contract_name = contract_definition.name().name();
-            self.expression_emitter
-                .state
-                .add_dependency(contract_name.clone());
             let object_name = match builtin {
                 BuiltIn::TypeRuntimeCode => {
                     format!("{contract_name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX)
                 }
                 _ => contract_name,
             };
+            // Depend on the *object* actually referenced — `C` for creation
+            // code, `C_deployed` for runtime code. The deployed object is a
+            // distinct top-level linker object; depending on `C` alone leaves
+            // `runtimeCode`'s `__datasize__`/`__dataoffset__` symbols
+            // unresolved.
+            self.expression_emitter
+                .state
+                .add_dependency(object_name.clone());
             let result_type = self
                 .expression_emitter
                 .resolve_slang_type(access.get_type())
