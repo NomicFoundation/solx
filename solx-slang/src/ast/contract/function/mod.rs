@@ -161,9 +161,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             }
         }
 
-        let region = function_entry_block
-            .parent_region()
-            .expect("entry block belongs to a region");
         let mut current_block = function_entry_block;
 
         // State variable initializers run at the top of the constructor body,
@@ -179,7 +176,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             let mut emitter = StatementEmitter::new(
                 self.state,
                 &mut environment,
-                &region,
                 self.storage_layout,
                 &result_types,
             );

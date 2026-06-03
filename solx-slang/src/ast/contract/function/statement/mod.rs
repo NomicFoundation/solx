@@ -2,6 +2,8 @@
 //! Statement lowering to MLIR operations.
 //!
 
+/// Control flow statement lowering (`if`, `for`, `while`, `do`/`while`).
+pub mod control_flow;
 /// Expression statement lowering.
 pub mod expression_statement;
 /// Return statement lowering.
@@ -12,7 +14,6 @@ pub mod variable_declaration;
 use std::collections::HashMap;
 
 use melior::ir::BlockRef;
-use melior::ir::Region;
 use melior::ir::Type;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Statement;
@@ -31,11 +32,6 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
     environment: &'state mut Environment<'context, 'block>,
-    /// The current region for creating new blocks, stored as a raw pointer to
-    /// allow switching between Sol op regions without lifetime conflicts.
-    // TODO(rebuild): read once the control-flow domain (loops, branches) lands.
-    #[allow(dead_code)]
-    region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
     storage_layout: &'state HashMap<NodeId, StorageSlot>,
     /// The function's declared return types, for `return` to cast to.
@@ -51,14 +47,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     pub fn new(
         state: &'state Context<'context>,
         environment: &'state mut Environment<'context, 'block>,
-        region: &Region<'context>,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
         return_types: &'state [Type<'context>],
     ) -> Self {
         Self {
             state,
             environment,
-            region_pointer: region as *const Region<'context>,
             storage_layout,
             return_types,
             checked: true,
@@ -88,6 +82,14 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Statement::ReturnStatement(return_statement) => {
                 self.emit_return(return_statement, block)
             }
+            Statement::IfStatement(if_statement) => self.emit_if(if_statement, block),
+            Statement::ForStatement(for_statement) => self.emit_for(for_statement, block),
+            Statement::WhileStatement(while_statement) => self.emit_while(while_statement, block),
+            Statement::DoWhileStatement(do_while) => self.emit_do_while(do_while, block),
+            Statement::BreakStatement(_) => self.emit_break(block),
+            Statement::ContinueStatement(_) => self.emit_continue(block),
+            Statement::Block(inner) => self.emit_block(inner.statements(), block),
+            Statement::UncheckedBlock(inner) => self.emit_unchecked_block(inner, block),
             _ => unimplemented!(
                 "statement lowering: {:?}",
                 std::mem::discriminant(statement)
