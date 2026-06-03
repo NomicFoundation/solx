@@ -43,16 +43,28 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 TypeConversion::resolve_slang_type(slang_type, None, &self.state.builder)
             })
             .unwrap_or_else(|| self.state.builder.types.ui256);
-        // A value-type memory aggregate declared without an initializer
-        // (`T[n] memory a;`, `S memory s;`) is zero-allocated in memory by
-        // Solidity; without that, indexing it reverts. Allocate fixed-size
-        // arrays and structs up front.
-        let needs_memory_alloc = declaration.value().is_none()
+        // A memory aggregate declared without an initializer is
+        // default-initialised by Solidity, not left dangling: a fixed-size
+        // array / struct (`T[n] memory a;`, `S memory s;`) is zero-filled, and a
+        // dynamic `string` / `bytes` becomes an empty (length-0) buffer.
+        // Without this the variable is an uninitialised `sol.alloca` pointer, so
+        // indexing it reverts and ABI-encoding it (e.g. `require(cond, str)` with
+        // an unassigned `string memory str`) reads garbage instead of `""`.
+        let uninitialized = declaration.value().is_none();
+        let needs_fixed_alloc = uninitialized
             && matches!(
                 slang_declared_type,
                 Some(
                     slang_solidity_v2::ast::Type::FixedSizeArray(_)
                         | slang_solidity_v2::ast::Type::Struct(_)
+                )
+            );
+        let needs_dynamic_alloc = uninitialized
+            && matches!(
+                slang_declared_type,
+                Some(
+                    slang_solidity_v2::ast::Type::String(_)
+                        | slang_solidity_v2::ast::Type::Bytes(_)
                 )
             );
 
@@ -89,10 +101,21 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 .builder
                 .emit_sol_constant(0, declared_type, &block);
             emitter.state.builder.emit_sol_store(zero, pointer, &block);
-        } else if needs_memory_alloc {
+        } else if needs_fixed_alloc {
             // Allocate a fresh zero-initialised aggregate in memory and bind
             // the variable to it.
             let allocated = emitter.state.builder.emit_sol_malloc(declared_type, &block);
+            emitter.state.builder.emit_sol_store(allocated, pointer, &block);
+        } else if needs_dynamic_alloc {
+            // Allocate an empty (length-0) dynamic `string` / `bytes` buffer.
+            let zero = emitter
+                .state
+                .builder
+                .emit_sol_constant(0, emitter.state.builder.types.ui256, &block);
+            let allocated = emitter
+                .state
+                .builder
+                .emit_sol_malloc_sized(declared_type, zero, &block);
             emitter.state.builder.emit_sol_store(allocated, pointer, &block);
         }
         // Other non-integer declarations without an initializer are left as
