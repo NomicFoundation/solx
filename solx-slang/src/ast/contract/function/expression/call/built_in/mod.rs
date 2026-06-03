@@ -281,12 +281,19 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             BuiltIn::Addmod if arguments.len() == 3 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
                 let builder = &self.expression_emitter.state.builder;
+                // `addmod` operates on `uint256`, but a literal operand keeps its
+                // narrow type (`addmod(1, 2, d)` → ui8, ui8, ui256). `sol.addmod`
+                // requires identical operand/result types, so widen all to ui256.
+                let ui256 = builder.types.ui256;
+                let x = TypeConversion::from_target_type(ui256, builder).emit(values[0], builder, &block);
+                let y = TypeConversion::from_target_type(ui256, builder).emit(values[1], builder, &block);
+                let modulus = TypeConversion::from_target_type(ui256, builder).emit(values[2], builder, &block);
                 let value = block
                     .append_operation(
                         AddModOperation::builder(builder.context, builder.unknown_location)
-                            .x(values[0])
-                            .y(values[1])
-                            .r#mod(values[2])
+                            .x(x)
+                            .y(y)
+                            .r#mod(modulus)
                             .build()
                             .into(),
                     )
@@ -298,12 +305,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             BuiltIn::Mulmod if arguments.len() == 3 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
                 let builder = &self.expression_emitter.state.builder;
+                // `mulmod` operates on `uint256`; widen narrow literal operands so
+                // all operands/result share the type `sol.mulmod` requires.
+                let ui256 = builder.types.ui256;
+                let x = TypeConversion::from_target_type(ui256, builder).emit(values[0], builder, &block);
+                let y = TypeConversion::from_target_type(ui256, builder).emit(values[1], builder, &block);
+                let modulus = TypeConversion::from_target_type(ui256, builder).emit(values[2], builder, &block);
                 let value = block
                     .append_operation(
                         MulModOperation::builder(builder.context, builder.unknown_location)
-                            .x(values[0])
-                            .y(values[1])
-                            .r#mod(values[2])
+                            .x(x)
+                            .y(y)
+                            .r#mod(modulus)
                             .build()
                             .into(),
                     )
