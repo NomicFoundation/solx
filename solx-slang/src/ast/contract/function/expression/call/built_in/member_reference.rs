@@ -162,7 +162,6 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 }
                 _ => None,
             };
-            let builder = &self.expression_emitter.state.builder;
             // Each arm yields (selector value, fixedbytes width in bytes): a
             // 4-byte `bytes4` for functions / errors / getters, the full
             // 32-byte keccak topic hash (`bytes32`) for events.
@@ -187,9 +186,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 _ => None,
             };
             if let Some((value, width_bytes)) = selector_constant {
+                // The selector is a compile-time constant, but a `.selector`
+                // taken off a member of a value expression (`h().f.selector`)
+                // still evaluates that value for its side effects.
+                let block = self.eval_selector_receiver_side_effects(access, block)?;
                 // `!sol.fixedbytes<N>` rejects a bare integer attribute, so emit
                 // the value as an integer constant of the matching width and
                 // bridge to fixedbytes via `sol.bytes_cast`.
+                let builder = &self.expression_emitter.state.builder;
                 let integer_type =
                     Type::from(IntegerType::unsigned(builder.context, width_bytes * 8));
                 let integer = builder.emit_constant(&value, integer_type, &block);
@@ -230,6 +234,27 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok(None)
     }
 
+    /// Evaluates the receiver of a `<receiver>.member.selector` for its side
+    /// effects when `<receiver>` is a value expression (e.g. the call in
+    /// `h().f.selector`). A namespace / type qualifier (`C.f.selector`) has no
+    /// runtime value to evaluate. The selector itself stays a compile-time
+    /// constant; this only reproduces the evaluation of the discarded receiver.
+    fn eval_selector_receiver_side_effects(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+        let Expression::MemberAccessExpression(inner) = access.operand() else {
+            return Ok(block);
+        };
+        let receiver = inner.operand();
+        if is_namespace_or_type_operand(&receiver) {
+            return Ok(block);
+        }
+        let (_discarded, block) = self.expression_emitter.emit_value(&receiver, block)?;
+        Ok(block)
+    }
+
     /// `this.f` / `obj.f` used as a value (no call) is an external
     /// function pointer: `sol.ext_func_constant(addr, selector)`.
     pub(crate) fn try_emit_external_function_pointer(
@@ -263,4 +288,29 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
         Ok(None)
     }
+}
+
+/// Whether `expr` is a namespace or type reference (a contract / interface /
+/// library / import / enum / struct / user-defined-value-type name) rather than
+/// a runtime value. Such an operand carries no side effects, so the receiver of
+/// a `.selector` taken through it is not evaluated.
+fn is_namespace_or_type_operand(expr: &Expression) -> bool {
+    let definition = match expr {
+        Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+        Expression::MemberAccessExpression(member) => member.member().resolve_to_definition(),
+        _ => return false,
+    };
+    matches!(
+        definition,
+        Some(
+            Definition::Contract(_)
+                | Definition::Interface(_)
+                | Definition::Library(_)
+                | Definition::Import(_)
+                | Definition::ImportedSymbol(_)
+                | Definition::Enum(_)
+                | Definition::Struct(_)
+                | Definition::UserDefinedValueType(_)
+        )
+    )
 }
