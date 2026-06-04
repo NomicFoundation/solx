@@ -7,13 +7,18 @@ pub mod function;
 
 use std::collections::HashMap;
 
+use melior::ir::BlockRef;
+use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::StateVariableDefinition;
 
 use solx_mlir::Context;
+use solx_mlir::StateMutability;
+use solx_utils::DataLocation;
 
 use self::function::FunctionEmitter;
 use self::function::expression::call::type_conversion::TypeConversion;
@@ -110,6 +115,68 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             self.state.current_contract_type = None;
         }
 
+        // Solidity auto-generates an external `view` getter for every public
+        // state variable.
+        for member in contract.members().iter() {
+            let ContractMember::StateVariableDefinition(state_variable) = member else {
+                continue;
+            };
+            let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
+                continue;
+            };
+            self.emit_state_variable_getter(&state_variable, slot, &contract_body)?;
+        }
+
+        Ok(())
+    }
+
+    /// Emits the auto-generated external getter for a public, value-typed state
+    /// variable: `T public name;` becomes `function name() external view returns
+    /// (T)` reading `slot` via `sol.addr_of` + `sol.load`.
+    ///
+    /// Indexed getters (mappings / arrays, which take key/index arguments) and
+    /// reference-typed getters (`string` / `bytes` / struct, which return a
+    /// memory copy of the storage value) defer to later domains; they are
+    /// skipped here so the rest of the contract still compiles.
+    fn emit_state_variable_getter(
+        &self,
+        state_variable: &StateVariableDefinition,
+        slot: &StorageSlot,
+        contract_body: &BlockRef<'context, '_>,
+    ) -> anyhow::Result<()> {
+        let Some(AbiEntry::Function(abi)) = state_variable.compute_abi_entry() else {
+            return Ok(());
+        };
+        if !abi.inputs().is_empty() {
+            return Ok(());
+        }
+        let declared_type = state_variable
+            .get_type()
+            .expect("the binder types every state variable");
+        if declared_type.is_reference_type() {
+            return Ok(());
+        }
+        let Some(signature) = state_variable.compute_canonical_signature() else {
+            return Ok(());
+        };
+        let Some(selector) = state_variable.compute_selector() else {
+            return Ok(());
+        };
+        let builder = &self.state.builder;
+        let element_type = TypeConversion::resolve_slang_type(&declared_type, None, builder);
+        let entry = builder.emit_sol_func(
+            &signature,
+            &[],
+            std::slice::from_ref(&element_type),
+            Some(selector),
+            StateMutability::View,
+            None,
+            contract_body,
+        );
+        let pointer_type = builder.types.pointer(element_type, DataLocation::Storage);
+        let pointer = builder.emit_sol_addr_of(&slot.name, pointer_type, &entry);
+        let value = builder.emit_sol_load(pointer, element_type, &entry)?;
+        builder.emit_sol_return(&[value], &entry);
         Ok(())
     }
 

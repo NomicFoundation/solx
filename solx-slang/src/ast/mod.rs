@@ -56,16 +56,27 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
 
         let mut method_identifiers = BTreeMap::new();
         for contract_member in contract.members().iter() {
-            let ContractMember::FunctionDefinition(function) = contract_member else {
-                continue;
-            };
-            let Some(signature) = function.compute_canonical_signature() else {
-                continue;
-            };
-            let Some(selector) = function.compute_selector() else {
-                continue;
-            };
-            method_identifiers.insert(signature, format!("{selector:08x}"));
+            match contract_member {
+                ContractMember::FunctionDefinition(function) => {
+                    let Some(signature) = function.compute_canonical_signature() else {
+                        continue;
+                    };
+                    let Some(selector) = function.compute_selector() else {
+                        continue;
+                    };
+                    method_identifiers.insert(signature, format!("{selector:08x}"));
+                }
+                ContractMember::StateVariableDefinition(state_variable) => {
+                    let Some(signature) = state_variable.compute_canonical_signature() else {
+                        continue;
+                    };
+                    let Some(selector) = state_variable.compute_selector() else {
+                        continue;
+                    };
+                    method_identifiers.insert(signature, format!("{selector:08x}"));
+                }
+                _ => {}
+            }
         }
 
         Ok(Some((name, method_identifiers)))
