@@ -47,8 +47,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
     }
 
-    /// Lowers a struct-field read `s.field`, returning `Ok(None)` when the base
-    /// is not a struct so the caller falls back to built-in member access.
+    /// Lowers a struct-field read `s.field` to `sol.gep` + `sol.load`.
+    ///
+    /// Returns `Ok(None)` when the base is not a struct, so the caller falls
+    /// back to built-in member-access lowering.
     fn emit_struct_field(
         &self,
         access: &MemberAccessExpression,
@@ -65,10 +67,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Ok(Some((value, block)))
     }
 
-    /// Resolves a struct-field access `s.field` to the field's address via
-    /// `sol.gep`, returning `Ok(None)` when the base is not a struct. The field
-    /// index is resolved by `NodeId`, and the field's element type comes from
-    /// the base value's MLIR struct type.
+    /// Emits the address of `s.field` together with the field's element type,
+    /// without the trailing load. Shared by the value read and the assignment
+    /// lvalue path. Returns `Ok(None)` when the base is not a struct.
     pub fn emit_struct_field_address(
         &self,
         access: &MemberAccessExpression,
@@ -105,9 +106,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Ok(Some((address, element_type, block)))
     }
 
-    /// Lowers a nullary environment global (`msg.*`, `tx.*`, `block.*`) to its
-    /// `sol.*` intrinsic. The `msg` / `tx` / `block` operand is a magic global
-    /// with no runtime value, so it is not evaluated.
+    /// Lowers a nullary environment global to its `sol.*` intrinsic. The
+    /// `msg` / `tx` / `block` operand is a magic global with no runtime value,
+    /// so it is not evaluated.
     fn emit_environment_global(
         &self,
         built_in: BuiltIn,
