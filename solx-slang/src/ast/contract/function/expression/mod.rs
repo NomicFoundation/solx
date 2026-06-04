@@ -22,6 +22,8 @@ pub mod literal;
 pub mod logical;
 /// Assignable locations (lvalues).
 pub mod lvalue;
+/// Member access expression lowering.
+pub mod member;
 /// State variable storage access.
 pub mod storage;
 
@@ -139,6 +141,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 self.emit_bitwise_xor(expression, block)
             }
             Expression::ShiftExpression(expression) => self.emit_shift(expression, block),
+            Expression::MemberAccessExpression(access) => self.emit_member_access(access, block),
             _ => unimplemented!(
                 "expression lowering: {:?}",
                 std::mem::discriminant(expression)
