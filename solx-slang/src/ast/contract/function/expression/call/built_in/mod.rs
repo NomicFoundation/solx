@@ -115,6 +115,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     }
 
     /// Lowers `require(condition[, message])` to `sol.require`.
+    ///
+    /// A string-literal message is carried verbatim; a runtime string is
+    /// wrapped as `Error(string)`. A custom-error message (`require(c, E(a))`)
+    /// defers to the reverts domain.
     fn emit_require(
         &self,
         arguments: &PositionalArguments,
@@ -157,62 +161,136 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// Lowers `gasleft()` to `sol.gasleft`.
     fn emit_gasleft(
         &self,
-        _block: BlockRef<'context, 'block>,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        unimplemented!("built-in: gasleft")
+        let value = self
+            .expression_emitter
+            .state
+            .builder
+            .emit_sol_gas_left(&block);
+        Ok((Some(value), block))
     }
 
     /// Lowers `keccak256(bytes memory)` to `sol.keccak256`.
     fn emit_keccak256(
         &self,
-        _arguments: &PositionalArguments,
-        _block: BlockRef<'context, 'block>,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        unimplemented!("built-in: keccak256")
+        let (values, block) = self.emit_argument_values(arguments, block)?;
+        let value = self
+            .expression_emitter
+            .state
+            .builder
+            .emit_sol_keccak256(values[0], &block);
+        Ok((Some(value), block))
     }
 
     /// Lowers `sha256(bytes memory)` to the `sol.sha256` precompile.
     fn emit_sha256(
         &self,
-        _arguments: &PositionalArguments,
-        _block: BlockRef<'context, 'block>,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        unimplemented!("built-in: sha256")
+        let (values, block) = self.emit_argument_values(arguments, block)?;
+        let value = self
+            .expression_emitter
+            .state
+            .builder
+            .emit_sol_sha256(values[0], &block);
+        Ok((Some(value), block))
     }
 
     /// Lowers `ripemd160(bytes memory)` to the `sol.ripemd160` precompile.
     fn emit_ripemd160(
         &self,
-        _arguments: &PositionalArguments,
-        _block: BlockRef<'context, 'block>,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        unimplemented!("built-in: ripemd160")
+        let (values, block) = self.emit_argument_values(arguments, block)?;
+        let value = self
+            .expression_emitter
+            .state
+            .builder
+            .emit_sol_ripemd160(values[0], &block);
+        Ok((Some(value), block))
     }
 
     /// Lowers `ecrecover(hash, v, r, s)` to the `sol.ecrecover` precompile.
     fn emit_ecrecover(
         &self,
-        _arguments: &PositionalArguments,
-        _block: BlockRef<'context, 'block>,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        unimplemented!("built-in: ecrecover")
+        let (values, block) = self.emit_argument_values(arguments, block)?;
+        let value = self
+            .expression_emitter
+            .state
+            .builder
+            .emit_sol_ecrecover(values[0], values[1], values[2], values[3], &block);
+        Ok((Some(value), block))
     }
 
     /// Lowers `addmod(x, y, m)` to `sol.addmod`.
     fn emit_addmod(
         &self,
-        _arguments: &PositionalArguments,
-        _block: BlockRef<'context, 'block>,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        unimplemented!("built-in: addmod")
+        let (values, block) = self.emit_argument_values(arguments, block)?;
+        let x = self.widen_to_word(values[0], &block);
+        let y = self.widen_to_word(values[1], &block);
+        let modulus = self.widen_to_word(values[2], &block);
+        let value = self
+            .expression_emitter
+            .state
+            .builder
+            .emit_sol_addmod(x, y, modulus, &block);
+        Ok((Some(value), block))
     }
 
     /// Lowers `mulmod(x, y, m)` to `sol.mulmod`.
     fn emit_mulmod(
         &self,
-        _arguments: &PositionalArguments,
-        _block: BlockRef<'context, 'block>,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        unimplemented!("built-in: mulmod")
+        let (values, block) = self.emit_argument_values(arguments, block)?;
+        let x = self.widen_to_word(values[0], &block);
+        let y = self.widen_to_word(values[1], &block);
+        let modulus = self.widen_to_word(values[2], &block);
+        let value = self
+            .expression_emitter
+            .state
+            .builder
+            .emit_sol_mulmod(x, y, modulus, &block);
+        Ok((Some(value), block))
+    }
+
+    /// Evaluates each argument expression in order.
+    fn emit_argument_values(
+        &self,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let mut values = Vec::with_capacity(arguments.len());
+        let mut block = block;
+        for argument in arguments.iter() {
+            let (value, next_block) = self.expression_emitter.emit_value(&argument, block)?;
+            values.push(value);
+            block = next_block;
+        }
+        Ok((values, block))
+    }
+
+    /// Widens an integer value to `ui256`, the type `sol.addmod`/`sol.mulmod`
+    /// require for their uniform operands (a narrow literal keeps its type).
+    fn widen_to_word(
+        &self,
+        value: Value<'context, 'block>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        let builder = &self.expression_emitter.state.builder;
+        builder.emit_sol_cast(value, builder.types.ui256, block)
     }
 }
