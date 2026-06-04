@@ -94,6 +94,43 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((result, block))
     }
 
+    /// Emits a direct internal call `f(args)` whose results are bound
+    /// individually (tuple deconstruction `(a, b) = f();`), returning one value
+    /// per declared return.
+    ///
+    /// Only direct internal function callees are supported; member-access,
+    /// library, and function-pointer callees defer to later domains.
+    pub fn emit_function_call_results(
+        &self,
+        call: &FunctionCallExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let ArgumentsDeclaration::PositionalArguments(arguments) = &call.arguments() else {
+            unimplemented!("named-argument call lowering");
+        };
+        let Expression::Identifier(identifier) = call.operand() else {
+            unimplemented!(
+                "multi-result call callee: {:?}",
+                std::mem::discriminant(&call.operand())
+            );
+        };
+        let Some(Definition::Function(function)) = identifier.resolve_to_definition() else {
+            unimplemented!(
+                "multi-result call to non-function callee: {}",
+                identifier.name()
+            );
+        };
+
+        let (callee_name, argument_values, return_types, block) =
+            self.emit_call_setup(&function, arguments, block)?;
+        let results = self
+            .expression_emitter
+            .state
+            .builder
+            .emit_sol_call_results(callee_name, &argument_values, return_types, &block)?;
+        Ok((results, block))
+    }
+
     /// Resolves a callee function's symbol, parameter types, and return types,
     /// then evaluates and coerces each argument to its parameter type.
     fn emit_call_setup<'a>(
