@@ -32,6 +32,7 @@ use ruint::aliases::U256;
 use crate::CmpPredicate;
 use crate::StateMutability;
 use crate::context::builder::type_factory::TypeFactory;
+use crate::ods::sol::AddModOperation;
 use crate::ods::sol::AddOperation;
 use crate::ods::sol::AddrOfOperation;
 use crate::ods::sol::AddressCastOperation;
@@ -62,6 +63,7 @@ use crate::ods::sol::DeleteOperation;
 use crate::ods::sol::DivOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::DynBytesToFixedBytesOperation;
+use crate::ods::sol::EcrecoverOperation;
 use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::ExpOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
@@ -73,10 +75,12 @@ use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::GepOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::IfOperation;
+use crate::ods::sol::Keccak256Operation;
 use crate::ods::sol::LoadOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::MapOperation;
 use crate::ods::sol::ModOperation;
+use crate::ods::sol::MulModOperation;
 use crate::ods::sol::MulOperation;
 use crate::ods::sol::NotOperation;
 use crate::ods::sol::OrOperation;
@@ -86,6 +90,8 @@ use crate::ods::sol::PushStringOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
+use crate::ods::sol::Ripemd160Operation;
+use crate::ods::sol::Sha256Operation;
 use crate::ods::sol::ShlOperation;
 use crate::ods::sol::ShrOperation;
 use crate::ods::sol::StateVarOperation;
@@ -1373,9 +1379,10 @@ impl<'context> Builder<'context> {
             .into()
     }
 
-    /// Emits `sol.gas` yielding all remaining gas as a `ui256` — the default
-    /// gas forwarded by an external call without an explicit `{gas: ...}`.
-    fn emit_sol_gas_left<'block, B>(&self, block: &B) -> Value<'context, 'block>
+    /// Emits `sol.gasleft` yielding all remaining gas as a `ui256` — both the
+    /// `gasleft()` built-in and the default gas an external call forwards
+    /// without an explicit `{gas: ...}`.
+    pub fn emit_sol_gas_left<'block, B>(&self, block: &B) -> Value<'context, 'block>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
@@ -1933,6 +1940,159 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.not always produces one result")
+            .into()
+    }
+
+    // ==== Precompiles ====
+
+    /// Emits `sol.keccak256` over a memory buffer, yielding a `fixedbytes<32>`.
+    pub fn emit_sol_keccak256<'block, B>(
+        &self,
+        address: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                Keccak256Operation::builder(self.context, self.unknown_location)
+                    .addr(address)
+                    .result(self.types.fixed_bytes(32))
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.keccak256 always produces one result")
+            .into()
+    }
+
+    /// Emits the `sol.sha256` precompile over a memory buffer (`fixedbytes<32>`).
+    pub fn emit_sol_sha256<'block, B>(
+        &self,
+        data: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                Sha256Operation::builder(self.context, self.unknown_location)
+                    .data(data)
+                    .result(self.types.fixed_bytes(32))
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.sha256 always produces one result")
+            .into()
+    }
+
+    /// Emits the `sol.ripemd160` precompile over a memory buffer
+    /// (`fixedbytes<20>`).
+    pub fn emit_sol_ripemd160<'block, B>(
+        &self,
+        data: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                Ripemd160Operation::builder(self.context, self.unknown_location)
+                    .data(data)
+                    .result(self.types.fixed_bytes(20))
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.ripemd160 always produces one result")
+            .into()
+    }
+
+    /// Emits the `sol.ecrecover` precompile, yielding the signer `address`.
+    pub fn emit_sol_ecrecover<'block, B>(
+        &self,
+        hash: Value<'context, 'block>,
+        v: Value<'context, 'block>,
+        r: Value<'context, 'block>,
+        s: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                EcrecoverOperation::builder(self.context, self.unknown_location)
+                    .hash(hash)
+                    .v(v)
+                    .r(r)
+                    .s(s)
+                    .result(self.types.sol_address)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.ecrecover always produces one result")
+            .into()
+    }
+
+    /// Emits `sol.addmod` (`(x + y) % m` without intermediate overflow).
+    pub fn emit_sol_addmod<'block, B>(
+        &self,
+        x: Value<'context, 'block>,
+        y: Value<'context, 'block>,
+        modulus: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                AddModOperation::builder(self.context, self.unknown_location)
+                    .x(x)
+                    .y(y)
+                    .r#mod(modulus)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.addmod always produces one result")
+            .into()
+    }
+
+    /// Emits `sol.mulmod` (`(x * y) % m` without intermediate overflow).
+    pub fn emit_sol_mulmod<'block, B>(
+        &self,
+        x: Value<'context, 'block>,
+        y: Value<'context, 'block>,
+        modulus: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                MulModOperation::builder(self.context, self.unknown_location)
+                    .x(x)
+                    .y(y)
+                    .r#mod(modulus)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.mulmod always produces one result")
             .into()
     }
 
