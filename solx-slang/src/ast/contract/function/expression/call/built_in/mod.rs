@@ -2,6 +2,8 @@
 //! Built-in function call lowering.
 //!
 
+/// Address value-transfer member built-ins (`send`/`transfer`).
+pub mod address;
 /// Dynamic-array and `bytes` member built-ins (`push`/`pop`).
 pub mod array;
 
@@ -67,6 +69,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::ArrayPop) => self.emit_array_pop(access, block).map(Some),
             Some(BuiltIn::ArrayPush) => self.emit_array_push(access, arguments, block).map(Some),
+            Some(BuiltIn::AddressSend) => {
+                self.emit_address_send(access, arguments, block).map(Some)
+            }
+            Some(BuiltIn::AddressTransfer) => self
+                .emit_address_transfer(access, arguments, block)
+                .map(Some),
             _ => Ok(None),
         }
     }

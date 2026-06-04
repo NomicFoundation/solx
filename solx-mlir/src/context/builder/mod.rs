@@ -109,6 +109,7 @@ use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
 use crate::ods::sol::Ripemd160Operation;
+use crate::ods::sol::SendOperation;
 use crate::ods::sol::Sha256Operation;
 use crate::ods::sol::ShlOperation;
 use crate::ods::sol::ShrOperation;
@@ -118,6 +119,7 @@ use crate::ods::sol::StoreOperation;
 use crate::ods::sol::StringLitOperation;
 use crate::ods::sol::SubOperation;
 use crate::ods::sol::TimestampOperation;
+use crate::ods::sol::TransferOperation;
 use crate::ods::sol::WhileOperation;
 use crate::ods::sol::XorOperation;
 use crate::ods::sol::YieldOperation;
@@ -1247,6 +1249,52 @@ impl<'context> Builder<'context> {
         block.append_operation(
             PopOperation::builder(self.context, self.unknown_location)
                 .inp(array)
+                .build()
+                .into(),
+        );
+    }
+
+    /// Emits `sol.send` forwarding `amount` wei to `address`, yielding a `bool`
+    /// success status (`address.send(amount)`; no revert on failure).
+    pub fn emit_sol_send<'block, B>(
+        &self,
+        address: Value<'context, 'block>,
+        amount: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                SendOperation::builder(self.context, self.unknown_location)
+                    .addr(address)
+                    .val(amount)
+                    .status(self.types.i1)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.send always produces one result")
+            .into()
+    }
+
+    /// Emits `sol.transfer` forwarding `amount` wei to `address`
+    /// (`address.transfer(amount)`; reverts on failure).
+    pub fn emit_sol_transfer<'block, B>(
+        &self,
+        address: Value<'context, 'block>,
+        amount: Value<'context, 'block>,
+        block: &B,
+    ) where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block.append_operation(
+            TransferOperation::builder(self.context, self.unknown_location)
+                .addr(address)
+                .val(amount)
                 .build()
                 .into(),
         );

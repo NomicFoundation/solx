@@ -95,7 +95,12 @@ impl<'context> TypeFactory<'context> {
     pub fn element_type<'a>(aggregate_type: Type<'a>, index: u64) -> Type<'a> {
         // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
         // `sol::getEltType` for an in-range index.
-        unsafe { Type::from_raw(crate::ffi::mlirSolGetEltType(aggregate_type.to_raw(), index)) }
+        unsafe {
+            Type::from_raw(crate::ffi::mlirSolGetEltType(
+                aggregate_type.to_raw(),
+                index,
+            ))
+        }
     }
 
     /// Whether `ty` is a Sol reference type: array, struct, string/`bytes`, or
@@ -114,9 +119,7 @@ impl<'context> TypeFactory<'context> {
     /// `!sol.func_ref<…>` or external `!sol.ext_func_ref<…>`.
     pub fn is_sol_function_ref(ty: Type<'_>) -> bool {
         let raw = ty.to_raw();
-        unsafe {
-            crate::ffi::solxIsFuncRefType(raw) || crate::ffi::solxIsExtFuncRefType(raw)
-        }
+        unsafe { crate::ffi::solxIsFuncRefType(raw) || crate::ffi::solxIsExtFuncRefType(raw) }
     }
 
     /// Whether `ty` is an external function reference (`!sol.ext_func_ref<…>`),
@@ -319,8 +322,8 @@ impl<'context> TypeFactory<'context> {
     /// Solidity caps enums at 256 members, so the maximum valid enumerator
     /// index (`member_count - 1`) always fits in a `u8`.
     pub fn enumeration_for_member_count(&self, member_count: usize) -> Type<'context> {
-        let max = u8::try_from(member_count.saturating_sub(1))
-            .expect("enum member count fits in u8");
+        let max =
+            u8::try_from(member_count.saturating_sub(1)).expect("enum member count fits in u8");
         self.enumeration(max.into())
     }
 
