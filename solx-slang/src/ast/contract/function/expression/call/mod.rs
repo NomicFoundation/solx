@@ -16,12 +16,11 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 
+use self::type_conversion::TypeConversion;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 
 /// Lowers a `FunctionCallExpression`, classifying the callee and routing to the
 /// matching call kind.
-// TODO(skeleton): the field is read once the call-kind handlers are filled in.
-#[allow(dead_code)]
 pub struct CallEmitter<'emitter, 'state, 'context, 'block> {
     /// The parent expression emitter, for recursive subexpression lowering.
     expression_emitter: &'emitter ExpressionEmitter<'state, 'context, 'block>,
@@ -81,10 +80,26 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// `Ok(None)` when the call is not a single-argument type conversion.
     fn try_emit_type_conversion(
         &self,
-        _call: &FunctionCallExpression,
-        _arguments: &PositionalArguments,
-        _block: BlockRef<'context, 'block>,
+        call: &FunctionCallExpression,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
-        unimplemented!("type conversion call")
+        if !call.is_type_conversion() || arguments.len() != 1 {
+            return Ok(None);
+        }
+        let Some(target_slang_type) = call.get_type() else {
+            unimplemented!("untyped type conversion");
+        };
+        let builder = &self.expression_emitter.state.builder;
+        let target_type = TypeConversion::resolve_slang_type(&target_slang_type, None, builder);
+
+        let argument = arguments
+            .iter()
+            .next()
+            .expect("argument count checked to be one");
+        let (value, block) = self.expression_emitter.emit_value(&argument, block)?;
+        let result =
+            TypeConversion::from_target_type(target_type, builder).emit(value, builder, &block);
+        Ok(Some((Some(result), block)))
     }
 }
