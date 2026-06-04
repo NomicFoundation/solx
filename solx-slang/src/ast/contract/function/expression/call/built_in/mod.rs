@@ -101,19 +101,57 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// Lowers `assert(condition)` to `sol.assert`.
     fn emit_assert(
         &self,
-        _arguments: &PositionalArguments,
-        _block: BlockRef<'context, 'block>,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        unimplemented!("built-in: assert")
+        let condition = arguments.iter().next().expect("assert takes one argument");
+        let (value, block) = self.expression_emitter.emit_value(&condition, block)?;
+        let condition = self.expression_emitter.emit_is_nonzero(value, &block);
+        self.expression_emitter
+            .state
+            .builder
+            .emit_sol_assert(condition, &block);
+        Ok((None, block))
     }
 
     /// Lowers `require(condition[, message])` to `sol.require`.
     fn emit_require(
         &self,
-        _arguments: &PositionalArguments,
-        _block: BlockRef<'context, 'block>,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        unimplemented!("built-in: require")
+        let mut arguments = arguments.iter();
+        let condition = arguments
+            .next()
+            .expect("require takes a condition argument");
+        let message = arguments.next();
+
+        let (value, block) = self.expression_emitter.emit_value(&condition, block)?;
+        let condition = self.expression_emitter.emit_is_nonzero(value, &block);
+        let builder = &self.expression_emitter.state.builder;
+        match message {
+            None => {
+                builder.emit_sol_require(condition, None, &[], false, &block);
+                Ok((None, block))
+            }
+            Some(Expression::StringExpression(string)) => {
+                let literal = String::from_utf8(string.value())
+                    .map_err(|_| anyhow::anyhow!("require message is not valid UTF-8"))?;
+                builder.emit_sol_require(condition, Some(&literal), &[], false, &block);
+                Ok((None, block))
+            }
+            Some(expression) => {
+                let (message, block) = self.expression_emitter.emit_value(&expression, block)?;
+                self.expression_emitter.state.builder.emit_sol_require(
+                    condition,
+                    Some("Error(string)"),
+                    &[message],
+                    true,
+                    &block,
+                );
+                Ok((None, block))
+            }
+        }
     }
 
     /// Lowers `gasleft()` to `sol.gasleft`.
