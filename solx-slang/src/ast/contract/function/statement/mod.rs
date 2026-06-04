@@ -33,9 +33,6 @@ use crate::ast::contract::function::storage_slot::StorageSlot;
 ///
 /// Returns `Some(block)` as the continuation block, or `None` when control
 /// flow has been terminated (by `return`, `break`, or `continue`).
-// TODO(skeleton): the fields are written but not yet read; they become read as
-// the statement-handler domains are filled in.
-#[allow(dead_code)]
 pub struct StatementEmitter<'state, 'context, 'block> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
