@@ -27,7 +27,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             unimplemented!("compound assignment lowering");
         }
 
-        let lvalue = self.resolve_lvalue(&assignment.left_operand());
+        let (lvalue, block) = self.resolve_lvalue(&assignment.left_operand(), block)?;
         let (value, block) = self.emit_value(&assignment.right_operand(), block)?;
         let stored = TypeConversion::from_target_type(lvalue.element_type(), &self.state.builder)
             .emit(value, &self.state.builder, &block);

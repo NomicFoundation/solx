@@ -11,6 +11,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::Identifier;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -22,27 +23,50 @@ pub enum Lvalue<'context, 'block> {
     Stack(Value<'context, 'block>, Type<'context>),
     /// A value-typed state variable storage slot.
     Storage(StorageSlot, Type<'context>),
+    /// A materialized element address — a struct field or array element,
+    /// already resolved to a pointer (the address-producing ops have run).
+    Pointer(Value<'context, 'block>, Type<'context>),
 }
 
 impl<'context, 'block> Lvalue<'context, 'block> {
     /// The declared element type of the location.
     pub fn element_type(&self) -> Type<'context> {
         match self {
-            Self::Stack(_, element_type) | Self::Storage(_, element_type) => *element_type,
+            Self::Stack(_, element_type)
+            | Self::Storage(_, element_type)
+            | Self::Pointer(_, element_type) => *element_type,
         }
     }
 }
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
-    /// Resolves an expression to the location it denotes for assignment.
+    /// Resolves an expression to the location it denotes for assignment,
+    /// emitting any address-producing ops (struct-field `sol.gep`) into `block`.
     ///
-    /// Only identifier lvalues — locals, parameters, value-typed state
-    /// variables — are supported; index, member, and reference-typed targets
-    /// are lowered by later domains.
-    pub fn resolve_lvalue(&self, expression: &Expression) -> Lvalue<'context, 'block> {
-        let Expression::Identifier(identifier) = expression else {
-            unimplemented!("lvalue: {:?}", std::mem::discriminant(expression));
-        };
+    /// Identifier targets (locals, parameters, value-typed state variables) and
+    /// struct-field member accesses are supported; index and reference-typed
+    /// targets are lowered by later domains.
+    pub fn resolve_lvalue(
+        &self,
+        expression: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Lvalue<'context, 'block>, BlockRef<'context, 'block>)> {
+        match expression {
+            Expression::Identifier(identifier) => {
+                Ok((self.resolve_identifier_lvalue(identifier), block))
+            }
+            Expression::MemberAccessExpression(access) => {
+                let (address, element_type, block) = self
+                    .emit_struct_field_address(access, block)?
+                    .expect("a member-access lvalue addresses a struct field");
+                Ok((Lvalue::Pointer(address, element_type), block))
+            }
+            _ => unimplemented!("lvalue: {:?}", std::mem::discriminant(expression)),
+        }
+    }
+
+    /// Resolves an identifier to the stack slot or storage slot it names.
+    fn resolve_identifier_lvalue(&self, identifier: &Identifier) -> Lvalue<'context, 'block> {
         match identifier.resolve_to_definition() {
             Some(Definition::Variable(_) | Definition::Parameter(_)) => {
                 let (pointer, element_type) =
@@ -85,6 +109,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Lvalue::Storage(slot, element_type) => {
                 self.emit_storage_load(slot, *element_type, block)
             }
+            Lvalue::Pointer(pointer, element_type) => {
+                self.state
+                    .builder
+                    .emit_sol_load(*pointer, *element_type, block)
+            }
         }
     }
 
@@ -99,6 +128,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Lvalue::Stack(pointer, _) => self.state.builder.emit_sol_store(value, *pointer, block),
             Lvalue::Storage(slot, element_type) => {
                 self.emit_storage_store(slot, value, *element_type, block);
+            }
+            Lvalue::Pointer(pointer, _) => {
+                self.state.builder.emit_sol_store(value, *pointer, block);
             }
         }
     }

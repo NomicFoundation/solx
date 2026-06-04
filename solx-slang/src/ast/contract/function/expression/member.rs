@@ -3,9 +3,13 @@
 //!
 
 use melior::ir::BlockRef;
+use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::ValueLike;
 use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::MemberAccessExpression;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 
@@ -47,10 +51,58 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// is not a struct so the caller falls back to built-in member access.
     fn emit_struct_field(
         &self,
-        _access: &MemberAccessExpression,
-        _block: BlockRef<'context, 'block>,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
-        Ok(None)
+        let Some((address, element_type, block)) = self.emit_struct_field_address(access, block)?
+        else {
+            return Ok(None);
+        };
+        let value = self
+            .state
+            .builder
+            .emit_sol_load(address, element_type, &block)?;
+        Ok(Some((value, block)))
+    }
+
+    /// Resolves a struct-field access `s.field` to the field's address via
+    /// `sol.gep`, returning `Ok(None)` when the base is not a struct. The field
+    /// index is resolved by `NodeId`, and the field's element type comes from
+    /// the base value's MLIR struct type.
+    pub fn emit_struct_field_address(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<
+        Option<(
+            Value<'context, 'block>,
+            Type<'context>,
+            BlockRef<'context, 'block>,
+        )>,
+    > {
+        let base = access.operand();
+        let Some(SlangType::Struct(struct_type)) = base.get_type() else {
+            return Ok(None);
+        };
+        let Definition::Struct(struct_definition) = struct_type.definition() else {
+            unreachable!("a Slang struct type always references a struct definition");
+        };
+        let field_index = match access.member().resolve_to_definition() {
+            Some(Definition::StructMember(field)) => struct_definition
+                .members()
+                .iter()
+                .position(|member| member.node_id() == field.node_id()),
+            _ => None,
+        }
+        .expect("the binder resolves a struct field access to a member of its struct");
+
+        let (base_value, block) = self.emit_value(&base, block)?;
+        let builder = &self.state.builder;
+        let index = builder.emit_sol_constant(field_index as i64, builder.types.ui64, &block);
+        let element_type =
+            solx_mlir::TypeFactory::element_type(base_value.r#type(), field_index as u64);
+        let address = builder.emit_sol_gep(base_value, index, element_type, &block);
+        Ok(Some((address, element_type, block)))
     }
 
     /// Lowers a nullary environment global (`msg.*`, `tx.*`, `block.*`) to its
