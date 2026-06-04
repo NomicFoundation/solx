@@ -2,6 +2,8 @@
 //! Function and built-in call lowering.
 //!
 
+/// Built-in function call lowering.
+pub mod built_in;
 /// Type conversions between Solidity and Sol dialect MLIR types.
 pub mod type_conversion;
 
@@ -44,10 +46,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(result);
         }
 
-        unimplemented!(
-            "call lowering: {:?}",
-            std::mem::discriminant(&call.operand())
-        )
+        let callee = call.operand();
+        if let Some(result) = self.try_emit_built_in_call(&callee, arguments, block)? {
+            return Ok(result);
+        }
+
+        unimplemented!("call lowering: {:?}", std::mem::discriminant(&callee))
     }
 
     /// Emits an explicit type conversion `T(x)` (e.g. `uint256(x)`, `uint8(x)`)
