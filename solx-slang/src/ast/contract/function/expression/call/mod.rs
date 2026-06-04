@@ -70,6 +70,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
     /// Emits a direct internal call `f(args)` to a contract function as a
     /// `sol.call` to its registered symbol.
+    ///
+    /// Calls through function-pointer values and member-access callees
+    /// (`c.g(...)`, `L.f(...)`) defer to later domains.
     fn emit_internal_call(
         &self,
         callee: &Expression,
@@ -131,8 +134,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((results, block))
     }
 
-    /// Resolves a callee function's symbol, parameter types, and return types,
-    /// then evaluates and coerces each argument to its parameter type.
+    /// Resolves a callee's registered signature and emits its arguments,
+    /// each coerced to its declared parameter type.
+    ///
+    /// Returns the callee's MLIR symbol, the argument values, its declared
+    /// return types, and the continuation block.
     fn emit_call_setup<'a>(
         &'a self,
         function: &FunctionDefinition,
@@ -167,8 +173,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((callee_name, argument_values, return_types, block))
     }
 
-    /// Emits an explicit type conversion `T(x)` via [`TypeConversion`], or
-    /// `Ok(None)` when the call is not a single-argument type conversion.
+    /// Emits an explicit type conversion `T(x)` (e.g. `uint256(x)`, `uint8(x)`)
+    /// as a `sol.cast`/`sol.address_cast`/comparison via [`TypeConversion`].
+    ///
+    /// Returns `None` when the call is not a single-argument type conversion.
+    /// Conversions slang leaves untyped (enum, `bytes` of a constant) and
+    /// single-field struct constructors (which slang also reports as
+    /// conversions) defer to later domains.
     fn try_emit_type_conversion(
         &self,
         call: &FunctionCallExpression,
