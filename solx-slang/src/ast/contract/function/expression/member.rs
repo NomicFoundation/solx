@@ -12,8 +12,25 @@ use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::CallEmitter;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+    /// Lowers a member access `base.member`.
+    ///
+    /// A struct base resolves to a field access; any other base (e.g.
+    /// `msg.sender`, `tx.origin`, `addr.balance`) falls back to built-in
+    /// member access lowering.
+    pub fn emit_member_access(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        if let Some((value, block)) = self.emit_struct_field(access, block)? {
+            return Ok((value, block));
+        }
+        CallEmitter::new(self).emit_member_access(access, block)
+    }
+
     /// Lowers `s.field` for a struct base to `sol.gep`, followed by a
     /// `sol.load` of the addressed field unless the field already IS the
     /// value (non-ptr-ref-in-storage rule).
@@ -66,7 +83,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .members()
             .iter()
             .position(|member| member.name().name() == member_name)
-            .ok_or_else(|| anyhow::anyhow!("unknown struct member: {member_name}"))?;
+            .expect("the binder validates that a member access names a struct field");
 
         let (base_value, block) = self.emit_value(&base, block)?;
         let builder = &self.state.builder;

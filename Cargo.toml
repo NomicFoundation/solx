@@ -99,4 +99,12 @@ features = [
 [workspace.dependencies.slang_solidity_v2]
 git = "https://github.com/NomicFoundation/slang.git"
 # TODO: pin to a release tag instead of a revision.
-rev = "dafc141184be5df5ed1a9fb7199e330a21aa1c10"
+# Temporary: points at feat-v2-display-node-id, rebased linear on slang main.
+# Carries the patches not yet upstreamed — the `using`-attached-function
+# import-alias resolution fix, the multi-output (tuple) getter ABI expansion,
+# the hex-literal integer-value fix, `payable(this)` typing as
+# `address payable`, modulo on rational literals, rational array-size
+# truncation, reference-type (`bytes`/`string`) constants typed as memory,
+# the `is_slice` flag distinguishing `x[a:]` from `x[a]`, and string-slice
+# typing. (The NodeId Display impl landed upstream as slang#1803.)
+rev = "ae9375c9388da3801f464a6c9629dc9a48cb8b51"

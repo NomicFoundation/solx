@@ -70,12 +70,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             if matches!(initializer, Expression::ArrayExpression(_)) {
                 unimplemented!("array-literal state variable initializers are not yet supported");
             }
-            let declared_type = state_variable.get_type().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "unresolved type for state variable: {}",
-                    state_variable.name().name()
-                )
-            })?;
+            let declared_type = state_variable
+                .get_type()
+                .expect("the binder types every state variable");
             let builder = &self.state.builder;
             let element_type = TypeConversion::resolve_slang_type(&declared_type, None, builder);
             let address_type =

@@ -483,7 +483,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                             .into()
                     }
                     // TODO: split this catch-all so non-built-in member accesses (struct fields, etc.) and unimplemented built-ins surface distinct errors.
-                    _ => anyhow::bail!("unsupported member access: {}", access.member().name()),
+                    _ => unimplemented!(
+                        "member access '.{}' is not yet supported",
+                        access.member().name()
+                    ),
                 };
                 let value = block
                     .append_operation(operation)
@@ -523,7 +526,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let base = access.operand();
         let base_slang_type = base
             .get_type()
-            .ok_or_else(|| anyhow::anyhow!("base of array push has no resolved type"))?;
+            .expect("the binder types the base of an array push");
         let value_argument = arguments.iter().next();
         if value_argument.is_some() && matches!(&base_slang_type, SlangType::Bytes(_)) {
             unimplemented!("bytes.push(x) lowers to sol.push_string, which is not yet wired");

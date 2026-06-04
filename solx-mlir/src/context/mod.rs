@@ -10,7 +10,9 @@ pub mod builder;
 pub mod environment;
 pub mod function;
 
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Once;
 
 use melior::dialect::DialectRegistry;
@@ -31,6 +33,49 @@ use crate::llvm_module::RawLlvmModule;
 use self::builder::Builder;
 use self::function::Function;
 
+/// A Solidity operator that can be bound to a function via a
+/// `using {f as op} for T global;` directive (user-defined operators).
+///
+/// Used as the operator component of [`Context::operator_bindings`]'s key.
+/// Binary `-` ([`Self::Sub`]) and unary `-` ([`Self::Neg`]) are distinct
+/// variants because the same `-` token binds to a two-parameter function as a
+/// subtraction operator and to a one-parameter function as a negation operator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UserDefinedOperator {
+    /// Binary `+`.
+    Add,
+    /// Binary `-`.
+    Sub,
+    /// Binary `*`.
+    Mul,
+    /// Binary `/`.
+    Div,
+    /// Binary `%`.
+    Rem,
+    /// Binary `&`.
+    BitAnd,
+    /// Binary `|`.
+    BitOr,
+    /// Binary `^`.
+    BitXor,
+    /// Binary `==`.
+    Eq,
+    /// Binary `!=`.
+    Ne,
+    /// Binary `<`.
+    Lt,
+    /// Binary `<=`.
+    Le,
+    /// Binary `>`.
+    Gt,
+    /// Binary `>=`.
+    Ge,
+    /// Unary `-`.
+    Neg,
+    /// Unary `~`.
+    BitNot,
+}
+
 /// Accumulated MLIR state threaded through the AST visitors.
 ///
 /// Owns a `melior::ir::Module` being populated and provides helpers for
@@ -45,9 +90,47 @@ pub struct Context<'context> {
     pub builder: Builder<'context>,
     /// Resolution metadata keyed by the AST definition id of each function.
     pub function_signatures: HashMap<NodeId, Function<'context>>,
+    /// Node ids of the library functions pre-registered for the contract being
+    /// emitted. A member call whose callee is in this set is a library call
+    /// (`L.f(...)` or a `using for` `x.f(...)`), distinguishing it from the
+    /// contract's own member/inherited functions. Frontends set this before
+    /// emitting function bodies.
+    pub library_function_ids: HashSet<NodeId>,
+    /// Redirect for `super` calls: maps a `super` member-access node id to the
+    /// function node id it dispatches to under the most-derived contract's C3
+    /// linearisation. Slang resolves `super` lexically, which is wrong in a
+    /// diamond, so the frontend pre-resolves every `super` call against the
+    /// linearised bases and records the result here. Empty unless the contract
+    /// uses `super`.
+    pub super_redirect: HashMap<NodeId, NodeId>,
+    /// Virtual dispatch redirect: maps an overridden base function's node id to
+    /// the most-derived override of the same signature. A plain internal call
+    /// resolving (lexically) to a shadowed base function is routed through this
+    /// so it reaches the override, matching Solidity's virtual semantics. Empty
+    /// unless the contract overrides an inherited function.
+    pub virtual_redirect: HashMap<NodeId, NodeId>,
+    /// User-defined operator bindings: maps `(udvt_definition_id, operator)` to
+    /// the node id of the bound function. Populated by the frontend from
+    /// file-level `using {f as op} for T global;` directives so that a binary or
+    /// unary operation on a user-defined-value-type operand dispatches to the
+    /// bound function — which carries its own checked/unchecked context — instead
+    /// of native arithmetic. Empty unless the unit defines operator bindings.
+    pub operator_bindings: HashMap<(NodeId, UserDefinedOperator), NodeId>,
+    /// Maps an external/public library function's definition id to the linker
+    /// symbol of its enclosing library (`file_id:LibraryName`). Lets a
+    /// `using`-for value-receiver call to a selector-carrying library function
+    /// (`x.f(args)`) resolve the delegatecall target the same way an explicit
+    /// `L.f(args)` does — slang exposes no enclosing-library accessor on a
+    /// resolved function, so the frontend precomputes this from the unit.
+    pub library_function_symbols: HashMap<NodeId, String>,
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
+    /// Cross-contract references collected during emission, in encounter
+    /// order. Populated by [`Self::add_dependency`] from emitters that
+    /// reach into other contracts (e.g. `sol.new`), drained into the
+    /// returned [`crate::output::MlirOutput`] by [`Self::finalize_module`].
+    dependencies: RefCell<Vec<String>>,
 }
 
 impl<'context> Context<'context> {
@@ -157,8 +240,24 @@ impl<'context> Context<'context> {
         Self {
             module,
             function_signatures: HashMap::new(),
+            library_function_ids: HashSet::new(),
+            super_redirect: HashMap::new(),
+            virtual_redirect: HashMap::new(),
+            operator_bindings: HashMap::new(),
+            library_function_symbols: HashMap::new(),
             builder: Builder::new(context),
             current_contract_type: None,
+            dependencies: RefCell::new(Vec::new()),
+        }
+    }
+
+    /// Records a cross-contract reference (e.g. the object name passed to
+    /// `sol.new`). Duplicates are ignored. The accumulated list is drained
+    /// into [`crate::output::MlirOutput::dependencies`] at finalize time.
+    pub fn add_dependency(&self, name: String) {
+        let mut dependencies = self.dependencies.borrow_mut();
+        if !dependencies.iter().any(|existing| existing == &name) {
+            dependencies.push(name);
         }
     }
 
@@ -316,6 +415,7 @@ impl<'context> Context<'context> {
             sol_source,
             deploy_source: deploy_llvm,
             runtime_source: runtime_llvm,
+            dependencies: self.dependencies.into_inner(),
         })
     }
 

@@ -6,12 +6,10 @@
 //! libraries built from solx-llvm.
 //!
 
-use mlir_sys::MlirBlock;
 use mlir_sys::MlirContext;
 use mlir_sys::MlirDialectHandle;
 use mlir_sys::MlirDialectRegistry;
 use mlir_sys::MlirPass;
-use mlir_sys::MlirRegion;
 
 unsafe extern "C" {
     // ---- Sol dialect registration ----
@@ -155,6 +153,60 @@ unsafe extern "C" {
     /// (one less than the number of enum members).
     pub fn solxCreateEnumType(context: MlirContext, max: u32) -> mlir_sys::MlirType;
 
+    /// Creates a `sol::FuncRefType` wrapping a `FunctionType` built from the
+    /// given parameter and result type arrays. Used for internal function
+    /// pointers (`function(...) internal returns (...)`).
+    pub fn solxCreateFuncRefType(
+        context: MlirContext,
+        param_types: *const mlir_sys::MlirType,
+        param_count: usize,
+        result_types: *const mlir_sys::MlirType,
+        result_count: usize,
+    ) -> mlir_sys::MlirType;
+
+    /// Creates a `sol::ExtFuncRefType` (external function reference: address +
+    /// selector) wrapping a `FunctionType`. Used for external calls.
+    pub fn solxCreateExtFuncRefType(
+        context: MlirContext,
+        param_types: *const mlir_sys::MlirType,
+        param_count: usize,
+        result_types: *const mlir_sys::MlirType,
+        result_count: usize,
+    ) -> mlir_sys::MlirType;
+
+    // ---- Sol type predicates ----
+    //
+    // Typed `isa<>` introspection (defined in `sol_attr_stubs.cpp`), replacing
+    // textual `AsmPrinter` matching. Centralized in `TypeFactory::is_sol_*`,
+    // which composes the category predicates (reference, function-ref,
+    // address-like) from these per-type ones.
+
+    /// Whether `ty` is a `sol::EnumType`.
+    pub fn solxIsEnumType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `sol::AddressType`.
+    pub fn solxIsAddressType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `sol::ContractType`.
+    pub fn solxIsContractType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `sol::FixedBytesType`.
+    pub fn solxIsFixedBytesType(ty: mlir_sys::MlirType) -> bool;
+    /// Byte width `N` of a `sol::FixedBytesType<N>`. The caller must ensure
+    /// `ty` is a fixed-bytes type (see [`solxIsFixedBytesType`]).
+    pub fn solxGetFixedBytesWidth(ty: mlir_sys::MlirType) -> u32;
+    /// Whether `ty` is a `sol::ByteType` (the element type of bytes/string).
+    pub fn solxIsByteType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `sol::StringType` (shared by `bytes` and `string`).
+    pub fn solxIsStringType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `sol::ArrayType`.
+    pub fn solxIsArrayType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `sol::StructType`.
+    pub fn solxIsStructType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `sol::MappingType`.
+    pub fn solxIsMappingType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `sol::FuncRefType` (internal function pointer).
+    pub fn solxIsFuncRefType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `sol::ExtFuncRefType` (external function reference).
+    pub fn solxIsExtFuncRefType(ty: mlir_sys::MlirType) -> bool;
+
     // ---- Sol type inference ----
 
     /// Returns the element type of a non-mapping reference type. For
@@ -167,26 +219,4 @@ unsafe extern "C" {
         base_addr_ty: mlir_sys::MlirType,
         element_type: mlir_sys::MlirType,
     ) -> mlir_sys::MlirType;
-
-    // ---- MLIR core (not in mlir-sys) ----
-
-    /// Returns the region that owns the given block.
-    pub fn mlirBlockGetParentRegion(block: MlirBlock) -> MlirRegion;
-}
-
-/// Returns the parent region of a block as a `RegionRef`.
-///
-/// # Safety
-///
-/// The block must be attached to a region (i.e., not detached).
-pub fn block_parent_region<'context, 'block>(
-    block: &melior::ir::BlockRef<'context, 'block>,
-) -> melior::ir::RegionRef<'context, 'block> {
-    // SAFETY: The block is attached (guaranteed by melior's ownership model).
-    // `mlirBlockGetParentRegion` returns a non-owning handle to the parent.
-    unsafe {
-        melior::ir::RegionRef::from_raw(mlirBlockGetParentRegion(melior::ir::BlockLike::to_raw(
-            block,
-        )))
-    }
 }

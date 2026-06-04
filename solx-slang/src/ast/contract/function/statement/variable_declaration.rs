@@ -15,7 +15,7 @@ use crate::ast::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Emits a variable declaration with optional initializer.
-    pub(super) fn emit_variable_declaration(
+    pub fn emit_variable_declaration(
         &mut self,
         declaration: &VariableDeclarationStatement,
         block: BlockRef<'context, 'block>,
@@ -103,18 +103,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let (values, current) = match &expression {
             Expression::TupleExpression(tuple) => {
                 let items = tuple.items();
-                anyhow::ensure!(
-                    items.len() == elements.len(),
-                    "tuple deconstruction arity mismatch: {} LHS slots vs {} RHS values",
-                    elements.len(),
-                    items.len(),
-                );
                 let mut values = Vec::with_capacity(items.len());
                 let mut current = block;
                 for item in items.iter() {
-                    let inner = item.expression().ok_or_else(|| {
-                        anyhow::anyhow!("empty tuple element on RHS of deconstruction")
-                    })?;
+                    let inner = item
+                        .expression()
+                        .expect("a tuple deconstruction element wraps an expression");
                     let (value, next) = emitter.emit_value(&inner, current)?;
                     values.push(value);
                     current = next;
@@ -122,17 +116,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 (values, current)
             }
             Expression::FunctionCallExpression(call) => {
-                let call_emitter = CallEmitter::new(&emitter);
-                let (values, current) = call_emitter.emit_function_call_results(call, block)?;
-                anyhow::ensure!(
-                    values.len() == elements.len(),
-                    "tuple deconstruction arity mismatch: {} LHS slots vs {} call results",
-                    elements.len(),
-                    values.len(),
-                );
-                (values, current)
+                CallEmitter::new(&emitter).emit_function_call_results(call, block)?
             }
-            _ => anyhow::bail!(
+            _ => unimplemented!(
                 "tuple deconstruction with this right-hand side shape is not yet supported"
             ),
         };

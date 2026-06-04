@@ -1,21 +1,17 @@
 //! Revert statement lowering.
 
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
-
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
-use slang_solidity_v2::ast::NamedArguments;
-use slang_solidity_v2::ast::Parameters;
 use slang_solidity_v2::ast::RevertStatement;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::contract::function::statement::named_arguments;
 
 /// Identifier the parser uses to recognize the Solidity `revert` built-in.
 pub const IDENTIFIER: &str = "revert";
@@ -55,21 +51,18 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 return Ok(Some(block));
             }
             Some(Definition::Error(error)) => error,
-            Some(_) => anyhow::bail!("revert target does not resolve to an error definition"),
+            Some(_) => unreachable!("the binder resolves a revert target to an error definition"),
         };
-        let signature = error.compute_canonical_signature().ok_or_else(|| {
-            anyhow::anyhow!(
-                "cannot compute canonical signature for error `{}`",
-                error.name().name()
-            )
-        })?;
+        let signature = error
+            .compute_canonical_signature()
+            .expect("a custom error has a canonical signature");
         let parameters = error.parameters();
         let mut evaluated = match revert.arguments() {
             ArgumentsDeclaration::PositionalArguments(positional) => {
                 self.emit_revert_argument_values(positional.iter(), block)?
             }
             ArgumentsDeclaration::NamedArguments(named) => {
-                let ordered = Self::order_named_revert_arguments(&named, &parameters)?;
+                let ordered = named_arguments::order_named_arguments(&named, &parameters);
                 self.emit_revert_argument_values(ordered, block)?
             }
         };
@@ -115,75 +108,29 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
         else {
-            anyhow::bail!("only positional arguments supported");
+            unimplemented!("non-positional arguments to revert are not yet supported");
         };
-        let mut arguments = positional_arguments.iter();
-        let message_argument = arguments.next();
-        anyhow::ensure!(
-            arguments.next().is_none(),
-            "revert accepts at most one argument"
-        );
+        let message_argument = positional_arguments.iter().next();
         let signature: String = match message_argument {
             None => String::new(),
             Some(Expression::StringExpression(string_expression)) => {
                 let message = String::from_utf8(string_expression.value())
-                    .expect("revert message is valid UTF-8");
-                anyhow::ensure!(
-                    !message.is_empty(),
-                    "revert(\"\") would emit ambiguous bytecode under the current Sol dialect; use revert() for no-data revert"
-                );
+                    .expect("a revert message is valid UTF-8");
+                if message.is_empty() {
+                    unimplemented!(
+                        "revert(\"\") would emit ambiguous bytecode under the current Sol dialect; use revert() for the no-data form"
+                    );
+                }
                 message
             }
-            Some(_) => anyhow::bail!("revert message must be a string literal"),
+            Some(_) => {
+                unimplemented!("revert with a non-string-literal message is not yet supported")
+            }
         };
         self.state
             .builder
             .emit_sol_revert(&signature, &[], false, &block);
         Ok(Some(block))
-    }
-
-    /// Orders named revert arguments by the custom error's parameter declaration order.
-    fn order_named_revert_arguments(
-        named_arguments: &NamedArguments,
-        error_parameters: &Parameters,
-    ) -> anyhow::Result<Vec<Expression>> {
-        let mut arguments = HashMap::new();
-        for argument in named_arguments.iter() {
-            match arguments.entry(argument.name().name()) {
-                Entry::Vacant(entry) => {
-                    entry.insert(argument.value());
-                }
-                Entry::Occupied(entry) => {
-                    anyhow::bail!("duplicate named revert argument `{}`", entry.key());
-                }
-            }
-        }
-
-        let mut ordered_arguments = Vec::new();
-        for parameter in error_parameters.iter() {
-            let parameter_name = parameter
-                .name()
-                .ok_or_else(|| {
-                    anyhow::anyhow!("cannot match named revert argument to unnamed error parameter")
-                })?
-                .name();
-            let argument = arguments.remove(&parameter_name).ok_or_else(|| {
-                anyhow::anyhow!("missing named revert argument `{parameter_name}`")
-            })?;
-            ordered_arguments.push(argument);
-        }
-
-        anyhow::ensure!(
-            arguments.is_empty(),
-            "unknown named revert argument(s): {}",
-            arguments
-                .keys()
-                .map(String::as_str)
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
-
-        Ok(ordered_arguments)
     }
 
     /// Evaluates revert argument expressions left-to-right, threading the

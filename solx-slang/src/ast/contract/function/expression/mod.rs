@@ -2,25 +2,39 @@
 //! Expression lowering to MLIR SSA values.
 //!
 
+/// Index access expression lowering.
 pub mod access;
+/// Arithmetic expression lowering.
 pub mod arithmetic;
+/// Assignment expression lowering.
 pub mod assignment;
+/// Bitwise and shift expression lowering.
+pub mod bitwise;
+/// Function call and member access lowering.
 pub mod call;
+/// Comparison expression lowering.
+pub mod comparison;
+/// Conditional (ternary) expression lowering.
+pub mod conditional;
+/// Identifier expression lowering.
+pub mod identifier;
+/// Literal expression lowering.
+pub mod literal;
+/// Short-circuit logical expression lowering.
 pub mod logical;
+/// Member access expression lowering.
 pub mod member;
-pub mod operator;
+/// State variable storage access.
 pub mod storage;
+/// Tuple expression lowering.
+pub mod tuple;
 
 use std::collections::HashMap;
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
-use operator::Operator;
-use slang_solidity_v2::ast;
-use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -29,10 +43,9 @@ use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
 use solx_mlir::Environment;
-use solx_mlir::ods::sol::ThisOperation;
 use solx_utils::DataLocation;
 
-use self::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::storage_slot::StorageSlot;
 
 /// Lowers Solidity expressions to MLIR SSA values.
@@ -66,10 +79,38 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
     }
 
+    /// Emits MLIR for an expression, appending operations to `block`.
+    ///
+    /// Returns `None` for void expressions (calls with no return value); use
+    /// [`Self::emit_value`] when a value is required.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the expression contains unsupported constructs.
+    pub fn emit(
+        &self,
+        expression: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        // Function calls (and parenthesized calls) may be void; every other
+        // expression yields a value, wrapped here once.
+        match expression {
+            Expression::FunctionCallExpression(call) => {
+                call::CallEmitter::new(self).emit_function_call(call, block)
+            }
+            Expression::TupleExpression(tuple) => self.emit_tuple(tuple, block),
+            _ => {
+                let (value, block) = self.emit_value_expression(expression, block)?;
+                Ok((Some(value), block))
+            }
+        }
+    }
+
     /// Emits MLIR for an expression that must produce a value.
     ///
-    /// Delegates to [`Self::emit`] and returns an error for void expressions
-    /// (e.g. calls to functions with no return value).
+    /// # Errors
+    ///
+    /// Returns an error if the expression is void or unsupported.
     pub fn emit_value(
         &self,
         expression: &Expression,
@@ -80,351 +121,62 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Ok((value, block))
     }
 
-    /// Emits MLIR for an expression, appending operations to `block`.
-    ///
-    /// Returns `None` for void expressions (calls with no return value).
-    /// Use [`Self::emit_value`] when a value is required.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the expression contains unsupported constructs.
-    pub fn emit(
+    /// Dispatches a value-producing expression to its domain.
+    fn emit_value_expression(
         &self,
         expression: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         match expression {
-            Expression::DecimalNumberExpression(decimal_number) => {
-                let value = decimal_number.integer_value().ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "decimal literal cannot be lowered: it must evaluate to an integer \
-                         after applying any units"
-                    )
-                })?;
-                let result_type = self
-                    .resolve_slang_type(decimal_number.get_type())
-                    .expect("binder types every decimal literal node");
-                let constant = self
-                    .state
-                    .builder
-                    .emit_constant(&value, result_type, &block);
-                Ok((Some(constant), block))
+            Expression::DecimalNumberExpression(decimal) => {
+                Ok((self.emit_decimal(decimal, &block), block))
             }
-            Expression::HexNumberExpression(hex_number) => {
-                let value = hex_number
-                    .integer_value()
-                    .expect("hex literals always evaluate to integers");
-                let result_type = self
-                    .resolve_slang_type(hex_number.get_type())
-                    .expect("binder types every hex literal node");
-                let constant = self
-                    .state
-                    .builder
-                    .emit_constant(&value, result_type, &block);
-                Ok((Some(constant), block))
-            }
-            Expression::TrueKeyword(_) => {
-                let constant = self.state.builder.emit_bool(true, &block);
-                Ok((Some(constant), block))
-            }
-            Expression::FalseKeyword(_) => {
-                let constant = self.state.builder.emit_bool(false, &block);
-                Ok((Some(constant), block))
-            }
-            Expression::ThisKeyword(_) => {
-                let contract_type = self
-                    .state
-                    .current_contract_type
-                    .ok_or_else(|| anyhow::anyhow!("sol.this emitted outside a contract"))?;
-                let operation = ThisOperation::builder(
-                    self.state.builder.context,
-                    self.state.builder.unknown_location,
-                )
-                .addr(contract_type)
-                .build();
-                let value = block
-                    .append_operation(operation.into())
-                    .result(0)
-                    .expect("sol.this always produces one result")
-                    .into();
-                Ok((Some(value), block))
-            }
-            Expression::StringExpression(string_expression) => {
-                let bytes = string_expression.value();
-                let text = std::str::from_utf8(&bytes).expect("string literal is valid UTF-8");
-                let value = self.state.builder.emit_sol_string_lit(text, &block);
-                Ok((Some(value), block))
-            }
-            Expression::Identifier(identifier) => {
-                let name = identifier.name();
-                match identifier.resolve_to_definition() {
-                    Some(Definition::StateVariable(state_variable)) => {
-                        let slot = self
-                            .storage_layout
-                            .get(&state_variable.node_id())
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("unregistered state variable: {name}")
-                            })?;
-                        let declared_type = state_variable.get_type().ok_or_else(|| {
-                            anyhow::anyhow!("unresolved type for state variable: {name}")
-                        })?;
-                        let element_type = TypeConversion::resolve_slang_type(
-                            &declared_type,
-                            None,
-                            &self.state.builder,
-                        );
-                        let address = self.state.builder.emit_sol_addr_of(
-                            &slot.name,
-                            Self::address_type(
-                                &self.state.builder,
-                                element_type,
-                                DataLocation::Storage,
-                                &declared_type,
-                            ),
-                            &block,
-                        );
-                        let value =
-                            self.state
-                                .builder
-                                .emit_sol_load(address, element_type, &block)?;
-                        Ok((Some(value), block))
-                    }
-                    Some(Definition::Variable(_) | Definition::Parameter(_)) => {
-                        let (pointer, element_type) = self.environment.variable_with_type(&name);
-                        let value =
-                            self.state
-                                .builder
-                                .emit_sol_load(pointer, element_type, &block)?;
-                        Ok((Some(value), block))
-                    }
-                    Some(Definition::Constant(constant)) => {
-                        let initializer = constant
-                            .value()
-                            .ok_or_else(|| anyhow::anyhow!("constant {name} has no initializer"))?;
-                        self.emit(&initializer, block)
-                    }
-                    None => anyhow::bail!("unresolved identifier: {name}"),
-                    Some(_) => anyhow::bail!("unsupported identifier reference: {name}"),
-                }
-            }
-            Expression::AssignmentExpression(assign) => self
-                .emit_assignment(assign, block)
-                .map(|(value, block)| (Some(value), block)),
-            Expression::AdditiveExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                let operator = match expression.operator() {
-                    ast::AdditiveExpressionOperator::Plus(_) => Operator::Add,
-                    ast::AdditiveExpressionOperator::Minus(_) => Operator::Subtract,
-                };
-                self.emit_binary_op(&left, &right, operator, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
+            Expression::HexNumberExpression(hex) => Ok((self.emit_hex(hex, &block), block)),
+            Expression::TrueKeyword(_) => Ok((self.emit_boolean(true, &block), block)),
+            Expression::FalseKeyword(_) => Ok((self.emit_boolean(false, &block), block)),
+            Expression::ThisKeyword(_) => Ok((self.emit_this(&block), block)),
+            Expression::StringExpression(string) => Ok((self.emit_string(string, &block), block)),
+            Expression::ArrayExpression(array) => self.emit_array(array, block),
+            Expression::Identifier(identifier) => self.emit_identifier(identifier, block),
+            Expression::AdditiveExpression(expression) => self.emit_additive(expression, block),
             Expression::MultiplicativeExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                let operator = match expression.operator() {
-                    ast::MultiplicativeExpressionOperator::Asterisk(_) => Operator::Multiply,
-                    ast::MultiplicativeExpressionOperator::Percent(_) => Operator::Remainder,
-                    ast::MultiplicativeExpressionOperator::Slash(_) => Operator::Divide,
-                };
-                self.emit_binary_op(&left, &right, operator, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
+                self.emit_multiplicative(expression, block)
             }
             Expression::ExponentiationExpression(expression) => {
-                let target_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, Operator::Exponentiation, target_type, block)
-                    .map(|(value, block)| (Some(value), block))
+                self.emit_exponentiation(expression, block)
             }
-            Expression::EqualityExpression(expression) => {
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                let predicate = match expression.operator() {
-                    ast::EqualityExpressionOperator::BangEqual(_) => CmpPredicate::Ne,
-                    ast::EqualityExpressionOperator::EqualEqual(_) => CmpPredicate::Eq,
-                };
-                self.emit_comparison(&left, &right, predicate, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::InequalityExpression(expression) => {
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                let predicate = match expression.operator() {
-                    ast::InequalityExpressionOperator::GreaterThan(_) => CmpPredicate::Gt,
-                    ast::InequalityExpressionOperator::GreaterThanEqual(_) => CmpPredicate::Ge,
-                    ast::InequalityExpressionOperator::LessThan(_) => CmpPredicate::Lt,
-                    ast::InequalityExpressionOperator::LessThanEqual(_) => CmpPredicate::Le,
-                };
-                self.emit_comparison(&left, &right, predicate, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::AndExpression(expression) => {
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                self.emit_and(&left, &right, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::OrExpression(expression) => {
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                self.emit_or(&left, &right, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::PostfixExpression(expression) => {
-                let operand = expression.operand();
-                let operator = match expression.operator() {
-                    ast::PostfixExpressionOperator::MinusMinus(_) => Operator::Decrement,
-                    ast::PostfixExpressionOperator::PlusPlus(_) => Operator::Increment,
-                };
-                self.emit_postfix(&operand, operator, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::PrefixExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let operator = match expression.operator() {
-                    ast::PrefixExpressionOperator::Bang(_) => Operator::Not,
-                    ast::PrefixExpressionOperator::DeleteKeyword(_) => Operator::Delete,
-                    ast::PrefixExpressionOperator::Minus(_) => Operator::Subtract,
-                    ast::PrefixExpressionOperator::MinusMinus(_) => Operator::Decrement,
-                    ast::PrefixExpressionOperator::PlusPlus(_) => Operator::Increment,
-                    ast::PrefixExpressionOperator::Tilde(_) => Operator::BitwiseNot,
-                };
-                let operand = expression.operand();
-                self.emit_prefix(operator, &operand, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::BitwiseAndExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, Operator::BitwiseAnd, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::BitwiseOrExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, Operator::BitwiseOr, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::BitwiseXorExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                self.emit_binary_op(&left, &right, Operator::BitwiseXor, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::ShiftExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
-                let left = expression.left_operand();
-                let right = expression.right_operand();
-                let operator = match expression.operator() {
-                    ast::ShiftExpressionOperator::GreaterThanGreaterThan(_) => Operator::ShiftRight,
-                    ast::ShiftExpressionOperator::GreaterThanGreaterThanGreaterThan(_) => {
-                        Operator::ShiftRight
-                    }
-                    ast::ShiftExpressionOperator::LessThanLessThan(_) => Operator::ShiftLeft,
-                };
-                self.emit_binary_op(&left, &right, operator, result_type, block)
-                    .map(|(value, block)| (Some(value), block))
-            }
-            Expression::FunctionCallExpression(call) => {
-                self::call::CallEmitter::new(self).emit_function_call(call, block)
-            }
-            Expression::TupleExpression(tuple) => {
-                let items = tuple.items();
-                // TODO: support multi-value tuples (e.g. tuple deconstruction)
-                anyhow::ensure!(items.len() == 1, "multi-value tuples not yet supported");
-                let item = items.iter().next().expect("length checked to be 1 above");
-                let inner = item
-                    .expression()
-                    .ok_or_else(|| anyhow::anyhow!("empty tuple element"))?;
-                self.emit(&inner, block)
-            }
+            Expression::EqualityExpression(expression) => self.emit_equality(expression, block),
+            Expression::InequalityExpression(expression) => self.emit_inequality(expression, block),
+            Expression::AssignmentExpression(assignment) => self.emit_assignment(assignment, block),
+            Expression::PostfixExpression(expression) => self.emit_postfix(expression, block),
+            Expression::PrefixExpression(expression) => self.emit_prefix(expression, block),
             Expression::ConditionalExpression(conditional) => {
-                let result_type = self
-                    .resolve_slang_type(conditional.get_type())
-                    .unwrap_or(self.state.builder.types.ui256);
-                let condition = conditional.operand();
-                let (condition_value, block) = self.emit_value(&condition, block)?;
-                let condition_boolean = self.emit_is_nonzero(condition_value, &block);
-
-                let result_slot = self.state.builder.emit_sol_alloca(result_type, &block);
-                let (then_block, else_block) =
-                    self.state.builder.emit_sol_if(condition_boolean, &block);
-
-                let true_expression = conditional.true_expression();
-                let (then_value, then_end) = self.emit_value(&true_expression, then_block)?;
-                let then_cast = TypeConversion::from_target_type(result_type, &self.state.builder)
-                    .emit(then_value, &self.state.builder, &then_end);
-                self.state
-                    .builder
-                    .emit_sol_store(then_cast, result_slot, &then_end);
-                self.state.builder.emit_sol_yield(&then_end);
-
-                let false_expression = conditional.false_expression();
-                let (else_value, else_end) = self.emit_value(&false_expression, else_block)?;
-                let else_cast = TypeConversion::from_target_type(result_type, &self.state.builder)
-                    .emit(else_value, &self.state.builder, &else_end);
-                self.state
-                    .builder
-                    .emit_sol_store(else_cast, result_slot, &else_end);
-                self.state.builder.emit_sol_yield(&else_end);
-
-                let result = self
-                    .state
-                    .builder
-                    .emit_sol_load(result_slot, result_type, &block)?;
-
-                Ok((Some(result), block))
+                self.emit_conditional(conditional, block)
             }
-            Expression::ArrayExpression(array_expression) => {
-                let result_slang_type = array_expression
-                    .get_type()
-                    .expect("slang types every array literal");
-                let element_slang_type = match &result_slang_type {
-                    SlangType::FixedSizeArray(fixed_array_type) => fixed_array_type.element_type(),
-                    SlangType::Array(array_type) => array_type.element_type(),
-                    _ => anyhow::bail!(
-                        "array literal has unexpected result type: {:?}",
-                        std::mem::discriminant(&result_slang_type)
-                    ),
-                };
-                let builder = &self.state.builder;
-                let array_type =
-                    TypeConversion::resolve_slang_type(&result_slang_type, None, builder);
-                let element_type =
-                    TypeConversion::resolve_slang_type(&element_slang_type, None, builder);
-                let mut element_values = Vec::new();
-                let mut current = block;
-                for item in array_expression.items().iter() {
-                    let (value, next) = self.emit_value(&item, current)?;
-                    let cast_value = TypeConversion::from_target_type(element_type, builder)
-                        .emit(value, builder, &next);
-                    element_values.push(cast_value);
-                    current = next;
-                }
-                let value = builder.emit_sol_array_lit(&element_values, array_type, &current);
-                Ok((Some(value), current))
+            Expression::AndExpression(expression) => self.emit_and(
+                &expression.left_operand(),
+                &expression.right_operand(),
+                block,
+            ),
+            Expression::OrExpression(expression) => self.emit_or(
+                &expression.left_operand(),
+                &expression.right_operand(),
+                block,
+            ),
+            Expression::BitwiseAndExpression(expression) => {
+                self.emit_bitwise_and(expression, block)
             }
-            Expression::MemberAccessExpression(access) => {
-                if let Some((value, block)) = self.emit_struct_field(access, block)? {
-                    Ok((Some(value), block))
-                } else {
-                    self::call::CallEmitter::new(self)
-                        .emit_member_access(access, block)
-                        .map(|(value, block)| (Some(value), block))
-                }
+            Expression::BitwiseOrExpression(expression) => self.emit_bitwise_or(expression, block),
+            Expression::BitwiseXorExpression(expression) => {
+                self.emit_bitwise_xor(expression, block)
             }
+            Expression::ShiftExpression(expression) => self.emit_shift(expression, block),
+            Expression::MemberAccessExpression(access) => self.emit_member_access(access, block),
             Expression::IndexAccessExpression(index_access) => {
                 self.emit_index_access(index_access, block)
             }
-            _ => anyhow::bail!(
-                "unsupported expression: {:?}",
+            _ => unimplemented!(
+                "expression lowering: {:?}",
                 std::mem::discriminant(expression)
             ),
         }
@@ -451,12 +203,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .emit_sol_cmp(value, zero, CmpPredicate::Ne, block)
     }
 
-    /// Resolves the Solidity type from Slang to an MLIR type.
-    ///
-    /// Returns `None` when the incoming slang type is `None`. This can happen when calling
-    /// `node.get_type()` if the node doesn't have typing information, for example when
-    /// there are unresolved references or semantic errors.
-    /// Panics on types that `TypeConversion::resolve_slang_type` does not yet handle.
+    /// Resolves a Slang type to its MLIR type, propagating `None` when the
+    /// binder has no type for the node (unresolved references, semantic errors).
     // TODO: slang's binder does not fold binary expressions of literal operands —
     // its typing rules return the type of one operand (e.g. type of the left
     // operand for shifts), so `1 << 100` gets typed as ui8 (the type of `1`)
@@ -477,7 +225,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// element is itself a reference type and lives in `Storage` or
     /// `CallData`, the result address IS the element type rather than a
     /// pointer to it.
-    fn address_type(
+    pub fn address_type(
         builder: &Builder<'context>,
         element_type: Type<'context>,
         base_location: DataLocation,

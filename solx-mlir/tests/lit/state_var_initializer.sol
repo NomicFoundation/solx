@@ -6,7 +6,7 @@
 // CHECK: sol.state_var @small_{{[0-9]+}} slot 2 offset 0 : ui8
 // CHECK: sol.state_var @flag_{{[0-9]+}} slot 2 offset 1 : i1
 
-// CHECK: sol.func @{{.*}} attributes {kind = #Constructor
+// CHECK: sol.func @{{.*}} attributes {{.*}}kind = #{{.*}}Constructor
 // CHECK:   sol.addr_of @x_{{[0-9]+}} : !sol.ptr<ui256, Storage>
 // CHECK:   sol.constant 42
 // CHECK:   sol.store %{{.*}}, %{{.*}} : ui256, !sol.ptr<ui256, Storage>

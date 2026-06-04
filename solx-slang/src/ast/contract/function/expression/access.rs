@@ -27,7 +27,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         &self,
         index_access: &IndexAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (address, element_type, block) = self.emit_index_access_address(index_access, block)?;
         let value = self
             .state
@@ -42,7 +42,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .state
             .builder
             .emit_sol_bytes_cast(value, slang_expected, &block);
-        Ok((Some(value), block))
+        Ok((value, block))
     }
 
     /// Emits the address yielded by `a[i]` / `m[k]` together with the element
@@ -70,7 +70,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .expect("slang validates a[i] has an index expression");
         let base_type = base
             .get_type()
-            .ok_or_else(|| anyhow::anyhow!("base of index access has no resolved type"))?;
+            .expect("the binder types the base of an index access");
         let result_type = index_access
             .get_type()
             .expect("slang types every index-access expression");

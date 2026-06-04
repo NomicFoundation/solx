@@ -2,8 +2,8 @@
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
 // CHECK: sol.func @{{.*}} attributes {{.*}}kind = #{{.*}}Constructor
-// CHECK: sol.func @{{.*}} attributes {{.*}}kind = #{{.*}}Receive, state_mutability = #{{.*}}Payable
-// CHECK: sol.func @{{.*}} attributes {{.*}}kind = #{{.*}}Fallback, state_mutability = #{{.*}}Payable
+// CHECK: sol.func @{{.*}} attributes {{.*}}kind = #{{.*}}Receive,{{.*}}state_mutability = #{{.*}}Payable
+// CHECK: sol.func @{{.*}} attributes {{.*}}kind = #{{.*}}Fallback,{{.*}}state_mutability = #{{.*}}Payable
 
 contract C {
     uint256 x;
