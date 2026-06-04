@@ -2,6 +2,8 @@
 //! Statement lowering to MLIR operations.
 //!
 
+/// Inline-assembly (Yul) statement lowering.
+pub mod assembly;
 /// Control flow statement lowering (`if`, `for`, `while`, `do`/`while`).
 pub mod control_flow;
 /// Event emit statement lowering.
@@ -23,6 +25,7 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Statement;
+use slang_solidity_v2::ast::YulFunctionDefinition;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -46,6 +49,14 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     ///
     /// `true` by default; `false` inside `unchecked {}` blocks.
     checked: bool,
+    /// Yul function definitions in scope for the assembly block currently being
+    /// lowered, keyed by name. Each `assembly { ... }` registers its own
+    /// definitions (so calls resolve regardless of textual order) and removes
+    /// them again on exit. Empty outside inline assembly.
+    yul_functions: HashMap<String, YulFunctionDefinition>,
+    /// Per-name inlining depth of Yul user-defined functions, used to reject
+    /// recursive calls (which would otherwise inline forever at compile time).
+    yul_inline_depth: HashMap<String, usize>,
 }
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -62,6 +73,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             storage_layout,
             return_types,
             checked: true,
+            yul_functions: HashMap::new(),
+            yul_inline_depth: HashMap::new(),
         }
     }
 
@@ -98,6 +111,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Statement::UncheckedBlock(inner) => self.emit_unchecked_block(inner, block),
             Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
             Statement::RevertStatement(revert) => self.emit_revert(revert, block),
+            Statement::AssemblyStatement(assembly) => self.emit_assembly(assembly, block),
             _ => unimplemented!(
                 "statement lowering: {:?}",
                 std::mem::discriminant(statement)
