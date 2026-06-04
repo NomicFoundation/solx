@@ -72,6 +72,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(result);
         }
 
+        // `new T[](n)` / `new bytes(n)` — a zeroed dynamic memory allocation.
+        if let Some(result) = self.try_emit_new_array(call, arguments, block)? {
+            return Ok(result);
+        }
+
         // An external member call (`recv.f(args)` / `this.f(args)`) used in
         // value position keeps its first declared result.
         if let Some((values, block)) =

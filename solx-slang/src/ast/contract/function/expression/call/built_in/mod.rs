@@ -12,6 +12,8 @@ pub mod array;
 pub mod bare_call;
 /// External member calls (`recv.f(args)` / `this.f(args)`).
 pub mod external_call;
+/// Dynamic memory allocation via `new` (`new T[](n)` / `new bytes(n)`).
+pub mod new;
 /// User-defined value type member built-ins (`wrap`/`unwrap`).
 pub mod user_defined_value_type;
 
