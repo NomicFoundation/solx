@@ -41,6 +41,9 @@ use crate::ods::sol::AndOperation;
 use crate::ods::sol::ArrayLitOperation;
 use crate::ods::sol::AssertOperation;
 use crate::ods::sol::BalanceOperation;
+use crate::ods::sol::BareCallOperation;
+use crate::ods::sol::BareDelegateCallOperation;
+use crate::ods::sol::BareStaticCallOperation;
 use crate::ods::sol::BaseFeeOperation;
 use crate::ods::sol::BlobBaseFeeOperation;
 use crate::ods::sol::BlockNumberOperation;
@@ -1692,6 +1695,114 @@ impl<'context> Builder<'context> {
             results.push(operation.result(index + 1)?.into());
         }
         Ok((status, results))
+    }
+
+    /// Emits `sol.bare_call` — a low-level `addr.call{value: v}(data)` —
+    /// forwarding all remaining gas and `value` wei. Returns the `(status,
+    /// ret_data)` pair: the `i1` success flag and the raw `bytes memory`
+    /// return data. Does not revert on failure (the caller inspects `status`).
+    pub fn emit_sol_bare_call<'block, B>(
+        &self,
+        address: Value<'context, 'block>,
+        value: Value<'context, 'block>,
+        input: Value<'context, 'block>,
+        block: &B,
+    ) -> (Value<'context, 'block>, Value<'context, 'block>)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let gas = self.emit_sol_gas_left(block);
+        let operation = block.append_operation(
+            BareCallOperation::builder(self.context, self.unknown_location)
+                .addr(address)
+                .gas(gas)
+                .val(value)
+                .inp(input)
+                .status(self.types.i1)
+                .ret_data(self.types.sol_string_memory)
+                .build()
+                .into(),
+        );
+        let status = operation
+            .result(0)
+            .expect("a bare call always produces a status result")
+            .into();
+        let ret_data = operation
+            .result(1)
+            .expect("a bare call always produces return data")
+            .into();
+        (status, ret_data)
+    }
+
+    /// Emits `sol.bare_delegate_call` — `addr.delegatecall(data)` — forwarding
+    /// all remaining gas (a delegatecall carries no value). Returns the
+    /// `(status, ret_data)` pair without reverting on failure.
+    pub fn emit_sol_bare_delegate_call<'block, B>(
+        &self,
+        address: Value<'context, 'block>,
+        input: Value<'context, 'block>,
+        block: &B,
+    ) -> (Value<'context, 'block>, Value<'context, 'block>)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let gas = self.emit_sol_gas_left(block);
+        let operation = block.append_operation(
+            BareDelegateCallOperation::builder(self.context, self.unknown_location)
+                .addr(address)
+                .gas(gas)
+                .inp(input)
+                .status(self.types.i1)
+                .ret_data(self.types.sol_string_memory)
+                .build()
+                .into(),
+        );
+        let status = operation
+            .result(0)
+            .expect("a bare call always produces a status result")
+            .into();
+        let ret_data = operation
+            .result(1)
+            .expect("a bare call always produces return data")
+            .into();
+        (status, ret_data)
+    }
+
+    /// Emits `sol.bare_static_call` — `addr.staticcall(data)` — forwarding all
+    /// remaining gas. Returns the `(status, ret_data)` pair without reverting
+    /// on failure.
+    pub fn emit_sol_bare_static_call<'block, B>(
+        &self,
+        address: Value<'context, 'block>,
+        input: Value<'context, 'block>,
+        block: &B,
+    ) -> (Value<'context, 'block>, Value<'context, 'block>)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let gas = self.emit_sol_gas_left(block);
+        let operation = block.append_operation(
+            BareStaticCallOperation::builder(self.context, self.unknown_location)
+                .addr(address)
+                .gas(gas)
+                .inp(input)
+                .status(self.types.i1)
+                .ret_data(self.types.sol_string_memory)
+                .build()
+                .into(),
+        );
+        let status = operation
+            .result(0)
+            .expect("a bare call always produces a status result")
+            .into();
+        let ret_data = operation
+            .result(1)
+            .expect("a bare call always produces return data")
+            .into();
+        (status, ret_data)
     }
 
     // ==== Comparisons ====

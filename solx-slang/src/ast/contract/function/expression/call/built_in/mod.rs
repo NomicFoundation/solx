@@ -8,6 +8,8 @@ pub mod abi;
 pub mod address;
 /// Dynamic-array and `bytes` member built-ins (`push`/`pop`).
 pub mod array;
+/// Low-level bare calls (`call`/`delegatecall`/`staticcall`).
+pub mod bare_call;
 /// User-defined value type member built-ins (`wrap`/`unwrap`).
 pub mod user_defined_value_type;
 

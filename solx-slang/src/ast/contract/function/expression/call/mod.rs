@@ -13,6 +13,7 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::CallOptionsExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
@@ -59,6 +60,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
         if let Some(result) = self.try_emit_member_built_in_call(call, arguments, block)? {
             return Ok(result);
+        }
+
+        // A bare call discarded in statement position (`addr.call(data);`) keeps
+        // only the success status; the return data is dropped.
+        if let Some((values, block)) = self.try_emit_bare_call_results(call, arguments, block)? {
+            return Ok((values.into_iter().next(), block));
         }
 
         if let Some(result) = self.try_emit_struct_constructor(call, arguments, block)? {
@@ -111,6 +118,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let ArgumentsDeclaration::PositionalArguments(arguments) = &call.arguments() else {
             unimplemented!("named-argument call lowering");
         };
+
+        // `(bool ok, bytes memory d) = addr.call(payload)` — a bare low-level
+        // call yielding both the success status and the raw return data.
+        if let Some(result) = self.try_emit_bare_call_results(call, arguments, block)? {
+            return Ok(result);
+        }
+
         let Expression::Identifier(identifier) = call.operand() else {
             unimplemented!(
                 "multi-result call callee: {:?}",
@@ -203,5 +217,29 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let result =
             TypeConversion::from_target_type(target_type, builder).emit(value, builder, &block);
         Ok(Some((Some(result), block)))
+    }
+
+    /// Evaluates a `{value: v, gas: g, ...}` call-options layer for its side
+    /// effects and returns the `value` option (coerced to `ui256`) when
+    /// present. The `gas` option is left to the backend's default stipend.
+    fn capture_call_value(
+        &self,
+        call_options: &CallOptionsExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let mut block = block;
+        let mut call_value = None;
+        for option in call_options.options().iter() {
+            let (value, next_block) = self.expression_emitter.emit_value(&option.value(), block)?;
+            block = next_block;
+            if option.name().name() == "value" {
+                let builder = &self.expression_emitter.state.builder;
+                call_value = Some(
+                    TypeConversion::from_target_type(builder.types.ui256, builder)
+                        .emit(value, builder, &block),
+                );
+            }
+        }
+        Ok((call_value, block))
     }
 }
