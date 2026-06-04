@@ -2,6 +2,9 @@
 //! Built-in function call lowering.
 //!
 
+/// Dynamic-array and `bytes` member built-ins (`push`/`pop`).
+pub mod array;
+
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::BuiltIn;
@@ -41,6 +44,29 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             BuiltIn::Ecrecover => self.emit_ecrecover(arguments, block).map(Some),
             BuiltIn::Addmod => self.emit_addmod(arguments, block).map(Some),
             BuiltIn::Mulmod => self.emit_mulmod(arguments, block).map(Some),
+            _ => Ok(None),
+        }
+    }
+
+    /// Tries to lower a member-access call `base.method(arguments)` whose method
+    /// is a Solidity built-in handled here (`arr.push(x)`, `arr.push()`,
+    /// `arr.pop()`).
+    ///
+    /// Returns `Ok(None)` when the callee is not a member access or its member
+    /// is not such a built-in, so the caller falls through to the remaining
+    /// call kinds.
+    pub fn try_emit_member_built_in_call(
+        &self,
+        callee: &Expression,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        let Expression::MemberAccessExpression(access) = callee else {
+            return Ok(None);
+        };
+        match access.member().resolve_to_built_in() {
+            Some(BuiltIn::ArrayPop) => self.emit_array_pop(access, block).map(Some),
+            Some(BuiltIn::ArrayPush) => self.emit_array_push(access, arguments, block).map(Some),
             _ => Ok(None),
         }
     }

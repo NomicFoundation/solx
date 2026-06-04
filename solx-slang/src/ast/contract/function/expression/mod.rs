@@ -6,6 +6,8 @@
 pub mod access;
 /// Binary arithmetic expression lowering.
 pub mod arithmetic;
+/// Inline array literal expression lowering.
+pub mod array_literal;
 /// Assignment expression lowering.
 pub mod assignment;
 /// Bitwise and shift expression lowering.
@@ -147,6 +149,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::MemberAccessExpression(access) => self.emit_member_access(access, block),
             Expression::IndexAccessExpression(index_access) => {
                 self.emit_index_access(index_access, block)
+            }
+            Expression::ArrayExpression(array_expression) => {
+                self.emit_array_literal(array_expression, block)
             }
             _ => unimplemented!(
                 "expression lowering: {:?}",

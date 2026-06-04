@@ -57,6 +57,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(result);
         }
 
+        if let Some(result) = self.try_emit_member_built_in_call(&callee, arguments, block)? {
+            return Ok(result);
+        }
+
         if let Some(result) = self.try_emit_struct_constructor(call, arguments, block)? {
             return Ok(result);
         }
