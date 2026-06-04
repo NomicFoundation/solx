@@ -131,6 +131,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     block,
                 )
                 .map(some_value),
+            Expression::FunctionCallExpression(call_expression) => {
+                call::CallEmitter::new(self).emit_function_call(call_expression, block)
+            }
             _ => unimplemented!(
                 "expression lowering: {:?}",
                 std::mem::discriminant(expression)
