@@ -8,15 +8,15 @@ use melior::ir::Value;
 use slang_solidity_v2::ast::ConditionalExpression;
 use slang_solidity_v2::ast::Expression;
 
-use super::ExpressionEmitter;
-use super::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers a ternary `cond ? a : b` to a `sol.if` over a stack result slot.
     ///
     /// Each branch evaluates its expression, casts it to the ternary's result
     /// type, and stores it into the slot; the slot is loaded afterwards.
-    pub(super) fn emit_conditional(
+    pub fn emit_conditional(
         &self,
         conditional: &ConditionalExpression,
         block: BlockRef<'context, 'block>,

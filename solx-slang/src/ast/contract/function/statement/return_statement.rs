@@ -8,7 +8,7 @@ use slang_solidity_v2::ast::ReturnStatement;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
-use super::StatementEmitter;
+use crate::ast::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Lowers a `return` statement to a `sol.return`, terminating the block.
@@ -16,7 +16,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// A bare `return;` emits an operand-less `sol.return`. Otherwise the
     /// returned value is cast to the declared return type before becoming the
     /// `sol.return` operand. Returns `None` because control flow terminates.
-    pub(super) fn emit_return(
+    pub fn emit_return(
         &self,
         return_statement: &ReturnStatement,
         block: BlockRef<'context, 'block>,

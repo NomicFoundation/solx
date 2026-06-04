@@ -15,13 +15,13 @@ use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Builder;
 
-use super::ExpressionEmitter;
-use super::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 /// A bitwise or shift binary operation. Unlike arithmetic, these have no
 /// overflow-checked variant.
 #[derive(Debug, Clone, Copy)]
-enum BitwiseOperation {
+pub enum BitwiseOperation {
     /// `&`
     And,
     /// `|`
@@ -36,7 +36,7 @@ enum BitwiseOperation {
 
 impl BitwiseOperation {
     /// Emits this operator's Sol op through the builder and returns its result.
-    fn emit<'context, 'block>(
+    pub fn emit<'context, 'block>(
         self,
         builder: &Builder<'context>,
         lhs: Value<'context, 'block>,
@@ -55,7 +55,7 @@ impl BitwiseOperation {
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers a bitwise-and expression (`&`).
-    pub(super) fn emit_bitwise_and(
+    pub fn emit_bitwise_and(
         &self,
         expression: &BitwiseAndExpression,
         block: BlockRef<'context, 'block>,
@@ -73,7 +73,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers a bitwise-or expression (`|`).
-    pub(super) fn emit_bitwise_or(
+    pub fn emit_bitwise_or(
         &self,
         expression: &BitwiseOrExpression,
         block: BlockRef<'context, 'block>,
@@ -91,7 +91,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers a bitwise-xor expression (`^`).
-    pub(super) fn emit_bitwise_xor(
+    pub fn emit_bitwise_xor(
         &self,
         expression: &BitwiseXorExpression,
         block: BlockRef<'context, 'block>,
@@ -109,7 +109,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers a shift expression (`<<`, `>>`, `>>>`).
-    pub(super) fn emit_shift(
+    pub fn emit_shift(
         &self,
         expression: &ShiftExpression,
         block: BlockRef<'context, 'block>,
@@ -134,7 +134,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers a bitwise-not expression (`~x`) to `sol.not`.
-    pub(super) fn emit_bitwise_not(
+    pub fn emit_bitwise_not(
         &self,
         expression: &PrefixExpression,
         block: BlockRef<'context, 'block>,

@@ -11,8 +11,8 @@ use slang_solidity_v2::ast::EmitStatement;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
-use super::StatementEmitter;
-use super::named_arguments::order_named_arguments;
+use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::contract::function::statement::named_arguments::order_named_arguments;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Lowers `emit Event(args);` to `sol.emit`.
@@ -21,7 +21,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// field per the event declaration, coerced to its parameter type, and the
     /// op is tagged with the event's canonical signature (`None` for an
     /// anonymous event).
-    pub(super) fn emit_event(
+    pub fn emit_event(
         &self,
         emit_statement: &EmitStatement,
         block: BlockRef<'context, 'block>,

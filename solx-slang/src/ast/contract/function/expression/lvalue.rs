@@ -15,11 +15,11 @@ use slang_solidity_v2::ast::Identifier;
 
 use crate::ast::contract::function::storage_slot::StorageSlot;
 
-use super::ExpressionEmitter;
-use super::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 /// A resolved assignable location.
-pub(super) enum Lvalue<'context, 'block> {
+pub enum Lvalue<'context, 'block> {
     /// A stack slot — a local variable or parameter.
     Stack(Value<'context, 'block>, Type<'context>),
     /// A value-typed state variable storage slot.
@@ -31,7 +31,7 @@ pub(super) enum Lvalue<'context, 'block> {
 
 impl<'context, 'block> Lvalue<'context, 'block> {
     /// The declared element type of the location.
-    pub(super) fn element_type(&self) -> Type<'context> {
+    pub fn element_type(&self) -> Type<'context> {
         match self {
             Self::Stack(_, element_type)
             | Self::Storage(_, element_type)
@@ -48,7 +48,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// struct-field member accesses, and array / mapping index accesses are
     /// supported; reference-typed identifier targets are lowered by a later
     /// domain.
-    pub(super) fn resolve_lvalue(
+    pub fn resolve_lvalue(
         &self,
         expression: &Expression,
         block: BlockRef<'context, 'block>,
@@ -102,7 +102,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Loads the value currently held at an lvalue.
-    pub(super) fn emit_lvalue_load(
+    pub fn emit_lvalue_load(
         &self,
         lvalue: &Lvalue<'context, 'block>,
         block: &BlockRef<'context, 'block>,
@@ -125,7 +125,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Stores a value to an lvalue.
-    pub(super) fn emit_lvalue_store(
+    pub fn emit_lvalue_store(
         &self,
         lvalue: &Lvalue<'context, 'block>,
         value: Value<'context, 'block>,

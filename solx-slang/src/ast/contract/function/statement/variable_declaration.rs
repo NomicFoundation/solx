@@ -11,11 +11,11 @@ use slang_solidity_v2::ast::VariableDeclarationTarget;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
-use super::StatementEmitter;
+use crate::ast::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Lowers a local variable declaration.
-    pub(super) fn emit_variable_declaration(
+    pub fn emit_variable_declaration(
         &mut self,
         declaration: &VariableDeclarationStatement,
         block: BlockRef<'context, 'block>,

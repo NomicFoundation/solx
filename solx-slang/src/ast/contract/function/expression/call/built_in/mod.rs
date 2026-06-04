@@ -8,7 +8,7 @@ use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::PositionalArguments;
 
-use super::CallEmitter;
+use crate::ast::contract::function::expression::call::CallEmitter;
 
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
     /// Tries to lower `callee(arguments)` as a Solidity built-in.
@@ -19,7 +19,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// through. The binder fixes each built-in's arity, so the handlers take
     /// the arguments as given. Member-access built-ins (`msg.sender`,
     /// `abi.encode`, …) and the remaining globals defer to later domains.
-    pub(super) fn try_emit_built_in_call(
+    pub fn try_emit_built_in_call(
         &self,
         callee: &Expression,
         arguments: &PositionalArguments,

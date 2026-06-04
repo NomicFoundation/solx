@@ -11,8 +11,8 @@ use solx_utils::DataLocation;
 
 use crate::ast::contract::function::storage_slot::StorageSlot;
 
-use super::ExpressionEmitter;
-use super::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers a read of a state variable.
@@ -22,7 +22,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// yields the storage reference itself via `sol.addr_of`, addressed in
     /// place with no scalar to load. `constant` state variables are lowered by
     /// a later domain.
-    pub(super) fn emit_state_variable_read(
+    pub fn emit_state_variable_read(
         &self,
         state_variable: &StateVariableDefinition,
         block: BlockRef<'context, 'block>,
@@ -55,7 +55,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a value-typed storage load: `sol.addr_of` + `sol.load`.
-    pub(super) fn emit_storage_load(
+    pub fn emit_storage_load(
         &self,
         slot: &StorageSlot,
         element_type: Type<'context>,
@@ -68,7 +68,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a value-typed storage store: `sol.addr_of` + `sol.store`.
-    pub(super) fn emit_storage_store(
+    pub fn emit_storage_store(
         &self,
         slot: &StorageSlot,
         value: Value<'context, 'block>,

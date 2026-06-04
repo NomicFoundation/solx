@@ -9,7 +9,7 @@ use slang_solidity_v2::ast::ExpressionStatement;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 
-use super::StatementEmitter;
+use crate::ast::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Lowers an expression statement: the expression is emitted for its side
@@ -17,7 +17,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ///
     /// The call form of `revert` (`revert()` / `revert("msg")`) is a statement
     /// that never yields a value, so it is routed to its dedicated lowering.
-    pub(super) fn emit_expression_statement(
+    pub fn emit_expression_statement(
         &self,
         statement: &ExpressionStatement,
         block: BlockRef<'context, 'block>,

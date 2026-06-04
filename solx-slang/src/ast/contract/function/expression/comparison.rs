@@ -14,12 +14,12 @@ use slang_solidity_v2::ast::InequalityExpressionOperator;
 use solx_mlir::CmpPredicate;
 use solx_mlir::TypeFactory;
 
-use super::ExpressionEmitter;
-use super::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers an equality expression (`==`, `!=`).
-    pub(super) fn emit_equality(
+    pub fn emit_equality(
         &self,
         expression: &EqualityExpression,
         block: BlockRef<'context, 'block>,
@@ -37,7 +37,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers an inequality expression (`<`, `<=`, `>`, `>=`).
-    pub(super) fn emit_inequality(
+    pub fn emit_inequality(
         &self,
         expression: &InequalityExpression,
         block: BlockRef<'context, 'block>,

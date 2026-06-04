@@ -7,15 +7,15 @@ use melior::ir::Value;
 use slang_solidity_v2::ast::AssignmentExpression;
 use slang_solidity_v2::ast::AssignmentExpressionOperator;
 
-use super::ExpressionEmitter;
-use super::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers a simple assignment (`=`); the cast right-hand side is stored to
     /// the target and is also the expression's result.
     ///
     /// Compound assignments are lowered by a later domain.
-    pub(super) fn emit_assignment(
+    pub fn emit_assignment(
         &self,
         assignment: &AssignmentExpression,
         block: BlockRef<'context, 'block>,

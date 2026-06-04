@@ -7,7 +7,7 @@ use melior::ir::Value;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Identifier;
 
-use super::ExpressionEmitter;
+use crate::ast::contract::function::expression::ExpressionEmitter;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers an identifier reference to the value it denotes.
@@ -15,7 +15,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Locals and parameters are stack slots: the binding is looked up in the
     /// environment and loaded. Other binding kinds (state variables, constants,
     /// functions, libraries) are lowered by their own domains.
-    pub(super) fn emit_identifier(
+    pub fn emit_identifier(
         &self,
         identifier: &Identifier,
         block: BlockRef<'context, 'block>,

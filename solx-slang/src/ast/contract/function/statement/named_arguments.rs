@@ -14,7 +14,7 @@ use slang_solidity_v2::ast::Parameters;
 /// The binder validates that the names cover the parameters exactly with no
 /// duplicates, so a missing or unmatched name is an invariant violation, not a
 /// user error.
-pub(super) fn order_named_arguments(
+pub fn order_named_arguments(
     named_arguments: &NamedArguments,
     parameters: &Parameters,
 ) -> Vec<Expression> {

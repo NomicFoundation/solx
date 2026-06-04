@@ -9,12 +9,12 @@ use slang_solidity_v2::ast::Expression;
 
 use solx_mlir::CmpPredicate;
 
-use super::ExpressionEmitter;
+use crate::ast::contract::function::expression::ExpressionEmitter;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers short-circuit `&&`: seed an `i1` slot with `false`, and only when
     /// the left operand is true evaluate the right and store it.
-    pub(super) fn emit_and(
+    pub fn emit_and(
         &self,
         left: &Expression,
         right: &Expression,
@@ -25,7 +25,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Lowers short-circuit `||`: seed an `i1` slot with `true`, and only when
     /// the left operand is false evaluate the right and store it.
-    pub(super) fn emit_or(
+    pub fn emit_or(
         &self,
         left: &Expression,
         right: &Expression,
@@ -35,7 +35,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers `!operand` as a comparison against zero (`operand == 0`).
-    pub(super) fn emit_not(
+    pub fn emit_not(
         &self,
         operand: &Expression,
         block: BlockRef<'context, 'block>,

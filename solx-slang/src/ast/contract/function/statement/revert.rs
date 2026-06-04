@@ -14,8 +14,8 @@ use solx_utils::DataLocation;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
-use super::StatementEmitter;
-use super::named_arguments::order_named_arguments;
+use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::contract::function::statement::named_arguments::order_named_arguments;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Lowers `revert ErrorName(args);` to a `sol.revert` carrying the error's
@@ -24,7 +24,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ///
     /// `sol.revert` is not a dialect terminator, so lowering continues in the
     /// same block; the function epilogue supplies the structural terminator.
-    pub(super) fn emit_revert(
+    pub fn emit_revert(
         &self,
         revert: &RevertStatement,
         block: BlockRef<'context, 'block>,
@@ -83,7 +83,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// `Error(string)` payload; a runtime message expression (or an empty
     /// literal) is evaluated, coerced to `string memory`, and ABI-encoded under
     /// the `Error(string)` selector, exactly like `require(cond, expr)`.
-    pub(super) fn emit_revert_call(
+    pub fn emit_revert_call(
         &self,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,

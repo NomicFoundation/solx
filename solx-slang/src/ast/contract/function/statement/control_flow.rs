@@ -21,11 +21,11 @@ use slang_solidity_v2::ast::WhileStatement;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 
-use super::StatementEmitter;
+use crate::ast::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Lowers an `if`/`else` statement to `sol.if`.
-    pub(super) fn emit_if(
+    pub fn emit_if(
         &mut self,
         if_statement: &IfStatement,
         block: BlockRef<'context, 'block>,
@@ -52,7 +52,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers a `while` loop to `sol.while`.
-    pub(super) fn emit_while(
+    pub fn emit_while(
         &mut self,
         while_statement: &WhileStatement,
         block: BlockRef<'context, 'block>,
@@ -65,7 +65,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
     /// Lowers a `do`/`while` loop to `sol.do`; the body runs before the
     /// condition is first tested.
-    pub(super) fn emit_do_while(
+    pub fn emit_do_while(
         &mut self,
         do_while: &DoWhileStatement,
         block: BlockRef<'context, 'block>,
@@ -78,7 +78,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
     /// Lowers a `for` loop to `sol.for`. The initializer runs in the current
     /// block; a fresh lexical scope covers it and the body.
-    pub(super) fn emit_for(
+    pub fn emit_for(
         &mut self,
         for_statement: &ForStatement,
         block: BlockRef<'context, 'block>,
@@ -102,7 +102,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a `sol.break` terminator, ending the current control flow.
-    pub(super) fn emit_break(
+    pub fn emit_break(
         &self,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
@@ -111,7 +111,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Emits a `sol.continue` terminator, ending the current control flow.
-    pub(super) fn emit_continue(
+    pub fn emit_continue(
         &self,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
@@ -120,7 +120,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers a nested block in its own lexical scope.
-    pub(super) fn emit_block(
+    pub fn emit_block(
         &mut self,
         statements: Statements,
         block: BlockRef<'context, 'block>,
@@ -142,7 +142,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
     /// Lowers an `unchecked { … }` block, suppressing overflow checks for the
     /// arithmetic inside it.
-    pub(super) fn emit_unchecked_block(
+    pub fn emit_unchecked_block(
         &mut self,
         unchecked: &UncheckedBlock,
         block: BlockRef<'context, 'block>,

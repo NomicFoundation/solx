@@ -12,8 +12,8 @@ use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StructDefinition;
 use solx_utils::DataLocation;
 
-use super::CallEmitter;
-use super::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
     /// Tries to lower `S(a, b, …)` as a positional struct constructor.
@@ -21,7 +21,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// Returns `Ok(None)` when the callee is not a struct name, so the caller
     /// falls through. Named-argument construction (`S({a: x})`) defers to a
     /// later domain.
-    pub(super) fn try_emit_struct_constructor(
+    pub fn try_emit_struct_constructor(
         &self,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,

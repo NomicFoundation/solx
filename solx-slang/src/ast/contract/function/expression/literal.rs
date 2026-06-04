@@ -9,8 +9,8 @@ use slang_solidity_v2::ast::DecimalNumberExpression;
 use slang_solidity_v2::ast::HexNumberExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use super::ExpressionEmitter;
-use super::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers a decimal number literal to a `sol.constant`.
@@ -18,7 +18,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// The value is taken after applying any unit suffix (`wei`, `ether`,
     /// `seconds`, …); the type is the smallest byte-aligned integer type the
     /// binder assigned to the literal node.
-    pub(super) fn emit_decimal(
+    pub fn emit_decimal(
         &self,
         decimal: &DecimalNumberExpression,
         block: &BlockRef<'context, 'block>,
@@ -33,7 +33,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers a hexadecimal number literal to a `sol.constant`.
-    pub(super) fn emit_hex(
+    pub fn emit_hex(
         &self,
         hex: &HexNumberExpression,
         block: &BlockRef<'context, 'block>,
@@ -46,7 +46,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers a boolean keyword (`true` / `false`) to an `i1` `sol.constant`.
-    pub(super) fn emit_boolean(
+    pub fn emit_boolean(
         &self,
         value: bool,
         block: &BlockRef<'context, 'block>,

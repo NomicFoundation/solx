@@ -11,8 +11,8 @@ use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_utils::DataLocation;
 
-use super::ExpressionEmitter;
-use super::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers an index access `a[i]` / `m[k]` for arrays, dynamic `bytes`,
@@ -20,7 +20,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// containers) or `sol.map` (mappings), then `sol.load` it. For dynamic
     /// `bytes` the element loads as `!sol.byte`; a trailing `sol.bytes_cast`
     /// widens it to the expression's `bytesN` type (a no-op for other types).
-    pub(super) fn emit_index_access(
+    pub fn emit_index_access(
         &self,
         index_access: &IndexAccessExpression,
         block: BlockRef<'context, 'block>,
@@ -39,7 +39,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits the address of `a[i]` / `m[k]` together with the element type,
     /// without the trailing load. Shared by the value read and the assignment
     /// lvalue path. Range indices (`a[i:j]`) defer to a later domain.
-    pub(super) fn emit_index_access_address(
+    pub fn emit_index_access_address(
         &self,
         index_access: &IndexAccessExpression,
         block: BlockRef<'context, 'block>,

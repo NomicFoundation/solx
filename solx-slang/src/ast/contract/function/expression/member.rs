@@ -11,7 +11,7 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use super::ExpressionEmitter;
+use crate::ast::contract::function::expression::ExpressionEmitter;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers a member access `operand.member`.
@@ -67,7 +67,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits the address of `s.field` together with the field's element type,
     /// without the trailing load. Shared by the value read and the assignment
     /// lvalue path. Returns `Ok(None)` when the base is not a struct.
-    pub(super) fn emit_struct_field_address(
+    pub fn emit_struct_field_address(
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,

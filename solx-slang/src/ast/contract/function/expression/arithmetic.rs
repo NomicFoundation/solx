@@ -19,13 +19,13 @@ use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Builder;
 
-use super::ExpressionEmitter;
-use super::call::type_conversion::TypeConversion;
+use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 
 /// A binary arithmetic operation, abstracting over the source operator so the
 /// checked/unchecked Sol op selection lives in one place.
 #[derive(Debug, Clone, Copy)]
-enum ArithmeticOperation {
+pub enum ArithmeticOperation {
     /// `+`
     Add,
     /// `-`
@@ -46,7 +46,7 @@ impl ArithmeticOperation {
     /// In checked mode (Solidity 0.8+ default) the overflow-trapping variants
     /// are emitted; inside `unchecked {}` the wrapping variants are. `%` has no
     /// checked variant.
-    fn emit<'context, 'block>(
+    pub fn emit<'context, 'block>(
         self,
         checked: bool,
         builder: &Builder<'context>,
@@ -72,7 +72,7 @@ impl ArithmeticOperation {
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers an additive expression (`+`, `-`).
-    pub(super) fn emit_additive(
+    pub fn emit_additive(
         &self,
         expression: &AdditiveExpression,
         block: BlockRef<'context, 'block>,
@@ -94,7 +94,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers a multiplicative expression (`*`, `/`, `%`).
-    pub(super) fn emit_multiplicative(
+    pub fn emit_multiplicative(
         &self,
         expression: &MultiplicativeExpression,
         block: BlockRef<'context, 'block>,
@@ -117,7 +117,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers an exponentiation expression (`**`).
-    pub(super) fn emit_exponentiation(
+    pub fn emit_exponentiation(
         &self,
         expression: &ExponentiationExpression,
         block: BlockRef<'context, 'block>,
@@ -157,7 +157,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits both operands of a binary expression — right-to-left, matching
     /// solc's evaluation order — and coerces each to `result_type` so the Sol
     /// op satisfies `SameOperandsAndResultType`. Shared with the bitwise domain.
-    pub(super) fn emit_binary_operands(
+    pub fn emit_binary_operands(
         &self,
         left: &Expression,
         right: &Expression,
@@ -184,7 +184,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     }
 
     /// Lowers a postfix step (`x++`, `x--`), yielding the value before the step.
-    pub(super) fn emit_postfix(
+    pub fn emit_postfix(
         &self,
         expression: &PostfixExpression,
         block: BlockRef<'context, 'block>,
@@ -200,7 +200,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Lowers a prefix operator, routing each to its domain: `++`/`--` step
     /// here, `!` to logical, `~` to bitwise, `-` to negation. `delete` defers.
-    pub(super) fn emit_prefix(
+    pub fn emit_prefix(
         &self,
         expression: &PrefixExpression,
         block: BlockRef<'context, 'block>,

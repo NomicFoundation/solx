@@ -20,7 +20,7 @@ use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::PositionalArguments;
 
 use self::type_conversion::TypeConversion;
-use super::ExpressionEmitter;
+use crate::ast::contract::function::expression::ExpressionEmitter;
 
 /// Lowers a `FunctionCallExpression`, classifying the callee and routing to the
 /// matching call kind.
