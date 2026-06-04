@@ -10,6 +10,8 @@ pub mod address;
 pub mod array;
 /// Low-level bare calls (`call`/`delegatecall`/`staticcall`).
 pub mod bare_call;
+/// External member calls (`recv.f(args)` / `this.f(args)`).
+pub mod external_call;
 /// User-defined value type member built-ins (`wrap`/`unwrap`).
 pub mod user_defined_value_type;
 

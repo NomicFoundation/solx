@@ -72,6 +72,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(result);
         }
 
+        // An external member call (`recv.f(args)` / `this.f(args)`) used in
+        // value position keeps its first declared result.
+        if let Some((values, block)) =
+            self.try_emit_external_call_results(call, arguments, block)?
+        {
+            return Ok((values.into_iter().next(), block));
+        }
+
         self.emit_internal_call(&callee, arguments, block)
     }
 
@@ -122,6 +130,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // `(bool ok, bytes memory d) = addr.call(payload)` — a bare low-level
         // call yielding both the success status and the raw return data.
         if let Some(result) = self.try_emit_bare_call_results(call, arguments, block)? {
+            return Ok(result);
+        }
+
+        // `(a, b) = recv.f(args)` — an external member call returning a tuple.
+        if let Some(result) = self.try_emit_external_call_results(call, arguments, block)? {
             return Ok(result);
         }
 
@@ -217,6 +230,23 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let result =
             TypeConversion::from_target_type(target_type, builder).emit(value, builder, &block);
         Ok(Some((Some(result), block)))
+    }
+
+    /// Coerces each evaluated argument to its declared parameter type in place
+    /// (a narrow literal to its parameter width, an address/contract to the
+    /// declared interface, …). Extra arguments past the known parameter types
+    /// are left unchanged.
+    fn coerce_arguments(
+        &self,
+        argument_values: &mut [Value<'context, 'block>],
+        parameter_types: &[Type<'context>],
+        block: &BlockRef<'context, 'block>,
+    ) {
+        let builder = &self.expression_emitter.state.builder;
+        for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
+            *value = TypeConversion::from_target_type(parameter_type, builder)
+                .emit(*value, builder, block);
+        }
     }
 
     /// Evaluates a `{value: v, gas: g, ...}` call-options layer for its side
