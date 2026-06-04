@@ -13,9 +13,10 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Identifier;
 
+use crate::ast::contract::function::storage_slot::StorageSlot;
+
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::contract::function::storage_slot::StorageSlot;
 
 /// A resolved assignable location.
 pub enum Lvalue<'context, 'block> {
@@ -41,11 +42,12 @@ impl<'context, 'block> Lvalue<'context, 'block> {
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Resolves an expression to the location it denotes for assignment,
-    /// emitting any address-producing ops (struct-field `sol.gep`) into `block`.
+    /// emitting any address-producing ops (`sol.gep` / `sol.map`) into `block`.
     ///
-    /// Identifier targets (locals, parameters, value-typed state variables) and
-    /// struct-field member accesses are supported; index and reference-typed
-    /// targets are lowered by later domains.
+    /// Identifier targets (locals, parameters, value-typed state variables),
+    /// struct-field member accesses, and array / mapping index accesses are
+    /// supported; reference-typed identifier targets are lowered by a later
+    /// domain.
     pub fn resolve_lvalue(
         &self,
         expression: &Expression,
@@ -59,6 +61,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let (address, element_type, block) = self
                     .emit_struct_field_address(access, block)?
                     .expect("a member-access lvalue addresses a struct field");
+                Ok((Lvalue::Pointer(address, element_type), block))
+            }
+            Expression::IndexAccessExpression(index_access) => {
+                let (address, element_type, block) =
+                    self.emit_index_access_address(index_access, block)?;
                 Ok((Lvalue::Pointer(address, element_type), block))
             }
             _ => unimplemented!("lvalue: {:?}", std::mem::discriminant(expression)),

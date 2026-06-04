@@ -135,10 +135,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
     }
 
-    /// Lowers an operand-bearing member intrinsic. At this layer that is an
-    /// address member (`address.balance` / `.codehash` / `.code`); the address
-    /// operand is evaluated and passed to the matching `sol.*` intrinsic.
-    /// `x.length` joins in the index-access domain.
+    /// Lowers an operand-bearing member intrinsic — the address members
+    /// (`address.balance` / `.codehash` / `.code`) and `x.length` — by
+    /// evaluating the operand and passing it to the matching `sol.*` op.
     fn emit_unary_member(
         &self,
         built_in: BuiltIn,
@@ -151,7 +150,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             BuiltIn::AddressBalance => builder.emit_sol_balance(operand, &block),
             BuiltIn::AddressCodehash => builder.emit_sol_code_hash(operand, &block),
             BuiltIn::AddressCode => builder.emit_sol_code(operand, &block),
-            _ => unimplemented!("member access: unary member"),
+            BuiltIn::Length => builder.emit_sol_length(operand, &block),
+            _ => unreachable!("emit_unary_member only handles operand-bearing members"),
         };
         Ok((value, block))
     }
