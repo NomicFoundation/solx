@@ -198,27 +198,53 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Ok((old, block))
     }
 
-    /// Lowers a prefix step (`++x`, `--x`), yielding the value after the step.
-    ///
-    /// The other prefix operators (`~`, unary `-`, `delete`) are lowered by
-    /// later domains.
+    /// Lowers a prefix operator, routing each to its domain: `++`/`--` step
+    /// here, `!` to logical, `~` to bitwise, `-` to negation. `delete` defers.
     pub fn emit_prefix(
         &self,
         expression: &PrefixExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let operation = match expression.operator() {
+        let step = match expression.operator() {
             PrefixExpressionOperator::PlusPlus(_) => ArithmeticOperation::Add,
             PrefixExpressionOperator::MinusMinus(_) => ArithmeticOperation::Subtract,
-            // `!` is a logical operator, lowered by its own domain.
             PrefixExpressionOperator::Bang(_) => {
                 return self.emit_not(&expression.operand(), block);
             }
-            _ => unimplemented!("prefix operator lowering"),
+            PrefixExpressionOperator::Tilde(_) => return self.emit_bitwise_not(expression, block),
+            PrefixExpressionOperator::Minus(_) => return self.emit_negate(expression, block),
+            PrefixExpressionOperator::DeleteKeyword(_) => {
+                unimplemented!("delete operator lowering")
+            }
         };
         let (_old, new, block) =
-            self.emit_increment_decrement(operation, &expression.operand(), block)?;
+            self.emit_increment_decrement(step, &expression.operand(), block)?;
         Ok((new, block))
+    }
+
+    /// Lowers unary negation `-x` as `0 - x` (unchecked subtraction; checked
+    /// negation would need signed-type-aware handling of `-INT_MIN`).
+    fn emit_negate(
+        &self,
+        expression: &PrefixExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let result_type = TypeConversion::resolve_slang_type(
+            &expression
+                .get_type()
+                .expect("binder types every negation expression"),
+            None,
+            &self.state.builder,
+        );
+        let (value, block) = self.emit_value(&expression.operand(), block)?;
+        let value = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
+            value,
+            &self.state.builder,
+            &block,
+        );
+        let zero = self.state.builder.emit_sol_constant(0, result_type, &block);
+        let result = self.state.builder.emit_sol_sub(zero, value, &block);
+        Ok((result, block))
     }
 
     /// Emits a `±1` read-modify-write of an lvalue, returning both the value
