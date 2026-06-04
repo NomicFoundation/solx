@@ -30,6 +30,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .emit_sol_load(pointer, element_type, &block)?;
                 Ok((value, block))
             }
+            Some(Definition::StateVariable(state_variable)) => {
+                self.emit_state_variable_read(&state_variable, block)
+            }
             Some(_) => unimplemented!("identifier reference lowering: {name}"),
             None => unreachable!("unresolved identifier: {name}"),
         }
