@@ -7,6 +7,7 @@ use melior::ir::Value;
 use num_bigint::BigInt;
 use slang_solidity_v2::ast::DecimalNumberExpression;
 use slang_solidity_v2::ast::HexNumberExpression;
+use slang_solidity_v2::ast::StringExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
@@ -52,6 +53,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         self.state.builder.emit_bool(value, block)
+    }
+
+    /// Lowers a string / `bytes` literal to a freshly allocated memory string
+    /// via `sol.string_lit`.
+    pub fn emit_string(
+        &self,
+        string: &StringExpression,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        self.state
+            .builder
+            .emit_sol_string_lit_bytes(&string.value(), block)
     }
 
     /// Emits a `sol.constant` of the integer type the binder assigned to a

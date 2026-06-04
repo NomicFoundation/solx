@@ -35,8 +35,6 @@ use std::collections::HashMap;
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
-use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 
@@ -111,6 +109,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::HexNumberExpression(hex) => Ok((self.emit_hex(hex, &block), block)),
             Expression::TrueKeyword(_) => Ok((self.emit_boolean(true, &block), block)),
             Expression::FalseKeyword(_) => Ok((self.emit_boolean(false, &block), block)),
+            Expression::StringExpression(string) => Ok((self.emit_string(string, &block), block)),
             Expression::Identifier(identifier) => self.emit_identifier(identifier, block),
             Expression::AdditiveExpression(expression) => self.emit_additive(expression, block),
             Expression::MultiplicativeExpression(expression) => {
@@ -169,26 +168,5 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (value, block) = self.emit(expression, block)?;
         let value = value.ok_or_else(|| anyhow::anyhow!("expression produced no value"))?;
         Ok((value, block))
-    }
-
-    /// Emits the contract's state-variable initializers into `block`, returning
-    /// the continuation block.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if an initializer contains unsupported constructs.
-    pub fn emit_state_var_initializers(
-        &self,
-        contract: &ContractDefinition,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        for member in contract.members().iter() {
-            if let ContractMember::StateVariableDefinition(variable) = member
-                && variable.value().is_some()
-            {
-                unimplemented!("state variable initializer lowering");
-            }
-        }
-        Ok(block)
     }
 }
