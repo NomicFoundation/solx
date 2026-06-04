@@ -75,6 +75,8 @@ impl Frontend for Slang {
         Self::NAME
     }
 
+    // TODO(rebuild): split the per-file emission loop out when the driver is refined.
+    #[allow(clippy::too_many_lines)]
     fn standard_json(
         &self,
         input_json: &mut solx_standard_json::Input,

@@ -87,7 +87,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 continue;
             };
             let element_type =
-                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder);
+                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
             self.state.builder.emit_sol_state_var(
                 &slot.name,
                 slot.slot,

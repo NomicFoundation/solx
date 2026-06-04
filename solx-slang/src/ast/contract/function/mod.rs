@@ -68,6 +68,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     ///
     /// Panics if an entry block is not attached to a region, which is
     /// unreachable because `emit_sol_func` always creates a region.
+    // TODO(rebuild): split when the function-emission domain is rebuilt to the bar.
+    #[allow(clippy::too_many_lines)]
     pub fn emit_sol(
         &self,
         function: &FunctionDefinition,
