@@ -6,6 +6,7 @@ use melior::Context as MlirContext;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Location;
+use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::operation::Operation;
@@ -212,21 +213,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let result_type =
             TypeConversion::resolve_slang_type(result_slang_type, None, &self.state.builder);
-
-        let (rhs, block) = self.emit_value(right, block)?;
-        let (lhs, block) = self.emit_value(left, block)?;
-
-        let lhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
-            lhs,
-            &self.state.builder,
-            &block,
-        );
-        let rhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
-            rhs,
-            &self.state.builder,
-            &block,
-        );
-
+        let (lhs, rhs, block) = self.emit_binary_operands(left, right, result_type, block)?;
         let operation = operation.build(
             self.checked,
             self.state.builder.context,
@@ -240,6 +227,35 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .expect("arithmetic operation produces one result")
             .into();
         Ok((value, block))
+    }
+
+    /// Emits both operands of a binary expression — right-to-left, matching
+    /// solc's evaluation order — and coerces each to `result_type` so the Sol
+    /// op satisfies `SameOperandsAndResultType`. Shared with the bitwise domain.
+    pub(super) fn emit_binary_operands(
+        &self,
+        left: &Expression,
+        right: &Expression,
+        result_type: Type<'context>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        Value<'context, 'block>,
+        Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    )> {
+        let (rhs, block) = self.emit_value(right, block)?;
+        let (lhs, block) = self.emit_value(left, block)?;
+        let lhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
+            lhs,
+            &self.state.builder,
+            &block,
+        );
+        let rhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
+            rhs,
+            &self.state.builder,
+            &block,
+        );
+        Ok((lhs, rhs, block))
     }
 
     /// Lowers a postfix step (`x++`, `x--`), yielding the value before the step.
@@ -257,27 +273,64 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Ok((old, block))
     }
 
-    /// Lowers a prefix step (`++x`, `--x`), yielding the value after the step.
-    ///
-    /// The other prefix operators (`!`, `~`, unary `-`, `delete`) are lowered
-    /// by later domains.
+    /// Lowers a prefix operator, routing each to its domain: `++`/`--` step
+    /// here, `!` to logical, `~` to bitwise, `-` to negation. `delete` defers.
     pub(super) fn emit_prefix(
         &self,
         expression: &PrefixExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let operation = match expression.operator() {
+        let step = match expression.operator() {
             PrefixExpressionOperator::PlusPlus(_) => ArithmeticOperation::Add,
             PrefixExpressionOperator::MinusMinus(_) => ArithmeticOperation::Subtract,
-            // `!` is a logical operator, lowered by its own domain.
             PrefixExpressionOperator::Bang(_) => {
                 return self.emit_not(&expression.operand(), block);
             }
-            _ => unimplemented!("prefix operator lowering"),
+            PrefixExpressionOperator::Tilde(_) => return self.emit_bitwise_not(expression, block),
+            PrefixExpressionOperator::Minus(_) => return self.emit_negate(expression, block),
+            PrefixExpressionOperator::DeleteKeyword(_) => {
+                unimplemented!("delete operator lowering")
+            }
         };
         let (_old, new, block) =
-            self.emit_increment_decrement(operation, &expression.operand(), block)?;
+            self.emit_increment_decrement(step, &expression.operand(), block)?;
         Ok((new, block))
+    }
+
+    /// Lowers unary negation `-x` as `0 - x` (unchecked subtraction; checked
+    /// negation would need signed-type-aware handling of `-INT_MIN`).
+    fn emit_negate(
+        &self,
+        expression: &PrefixExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let result_type = TypeConversion::resolve_slang_type(
+            &expression
+                .get_type()
+                .expect("binder types every negation expression"),
+            None,
+            &self.state.builder,
+        );
+        let (value, block) = self.emit_value(&expression.operand(), block)?;
+        let value = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
+            value,
+            &self.state.builder,
+            &block,
+        );
+        let zero = self.state.builder.emit_sol_constant(0, result_type, &block);
+        let operation = ArithmeticOperation::Subtract.build(
+            false,
+            self.state.builder.context,
+            self.state.builder.unknown_location,
+            zero,
+            value,
+        );
+        let result = block
+            .append_operation(operation)
+            .result(0)
+            .expect("negation produces one result")
+            .into();
+        Ok((result, block))
     }
 
     /// Emits a `±1` read-modify-write of an lvalue, returning both the value

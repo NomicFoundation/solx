@@ -6,6 +6,8 @@
 pub mod arithmetic;
 /// Assignment expression lowering.
 pub mod assignment;
+/// Bitwise and shift expression lowering.
+pub mod bitwise;
 /// Function and built-in call lowering.
 pub mod call;
 /// Comparison expression lowering.
@@ -131,6 +133,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     block,
                 )
                 .map(some_value),
+            Expression::BitwiseAndExpression(expression) => {
+                self.emit_bitwise_and(expression, block).map(some_value)
+            }
+            Expression::BitwiseOrExpression(expression) => {
+                self.emit_bitwise_or(expression, block).map(some_value)
+            }
+            Expression::BitwiseXorExpression(expression) => {
+                self.emit_bitwise_xor(expression, block).map(some_value)
+            }
+            Expression::ShiftExpression(expression) => {
+                self.emit_shift(expression, block).map(some_value)
+            }
             Expression::FunctionCallExpression(call_expression) => {
                 call::CallEmitter::new(self).emit_function_call(call_expression, block)
             }
