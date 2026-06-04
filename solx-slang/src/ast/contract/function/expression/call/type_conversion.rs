@@ -36,6 +36,9 @@ impl<'context> TypeConversion<'context> {
     /// type's Slang location is `Inherited` (struct-field-relative). Top-level
     /// callers pass `None`; the `Struct` arm sets it to the parent struct's
     /// location for the duration of member resolution.
+    // TODO(rebuild): a per-variant type match is one cohesive unit; reassess
+    // against rule 4 when the type domain is rebuilt to the bar.
+    #[allow(clippy::too_many_lines)]
     pub fn resolve_slang_type(
         slang_type: &SlangType,
         inherited_location: Option<solx_utils::DataLocation>,
@@ -246,11 +249,12 @@ impl<'context> TypeConversion<'context> {
     pub fn resolve_state_variable_type(
         state_variable: &StateVariableDefinition,
         builder: &solx_mlir::Builder<'context>,
-    ) -> Type<'context> {
+    ) -> anyhow::Result<Type<'context>> {
+        let name = state_variable.name().name();
         let slang_type = state_variable
             .get_type()
-            .expect("the binder types every state variable");
-        Self::resolve_slang_type(&slang_type, None, builder)
+            .ok_or_else(|| anyhow::anyhow!("unresolved type for state variable: {name}"))?;
+        Ok(Self::resolve_slang_type(&slang_type, None, builder))
     }
 
     /// Resolves a function's parameter and return types from Slang AST to MLIR.

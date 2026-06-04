@@ -7,11 +7,13 @@ pub mod function;
 
 use std::collections::HashMap;
 
+use melior::ir::BlockRef;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::StateVariableDefinition;
 
 use solx_mlir::Context;
 
@@ -87,7 +89,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 continue;
             };
             let element_type =
-                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder);
+                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
             self.state.builder.emit_sol_state_var(
                 &slot.name,
                 slot.slot,
@@ -110,7 +112,36 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             self.state.current_contract_type = None;
         }
 
+        // Solidity auto-generates an external `view` getter for every public
+        // state variable.
+        for member in contract.members().iter() {
+            let ContractMember::StateVariableDefinition(state_variable) = member else {
+                continue;
+            };
+            let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
+                continue;
+            };
+            self.emit_state_variable_getter(&state_variable, slot, &contract_body)?;
+        }
+
         Ok(())
+    }
+
+    /// Emits the auto-generated external getter for a public, value-typed state
+    /// variable: `T public name;` becomes `function name() external view returns
+    /// (T)` reading `slot` via `sol.addr_of` + `sol.load`.
+    ///
+    /// Indexed getters (mappings / arrays, which take key/index arguments) and
+    /// reference-typed getters (`string` / `bytes` / struct, which return a
+    /// memory copy of the storage value) defer to later domains; they are
+    /// skipped here so the rest of the contract still compiles.
+    fn emit_state_variable_getter(
+        &self,
+        _state_variable: &StateVariableDefinition,
+        _slot: &StorageSlot,
+        _contract_body: &BlockRef<'context, '_>,
+    ) -> anyhow::Result<()> {
+        unimplemented!("public state-variable getter")
     }
 
     /// Pre-registers all function signatures for call resolution before bodies

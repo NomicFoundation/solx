@@ -68,6 +68,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     ///
     /// Panics if an entry block is not attached to a region, which is
     /// unreachable because `emit_sol_func` always creates a region.
+    // TODO(rebuild): split when the function-emission domain is rebuilt to the bar.
+    #[allow(clippy::too_many_lines)]
     pub fn emit_sol(
         &self,
         function: &FunctionDefinition,
@@ -159,9 +161,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             }
         }
 
-        let region = function_entry_block
-            .parent_region()
-            .expect("entry block belongs to a region");
         let mut current_block = function_entry_block;
 
         // State variable initializers run at the top of the constructor body,
@@ -177,7 +176,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             let mut emitter = StatementEmitter::new(
                 self.state,
                 &mut environment,
-                &region,
                 self.storage_layout,
                 &result_types,
             );

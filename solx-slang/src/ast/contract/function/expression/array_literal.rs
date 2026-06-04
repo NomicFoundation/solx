@@ -1,20 +1,20 @@
 //!
-//! Identifier expression lowering: reads of locals and parameters.
+//! Inline array literal expression lowering: `[a, b, c]`.
 //!
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
-use slang_solidity_v2::ast::Identifier;
+use slang_solidity_v2::ast::ArrayExpression;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
-    /// Lowers an identifier read.
-    pub fn emit_identifier(
+    /// Lowers an inline array literal `[a, b, c]`.
+    pub fn emit_array_literal(
         &self,
-        _identifier: &Identifier,
+        _array_expression: &ArrayExpression,
         _block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        unimplemented!("identifier read")
+        unimplemented!("array literal")
     }
 }

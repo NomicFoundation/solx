@@ -1,103 +1,77 @@
 //!
-//! Member access expression lowering for struct fields: `s.field`.
+//! Member access expression lowering.
 //!
 
 use melior::ir::BlockRef;
-use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::ValueLike;
-use melior::ir::r#type::TypeLike;
-use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
-use crate::ast::contract::function::expression::call::CallEmitter;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
-    /// Lowers a member access `base.member`.
+    /// Lowers a member access `operand.member`.
     ///
-    /// A struct base resolves to a field access; any other base (e.g.
-    /// `msg.sender`, `tx.origin`, `addr.balance`) falls back to built-in
-    /// member access lowering.
+    /// A struct-field access (`s.field`) is tried first; otherwise the member
+    /// is an EVM built-in — the environment globals (`msg.*`, `tx.*`,
+    /// `block.*`), or an operand-bearing member (`address.balance` /
+    /// `.codehash` / `.code`, `x.length`). Namespace-qualified reads, enum
+    /// variants, and selectors defer to later domains.
     pub fn emit_member_access(
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        if let Some((value, block)) = self.emit_struct_field(access, block)? {
-            return Ok((value, block));
+        if let Some(result) = self.emit_struct_field(access, block)? {
+            return Ok(result);
         }
-        CallEmitter::new(self).emit_member_access(access, block)
+        if let Some(result) = self.try_emit_type_introspection(access, block)? {
+            return Ok(result);
+        }
+        match access.member().resolve_to_built_in() {
+            Some(
+                built_in @ (BuiltIn::AddressBalance
+                | BuiltIn::AddressCodehash
+                | BuiltIn::AddressCode
+                | BuiltIn::Length),
+            ) => self.emit_unary_member(built_in, access, block),
+            Some(built_in) => Ok((
+                self.emit_environment_global(built_in, access, &block),
+                block,
+            )),
+            None => unimplemented!("member access lowering: {}", access.member().name()),
+        }
     }
 
-    /// Lowers `s.field` for a struct base to `sol.gep`, followed by a
-    /// `sol.load` of the addressed field unless the field already IS the
-    /// value (non-ptr-ref-in-storage rule).
-    ///
-    /// Returns `Ok(None)` when the base is not a struct (e.g. `msg.sender`),
-    /// so the caller can fall back to built-in member access lowering.
-    pub fn emit_struct_field(
+    /// Lowers a struct-field read `s.field`, returning `Ok(None)` when the base
+    /// is not a struct so the caller falls back to built-in member access.
+    fn emit_struct_field(
         &self,
-        access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
+        _access: &MemberAccessExpression,
+        _block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
-        let Some((address, element_type, block)) = self.emit_struct_field_address(access, block)?
-        else {
-            return Ok(None);
-        };
-        let value = self
-            .state
-            .builder
-            .emit_sol_load(address, element_type, &block)?;
-        Ok(Some((value, block)))
+        unimplemented!("member access: struct field")
     }
 
-    /// Emits the address yielded by `s.field` together with the field's
-    /// element MLIR type, without the trailing `sol.load`.
-    ///
-    /// Shared between the value-producing read path
-    /// ([`Self::emit_struct_field`]) and the lvalue write path in
-    /// `emit_assignment`. Returns `Ok(None)` when the base is not a struct.
-    pub fn emit_struct_field_address(
+    /// Lowers a nullary environment global (`msg.*`, `tx.*`, `block.*`) to its
+    /// `sol.*` intrinsic.
+    fn emit_environment_global(
         &self,
-        access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<
-        Option<(
-            Value<'context, 'block>,
-            Type<'context>,
-            BlockRef<'context, 'block>,
-        )>,
-    > {
-        let base = access.operand();
-        let Some(SlangType::Struct(struct_type)) = base.get_type() else {
-            return Ok(None);
-        };
-        let Definition::Struct(struct_definition) = struct_type.definition() else {
-            unreachable!("slang StructType always references a Struct definition");
-        };
+        _built_in: BuiltIn,
+        _access: &MemberAccessExpression,
+        _block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        unimplemented!("member access: environment global")
+    }
 
-        let member_name = access.member().name();
-        let field_index = struct_definition
-            .members()
-            .iter()
-            .position(|member| member.name().name() == member_name)
-            .expect("the binder validates that a member access names a struct field");
-
-        let (base_value, block) = self.emit_value(&base, block)?;
-        let builder = &self.state.builder;
-
-        let index_value = builder.emit_sol_constant(field_index as i64, builder.types.ui64, &block);
-        // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
-        // `sol::getEltType` on the C++ side.
-        let element_type = unsafe {
-            Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
-                base_value.r#type().to_raw(),
-                field_index as u64,
-            ))
-        };
-        let address = builder.emit_sol_gep(base_value, index_value, element_type, &block);
-        Ok(Some((address, element_type, block)))
+    /// Lowers an operand-bearing member intrinsic (`address.balance` /
+    /// `.codehash` / `.code`, `x.length`).
+    fn emit_unary_member(
+        &self,
+        _built_in: BuiltIn,
+        _access: &MemberAccessExpression,
+        _block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        unimplemented!("member access: unary member")
     }
 }
