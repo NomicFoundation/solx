@@ -141,8 +141,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     .state
                     .builder
                     .emit_sol_alloca(return_type, &function_entry_block);
-                // TODO: replace with a typed-zero helper covering address, fixed-bytes, and
-                // memory-resident types (e.g. `0x60` for empty `string`/`bytes` memory).
                 if IntegerType::try_from(return_type).is_ok() {
                     let zero =
                         self.state
@@ -151,11 +149,29 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     self.state
                         .builder
                         .emit_sol_store(zero, pointer, &function_entry_block);
-                } else {
-                    unimplemented!(
-                        "zero-initialization for non-integer named return: {return_type}"
-                    );
+                } else if matches!(
+                    parameter.get_type(),
+                    Some(
+                        slang_solidity_v2::ast::Type::FixedSizeArray(_)
+                            | slang_solidity_v2::ast::Type::Struct(_)
+                    )
+                ) {
+                    // A named return of a memory aggregate (`T[n] memory`,
+                    // `S memory`) must point at a fresh zero-initialised
+                    // allocation, otherwise writes through `result[..]` hit an
+                    // uninitialised reference (and `return result` ABI-encodes
+                    // garbage).
+                    let allocated = self
+                        .state
+                        .builder
+                        .emit_sol_malloc_zeroed(return_type, &function_entry_block);
+                    self.state
+                        .builder
+                        .emit_sol_store(allocated, pointer, &function_entry_block);
                 }
+                // Other non-integer named returns (`address`, `bytesN`, `bool`,
+                // `string` / `bytes`) are left uninitialised: a fresh alloca reads
+                // back as zero, so an unassigned return yields the zero value.
                 environment.define_variable(identifier.name(), pointer, return_type);
                 return_slots.push(Some(pointer));
             }
