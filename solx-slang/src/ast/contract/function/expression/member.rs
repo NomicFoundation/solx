@@ -29,6 +29,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         if let Some(result) = self.emit_struct_field(access, block)? {
             return Ok(result);
         }
+        if let Some(result) = self.try_emit_type_introspection(access, block)? {
+            return Ok(result);
+        }
         match access.member().resolve_to_built_in() {
             Some(
                 built_in @ (BuiltIn::AddressBalance

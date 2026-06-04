@@ -32,6 +32,8 @@ pub mod member;
 pub mod storage;
 /// Tuple expression lowering.
 pub mod tuple;
+/// `type(T)` introspection expression lowering.
+pub mod type_introspection;
 
 use std::collections::HashMap;
 
