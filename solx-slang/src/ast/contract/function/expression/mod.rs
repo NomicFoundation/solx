@@ -82,72 +82,63 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         expression: &Expression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        // A function call may be void (used as a statement); every other
+        // expression yields a value, wrapped here once.
+        if let Expression::FunctionCallExpression(call) = expression {
+            return call::CallEmitter::new(self).emit_function_call(call, block);
+        }
+        let (value, block) = self.emit_value_expression(expression, block)?;
+        Ok((Some(value), block))
+    }
+
+    /// Lowers an expression that always yields a value, dispatching each
+    /// expression kind to its domain.
+    fn emit_value_expression(
+        &self,
+        expression: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         match expression {
             Expression::DecimalNumberExpression(decimal) => {
-                Ok((Some(self.emit_decimal(decimal, &block)), block))
+                Ok((self.emit_decimal(decimal, &block), block))
             }
-            Expression::HexNumberExpression(hex) => Ok((Some(self.emit_hex(hex, &block)), block)),
-            Expression::TrueKeyword(_) => Ok((Some(self.emit_boolean(true, &block)), block)),
-            Expression::FalseKeyword(_) => Ok((Some(self.emit_boolean(false, &block)), block)),
-            Expression::Identifier(identifier) => {
-                self.emit_identifier(identifier, block).map(some_value)
-            }
-            Expression::AdditiveExpression(expression) => {
-                self.emit_additive(expression, block).map(some_value)
-            }
+            Expression::HexNumberExpression(hex) => Ok((self.emit_hex(hex, &block), block)),
+            Expression::TrueKeyword(_) => Ok((self.emit_boolean(true, &block), block)),
+            Expression::FalseKeyword(_) => Ok((self.emit_boolean(false, &block), block)),
+            Expression::Identifier(identifier) => self.emit_identifier(identifier, block),
+            Expression::AdditiveExpression(expression) => self.emit_additive(expression, block),
             Expression::MultiplicativeExpression(expression) => {
-                self.emit_multiplicative(expression, block).map(some_value)
+                self.emit_multiplicative(expression, block)
             }
             Expression::ExponentiationExpression(expression) => {
-                self.emit_exponentiation(expression, block).map(some_value)
+                self.emit_exponentiation(expression, block)
             }
-            Expression::EqualityExpression(expression) => {
-                self.emit_equality(expression, block).map(some_value)
-            }
-            Expression::InequalityExpression(expression) => {
-                self.emit_inequality(expression, block).map(some_value)
-            }
-            Expression::AssignmentExpression(assignment) => {
-                self.emit_assignment(assignment, block).map(some_value)
-            }
-            Expression::PostfixExpression(expression) => {
-                self.emit_postfix(expression, block).map(some_value)
-            }
-            Expression::PrefixExpression(expression) => {
-                self.emit_prefix(expression, block).map(some_value)
-            }
+            Expression::EqualityExpression(expression) => self.emit_equality(expression, block),
+            Expression::InequalityExpression(expression) => self.emit_inequality(expression, block),
+            Expression::AssignmentExpression(assignment) => self.emit_assignment(assignment, block),
+            Expression::PostfixExpression(expression) => self.emit_postfix(expression, block),
+            Expression::PrefixExpression(expression) => self.emit_prefix(expression, block),
             Expression::ConditionalExpression(conditional) => {
-                self.emit_conditional(conditional, block).map(some_value)
+                self.emit_conditional(conditional, block)
             }
-            Expression::AndExpression(expression) => self
-                .emit_and(
-                    &expression.left_operand(),
-                    &expression.right_operand(),
-                    block,
-                )
-                .map(some_value),
-            Expression::OrExpression(expression) => self
-                .emit_or(
-                    &expression.left_operand(),
-                    &expression.right_operand(),
-                    block,
-                )
-                .map(some_value),
+            Expression::AndExpression(expression) => self.emit_and(
+                &expression.left_operand(),
+                &expression.right_operand(),
+                block,
+            ),
+            Expression::OrExpression(expression) => self.emit_or(
+                &expression.left_operand(),
+                &expression.right_operand(),
+                block,
+            ),
             Expression::BitwiseAndExpression(expression) => {
-                self.emit_bitwise_and(expression, block).map(some_value)
+                self.emit_bitwise_and(expression, block)
             }
-            Expression::BitwiseOrExpression(expression) => {
-                self.emit_bitwise_or(expression, block).map(some_value)
-            }
+            Expression::BitwiseOrExpression(expression) => self.emit_bitwise_or(expression, block),
             Expression::BitwiseXorExpression(expression) => {
-                self.emit_bitwise_xor(expression, block).map(some_value)
+                self.emit_bitwise_xor(expression, block)
             }
-            Expression::ShiftExpression(expression) => {
-                self.emit_shift(expression, block).map(some_value)
-            }
-            Expression::FunctionCallExpression(call_expression) => {
-                call::CallEmitter::new(self).emit_function_call(call_expression, block)
-            }
+            Expression::ShiftExpression(expression) => self.emit_shift(expression, block),
             _ => unimplemented!(
                 "expression lowering: {:?}",
                 std::mem::discriminant(expression)
@@ -190,12 +181,4 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
         Ok(block)
     }
-}
-
-/// Adapts a value-producing emission result to the optional-value shape
-/// [`ExpressionEmitter::emit`] returns, for `Result::map` in its dispatch.
-fn some_value<'context, 'block>(
-    (value, block): (Value<'context, 'block>, BlockRef<'context, 'block>),
-) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-    (Some(value), block)
 }

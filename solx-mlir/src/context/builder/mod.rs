@@ -32,16 +32,21 @@ use ruint::aliases::U256;
 use crate::CmpPredicate;
 use crate::StateMutability;
 use crate::context::builder::type_factory::TypeFactory;
+use crate::ods::sol::AddOperation;
 use crate::ods::sol::AddrOfOperation;
 use crate::ods::sol::AddressCastOperation;
 use crate::ods::sol::AllocaOperation;
+use crate::ods::sol::AndOperation;
 use crate::ods::sol::ArrayLitOperation;
 use crate::ods::sol::AssertOperation;
 use crate::ods::sol::BreakOperation;
 use crate::ods::sol::BytesCastOperation;
-use crate::ods::sol::ConvCastOperation;
+use crate::ods::sol::CAddOperation;
+use crate::ods::sol::CDivOperation;
+use crate::ods::sol::CExpOperation;
+use crate::ods::sol::CMulOperation;
+use crate::ods::sol::CSubOperation;
 use crate::ods::sol::CallOperation;
-use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::CastOperation;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConditionOperation;
@@ -49,34 +54,46 @@ use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ContinueOperation;
 use crate::ods::sol::ContractCastOperation;
 use crate::ods::sol::ContractOperation;
+use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::CopyOperation;
 use crate::ods::sol::DataLocCastOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::DeleteOperation;
+use crate::ods::sol::DivOperation;
 use crate::ods::sol::DoWhileOperation;
+use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::EnumCastOperation;
+use crate::ods::sol::ExpOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::ExtICallOperation;
-use crate::ods::sol::FuncConstantOperation;
-use crate::ods::sol::GasLeftOperation;
-use crate::ods::sol::ICallOperation;
 use crate::ods::sol::ForOperation;
+use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::FuncOperation;
+use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::GepOperation;
+use crate::ods::sol::ICallOperation;
 use crate::ods::sol::IfOperation;
 use crate::ods::sol::LoadOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::MapOperation;
+use crate::ods::sol::ModOperation;
+use crate::ods::sol::MulOperation;
+use crate::ods::sol::NotOperation;
+use crate::ods::sol::OrOperation;
 use crate::ods::sol::PopOperation;
 use crate::ods::sol::PushOperation;
 use crate::ods::sol::PushStringOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
+use crate::ods::sol::ShlOperation;
+use crate::ods::sol::ShrOperation;
 use crate::ods::sol::StateVarOperation;
 use crate::ods::sol::StoreOperation;
 use crate::ods::sol::StringLitOperation;
+use crate::ods::sol::SubOperation;
 use crate::ods::sol::WhileOperation;
+use crate::ods::sol::XorOperation;
 use crate::ods::sol::YieldOperation;
 
 /// Cached MLIR types and emission methods for building MLIR operations.
@@ -383,17 +400,14 @@ impl<'context> Builder<'context> {
     {
         block
             .append_operation(
-                melior::ir::operation::OperationBuilder::new(
-                    "sol.lib_addr",
-                    self.unknown_location,
-                )
-                .add_attributes(&[(
-                    melior::ir::Identifier::new(self.context, "name"),
-                    StringAttribute::new(self.context, name).into(),
-                )])
-                .add_results(&[self.types.sol_address])
-                .build()
-                .expect("valid sol.lib_addr"),
+                melior::ir::operation::OperationBuilder::new("sol.lib_addr", self.unknown_location)
+                    .add_attributes(&[(
+                        melior::ir::Identifier::new(self.context, "name"),
+                        StringAttribute::new(self.context, name).into(),
+                    )])
+                    .add_results(&[self.types.sol_address])
+                    .build()
+                    .expect("valid sol.lib_addr"),
             )
             .result(0)
             .expect("sol.lib_addr produces one result")
@@ -1510,6 +1524,418 @@ impl<'context> Builder<'context> {
             .into()
     }
 
+    // ==== Arithmetic ====
+
+    /// Emits a checked addition `sol.cadd` (reverts on overflow).
+    pub fn emit_sol_cadd<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                CAddOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.cadd always produces one result")
+            .into()
+    }
+
+    /// Emits a wrapping addition `sol.add`.
+    pub fn emit_sol_add<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                AddOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.add always produces one result")
+            .into()
+    }
+
+    /// Emits a checked subtraction `sol.csub` (reverts on underflow).
+    pub fn emit_sol_csub<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                CSubOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.csub always produces one result")
+            .into()
+    }
+
+    /// Emits a wrapping subtraction `sol.sub`.
+    pub fn emit_sol_sub<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                SubOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.sub always produces one result")
+            .into()
+    }
+
+    /// Emits a checked multiplication `sol.cmul` (reverts on overflow).
+    pub fn emit_sol_cmul<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                CMulOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.cmul always produces one result")
+            .into()
+    }
+
+    /// Emits a wrapping multiplication `sol.mul`.
+    pub fn emit_sol_mul<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                MulOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.mul always produces one result")
+            .into()
+    }
+
+    /// Emits a checked division `sol.cdiv` (reverts on division by zero).
+    pub fn emit_sol_cdiv<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                CDivOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.cdiv always produces one result")
+            .into()
+    }
+
+    /// Emits a wrapping division `sol.div`.
+    pub fn emit_sol_div<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                DivOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.div always produces one result")
+            .into()
+    }
+
+    /// Emits a modulo `sol.mod` (no checked variant exists).
+    pub fn emit_sol_mod<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                ModOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.mod always produces one result")
+            .into()
+    }
+
+    /// Emits a checked exponentiation `sol.cexp` (reverts on overflow).
+    pub fn emit_sol_cexp<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                CExpOperation::builder(self.context, self.unknown_location)
+                    .result(lhs.r#type())
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.cexp always produces one result")
+            .into()
+    }
+
+    /// Emits a wrapping exponentiation `sol.exp`.
+    pub fn emit_sol_exp<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                ExpOperation::builder(self.context, self.unknown_location)
+                    .result(lhs.r#type())
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.exp always produces one result")
+            .into()
+    }
+
+    // ==== Bitwise ====
+
+    /// Emits a bitwise and `sol.and`.
+    pub fn emit_sol_and<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                AndOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.and always produces one result")
+            .into()
+    }
+
+    /// Emits a bitwise or `sol.or`.
+    pub fn emit_sol_or<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                OrOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.or always produces one result")
+            .into()
+    }
+
+    /// Emits a bitwise xor `sol.xor`.
+    pub fn emit_sol_xor<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                XorOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.xor always produces one result")
+            .into()
+    }
+
+    /// Emits a left shift `sol.shl`.
+    pub fn emit_sol_shl<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                ShlOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.shl always produces one result")
+            .into()
+    }
+
+    /// Emits a right shift `sol.shr` (arithmetic for signed operands).
+    pub fn emit_sol_shr<'block, B>(
+        &self,
+        lhs: Value<'context, 'block>,
+        rhs: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                ShrOperation::builder(self.context, self.unknown_location)
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.shr always produces one result")
+            .into()
+    }
+
+    /// Emits a bitwise not `sol.not`.
+    pub fn emit_sol_not<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                NotOperation::builder(self.context, self.unknown_location)
+                    .value(value)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.not always produces one result")
+            .into()
+    }
+
     /// Emits a `sol.cast` to an arbitrary target type.
     ///
     /// # Panics
@@ -1735,9 +2161,8 @@ impl<'context> Builder<'context> {
         let src = value.r#type();
         let is_word256 =
             |ty: Type<'context>| IntegerType::try_from(ty).is_ok_and(|int| int.width() == 256);
-        let bytes_into_word =
-            TypeFactory::fixed_bytes_width(src).is_some_and(|width| width != 32)
-                && is_word256(to_type);
+        let bytes_into_word = TypeFactory::fixed_bytes_width(src).is_some_and(|width| width != 32)
+            && is_word256(to_type);
         let word_into_bytes = is_word256(src)
             && TypeFactory::fixed_bytes_width(to_type).is_some_and(|width| width != 32);
         if bytes_into_word || word_into_bytes {

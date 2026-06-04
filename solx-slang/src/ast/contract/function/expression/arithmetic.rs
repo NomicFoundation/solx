@@ -2,14 +2,9 @@
 //! Binary arithmetic expression lowering.
 //!
 
-use melior::Context as MlirContext;
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Location;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::ValueLike;
-use melior::ir::operation::Operation;
 use slang_solidity_v2::ast::AdditiveExpression;
 use slang_solidity_v2::ast::AdditiveExpressionOperator;
 use slang_solidity_v2::ast::ExponentiationExpression;
@@ -22,17 +17,7 @@ use slang_solidity_v2::ast::PrefixExpression;
 use slang_solidity_v2::ast::PrefixExpressionOperator;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use solx_mlir::ods::sol::AddOperation;
-use solx_mlir::ods::sol::CAddOperation;
-use solx_mlir::ods::sol::CDivOperation;
-use solx_mlir::ods::sol::CExpOperation;
-use solx_mlir::ods::sol::CMulOperation;
-use solx_mlir::ods::sol::CSubOperation;
-use solx_mlir::ods::sol::DivOperation;
-use solx_mlir::ods::sol::ExpOperation;
-use solx_mlir::ods::sol::ModOperation;
-use solx_mlir::ods::sol::MulOperation;
-use solx_mlir::ods::sol::SubOperation;
+use solx_mlir::Builder;
 
 use super::ExpressionEmitter;
 use super::call::type_conversion::TypeConversion;
@@ -56,80 +41,31 @@ enum ArithmeticOperation {
 }
 
 impl ArithmeticOperation {
-    /// Builds the Sol dialect operation for this arithmetic operator.
+    /// Emits this operator's Sol op through the builder and returns its result.
     ///
     /// In checked mode (Solidity 0.8+ default) the overflow-trapping variants
-    /// `sol.cadd`/`sol.csub`/`sol.cmul`/`sol.cdiv`/`sol.cexp` are emitted;
-    /// inside `unchecked {}` the wrapping variants are emitted instead. `%` has
-    /// no checked variant. The result type is inferred from the operands
-    /// (`SameOperandsAndResultType`), except `**`, whose result is set
-    /// explicitly.
-    fn build<'context, 'block>(
+    /// are emitted; inside `unchecked {}` the wrapping variants are. `%` has no
+    /// checked variant.
+    fn emit<'context, 'block>(
         self,
         checked: bool,
-        context: &'context MlirContext,
-        location: Location<'context>,
+        builder: &Builder<'context>,
         lhs: Value<'context, 'block>,
         rhs: Value<'context, 'block>,
-    ) -> Operation<'context> {
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
         match (self, checked) {
-            (Self::Add, true) => CAddOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            (Self::Add, false) => AddOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            (Self::Subtract, true) => CSubOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            (Self::Subtract, false) => SubOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            (Self::Multiply, true) => CMulOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            (Self::Multiply, false) => MulOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            (Self::Divide, true) => CDivOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            (Self::Divide, false) => DivOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            (Self::Remainder, _) => ModOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            (Self::Exponentiation, true) => CExpOperation::builder(context, location)
-                .result(lhs.r#type())
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            (Self::Exponentiation, false) => ExpOperation::builder(context, location)
-                .result(lhs.r#type())
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
+            (Self::Add, true) => builder.emit_sol_cadd(lhs, rhs, block),
+            (Self::Add, false) => builder.emit_sol_add(lhs, rhs, block),
+            (Self::Subtract, true) => builder.emit_sol_csub(lhs, rhs, block),
+            (Self::Subtract, false) => builder.emit_sol_sub(lhs, rhs, block),
+            (Self::Multiply, true) => builder.emit_sol_cmul(lhs, rhs, block),
+            (Self::Multiply, false) => builder.emit_sol_mul(lhs, rhs, block),
+            (Self::Divide, true) => builder.emit_sol_cdiv(lhs, rhs, block),
+            (Self::Divide, false) => builder.emit_sol_div(lhs, rhs, block),
+            (Self::Remainder, _) => builder.emit_sol_mod(lhs, rhs, block),
+            (Self::Exponentiation, true) => builder.emit_sol_cexp(lhs, rhs, block),
+            (Self::Exponentiation, false) => builder.emit_sol_exp(lhs, rhs, block),
         }
     }
 }
@@ -202,7 +138,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ///
     /// Both operands are coerced to the expression's binder-assigned type so
     /// the Sol op satisfies `SameOperandsAndResultType` and matches solc's
-    /// type-annotated IR. Operands are evaluated right-to-left to match solc.
+    /// type-annotated IR.
     fn emit_binary_arithmetic(
         &self,
         operation: ArithmeticOperation,
@@ -214,18 +150,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let result_type =
             TypeConversion::resolve_slang_type(result_slang_type, None, &self.state.builder);
         let (lhs, rhs, block) = self.emit_binary_operands(left, right, result_type, block)?;
-        let operation = operation.build(
-            self.checked,
-            self.state.builder.context,
-            self.state.builder.unknown_location,
-            lhs,
-            rhs,
-        );
-        let value = block
-            .append_operation(operation)
-            .result(0)
-            .expect("arithmetic operation produces one result")
-            .into();
+        let value = operation.emit(self.checked, &self.state.builder, lhs, rhs, &block);
         Ok((value, block))
     }
 
@@ -318,18 +243,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             &block,
         );
         let zero = self.state.builder.emit_sol_constant(0, result_type, &block);
-        let operation = ArithmeticOperation::Subtract.build(
-            false,
-            self.state.builder.context,
-            self.state.builder.unknown_location,
-            zero,
-            value,
-        );
-        let result = block
-            .append_operation(operation)
-            .result(0)
-            .expect("negation produces one result")
-            .into();
+        let result = self.state.builder.emit_sol_sub(zero, value, &block);
         Ok((result, block))
     }
 
@@ -352,18 +266,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .state
             .builder
             .emit_sol_constant(1, element_type, &block);
-        let operation = operation.build(
-            self.checked,
-            self.state.builder.context,
-            self.state.builder.unknown_location,
-            old,
-            one,
-        );
-        let new = block
-            .append_operation(operation)
-            .result(0)
-            .expect("step operation produces one result")
-            .into();
+        let new = operation.emit(self.checked, &self.state.builder, old, one, &block);
         self.emit_lvalue_store(&lvalue, new, &block);
         Ok((old, new, block))
     }

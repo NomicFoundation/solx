@@ -2,12 +2,8 @@
 //! Bitwise and shift expression lowering.
 //!
 
-use melior::Context as MlirContext;
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Location;
 use melior::ir::Value;
-use melior::ir::operation::Operation;
 use slang_solidity_v2::ast::BitwiseAndExpression;
 use slang_solidity_v2::ast::BitwiseOrExpression;
 use slang_solidity_v2::ast::BitwiseXorExpression;
@@ -17,12 +13,7 @@ use slang_solidity_v2::ast::ShiftExpression;
 use slang_solidity_v2::ast::ShiftExpressionOperator;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use solx_mlir::ods::sol::AndOperation;
-use solx_mlir::ods::sol::NotOperation;
-use solx_mlir::ods::sol::OrOperation;
-use solx_mlir::ods::sol::ShlOperation;
-use solx_mlir::ods::sol::ShrOperation;
-use solx_mlir::ods::sol::XorOperation;
+use solx_mlir::Builder;
 
 use super::ExpressionEmitter;
 use super::call::type_conversion::TypeConversion;
@@ -44,41 +35,20 @@ enum BitwiseOperation {
 }
 
 impl BitwiseOperation {
-    /// Builds the Sol dialect operation for this operator. The result type is
-    /// inferred from the operands (`SameOperandsAndResultType`).
-    fn build<'context, 'block>(
+    /// Emits this operator's Sol op through the builder and returns its result.
+    fn emit<'context, 'block>(
         self,
-        context: &'context MlirContext,
-        location: Location<'context>,
+        builder: &Builder<'context>,
         lhs: Value<'context, 'block>,
         rhs: Value<'context, 'block>,
-    ) -> Operation<'context> {
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
         match self {
-            Self::And => AndOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::Or => OrOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::Xor => XorOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::ShiftLeft => ShlOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
-            Self::ShiftRight => ShrOperation::builder(context, location)
-                .lhs(lhs)
-                .rhs(rhs)
-                .build()
-                .into(),
+            Self::And => builder.emit_sol_and(lhs, rhs, block),
+            Self::Or => builder.emit_sol_or(lhs, rhs, block),
+            Self::Xor => builder.emit_sol_xor(lhs, rhs, block),
+            Self::ShiftLeft => builder.emit_sol_shl(lhs, rhs, block),
+            Self::ShiftRight => builder.emit_sol_shr(lhs, rhs, block),
         }
     }
 }
@@ -182,17 +152,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             &self.state.builder,
             &block,
         );
-        let operation = NotOperation::builder(
-            self.state.builder.context,
-            self.state.builder.unknown_location,
-        )
-        .value(value)
-        .build();
-        let result = block
-            .append_operation(operation.into())
-            .result(0)
-            .expect("sol.not produces one result")
-            .into();
+        let result = self.state.builder.emit_sol_not(value, &block);
         Ok((result, block))
     }
 
@@ -209,17 +169,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let result_type =
             TypeConversion::resolve_slang_type(result_slang_type, None, &self.state.builder);
         let (lhs, rhs, block) = self.emit_binary_operands(left, right, result_type, block)?;
-        let operation = operation.build(
-            self.state.builder.context,
-            self.state.builder.unknown_location,
-            lhs,
-            rhs,
-        );
-        let value = block
-            .append_operation(operation)
-            .result(0)
-            .expect("bitwise operation produces one result")
-            .into();
+        let value = operation.emit(&self.state.builder, lhs, rhs, &block);
         Ok((value, block))
     }
 }

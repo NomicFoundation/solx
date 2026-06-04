@@ -32,13 +32,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(None);
         };
         match built_in {
-            BuiltIn::Assert if arguments.len() == 1 => {
-                let condition = arguments.iter().next().expect("argument count verified");
+            BuiltIn::Assert => {
+                let condition = arguments.iter().next().expect("assert takes one argument");
                 Ok(Some((None, self.emit_assert(&condition, block)?)))
             }
-            BuiltIn::Require if matches!(arguments.len(), 1 | 2) => {
+            BuiltIn::Require => {
                 let mut arguments = arguments.iter();
-                let condition = arguments.next().expect("argument count verified");
+                let condition = arguments
+                    .next()
+                    .expect("require takes a condition argument");
                 let message = arguments.next();
                 Ok(Some((
                     None,
