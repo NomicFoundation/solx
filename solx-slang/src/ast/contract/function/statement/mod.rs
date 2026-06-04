@@ -4,10 +4,16 @@
 
 /// Control flow statement lowering (`if`, `for`, `while`, `do`/`while`).
 pub mod control_flow;
+/// Event emit statement lowering.
+pub mod event;
 /// Expression statement lowering.
 pub mod expression_statement;
+/// Named call-argument ordering.
+pub mod named_arguments;
 /// Return statement lowering.
 pub mod return_statement;
+/// Revert statement lowering.
+pub mod revert;
 /// Local variable declaration statement lowering.
 pub mod variable_declaration;
 
@@ -90,6 +96,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Statement::ContinueStatement(_) => self.emit_continue(block),
             Statement::Block(inner) => self.emit_block(inner.statements(), block),
             Statement::UncheckedBlock(inner) => self.emit_unchecked_block(inner, block),
+            Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
+            Statement::RevertStatement(revert) => self.emit_revert(revert, block),
             _ => unimplemented!(
                 "statement lowering: {:?}",
                 std::mem::discriminant(statement)

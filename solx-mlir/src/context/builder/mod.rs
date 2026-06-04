@@ -75,6 +75,7 @@ use crate::ods::sol::DivOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::EcrecoverOperation;
+use crate::ods::sol::EmitOperation;
 use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::ExpOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
@@ -474,6 +475,49 @@ impl<'context> Builder<'context> {
             builder = builder.call(Attribute::unit(self.context));
         }
         block.append_operation(builder.build().into());
+    }
+
+    /// Emits a `sol.emit` for an `emit Event(args)` statement.
+    ///
+    /// Indexed topic arguments precede the non-indexed data arguments;
+    /// `signature` is the event's canonical signature, or `None` for an
+    /// anonymous event. The indexed-topic count is recorded in the
+    /// `indexedArgsCount` attribute.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed, indicating a bug in
+    /// the builder.
+    pub fn emit_sol_emit<'block, B>(
+        &self,
+        signature: Option<&str>,
+        indexed_args: &[Value<'context, 'block>],
+        non_indexed_args: &[Value<'context, 'block>],
+        block: &B,
+    ) where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let arguments: Vec<Value<'context, 'block>> = indexed_args
+            .iter()
+            .chain(non_indexed_args)
+            .copied()
+            .collect();
+        // An EVM event carries at most four indexed topics, so the count fits
+        // in the dialect's `i8` `indexedArgsCount` attribute.
+        let indexed_count = i8::try_from(indexed_args.len())
+            .expect("an EVM event has at most four indexed arguments");
+        let indexed_count_attribute = IntegerAttribute::new(
+            Type::from(IntegerType::new(self.context, 8)),
+            indexed_count.into(),
+        );
+        let mut emit_builder = EmitOperation::builder(self.context, self.unknown_location)
+            .args(&arguments)
+            .indexed_args_count(indexed_count_attribute);
+        if let Some(signature) = signature {
+            emit_builder = emit_builder.signature(StringAttribute::new(self.context, signature));
+        }
+        block.append_operation(emit_builder.build().into());
     }
 
     /// Emits a `sol.assert` panic if the condition is false.
