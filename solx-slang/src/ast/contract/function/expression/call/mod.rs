@@ -4,6 +4,8 @@
 
 /// Built-in function call lowering.
 pub mod built_in;
+/// Struct constructor call lowering.
+pub mod struct_constructor;
 /// Type conversions between Solidity and Sol dialect MLIR types.
 pub mod type_conversion;
 
@@ -35,8 +37,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
     /// Lowers a function call by trying each call-kind handler in turn.
     ///
-    /// Built-in dispatch, internal/external/library calls, struct constructors,
-    /// `new`, and named-argument calls are lowered by later domains.
+    /// External / library calls, `new`, and named-argument calls are lowered by
+    /// later domains.
     pub fn emit_function_call(
         &self,
         call: &FunctionCallExpression,
@@ -55,14 +57,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(result);
         }
 
+        if let Some(result) = self.try_emit_struct_constructor(call, arguments, block)? {
+            return Ok(result);
+        }
+
         self.emit_internal_call(&callee, arguments, block)
     }
 
     /// Emits a direct internal call `f(args)` to a contract function as a
     /// `sol.call` to its registered symbol.
     ///
-    /// Struct constructors, calls through function-pointer values, and
-    /// member-access callees (`c.g(...)`, `L.f(...)`) defer to later domains.
+    /// Calls through function-pointer values and member-access callees
+    /// (`c.g(...)`, `L.f(...)`) defer to later domains.
     fn emit_internal_call(
         &self,
         callee: &Expression,
