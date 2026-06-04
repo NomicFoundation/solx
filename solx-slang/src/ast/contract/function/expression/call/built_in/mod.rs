@@ -8,6 +8,8 @@ pub mod abi;
 pub mod address;
 /// Dynamic-array and `bytes` member built-ins (`push`/`pop`).
 pub mod array;
+/// User-defined value type member built-ins (`wrap`/`unwrap`).
+pub mod user_defined_value_type;
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
@@ -89,6 +91,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .emit_abi_encode_with_signature(arguments, block)
                 .map(Some),
             Some(BuiltIn::AbiDecode) => self.emit_abi_decode(call, arguments, block).map(Some),
+            Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
+                self.emit_wrap_unwrap(call, arguments, block).map(Some)
+            }
             _ => Ok(None),
         }
     }
