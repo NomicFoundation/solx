@@ -9,7 +9,6 @@ use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::StateVariableDefinition;
-use slang_solidity_v2::ast::StateVariableMutability;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
@@ -89,19 +88,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let declared_type = state_variable
             .get_type()
             .expect("binder types every state variable");
-        if matches!(
-            state_variable.mutability(),
-            StateVariableMutability::Constant
-        ) {
-            unimplemented!("constant state variable read");
-        }
-
+        let element_type =
+            TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
         let slot = self
             .storage_layout
             .get(&state_variable.node_id())
             .expect("every state variable has a storage slot");
-        let element_type =
-            TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
         if declared_type.is_reference_type() {
             let reference = self
                 .state
