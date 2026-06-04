@@ -87,6 +87,15 @@ impl<'context> TypeFactory<'context> {
         unsafe { crate::ffi::solxIsByteType(ty.to_raw()) }
     }
 
+    /// The MLIR type of field `index` within a `!sol.struct<…>`, preserving the
+    /// struct's data location (a `Storage` struct yields `Storage`-located
+    /// field types, a `Memory` struct yields `Memory`-located ones).
+    pub fn struct_field_type<'a>(struct_type: Type<'a>, index: u64) -> Type<'a> {
+        // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
+        // `sol::getEltType` for an in-range struct field index.
+        unsafe { Type::from_raw(crate::ffi::mlirSolGetEltType(struct_type.to_raw(), index)) }
+    }
+
     /// Whether `ty` is a Sol reference type: array, struct, string/`bytes`, or
     /// mapping. (`bytes` and `string` share `!sol.string`.)
     pub fn is_sol_reference(ty: Type<'_>) -> bool {

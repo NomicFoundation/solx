@@ -3,24 +3,32 @@
 //!
 
 use melior::ir::BlockRef;
+use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::ValueLike;
 use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::MemberAccessExpression;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use super::ExpressionEmitter;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers a member access `operand.member`.
     ///
-    /// Handles the EVM environment globals (`msg.*`, `tx.*`, `block.*`) and the
-    /// address-operand members (`address.balance` / `.codehash` / `.code`).
-    /// Struct fields, namespace-qualified reads, enum variants, and selectors
-    /// defer to later domains.
+    /// A struct-field access (`s.field`) is tried first; otherwise the member
+    /// is an EVM built-in — the environment globals (`msg.*`, `tx.*`,
+    /// `block.*`) or an address member (`address.balance` / `.codehash` /
+    /// `.code`). Namespace-qualified reads, enum variants, and selectors defer
+    /// to later domains.
     pub fn emit_member_access(
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        if let Some(result) = self.emit_struct_field(access, block)? {
+            return Ok(result);
+        }
         match access.member().resolve_to_built_in() {
             Some(
                 built_in @ (BuiltIn::AddressBalance
@@ -33,6 +41,65 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             )),
             None => unimplemented!("member access lowering: {}", access.member().name()),
         }
+    }
+
+    /// Lowers a struct-field read `s.field` to `sol.gep` + `sol.load`.
+    ///
+    /// Returns `Ok(None)` when the base is not a struct, so the caller falls
+    /// back to built-in member-access lowering.
+    fn emit_struct_field(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
+        let Some((address, element_type, block)) = self.emit_struct_field_address(access, block)?
+        else {
+            return Ok(None);
+        };
+        let value = self
+            .state
+            .builder
+            .emit_sol_load(address, element_type, &block)?;
+        Ok(Some((value, block)))
+    }
+
+    /// Emits the address of `s.field` together with the field's element type,
+    /// without the trailing load. Shared by the value read and the assignment
+    /// lvalue path. Returns `Ok(None)` when the base is not a struct.
+    pub(super) fn emit_struct_field_address(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<
+        Option<(
+            Value<'context, 'block>,
+            Type<'context>,
+            BlockRef<'context, 'block>,
+        )>,
+    > {
+        let base = access.operand();
+        let Some(SlangType::Struct(struct_type)) = base.get_type() else {
+            return Ok(None);
+        };
+        let Definition::Struct(struct_definition) = struct_type.definition() else {
+            unreachable!("a Slang struct type always references a struct definition");
+        };
+        let field_index = match access.member().resolve_to_definition() {
+            Some(Definition::StructMember(field)) => struct_definition
+                .members()
+                .iter()
+                .position(|member| member.node_id() == field.node_id()),
+            _ => None,
+        }
+        .expect("the binder resolves a struct field access to a member of its struct");
+
+        let (base_value, block) = self.emit_value(&base, block)?;
+        let builder = &self.state.builder;
+        let index = builder.emit_sol_constant(field_index as i64, builder.types.ui64, &block);
+        let element_type =
+            solx_mlir::TypeFactory::struct_field_type(base_value.r#type(), field_index as u64);
+        let address = builder.emit_sol_gep(base_value, index, element_type, &block);
+        Ok(Some((address, element_type, block)))
     }
 
     /// Lowers a nullary environment global to its `sol.*` intrinsic. The

@@ -259,7 +259,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Value<'context, 'block>,
         BlockRef<'context, 'block>,
     )> {
-        let lvalue = self.resolve_lvalue(operand);
+        let (lvalue, block) = self.resolve_lvalue(operand, block)?;
         let element_type = lvalue.element_type();
         let old = self.emit_lvalue_load(&lvalue, &block)?;
         let one = self

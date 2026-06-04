@@ -15,12 +15,13 @@ use super::ExpressionEmitter;
 use super::call::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
-    /// Lowers a read of a value-typed state variable to `sol.addr_of` +
-    /// `sol.load`.
+    /// Lowers a read of a state variable.
     ///
-    /// `constant` state variables and reference-typed slots (which yield a
-    /// storage reference rather than a loaded value) are lowered by later
-    /// domains.
+    /// A value-typed slot loads its scalar via `sol.addr_of` + `sol.load`; a
+    /// reference-typed slot (struct / array / mapping / `bytes` in storage)
+    /// yields the storage reference itself via `sol.addr_of`, addressed in
+    /// place with no scalar to load. `constant` state variables are lowered by
+    /// a later domain.
     pub(super) fn emit_state_variable_read(
         &self,
         state_variable: &StateVariableDefinition,
@@ -35,16 +36,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         ) {
             unimplemented!("constant state variable read");
         }
-        if declared_type.is_reference_type() {
-            unimplemented!("reference-typed state variable read");
-        }
 
         let slot = self
             .storage_layout
             .get(&state_variable.node_id())
-            .expect("every value-typed state variable has a storage slot");
+            .expect("every state variable has a storage slot");
         let element_type =
             TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
+        if declared_type.is_reference_type() {
+            let reference = self
+                .state
+                .builder
+                .emit_sol_addr_of(&slot.name, element_type, &block);
+            return Ok((reference, block));
+        }
         let value = self.emit_storage_load(slot, element_type, &block)?;
         Ok((value, block))
     }
