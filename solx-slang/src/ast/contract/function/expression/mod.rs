@@ -28,6 +28,8 @@ pub mod lvalue;
 pub mod member;
 /// State variable storage access.
 pub mod storage;
+/// Tuple expression lowering.
+pub mod tuple;
 
 use std::collections::HashMap;
 

@@ -4,13 +4,15 @@
 
 use melior::ir::BlockRef;
 use melior::ir::r#type::IntegerType;
+use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::MultiTypedDeclaration;
 use slang_solidity_v2::ast::SingleTypedDeclaration;
 use slang_solidity_v2::ast::VariableDeclarationStatement;
 use slang_solidity_v2::ast::VariableDeclarationTarget;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-
 use crate::ast::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -24,10 +26,58 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             VariableDeclarationTarget::SingleTypedDeclaration(single) => {
                 self.emit_single_typed_declaration(&single, block)
             }
-            VariableDeclarationTarget::MultiTypedDeclaration(_) => {
-                unimplemented!("tuple deconstruction declaration lowering")
+            VariableDeclarationTarget::MultiTypedDeclaration(multi) => {
+                self.emit_multi_typed_declaration(&multi, block)
             }
         }
+    }
+
+    /// Lowers a tuple deconstruction declaration `(T a, T b) = rhs;`.
+    ///
+    /// The right-hand side — a tuple expression or a multi-result call — yields
+    /// one value per slot; each named slot allocates a fresh stack slot, stores
+    /// the coerced value, and binds the name, while an empty slot (`(, b)`)
+    /// discards its value.
+    fn emit_multi_typed_declaration(
+        &mut self,
+        declaration: &MultiTypedDeclaration,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        let elements = declaration.elements();
+        let emitter = ExpressionEmitter::new(
+            self.state,
+            self.environment,
+            self.storage_layout,
+            self.checked,
+        );
+        let (values, block) = match declaration.value() {
+            Expression::FunctionCallExpression(call) => {
+                CallEmitter::new(&emitter).emit_function_call_results(&call, block)?
+            }
+            expression => emitter.emit_component_values(&expression, block)?,
+        };
+
+        for (element, value) in elements.iter().zip(values) {
+            let Some(declared) = element.member() else {
+                continue;
+            };
+            let name = declared.name().name();
+            let builder = &self.state.builder;
+            let declared_type = TypeConversion::resolve_slang_type(
+                &declared
+                    .get_type()
+                    .expect("the binder types every deconstructed local"),
+                None,
+                builder,
+            );
+            let value = TypeConversion::from_target_type(declared_type, builder)
+                .emit(value, builder, &block);
+            let pointer = builder.emit_sol_alloca(declared_type, &block);
+            builder.emit_sol_store(value, pointer, &block);
+            self.environment
+                .define_variable(name, pointer, declared_type);
+        }
+        Ok(Some(block))
     }
 
     /// Lowers a single `T name [= value];` declaration: allocate a stack slot,
