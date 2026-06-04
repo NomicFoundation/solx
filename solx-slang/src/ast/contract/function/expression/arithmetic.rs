@@ -5,8 +5,10 @@
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::AdditiveExpression;
 use slang_solidity_v2::ast::AdditiveExpressionOperator;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::ExponentiationExpression;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MultiplicativeExpression;
@@ -15,7 +17,9 @@ use slang_solidity_v2::ast::PostfixExpression;
 use slang_solidity_v2::ast::PostfixExpressionOperator;
 use slang_solidity_v2::ast::PrefixExpression;
 use slang_solidity_v2::ast::PrefixExpressionOperator;
+use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
+use solx_utils::DataLocation;
 
 use solx_mlir::Builder;
 
@@ -214,12 +218,183 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             PrefixExpressionOperator::Tilde(_) => return self.emit_bitwise_not(expression, block),
             PrefixExpressionOperator::Minus(_) => return self.emit_negate(expression, block),
             PrefixExpressionOperator::DeleteKeyword(_) => {
-                unimplemented!("delete operator lowering")
+                return self.emit_delete(&expression.operand(), block);
             }
         };
         let (_old, new, block) =
             self.emit_increment_decrement(step, &expression.operand(), block)?;
         Ok((new, block))
+    }
+
+    /// Emits `delete <operand>`, resetting the target to its type's zero value.
+    /// `delete m[k]` / `delete arr[i]` and `delete s.field` reset the addressed
+    /// element in place; a bare identifier dispatches to the local- or
+    /// state-variable handler.
+    fn emit_delete(
+        &self,
+        operand: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        // `delete m[k]` / `delete arr[i]` resets the indexed element to zero.
+        if let Expression::IndexAccessExpression(index_access) = operand {
+            let (address, element_type, block) =
+                self.emit_index_access_address(index_access, block)?;
+            let zero = self
+                .state
+                .builder
+                .emit_sol_constant(0, element_type, &block);
+            self.state.builder.emit_sol_store(zero, address, &block);
+            return Ok((zero, block));
+        }
+        // `delete s.field` resets the addressed struct field: a reference-typed
+        // field (nested array / struct / `bytes` in storage) recurses through
+        // `sol.delete`; a value-typed field stores its zero.
+        if let Expression::MemberAccessExpression(access) = operand
+            && let Some((address, element_type, block)) =
+                self.emit_struct_field_address(access, block)?
+        {
+            let builder = &self.state.builder;
+            if solx_mlir::TypeFactory::is_sol_reference(element_type) {
+                builder.emit_sol_delete(address, &block);
+                let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                return Ok((placeholder, block));
+            }
+            let zero = self.delete_zero_value(element_type, &block);
+            builder.emit_sol_store(zero, address, &block);
+            return Ok((zero, block));
+        }
+        // `delete x` resets `x` to its type's zero value; reference-type deletion
+        // needs storage-class-specific lowering, so dispatch on the definition.
+        let Expression::Identifier(identifier) = operand else {
+            unimplemented!("delete of a non-identifier operand");
+        };
+        let name = identifier.name();
+        match identifier.resolve_to_definition() {
+            Some(Definition::Variable(_) | Definition::Parameter(_)) => {
+                self.emit_delete_local_variable(&name, identifier.get_type(), block)
+            }
+            Some(Definition::StateVariable(state_variable)) => {
+                self.emit_delete_state_variable(&state_variable, block)
+            }
+            _ => unimplemented!("unsupported delete target: {name}"),
+        }
+    }
+
+    /// The zero value for a value-typed slot: a zero integer, an enum's zero
+    /// variant (bridged through `sol.enum_cast`), or a `ui256` zero coerced to
+    /// the type (`address(0)`, `bytesN(0)`, `false`).
+    fn delete_zero_value(
+        &self,
+        element_type: Type<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        let builder = &self.state.builder;
+        if IntegerType::try_from(element_type).is_ok() {
+            builder.emit_sol_constant(0, element_type, block)
+        } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
+            let raw = builder.emit_sol_constant(0, builder.types.ui256, block);
+            builder.emit_sol_enum_cast(raw, element_type, block)
+        } else {
+            let raw = builder.emit_sol_constant(0, builder.types.ui256, block);
+            TypeConversion::from_target_type(element_type, builder).emit(raw, builder, block)
+        }
+    }
+
+    /// Emits `delete x` for a local variable / parameter, rebinding it to its
+    /// type's zero value: integers to `0`, enums to their zero variant,
+    /// function pointers to the default pointer, dynamic aggregates (arrays /
+    /// `bytes` / `string`) to a fresh empty allocation, and fixed aggregates
+    /// (structs / fixed arrays) to a zero-initialised allocation.
+    fn emit_delete_local_variable(
+        &self,
+        name: &str,
+        slang_type: Option<SlangType>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let (pointer, element_type) = self.environment.variable_with_type(name);
+        let builder = &self.state.builder;
+        let zero = if IntegerType::try_from(element_type).is_ok() {
+            builder.emit_sol_constant(0, element_type, &block)
+        } else if solx_mlir::TypeFactory::is_sol_enum(element_type) {
+            let raw = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            builder.emit_sol_enum_cast(raw, element_type, &block)
+        } else {
+            match slang_type {
+                Some(SlangType::Function(_)) => {
+                    builder.emit_sol_default_func_constant(element_type, &block)
+                }
+                Some(SlangType::Array(_) | SlangType::String(_) | SlangType::Bytes(_)) => {
+                    let zero_size = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                    builder.emit_sol_malloc_sized(element_type, zero_size, &block)
+                }
+                Some(SlangType::FixedSizeArray(_) | SlangType::Struct(_)) => {
+                    builder.emit_sol_malloc(element_type, &block)
+                }
+                _ => unimplemented!("delete on a non-integer local '{name}' is not yet supported"),
+            }
+        };
+        builder.emit_sol_store(zero, pointer, &block);
+        Ok((zero, block))
+    }
+
+    /// Emits `delete x` for a state variable, resetting its storage to the
+    /// default. A mapping is a no-op; dynamic `bytes` / `string` reset by
+    /// copying a fresh empty memory buffer into the slot; arrays / structs
+    /// recurse through `sol.delete`; value types and enums store a zero word.
+    fn emit_delete_state_variable(
+        &self,
+        state_variable: &StateVariableDefinition,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let declared_type = state_variable
+            .get_type()
+            .expect("binder types every state variable");
+        let element_type =
+            TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
+        let slot = self
+            .storage_layout
+            .get(&state_variable.node_id())
+            .expect("every state variable has a storage slot")
+            .clone();
+        let builder = &self.state.builder;
+
+        if declared_type.is_reference_type() {
+            match &declared_type {
+                // `delete` on a mapping is a no-op in Solidity.
+                SlangType::Mapping(_) => {}
+                // Dynamic `bytes` / `string` reset to empty: copy a freshly
+                // allocated zero-length memory buffer into the slot (`sol.copy`
+                // writes the destination and clears the previous tail).
+                SlangType::Bytes(_) | SlangType::String(_) => {
+                    let memory_type = TypeConversion::resolve_slang_type(
+                        &declared_type,
+                        Some(DataLocation::Memory),
+                        builder,
+                    );
+                    let zero_size = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                    let default_value =
+                        builder.emit_sol_malloc_sized(memory_type, zero_size, &block);
+                    let address = builder.emit_sol_addr_of(&slot.name, element_type, &block);
+                    builder.emit_sol_copy(default_value, address, &block);
+                }
+                // Arrays and structs: `sol.delete` recursively clears every
+                // storage slot the aggregate occupies.
+                SlangType::Struct(_) | SlangType::Array(_) | SlangType::FixedSizeArray(_) => {
+                    let address = builder.emit_sol_addr_of(&slot.name, element_type, &block);
+                    builder.emit_sol_delete(address, &block);
+                }
+                _ => unimplemented!(
+                    "delete of this reference-type storage variable is not yet supported"
+                ),
+            }
+            // The value of a `delete` expression is rarely consumed.
+            let result = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            return Ok((result, block));
+        }
+
+        let zero = self.delete_zero_value(element_type, &block);
+        self.emit_storage_store(&slot, zero, element_type, &block);
+        Ok((zero, block))
     }
 
     /// Lowers unary negation `-x` as `0 - x` (unchecked subtraction; checked
