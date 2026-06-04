@@ -50,28 +50,57 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         _access: &MemberAccessExpression,
         _block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
-        unimplemented!("member access: struct field")
+        Ok(None)
     }
 
     /// Lowers a nullary environment global (`msg.*`, `tx.*`, `block.*`) to its
-    /// `sol.*` intrinsic.
+    /// `sol.*` intrinsic. The `msg` / `tx` / `block` operand is a magic global
+    /// with no runtime value, so it is not evaluated.
     fn emit_environment_global(
         &self,
-        _built_in: BuiltIn,
-        _access: &MemberAccessExpression,
-        _block: &BlockRef<'context, 'block>,
+        built_in: BuiltIn,
+        access: &MemberAccessExpression,
+        block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        unimplemented!("member access: environment global")
+        let builder = &self.state.builder;
+        match built_in {
+            BuiltIn::MsgSender => builder.emit_sol_caller(block),
+            BuiltIn::MsgValue => builder.emit_sol_call_value(block),
+            BuiltIn::MsgSig => builder.emit_sol_sig(block),
+            BuiltIn::MsgData => builder.emit_sol_call_data(block),
+            BuiltIn::TxOrigin => builder.emit_sol_origin(block),
+            BuiltIn::TxGasPrice => builder.emit_sol_gas_price(block),
+            BuiltIn::BlockTimestamp => builder.emit_sol_timestamp(block),
+            BuiltIn::BlockNumber => builder.emit_sol_block_number(block),
+            BuiltIn::BlockCoinbase => builder.emit_sol_coinbase(block),
+            BuiltIn::BlockChainid => builder.emit_sol_chain_id(block),
+            BuiltIn::BlockBasefee => builder.emit_sol_base_fee(block),
+            BuiltIn::BlockGaslimit => builder.emit_sol_gas_limit(block),
+            BuiltIn::BlockBlobbasefee => builder.emit_sol_blob_base_fee(block),
+            BuiltIn::BlockDifficulty => builder.emit_sol_difficulty(block),
+            BuiltIn::BlockPrevrandao => builder.emit_sol_prev_randao(block),
+            _ => unimplemented!("member access lowering: {}", access.member().name()),
+        }
     }
 
-    /// Lowers an operand-bearing member intrinsic (`address.balance` /
-    /// `.codehash` / `.code`, `x.length`).
+    /// Lowers an operand-bearing member intrinsic. At this layer that is an
+    /// address member (`address.balance` / `.codehash` / `.code`); the address
+    /// operand is evaluated and passed to the matching `sol.*` intrinsic.
+    /// `x.length` joins in the index-access domain.
     fn emit_unary_member(
         &self,
-        _built_in: BuiltIn,
-        _access: &MemberAccessExpression,
-        _block: BlockRef<'context, 'block>,
+        built_in: BuiltIn,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        unimplemented!("member access: unary member")
+        let (operand, block) = self.emit_value(&access.operand(), block)?;
+        let builder = &self.state.builder;
+        let value = match built_in {
+            BuiltIn::AddressBalance => builder.emit_sol_balance(operand, &block),
+            BuiltIn::AddressCodehash => builder.emit_sol_code_hash(operand, &block),
+            BuiltIn::AddressCode => builder.emit_sol_code(operand, &block),
+            _ => unimplemented!("member access: unary member"),
+        };
+        Ok((value, block))
     }
 }

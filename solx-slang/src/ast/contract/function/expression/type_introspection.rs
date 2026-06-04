@@ -17,6 +17,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         _access: &MemberAccessExpression,
         _block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
-        unimplemented!("type introspection")
+        Ok(None)
     }
 }
