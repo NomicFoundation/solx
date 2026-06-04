@@ -200,8 +200,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
     /// Lowers a prefix step (`++x`, `--x`), yielding the value after the step.
     ///
-    /// The other prefix operators (`!`, `~`, unary `-`, `delete`) are lowered
-    /// by later domains.
+    /// The other prefix operators (`~`, unary `-`, `delete`) are lowered by
+    /// later domains.
     pub fn emit_prefix(
         &self,
         expression: &PrefixExpression,
@@ -210,6 +210,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let operation = match expression.operator() {
             PrefixExpressionOperator::PlusPlus(_) => ArithmeticOperation::Add,
             PrefixExpressionOperator::MinusMinus(_) => ArithmeticOperation::Subtract,
+            // `!` is a logical operator, lowered by its own domain.
+            PrefixExpressionOperator::Bang(_) => {
+                return self.emit_not(&expression.operand(), block);
+            }
             _ => unimplemented!("prefix operator lowering"),
         };
         let (_old, new, block) =
