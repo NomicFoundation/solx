@@ -207,7 +207,51 @@ impl<'context> TypeConversion<'context> {
                     .expect("UDVT target type resolved by semantic analysis");
                 Self::resolve_slang_type(&target_type, inherited_location, builder)
             }
-            _ => unimplemented!("unsupported Slang type"),
+            SlangType::Tuple(tuple_type) => {
+                // A single-element tuple collapses to its inner type; a
+                // multi-value tuple has no single MLIR equivalent.
+                let types = tuple_type.types();
+                if types.len() == 1 {
+                    Self::resolve_slang_type(&types[0], inherited_location, builder)
+                } else {
+                    unimplemented!("multi-element tuple type")
+                }
+            }
+            SlangType::Void(_) => {
+                // No MLIR equivalent; a sentinel `ui256` keeps the resolver
+                // total for paths where the void value is never consumed.
+                builder.types.ui256
+            }
+            SlangType::Function(function_type) => {
+                // Function pointer → `!sol.func_ref<…>` (internal) or
+                // `!sol.ext_func_ref<…>` (external).
+                let parameter_types: Vec<_> = function_type
+                    .parameter_types()
+                    .iter()
+                    .map(|parameter_type| Self::resolve_slang_type(parameter_type, None, builder))
+                    .collect();
+                let return_type = function_type.return_type();
+                let result_types: Vec<_> = match &return_type {
+                    SlangType::Void(_) => Vec::new(),
+                    SlangType::Tuple(tuple) => tuple
+                        .types()
+                        .iter()
+                        .map(|component| Self::resolve_slang_type(component, None, builder))
+                        .collect(),
+                    other => vec![Self::resolve_slang_type(other, None, builder)],
+                };
+                if function_type.is_externally_visible() {
+                    builder.types.ext_func_ref(&parameter_types, &result_types)
+                } else {
+                    builder.types.func_ref(&parameter_types, &result_types)
+                }
+            }
+            SlangType::FixedPointNumber(_) => {
+                // The reserved-but-unimplemented fixed-point types have no MLIR
+                // lowering; return `ui256` as a sentinel so the resolver stays
+                // total. Code that actually consumes them still fails later.
+                builder.types.ui256
+            }
         }
     }
 
