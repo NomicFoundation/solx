@@ -59,10 +59,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// via `sol.string_lit`.
     pub fn emit_string(
         &self,
-        _string: &StringExpression,
-        _block: &BlockRef<'context, 'block>,
+        string: &StringExpression,
+        block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        unimplemented!("literal: string")
+        self.state
+            .builder
+            .emit_sol_string_lit_bytes(&string.value(), block)
     }
 
     /// Emits a `sol.constant` of the integer type the binder assigned to a

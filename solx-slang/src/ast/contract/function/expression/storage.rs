@@ -7,6 +7,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::StateVariableMutability;
 use solx_utils::DataLocation;
@@ -16,18 +17,58 @@ use crate::ast::contract::function::expression::call::type_conversion::TypeConve
 use crate::ast::contract::function::storage_slot::StorageSlot;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
-    /// Emits the contract's state-variable initializers into `block`, returning
-    /// the continuation block. Contracts without initializers emit nothing.
+    /// Emits the contract's inline state-variable initializers (`T x = expr;`)
+    /// in declaration order, returning the continuation block.
+    ///
+    /// A value-typed slot casts its initializer and stores it; a reference-typed
+    /// slot (`string s = "…";`) copies the evaluated reference into the storage
+    /// reference with `sol.copy`. A slot without an initializer is skipped.
+    /// Array-literal initializers defer to a later domain.
     pub fn emit_state_var_initializers(
         &self,
         contract: &ContractDefinition,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<BlockRef<'context, 'block>> {
+        let mut block = block;
         for member in contract.members().iter() {
-            if let ContractMember::StateVariableDefinition(variable) = member
-                && variable.value().is_some()
-            {
-                unimplemented!("state variable initializer lowering");
+            let ContractMember::StateVariableDefinition(state_variable) = member else {
+                continue;
+            };
+            let Some(initializer) = state_variable.value() else {
+                continue;
+            };
+            if matches!(initializer, Expression::ArrayExpression(_)) {
+                unimplemented!("array-literal state variable initializer");
+            }
+            let declared_type = state_variable
+                .get_type()
+                .expect("the binder types every state variable");
+            let element_type =
+                TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
+            let slot = self
+                .storage_layout
+                .get(&state_variable.node_id())
+                .expect("every state variable has a storage slot");
+
+            let storage_reference = if declared_type.is_reference_type() {
+                self.state
+                    .builder
+                    .emit_sol_addr_of(&slot.name, element_type, &block)
+            } else {
+                self.emit_storage_addr_of(slot, element_type, &block)
+            };
+            let (value, next_block) = self.emit_value(&initializer, block)?;
+            block = next_block;
+            if declared_type.is_reference_type() {
+                self.state
+                    .builder
+                    .emit_sol_copy(value, storage_reference, &block);
+            } else {
+                let value = TypeConversion::from_target_type(element_type, &self.state.builder)
+                    .emit(value, &self.state.builder, &block);
+                self.state
+                    .builder
+                    .emit_sol_store(value, storage_reference, &block);
             }
         }
         Ok(block)
