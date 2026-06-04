@@ -113,6 +113,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::HexNumberExpression(hex) => Ok((self.emit_hex(hex, &block), block)),
             Expression::TrueKeyword(_) => Ok((self.emit_boolean(true, &block), block)),
             Expression::FalseKeyword(_) => Ok((self.emit_boolean(false, &block), block)),
+            Expression::ThisKeyword(_) => {
+                let contract_type = self
+                    .state
+                    .current_contract_type
+                    .expect("`this` is only emitted inside a contract function");
+                Ok((
+                    self.state.builder.emit_sol_this(contract_type, &block),
+                    block,
+                ))
+            }
             Expression::StringExpression(string) => Ok((self.emit_string(string, &block), block)),
             Expression::Identifier(identifier) => self.emit_identifier(identifier, block),
             Expression::AdditiveExpression(expression) => self.emit_additive(expression, block),

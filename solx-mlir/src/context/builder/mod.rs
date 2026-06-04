@@ -123,6 +123,7 @@ use crate::ods::sol::StateVarOperation;
 use crate::ods::sol::StoreOperation;
 use crate::ods::sol::StringLitOperation;
 use crate::ods::sol::SubOperation;
+use crate::ods::sol::ThisOperation;
 use crate::ods::sol::TimestampOperation;
 use crate::ods::sol::TransferOperation;
 use crate::ods::sol::WhileOperation;
@@ -1303,6 +1304,31 @@ impl<'context> Builder<'context> {
                 .build()
                 .into(),
         );
+    }
+
+    /// Emits `sol.this`, the `this` keyword — the current contract instance,
+    /// typed as `contract_type` (the enclosing contract's `!sol.contract`).
+    /// Used directly (`address(this)`, passing `this`) and as the receiver of
+    /// an external self-call (`this.f(...)`).
+    pub fn emit_sol_this<'block, B>(
+        &self,
+        contract_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                ThisOperation::builder(self.context, self.unknown_location)
+                    .addr(contract_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.this always produces one result")
+            .into()
     }
 
     /// Emits `sol.encode` producing an `abi.encode*` `bytes memory` payload.
