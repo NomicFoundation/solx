@@ -2,6 +2,8 @@
 //! Built-in function call lowering.
 //!
 
+/// ABI encoding/decoding member built-ins (`abi.encode*` / `abi.decode`).
+pub mod abi;
 /// Address value-transfer member built-ins (`send`/`transfer`).
 pub mod address;
 /// Dynamic-array and `bytes` member built-ins (`push`/`pop`).
@@ -11,6 +13,7 @@ use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
@@ -50,31 +53,42 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
     }
 
-    /// Tries to lower a member-access call `base.method(arguments)` whose method
-    /// is a Solidity built-in handled here (`arr.push(x)`, `arr.push()`,
-    /// `arr.pop()`).
+    /// Tries to lower a member-access call `base.method(args)` whose method is a
+    /// Solidity built-in handled here: the array `push`/`pop`, the address
+    /// value-transfer `send`/`transfer`, and the `abi.*` encode/decode family.
     ///
     /// Returns `Ok(None)` when the callee is not a member access or its member
     /// is not such a built-in, so the caller falls through to the remaining
     /// call kinds.
     pub fn try_emit_member_built_in_call(
         &self,
-        callee: &Expression,
+        call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
-        let Expression::MemberAccessExpression(access) = callee else {
+        let Expression::MemberAccessExpression(access) = call.operand() else {
             return Ok(None);
         };
         match access.member().resolve_to_built_in() {
-            Some(BuiltIn::ArrayPop) => self.emit_array_pop(access, block).map(Some),
-            Some(BuiltIn::ArrayPush) => self.emit_array_push(access, arguments, block).map(Some),
+            Some(BuiltIn::ArrayPop) => self.emit_array_pop(&access, block).map(Some),
+            Some(BuiltIn::ArrayPush) => self.emit_array_push(&access, arguments, block).map(Some),
             Some(BuiltIn::AddressSend) => {
-                self.emit_address_send(access, arguments, block).map(Some)
+                self.emit_address_send(&access, arguments, block).map(Some)
             }
             Some(BuiltIn::AddressTransfer) => self
-                .emit_address_transfer(access, arguments, block)
+                .emit_address_transfer(&access, arguments, block)
                 .map(Some),
+            Some(BuiltIn::AbiEncode) => self.emit_abi_encode(arguments, block).map(Some),
+            Some(BuiltIn::AbiEncodePacked) => {
+                self.emit_abi_encode_packed(arguments, block).map(Some)
+            }
+            Some(BuiltIn::AbiEncodeWithSelector) => self
+                .emit_abi_encode_with_selector(arguments, block)
+                .map(Some),
+            Some(BuiltIn::AbiEncodeWithSignature) => self
+                .emit_abi_encode_with_signature(arguments, block)
+                .map(Some),
+            Some(BuiltIn::AbiDecode) => self.emit_abi_decode(call, arguments, block).map(Some),
             _ => Ok(None),
         }
     }

@@ -68,6 +68,7 @@ use crate::ods::sol::ContractOperation;
 use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::CopyOperation;
 use crate::ods::sol::DataLocCastOperation;
+use crate::ods::sol::DecodeOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::DeleteOperation;
 use crate::ods::sol::DifficultyOperation;
@@ -76,6 +77,7 @@ use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::EcrecoverOperation;
 use crate::ods::sol::EmitOperation;
+use crate::ods::sol::EncodeOperation;
 use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::ExpOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
@@ -1298,6 +1300,69 @@ impl<'context> Builder<'context> {
                 .build()
                 .into(),
         );
+    }
+
+    /// Emits `sol.encode` producing an `abi.encode*` `bytes memory` payload.
+    ///
+    /// `selector`, when present (`abi.encodeWithSelector` /
+    /// `abi.encodeWithSignature`), is prepended as the first four bytes;
+    /// `packed` (`abi.encodePacked`) drops per-element padding. The
+    /// `operand_segment_sizes` attribute is synthesized by the ODS builder for
+    /// this `AttrSizedOperandSegments` op.
+    pub fn emit_sol_encode<'block, B>(
+        &self,
+        inputs: &[Value<'context, 'block>],
+        selector: Option<Value<'context, 'block>>,
+        packed: bool,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let mut operation = EncodeOperation::builder(self.context, self.unknown_location)
+            .ins(inputs)
+            .res(self.types.sol_string_memory);
+        if let Some(selector) = selector {
+            operation = operation.selector(selector);
+        }
+        if packed {
+            operation = operation.packed(Attribute::unit(self.context));
+        }
+        block
+            .append_operation(operation.build().into())
+            .result(0)
+            .expect("sol.encode always produces one result")
+            .into()
+    }
+
+    /// Emits `sol.decode` (`abi.decode`) yielding one value per requested
+    /// result type.
+    pub fn emit_sol_decode<'block, B>(
+        &self,
+        payload: Value<'context, 'block>,
+        result_types: &[Type<'context>],
+        block: &B,
+    ) -> Vec<Value<'context, 'block>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let operation = block.append_operation(
+            DecodeOperation::builder(self.context, self.unknown_location)
+                .addr(payload)
+                .outs(result_types)
+                .build()
+                .into(),
+        );
+        (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index)
+                    .expect("sol.decode yields one result per requested type")
+                    .into()
+            })
+            .collect()
     }
 
     /// Emits a `sol.array_lit` constructing an array from `elements` of the

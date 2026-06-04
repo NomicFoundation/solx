@@ -57,7 +57,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(result);
         }
 
-        if let Some(result) = self.try_emit_member_built_in_call(&callee, arguments, block)? {
+        if let Some(result) = self.try_emit_member_built_in_call(call, arguments, block)? {
             return Ok(result);
         }
 
