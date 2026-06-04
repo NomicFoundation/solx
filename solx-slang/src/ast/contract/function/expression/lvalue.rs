@@ -27,6 +27,11 @@ pub enum Lvalue<'context, 'block> {
     /// A materialized element address — a struct field or array element,
     /// already resolved to a pointer (the address-producing ops have run).
     Pointer(Value<'context, 'block>, Type<'context>),
+    /// A reference-typed state variable (storage struct / array / `bytes` /
+    /// `string`). The storage reference is materialized lazily at load/store;
+    /// a store copies the whole aggregate in (`sol.copy`) rather than writing a
+    /// scalar with `sol.store`.
+    StorageReference(StorageSlot, Type<'context>),
 }
 
 impl<'context, 'block> Lvalue<'context, 'block> {
@@ -35,7 +40,8 @@ impl<'context, 'block> Lvalue<'context, 'block> {
         match self {
             Self::Stack(_, element_type)
             | Self::Storage(_, element_type)
-            | Self::Pointer(_, element_type) => *element_type,
+            | Self::Pointer(_, element_type)
+            | Self::StorageReference(_, element_type) => *element_type,
         }
     }
 }
@@ -44,10 +50,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Resolves an expression to the location it denotes for assignment,
     /// emitting any address-producing ops (`sol.gep` / `sol.map`) into `block`.
     ///
-    /// Identifier targets (locals, parameters, value-typed state variables),
-    /// struct-field member accesses, and array / mapping index accesses are
-    /// supported; reference-typed identifier targets are lowered by a later
-    /// domain.
+    /// Identifier targets (locals, parameters, value- and reference-typed state
+    /// variables), struct-field member accesses, and array / mapping index
+    /// accesses are supported.
     pub fn resolve_lvalue(
         &self,
         expression: &Expression,
@@ -84,17 +89,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let declared_type = state_variable
                     .get_type()
                     .expect("binder types every state variable");
-                if declared_type.is_reference_type() {
-                    unimplemented!("lvalue: reference-typed state variable");
-                }
                 let slot = self
                     .storage_layout
                     .get(&state_variable.node_id())
-                    .expect("every value-typed state variable has a storage slot")
+                    .expect("every state variable has a storage slot")
                     .clone();
                 let element_type =
                     TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
-                Lvalue::Storage(slot, element_type)
+                if declared_type.is_reference_type() {
+                    Lvalue::StorageReference(slot, element_type)
+                } else {
+                    Lvalue::Storage(slot, element_type)
+                }
             }
             Some(_) => unimplemented!("lvalue binding kind: {}", identifier.name()),
             None => unreachable!("slang resolves every identifier reference"),
@@ -121,6 +127,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .builder
                     .emit_sol_load(*pointer, *element_type, block)
             }
+            Lvalue::StorageReference(slot, element_type) => Ok(self
+                .state
+                .builder
+                .emit_sol_addr_of(&slot.name, *element_type, block)),
         }
     }
 
@@ -138,6 +148,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Lvalue::Pointer(pointer, _) => {
                 self.state.builder.emit_sol_store(value, *pointer, block);
+            }
+            Lvalue::StorageReference(slot, element_type) => {
+                let reference =
+                    self.state
+                        .builder
+                        .emit_sol_addr_of(&slot.name, *element_type, block);
+                self.state.builder.emit_sol_copy(value, reference, block);
             }
         }
     }
