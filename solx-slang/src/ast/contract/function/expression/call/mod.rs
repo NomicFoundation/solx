@@ -10,10 +10,13 @@ pub mod struct_constructor;
 pub mod type_conversion;
 
 use melior::ir::BlockRef;
+use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::PositionalArguments;
 
 use self::type_conversion::TypeConversion;
@@ -69,11 +72,62 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// `sol.call` to its registered symbol.
     fn emit_internal_call(
         &self,
-        _callee: &Expression,
-        _arguments: &PositionalArguments,
-        _block: BlockRef<'context, 'block>,
+        callee: &Expression,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        unimplemented!("internal call")
+        let Expression::Identifier(identifier) = callee else {
+            unimplemented!("call lowering: {:?}", std::mem::discriminant(callee));
+        };
+        let Some(Definition::Function(function)) = identifier.resolve_to_definition() else {
+            unimplemented!("call to non-function callee: {}", identifier.name());
+        };
+
+        let (callee_name, argument_values, return_types, block) =
+            self.emit_call_setup(&function, arguments, block)?;
+        let result = self.expression_emitter.state.builder.emit_sol_call(
+            callee_name,
+            &argument_values,
+            return_types,
+            &block,
+        )?;
+        Ok((result, block))
+    }
+
+    /// Resolves a callee function's symbol, parameter types, and return types,
+    /// then evaluates and coerces each argument to its parameter type.
+    fn emit_call_setup<'a>(
+        &'a self,
+        function: &FunctionDefinition,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        &'a str,
+        Vec<Value<'context, 'block>>,
+        &'a [Type<'context>],
+        BlockRef<'context, 'block>,
+    )> {
+        let (callee_name, parameter_types, return_types) = self
+            .expression_emitter
+            .state
+            .resolve_function(function.node_id())?;
+
+        let mut argument_values = Vec::with_capacity(arguments.len());
+        let mut block = block;
+        for (index, argument) in arguments.iter().enumerate() {
+            let (value, next_block) = self.expression_emitter.emit_value(&argument, block)?;
+            block = next_block;
+            let value = match parameter_types.get(index) {
+                Some(&parameter_type) => {
+                    let builder = &self.expression_emitter.state.builder;
+                    TypeConversion::from_target_type(parameter_type, builder)
+                        .emit(value, builder, &block)
+                }
+                None => value,
+            };
+            argument_values.push(value);
+        }
+        Ok((callee_name, argument_values, return_types, block))
     }
 
     /// Emits an explicit type conversion `T(x)` via [`TypeConversion`], or
