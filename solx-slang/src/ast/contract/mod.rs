@@ -8,6 +8,7 @@ pub mod function;
 use std::collections::HashMap;
 
 use melior::ir::BlockRef;
+use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
@@ -16,6 +17,8 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableDefinition;
 
 use solx_mlir::Context;
+use solx_mlir::StateMutability;
+use solx_utils::DataLocation;
 
 use self::function::FunctionEmitter;
 use self::function::expression::call::type_conversion::TypeConversion;
@@ -137,11 +140,44 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// skipped here so the rest of the contract still compiles.
     fn emit_state_variable_getter(
         &self,
-        _state_variable: &StateVariableDefinition,
-        _slot: &StorageSlot,
-        _contract_body: &BlockRef<'context, '_>,
+        state_variable: &StateVariableDefinition,
+        slot: &StorageSlot,
+        contract_body: &BlockRef<'context, '_>,
     ) -> anyhow::Result<()> {
-        unimplemented!("public state-variable getter")
+        let Some(AbiEntry::Function(abi)) = state_variable.compute_abi_entry() else {
+            return Ok(());
+        };
+        if !abi.inputs().is_empty() {
+            return Ok(());
+        }
+        let declared_type = state_variable
+            .get_type()
+            .expect("the binder types every state variable");
+        if declared_type.is_reference_type() {
+            return Ok(());
+        }
+        let Some(signature) = state_variable.compute_canonical_signature() else {
+            return Ok(());
+        };
+        let Some(selector) = state_variable.compute_selector() else {
+            return Ok(());
+        };
+        let builder = &self.state.builder;
+        let element_type = TypeConversion::resolve_slang_type(&declared_type, None, builder);
+        let entry = builder.emit_sol_func(
+            &signature,
+            &[],
+            std::slice::from_ref(&element_type),
+            Some(selector),
+            StateMutability::View,
+            None,
+            contract_body,
+        );
+        let pointer_type = builder.types.pointer(element_type, DataLocation::Storage);
+        let pointer = builder.emit_sol_addr_of(&slot.name, pointer_type, &entry);
+        let value = builder.emit_sol_load(pointer, element_type, &entry)?;
+        builder.emit_sol_return(&[value], &entry);
+        Ok(())
     }
 
     /// Pre-registers all function signatures for call resolution before bodies
