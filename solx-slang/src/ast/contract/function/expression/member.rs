@@ -18,9 +18,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ///
     /// A struct-field access (`s.field`) is tried first; otherwise the member
     /// is an EVM built-in — the environment globals (`msg.*`, `tx.*`,
-    /// `block.*`) or an address member (`address.balance` / `.codehash` /
-    /// `.code`). Namespace-qualified reads, enum variants, and selectors defer
-    /// to later domains.
+    /// `block.*`), or an operand-bearing member (`address.balance` /
+    /// `.codehash` / `.code`, `x.length`). Namespace-qualified reads, enum
+    /// variants, and selectors defer to later domains.
     pub fn emit_member_access(
         &self,
         access: &MemberAccessExpression,
@@ -33,8 +33,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Some(
                 built_in @ (BuiltIn::AddressBalance
                 | BuiltIn::AddressCodehash
-                | BuiltIn::AddressCode),
-            ) => self.emit_address_member(built_in, access, block),
+                | BuiltIn::AddressCode
+                | BuiltIn::Length),
+            ) => self.emit_unary_member(built_in, access, block),
             Some(built_in) => Ok((
                 self.emit_environment_global(built_in, access, &block),
                 block,
@@ -97,7 +98,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let builder = &self.state.builder;
         let index = builder.emit_sol_constant(field_index as i64, builder.types.ui64, &block);
         let element_type =
-            solx_mlir::TypeFactory::struct_field_type(base_value.r#type(), field_index as u64);
+            solx_mlir::TypeFactory::element_type(base_value.r#type(), field_index as u64);
         let address = builder.emit_sol_gep(base_value, index, element_type, &block);
         Ok(Some((address, element_type, block)))
     }
@@ -132,22 +133,23 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
     }
 
-    /// Lowers an address-operand member (`address.balance` / `.codehash` /
-    /// `.code`): the address operand is evaluated and passed to the matching
-    /// `sol.*` intrinsic.
-    fn emit_address_member(
+    /// Lowers an operand-bearing member intrinsic — the address members
+    /// (`address.balance` / `.codehash` / `.code`) and `x.length` — by
+    /// evaluating the operand and passing it to the matching `sol.*` op.
+    fn emit_unary_member(
         &self,
         built_in: BuiltIn,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (address, block) = self.emit_value(&access.operand(), block)?;
+        let (operand, block) = self.emit_value(&access.operand(), block)?;
         let builder = &self.state.builder;
         let value = match built_in {
-            BuiltIn::AddressBalance => builder.emit_sol_balance(address, &block),
-            BuiltIn::AddressCodehash => builder.emit_sol_code_hash(address, &block),
-            BuiltIn::AddressCode => builder.emit_sol_code(address, &block),
-            _ => unreachable!("emit_address_member only handles address members"),
+            BuiltIn::AddressBalance => builder.emit_sol_balance(operand, &block),
+            BuiltIn::AddressCodehash => builder.emit_sol_code_hash(operand, &block),
+            BuiltIn::AddressCode => builder.emit_sol_code(operand, &block),
+            BuiltIn::Length => builder.emit_sol_length(operand, &block),
+            _ => unreachable!("emit_unary_member only handles operand-bearing members"),
         };
         Ok((value, block))
     }

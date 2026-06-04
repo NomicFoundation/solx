@@ -2,6 +2,8 @@
 //! Expression lowering to MLIR SSA values.
 //!
 
+/// Index access expression lowering.
+pub mod access;
 /// Binary arithmetic expression lowering.
 pub mod arithmetic;
 /// Assignment expression lowering.
@@ -142,6 +144,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Expression::ShiftExpression(expression) => self.emit_shift(expression, block),
             Expression::MemberAccessExpression(access) => self.emit_member_access(access, block),
+            Expression::IndexAccessExpression(index_access) => {
+                self.emit_index_access(index_access, block)
+            }
             _ => unimplemented!(
                 "expression lowering: {:?}",
                 std::mem::discriminant(expression)

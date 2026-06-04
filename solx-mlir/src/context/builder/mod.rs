@@ -90,6 +90,7 @@ use crate::ods::sol::GetCallDataOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::IfOperation;
 use crate::ods::sol::Keccak256Operation;
+use crate::ods::sol::LengthOperation;
 use crate::ods::sol::LoadOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::MapOperation;
@@ -1143,6 +1144,30 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.push always produces one result")
+            .into()
+    }
+
+    /// Emits `sol.length` yielding the element / byte count of an array,
+    /// `bytes`, or `string` as a `ui256` (`x.length`).
+    pub fn emit_sol_length<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                LengthOperation::builder(self.context, self.unknown_location)
+                    .inp(value)
+                    .len(self.types.ui256)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.length always produces one result")
             .into()
     }
 
