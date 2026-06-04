@@ -8,6 +8,7 @@ use melior::ir::Value;
 use melior::ir::ValueLike;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
@@ -32,6 +33,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         if let Some(result) = self.try_emit_type_introspection(access, block)? {
             return Ok(result);
         }
+        if let Some(result) = self.try_emit_enum_variant(access, block)? {
+            return Ok(result);
+        }
         match access.member().resolve_to_built_in() {
             Some(
                 built_in @ (BuiltIn::AddressBalance
@@ -44,6 +48,54 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 block,
             )),
             None => unimplemented!("member access lowering: {}", access.member().name()),
+        }
+    }
+
+    /// Lowers `MyEnum.VARIANT` — the variant's declaration index as a `ui256`
+    /// constant bridged to `!sol.enum<max>` via `sol.enum_cast`. The operand may
+    /// be a bare enum name (`MyEnum.VARIANT`) or a qualified path whose operand
+    /// is itself a member access (`C.MyEnum.VARIANT`). Returns `Ok(None)` when
+    /// the member is not an enum variant, so the caller falls through.
+    fn try_emit_enum_variant(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
+        if !matches!(
+            access.member().resolve_to_definition(),
+            Some(Definition::EnumMember(_))
+        ) {
+            return Ok(None);
+        }
+        let Some(Definition::Enum(enum_definition)) =
+            Self::resolve_operand_definition(&access.operand())
+        else {
+            return Ok(None);
+        };
+        let member_name = access.member().name();
+        let Some(index) = enum_definition
+            .members()
+            .iter()
+            .position(|member| member.name() == member_name)
+        else {
+            return Ok(None);
+        };
+        let builder = &self.state.builder;
+        let member_count = enum_definition.members().iter().count();
+        let enum_type = builder.types.enumeration_for_member_count(member_count);
+        let raw = builder.emit_sol_constant(index as i64, builder.types.ui256, &block);
+        let value = builder.emit_sol_enum_cast(raw, enum_type, &block);
+        Ok(Some((value, block)))
+    }
+
+    /// Resolves a member-access operand to its definition, handling a bare enum
+    /// name (`E.A`) and a qualified path (`C.E.A`, whose operand is itself a
+    /// member access).
+    fn resolve_operand_definition(operand: &Expression) -> Option<Definition> {
+        match operand {
+            Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+            Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
+            _ => None,
         }
     }
 
