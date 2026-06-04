@@ -74,6 +74,21 @@ impl Mode {
     /// Checks if the mode is compatible with the source code pragmas.
     ///
     pub fn check_pragmas(&self, sources: &[(String, String)]) -> bool {
+        // The Slang frontend has no abicoder v1 (it always emits v2), so skip
+        // sources that request v1 via `pragma abicoder v1` unless they also opt
+        // into v2 (mirrors solc's source-pragma detection in Common.cpp).
+        #[cfg(feature = "slang-ast")]
+        if sources
+            .iter()
+            .any(|(_, source)| source.contains("pragma abicoder v1"))
+            && !sources.iter().any(|(_, source)| {
+                source.contains("pragma abicoder v2")
+                    || source.contains("pragma experimental ABIEncoderV2")
+            })
+        {
+            return false;
+        }
+
         // Strip pre-release for pragma matching since semver pre-release versions
         // have special matching rules that don't work well with Solidity pragmas.
         // E.g., ">=0.8.0" should match "0.8.34-develop" but semver doesn't agree.
