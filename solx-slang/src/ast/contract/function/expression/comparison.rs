@@ -12,6 +12,7 @@ use slang_solidity_v2::ast::InequalityExpression;
 use slang_solidity_v2::ast::InequalityExpressionOperator;
 
 use solx_mlir::CmpPredicate;
+use solx_mlir::TypeFactory;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
@@ -88,5 +89,26 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         let comparison = self.state.builder.emit_sol_cmp(lhs, rhs, predicate, &block);
         Ok((comparison, block))
+    }
+
+    /// Coerces a value to an `i1` boolean condition for control flow.
+    ///
+    /// A value already of width 1 is returned unchanged; any wider integer is
+    /// compared against zero (`!= 0`).
+    pub(crate) fn emit_is_nonzero(
+        &self,
+        value: Value<'context, 'block>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        if TypeFactory::integer_bit_width(value.r#type()) == 1 {
+            return value;
+        }
+        let zero = self
+            .state
+            .builder
+            .emit_sol_constant(0, value.r#type(), block);
+        self.state
+            .builder
+            .emit_sol_cmp(value, zero, CmpPredicate::Ne, block)
     }
 }
