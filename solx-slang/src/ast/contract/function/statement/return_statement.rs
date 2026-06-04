@@ -4,9 +4,11 @@
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::ReturnStatement;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::statement::StatementEmitter;
 
@@ -14,9 +16,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Lowers a `return` statement to a `sol.return`, terminating control flow.
     ///
     /// A bare `return;` emits an operand-less `sol.return`. A tuple
-    /// (`return (a, b);`) returns one value per component; any other expression
-    /// returns a single value. Each returned value is cast to its declared
-    /// return type.
+    /// (`return (a, b);`) returns one value per component, and a single call
+    /// returning the whole tuple (`return f();`) returns one value per declared
+    /// return; any other expression returns a single value. Each returned value
+    /// is cast to its declared return type.
     pub fn emit_return(
         &self,
         return_statement: &ReturnStatement,
@@ -33,7 +36,18 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             self.storage_layout,
             self.checked,
         );
-        let (values, block) = emitter.emit_component_values(&expression, block)?;
+
+        // A single call returning the whole tuple (`return f();` /
+        // `return addr.delegatecall(d);`) yields one value per declared return,
+        // so its `sol.return` arity matches the function. Every other form (an
+        // explicit `(a, b)` tuple, or a scalar) resolves component-wise.
+        let (values, block) = if self.return_types.len() > 1
+            && let Expression::FunctionCallExpression(call) = &expression
+        {
+            CallEmitter::new(&emitter).emit_function_call_results(call, block)?
+        } else {
+            emitter.emit_component_values(&expression, block)?
+        };
 
         let cast_values: Vec<Value<'context, 'block>> = values
             .into_iter()
