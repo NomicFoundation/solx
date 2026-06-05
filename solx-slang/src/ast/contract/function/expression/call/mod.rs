@@ -77,6 +77,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(result);
         }
 
+        // An internal library call (`L.f(args)` / `using`-for `x.f(args)`) used
+        // in value position keeps its first declared result.
+        if let Some((values, block)) = self.try_emit_library_call(&callee, arguments, block)? {
+            return Ok((values.into_iter().next(), block));
+        }
+
         // An external member call (`recv.f(args)` / `this.f(args)`) used in
         // value position keeps its first declared result.
         if let Some((values, block)) =
@@ -135,6 +141,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // `(bool ok, bytes memory d) = addr.call(payload)` — a bare low-level
         // call yielding both the success status and the raw return data.
         if let Some(result) = self.try_emit_bare_call_results(call, arguments, block)? {
+            return Ok(result);
+        }
+
+        // `(a, b) = L.f(args)` / `x.f(args)` — an internal library call.
+        if let Some(result) = self.try_emit_library_call(&call.operand(), arguments, block)? {
             return Ok(result);
         }
 

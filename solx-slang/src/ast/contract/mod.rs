@@ -6,6 +6,8 @@
 pub mod free_function;
 /// Function definition lowering to Sol dialect MLIR.
 pub mod function;
+/// Internal library function collection for a contract.
+pub mod library;
 
 use std::collections::HashMap;
 
@@ -77,7 +79,17 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // resolve before any body is emitted.
         let reached_free_functions =
             free_function::collect_free_functions(contract, free_functions);
-        self.register_free_functions(&reached_free_functions);
+        self.register_qualified_functions(&reached_free_functions);
+        // Internal (no-selector) library functions the contract reaches are
+        // inlined the same way. Record their ids so `L.f(...)` / `x.f(...)` calls
+        // dispatch to the inlined symbol, then register their signatures.
+        let reached_library_functions =
+            library::collect_library_functions(contract, free_functions);
+        self.state.library_function_ids = reached_library_functions
+            .iter()
+            .map(|function| function.node_id())
+            .collect();
+        self.register_qualified_functions(&reached_library_functions);
         let storage_layout = Self::compute_storage_layout(contract);
 
         let contract_type = self
@@ -136,6 +148,19 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             FunctionEmitter::new(self.state, contract, &storage_layout).emit_sol_with_symbol(
                 free,
                 &Self::node_id_qualified_symbol(free),
+                &contract_body,
+            )?;
+            self.state.current_contract_type = None;
+        }
+
+        // Emit the reached internal library functions the same way; they lower
+        // like internal contract functions, called through the dispatch keyed on
+        // `library_function_ids`.
+        for library_function in &reached_library_functions {
+            self.state.current_contract_type = Some(contract_type);
+            FunctionEmitter::new(self.state, contract, &storage_layout).emit_sol_with_symbol(
+                library_function,
+                &Self::node_id_qualified_symbol(library_function),
                 &contract_body,
             )?;
             self.state.current_contract_type = None;
@@ -226,9 +251,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
     }
 
-    /// Registers each reached free function's signature under its node-id-
-    /// qualified symbol, so a `f(...)` call resolves to it like an internal call.
-    fn register_free_functions(&mut self, functions: &[FunctionDefinition]) {
+    /// Registers each reached free / internal-library function's signature under
+    /// its node-id-qualified symbol, so a `f(...)` / `L.f(...)` call resolves to
+    /// the inlined definition like an internal call.
+    fn register_qualified_functions(&mut self, functions: &[FunctionDefinition]) {
         for function in functions {
             let (parameter_types, return_types) =
                 TypeConversion::resolve_function_types(function, &self.state.builder);
