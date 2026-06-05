@@ -165,6 +165,22 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::ArrayExpression(array_expression) => {
                 self.emit_array_literal(array_expression, block)
             }
+            // A parenthesised expression `(x)` parses as a single-element tuple;
+            // emit its inner expression. Genuine multi-value tuples appear only
+            // as assignment / return targets, handled in those statements.
+            Expression::TupleExpression(tuple) => {
+                let items = tuple.items();
+                if items.len() != 1 {
+                    unimplemented!("multi-value tuple expression");
+                }
+                let inner = items
+                    .iter()
+                    .next()
+                    .expect("length checked to be one above")
+                    .expression()
+                    .expect("a parenthesised expression has an inner expression");
+                self.emit_value(&inner, block)
+            }
             _ => unimplemented!(
                 "expression lowering: {:?}",
                 std::mem::discriminant(expression)
