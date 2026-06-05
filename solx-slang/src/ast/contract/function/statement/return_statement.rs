@@ -26,7 +26,24 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let Some(expression) = return_statement.expression() else {
-            self.state.builder.emit_sol_return(&[], &block);
+            // A bare `return;` returns the current values of the named returns,
+            // loaded from their slots (a typed zero for an unnamed slot) — the
+            // same values the fall-off-the-end epilogue yields, and what a
+            // modifier stage threads on to its caller.
+            let mut values: Vec<Value<'context, 'block>> =
+                Vec::with_capacity(self.return_types.len());
+            for (index, &return_type) in self.return_types.iter().enumerate() {
+                let value = match self.return_slots.get(index).copied().flatten() {
+                    Some(pointer) => {
+                        self.state
+                            .builder
+                            .emit_sol_load(pointer, return_type, &block)?
+                    }
+                    None => self.state.builder.emit_sol_constant(0, return_type, &block),
+                };
+                values.push(value);
+            }
+            self.state.builder.emit_sol_return(&values, &block);
             return Ok(None);
         };
 
