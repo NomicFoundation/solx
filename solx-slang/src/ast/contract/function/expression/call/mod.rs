@@ -221,19 +221,55 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         if !call.is_type_conversion() || arguments.len() != 1 {
             return Ok(None);
         }
+        let argument = arguments
+            .iter()
+            .next()
+            .expect("argument count checked to be one");
+
+        // `E(x)` (integer -> enum): slang reports a type conversion but surfaces
+        // no call type, and it lowers to `sol.enum_cast` rather than `sol.cast`.
+        if let Some(result) = self.try_emit_enum_conversion(&call.operand(), &argument, block)? {
+            return Ok(Some(result));
+        }
+
         let Some(target_slang_type) = call.get_type() else {
             unimplemented!("untyped type conversion");
         };
         let builder = &self.expression_emitter.state.builder;
         let target_type = TypeConversion::resolve_slang_type(&target_slang_type, None, builder);
-
-        let argument = arguments
-            .iter()
-            .next()
-            .expect("argument count checked to be one");
         let (value, block) = self.expression_emitter.emit_value(&argument, block)?;
         let result =
             TypeConversion::from_target_type(target_type, builder).emit(value, builder, &block);
+        Ok(Some((Some(result), block)))
+    }
+
+    /// Tries to lower an enum conversion `E(x)` (integer → enum) to a
+    /// `sol.enum_cast`. Slang reports such a conversion as a type conversion but
+    /// gives it no call type, so it cannot take the ordinary `sol.cast` path. The
+    /// callee may be a bare `E` or a qualified `L.E` / `C.E` (a library- or
+    /// contract-nested enum). Returns `Ok(None)` when the callee is not an enum,
+    /// so the caller falls through to the ordinary conversion path.
+    fn try_emit_enum_conversion(
+        &self,
+        callee: &Expression,
+        argument: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>> {
+        let target = match callee {
+            Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+            Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
+            _ => return Ok(None),
+        };
+        let Some(Definition::Enum(enum_definition)) = target else {
+            return Ok(None);
+        };
+        let (value, block) = self.expression_emitter.emit_value(argument, block)?;
+        let builder = &self.expression_emitter.state.builder;
+        let member_count = enum_definition.members().iter().count();
+        let enum_type = builder.types.enumeration_for_member_count(member_count);
+        let raw = TypeConversion::from_target_type(builder.types.ui256, builder)
+            .emit(value, builder, &block);
+        let result = builder.emit_sol_enum_cast(raw, enum_type, &block);
         Ok(Some((Some(result), block)))
     }
 
