@@ -77,6 +77,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok(result);
         }
 
+        // An external/public library call (`L.f(args)` / `using`-for `x.f(args)`)
+        // delegatecalls the linked library; claimed before the external-call
+        // path, which would otherwise mis-lower a value-receiver `x.f(args)`.
+        if let Some(result) = self.try_emit_library_external_call(&callee, arguments, block)? {
+            return Ok(result);
+        }
+
         // An internal library call (`L.f(args)` / `using`-for `x.f(args)`) used
         // in value position keeps its first declared result.
         if let Some((values, block)) = self.try_emit_library_call(&callee, arguments, block)? {
