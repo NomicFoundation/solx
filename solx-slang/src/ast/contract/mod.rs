@@ -2,6 +2,8 @@
 //! Contract definition lowering to Sol dialect MLIR.
 //!
 
+/// Free (file-level) function collection for a contract.
+pub mod free_function;
 /// Function definition lowering to Sol dialect MLIR.
 pub mod function;
 
@@ -11,6 +13,7 @@ use melior::ir::BlockRef;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::NodeId;
@@ -61,10 +64,20 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ///
     /// Returns an error if any function body or constructor initializer
     /// contains unsupported constructs.
-    pub fn emit(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
+    pub fn emit(
+        &mut self,
+        contract: &ContractDefinition,
+        free_functions: &[FunctionDefinition],
+    ) -> anyhow::Result<()> {
         let contract_name = contract.name().name();
 
         self.pre_register_functions(contract);
+        // Free functions the contract reaches lower like internal functions;
+        // register their node-id-qualified signatures up front so `f(...)` calls
+        // resolve before any body is emitted.
+        let reached_free_functions =
+            free_function::collect_free_functions(contract, free_functions);
+        self.register_free_functions(&reached_free_functions);
         let storage_layout = Self::compute_storage_layout(contract);
 
         let contract_type = self
@@ -112,6 +125,19 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, contract, &storage_layout)
                 .emit_sol(&function, &contract_body)?;
+            self.state.current_contract_type = None;
+        }
+
+        // Emit the reached free functions into this contract's module, each
+        // under its node-id-qualified symbol so two same-name file-level
+        // functions (e.g. one imported under an alias) do not collide.
+        for free in &reached_free_functions {
+            self.state.current_contract_type = Some(contract_type);
+            FunctionEmitter::new(self.state, contract, &storage_layout).emit_sol_with_symbol(
+                free,
+                &Self::node_id_qualified_symbol(free),
+                &contract_body,
+            )?;
             self.state.current_contract_type = None;
         }
 
@@ -198,6 +224,32 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 return_types,
             );
         }
+    }
+
+    /// Registers each reached free function's signature under its node-id-
+    /// qualified symbol, so a `f(...)` call resolves to it like an internal call.
+    fn register_free_functions(&mut self, functions: &[FunctionDefinition]) {
+        for function in functions {
+            let (parameter_types, return_types) =
+                TypeConversion::resolve_function_types(function, &self.state.builder);
+            self.state.register_function_signature(
+                function.node_id(),
+                Self::node_id_qualified_symbol(function),
+                parameter_types,
+                return_types,
+            );
+        }
+    }
+
+    /// The MLIR symbol for a free function: its signature-derived name suffixed
+    /// with the node id, so two same-name file-level functions reachable
+    /// together (e.g. one imported under an alias) stay distinct.
+    fn node_id_qualified_symbol(function: &FunctionDefinition) -> String {
+        format!(
+            "{}#{:?}",
+            FunctionEmitter::mlir_function_name(function),
+            function.node_id()
+        )
     }
 
     /// Computes the storage layout using slang-solidity's ABI computation.

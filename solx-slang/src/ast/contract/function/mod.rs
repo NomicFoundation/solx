@@ -68,20 +68,47 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     ///
     /// Panics if an entry block is not attached to a region, which is
     /// unreachable because `emit_sol_func` always creates a region.
-    // TODO(rebuild): split when the function-emission domain is rebuilt to the bar.
-    #[allow(clippy::too_many_lines)]
     pub fn emit_sol(
         &self,
         function: &FunctionDefinition,
         contract_body: &BlockRef<'context, '_>,
     ) -> anyhow::Result<String> {
+        self.emit_sol_inner(function, None, contract_body)
+    }
+
+    /// Emits a function under an explicit MLIR symbol, overriding the default
+    /// signature-derived name. Used for free (file-level) functions, which are
+    /// emitted under a node-id-qualified symbol so two same-name file-level
+    /// functions do not collide on one symbol.
+    pub fn emit_sol_with_symbol(
+        &self,
+        function: &FunctionDefinition,
+        symbol: &str,
+        contract_body: &BlockRef<'context, '_>,
+    ) -> anyhow::Result<String> {
+        self.emit_sol_inner(function, Some(symbol), contract_body)
+    }
+
+    /// Shared body of [`Self::emit_sol`] / [`Self::emit_sol_with_symbol`]: emits
+    /// the function as a `sol.func` under `symbol_override` (or its
+    /// signature-derived name when `None`), binding parameters and named returns.
+    // TODO(rebuild): split when the function-emission domain is rebuilt to the bar.
+    #[allow(clippy::too_many_lines)]
+    fn emit_sol_inner(
+        &self,
+        function: &FunctionDefinition,
+        symbol_override: Option<&str>,
+        contract_body: &BlockRef<'context, '_>,
+    ) -> anyhow::Result<String> {
+        let mlir_name = symbol_override
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| Self::mlir_function_name(function));
         let Some(ref body) = function.body() else {
             // Abstract or interface function — no codegen needed.
-            return Ok(Self::mlir_function_name(function));
+            return Ok(mlir_name);
         };
 
         let parameters = function.parameters();
-        let mlir_name = Self::mlir_function_name(function);
 
         let (mlir_parameter_types, result_types) =
             TypeConversion::resolve_function_types(function, &self.state.builder);

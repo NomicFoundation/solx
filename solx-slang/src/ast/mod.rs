@@ -8,7 +8,9 @@ pub mod contract;
 use std::collections::BTreeMap;
 
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::SourceUnit;
+use slang_solidity_v2::ast::SourceUnitMember;
 
 use solx_mlir::Context;
 
@@ -50,9 +52,13 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
             return Ok(None);
         };
 
+        // File-level functions are shared across the unit's contracts; gather
+        // them so a contract that calls one emits it into its own module.
+        let free_functions = Self::gather_free_functions(unit);
+
         let name = contract.name().name();
         let mut emitter = ContractEmitter::new(self.state);
-        emitter.emit(contract)?;
+        emitter.emit(contract, &free_functions)?;
 
         let mut method_identifiers = BTreeMap::new();
         for contract_member in contract.members().iter() {
@@ -80,5 +86,16 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         }
 
         Ok(Some((name, method_identifiers)))
+    }
+
+    /// Collects the source unit's file-level (free) function definitions.
+    fn gather_free_functions(unit: &SourceUnit) -> Vec<FunctionDefinition> {
+        unit.members()
+            .iter()
+            .filter_map(|member| match member {
+                SourceUnitMember::FunctionDefinition(function) => Some(function),
+                _ => None,
+            })
+            .collect()
     }
 }
