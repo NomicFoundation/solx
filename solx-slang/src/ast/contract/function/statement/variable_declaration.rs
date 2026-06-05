@@ -3,10 +3,13 @@
 //!
 
 use melior::ir::BlockRef;
+use melior::ir::Type;
+use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MultiTypedDeclaration;
 use slang_solidity_v2::ast::SingleTypedDeclaration;
+use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::VariableDeclarationStatement;
 use slang_solidity_v2::ast::VariableDeclarationTarget;
 
@@ -114,17 +117,48 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         };
 
         let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
-        let value = match initial_value {
-            Some(value) => value,
-            None if IntegerType::try_from(declared_type).is_ok() => self
-                .state
-                .builder
-                .emit_sol_constant(0, declared_type, &block),
-            None => unimplemented!("zero-initialization for non-integer type {declared_type}"),
-        };
-        self.state.builder.emit_sol_store(value, pointer, &block);
+        match initial_value {
+            Some(value) => self.state.builder.emit_sol_store(value, pointer, &block),
+            None => {
+                self.emit_zero_initialization(&declared_slang_type, declared_type, pointer, &block)
+            }
+        }
         self.environment
             .define_variable(name, pointer, declared_type);
         Ok(Some(block))
+    }
+
+    /// Default-initialises a local declared without an initializer, matching
+    /// Solidity's implicit zero value: a fixed-size array / struct
+    /// (`T[n] memory a;`, `S memory s;`) becomes a freshly allocated zero-filled
+    /// memory aggregate, a dynamic `string` / `bytes` an empty (length-0)
+    /// buffer, and an integer a zero constant. Other non-integer types (function
+    /// pointers, user-defined value types, …) keep the raw `sol.alloca` pointer,
+    /// which the backend zero-fills.
+    fn emit_zero_initialization(
+        &self,
+        declared_slang_type: &SlangType,
+        declared_type: Type<'context>,
+        pointer: Value<'context, 'block>,
+        block: &BlockRef<'context, 'block>,
+    ) {
+        let builder = &self.state.builder;
+        match declared_slang_type {
+            SlangType::FixedSizeArray(_) | SlangType::Struct(_) => {
+                let allocated = builder.emit_sol_malloc_zeroed(declared_type, block);
+                builder.emit_sol_store(allocated, pointer, block);
+            }
+            SlangType::String(_) | SlangType::Bytes(_) => {
+                let zero = builder.emit_sol_constant(0, builder.types.ui256, block);
+                let allocated = builder.emit_sol_malloc_sized(declared_type, zero, block);
+                builder.emit_sol_store(allocated, pointer, block);
+            }
+            _ if IntegerType::try_from(declared_type).is_ok() => {
+                let zero = builder.emit_sol_constant(0, declared_type, block);
+                builder.emit_sol_store(zero, pointer, block);
+            }
+            // Other non-integer types are left as the raw `sol.alloca` pointer.
+            _ => {}
+        }
     }
 }
