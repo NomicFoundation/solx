@@ -264,7 +264,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
     /// Appends a dead block terminated by `sol.yield` to a region whose live
     /// block already terminated, satisfying the region's yield requirement.
-    fn emit_dead_yield(&self, region: &Region<'context>) {
+    pub fn emit_dead_yield(&self, region: &Region<'context>) {
         let dead_block = Block::new(&[]);
         self.state.builder.emit_sol_yield(&dead_block);
         region.append_block(dead_block);

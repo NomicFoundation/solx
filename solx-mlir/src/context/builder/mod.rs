@@ -93,6 +93,7 @@ use crate::ods::sol::GasLimitOperation;
 use crate::ods::sol::GasPriceOperation;
 use crate::ods::sol::GepOperation;
 use crate::ods::sol::GetCallDataOperation;
+use crate::ods::sol::GetReturnDataOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::IfOperation;
 use crate::ods::sol::Keccak256Operation;
@@ -129,6 +130,9 @@ use crate::ods::sol::TransferOperation;
 use crate::ods::sol::WhileOperation;
 use crate::ods::sol::XorOperation;
 use crate::ods::sol::YieldOperation;
+use crate::ods::yul::ReturnDataCopyOperation as YulReturnDataCopyOperation;
+use crate::ods::yul::ReturnDataSizeOperation as YulReturnDataSizeOperation;
+use crate::ods::yul::RevertOperation as YulRevertOperation;
 
 /// Cached MLIR types and emission methods for building MLIR operations.
 pub struct Builder<'context> {
@@ -483,6 +487,48 @@ impl<'context> Builder<'context> {
             builder = builder.call(Attribute::unit(self.context));
         }
         block.append_operation(builder.build().into());
+    }
+
+    /// Re-reverts with the current return data verbatim — copies the whole
+    /// `returndata` buffer into memory and reverts with it. Used by `try`/`catch`
+    /// to bubble a revert that matched no catch clause, preserving the original
+    /// error selector and payload.
+    ///
+    /// Like [`Self::emit_sol_revert`], the underlying `yul.revert` is not a
+    /// structural terminator, so the caller must still terminate the block.
+    pub fn emit_revert_returndata<'block, B>(&self, block: &B)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let i256 = Type::from(IntegerType::new(self.context, 256));
+        let size = block
+            .append_operation(
+                YulReturnDataSizeOperation::builder(self.context, self.unknown_location)
+                    .out(i256)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("yul.returndatasize produces one result")
+            .into();
+        let zero_unsigned = self.emit_sol_constant(0, self.types.ui256, block);
+        let zero = self.emit_sol_cast(zero_unsigned, i256, block);
+        block.append_operation(
+            YulReturnDataCopyOperation::builder(self.context, self.unknown_location)
+                .dst(zero)
+                .src(zero)
+                .size(size)
+                .build()
+                .into(),
+        );
+        block.append_operation(
+            YulRevertOperation::builder(self.context, self.unknown_location)
+                .addr(zero)
+                .size(size)
+                .build()
+                .into(),
+        );
     }
 
     /// Emits a `sol.emit` for an `emit Event(args)` statement.
@@ -1392,6 +1438,31 @@ impl<'context> Builder<'context> {
                     .into()
             })
             .collect()
+    }
+
+    /// Emits a `sol.get_returndata` — materialises `returndata[start..]` as a
+    /// `bytes memory` value. Used by `try`/`catch` to read the decoded return
+    /// data or the raw revert reason of the tried external call.
+    pub fn emit_sol_get_returndata<'block, B>(
+        &self,
+        start: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                GetReturnDataOperation::builder(self.context, self.unknown_location)
+                    .start(start)
+                    .addr(self.types.string(solx_utils::DataLocation::Memory))
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.get_returndata produces one result")
+            .into()
     }
 
     /// Emits a `sol.array_lit` constructing an array from `elements` of the

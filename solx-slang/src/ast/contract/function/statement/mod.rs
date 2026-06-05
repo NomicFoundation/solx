@@ -16,6 +16,8 @@ pub mod named_arguments;
 pub mod return_statement;
 /// Revert statement lowering.
 pub mod revert;
+/// Try-catch statement lowering.
+pub mod try_statement;
 /// Local variable declaration statement lowering.
 pub mod variable_declaration;
 
@@ -111,11 +113,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Statement::UncheckedBlock(inner) => self.emit_unchecked_block(inner, block),
             Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
             Statement::RevertStatement(revert) => self.emit_revert(revert, block),
+            Statement::TryStatement(try_statement) => self.emit_try(try_statement, block),
             Statement::AssemblyStatement(assembly) => self.emit_assembly(assembly, block),
-            _ => unimplemented!(
-                "statement lowering: {:?}",
-                std::mem::discriminant(statement)
-            ),
         }
     }
 }

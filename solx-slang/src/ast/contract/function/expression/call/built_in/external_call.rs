@@ -10,6 +10,7 @@
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
@@ -118,6 +119,88 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             &block,
         )?;
         Ok(Some((results, block)))
+    }
+
+    /// Tries to emit an external member call with `try` semantics — a
+    /// `sol.ext_icall` with `try_call` set, which yields an `i1` success flag
+    /// instead of reverting. Returns `Ok(Some((status, results, block)))` for an
+    /// external-call shape, or `Ok(None)` when the callee is not one (so `try`
+    /// lowering falls back to running just the success body).
+    ///
+    /// Mirrors [`Self::try_emit_external_call_results`] for the catchable form:
+    /// it peels an optional `{value: v}` layer, casts the receiver to `address`,
+    /// and builds the external function reference from the resolved selector and
+    /// signature. The call is always a `CALL` (never `STATICCALL`) so a reverting
+    /// callee yields `status = false` for the catch path rather than aborting.
+    pub fn emit_external_call_try(
+        &self,
+        call: &FunctionCallExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<
+        Option<(
+            Value<'context, 'block>,
+            Vec<Value<'context, 'block>>,
+            BlockRef<'context, 'block>,
+        )>,
+    > {
+        let ArgumentsDeclaration::PositionalArguments(arguments) = &call.arguments() else {
+            return Ok(None);
+        };
+
+        let mut block = block;
+        let mut call_value: Option<Value<'context, 'block>> = None;
+        let access = match call.operand() {
+            Expression::MemberAccessExpression(access) => access,
+            Expression::CallOptionsExpression(options) => {
+                (call_value, block) = self.capture_call_value(&options, block)?;
+                match options.operand() {
+                    Expression::MemberAccessExpression(access) => access,
+                    _ => return Ok(None),
+                }
+            }
+            _ => return Ok(None),
+        };
+
+        let Some(Definition::Function(function)) = access.member().resolve_to_definition() else {
+            return Ok(None);
+        };
+        let Some(selector) = function.compute_selector() else {
+            return Ok(None);
+        };
+
+        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
+            &function,
+            &self.expression_emitter.state.builder,
+        );
+
+        let (receiver_value, next) = self
+            .expression_emitter
+            .emit_value(&access.operand(), block)?;
+        block = next;
+        let mut argument_values = Vec::with_capacity(arguments.len());
+        for argument in arguments.iter() {
+            let (value, next) = self.expression_emitter.emit_value(&argument, block)?;
+            argument_values.push(value);
+            block = next;
+        }
+        self.coerce_arguments(&mut argument_values, &parameter_types, &block);
+
+        let builder = &self.expression_emitter.state.builder;
+        let address =
+            builder.emit_sol_address_cast(receiver_value, builder.types.sol_address, &block);
+        let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
+        let callee_ref =
+            builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &block);
+        let value =
+            call_value.unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &block));
+        let (status, results) = builder.emit_sol_ext_icall_try(
+            callee_ref,
+            &argument_values,
+            &return_types,
+            value,
+            &block,
+        )?;
+        Ok(Some((status, results, block)))
     }
 }
 
