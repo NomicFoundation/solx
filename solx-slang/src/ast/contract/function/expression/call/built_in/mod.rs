@@ -19,12 +19,15 @@ pub mod new;
 /// User-defined value type member built-ins (`wrap`/`unwrap`).
 pub mod user_defined_value_type;
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::PositionalArguments;
+
+use solx_mlir::ods::sol::ConcatOperation;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
 
@@ -102,8 +105,36 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
                 self.emit_wrap_unwrap(call, arguments, block).map(Some)
             }
+            Some(BuiltIn::StringConcat | BuiltIn::BytesConcat) => {
+                self.emit_concat(arguments, block).map(Some)
+            }
             _ => Ok(None),
         }
+    }
+
+    /// Lowers `string.concat(...)` / `bytes.concat(...)` to `sol.concat`: a
+    /// variadic concatenation of string / `bytesN` values into a freshly
+    /// allocated memory string. An empty argument list yields the empty string.
+    fn emit_concat(
+        &self,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let (values, block) = self.emit_argument_values(arguments, block)?;
+        let builder = &self.expression_emitter.state.builder;
+        let result_type = builder.types.string(solx_utils::DataLocation::Memory);
+        let value = block
+            .append_operation(
+                ConcatOperation::builder(builder.context, builder.unknown_location)
+                    .args(&values)
+                    .result(result_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.concat always produces one result")
+            .into();
+        Ok((Some(value), block))
     }
 
     /// Lowers `assert(condition)` to `sol.assert`.
