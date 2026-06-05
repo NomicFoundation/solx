@@ -8,8 +8,10 @@ use melior::ir::Value;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
+use slang_solidity_v2::ast::NamedArguments;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StructDefinition;
+use slang_solidity_v2::ast::StructMember;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
@@ -56,8 +58,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let builder = &self.expression_emitter.state.builder;
-        let struct_address = builder.emit_sol_malloc(result_type, &block);
+        let struct_address = self
+            .expression_emitter
+            .state
+            .builder
+            .emit_sol_malloc(result_type, &block);
 
         let mut block = block;
         for (index, (member, argument)) in struct_definition
@@ -66,32 +71,78 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .zip(arguments.iter())
             .enumerate()
         {
-            let field_slang_type = member
-                .get_type()
-                .expect("the binder types every struct member");
-            let field_type = TypeConversion::resolve_slang_type(
-                &field_slang_type,
-                Some(DataLocation::Memory),
-                builder,
-            );
-            let index_value = builder.emit_sol_constant(index as i64, builder.types.ui64, &block);
-            let field_address =
-                builder.emit_sol_gep(struct_address, index_value, field_type, &block);
-
-            let (argument_value, next_block) =
-                self.expression_emitter.emit_value(&argument, block)?;
-            block = next_block;
-            if field_slang_type.is_reference_type() {
-                builder.emit_sol_copy(argument_value, field_address, &block);
-            } else {
-                let stored = TypeConversion::from_target_type(field_type, builder).emit(
-                    argument_value,
-                    builder,
-                    &block,
-                );
-                builder.emit_sol_store(stored, field_address, &block);
-            }
+            block = self.store_struct_field(struct_address, index, &member, &argument, block)?;
         }
         Ok((struct_address, block))
+    }
+
+    /// Allocates a fresh memory struct and stores each NAMED argument into its
+    /// matching field — `S({b: y, a: x})`. Mirrors [`Self::emit_struct_constructor`]
+    /// but resolves each declared member to the argument sharing its name rather
+    /// than by position; per-field lowering (value cast / reference `sol.copy`)
+    /// is identical.
+    pub(crate) fn emit_named_struct_constructor(
+        &self,
+        struct_definition: &StructDefinition,
+        result_type: Type<'context>,
+        named_arguments: &NamedArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let struct_address = self
+            .expression_emitter
+            .state
+            .builder
+            .emit_sol_malloc(result_type, &block);
+
+        let mut block = block;
+        for (index, member) in struct_definition.members().iter().enumerate() {
+            let member_name = member.name().name();
+            let argument = named_arguments
+                .iter()
+                .find(|argument| argument.name().name() == member_name)
+                .expect("named struct constructor missing a field argument");
+            block =
+                self.store_struct_field(struct_address, index, &member, &argument.value(), block)?;
+        }
+        Ok((struct_address, block))
+    }
+
+    /// Stores one struct-constructor argument into its field: a value-typed
+    /// field casts the argument and `sol.store`s it; a reference-typed field
+    /// (nested struct / array / `string` / `bytes`) deep-copies the evaluated
+    /// reference with `sol.copy`. Shared by the positional and named
+    /// constructors, which differ only in how a member's argument is located.
+    fn store_struct_field(
+        &self,
+        struct_address: Value<'context, 'block>,
+        index: usize,
+        member: &StructMember,
+        argument: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+        let builder = &self.expression_emitter.state.builder;
+        let field_slang_type = member
+            .get_type()
+            .expect("the binder types every struct member");
+        let field_type = TypeConversion::resolve_slang_type(
+            &field_slang_type,
+            Some(DataLocation::Memory),
+            builder,
+        );
+        let index_value = builder.emit_sol_constant(index as i64, builder.types.ui64, &block);
+        let field_address = builder.emit_sol_gep(struct_address, index_value, field_type, &block);
+
+        let (argument_value, block) = self.expression_emitter.emit_value(argument, block)?;
+        if field_slang_type.is_reference_type() {
+            builder.emit_sol_copy(argument_value, field_address, &block);
+        } else {
+            let stored = TypeConversion::from_target_type(field_type, builder).emit(
+                argument_value,
+                builder,
+                &block,
+            );
+            builder.emit_sol_store(stored, field_address, &block);
+        }
+        Ok(block)
     }
 }

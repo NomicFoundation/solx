@@ -18,6 +18,7 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::NamedArguments;
 use slang_solidity_v2::ast::PositionalArguments;
 
 use self::type_conversion::TypeConversion;
@@ -45,8 +46,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        if let ArgumentsDeclaration::NamedArguments(named_arguments) = &call.arguments() {
+            return self.emit_named_call(call, named_arguments, block);
+        }
         let ArgumentsDeclaration::PositionalArguments(arguments) = &call.arguments() else {
-            unimplemented!("named-argument call lowering");
+            unimplemented!(
+                "call argument form: {:?}",
+                std::mem::discriminant(&call.arguments())
+            );
         };
 
         if let Some(result) = self.try_emit_type_conversion(call, arguments, block)? {
@@ -99,6 +106,100 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
 
         self.emit_internal_call(&callee, arguments, block)
+    }
+
+    /// Lowers a call written with named arguments — `f({b: 2, a: 1})`,
+    /// `S({field: value})`, or `Lib.S({...})`. Resolves the callee to a struct
+    /// constructor or a directly-named function and matches each argument to its
+    /// declared field / parameter by name. Named library member calls
+    /// (`x.f({...})` / `L.f({...})`) defer to a later domain.
+    fn emit_named_call(
+        &self,
+        call: &FunctionCallExpression,
+        named_arguments: &NamedArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let callee = call.operand();
+
+        // `S({...})` / `Lib.S({...})` — a struct constructor, fields by name.
+        let struct_target = match &callee {
+            Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+            Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
+            _ => None,
+        };
+        if let Some(Definition::Struct(struct_definition)) = struct_target {
+            let result_slang_type = call
+                .get_type()
+                .expect("the binder types a struct constructor");
+            let result_type = TypeConversion::resolve_slang_type(
+                &result_slang_type,
+                None,
+                &self.expression_emitter.state.builder,
+            );
+            let (value, block) = self.emit_named_struct_constructor(
+                &struct_definition,
+                result_type,
+                named_arguments,
+                block,
+            )?;
+            return Ok((Some(value), block));
+        }
+
+        // `f({b: 2, a: 1})` — a direct function, reordered to parameter order.
+        if let Expression::Identifier(identifier) = &callee
+            && let Some(Definition::Function(function)) = identifier.resolve_to_definition()
+        {
+            return self.emit_named_function_call(&function, named_arguments, block);
+        }
+
+        unimplemented!(
+            "named-argument call lowering: {:?}",
+            std::mem::discriminant(&callee)
+        );
+    }
+
+    /// Emits a direct call written with named arguments (`f({b: 2, a: 1})`).
+    ///
+    /// Slang preserves named arguments in source order; they are reordered to
+    /// the callee's declared parameter order, evaluated, coerced to the declared
+    /// parameter types, and dispatched as an ordinary `sol.call`. The first
+    /// result (if any) is returned, matching [`Self::emit_internal_call`].
+    fn emit_named_function_call(
+        &self,
+        function: &FunctionDefinition,
+        named_arguments: &NamedArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let mut argument_values = Vec::new();
+        let mut block = block;
+        for parameter in function.parameters().iter() {
+            let parameter_name = parameter
+                .name()
+                .expect("named call to a function with an unnamed parameter")
+                .name();
+            let argument = named_arguments
+                .iter()
+                .find(|argument| argument.name().name() == parameter_name)
+                .expect("named call missing an argument for a parameter");
+            let (value, next_block) = self
+                .expression_emitter
+                .emit_value(&argument.value(), block)?;
+            argument_values.push(value);
+            block = next_block;
+        }
+
+        let (callee_name, parameter_types, return_types) = self
+            .expression_emitter
+            .state
+            .resolve_function(function.node_id())?;
+        self.coerce_arguments(&mut argument_values, parameter_types, &block);
+        let result = self.expression_emitter.state.builder.emit_sol_call(
+            callee_name,
+            &argument_values,
+            return_types,
+            &block,
+        )?;
+        Ok((result, block))
     }
 
     /// Emits a direct internal call `f(args)` to a contract function as a
