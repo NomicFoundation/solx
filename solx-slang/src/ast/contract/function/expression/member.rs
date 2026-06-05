@@ -6,6 +6,8 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
+use melior::ir::r#type::IntegerType;
+use num_bigint::BigInt;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
@@ -34,6 +36,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             return Ok(result);
         }
         if let Some(result) = self.try_emit_enum_variant(access, block)? {
+            return Ok(result);
+        }
+        if let Some(result) = self.try_emit_selector(access, block)? {
             return Ok(result);
         }
         match access.member().resolve_to_built_in() {
@@ -97,6 +102,88 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
             _ => None,
         }
+    }
+
+    /// Lowers `f.selector` / `E.selector` / `this.x.selector` to a compile-time
+    /// selector constant: a 4-byte `bytes4` for a function / error / public-
+    /// getter selector, or the full 32-byte keccak topic hash (`bytes32`) for an
+    /// event. The base resolves to a function, error, event, or public state
+    /// variable. A member named `selector` that resolves to a user function (a
+    /// `using`-attached function taken as a value) and a function-pointer VALUE's
+    /// runtime `.selector` are both refused (`Ok(None)`), deferring to later
+    /// domains.
+    fn try_emit_selector(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
+        if access.member().name() != "selector"
+            || matches!(
+                access.member().resolve_to_definition(),
+                Some(Definition::Function(_))
+            )
+        {
+            return Ok(None);
+        }
+
+        // Each arm yields `(selector value, fixedbytes width in bytes)`: a 4-byte
+        // `bytes4` for functions / errors / getters, the 32-byte keccak topic
+        // hash for events.
+        let selector_constant: Option<(BigInt, u32)> =
+            match Self::resolve_operand_definition(&access.operand()) {
+                Some(Definition::Function(function)) => function
+                    .compute_selector()
+                    .map(|selector| (BigInt::from(selector), 4)),
+                Some(Definition::Error(error)) => error
+                    .compute_selector()
+                    .map(|selector| (BigInt::from(selector), 4)),
+                Some(Definition::StateVariable(state_variable)) => state_variable
+                    .compute_selector()
+                    .map(|selector| (BigInt::from(selector), 4)),
+                Some(Definition::Event(event)) => {
+                    event.compute_canonical_signature().map(|signature| {
+                        let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
+                        let value = BigInt::from_bytes_be(num_bigint::Sign::Plus, hash.as_bytes());
+                        (value, 32)
+                    })
+                }
+                _ => None,
+            };
+        let Some((value, width_bytes)) = selector_constant else {
+            return Ok(None);
+        };
+
+        // The selector is a compile-time constant, but a `.selector` taken off a
+        // member of a value expression (`h().f.selector`) still evaluates that
+        // receiver for its side effects.
+        let block = self.eval_selector_receiver_side_effects(access, block)?;
+        let builder = &self.state.builder;
+        // `!sol.fixedbytes<N>` rejects a bare integer attribute, so emit the
+        // value as an integer of the matching width and bridge via `sol.bytes_cast`.
+        let integer_type = Type::from(IntegerType::unsigned(builder.context, width_bytes * 8));
+        let integer = builder.emit_constant(&value, integer_type, &block);
+        let value =
+            builder.emit_sol_bytes_cast(integer, builder.types.fixed_bytes(width_bytes), &block);
+        Ok(Some((value, block)))
+    }
+
+    /// Evaluates the receiver of a `.selector` taken off a value member
+    /// (`h().f.selector`) for its side effects; a name / namespace / type
+    /// receiver has none and is skipped.
+    fn eval_selector_receiver_side_effects(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+        let Expression::MemberAccessExpression(inner) = access.operand() else {
+            return Ok(block);
+        };
+        let receiver = inner.operand();
+        if is_namespace_or_type_operand(&receiver) {
+            return Ok(block);
+        }
+        let (_discarded, block) = self.emit_value(&receiver, block)?;
+        Ok(block)
     }
 
     /// Lowers a struct-field read `s.field` to `sol.gep` + `sol.load`.
@@ -208,4 +295,29 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         };
         Ok((value, block))
     }
+}
+
+/// Whether an expression names a namespace or type (a contract / interface /
+/// library / import / enum / struct / user-defined value type) rather than a
+/// runtime value, so a `.selector` receiver built on it has no side effects to
+/// evaluate.
+fn is_namespace_or_type_operand(expression: &Expression) -> bool {
+    let definition = match expression {
+        Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+        Expression::MemberAccessExpression(member) => member.member().resolve_to_definition(),
+        _ => return false,
+    };
+    matches!(
+        definition,
+        Some(
+            Definition::Contract(_)
+                | Definition::Interface(_)
+                | Definition::Library(_)
+                | Definition::Import(_)
+                | Definition::ImportedSymbol(_)
+                | Definition::Enum(_)
+                | Definition::Struct(_)
+                | Definition::UserDefinedValueType(_)
+        )
+    )
 }
