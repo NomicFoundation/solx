@@ -6,6 +6,7 @@ pub mod abi;
 pub mod array;
 pub mod global;
 pub mod require;
+pub mod type_introspection;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;

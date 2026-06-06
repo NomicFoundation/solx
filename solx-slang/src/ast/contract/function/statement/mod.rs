@@ -2,9 +2,11 @@
 //! Statement lowering to MLIR operations.
 //!
 
+pub mod assembly;
 pub mod control_flow;
 pub mod event;
 pub mod revert;
+pub mod try_statement;
 pub mod variable_declaration;
 
 use std::collections::HashMap;
@@ -172,10 +174,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             Statement::RevertStatement(revert) => self.emit_revert(revert, block),
             Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
-            _ => unimplemented!(
-                "unsupported statement: {:?}",
-                std::mem::discriminant(statement)
-            ),
+            Statement::AssemblyStatement(assembly) => self.emit_assembly(assembly, block),
+            Statement::TryStatement(try_statement) => self.emit_try(try_statement, block),
         }
     }
 

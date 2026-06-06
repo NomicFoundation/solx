@@ -9,7 +9,11 @@
 pub mod builder;
 pub mod environment;
 pub mod function;
+pub mod user_defined_operator;
 
+pub use self::user_defined_operator::UserDefinedOperator;
+
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Once;
 
@@ -48,6 +52,30 @@ pub struct Context<'context> {
     /// The MLIR type of the contract currently being emitted, used to type
     /// `this` expressions. Frontends set this before emitting function bodies.
     pub current_contract_type: Option<Type<'context>>,
+    /// User-defined operator bindings (`using {f as op} for T global;`), keyed
+    /// by `(udvt_definition_id, operator)` and mapping to the bound function's
+    /// definition id. Frontends populate this before emitting bodies; a binary
+    /// or unary operation on a bound user-defined value type then dispatches to
+    /// the function rather than emitting native arithmetic.
+    pub operator_bindings: HashMap<(NodeId, UserDefinedOperator), NodeId>,
+    /// Redirect for `super` calls: maps a `super` member-access node id to the
+    /// function node id it dispatches to under the most-derived contract's C3
+    /// linearisation. Slang resolves `super` lexically, which is wrong in a
+    /// diamond, so the frontend pre-resolves every `super` call against the
+    /// linearised bases and records the result here. Empty unless the contract
+    /// uses `super`.
+    pub super_redirect: HashMap<NodeId, NodeId>,
+    /// Virtual dispatch redirect: maps an overridden base function's node id to
+    /// the most-derived override of the same signature. A plain internal call
+    /// resolving (lexically) to a shadowed base function is routed through this
+    /// so it reaches the override, matching Solidity's virtual semantics. Empty
+    /// unless the contract overrides an inherited function.
+    pub virtual_redirect: HashMap<NodeId, NodeId>,
+    /// Cross-contract references collected during emission, in encounter order
+    /// — populated when an emitter reaches into another contract (`new C(...)`
+    /// → `sol.new`) and drained into the MLIR output for the linker. Empty
+    /// unless the contract deploys another.
+    pub dependencies: RefCell<Vec<String>>,
 }
 
 impl<'context> Context<'context> {
@@ -159,6 +187,10 @@ impl<'context> Context<'context> {
             function_signatures: HashMap::new(),
             builder: Builder::new(context),
             current_contract_type: None,
+            operator_bindings: HashMap::new(),
+            super_redirect: HashMap::new(),
+            virtual_redirect: HashMap::new(),
+            dependencies: RefCell::new(Vec::new()),
         }
     }
 

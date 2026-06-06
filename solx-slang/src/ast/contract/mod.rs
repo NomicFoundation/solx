@@ -2,10 +2,15 @@
 //! Contract definition lowering to Sol dialect MLIR.
 //!
 
+pub mod free_function;
 /// Function definition lowering to Sol dialect MLIR.
 pub mod function;
+pub mod getter;
+pub mod getter_level;
+pub mod library;
 /// Contract storage layout: the slot assignment of state variables.
 pub mod storage_layout;
+pub mod super_call;
 
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
