@@ -4,6 +4,10 @@
 
 pub mod built_in;
 pub mod call_kind;
+pub mod external_call;
+pub mod library_call;
+pub mod member_call_kind;
+pub mod static_mode;
 
 use anyhow::Context as _;
 use melior::ir::BlockRef;
@@ -21,6 +25,7 @@ use slang_solidity_v2::ast::StructDefinition;
 use solx_utils::DataLocation;
 
 use self::call_kind::CallKind;
+use self::member_call_kind::MemberCallKind;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::type_conversion::TypeConversion;
 
@@ -80,6 +85,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let (value, block) = self.emit_abi_decode(call, positional_arguments, block)?;
                 Ok((Some(value), block))
             }
+            CallKind::UdvtWrapUnwrap => {
+                unimplemented!("call dispatch: udvt wrap/unwrap")
+            }
             CallKind::BuiltInMemberAccess(access) => {
                 self.emit_built_in_member_access(&access, Some(positional_arguments), block)
             }
@@ -122,6 +130,34 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     block,
                 )
                 .map(|(value, block)| (Some(value), block))
+            }
+            CallKind::New => unimplemented!("call dispatch: new expression"),
+            CallKind::WithOptions(_) => {
+                unimplemented!("call dispatch: call with options")
+            }
+            CallKind::ArrayTypeConversion => {
+                unimplemented!("call dispatch: array type conversion")
+            }
+            CallKind::RefFieldStructAsConversion => {
+                unimplemented!("call dispatch: reference-field struct as conversion")
+            }
+            CallKind::IndirectPointer => {
+                unimplemented!("call dispatch: indirect function pointer")
+            }
+            CallKind::Member(member_kind) => {
+                let Expression::MemberAccessExpression(access) = call.operand() else {
+                    unreachable!("a member call classifies only a member-access callee");
+                };
+                // Single-result position takes the first decoded value; the full
+                // tuple flows through the one shared member-call dispatcher.
+                let (results, block) = self.emit_member_call_results(
+                    member_kind,
+                    &access,
+                    None,
+                    positional_arguments,
+                    block,
+                )?;
+                Ok((results.into_iter().next(), block))
             }
         }
     }
@@ -177,6 +213,78 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 "callee '{}' does not resolve to a function",
                 callee_identifier.name()
             ),
+        }
+    }
+
+    /// Classifies a member-access callee (`x.f(...)`) into its
+    /// [`MemberCallKind`] ahead of emission, mirroring [`Self::classify_call`].
+    pub fn classify_member(&self, access: &MemberAccessExpression) -> MemberCallKind {
+        let _ = access;
+        unimplemented!("member-call classification")
+    }
+
+    /// The single member-call dispatcher: lowers a member-access callee
+    /// (`recv.f(args)` / `this.f(args)` / `L.f(args)` / a public getter) to its
+    /// full result tuple. [`Self::emit_function_call`] takes the first value for
+    /// single-result position and [`Self::emit_function_call_results`] takes the
+    /// whole tuple — both route here, so classify-and-dispatch lives in one place.
+    fn emit_member_call_results(
+        &self,
+        member_kind: MemberCallKind,
+        access: &MemberAccessExpression,
+        call_value: Option<Value<'context, 'block>>,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        match member_kind {
+            // `this.f(args)` and `c.f(args)` are both genuine external calls; the
+            // single results helper computes the signature from the callee
+            // definition for either receiver (self or foreign instance).
+            MemberCallKind::SelfExternal | MemberCallKind::ExternalInstance => {
+                let Some(Definition::Function(function_definition)) =
+                    access.member().resolve_to_definition()
+                else {
+                    unreachable!("an external member call resolves to a function");
+                };
+                self.emit_external_call_results(
+                    access,
+                    &function_definition,
+                    call_value,
+                    arguments,
+                    block,
+                )
+            }
+            MemberCallKind::SelfGetter => {
+                let Some(Definition::StateVariable(state_variable)) =
+                    access.member().resolve_to_definition()
+                else {
+                    unreachable!("a self getter call resolves to a state variable");
+                };
+                self.emit_self_getter_call(access, &state_variable, arguments, call_value, block)
+            }
+            MemberCallKind::ExternalGetter => {
+                let Some(Definition::StateVariable(state_variable)) =
+                    access.member().resolve_to_definition()
+                else {
+                    unreachable!("an external getter call resolves to a state variable");
+                };
+                let (value, block) =
+                    self.emit_external_getter_call(access, &state_variable, arguments, block)?;
+                Ok((value.into_iter().collect(), block))
+            }
+            MemberCallKind::Library { external: false } => {
+                let Some(Definition::Function(library_function)) =
+                    access.member().resolve_to_definition()
+                else {
+                    unreachable!("a library call resolves to a function");
+                };
+                self.emit_library_call(access, &library_function, arguments, block)
+            }
+            MemberCallKind::Library { external: true } => {
+                unimplemented!("external (delegatecall) library call")
+            }
+            MemberCallKind::Super => unimplemented!("super call"),
+            MemberCallKind::FunctionPointer => unimplemented!("function pointer call"),
         }
     }
 
@@ -262,8 +370,37 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             unimplemented!("only positional arguments supported");
         };
 
+        // A member-access callee yields its full result tuple through the same
+        // dispatchers as the single-result path: a bare low-level call (member
+        // resolves to a built-in) via `emit_bare_call_results`, any other member
+        // via the shared `emit_member_call_results`.
+        if let Expression::MemberAccessExpression(access) = call.operand() {
+            if let Some(built_in) = access.member().resolve_to_built_in() {
+                return match built_in {
+                    kind @ (BuiltIn::AddressCall
+                    | BuiltIn::AddressDelegatecall
+                    | BuiltIn::AddressStaticcall) => self.emit_bare_call_results(
+                        &access,
+                        kind,
+                        None,
+                        positional_arguments,
+                        block,
+                    ),
+                    _ => unimplemented!("multi-result built-in member call is not yet supported"),
+                };
+            }
+            let member_kind = self.classify_member(&access);
+            return self.emit_member_call_results(
+                member_kind,
+                &access,
+                None,
+                positional_arguments,
+                block,
+            );
+        }
+
         let Expression::Identifier(callee_identifier) = call.operand() else {
-            unimplemented!("multi-result calls only support direct named function callees");
+            unimplemented!("multi-result calls only support direct named or member callees");
         };
         let Some(Definition::Function(function_definition)) =
             callee_identifier.resolve_to_definition()

@@ -2,7 +2,11 @@
 //! Function definition lowering to Sol dialect MLIR.
 //!
 
+pub mod body_kind;
 pub mod expression;
+pub mod modifier;
+pub mod modifier_body_call;
+pub mod signature;
 pub mod statement;
 
 use std::collections::HashMap;
@@ -11,7 +15,6 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -22,8 +25,10 @@ use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::StateMutability;
 
+use self::body_kind::BodyKind;
 use self::expression::ExpressionEmitter;
 use self::expression::arithmetic_mode::ArithmeticMode;
+use self::signature::InnerSignature;
 use self::statement::StatementEmitter;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::type_conversion::TypeConversion;
@@ -55,7 +60,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     }
 
     /// Emits a `sol.func` for the given function definition into the given
-    /// contract body block.
+    /// contract body block, under its canonical (dispatchable) symbol.
     ///
     /// # Errors
     ///
@@ -70,28 +75,66 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         function: &FunctionDefinition,
         contract_body: &BlockRef<'context, '_>,
     ) -> anyhow::Result<String> {
+        self.emit_sol_inner(function, None, contract_body, BodyKind::Function)
+    }
+
+    /// Emits `function` under an explicit `symbol` with no public selector.
+    ///
+    /// Used for free and library functions emitted into a contract's module:
+    /// they are never dispatched by selector, only resolved by node id, so each
+    /// is given a node-id-qualified symbol that cannot collide with a same-named
+    /// function reached together.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function body contains unsupported statements.
+    pub fn emit_sol_with_symbol(
+        &self,
+        function: &FunctionDefinition,
+        symbol: &str,
+        contract_body: &BlockRef<'context, '_>,
+    ) -> anyhow::Result<String> {
+        self.emit_sol_inner(function, Some(symbol), contract_body, BodyKind::Function)
+    }
+
+    /// The central function-emission driver: opens the `sol.func`, binds
+    /// parameters and return slots, threads the body statements, and closes with
+    /// the default return. `symbol_override` names the `sol.func` explicitly (a
+    /// free/library function) and suppresses the public selector and special
+    /// kind; otherwise the canonical [`Self::mlir_function_name`] and computed
+    /// selector are used.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function body contains unsupported statements.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an entry block is not attached to a region, which is
+    /// unreachable because `emit_sol_func` always creates a region.
+    fn emit_sol_inner(
+        &self,
+        function: &FunctionDefinition,
+        symbol_override: Option<&str>,
+        contract_body: &BlockRef<'context, '_>,
+        body_kind: BodyKind,
+    ) -> anyhow::Result<String> {
         let Some(ref body) = function.body() else {
             // Abstract or interface function — no codegen needed.
-            return Ok(Self::mlir_function_name(function));
+            return Ok(symbol_override
+                .map(str::to_owned)
+                .unwrap_or_else(|| Self::mlir_function_name(function)));
         };
 
-        let parameters = function.parameters();
-        let mlir_name = Self::mlir_function_name(function);
-
-        let (mlir_parameter_types, result_types) =
-            TypeConversion::resolve_function_types(function, &self.state.builder);
-
-        let selector = function.compute_selector();
-
-        let state_mutability = Self::map_state_mutability(function);
-
-        let mlir_kind = match function.kind() {
-            FunctionKind::Constructor => Some(solx_mlir::FunctionKind::Constructor),
-            FunctionKind::Fallback => Some(solx_mlir::FunctionKind::Fallback),
-            FunctionKind::Receive => Some(solx_mlir::FunctionKind::Receive),
-            FunctionKind::Regular => None,
-            FunctionKind::Modifier => unreachable!("modifiers are filtered before emission"),
-        };
+        let InnerSignature {
+            mlir_name,
+            mlir_parameter_types,
+            parameter_count,
+            result_types,
+            selector,
+            state_mutability,
+            mlir_kind,
+        } = self.resolve_inner_signature(function, symbol_override, body_kind);
 
         let function_entry_block = self.state.builder.emit_sol_func(
             &mlir_name,
@@ -104,53 +147,21 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         );
 
         let mut environment = Environment::new();
+        self.bind_parameters(
+            function,
+            &mlir_parameter_types,
+            &function_entry_block,
+            &mut environment,
+        )?;
 
-        // Create allocas for parameters and bind to environment.
-        for (index, parameter) in parameters.iter().enumerate() {
-            let parameter_type = mlir_parameter_types[index];
-            let parameter_value: Value<'context, '_> = function_entry_block.argument(index)?.into();
-            let pointer = self
-                .state
-                .builder
-                .emit_sol_alloca(parameter_type, &function_entry_block);
-            self.state
-                .builder
-                .emit_sol_store(parameter_value, pointer, &function_entry_block);
-
-            environment.define_variable(parameter.node_id(), pointer, parameter_type);
-        }
-
-        let mut return_slots: Vec<Option<Value<'context, '_>>> = Vec::new();
-        if let Some(returns) = function.returns() {
-            for (index, parameter) in returns.iter().enumerate() {
-                if parameter.name().is_none() {
-                    return_slots.push(None);
-                    continue;
-                }
-                let return_type = result_types[index];
-                let pointer = self
-                    .state
-                    .builder
-                    .emit_sol_alloca(return_type, &function_entry_block);
-                // TODO: replace with a typed-zero helper covering address, fixed-bytes, and
-                // memory-resident types (e.g. `0x60` for empty `string`/`bytes` memory).
-                if IntegerType::try_from(return_type).is_ok() {
-                    let zero =
-                        self.state
-                            .builder
-                            .emit_sol_constant(0, return_type, &function_entry_block);
-                    self.state
-                        .builder
-                        .emit_sol_store(zero, pointer, &function_entry_block);
-                } else {
-                    unimplemented!(
-                        "zero-initialization for non-integer named return: {return_type}"
-                    );
-                }
-                environment.define_variable(parameter.node_id(), pointer, return_type);
-                return_slots.push(Some(pointer));
-            }
-        }
+        let return_slots = self.init_return_slots(
+            function,
+            &result_types,
+            parameter_count,
+            body_kind,
+            &function_entry_block,
+            &mut environment,
+        )?;
 
         let region = function_entry_block
             .parent_region()
@@ -192,6 +203,126 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         Ok(mlir_name)
+    }
+
+    /// Resolves the MLIR signature for `function` — symbol, parameter and result
+    /// types, selector, mutability, and kind (see [`InnerSignature`]). A
+    /// symbol-override emission (a free/library function) or a modifier body
+    /// carries no public selector or special function kind.
+    fn resolve_inner_signature(
+        &self,
+        function: &FunctionDefinition,
+        symbol_override: Option<&str>,
+        body_kind: BodyKind,
+    ) -> InnerSignature<'context> {
+        let mlir_name = symbol_override
+            .map(str::to_owned)
+            .unwrap_or_else(|| Self::mlir_function_name(function));
+
+        let (mut mlir_parameter_types, result_types) =
+            TypeConversion::resolve_function_types(function, &self.state.builder);
+
+        // The function's own parameters, recorded before the modifier-body
+        // extension below.
+        let parameter_count = mlir_parameter_types.len();
+
+        // A modifier body (`$body`) receives the wrapping function's return
+        // values as trailing parameters, so its return slots can be seeded from
+        // the body call and observed by the modifier tail and epilogue.
+        if body_kind == BodyKind::ModifierBody {
+            mlir_parameter_types.extend(result_types.iter().copied());
+        }
+
+        let state_mutability = Self::map_state_mutability(function);
+
+        let (selector, mlir_kind) = match (symbol_override, body_kind) {
+            (None, BodyKind::Function) => {
+                let mlir_kind = match function.kind() {
+                    FunctionKind::Constructor => Some(solx_mlir::FunctionKind::Constructor),
+                    FunctionKind::Fallback => Some(solx_mlir::FunctionKind::Fallback),
+                    FunctionKind::Receive => Some(solx_mlir::FunctionKind::Receive),
+                    FunctionKind::Regular => None,
+                    FunctionKind::Modifier => {
+                        unreachable!("modifiers are filtered before emission")
+                    }
+                };
+                (function.compute_selector(), mlir_kind)
+            }
+            _ => (None, None),
+        };
+
+        InnerSignature {
+            mlir_name,
+            mlir_parameter_types,
+            parameter_count,
+            result_types,
+            selector,
+            state_mutability,
+            mlir_kind,
+        }
+    }
+
+    /// Allocates a stack slot for each parameter, stores the incoming argument
+    /// value into it, and binds the slot to the parameter name in `environment`.
+    fn bind_parameters<'block>(
+        &self,
+        function: &FunctionDefinition,
+        parameter_types: &[Type<'context>],
+        entry_block: &BlockRef<'context, 'block>,
+        environment: &mut Environment<'context, 'block>,
+    ) -> anyhow::Result<()> {
+        for (index, parameter) in function.parameters().iter().enumerate() {
+            let parameter_type = parameter_types[index];
+            let parameter_value: Value<'context, 'block> = entry_block.argument(index)?.into();
+            let pointer = self
+                .state
+                .builder
+                .emit_sol_alloca(parameter_type, entry_block);
+            self.state
+                .builder
+                .emit_sol_store(parameter_value, pointer, entry_block);
+            environment.define_variable(parameter.node_id(), pointer, parameter_type);
+        }
+        Ok(())
+    }
+
+    /// Allocates and binds a stack slot for each named return value (integers
+    /// zero-initialised), and pushes `None` for an unnamed return. Returns the
+    /// per-return slots, parallel to the declared returns.
+    fn init_return_slots<'block>(
+        &self,
+        function: &FunctionDefinition,
+        result_types: &[Type<'context>],
+        parameter_count: usize,
+        body_kind: BodyKind,
+        entry_block: &BlockRef<'context, 'block>,
+        environment: &mut Environment<'context, 'block>,
+    ) -> anyhow::Result<Vec<Option<Value<'context, 'block>>>> {
+        // A modifier body seeds every return slot (named or not) from the values
+        // threaded in as trailing block arguments at the `parameter_count`
+        // offset, rather than zero-initialising only the named ones. Filled with
+        // the function-modifier cluster.
+        if body_kind == BodyKind::ModifierBody {
+            let _ = parameter_count;
+            unimplemented!("return slots for a modifier body");
+        }
+        let mut return_slots: Vec<Option<Value<'context, 'block>>> = Vec::new();
+        if let Some(returns) = function.returns() {
+            for (index, parameter) in returns.iter().enumerate() {
+                if parameter.name().is_none() {
+                    return_slots.push(None);
+                    continue;
+                }
+                let return_type = result_types[index];
+                let pointer = self
+                    .state
+                    .builder
+                    .emit_zero_initialized_alloca(return_type, entry_block);
+                environment.define_variable(parameter.node_id(), pointer, return_type);
+                return_slots.push(Some(pointer));
+            }
+        }
+        Ok(return_slots)
     }
 
     /// Emits the contract's constructor as a `sol.func`.

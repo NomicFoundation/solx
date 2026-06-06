@@ -4,8 +4,12 @@
 
 /// Contract definition lowering to Sol dialect MLIR.
 pub mod contract;
+pub mod expression_ext;
+pub mod operator_binding;
 /// Solidity type conversion classification and dispatch.
 pub mod type_conversion;
+
+pub use self::expression_ext::ExpressionExt;
 
 use std::collections::BTreeMap;
 

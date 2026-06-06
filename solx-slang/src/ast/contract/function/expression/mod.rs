@@ -10,6 +10,7 @@ pub mod comparison;
 pub mod conditional;
 pub mod index_access;
 pub mod member;
+pub mod new;
 pub mod operator;
 pub mod short_circuit;
 pub mod storage;
@@ -376,10 +377,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::IndexAccessExpression(index_access) => {
                 self.emit_index_access(index_access, block)
             }
-            _ => unimplemented!(
-                "unsupported expression: {:?}",
-                std::mem::discriminant(expression)
-            ),
+            Expression::CallOptionsExpression(_) => {
+                unimplemented!("expression lowering: call options")
+            }
+            Expression::NewExpression(_)
+            | Expression::TypeExpression(_)
+            | Expression::ElementaryType(_)
+            | Expression::PayableKeyword(_)
+            | Expression::SuperKeyword(_) => {
+                unimplemented!("expression lowering: bare type/keyword")
+            }
         }
     }
 
