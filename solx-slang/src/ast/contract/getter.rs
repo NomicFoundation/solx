@@ -8,26 +8,39 @@
 //! is `GetterAbi`).
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::r#type::TypeLike;
 use num_bigint::BigInt;
-use ruint::aliases::U256;
+use slang_solidity_v2::abi::AbiEntry;
+use slang_solidity_v2::abi::AbiFunction;
+use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::CmpPredicate;
+use solx_mlir::StateMutability;
+use solx_mlir::ods::sol::LengthOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::getter_level::GetterLevel;
+use crate::ast::contract::storage_layout::StorageSlot;
+use crate::ast::type_conversion::TypeConversion;
 
 /// The per-getter emission frame: the state variable, its canonical ABI
-/// signature and selector, declared type, storage coordinate, and the
-/// `sol.contract` body the getter `sol.func` is appended to.
+/// signature and selector, declared type, storage slot, and the `sol.contract`
+/// body the getter `sol.func` is appended to.
 ///
-/// The SOLE top-level type of this module (§2a).
+/// The SOLE top-level type of this module (§2a); a pure `Copy` data carrier
+/// destructured by the `ContractEmitter` emission methods.
+#[derive(Clone, Copy)]
 pub struct GetterAbi<'a, 'context, 'block> {
     /// The state variable whose accessor is being generated.
     state_variable: &'a StateVariableDefinition,
@@ -37,110 +50,317 @@ pub struct GetterAbi<'a, 'context, 'block> {
     selector: u32,
     /// The variable's declared Solidity type (mapping/array/struct/scalar).
     declared_type: &'a SlangType,
-    /// The storage slot holding the variable.
-    slot: U256,
-    /// The byte offset within the slot (for packed value types).
-    byte_offset: u32,
-    /// `Storage` vs `Transient` — selects SLOAD/SSTORE vs TLOAD/TSTORE.
+    /// The storage slot holding the variable (carries the `{label}_{node_id}`
+    /// symbol name addressed by `sol.addr_of`).
+    slot: &'a StorageSlot,
+    /// The storage data location (`Storage` for persistent state).
     location: DataLocation,
     /// The `sol.contract` body the getter `sol.func` is appended to.
     contract_body: &'a BlockRef<'context, 'block>,
 }
 
-impl<'a, 'context, 'block> GetterAbi<'a, 'context, 'block> {
-    /// Derives the indexed (mapping/array) getter signature: the MLIR parameter
-    /// types, the per-level access plan, and the final result Solidity type.
-    ///
-    /// OPEN-A (R8-6): this name clashes with the kept `CallEmitter::getter_signature`
-    /// built-in classifier; the two must be de-clashed at the getter fill. It is
-    /// really a classifier over `indexed_getter_levels`.
-    pub fn getter_signature(
+impl<'state, 'context> ContractEmitter<'state, 'context> {
+    /// Computes the shared ABI prologue of a `public` state variable's getter —
+    /// its function ABI entry (carrying the input parameters), canonical
+    /// signature, and selector — or `None` when the variable has no synthesised
+    /// accessor. The single source the constant and storage getter entry points
+    /// both read.
+    fn getter_abi_prologue(
+        state_variable: &StateVariableDefinition,
+    ) -> Option<(AbiFunction, String, u32)> {
+        let Some(AbiEntry::Function(abi)) = state_variable.compute_abi_entry() else {
+            return None;
+        };
+        let signature = state_variable.compute_canonical_signature()?;
+        let selector = state_variable.compute_selector()?;
+        Some((abi, signature, selector))
+    }
+
+    /// Dispatches getter synthesis for one non-constant state variable to the
+    /// scalar or indexed (mapping/array) path. Struct getters are emitted by a
+    /// later fill; a variable left without an accessor is harmless (the rest of
+    /// the contract still compiles).
+    pub fn emit_state_variable_getter(
         &self,
-        declared_type: &SlangType,
+        state_variable: &StateVariableDefinition,
+        slot: &StorageSlot,
         location: DataLocation,
-    ) -> Option<(Vec<Type<'context>>, Vec<GetterLevel<'context>>, SlangType)> {
-        let _ = (
-            self.state_variable,
-            self.signature,
-            self.selector,
-            self.declared_type,
-            self.slot,
-            self.byte_offset,
-            self.location,
-            self.contract_body,
-            declared_type,
+        contract_body: &BlockRef<'context, '_>,
+    ) -> anyhow::Result<()> {
+        let Some((abi, signature, selector)) = Self::getter_abi_prologue(state_variable) else {
+            return Ok(());
+        };
+        let declared_type = state_variable
+            .get_type()
+            .expect("slang types every state variable");
+        let frame = GetterAbi {
+            state_variable,
+            signature: &signature,
+            selector,
+            declared_type: &declared_type,
+            slot,
             location,
+            contract_body,
+        };
+        if !abi.inputs().is_empty() {
+            return self.emit_indexed_getter(&frame, abi.inputs().len());
+        }
+        if self.emit_struct_getter(&frame)? {
+            return Ok(());
+        }
+        self.emit_scalar_getter(&frame)
+    }
+
+    /// Emits a scalar / reference getter: `T public name` becomes `function
+    /// name() view returns (T)` reading the variable's slot.
+    fn emit_scalar_getter(&self, abi: &GetterAbi<'_, 'context, '_>) -> anyhow::Result<()> {
+        let GetterAbi {
+            state_variable,
+            signature,
+            selector,
+            declared_type,
+            slot,
+            location,
+            contract_body,
+        } = *abi;
+        let builder = &self.state.builder;
+        let element_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
+        // A reference-typed variable (`string`/`bytes`/array) is addressed by the
+        // reference type itself in storage; value types by a `!sol.ptr<T, _>`.
+        let address_type = if declared_type.is_reference_type() {
+            element_type
+        } else {
+            builder.types.pointer(element_type, location)
+        };
+        let entry = builder.emit_sol_func(
+            signature,
+            &[],
+            std::slice::from_ref(&element_type),
+            Some(selector),
+            StateMutability::View,
+            None,
+            contract_body,
         );
-        unimplemented!("getter signature derivation")
+        let storage_ref = builder.emit_sol_addr_of(&slot.name, address_type, &entry);
+        let value = if declared_type.is_reference_type() {
+            storage_ref
+        } else {
+            builder.emit_sol_load(storage_ref, element_type, &entry)?
+        };
+        builder.emit_sol_return(&[value], &entry);
+        Ok(())
     }
 
-    /// Plans the per-level access chain for an indexed getter, owning the
-    /// [`GetterLevel`] construction.
-    pub fn indexed_getter_levels(
-        &self,
-        declared_type: &SlangType,
-        location: DataLocation,
-    ) -> (Vec<Type<'context>>, Vec<GetterLevel<'context>>, SlangType) {
-        let _ = (declared_type, location);
-        unimplemented!("indexed getter level planning")
-    }
-
-    /// Emits an indexed (mapping/array) getter `sol.func`.
+    /// Emits an indexed getter for a mapping / array state variable: `m(k)`,
+    /// `a(uint256)`, `a(i, j)`, `m(k1, k2)`, ... Each nesting level chains a
+    /// `sol.map` (mappings) or a bounds-checked `sol.gep` (arrays) over its
+    /// key/index argument; the final value is loaded.
     ///
-    /// A4 (#H-M7/#H-M10/M11): arg-bearing nested / reference getters stay a LOUD
-    /// `unimplemented!` at the tip.
-    pub fn emit_indexed_getter(&self, abi_input_count: usize) -> anyhow::Result<()> {
-        let _ = abi_input_count;
-        unimplemented!("indexed (mapping/array) getter emission")
-    }
-
-    /// Threads the storage access chain for an indexed getter, level by level.
-    pub fn emit_getter_access_chain(
+    /// Struct and other reference results are emitted by a later fill (the
+    /// getter is left ungenerated meanwhile rather than emitted incorrectly).
+    fn emit_indexed_getter(
         &self,
-        base: Value<'context, 'block>,
-        levels: &[GetterLevel<'context>],
-        entry: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Value<'context, 'block>> {
-        let _ = (base, levels, entry);
-        unimplemented!("getter storage access chain")
+        abi: &GetterAbi<'_, 'context, '_>,
+        abi_input_count: usize,
+    ) -> anyhow::Result<()> {
+        let GetterAbi {
+            state_variable,
+            signature,
+            selector,
+            declared_type,
+            slot,
+            location,
+            contract_body,
+        } = *abi;
+        let builder = &self.state.builder;
+        let (input_types, levels, result_slang) =
+            self.plan_indexed_getter_levels(declared_type, location);
+        if input_types.is_empty() || input_types.len() != abi_input_count {
+            return Ok(());
+        }
+        let container_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
+        let result_type =
+            TypeConversion::resolve_slang_type(&result_slang, Some(location), builder);
+        // A struct result expands into its flattened returnable-member tuple;
+        // other reference results aren't handled yet (left ungenerated).
+        let struct_plan = match &result_slang {
+            SlangType::Struct(struct_type) => {
+                let Definition::Struct(struct_definition) = struct_type.definition() else {
+                    return Ok(());
+                };
+                match Self::struct_getter_layout(&struct_definition, result_type, builder) {
+                    Some(plan) => Some(plan),
+                    None => return Ok(()),
+                }
+            }
+            _ if result_slang.is_reference_type() => return Ok(()),
+            _ => None,
+        };
+        let result_types: Vec<Type<'context>> = match &struct_plan {
+            Some(plan) => plan
+                .iter()
+                .map(|(_, _, member_result)| *member_result)
+                .collect(),
+            None => vec![result_type],
+        };
+        let entry = builder.emit_sol_func(
+            signature,
+            &input_types,
+            &result_types,
+            Some(selector),
+            StateMutability::View,
+            None,
+            contract_body,
+        );
+        let base = builder.emit_sol_addr_of(&slot.name, container_type, &entry);
+        let base = self.emit_getter_access_chain(base, &levels, &entry)?;
+        self.emit_indexed_getter_result(base, &struct_plan, result_type, &entry)
     }
 
-    /// Emits the return of an indexed getter (scalar or destructured struct).
-    pub fn emit_indexed_getter_result(
+    /// Emits the indexed getter's return: a struct result expands into its
+    /// flattened returnable-member tuple (each member loaded from `base`); a
+    /// scalar result loads the single value.
+    fn emit_indexed_getter_result<'block>(
         &self,
         base: Value<'context, 'block>,
         struct_plan: &Option<Vec<(u64, Type<'context>, Type<'context>)>>,
         result_type: Type<'context>,
         entry: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<()> {
-        let _ = (base, struct_plan, result_type, entry);
-        unimplemented!("indexed getter return emission")
+        let builder = &self.state.builder;
+        match struct_plan {
+            Some(plan) => {
+                let mut values = Vec::new();
+                for (member_index, member_type, result_member_type) in plan {
+                    let index_value =
+                        builder.emit_sol_constant(*member_index as i64, builder.types.ui64, entry);
+                    let address = builder.emit_sol_gep(base, index_value, *member_type, entry);
+                    values.push(Self::load_getter_member(
+                        builder,
+                        address,
+                        *member_type,
+                        *result_member_type,
+                        entry,
+                    )?);
+                }
+                builder.emit_sol_return(&values, entry);
+            }
+            None => {
+                let value = builder.emit_sol_load(base, result_type, entry)?;
+                builder.emit_sol_return(&[value], entry);
+            }
+        }
+        Ok(())
     }
 
-    /// Emits a struct getter; returns whether the variable was a struct getter.
-    pub fn emit_struct_getter(&self) -> anyhow::Result<bool> {
-        unimplemented!("struct getter emission")
-    }
-
-    /// Emits a scalar / reference getter.
-    pub fn emit_scalar_getter(&self) -> anyhow::Result<()> {
-        unimplemented!("scalar/reference getter emission")
-    }
-}
-
-impl<'state, 'context> ContractEmitter<'state, 'context> {
-    /// Dispatches getter synthesis for one state variable to the scalar /
-    /// struct / indexed path.
-    pub fn emit_state_variable_getter(
+    /// Walks the mapping/array nesting of an indexed getter's declared type,
+    /// producing the per-key/index ABI input types, the ordered access-`level`
+    /// plan, and the terminal Solidity type reached after all levels.
+    fn plan_indexed_getter_levels(
         &self,
-        state_variable: &StateVariableDefinition,
-        slot: U256,
-        byte_offset: u32,
+        declared_type: &SlangType,
         location: DataLocation,
-        contract_body: &BlockRef<'context, '_>,
-    ) -> anyhow::Result<()> {
-        let _ = (state_variable, slot, byte_offset, location, contract_body);
-        unimplemented!("state-variable getter dispatcher")
+    ) -> (Vec<Type<'context>>, Vec<GetterLevel<'context>>, SlangType) {
+        let builder = &self.state.builder;
+        let mut input_types: Vec<Type<'context>> = Vec::new();
+        let mut levels: Vec<GetterLevel<'context>> = Vec::new();
+        let mut current = declared_type.clone();
+        loop {
+            match &current {
+                SlangType::Mapping(mapping_type) => {
+                    let key_slang = mapping_type.key_type();
+                    let value_slang = mapping_type.value_type();
+                    let resolved_value =
+                        TypeConversion::resolve_slang_type(&value_slang, Some(location), builder);
+                    // Intermediate containers are addressed by their reference; a
+                    // value terminal by a `!sol.ptr<V>`.
+                    let level_type = if value_slang.is_reference_type() {
+                        resolved_value
+                    } else {
+                        builder.types.pointer(resolved_value, location)
+                    };
+                    // A reference-typed key (`string`/`bytes`) is an ABI input
+                    // decoded into memory; `sol.map` hashes the key bytes for the
+                    // slot. slang reports the key with the mapping's storage
+                    // location, so build the memory type directly rather than
+                    // resolving it (which would yield a storage string).
+                    let key_type = if key_slang.is_reference_type() {
+                        builder.types.string(DataLocation::Memory)
+                    } else {
+                        TypeConversion::resolve_slang_type(&key_slang, Some(location), builder)
+                    };
+                    input_types.push(key_type);
+                    levels.push(GetterLevel::Mapping(level_type));
+                    current = value_slang;
+                }
+                SlangType::Array(array_type) => {
+                    let element_slang = array_type.element_type();
+                    let element_type =
+                        TypeConversion::resolve_slang_type(&element_slang, Some(location), builder);
+                    input_types.push(builder.types.ui256);
+                    levels.push(GetterLevel::Array(element_type, None));
+                    current = element_slang;
+                }
+                SlangType::FixedSizeArray(array_type) => {
+                    let element_slang = array_type.element_type();
+                    let element_type =
+                        TypeConversion::resolve_slang_type(&element_slang, Some(location), builder);
+                    input_types.push(builder.types.ui256);
+                    levels.push(GetterLevel::Array(
+                        element_type,
+                        Some(array_type.size() as u64),
+                    ));
+                    current = element_slang;
+                }
+                _ => break,
+            }
+        }
+        (input_types, levels, current)
+    }
+
+    /// Chains the per-level storage access for an indexed getter, starting from
+    /// the base slot reference: a `sol.map` for each mapping key and a
+    /// bounds-checked `sol.gep` for each array index (out-of-bounds bare-revert
+    /// via a no-message `sol.require`, matching solc's accessor — NOT `sol.gep`'s
+    /// `Panic(0x32)`, which the semantic tests reject). Returns the reference to
+    /// the addressed element.
+    fn emit_getter_access_chain<'block>(
+        &self,
+        mut base: Value<'context, 'block>,
+        levels: &[GetterLevel<'context>],
+        entry: &BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Value<'context, 'block>> {
+        let builder = &self.state.builder;
+        for (index, level) in levels.iter().enumerate() {
+            let arg: Value<'context, 'block> = entry.argument(index)?.into();
+            base = match level {
+                GetterLevel::Mapping(level_type) => {
+                    builder.emit_sol_map(base, arg, *level_type, entry)
+                }
+                GetterLevel::Array(element_type, fixed_size) => {
+                    let length = match fixed_size {
+                        Some(size) => {
+                            builder.emit_sol_constant(*size as i64, builder.types.ui256, entry)
+                        }
+                        None => entry
+                            .append_operation(
+                                LengthOperation::builder(builder.context, builder.unknown_location)
+                                    .inp(base)
+                                    .len(builder.types.ui256)
+                                    .build()
+                                    .into(),
+                            )
+                            .result(0)
+                            .expect("sol.length produces one result")
+                            .into(),
+                    };
+                    let in_bounds = builder.emit_sol_cmp(arg, length, CmpPredicate::Lt, entry);
+                    builder.emit_sol_require(in_bounds, None, &[], false, entry);
+                    builder.emit_sol_gep(base, arg, *element_type, entry)
+                }
+            };
+        }
+        Ok(base)
     }
 
     /// Emits a `constant` state variable's getter (a folded compile-time value).
@@ -149,15 +369,139 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         state_variable: &StateVariableDefinition,
         contract_body: &BlockRef<'context, '_>,
     ) -> anyhow::Result<()> {
-        let _ = (state_variable, contract_body);
-        unimplemented!("constant getter emission")
+        let Some((abi, signature, selector)) = Self::getter_abi_prologue(state_variable) else {
+            return Ok(());
+        };
+        if !abi.inputs().is_empty() {
+            return Ok(());
+        }
+        let Some(initializer) = state_variable.value() else {
+            return Ok(());
+        };
+        let Some(value) = Self::fold_constant_int(&initializer) else {
+            return Ok(());
+        };
+
+        let builder = &self.state.builder;
+        let element_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
+        let entry = builder.emit_sol_func(
+            &signature,
+            &[],
+            std::slice::from_ref(&element_type),
+            Some(selector),
+            StateMutability::Pure,
+            None,
+            contract_body,
+        );
+        let constant = builder.emit_constant(&value, element_type, &entry);
+        builder.emit_sol_return(&[constant], &entry);
+        Ok(())
     }
 
     /// Folds a constant integer expression to a [`BigInt`], when it is one of the
     /// closed set of integer-foldable forms.
     pub fn fold_constant_int(expression: &Expression) -> Option<BigInt> {
-        let _ = expression;
-        unimplemented!("constant integer folding")
+        match expression {
+            Expression::DecimalNumberExpression(decimal) => decimal.integer_value(),
+            Expression::HexNumberExpression(hex) => hex.integer_value(),
+            Expression::Identifier(identifier) => match identifier.resolve_to_definition() {
+                Some(Definition::StateVariable(state_variable)) => {
+                    Self::fold_constant_int(&state_variable.value()?)
+                }
+                Some(Definition::Constant(constant)) => Self::fold_constant_int(&constant.value()?),
+                _ => None,
+            },
+            Expression::MemberAccessExpression(access) => {
+                match access.member().resolve_to_definition() {
+                    Some(Definition::StateVariable(state_variable)) => {
+                        Self::fold_constant_int(&state_variable.value()?)
+                    }
+                    Some(Definition::Constant(constant)) => {
+                        Self::fold_constant_int(&constant.value()?)
+                    }
+                    _ => None,
+                }
+            }
+            Expression::FunctionCallExpression(call) => {
+                let slang_solidity_v2::ast::ArgumentsDeclaration::PositionalArguments(positional) =
+                    call.arguments()
+                else {
+                    return None;
+                };
+                let mut arguments = positional.iter();
+                let argument = arguments.next()?;
+                if arguments.next().is_some() {
+                    return None;
+                }
+                let is_wrap_unwrap = matches!(
+                    &call.operand(),
+                    Expression::MemberAccessExpression(member)
+                        if matches!(
+                            member.member().resolve_to_built_in(),
+                            Some(BuiltIn::Wrap | BuiltIn::Unwrap)
+                        )
+                );
+                if is_wrap_unwrap || call.is_type_conversion() {
+                    Self::fold_constant_int(&argument)
+                } else {
+                    None
+                }
+            }
+            _ => expression
+                .get_type()
+                .and_then(|slang_type| match slang_type {
+                    SlangType::Literal(literal) => match literal.kind() {
+                        LiteralKind::Integer { value } => Some(value),
+                        LiteralKind::HexInteger { value, .. } => Some(value),
+                        _ => None,
+                    },
+                    _ => None,
+                }),
+        }
+    }
+
+    /// Emits a no-argument getter for a `public` struct state variable (its
+    /// returnable members as a flattened tuple). Emitted by a later fill.
+    pub fn emit_struct_getter(&self, abi: &GetterAbi<'_, 'context, '_>) -> anyhow::Result<bool> {
+        let GetterAbi {
+            state_variable,
+            signature,
+            selector,
+            declared_type,
+            slot,
+            location,
+            contract_body,
+        } = *abi;
+        let builder = &self.state.builder;
+        if let SlangType::Struct(struct_type) = declared_type
+            && let Definition::Struct(struct_definition) = struct_type.definition()
+        {
+            let struct_mlir_type =
+                TypeConversion::resolve_slang_type(declared_type, Some(location), builder);
+            if let Some(plan) =
+                Self::struct_getter_layout(&struct_definition, struct_mlir_type, builder)
+            {
+                let result_types: Vec<Type<'context>> = plan
+                    .iter()
+                    .map(|(_, _, result_type)| *result_type)
+                    .collect();
+                let container_type =
+                    TypeConversion::resolve_state_variable_type(state_variable, builder)?;
+                let entry = builder.emit_sol_func(
+                    signature,
+                    &[],
+                    &result_types,
+                    Some(selector),
+                    StateMutability::View,
+                    None,
+                    contract_body,
+                );
+                let base = builder.emit_sol_addr_of(&slot.name, container_type, &entry);
+                self.emit_indexed_getter_result(base, &Some(plan), struct_mlir_type, &entry)?;
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Plans a struct getter's destructured member layout (offset, member type,
@@ -167,8 +511,45 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         struct_mlir_type: Type<'context>,
         builder: &solx_mlir::Builder<'context>,
     ) -> Option<Vec<(u64, Type<'context>, Type<'context>)>> {
-        let _ = (struct_definition, struct_mlir_type, builder);
-        unimplemented!("struct getter member layout")
+        let mut plan = Vec::new();
+        for (member_index, member) in struct_definition.members().iter().enumerate() {
+            let is_string_or_bytes = match member.get_type() {
+                Some(
+                    SlangType::Mapping(_)
+                    | SlangType::Array(_)
+                    | SlangType::FixedSizeArray(_)
+                    | SlangType::Struct(_),
+                ) => continue,
+                Some(SlangType::String(_) | SlangType::Bytes(_)) => true,
+                Some(_) => false,
+                None => return None,
+            };
+            // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
+            // `sol::getEltType` for the struct field at `member_index` (mirroring
+            // the AST member index, including skipped members).
+            let member_type = unsafe {
+                Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
+                    struct_mlir_type.to_raw(),
+                    member_index as u64,
+                ))
+            };
+            // A `string`/`bytes` member returns a memory copy; every other member
+            // reaching here is a value type (mapping/array/struct/string/bytes are
+            // skipped above). A function-pointer member would need a func-ref
+            // guard (oracle `is_sol_function_ref`), which the recut's solx-mlir
+            // does not yet expose; such a struct is vanishingly rare and absent
+            // from the test corpus — left to the solx-mlir Sol-type-predicate fill.
+            let result_member_type = if is_string_or_bytes {
+                builder.types.string(DataLocation::Memory)
+            } else {
+                member_type
+            };
+            plan.push((member_index as u64, member_type, result_member_type));
+        }
+        if plan.is_empty() {
+            return None;
+        }
+        Some(plan)
     }
 
     /// Loads one struct getter member, casting it to its ABI result type through
@@ -181,7 +562,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         result_member_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
-        let _ = (builder, address, member_type, result_member_type, block);
-        unimplemented!("struct getter member load")
+        if member_type == result_member_type {
+            builder.emit_sol_load(address, result_member_type, block)
+        } else {
+            Ok(
+                TypeConversion::from_target_type(result_member_type, builder)
+                    .emit(address, builder, block),
+            )
+        }
     }
 }
