@@ -4,20 +4,18 @@
 
 /// Function definition lowering to Sol dialect MLIR.
 pub mod function;
-
-use std::collections::HashMap;
+/// Contract storage layout: the slot assignment of state variables.
+pub mod storage_layout;
 
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
-use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Context;
 
 use self::function::FunctionEmitter;
-use self::function::expression::call::type_conversion::TypeConversion;
-use self::function::storage_slot::StorageSlot;
+use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers a Solidity contract to Sol dialect MLIR.
 ///
@@ -131,30 +129,5 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 return_types,
             );
         }
-    }
-
-    /// Computes the storage layout using slang-solidity's ABI computation.
-    ///
-    /// Returns a mapping from state variable node ID to its storage slot
-    /// (slot index and byte offset within the slot). Returns an empty map
-    /// if the ABI is unavailable.
-    fn compute_storage_layout(contract: &ContractDefinition) -> HashMap<NodeId, StorageSlot> {
-        let Some(abi) = contract.compute_abi() else {
-            return HashMap::new();
-        };
-        abi.storage_layout()
-            .iter()
-            .map(|item| {
-                (
-                    item.node_id(),
-                    StorageSlot::new(
-                        item.slot(),
-                        item.offset() as u32,
-                        item.label(),
-                        item.node_id(),
-                    ),
-                )
-            })
-            .collect()
     }
 }

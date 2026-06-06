@@ -12,8 +12,8 @@ use slang_solidity_v2::ast::Expression;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::contract::function::storage_slot::StorageSlot;
+use crate::ast::contract::storage_layout::StorageSlot;
+use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Emits a storage load via `sol.addr_of` + `sol.load`.
@@ -70,12 +70,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             if matches!(initializer, Expression::ArrayExpression(_)) {
                 unimplemented!("array-literal state variable initializers are not yet supported");
             }
-            let declared_type = state_variable.get_type().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "unresolved type for state variable: {}",
-                    state_variable.name().name()
-                )
-            })?;
+            let declared_type = state_variable
+                .get_type()
+                .expect("slang types every state variable");
             let builder = &self.state.builder;
             let element_type = TypeConversion::resolve_slang_type(&declared_type, None, builder);
             let address_type =

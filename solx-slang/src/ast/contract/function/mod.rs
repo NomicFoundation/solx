@@ -4,7 +4,6 @@
 
 pub mod expression;
 pub mod statement;
-pub mod storage_slot;
 
 use std::collections::HashMap;
 
@@ -15,21 +14,19 @@ use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::ElementaryType;
-use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::NodeId;
-use slang_solidity_v2::ast::TypeName;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::StateMutability;
 
 use self::expression::ExpressionEmitter;
-use self::expression::call::type_conversion::TypeConversion;
+use self::expression::arithmetic_mode::ArithmeticMode;
 use self::statement::StatementEmitter;
-use self::storage_slot::StorageSlot;
+use crate::ast::contract::storage_layout::StorageSlot;
+use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub struct FunctionEmitter<'state, 'context> {
@@ -110,10 +107,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         // Create allocas for parameters and bind to environment.
         for (index, parameter) in parameters.iter().enumerate() {
-            let parameter_name = parameter
-                .name()
-                .map(|id| id.name())
-                .unwrap_or_else(|| "_".to_owned());
             let parameter_type = mlir_parameter_types[index];
             let parameter_value: Value<'context, '_> = function_entry_block.argument(index)?.into();
             let pointer = self
@@ -124,16 +117,16 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 .builder
                 .emit_sol_store(parameter_value, pointer, &function_entry_block);
 
-            environment.define_variable(parameter_name, pointer, parameter_type);
+            environment.define_variable(parameter.node_id(), pointer, parameter_type);
         }
 
         let mut return_slots: Vec<Option<Value<'context, '_>>> = Vec::new();
         if let Some(returns) = function.returns() {
             for (index, parameter) in returns.iter().enumerate() {
-                let Some(identifier) = parameter.name() else {
+                if parameter.name().is_none() {
                     return_slots.push(None);
                     continue;
-                };
+                }
                 let return_type = result_types[index];
                 let pointer = self
                     .state
@@ -154,7 +147,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         "zero-initialization for non-integer named return: {return_type}"
                     );
                 }
-                environment.define_variable(identifier.name(), pointer, return_type);
+                environment.define_variable(parameter.node_id(), pointer, return_type);
                 return_slots.push(Some(pointer));
             }
         }
@@ -167,8 +160,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // State variable initializers run at the top of the constructor body,
         // before any user-written statements.
         if matches!(function.kind(), FunctionKind::Constructor) {
-            let emitter =
-                ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
+            let emitter = ExpressionEmitter::new(
+                self.state,
+                &environment,
+                self.storage_layout,
+                ArithmeticMode::Checked,
+            );
             current_block = emitter.emit_state_var_initializers(self.contract, current_block)?;
         }
 
@@ -228,71 +225,42 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             contract_body,
         );
         let environment = Environment::new();
-        let emitter = ExpressionEmitter::new(self.state, &environment, self.storage_layout, true);
+        let emitter = ExpressionEmitter::new(
+            self.state,
+            &environment,
+            self.storage_layout,
+            ArithmeticMode::Checked,
+        );
         let block = emitter.emit_state_var_initializers(self.contract, entry)?;
         self.state.builder.emit_sol_return(&[], &block);
         Ok(())
     }
 
-    /// Builds the MLIR function name as `{name}({types})`.
+    /// Returns the unique MLIR symbol name for a function.
     ///
-    /// Uses slang's ABI canonical types when available (external functions),
-    /// falls back to AST-based type names for internal/private functions.
+    /// Externally-callable functions use slang's canonical ABI signature (a
+    /// struct parameter expands to its component tuple, so overloads taking
+    /// different structs do not collapse onto one symbol); internal/private
+    /// functions use slang's internal signature. Constructor / fallback /
+    /// receive have neither — they are not callable by name, so the base name
+    /// alone is unique. Every definition and call site routes through this, so
+    /// the symbol stays consistent.
     pub fn mlir_function_name(function: &FunctionDefinition) -> String {
-        let name = Self::mlir_base_name(function);
-
         if let Some(AbiEntry::Function(abi_function)) = function.compute_abi_entry() {
+            if let Some(signature) = function.compute_canonical_signature() {
+                return signature;
+            }
+            let name = Self::mlir_base_name(function);
             let inputs = abi_function.inputs();
             let types: Vec<&str> = inputs.iter().map(|input| input.type_name()).collect();
             return format!("{name}({})", types.join(","));
         }
 
-        let types: Vec<String> = function
-            .parameters()
-            .iter()
-            .map(|parameter| {
-                let type_name = parameter.type_name();
-                Self::type_name_text(&type_name)
-            })
-            .collect();
-        format!("{name}({})", types.join(","))
-    }
-
-    /// Returns a textual representation of a Solidity type name from the AST.
-    fn type_name_text(type_name: &TypeName) -> String {
-        match type_name {
-            TypeName::ElementaryType(elementary) => Self::elementary_type_text(elementary),
-            TypeName::IdentifierPath(path) => path.name(),
-            TypeName::ArrayTypeName(array) => {
-                let base = Self::type_name_text(&array.operand());
-                match array.index() {
-                    Some(Expression::DecimalNumberExpression(decimal)) => {
-                        format!("{base}[{}]", decimal.literal().unparse())
-                    }
-                    Some(Expression::HexNumberExpression(hex)) => {
-                        format!("{base}[{}]", hex.literal().unparse())
-                    }
-                    Some(_) => format!("{base}[]"),
-                    None => format!("{base}[]"),
-                }
-            }
-            TypeName::MappingType(_) => "mapping".to_owned(),
-            TypeName::FunctionType(_) => "function".to_owned(),
+        if let Some(signature) = function.compute_internal_signature() {
+            return signature;
         }
-    }
 
-    /// Returns the text for an elementary type from its AST node.
-    fn elementary_type_text(elementary: &ElementaryType) -> String {
-        match elementary {
-            ElementaryType::AddressType(_) => "address".to_owned(),
-            ElementaryType::BoolKeyword(_) => "bool".to_owned(),
-            ElementaryType::StringKeyword(_) => "string".to_owned(),
-            ElementaryType::UintKeyword(terminal) => terminal.unparse().to_string(),
-            ElementaryType::IntKeyword(terminal) => terminal.unparse().to_string(),
-            ElementaryType::BytesKeyword(terminal) => terminal.unparse().to_string(),
-            ElementaryType::FixedKeyword(terminal) => terminal.unparse().to_string(),
-            ElementaryType::UfixedKeyword(terminal) => terminal.unparse().to_string(),
-        }
+        format!("{}()", Self::mlir_base_name(function))
     }
 
     /// Returns the base name for a function's MLIR symbol, using its kind to
@@ -325,19 +293,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         if block.terminator().is_some() {
             return;
         }
-        let mut values: Vec<Value<'context, '_>> = Vec::with_capacity(result_types.len());
-        for (index, result_type) in result_types.iter().enumerate() {
-            let value = match return_slots.get(index).copied().flatten() {
-                Some(pointer) => self
-                    .state
-                    .builder
-                    .emit_sol_load(pointer, *result_type, block)
-                    .expect("named return slot loads with the declared type"),
-                None => self.state.builder.emit_sol_constant(0, *result_type, block),
-            };
-            values.push(value);
-        }
-        self.state.builder.emit_sol_return(&values, block);
+        self.state
+            .builder
+            .emit_return_from_slots(result_types, return_slots, block);
     }
 
     /// Maps Slang's `FunctionMutability` to the Sol dialect's `StateMutability`.

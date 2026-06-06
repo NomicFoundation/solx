@@ -9,6 +9,7 @@ use slang_solidity_v2::ast::ForStatementInitialization;
 use slang_solidity_v2::ast::Statement;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -23,12 +24,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let condition_expression = if_statement.condition();
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
-        );
+        let emitter = self.expression_emitter();
         let (condition_value, block) = emitter.emit_value(&condition_expression, block)?;
         let condition_boolean = emitter.emit_is_nonzero(condition_value, &block);
 
@@ -113,19 +109,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         // Condition region.
         match for_statement.condition() {
             ForStatementCondition::ExpressionStatement(expression_statement) => {
-                let expression = expression_statement.expression();
-                let emitter = ExpressionEmitter::new(
-                    self.state,
-                    self.environment,
-                    self.storage_layout,
-                    self.checked,
-                );
-                let (condition_value, condition_end) =
-                    emitter.emit_value(&expression, condition_block)?;
-                let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
-                self.state
-                    .builder
-                    .emit_sol_condition(condition_boolean, &condition_end);
+                self.emit_loop_condition(&expression_statement.expression(), condition_block)?;
             }
             ForStatementCondition::Semicolon(_) => {
                 let true_value = self.state.builder.emit_bool(true, &condition_block);
@@ -148,7 +132,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 self.state,
                 self.environment,
                 self.storage_layout,
-                false, // unchecked
+                // The loop step is always unchecked; solc emits `sol.add` for `i++`.
+                ArithmeticMode::Unchecked,
             );
             let (_, step_end) = emitter.emit(iterator_expression, step_block)?;
             self.state.builder.emit_sol_yield(&step_end);
@@ -176,19 +161,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let saved_region = self.region_pointer;
 
         // Condition region.
-        let condition_expression = while_statement.condition();
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
-        );
-        let (condition_value, condition_end) =
-            emitter.emit_value(&condition_expression, condition_block)?;
-        let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
-        self.state
-            .builder
-            .emit_sol_condition(condition_boolean, &condition_end);
+        self.emit_loop_condition(&while_statement.condition(), condition_block)?;
 
         // Body region.
         self.set_region(&body_region);
@@ -223,19 +196,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         }
 
         // Condition region.
-        let condition_expression = do_while.condition();
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
-        );
-        let (condition_value, condition_end) =
-            emitter.emit_value(&condition_expression, condition_block)?;
-        let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
-        self.state
-            .builder
-            .emit_sol_condition(condition_boolean, &condition_end);
+        self.emit_loop_condition(&do_while.condition(), condition_block)?;
 
         self.region_pointer = saved_region;
         Ok(Some(block))

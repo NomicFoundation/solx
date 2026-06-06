@@ -18,22 +18,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// `sol.load` of the addressed field unless the field already IS the
     /// value (non-ptr-ref-in-storage rule).
     ///
-    /// Returns `Ok(None)` when the base is not a struct (e.g. `msg.sender`),
-    /// so the caller can fall back to built-in member access lowering.
+    /// The caller is responsible for routing only struct-base member accesses
+    /// here; non-struct bases (e.g. `msg.sender`) go to built-in member access
+    /// lowering.
     pub fn emit_struct_field(
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<(Value<'context, 'block>, BlockRef<'context, 'block>)>> {
-        let Some((address, element_type, block)) = self.emit_struct_field_address(access, block)?
-        else {
-            return Ok(None);
-        };
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let (address, element_type, block) = self.emit_struct_field_address(access, block)?;
         let value = self
             .state
             .builder
             .emit_sol_load(address, element_type, &block)?;
-        Ok(Some((value, block)))
+        Ok((value, block))
     }
 
     /// Emits the address yielded by `s.field` together with the field's
@@ -41,32 +39,39 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ///
     /// Shared between the value-producing read path
     /// ([`Self::emit_struct_field`]) and the lvalue write path in
-    /// `emit_assignment`. Returns `Ok(None)` when the base is not a struct.
+    /// `emit_assignment`. Only called for a struct base.
     pub fn emit_struct_field_address(
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<
-        Option<(
-            Value<'context, 'block>,
-            Type<'context>,
-            BlockRef<'context, 'block>,
-        )>,
-    > {
+    ) -> anyhow::Result<(
+        Value<'context, 'block>,
+        Type<'context>,
+        BlockRef<'context, 'block>,
+    )> {
         let base = access.operand();
         let Some(SlangType::Struct(struct_type)) = base.get_type() else {
-            return Ok(None);
+            unreachable!("emit_struct_field_address is only called for a struct base");
         };
         let Definition::Struct(struct_definition) = struct_type.definition() else {
             unreachable!("slang StructType always references a Struct definition");
         };
 
-        let member_name = access.member().name();
+        // Resolve the accessed field to its `StructMember` definition and locate
+        // it by node-id identity — slang exposes struct fields as an ordered list
+        // with no direct field-index lookup, but the binder resolves the access,
+        // so no name-string comparison is needed (Rule-7).
+        let Some(Definition::StructMember(member_definition)) =
+            access.member().resolve_to_definition()
+        else {
+            unreachable!("slang resolves a struct field access to its StructMember definition");
+        };
+        let member_id = member_definition.node_id();
         let field_index = struct_definition
             .members()
             .iter()
-            .position(|member| member.name().name() == member_name)
-            .ok_or_else(|| anyhow::anyhow!("unknown struct member: {member_name}"))?;
+            .position(|member| member.node_id() == member_id)
+            .expect("slang validates the accessed field is a struct member");
 
         let (base_value, block) = self.emit_value(&base, block)?;
         let builder = &self.state.builder;
@@ -81,6 +86,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             ))
         };
         let address = builder.emit_sol_gep(base_value, index_value, element_type, &block);
-        Ok(Some((address, element_type, block)))
+        Ok((address, element_type, block))
     }
 }

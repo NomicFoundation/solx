@@ -3,13 +3,14 @@
 //!
 
 pub mod built_in;
-pub mod type_conversion;
+pub mod call_kind;
 
 use anyhow::Context as _;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
@@ -19,9 +20,9 @@ use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StructDefinition;
 use solx_utils::DataLocation;
 
+use self::call_kind::CallKind;
 use crate::ast::contract::function::expression::ExpressionEmitter;
-
-use self::type_conversion::TypeConversion;
+use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers function call and member access expressions to MLIR.
 pub struct CallEmitter<'emitter, 'state, 'context, 'block> {
@@ -53,91 +54,149 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
         else {
-            anyhow::bail!("only positional arguments supported");
+            unimplemented!("only positional arguments supported");
         };
 
-        let callee = call.operand();
+        match self.classify_call(call, positional_arguments) {
+            CallKind::TypeConversion => {
+                let first = positional_arguments
+                    .iter()
+                    .next()
+                    .expect("a type conversion has exactly one argument");
+                let (value, block) = self.expression_emitter.emit_value(&first, block)?;
+                let builder = &self.expression_emitter.state.builder;
+                let target_type = self
+                    .expression_emitter
+                    .resolve_slang_type(call.get_type())
+                    .expect("slang types a type-conversion call");
+                let result = TypeConversion::from_target_type(target_type, builder)
+                    .emit(value, builder, &block);
+                Ok((Some(result), block))
+            }
+            CallKind::BuiltInIdentifier(built_in) => {
+                self.emit_built_in_call(built_in, positional_arguments, block)
+            }
+            CallKind::AbiDecode => {
+                let (value, block) = self.emit_abi_decode(call, positional_arguments, block)?;
+                Ok((Some(value), block))
+            }
+            CallKind::BuiltInMemberAccess(access) => {
+                self.emit_built_in_member_access(&access, Some(positional_arguments), block)
+            }
+            CallKind::LocalFunction(function_definition) => {
+                let callee_name = function_definition
+                    .name()
+                    .map(|identifier| identifier.name())
+                    .unwrap_or_default();
+                let (mlir_name, argument_values, return_types, current_block) = self
+                    .emit_call_setup(&function_definition, positional_arguments, block)
+                    .with_context(|| format!("resolving callee '{callee_name}'"))?;
 
-        if call.is_type_conversion() && positional_arguments.len() == 1 {
-            let first = positional_arguments
-                .iter()
-                .next()
-                .expect("len checked to be 1 above");
-            let (value, block) = self.expression_emitter.emit_value(&first, block)?;
-            let builder = &self.expression_emitter.state.builder;
-
-            let target_type = self
-                .expression_emitter
-                .resolve_slang_type(call.get_type())
-                .ok_or_else(|| anyhow::anyhow!("unresolved type conversion target"))?;
-
-            let result =
-                TypeConversion::from_target_type(target_type, builder).emit(value, builder, &block);
-            return Ok((Some(result), block));
-        }
-
-        if let Some((value, block)) =
-            self.try_emit_built_in_call(&callee, positional_arguments, block)?
-        {
-            return Ok((value, block));
-        }
-
-        if let Some((value, block)) =
-            self.try_emit_built_in_call_expression(call, positional_arguments, block)?
-        {
-            return Ok((Some(value), block));
-        }
-
-        if let Expression::MemberAccessExpression(access) = &callee {
-            return self.emit_built_in_member_access(access, Some(positional_arguments), block);
-        }
-
-        let Expression::Identifier(callee_identifier) = &callee else {
-            anyhow::bail!("unsupported callee expression");
-        };
-        let function_definition = match callee_identifier.resolve_to_definition() {
-            Some(Definition::Function(function_definition)) => function_definition,
-            Some(Definition::Struct(struct_definition)) => {
+                if return_types.is_empty() {
+                    self.expression_emitter.state.builder.emit_sol_call(
+                        mlir_name,
+                        &argument_values,
+                        &[],
+                        &current_block,
+                    )?;
+                    Ok((None, current_block))
+                } else {
+                    let result = self
+                        .expression_emitter
+                        .state
+                        .builder
+                        .emit_sol_call(mlir_name, &argument_values, return_types, &current_block)?
+                        .expect("function call always produces at least one result");
+                    Ok((Some(result), current_block))
+                }
+            }
+            CallKind::StructConstructor(struct_definition) => {
                 let result_type = self
                     .expression_emitter
                     .resolve_slang_type(call.get_type())
-                    .ok_or_else(|| anyhow::anyhow!("unresolved struct constructor type"))?;
-                return self
-                    .emit_struct_constructor(
-                        &struct_definition,
-                        result_type,
-                        positional_arguments,
-                        block,
-                    )
-                    .map(|(value, block)| (Some(value), block));
+                    .expect("slang types a struct constructor call");
+                self.emit_struct_constructor(
+                    &struct_definition,
+                    result_type,
+                    positional_arguments,
+                    block,
+                )
+                .map(|(value, block)| (Some(value), block))
             }
-            _ => anyhow::bail!(
+        }
+    }
+
+    /// Classifies a call expression into its [`CallKind`] ahead of emission,
+    /// from positive, mutually-exclusive resolution facts rather than a
+    /// speculative chain of fallible attempts.
+    ///
+    /// The arms are ordered to preserve the original dispatch precedence:
+    /// type conversion, then identifier built-in, then the `abi.decode`
+    /// member built-in, then other member built-ins, then a user-defined
+    /// function or struct constructor. An unsupported callee shape is a loud
+    /// `unimplemented!`.
+    fn classify_call(
+        &self,
+        call: &FunctionCallExpression,
+        positional_arguments: &PositionalArguments,
+    ) -> CallKind {
+        let callee = call.operand();
+
+        if call.is_type_conversion() && positional_arguments.len() == 1 {
+            return CallKind::TypeConversion;
+        }
+
+        if let Expression::Identifier(identifier) = &callee
+            && let Some(built_in) = identifier.resolve_to_built_in()
+            && Self::is_emittable_identifier_built_in(built_in, positional_arguments.len())
+        {
+            return CallKind::BuiltInIdentifier(built_in);
+        }
+
+        if let Expression::MemberAccessExpression(access) = &callee {
+            if matches!(
+                access.member().resolve_to_built_in(),
+                Some(BuiltIn::AbiDecode)
+            ) {
+                return CallKind::AbiDecode;
+            }
+            return CallKind::BuiltInMemberAccess(access.clone());
+        }
+
+        let Expression::Identifier(callee_identifier) = &callee else {
+            unimplemented!("unsupported callee expression");
+        };
+        match callee_identifier.resolve_to_definition() {
+            Some(Definition::Function(function_definition)) => {
+                CallKind::LocalFunction(function_definition)
+            }
+            Some(Definition::Struct(struct_definition)) => {
+                CallKind::StructConstructor(struct_definition)
+            }
+            _ => unimplemented!(
                 "callee '{}' does not resolve to a function",
                 callee_identifier.name()
             ),
-        };
-
-        let (mlir_name, argument_values, return_types, current_block) = self
-            .emit_call_setup(&function_definition, positional_arguments, block)
-            .with_context(|| format!("resolving callee '{}'", callee_identifier.name()))?;
-
-        if return_types.is_empty() {
-            self.expression_emitter.state.builder.emit_sol_call(
-                mlir_name,
-                &argument_values,
-                &[],
-                &current_block,
-            )?;
-            Ok((None, current_block))
-        } else {
-            let result = self
-                .expression_emitter
-                .state
-                .builder
-                .emit_sol_call(mlir_name, &argument_values, return_types, &current_block)?
-                .expect("function call always produces at least one result");
-            Ok((Some(result), current_block))
         }
+    }
+
+    /// Returns whether an identifier-callee built-in is lowered directly with
+    /// the given argument count. Built-ins not listed here (or with a
+    /// mismatched arity) fall through to user-defined function resolution,
+    /// preserving the original dispatch behavior.
+    fn is_emittable_identifier_built_in(built_in: BuiltIn, argument_count: usize) -> bool {
+        matches!(
+            (built_in, argument_count),
+            (BuiltIn::Assert, 1)
+                | (BuiltIn::Require, 1 | 2)
+                | (BuiltIn::Gasleft, 0)
+                | (BuiltIn::Keccak256, 1)
+                | (BuiltIn::Sha256, 1)
+                | (BuiltIn::Ripemd160, 1)
+                | (BuiltIn::Ecrecover, 4)
+                | (BuiltIn::Addmod, 3)
+                | (BuiltIn::Mulmod, 3)
+        )
     }
 
     /// Emits a struct-literal constructor `S(a, b, c)` in memory.
@@ -200,16 +259,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
         else {
-            anyhow::bail!("only positional arguments supported");
+            unimplemented!("only positional arguments supported");
         };
 
         let Expression::Identifier(callee_identifier) = call.operand() else {
-            anyhow::bail!("multi-result calls only support direct named function callees");
+            unimplemented!("multi-result calls only support direct named function callees");
         };
         let Some(Definition::Function(function_definition)) =
             callee_identifier.resolve_to_definition()
         else {
-            anyhow::bail!(
+            unimplemented!(
                 "callee '{}' does not resolve to a function",
                 callee_identifier.name()
             );
@@ -227,10 +286,34 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((results, current_block))
     }
 
-    /// Emits argument values for a named call, resolves the callee's MLIR
-    /// signature, and casts each argument to its declared parameter type.
+    /// Evaluates `arguments` left-to-right (via
+    /// [`CallEmitter::emit_argument_values`]) and coerces each resulting value to
+    /// its declared parameter type, returning the materialised argument values
+    /// and the continuation block.
     ///
-    /// Returns the resolved MLIR name, the cast argument values, the
+    /// The single argument eval-and-coerce primitive: every call site (internal,
+    /// external, library, struct-constructor) delegates here rather than
+    /// re-implementing the evaluation and zip-coerce loops. `pub` so the call
+    /// fills in sibling modules reuse it.
+    pub fn emit_coerced_arguments(
+        &self,
+        arguments: &PositionalArguments,
+        parameter_types: &[melior::ir::Type<'context>],
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let (mut argument_values, block) = self.emit_argument_values(arguments, block)?;
+        let builder = &self.expression_emitter.state.builder;
+        for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
+            let conversion = TypeConversion::from_target_type(parameter_type, builder);
+            *value = conversion.emit(*value, builder, &block);
+        }
+        Ok((argument_values, block))
+    }
+
+    /// Resolves the callee's MLIR signature, then evaluates and coerces the
+    /// arguments to its declared parameter types.
+    ///
+    /// Returns the resolved MLIR name, the coerced argument values, the
     /// declared return types, and the block in which the call should be
     /// emitted.
     fn emit_call_setup<'a>(
@@ -244,26 +327,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         &'a [melior::ir::Type<'context>],
         BlockRef<'context, 'block>,
     )> {
-        let mut argument_values = Vec::new();
-        let mut current_block = block;
-        for argument in positional_arguments.iter() {
-            let (value, next_block) = self
-                .expression_emitter
-                .emit_value(&argument, current_block)?;
-            argument_values.push(value);
-            current_block = next_block;
-        }
-
         let (mlir_name, parameter_types, return_types) = self
             .expression_emitter
             .state
             .resolve_function(function_definition.node_id())?;
 
-        let builder = &self.expression_emitter.state.builder;
-        for (value, &param_type) in argument_values.iter_mut().zip(parameter_types) {
-            let conversion = TypeConversion::from_target_type(param_type, builder);
-            *value = conversion.emit(*value, builder, &current_block);
-        }
+        let (argument_values, current_block) =
+            self.emit_coerced_arguments(positional_arguments, parameter_types, block)?;
 
         Ok((mlir_name, argument_values, return_types, current_block))
     }

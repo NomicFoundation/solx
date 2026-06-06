@@ -8,12 +8,17 @@ pub mod revert;
 pub mod variable_declaration;
 
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::Type;
+use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::NamedArguments;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::Parameters;
 use slang_solidity_v2::ast::Statement;
 use slang_solidity_v2::ast::Statements;
 
@@ -21,8 +26,9 @@ use solx_mlir::Context;
 use solx_mlir::Environment;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
-use crate::ast::contract::function::storage_slot::StorageSlot;
+use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::contract::storage_layout::StorageSlot;
+use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers Solidity statements to MLIR operations with control flow.
 ///
@@ -41,10 +47,11 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     storage_layout: &'state HashMap<NodeId, StorageSlot>,
     /// The function's declared return types, for `emit_return` to cast to.
     return_types: &'state [Type<'context>],
-    /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
+    /// Arithmetic overflow-checking mode for binary operations.
     ///
-    /// `true` by default. Set to `false` inside `unchecked {}` blocks.
-    checked: bool,
+    /// [`ArithmeticMode::Checked`] by default; [`ArithmeticMode::Unchecked`]
+    /// inside `unchecked {}` blocks.
+    arithmetic_mode: ArithmeticMode,
 }
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -62,7 +69,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             region_pointer: region as *const Region<'context>,
             storage_layout,
             return_types,
-            checked: true,
+            arithmetic_mode: ArithmeticMode::Checked,
         }
     }
 
@@ -80,6 +87,41 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Switches the current region for emitting into Sol op regions.
     pub fn set_region(&mut self, region: &Region<'context>) {
         self.region_pointer = region as *const Region<'context>;
+    }
+
+    /// Builds an [`ExpressionEmitter`] for the current statement context,
+    /// supplying the shared state, environment, storage layout, and arithmetic
+    /// mode — the four fields every expression emission needs — so call sites do
+    /// not repeat the construction. The unchecked loop-step is the one site that
+    /// builds its emitter explicitly, with [`ArithmeticMode::Unchecked`].
+    fn expression_emitter(&self) -> ExpressionEmitter<'_, 'context, 'block> {
+        ExpressionEmitter::new(
+            self.state,
+            self.environment,
+            self.storage_layout,
+            self.arithmetic_mode,
+        )
+    }
+
+    /// Evaluates a loop `condition` in `condition_block` and emits the
+    /// `sol.condition` terminator. Shared by `for`, `while`, and `do-while`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the condition expression contains unsupported
+    /// constructs.
+    fn emit_loop_condition(
+        &self,
+        condition: &Expression,
+        condition_block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<()> {
+        let emitter = self.expression_emitter();
+        let (condition_value, condition_end) = emitter.emit_value(condition, condition_block)?;
+        let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
+        self.state
+            .builder
+            .emit_sol_condition(condition_boolean, &condition_end);
+        Ok(())
     }
 
     /// Emits MLIR for a statement.
@@ -103,16 +145,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let expression = expression_statement.expression();
                 if let Expression::FunctionCallExpression(call) = &expression
                     && let Expression::Identifier(identifier) = call.operand()
-                    && identifier.name() == revert::IDENTIFIER
+                    && matches!(identifier.resolve_to_built_in(), Some(BuiltIn::Revert))
                 {
                     return self.emit_revert_call(call, block);
                 }
-                let emitter = ExpressionEmitter::new(
-                    self.state,
-                    self.environment,
-                    self.storage_layout,
-                    self.checked,
-                );
+                let emitter = self.expression_emitter();
                 let (_, block) = emitter.emit(&expression, block)?;
                 Ok(Some(block))
             }
@@ -127,15 +164,15 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Statement::ContinueStatement(_) => self.emit_continue(block),
             Statement::Block(inner) => self.emit_block(inner.statements(), block),
             Statement::UncheckedBlock(inner) => {
-                let saved_checked = self.checked;
-                self.checked = false;
+                let saved_mode = self.arithmetic_mode;
+                self.arithmetic_mode = ArithmeticMode::Unchecked;
                 let result = self.emit_block(inner.block().statements(), block);
-                self.checked = saved_checked;
+                self.arithmetic_mode = saved_mode;
                 result
             }
             Statement::RevertStatement(revert) => self.emit_revert(revert, block),
             Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
-            _ => anyhow::bail!(
+            _ => unimplemented!(
                 "unsupported statement: {:?}",
                 std::mem::discriminant(statement)
             ),
@@ -201,12 +238,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             return Ok(None);
         };
 
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
-        );
+        let emitter = self.expression_emitter();
 
         let (values, block) = if let Expression::TupleExpression(tuple) = &expression
             && tuple.items().len() > 1
@@ -217,7 +249,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             for item in items.iter() {
                 let inner = item
                     .expression()
-                    .ok_or_else(|| anyhow::anyhow!("empty tuple element in return"))?;
+                    .expect("a return tuple element has an inner expression");
                 let (value, next) = emitter.emit_value(&inner, current)?;
                 values.push(value);
                 current = next;
@@ -242,5 +274,49 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         self.state.builder.emit_sol_return(&cast_values, &block);
         Ok(None)
+    }
+
+    /// Orders named arguments by the callee's parameter declaration order.
+    ///
+    /// Shared by `emit` and `revert` statements, both of which accept either
+    /// positional or named arguments. Each argument is bound to its parameter
+    /// through slang's typed resolution — keyed by the parameter's [`NodeId`],
+    /// never by comparing name strings. slang has already bound the named
+    /// arguments to the parameters, so a duplicate, missing, unknown, or
+    /// unnamed-parameter mismatch is unreachable.
+    fn order_named_arguments(
+        named_arguments: &NamedArguments,
+        parameters: &Parameters,
+    ) -> anyhow::Result<Vec<Expression>> {
+        let mut arguments: HashMap<NodeId, Expression> = HashMap::new();
+        for argument in named_arguments.iter() {
+            let Some(Definition::Parameter(parameter)) = argument.name().resolve_to_definition()
+            else {
+                unreachable!("slang resolves a named argument to its parameter");
+            };
+            match arguments.entry(parameter.node_id()) {
+                Entry::Vacant(entry) => {
+                    entry.insert(argument.value());
+                }
+                Entry::Occupied(_) => {
+                    unreachable!("slang rejects a duplicate named argument");
+                }
+            }
+        }
+
+        let mut ordered_arguments = Vec::new();
+        for parameter in parameters.iter() {
+            let argument = arguments
+                .remove(&parameter.node_id())
+                .expect("slang validates a matching named argument for every parameter");
+            ordered_arguments.push(argument);
+        }
+
+        assert!(
+            arguments.is_empty(),
+            "slang binds every named argument to a declared parameter"
+        );
+
+        Ok(ordered_arguments)
     }
 }

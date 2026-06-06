@@ -1,5 +1,5 @@
 //!
-//! Solidity operator parsed from source text.
+//! Solidity operator, bridged from slang's typed per-expression operator enums.
 //!
 
 use melior::ir::Location;
@@ -24,13 +24,17 @@ use solx_mlir::ods::sol::ShrOperation;
 use solx_mlir::ods::sol::SubOperation;
 use solx_mlir::ods::sol::XorOperation;
 
-/// Solidity operator parsed from source text.
+use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+
+/// Solidity operator, bridged from slang's typed per-expression operator enums
+/// (`AdditiveExpressionOperator`, `ShiftExpressionOperator`, …) — never parsed
+/// from source text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operator {
     // ---- Arithmetic ----
-    /// `+`
+    /// `+` (binary)
     Add,
-    /// `-`
+    /// `-` (binary or unary negation)
     Subtract,
     /// `*`
     Multiply,
@@ -41,18 +45,6 @@ pub enum Operator {
     /// `**`
     Exponentiation,
 
-    // ---- Arithmetic assignment ----
-    /// `+=`
-    AddAssign,
-    /// `-=`
-    SubtractAssign,
-    /// `*=`
-    MultiplyAssign,
-    /// `/=`
-    DivideAssign,
-    /// `%=`
-    RemainderAssign,
-
     // ---- Bitwise ----
     /// `&`
     BitwiseAnd,
@@ -62,36 +54,12 @@ pub enum Operator {
     BitwiseXor,
     /// `<<`
     ShiftLeft,
-    /// `>>`
+    /// `>>` (and the no-op `>>>`)
     ShiftRight,
     /// `~`
     BitwiseNot,
 
-    // ---- Bitwise assignment ----
-    /// `&=`
-    BitwiseAndAssign,
-    /// `|=`
-    BitwiseOrAssign,
-    /// `^=`
-    BitwiseXorAssign,
-    /// `<<=`
-    ShiftLeftAssign,
-    /// `>>=`
-    ShiftRightAssign,
-
-    // ---- Comparison ----
-    /// `==`
-    Equal,
-    /// `!=`
-    NotEqual,
-    /// `>`
-    Greater,
-    /// `>=`
-    GreaterEqual,
-    /// `<`
-    Less,
-    /// `<=`
-    LessEqual,
+    // ---- Logical ----
     /// `!`
     Not,
 
@@ -100,31 +68,29 @@ pub enum Operator {
     Increment,
     /// `--`
     Decrement,
-
-    // ---- Other ----
-    /// `delete`
-    Delete,
 }
 
 impl Operator {
     /// Builds a Sol dialect binary operation via ODS-generated builders.
     ///
-    /// When `checked` is true, uses checked variants (`sol.cadd`, `sol.csub`,
-    /// `sol.cmul`, `sol.cdiv`, `sol.cexp`) for arithmetic operators. Modulo, bitwise,
-    /// and shift operators are always unchecked. Result type is inferred
-    /// from `lhs` (`SameOperandsAndResultType`).
+    /// In [`ArithmeticMode::Checked`] mode, uses checked variants (`sol.cadd`,
+    /// `sol.csub`, `sol.cmul`, `sol.cdiv`, `sol.cexp`) for arithmetic operators.
+    /// Modulo, bitwise, and shift operators are always unchecked. Result type is
+    /// inferred from `lhs` (`SameOperandsAndResultType`).
     ///
     /// # Panics
     ///
-    /// Panics if called on a comparison or assignment operator.
+    /// Panics if called on a unary-only operator (`Not` / `BitwiseNot`), which
+    /// the prefix emitter handles instead.
     pub fn emit_sol_binary_operation<'context>(
         self,
-        checked: bool,
+        mode: ArithmeticMode,
         context: &'context melior::Context,
         location: Location<'context>,
         lhs: Value<'context, '_>,
         rhs: Value<'context, '_>,
     ) -> Operation<'context> {
+        let checked = matches!(mode, ArithmeticMode::Checked);
         match self {
             Self::Add | Self::Increment if checked => CAddOperation::builder(context, location)
                 .lhs(lhs)
