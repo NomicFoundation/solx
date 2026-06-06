@@ -8,6 +8,8 @@ pub mod compilation_config;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::SourceUnitMember;
 use slang_solidity_v2::compilation::CompilationBuilder;
 use slang_solidity_v2::compilation::CompilationUnit;
 use slang_solidity_v2::diagnostics::DiagnosticExtensions;
@@ -67,6 +69,31 @@ impl Slang {
         }
 
         Ok(builder.build())
+    }
+
+    /// Gathers every file-level (free) function across the compilation unit.
+    ///
+    /// Free functions are not part of any contract's linearised function set,
+    /// so they are collected once per unit and handed to each contract emitter,
+    /// which pre-registers and emits the ones that contract reaches.
+    fn gather_free_functions(unit: &CompilationUnit) -> Vec<FunctionDefinition> {
+        unit.file_ids()
+            .iter()
+            .filter_map(|file_identifier| unit.file(file_identifier))
+            .flat_map(|file| {
+                file.ast()
+                    .members()
+                    .iter()
+                    .filter_map(|member| {
+                        if let SourceUnitMember::FunctionDefinition(function) = member {
+                            Some(function)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
     }
 }
 
@@ -158,6 +185,7 @@ impl Frontend for Slang {
         }
 
         let file_identifiers = unit.file_ids();
+        let free_functions = Self::gather_free_functions(&unit);
 
         for file_identifier in &file_identifiers {
             let Some(file) = unit.file(file_identifier) else {
@@ -169,7 +197,9 @@ impl Frontend for Slang {
             let evm_version = input_json.settings.evm_version.unwrap_or_default();
             let mut context = solx_mlir::Context::new(&melior_context, evm_version);
             let mut emitter = AstEmitter::new(&mut context);
-            let Some((contract_name, method_identifiers)) = emitter.emit(&source_unit)? else {
+            let Some((contract_name, method_identifiers)) =
+                emitter.emit(&source_unit, &free_functions)?
+            else {
                 continue;
             };
 

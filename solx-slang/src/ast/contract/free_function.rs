@@ -19,6 +19,9 @@ use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::visitor::Visitor;
+use slang_solidity_v2::ast::visitor::accept_function_definition;
+
+use crate::ast::contract::reachability::ReachabilityWalk;
 
 /// Visitor that records every `f(...)` call whose callee is a plain identifier
 /// resolving to one of the source unit's free functions.
@@ -46,8 +49,23 @@ impl<'a> FreeCallCollector<'a> {
         free_functions: &[FunctionDefinition],
         extra_roots: &[FunctionDefinition],
     ) -> Vec<FunctionDefinition> {
-        let _ = (contract, free_functions, extra_roots);
-        unimplemented!("free-function reachability walk")
+        let free_ids: HashSet<NodeId> = free_functions.iter().map(|f| f.node_id()).collect();
+        if free_ids.is_empty() {
+            return Vec::new();
+        }
+
+        let mut walk = ReachabilityWalk::new(contract, extra_roots);
+        while let Some(function) = walk.next_body() {
+            let mut collector = FreeCallCollector {
+                free_ids: &free_ids,
+                reached: Vec::new(),
+            };
+            accept_function_definition(&function, &mut collector);
+            for free_function in collector.reached {
+                walk.reach(free_function);
+            }
+        }
+        walk.into_reached()
     }
 }
 

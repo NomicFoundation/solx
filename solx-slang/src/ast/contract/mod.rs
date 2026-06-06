@@ -8,6 +8,7 @@ pub mod function;
 pub mod getter;
 pub mod getter_level;
 pub mod library;
+pub mod reachability;
 /// Contract storage layout: the slot assignment of state variables.
 pub mod storage_layout;
 pub mod super_call;
@@ -17,6 +18,7 @@ use std::collections::HashMap;
 use melior::ir::BlockRef;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::NodeId;
@@ -25,6 +27,7 @@ use slang_solidity_v2::ast::StateVariableMutability;
 use solx_mlir::Context;
 use solx_utils::DataLocation;
 
+use self::free_function::FreeCallCollector;
 use self::function::FunctionEmitter;
 use self::storage_layout::StorageSlot;
 use crate::ast::type_conversion::TypeConversion;
@@ -66,10 +69,25 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ///
     /// Returns an error if any function body or constructor initializer
     /// contains unsupported constructs.
-    pub fn emit(&mut self, contract: &ContractDefinition) -> anyhow::Result<()> {
+    pub fn emit(
+        &mut self,
+        contract: &ContractDefinition,
+        free_functions: &[FunctionDefinition],
+    ) -> anyhow::Result<()> {
         let contract_name = contract.name().name();
 
         self.pre_register_functions(contract);
+
+        // Free functions (`f(...)` declared at file level) reachable from this
+        // contract, transitively. They are not in the linearised function set,
+        // so pre-register their signatures here and emit their bodies into this
+        // contract's module below, where they lower as ordinary internal
+        // functions. (No `super`/library roots yet — those clusters extend the
+        // `extra_roots` walk and add the duplicate-symbol filtering.)
+        let reached_free_functions =
+            FreeCallCollector::reachable_free_functions(contract, free_functions, &[]);
+        self.register_function_signatures(&reached_free_functions);
+
         let storage_layout = Self::compute_storage_layout(contract);
 
         let contract_type = self
@@ -117,6 +135,19 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, contract, &storage_layout)
                 .emit_sol(&function, &contract_body)?;
+            self.state.current_contract_type = None;
+        }
+
+        // Emit the collected free functions so their `sol.call`s resolve. Each
+        // is emitted under its node-id-qualified symbol so two file-level
+        // functions of the same name and signature do not collide on one symbol.
+        for free in &reached_free_functions {
+            self.state.current_contract_type = Some(contract_type);
+            FunctionEmitter::new(self.state, contract, &storage_layout).emit_sol_with_symbol(
+                free,
+                &Self::node_id_qualified_symbol(free),
+                &contract_body,
+            )?;
             self.state.current_contract_type = None;
         }
 
@@ -173,5 +204,36 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 return_types,
             );
         }
+    }
+
+    /// Registers each free function's `(symbol, parameter types, return types)`
+    /// signature under its node-id-qualified symbol, so calls to it resolve to a
+    /// distinct internal `sol.func` even when a same-named function is reached
+    /// together. Pre-registration runs before any body is emitted so calls
+    /// resolve regardless of emission order.
+    fn register_function_signatures(&mut self, functions: &[FunctionDefinition]) {
+        for function in functions {
+            let (parameter_types, return_types) =
+                TypeConversion::resolve_function_types(function, &self.state.builder);
+            self.state.register_function_signature(
+                function.node_id(),
+                Self::node_id_qualified_symbol(function),
+                parameter_types,
+                return_types,
+            );
+        }
+    }
+
+    /// A function's MLIR symbol qualified by its globally-unique node id, so two
+    /// file-level functions of the same canonical signature — reachable together
+    /// when one is imported under an alias — do not collide on a single symbol.
+    /// These functions are only ever resolved by node id, so the exact spelling
+    /// is immaterial.
+    fn node_id_qualified_symbol(function: &FunctionDefinition) -> String {
+        format!(
+            "{}#{:?}",
+            FunctionEmitter::mlir_function_name(function),
+            function.node_id()
+        )
     }
 }
