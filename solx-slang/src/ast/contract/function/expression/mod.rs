@@ -2,14 +2,18 @@
 //! Expression lowering to MLIR SSA values.
 //!
 
-pub mod access;
 pub mod arithmetic;
+pub mod arithmetic_mode;
 pub mod assignment;
 pub mod call;
-pub mod logical;
+pub mod comparison;
+pub mod conditional;
+pub mod index_access;
 pub mod member;
 pub mod operator;
+pub mod short_circuit;
 pub mod storage;
+pub mod unary;
 
 use std::collections::HashMap;
 
@@ -32,22 +36,24 @@ use solx_mlir::Environment;
 use solx_mlir::ods::sol::ThisOperation;
 use solx_utils::DataLocation;
 
-use self::call::type_conversion::TypeConversion;
-use crate::ast::contract::function::storage_slot::StorageSlot;
+use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::contract::storage_layout::StorageSlot;
+use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers Solidity expressions to MLIR SSA values.
 pub struct ExpressionEmitter<'state, 'context, 'block> {
     /// The shared MLIR context.
-    pub state: &'state Context<'context>,
+    state: &'state Context<'context>,
     /// Variable environment.
-    pub environment: &'state Environment<'context, 'block>,
+    environment: &'state Environment<'context, 'block>,
     /// State variable node ID to storage slot mapping.
-    pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
-    /// Whether arithmetic operations use checked variants (`sol.cadd` etc.).
+    storage_layout: &'state HashMap<NodeId, StorageSlot>,
+    /// Arithmetic overflow-checking mode for binary operations.
     ///
-    /// `true` by default (Solidity 0.8+). Set to `false` inside `unchecked {}`
-    /// blocks and for-loop step expressions.
-    pub checked: bool,
+    /// [`ArithmeticMode::Checked`] by default (Solidity 0.8+);
+    /// [`ArithmeticMode::Unchecked`] inside `unchecked {}` blocks and for-loop
+    /// step expressions.
+    arithmetic_mode: ArithmeticMode,
 }
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
@@ -56,13 +62,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         state: &'state Context<'context>,
         environment: &'state Environment<'context, 'block>,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
-        checked: bool,
+        arithmetic_mode: ArithmeticMode,
     ) -> Self {
         Self {
             state,
             environment,
             storage_layout,
-            checked,
+            arithmetic_mode,
         }
     }
 
@@ -76,7 +82,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (value, block) = self.emit(expression, block)?;
-        let value = value.ok_or_else(|| anyhow::anyhow!("expression produced no value"))?;
+        let value = value.expect("an expression in value position produces a value");
         Ok((value, block))
     }
 
@@ -95,12 +101,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         match expression {
             Expression::DecimalNumberExpression(decimal_number) => {
-                let value = decimal_number.integer_value().ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "decimal literal cannot be lowered: it must evaluate to an integer \
-                         after applying any units"
-                    )
-                })?;
+                let value = decimal_number
+                    .integer_value()
+                    .expect("a lowered decimal literal evaluates to an integer after units");
                 let result_type = self
                     .resolve_slang_type(decimal_number.get_type())
                     .expect("binder types every decimal literal node");
@@ -135,7 +138,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let contract_type = self
                     .state
                     .current_contract_type
-                    .ok_or_else(|| anyhow::anyhow!("sol.this emitted outside a contract"))?;
+                    .expect("`this` only appears inside a contract method");
                 let operation = ThisOperation::builder(
                     self.state.builder.context,
                     self.state.builder.unknown_location,
@@ -155,58 +158,69 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let value = self.state.builder.emit_sol_string_lit(text, &block);
                 Ok((Some(value), block))
             }
-            Expression::Identifier(identifier) => {
-                let name = identifier.name();
-                match identifier.resolve_to_definition() {
-                    Some(Definition::StateVariable(state_variable)) => {
-                        let slot = self
-                            .storage_layout
-                            .get(&state_variable.node_id())
-                            .ok_or_else(|| {
-                                anyhow::anyhow!("unregistered state variable: {name}")
-                            })?;
-                        let declared_type = state_variable.get_type().ok_or_else(|| {
-                            anyhow::anyhow!("unresolved type for state variable: {name}")
-                        })?;
-                        let element_type = TypeConversion::resolve_slang_type(
-                            &declared_type,
-                            None,
+            Expression::Identifier(identifier) => match identifier.resolve_to_definition() {
+                Some(Definition::StateVariable(state_variable)) => {
+                    let slot = self
+                        .storage_layout
+                        .get(&state_variable.node_id())
+                        .unwrap_or_else(|| {
+                            unimplemented!(
+                                "unregistered state variable {:?}",
+                                state_variable.node_id()
+                            )
+                        });
+                    let declared_type = state_variable
+                        .get_type()
+                        .expect("slang types every state variable");
+                    let element_type = TypeConversion::resolve_slang_type(
+                        &declared_type,
+                        None,
+                        &self.state.builder,
+                    );
+                    // A value-typed state variable reads through the shared
+                    // storage-load helper. A reference-typed one evaluates to its
+                    // storage reference, whose address type is the reference
+                    // itself — the single `address_type` rule, shared with the
+                    // initializer path.
+                    let value = if declared_type.is_reference_type() {
+                        let address_type = Self::address_type(
                             &self.state.builder,
+                            element_type,
+                            DataLocation::Storage,
+                            &declared_type,
                         );
-                        let address = self.state.builder.emit_sol_addr_of(
-                            &slot.name,
-                            Self::address_type(
-                                &self.state.builder,
-                                element_type,
-                                DataLocation::Storage,
-                                &declared_type,
-                            ),
-                            &block,
-                        );
-                        let value =
+                        let address =
                             self.state
                                 .builder
-                                .emit_sol_load(address, element_type, &block)?;
-                        Ok((Some(value), block))
-                    }
-                    Some(Definition::Variable(_) | Definition::Parameter(_)) => {
-                        let (pointer, element_type) = self.environment.variable_with_type(&name);
-                        let value =
-                            self.state
-                                .builder
-                                .emit_sol_load(pointer, element_type, &block)?;
-                        Ok((Some(value), block))
-                    }
-                    Some(Definition::Constant(constant)) => {
-                        let initializer = constant
-                            .value()
-                            .ok_or_else(|| anyhow::anyhow!("constant {name} has no initializer"))?;
-                        self.emit(&initializer, block)
-                    }
-                    None => anyhow::bail!("unresolved identifier: {name}"),
-                    Some(_) => anyhow::bail!("unsupported identifier reference: {name}"),
+                                .emit_sol_addr_of(&slot.name, address_type, &block);
+                        self.state
+                            .builder
+                            .emit_sol_load(address, element_type, &block)?
+                    } else {
+                        self.emit_storage_load(slot, element_type, &block)?
+                    };
+                    Ok((Some(value), block))
                 }
-            }
+                Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
+                    let (pointer, element_type) =
+                        self.environment.variable_with_type(definition.node_id());
+                    let value = self
+                        .state
+                        .builder
+                        .emit_sol_load(pointer, element_type, &block)?;
+                    Ok((Some(value), block))
+                }
+                Some(Definition::Constant(constant)) => {
+                    let initializer = constant
+                        .value()
+                        .expect("a Solidity constant has an initializer");
+                    self.emit(&initializer, block)
+                }
+                None => unreachable!("slang resolves every identifier reference"),
+                Some(other) => {
+                    unimplemented!("unsupported identifier reference {:?}", other.node_id())
+                }
+            },
             Expression::AssignmentExpression(assign) => self
                 .emit_assignment(assign, block)
                 .map(|(value, block)| (Some(value), block)),
@@ -287,7 +301,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let result_type = self.resolve_slang_type(expression.get_type());
                 let operator = match expression.operator() {
                     ast::PrefixExpressionOperator::Bang(_) => Operator::Not,
-                    ast::PrefixExpressionOperator::DeleteKeyword(_) => Operator::Delete,
+                    // `delete x` zeroes an lvalue — not an arithmetic/logical
+                    // prefix operator — so it is its own (loud) residual rather
+                    // than an `Operator` variant the prefix emitter must reject.
+                    ast::PrefixExpressionOperator::DeleteKeyword(_) => {
+                        unimplemented!("delete is not yet supported")
+                    }
                     ast::PrefixExpressionOperator::Minus(_) => Operator::Subtract,
                     ast::PrefixExpressionOperator::MinusMinus(_) => Operator::Decrement,
                     ast::PrefixExpressionOperator::PlusPlus(_) => Operator::Increment,
@@ -335,85 +354,19 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::FunctionCallExpression(call) => {
                 self::call::CallEmitter::new(self).emit_function_call(call, block)
             }
-            Expression::TupleExpression(tuple) => {
-                let items = tuple.items();
-                // TODO: support multi-value tuples (e.g. tuple deconstruction)
-                anyhow::ensure!(items.len() == 1, "multi-value tuples not yet supported");
-                let item = items.iter().next().expect("length checked to be 1 above");
-                let inner = item
-                    .expression()
-                    .ok_or_else(|| anyhow::anyhow!("empty tuple element"))?;
-                self.emit(&inner, block)
-            }
-            Expression::ConditionalExpression(conditional) => {
-                let result_type = self
-                    .resolve_slang_type(conditional.get_type())
-                    .unwrap_or(self.state.builder.types.ui256);
-                let condition = conditional.operand();
-                let (condition_value, block) = self.emit_value(&condition, block)?;
-                let condition_boolean = self.emit_is_nonzero(condition_value, &block);
-
-                let result_slot = self.state.builder.emit_sol_alloca(result_type, &block);
-                let (then_block, else_block) =
-                    self.state.builder.emit_sol_if(condition_boolean, &block);
-
-                let true_expression = conditional.true_expression();
-                let (then_value, then_end) = self.emit_value(&true_expression, then_block)?;
-                let then_cast = TypeConversion::from_target_type(result_type, &self.state.builder)
-                    .emit(then_value, &self.state.builder, &then_end);
-                self.state
-                    .builder
-                    .emit_sol_store(then_cast, result_slot, &then_end);
-                self.state.builder.emit_sol_yield(&then_end);
-
-                let false_expression = conditional.false_expression();
-                let (else_value, else_end) = self.emit_value(&false_expression, else_block)?;
-                let else_cast = TypeConversion::from_target_type(result_type, &self.state.builder)
-                    .emit(else_value, &self.state.builder, &else_end);
-                self.state
-                    .builder
-                    .emit_sol_store(else_cast, result_slot, &else_end);
-                self.state.builder.emit_sol_yield(&else_end);
-
-                let result = self
-                    .state
-                    .builder
-                    .emit_sol_load(result_slot, result_type, &block)?;
-
-                Ok((Some(result), block))
-            }
-            Expression::ArrayExpression(array_expression) => {
-                let result_slang_type = array_expression
-                    .get_type()
-                    .expect("slang types every array literal");
-                let element_slang_type = match &result_slang_type {
-                    SlangType::FixedSizeArray(fixed_array_type) => fixed_array_type.element_type(),
-                    SlangType::Array(array_type) => array_type.element_type(),
-                    _ => anyhow::bail!(
-                        "array literal has unexpected result type: {:?}",
-                        std::mem::discriminant(&result_slang_type)
-                    ),
-                };
-                let builder = &self.state.builder;
-                let array_type =
-                    TypeConversion::resolve_slang_type(&result_slang_type, None, builder);
-                let element_type =
-                    TypeConversion::resolve_slang_type(&element_slang_type, None, builder);
-                let mut element_values = Vec::new();
-                let mut current = block;
-                for item in array_expression.items().iter() {
-                    let (value, next) = self.emit_value(&item, current)?;
-                    let cast_value = TypeConversion::from_target_type(element_type, builder)
-                        .emit(value, builder, &next);
-                    element_values.push(cast_value);
-                    current = next;
-                }
-                let value = builder.emit_sol_array_lit(&element_values, array_type, &current);
-                Ok((Some(value), current))
-            }
+            Expression::TupleExpression(tuple) => self.emit_tuple(tuple, block),
+            Expression::ConditionalExpression(conditional) => self
+                .emit_conditional(conditional, block)
+                .map(|(value, block)| (Some(value), block)),
+            Expression::ArrayExpression(array_expression) => self
+                .emit_array_literal(array_expression, block)
+                .map(|(value, block)| (Some(value), block)),
             Expression::MemberAccessExpression(access) => {
-                if let Some((value, block)) = self.emit_struct_field(access, block)? {
-                    Ok((Some(value), block))
+                // A struct-typed base is a field read (`s.field`); anything else
+                // (e.g. `msg.sender`, `addr.balance`) is a built-in member access.
+                if matches!(access.operand().get_type(), Some(SlangType::Struct(_))) {
+                    self.emit_struct_field(access, block)
+                        .map(|(value, block)| (Some(value), block))
                 } else {
                     self::call::CallEmitter::new(self)
                         .emit_member_access(access, block)
@@ -423,7 +376,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::IndexAccessExpression(index_access) => {
                 self.emit_index_access(index_access, block)
             }
-            _ => anyhow::bail!(
+            _ => unimplemented!(
                 "unsupported expression: {:?}",
                 std::mem::discriminant(expression)
             ),

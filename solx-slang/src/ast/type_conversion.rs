@@ -213,9 +213,13 @@ impl<'context> TypeConversion<'context> {
     fn integer_bits_required(value: &BigInt) -> u32 {
         if value.is_negative() {
             let magnitude_minus_one = -value - 1u32;
-            u32::try_from(magnitude_minus_one.bits()).unwrap() + 1
+            u32::try_from(magnitude_minus_one.bits())
+                .expect("literal magnitude bit count fits in u32")
+                + 1
         } else {
-            u32::try_from(value.bits()).unwrap().max(1)
+            u32::try_from(value.bits())
+                .expect("literal bit count fits in u32")
+                .max(1)
         }
     }
 
@@ -247,10 +251,9 @@ impl<'context> TypeConversion<'context> {
         state_variable: &StateVariableDefinition,
         builder: &solx_mlir::Builder<'context>,
     ) -> anyhow::Result<Type<'context>> {
-        let name = state_variable.name().name();
         let slang_type = state_variable
             .get_type()
-            .ok_or_else(|| anyhow::anyhow!("unresolved type for state variable: {name}"))?;
+            .expect("slang types every state variable");
         Ok(Self::resolve_slang_type(&slang_type, None, builder))
     }
 

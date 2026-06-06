@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 use melior::ir::Type;
 use melior::ir::Value;
+use slang_solidity_v2::ast::NodeId;
 
 /// Tracks variable bindings (alloca'd pointers) for lexical scoping.
 ///
@@ -13,13 +14,17 @@ use melior::ir::Value;
 /// pointer (e.g. `ui64` for a `uint64` variable). Reads produce `sol.load`
 /// with the declared element type; writes produce `sol.store`.
 ///
-/// Implements lexical scoping: variable lookups search from the innermost
-/// scope outward. `enter_scope()` / `exit_scope()` bracket blocks that
-/// introduce new variables.
+/// Bindings are keyed by the declaration's Slang [`NodeId`], not its textual
+/// name, so same-named locals across scopes (shadowing) are distinct by
+/// construction and identifier references resolve through the binder
+/// (`resolve_to_definition().node_id()`) rather than by name. Lexical scoping is
+/// still tracked: lookups search from the innermost scope outward, and
+/// `enter_scope()` / `exit_scope()` bracket blocks that introduce new variables.
 pub struct Environment<'context, 'block> {
-    /// Stack of scopes, each mapping variable names to `(pointer, element_type)`.
-    /// The outermost scope (index 0) holds function parameters.
-    scopes: Vec<HashMap<String, (Value<'context, 'block>, Type<'context>)>>,
+    /// Stack of scopes, each mapping a declaration's [`NodeId`] to its
+    /// `(pointer, element_type)`. The outermost scope (index 0) holds function
+    /// parameters.
+    scopes: Vec<HashMap<NodeId, (Value<'context, 'block>, Type<'context>)>>,
 }
 
 impl<'context, 'block> Default for Environment<'context, 'block> {
@@ -51,20 +56,22 @@ impl<'context, 'block> Environment<'context, 'block> {
         self.scopes.pop();
     }
 
-    /// Registers a variable with its alloca'd pointer and element type in the current scope.
+    /// Registers a variable, keyed by its declaration's [`NodeId`], with its
+    /// alloca'd pointer and element type in the current scope.
     pub fn define_variable(
         &mut self,
-        name: String,
+        declaration: NodeId,
         pointer: Value<'context, 'block>,
         element_type: Type<'context>,
     ) {
         self.scopes
             .last_mut()
             .expect("at least one scope exists")
-            .insert(name, (pointer, element_type));
+            .insert(declaration, (pointer, element_type));
     }
 
-    /// Looks up a variable's alloca'd pointer and element type by name.
+    /// Looks up a variable's alloca'd pointer and element type by its
+    /// declaration's [`NodeId`] (from `resolve_to_definition().node_id()`).
     ///
     /// Searches from the innermost scope outward.
     ///
@@ -73,16 +80,15 @@ impl<'context, 'block> Environment<'context, 'block> {
     /// Panics if no binding exists. Slang's semantic pass guarantees every
     /// emitted identifier reference resolves, so a miss here is a solx-internal
     /// invariant failure rather than a user error.
-    ///
-    // TODO: key on the Slang `NodeId` of the declaration instead of the textual
-    // name to disambiguate same-named locals across scopes without relying on
-    // `enter_scope`/`exit_scope` discipline at the call sites.
-    pub fn variable_with_type(&self, name: &str) -> (Value<'context, 'block>, Type<'context>) {
+    pub fn variable_with_type(
+        &self,
+        declaration: NodeId,
+    ) -> (Value<'context, 'block>, Type<'context>) {
         for scope in self.scopes.iter().rev() {
-            if let Some(entry) = scope.get(name) {
+            if let Some(entry) = scope.get(&declaration) {
                 return *entry;
             }
         }
-        unreachable!("unregistered local variable: {name}");
+        unreachable!("unregistered local variable: {declaration:?}");
     }
 }

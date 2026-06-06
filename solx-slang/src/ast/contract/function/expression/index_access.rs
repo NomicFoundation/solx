@@ -14,7 +14,7 @@ use slang_solidity_v2::ast::Type as SlangType;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
+use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     /// Lowers `a[i]` / `m[k]` for arrays, dynamic `bytes`, mappings, and
@@ -70,7 +70,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .expect("slang validates a[i] has an index expression");
         let base_type = base
             .get_type()
-            .ok_or_else(|| anyhow::anyhow!("base of index access has no resolved type"))?;
+            .expect("slang types the base of an index access");
         let result_type = index_access
             .get_type()
             .expect("slang types every index-access expression");

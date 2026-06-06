@@ -12,9 +12,9 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::expression::operator::Operator;
-use crate::ast::contract::function::storage_slot::StorageSlot;
+use crate::ast::contract::storage_layout::StorageSlot;
+use crate::ast::type_conversion::TypeConversion;
 
 /// Assignment target resolved from the Slang binder.
 enum AssignmentTarget<'context, 'block> {
@@ -37,12 +37,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let left = assign.left_operand();
         let (target, block) = match &left {
             Expression::Identifier(identifier) => {
-                let name = identifier.name();
                 let target = match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(state_variable)) => {
-                        let declared_type = state_variable.get_type().ok_or_else(|| {
-                            anyhow::anyhow!("unresolved type for state variable: {name}")
-                        })?;
+                        let declared_type = state_variable
+                            .get_type()
+                            .expect("slang types every state variable");
                         if declared_type.is_reference_type() {
                             unimplemented!(
                                 "assignment to a reference-typed state variable is not yet supported"
@@ -51,7 +50,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let slot = self
                             .storage_layout
                             .get(&state_variable.node_id())
-                            .ok_or_else(|| anyhow::anyhow!("unregistered state variable: {name}"))?
+                            .unwrap_or_else(|| {
+                                unimplemented!(
+                                    "unregistered state variable {:?}",
+                                    state_variable.node_id()
+                                )
+                            })
                             .clone();
                         let element_type = TypeConversion::resolve_slang_type(
                             &declared_type,
@@ -60,13 +64,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         );
                         AssignmentTarget::Storage(slot, element_type)
                     }
-                    Some(Definition::Variable(_) | Definition::Parameter(_)) => {
-                        let (pointer, element_type) = self.environment.variable_with_type(&name);
+                    Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
+                        let (pointer, element_type) =
+                            self.environment.variable_with_type(definition.node_id());
                         AssignmentTarget::Pointer(pointer, element_type)
                     }
                     None => unreachable!("slang resolves every identifier reference"),
-                    Some(_) => unimplemented!(
-                        "assignment to non-variable definition '{name}' is not yet supported"
+                    Some(other) => unimplemented!(
+                        "assignment to non-variable definition {:?} is not yet supported",
+                        other.node_id()
                     ),
                 };
                 (target, block)
@@ -82,9 +88,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 (AssignmentTarget::Pointer(address, element_type), block)
             }
             Expression::MemberAccessExpression(access) => {
-                let (address, element_type, block) = self
-                    .emit_struct_field_address(access, block)?
-                    .expect("slang validates a member-access lvalue resolves to a struct field");
+                let (address, element_type, block) =
+                    self.emit_struct_field_address(access, block)?;
                 if address.r#type() == element_type {
                     unimplemented!(
                         "assignment to a reference-typed struct field in storage/calldata is not yet supported"
@@ -151,7 +156,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             );
             let result = block
                 .append_operation(operator.emit_sol_binary_operation(
-                    self.checked,
+                    self.arithmetic_mode,
                     self.state.builder.context,
                     self.state.builder.unknown_location,
                     old,

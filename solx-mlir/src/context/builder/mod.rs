@@ -703,6 +703,62 @@ impl<'context> Builder<'context> {
             .into()
     }
 
+    /// Allocates a stack slot for `element_type` and zero-initialises it,
+    /// returning the slot address.
+    ///
+    /// An integer type is initialised with a typed `0`. A non-integer type is a
+    /// LOUD `unimplemented!`: silently leaving the slot uninitialised would be a
+    /// bug-masking fallback.
+    ///
+    /// # Panics
+    ///
+    /// Panics on a non-integer `element_type` — zero-initialisation of address,
+    /// fixed-bytes, and memory-resident types is not yet supported.
+    pub fn emit_zero_initialized_alloca<'block, B>(
+        &self,
+        element_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let pointer = self.emit_sol_alloca(element_type, block);
+        if IntegerType::try_from(element_type).is_ok() {
+            let zero = self.emit_sol_constant(0, element_type, block);
+            self.emit_sol_store(zero, pointer, block);
+        } else {
+            unimplemented!("zero-initialization for non-integer type {element_type}");
+        }
+        pointer
+    }
+
+    /// Emits a `sol.return` whose operands are loaded from the per-return slots:
+    /// each named-return slot is loaded, and a typed zero is materialised where
+    /// no slot was allocated (an unnamed return). Shared by the implicit
+    /// end-of-body return and an explicit bare `return;`.
+    pub fn emit_return_from_slots<'block, B>(
+        &self,
+        result_types: &[Type<'context>],
+        return_slots: &[Option<Value<'context, 'block>>],
+        block: &B,
+    ) where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let mut values: Vec<Value<'context, 'block>> = Vec::with_capacity(result_types.len());
+        for (index, result_type) in result_types.iter().enumerate() {
+            let value = match return_slots.get(index).copied().flatten() {
+                Some(pointer) => self
+                    .emit_sol_load(pointer, *result_type, block)
+                    .expect("named return slot loads with the declared type"),
+                None => self.emit_sol_constant(0, *result_type, block),
+            };
+            values.push(value);
+        }
+        self.emit_sol_return(&values, block);
+    }
+
     /// Emits a `sol.malloc` for an aggregate type, returning the address.
     ///
     /// Use for memory-located structs, arrays, bytes, and strings constructed

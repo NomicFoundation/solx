@@ -4,6 +4,8 @@
 
 /// Contract definition lowering to Sol dialect MLIR.
 pub mod contract;
+/// Solidity type conversion classification and dispatch.
+pub mod type_conversion;
 
 use std::collections::BTreeMap;
 

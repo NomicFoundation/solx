@@ -1,4 +1,4 @@
-//! Tuple deconstruction statement lowering.
+//! Variable declaration statement lowering.
 
 use melior::ir::BlockRef;
 
@@ -8,14 +8,13 @@ use slang_solidity_v2::ast::SingleTypedDeclaration;
 use slang_solidity_v2::ast::VariableDeclarationStatement;
 use slang_solidity_v2::ast::VariableDeclarationTarget;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::CallEmitter;
-use crate::ast::contract::function::expression::call::type_conversion::TypeConversion;
 use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// Emits a variable declaration with optional initializer.
-    pub(super) fn emit_variable_declaration(
+    pub fn emit_variable_declaration(
         &mut self,
         declaration: &VariableDeclarationStatement,
         block: BlockRef<'context, 'block>,
@@ -35,7 +34,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         declaration: &SingleTypedDeclaration,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let name = declaration.declaration().name().name();
         let declared_type = declaration
             .declaration()
             .get_type()
@@ -44,44 +42,35 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             })
             .unwrap_or_else(|| self.state.builder.types.ui256);
 
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
-        );
+        let emitter = self.expression_emitter();
 
         // For explicit initializers, evaluate and cast before alloca to match
         // solc's emission order (constant → cast → alloca → store).
         // For implicit zero-initialization, alloca is emitted first.
         let (block, initial_value) = if let Some(ref initializer_expression) = declaration.value() {
             let (initial_value, block) = emitter.emit_value(initializer_expression, block)?;
-            let cast_value = TypeConversion::from_target_type(
-                declared_type,
-                &emitter.state.builder,
-            )
-            .emit(initial_value, &emitter.state.builder, &block);
+            let cast_value = TypeConversion::from_target_type(declared_type, &self.state.builder)
+                .emit(initial_value, &self.state.builder, &block);
             (block, Some(cast_value))
         } else {
             (block, None)
         };
 
-        let pointer = emitter.state.builder.emit_sol_alloca(declared_type, &block);
-
-        if let Some(value) = initial_value {
-            emitter.state.builder.emit_sol_store(value, pointer, &block);
-        } else if melior::ir::r#type::IntegerType::try_from(declared_type).is_ok() {
-            let zero = self
-                .state
-                .builder
-                .emit_sol_constant(0, declared_type, &block);
-            emitter.state.builder.emit_sol_store(zero, pointer, &block);
+        let pointer = if let Some(value) = initial_value {
+            let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
+            self.state.builder.emit_sol_store(value, pointer, &block);
+            pointer
         } else {
-            unimplemented!("zero-initialization for non-integer type {declared_type}");
-        }
+            self.state
+                .builder
+                .emit_zero_initialized_alloca(declared_type, &block)
+        };
 
-        self.environment
-            .define_variable(name, pointer, declared_type);
+        self.environment.define_variable(
+            declaration.declaration().node_id(),
+            pointer,
+            declared_type,
+        );
         Ok(Some(block))
     }
 
@@ -93,17 +82,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let expression = declaration.value();
         let elements = declaration.elements();
 
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.checked,
-        );
+        let emitter = self.expression_emitter();
 
         let (values, current) = match &expression {
             Expression::TupleExpression(tuple) => {
                 let items = tuple.items();
-                anyhow::ensure!(
+                assert!(
                     items.len() == elements.len(),
                     "tuple deconstruction arity mismatch: {} LHS slots vs {} RHS values",
                     elements.len(),
@@ -112,9 +96,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let mut values = Vec::with_capacity(items.len());
                 let mut current = block;
                 for item in items.iter() {
-                    let inner = item.expression().ok_or_else(|| {
-                        anyhow::anyhow!("empty tuple element on RHS of deconstruction")
-                    })?;
+                    let inner = item
+                        .expression()
+                        .expect("a deconstruction RHS tuple element has an inner expression");
                     let (value, next) = emitter.emit_value(&inner, current)?;
                     values.push(value);
                     current = next;
@@ -124,7 +108,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Expression::FunctionCallExpression(call) => {
                 let call_emitter = CallEmitter::new(&emitter);
                 let (values, current) = call_emitter.emit_function_call_results(call, block)?;
-                anyhow::ensure!(
+                assert!(
                     values.len() == elements.len(),
                     "tuple deconstruction arity mismatch: {} LHS slots vs {} call results",
                     elements.len(),
@@ -132,7 +116,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 );
                 (values, current)
             }
-            _ => anyhow::bail!(
+            _ => unimplemented!(
                 "tuple deconstruction with this right-hand side shape is not yet supported"
             ),
         };
@@ -142,7 +126,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 // Discard the value; nothing to bind.
                 continue;
             };
-            let name = declaration.name().name();
             let builder = &self.state.builder;
             let declared_type = declaration
                 .get_type()
@@ -153,7 +136,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             let pointer = builder.emit_sol_alloca(declared_type, &current);
             builder.emit_sol_store(cast, pointer, &current);
             self.environment
-                .define_variable(name, pointer, declared_type);
+                .define_variable(declaration.node_id(), pointer, declared_type);
         }
 
         Ok(Some(current))
