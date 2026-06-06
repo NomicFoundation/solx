@@ -12,14 +12,21 @@ pub mod library;
 pub mod storage_layout;
 pub mod super_call;
 
+use std::collections::HashMap;
+
+use melior::ir::BlockRef;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
+use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::StateVariableMutability;
 
 use solx_mlir::Context;
+use solx_utils::DataLocation;
 
 use self::function::FunctionEmitter;
+use self::storage_layout::StorageSlot;
 use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers a Solidity contract to Sol dialect MLIR.
@@ -113,6 +120,38 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             self.state.current_contract_type = None;
         }
 
+        self.emit_state_variable_getters(contract, &storage_layout, &contract_body)?;
+
+        Ok(())
+    }
+
+    /// Synthesises the auto-generated external accessor for each `public` state
+    /// variable: `constant` variables fold to a pure literal getter, scalar
+    /// storage variables read their slot. Struct and indexed (mapping/array)
+    /// getters resolve through the same dispatcher; a variable whose accessor is
+    /// not yet supported is left ungenerated (the rest of the contract still
+    /// compiles).
+    fn emit_state_variable_getters(
+        &self,
+        contract: &ContractDefinition,
+        storage_layout: &HashMap<NodeId, StorageSlot>,
+        contract_body: &BlockRef<'context, '_>,
+    ) -> anyhow::Result<()> {
+        for state_variable in contract.compute_linearised_state_variables() {
+            if matches!(
+                state_variable.mutability(),
+                StateVariableMutability::Constant
+            ) {
+                self.emit_constant_getter(&state_variable, contract_body)?;
+            } else if let Some(slot) = storage_layout.get(&state_variable.node_id()) {
+                self.emit_state_variable_getter(
+                    &state_variable,
+                    slot,
+                    DataLocation::Storage,
+                    contract_body,
+                )?;
+            }
+        }
         Ok(())
     }
 
