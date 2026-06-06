@@ -14,6 +14,7 @@ pub use self::expression_ext::ExpressionExt;
 use std::collections::BTreeMap;
 
 use slang_solidity_v2::ast::ContractMember;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::SourceUnit;
 
 use solx_mlir::Context;
@@ -41,6 +42,10 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
     /// Source files containing only interfaces, libraries, or abstract
     /// contracts are skipped without error.
     ///
+    /// `free_functions` is the compilation unit's full set of file-level (free)
+    /// functions; the contract emitter pre-registers and emits the ones this
+    /// contract reaches.
+    ///
     /// # Errors
     ///
     /// Returns an error if code generation encounters unsupported constructs.
@@ -49,6 +54,7 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
     pub fn emit(
         &mut self,
         unit: &SourceUnit,
+        free_functions: &[FunctionDefinition],
     ) -> anyhow::Result<Option<(String, BTreeMap<String, String>)>> {
         let contracts = unit.contracts();
         // TODO: support multiple contracts
@@ -58,7 +64,7 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
 
         let name = contract.name().name();
         let mut emitter = ContractEmitter::new(self.state);
-        emitter.emit(contract)?;
+        emitter.emit(contract, free_functions)?;
 
         let mut method_identifiers = BTreeMap::new();
         for contract_member in contract.members().iter() {
