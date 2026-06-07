@@ -9,6 +9,7 @@ use melior::ir::Value;
 use melior::ir::ValueLike;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::CmpPredicate;
 use solx_mlir::ods::sol::NotOperation;
@@ -16,6 +17,7 @@ use solx_mlir::ods::sol::SubOperation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::operator::Operator;
+use crate::ast::operator_binding::OperatorBindings;
 use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
@@ -41,6 +43,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        // A `-` / `~` prefix on a user-defined value type bound via
+        // `using {f as op} for T global;` dispatches to the bound function
+        // rather than emitting native negation / bitwise-not.
+        if let Some(function_id) = self.user_defined_unary_operator(operand, operator) {
+            let (value, block) = self.emit_value(operand, block)?;
+            let result = self.emit_operator_call(function_id, vec![value], &block)?;
+            return Ok((result, block));
+        }
+
         match operator {
             Operator::Increment | Operator::Decrement => {
                 let (_old, new_value) = self.emit_increment_decrement(operand, operator, &block)?;
@@ -189,5 +200,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .result(0)
             .expect("binary operation always produces one result")
             .into()
+    }
+
+    /// The function bound to the prefix `operator` for `operand`'s user-defined
+    /// value type via `using {f as op} for T global;`, or `None` when `operand`
+    /// is not such a type or the operator carries no binding. A pure
+    /// classification — the caller emits the dispatched call.
+    fn user_defined_unary_operator(
+        &self,
+        operand: &Expression,
+        operator: Operator,
+    ) -> Option<NodeId> {
+        let user_operator = OperatorBindings::unary_operator(operator)?;
+        self.user_defined_operator(operand, user_operator)
     }
 }

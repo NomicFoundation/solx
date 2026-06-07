@@ -14,6 +14,7 @@ pub mod storage_layout;
 pub mod super_call;
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use melior::ir::BlockRef;
 use slang_solidity_v2::ast::ContractDefinition;
@@ -30,6 +31,7 @@ use solx_utils::DataLocation;
 use self::free_function::FreeCallCollector;
 use self::function::FunctionEmitter;
 use self::storage_layout::StorageSlot;
+use crate::ast::operator_binding::OperatorBindings;
 use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers a Solidity contract to Sol dialect MLIR.
@@ -73,8 +75,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         &mut self,
         contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],
+        operator_bindings: &OperatorBindings,
     ) -> anyhow::Result<()> {
         let contract_name = contract.name().name();
+        self.state.operator_bindings = operator_bindings.map.clone();
 
         self.pre_register_functions(contract);
 
@@ -84,8 +88,23 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // contract's module below, where they lower as ordinary internal
         // functions. (No `super`/library roots yet — those clusters extend the
         // `extra_roots` walk and add the duplicate-symbol filtering.)
-        let reached_free_functions =
+        let mut reached_free_functions =
             FreeCallCollector::reachable_free_functions(contract, free_functions, &[]);
+
+        // Operator functions bound via `using {f as op} for T global;` are free
+        // functions the reachability walk misses — they are never called by
+        // name, only invoked through an operator (`a + b`). Append the ones not
+        // already reached so their dispatched `sol.call`s resolve; they lower as
+        // ordinary internal functions and the backend drops any left unused.
+        let already_reached: HashSet<NodeId> = reached_free_functions
+            .iter()
+            .map(|function| function.node_id())
+            .collect();
+        for function in &operator_bindings.functions {
+            if !already_reached.contains(&function.node_id()) {
+                reached_free_functions.push(function.clone());
+            }
+        }
         self.register_function_signatures(&reached_free_functions);
 
         let storage_layout = Self::compute_storage_layout(contract);
