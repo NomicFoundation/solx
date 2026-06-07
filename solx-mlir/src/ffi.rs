@@ -190,6 +190,27 @@ unsafe extern "C" {
         element_type: mlir_sys::MlirType,
     ) -> mlir_sys::MlirType;
 
+    // ---- Sol type predicates ----
+
+    /// Whether `ty` is a `!sol.enum<N>`.
+    pub fn solxIsEnumType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is the `!sol.address`.
+    pub fn solxIsAddressType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.contract<…>`.
+    pub fn solxIsContractType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.fixedbytes<N>`.
+    pub fn solxIsFixedBytesType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is the single `!sol.byte` (the `bytes`/`string` element).
+    pub fn solxIsByteType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.string<…>` (`bytes` and `string` share it).
+    pub fn solxIsStringType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.array<…>`.
+    pub fn solxIsArrayType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.struct<…>`.
+    pub fn solxIsStructType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.mapping<…>`.
+    pub fn solxIsMappingType(ty: mlir_sys::MlirType) -> bool;
+
     // ---- MLIR core (not in mlir-sys) ----
 
     /// Returns the region that owns the given block.

@@ -166,4 +166,49 @@ MlirType solxCreateExtFuncRefType(MlirContext ctx, const MlirType *param_types,
     return wrap(mlir::sol::ExtFuncRefType::get(context, fnTy));
 }
 
+/*
+ * Type predicates.
+ *
+ * Typed `isa<>` introspection for Sol-dialect types — never textual AsmPrinter
+ * matching (which silently miscompiles if the type printer drifts). One
+ * predicate per Sol type; the Rust side composes categories (reference,
+ * address-like).
+ */
+
+bool solxIsEnumType(MlirType ty) {
+    return mlir::isa<mlir::sol::EnumType>(unwrap(ty));
+}
+
+bool solxIsAddressType(MlirType ty) {
+    return mlir::isa<mlir::sol::AddressType>(unwrap(ty));
+}
+
+bool solxIsContractType(MlirType ty) {
+    return mlir::isa<mlir::sol::ContractType>(unwrap(ty));
+}
+
+bool solxIsFixedBytesType(MlirType ty) {
+    return mlir::isa<mlir::sol::FixedBytesType>(unwrap(ty));
+}
+
+bool solxIsByteType(MlirType ty) {
+    return mlir::isa<mlir::sol::ByteType>(unwrap(ty));
+}
+
+bool solxIsStringType(MlirType ty) {
+    return mlir::isa<mlir::sol::StringType>(unwrap(ty));
+}
+
+bool solxIsArrayType(MlirType ty) {
+    return mlir::isa<mlir::sol::ArrayType>(unwrap(ty));
+}
+
+bool solxIsStructType(MlirType ty) {
+    return mlir::isa<mlir::sol::StructType>(unwrap(ty));
+}
+
+bool solxIsMappingType(MlirType ty) {
+    return mlir::isa<mlir::sol::MappingType>(unwrap(ty));
+}
+
 } /* extern "C" */
