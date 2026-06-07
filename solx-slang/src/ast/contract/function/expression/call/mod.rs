@@ -86,7 +86,25 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 Ok((Some(value), block))
             }
             CallKind::UdvtWrapUnwrap => {
-                unimplemented!("call dispatch: udvt wrap/unwrap")
+                let argument = positional_arguments
+                    .iter()
+                    .next()
+                    .expect("wrap/unwrap takes exactly one argument");
+                let (value, block) = self.expression_emitter.emit_value(&argument, block)?;
+                // A UDVT shares its underlying type's representation, so wrap/unwrap
+                // is a single conversion of the argument to the call's result type
+                // (the UDVT for `wrap`, its underlying type for `unwrap`). With no
+                // resolved call type the value already has the right
+                // representation, so it passes through unchanged.
+                let result = match self.expression_emitter.resolve_slang_type(call.get_type()) {
+                    Some(result_type) => {
+                        let builder = &self.expression_emitter.state.builder;
+                        TypeConversion::from_target_type(result_type, builder)
+                            .emit(value, builder, &block)
+                    }
+                    None => value,
+                };
+                Ok((Some(result), block))
             }
             CallKind::BuiltInMemberAccess(access) => {
                 self.emit_built_in_member_access(&access, Some(positional_arguments), block)
@@ -190,13 +208,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
 
         if let Expression::MemberAccessExpression(access) = &callee {
-            if matches!(
-                access.member().resolve_to_built_in(),
-                Some(BuiltIn::AbiDecode)
-            ) {
-                return CallKind::AbiDecode;
-            }
-            return CallKind::BuiltInMemberAccess(access.clone());
+            return match access.member().resolve_to_built_in() {
+                Some(BuiltIn::AbiDecode) => CallKind::AbiDecode,
+                // `T.wrap(x)` / `T.unwrap(x)` take their result type from the call
+                // itself (the UDVT or its underlying type), so they classify apart
+                // from the member-access built-ins whose result follows from their
+                // operands — like `abi.decode` above.
+                Some(BuiltIn::Wrap | BuiltIn::Unwrap) => CallKind::UdvtWrapUnwrap,
+                _ => CallKind::BuiltInMemberAccess(access.clone()),
+            };
         }
 
         let Expression::Identifier(callee_identifier) = &callee else {
