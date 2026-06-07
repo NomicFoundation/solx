@@ -52,6 +52,7 @@ use crate::ods::sol::ContinueOperation;
 use crate::ods::sol::ContractOperation;
 use crate::ods::sol::CopyOperation;
 use crate::ods::sol::DoWhileOperation;
+use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::ForOperation;
@@ -1208,6 +1209,33 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.address_cast always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.enum_cast` bridging an integer ordinal to (or from) an enum
+    /// type. Both sides share an integer representation, so this is a
+    /// representation-preserving cast that records the change of static type
+    /// (e.g. `type(E).min` materialised as the enum's lowest member).
+    pub fn emit_sol_enum_cast<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        to_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                EnumCastOperation::builder(self.context, self.unknown_location)
+                    .inp(value)
+                    .out(to_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.enum_cast always produces one result")
             .into()
     }
 
