@@ -28,6 +28,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         operator: Operator,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        if let Some((old, _new, block)) =
+            self.emit_increment_decrement_indexed(operand, operator, block)?
+        {
+            return Ok((old, block));
+        }
         let (old, _) = self.emit_increment_decrement(operand, operator, &block)?;
         Ok((old, block))
     }
@@ -54,6 +59,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         match operator {
             Operator::Increment | Operator::Decrement => {
+                if let Some((_old, new_value, block)) =
+                    self.emit_increment_decrement_indexed(operand, operator, block)?
+                {
+                    return Ok((new_value, block));
+                }
                 let (_old, new_value) = self.emit_increment_decrement(operand, operator, &block)?;
                 Ok((new_value, block))
             }
@@ -175,6 +185,47 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 )
             }
         }
+    }
+
+    /// Emits `++` / `--` on a *computed* lvalue — an `a[i]` element or a struct
+    /// field — returning `Some((old, new, block))`, or `None` for any other
+    /// operand so the caller falls through to the identifier path.
+    ///
+    /// Unlike the identifier case, the operand evaluates a sub-expression (the
+    /// index / base), so the post-evaluation block is threaded back out. The
+    /// resolved address is a value-typed pointer (a reference type is never the
+    /// operand of `++`/`--`), so it is loaded, stepped, and stored like the
+    /// pointer lvalue in `emit_assignment`.
+    fn emit_increment_decrement_indexed(
+        &self,
+        operand: &Expression,
+        operator: Operator,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<
+        Option<(
+            Value<'context, 'block>,
+            Value<'context, 'block>,
+            BlockRef<'context, 'block>,
+        )>,
+    > {
+        let (address, element_type, block) = match operand {
+            Expression::IndexAccessExpression(index_access) => {
+                self.emit_index_access_address(index_access, block)?
+            }
+            Expression::MemberAccessExpression(access) => {
+                self.emit_struct_field_address(access, block)?
+            }
+            _ => return Ok(None),
+        };
+        let old = self
+            .state
+            .builder
+            .emit_sol_load(address, element_type, &block)?;
+        let new_value = self.emit_step(old, operator, element_type, &block);
+        self.state
+            .builder
+            .emit_sol_store(new_value, address, &block);
+        Ok(Some((old, new_value, block)))
     }
 
     /// Applies the `++` / `--` step to a loaded value: adds or subtracts a typed
