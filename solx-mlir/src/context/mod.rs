@@ -194,6 +194,16 @@ impl<'context> Context<'context> {
         }
     }
 
+    /// Records a cross-contract reference (e.g. the object name passed to
+    /// `sol.new`). Duplicates are ignored. The accumulated list is drained
+    /// into [`crate::output::MlirOutput::dependencies`] at finalize time.
+    pub fn add_dependency(&self, name: String) {
+        let mut dependencies = self.dependencies.borrow_mut();
+        if !dependencies.iter().any(|existing| existing == &name) {
+            dependencies.push(name);
+        }
+    }
+
     /// Registers a function signature keyed by its AST definition id.
     pub fn register_function_signature(
         &mut self,
@@ -348,6 +358,7 @@ impl<'context> Context<'context> {
             sol_source,
             deploy_source: deploy_llvm,
             runtime_source: runtime_llvm,
+            dependencies: self.dependencies.into_inner(),
         })
     }
 
