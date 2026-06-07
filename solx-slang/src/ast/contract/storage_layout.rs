@@ -90,6 +90,22 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 ),
             );
         }
+        // `immutable` variables have no native storage; slang lays them out as
+        // storage slots appended after the persistent layout, and the recut
+        // lowers them as ordinary storage so a read after the constructor's
+        // write observes the assigned value.
+        for item in abi.immutable_storage_layout() {
+            layout.insert(
+                item.node_id(),
+                StorageSlot::new(
+                    item.slot(),
+                    item.offset() as u32,
+                    item.label(),
+                    item.node_id(),
+                    DataLocation::Storage,
+                ),
+            );
+        }
         layout
     }
 }

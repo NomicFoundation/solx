@@ -97,11 +97,7 @@ features = [
 
 # Slang
 [workspace.dependencies.slang_solidity_v2]
-git = "https://github.com/NomicFoundation/slang.git"
-# TODO: pin to a release tag instead of a revision.
-rev = "e5d910159ef0e9e3d1e1c599d1f934df62746d81"
-
-[workspace.dependencies.slang_solidity_v2_common]
-git = "https://github.com/NomicFoundation/slang.git"
-# TODO: pin to a release tag instead of a revision.
-rev = "e5d910159ef0e9e3d1e1c599d1f934df62746d81"
+# Vendored slang fork: all solx-specific fixes live on the single `dev-solx`
+# branch (one branch per vendored repo). Depends on its tip for now.
+git = "file:///Users/oleksandrzarudnyi/src/slang"
+branch = "dev-solx"
