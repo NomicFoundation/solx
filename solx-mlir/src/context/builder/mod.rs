@@ -48,8 +48,11 @@ use crate::ods::sol::ContinueOperation;
 use crate::ods::sol::ContractOperation;
 use crate::ods::sol::CopyOperation;
 use crate::ods::sol::DoWhileOperation;
+use crate::ods::sol::ExtFuncConstantOperation;
+use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::ForOperation;
 use crate::ods::sol::FuncOperation;
+use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::GepOperation;
 use crate::ods::sol::IfOperation;
 use crate::ods::sol::LoadOperation;
@@ -1202,6 +1205,107 @@ impl<'context> Builder<'context> {
             .result(0)
             .expect("sol.address_cast always produces one result")
             .into()
+    }
+
+    /// Emits a `sol.ext_func_constant` packing a callee `address` and a 4-byte
+    /// `selector` into an `!sol.ext_func_ref<…>` external function reference —
+    /// the callee value of an external call.
+    pub fn emit_sol_ext_func_constant<'block, B>(
+        &self,
+        address: Value<'context, 'block>,
+        selector: u32,
+        ext_func_ref_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                ExtFuncConstantOperation::builder(self.context, self.unknown_location)
+                    .addr(address)
+                    .selector(IntegerAttribute::new(
+                        IntegerType::new(self.context, TypeFactory::SELECTOR_BIT_WIDTH).into(),
+                        selector as i64,
+                    ))
+                    .result(ext_func_ref_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.ext_func_constant always produces one result")
+            .into()
+    }
+
+    /// Emits `sol.gasleft` yielding all remaining gas as a `ui256` — the default
+    /// gas forwarded by an external call without an explicit `{gas: ...}`, and
+    /// the gas of a bare low-level call.
+    pub fn emit_sol_gas_left<'block, B>(&self, block: &B) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                GasLeftOperation::builder(self.context, self.unknown_location)
+                    .val(self.types.ui256)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.gasleft always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.ext_icall` (external call through an external function
+    /// reference), forwarding all remaining gas and the given `value`. ABI
+    /// encoding of `operands` and decoding of the results are implicit in the
+    /// op's lowering (driven by the callee's `ext_func_ref` signature). Returns
+    /// the decoded result values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a result cannot be retrieved.
+    pub fn emit_sol_ext_icall<'block, B>(
+        &self,
+        callee: Value<'context, 'block>,
+        operands: &[Value<'context, 'block>],
+        result_types: &[Type<'context>],
+        value: Value<'context, 'block>,
+        static_call: bool,
+        block: &B,
+    ) -> anyhow::Result<Vec<Value<'context, 'block>>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        // Forward all remaining gas (`gasleft()`), the default for an external
+        // call without an explicit `{gas: ...}` option.
+        let gas: Value<'context, 'block> = self.emit_sol_gas_left(block);
+        // `sol.ext_icall` results are `(i1 status, decoded-returns...)`. Prepend
+        // the status type and drop it from the values handed back — a non-try
+        // call reverts internally on failure, so the status is always true here.
+        let mut out_types = Vec::with_capacity(result_types.len() + 1);
+        out_types.push(self.types.i1);
+        out_types.extend_from_slice(result_types);
+        // A call to a `view`/`pure` function lowers to `STATICCALL`, which
+        // reverts if the callee attempts a state change (matching solc).
+        let mut operation_builder = ExtICallOperation::builder(self.context, self.unknown_location)
+            .outs(&out_types)
+            .callee(callee)
+            .callee_operands(operands)
+            .gas(gas)
+            .value(value);
+        if static_call {
+            operation_builder = operation_builder.static_call(Attribute::unit(self.context));
+        }
+        let operation = block.append_operation(operation_builder.build().into());
+        let mut results = Vec::with_capacity(result_types.len());
+        for index in 0..result_types.len() {
+            results.push(operation.result(index + 1)?.into());
+        }
+        Ok(results)
     }
 
     // ==== State variables ====

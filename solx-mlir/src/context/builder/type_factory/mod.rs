@@ -226,4 +226,28 @@ impl<'context> TypeFactory<'context> {
         // C++ Sol dialect. The context pointer is valid.
         unsafe { Type::from_raw(crate::ffi::solxCreateEnumType(self.context.to_raw(), max)) }
     }
+
+    /// Creates a `sol::ExtFuncRefType` — an external function reference (callee
+    /// address + selector) over a function signature `parameter_types ->
+    /// result_types`. The callee value of an external call.
+    pub fn ext_func_ref(
+        &self,
+        parameter_types: &[Type<'context>],
+        result_types: &[Type<'context>],
+    ) -> Type<'context> {
+        let parameters: Vec<_> = parameter_types.iter().map(|t| t.to_raw()).collect();
+        let results: Vec<_> = result_types.iter().map(|t| t.to_raw()).collect();
+        // SAFETY: `solxCreateExtFuncRefType` returns a valid MlirType from the
+        // C++ Sol dialect. The pointers reference local vectors valid for the
+        // duration of the call.
+        unsafe {
+            Type::from_raw(crate::ffi::solxCreateExtFuncRefType(
+                self.context.to_raw(),
+                parameters.as_ptr(),
+                parameters.len(),
+                results.as_ptr(),
+                results.len(),
+            ))
+        }
+    }
 }
