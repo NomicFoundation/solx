@@ -30,6 +30,7 @@ use solx_utils::DataLocation;
 
 use self::free_function::FreeCallCollector;
 use self::function::FunctionEmitter;
+use self::library::LibraryCallCollector;
 use self::storage_layout::StorageSlot;
 use crate::ast::operator_binding::OperatorBindings;
 use crate::ast::type_conversion::TypeConversion;
@@ -91,20 +92,32 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let mut reached_free_functions =
             FreeCallCollector::reachable_free_functions(contract, free_functions, &[]);
 
-        // Operator functions bound via `using {f as op} for T global;` are free
-        // functions the reachability walk misses — they are never called by
-        // name, only invoked through an operator (`a + b`). Append the ones not
-        // already reached so their dispatched `sol.call`s resolve; they lower as
-        // ordinary internal functions and the backend drops any left unused.
-        let already_reached: HashSet<NodeId> = reached_free_functions
+        // Out-of-band function sources the reachability walk does not reach by
+        // name are appended through one growing `seen` set, so each dedup is
+        // against everything appended so far (not a per-source stale snapshot).
+        let mut seen: HashSet<NodeId> = reached_free_functions
             .iter()
             .map(|function| function.node_id())
             .collect();
-        for function in &operator_bindings.functions {
-            if !already_reached.contains(&function.node_id()) {
-                reached_free_functions.push(function.clone());
-            }
-        }
+
+        // Operator functions bound via `using {f as op} for T global;` are free
+        // functions the reachability walk misses — they are never called by
+        // name, only invoked through an operator (`a + b`). They lower as ordinary
+        // internal functions and the backend drops any left unused.
+        Self::extend_unreached(
+            &mut reached_free_functions,
+            &mut seen,
+            operator_bindings.functions.iter().cloned(),
+        );
+
+        // Internal (no-selector) library functions called via `L.f(...)` or
+        // using-for `x.f(...)` are not in the linearised set either; append the
+        // not-already-reached ones so they register and emit as ordinary internal
+        // `sol.func`s (a library call resolves them by node id).
+        let library_functions =
+            LibraryCallCollector::reachable_library_functions(contract, free_functions, &[]);
+        Self::extend_unreached(&mut reached_free_functions, &mut seen, library_functions);
+
         self.register_function_signatures(&reached_free_functions);
 
         let storage_layout = Self::compute_storage_layout(contract);
@@ -222,6 +235,23 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 parameter_types,
                 return_types,
             );
+        }
+    }
+
+    /// Appends to `reached` every function in `additions` whose node id is not
+    /// already in `seen`, growing `seen` as it goes — the single dedup-append for
+    /// the out-of-band function sources (operator-bound, library) that the
+    /// reachability walk does not reach by name. One growing set keeps each
+    /// source deduplicated against all those appended before it.
+    fn extend_unreached(
+        reached: &mut Vec<FunctionDefinition>,
+        seen: &mut HashSet<NodeId>,
+        additions: impl IntoIterator<Item = FunctionDefinition>,
+    ) {
+        for function in additions {
+            if seen.insert(function.node_id()) {
+                reached.push(function);
+            }
         }
     }
 

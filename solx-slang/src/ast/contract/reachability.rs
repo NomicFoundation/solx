@@ -74,6 +74,22 @@ impl ReachabilityWalk {
         }
     }
 
+    /// Whether `node_id` is already in the reached result set. Lets a caller
+    /// decide one-time bookkeeping (e.g. marking a newly-reached function) before
+    /// it calls [`reach`](Self::reach), which is idempotent.
+    pub fn is_collected(&self, node_id: NodeId) -> bool {
+        self.collected.contains_key(&node_id)
+    }
+
+    /// Queues `function`'s body to be walked without adding it to the result set
+    /// — for a function reached only to follow the calls *it* makes (e.g. a free
+    /// function emitted elsewhere). A no-op if the body was already walked.
+    pub fn enqueue(&mut self, function: FunctionDefinition) {
+        if !self.walked.contains(&function.node_id()) {
+            self.to_walk.push(function);
+        }
+    }
+
     /// Consumes the walk and returns the reached functions, deduplicated by
     /// node id.
     pub fn into_reached(self) -> Vec<FunctionDefinition> {

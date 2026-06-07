@@ -8,13 +8,19 @@
 //! can pre-register and emit them.
 //!
 
+use std::collections::HashSet;
+
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionVisibility;
 use slang_solidity_v2::ast::MemberAccessExpression;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::visitor::Visitor;
+use slang_solidity_v2::ast::visitor::accept_function_definition;
+
+use crate::ast::contract::reachability::ReachabilityWalk;
 
 /// Visitor that records library functions reached from a walked function body.
 ///
@@ -46,8 +52,57 @@ impl LibraryCallCollector {
         free_functions: &[FunctionDefinition],
         extra_roots: &[FunctionDefinition],
     ) -> Vec<FunctionDefinition> {
-        let _ = (contract, free_functions, extra_roots);
-        unimplemented!("library-function reachability walk")
+        let own: HashSet<NodeId> = contract
+            .compute_linearised_functions()
+            .iter()
+            .map(|function| function.node_id())
+            .collect();
+        let free_ids: HashSet<NodeId> = free_functions.iter().map(|f| f.node_id()).collect();
+        let mut walk = ReachabilityWalk::new(contract, extra_roots);
+        // Library functions reached so far — walking one is "inside a library",
+        // which enables bare-identifier sibling-call collection. Contract roots
+        // (linearised functions + constructor) are not libraries, so they collect
+        // only member-access (`L.f`) calls.
+        let mut library_ids: HashSet<NodeId> = HashSet::new();
+
+        while let Some(function) = walk.next_body() {
+            let mut collector = LibraryCallCollector {
+                inside_library: library_ids.contains(&function.node_id()),
+                ..LibraryCallCollector::default()
+            };
+            accept_function_definition(&function, &mut collector);
+            // Member-access references (`L.f` / using-attached `x.f`) are always
+            // library functions; bare-identifier references collected here are
+            // no-selector siblings reached inside a library. Both exclude the
+            // contract's own (inherited) functions reached via `super.f`, and the
+            // free functions emitted separately under their own name.
+            let member_reached = collector
+                .functions
+                .into_iter()
+                .filter(|f| !own.contains(&f.node_id()));
+            let bare_reached = collector
+                .bare_functions
+                .into_iter()
+                .filter(|f| !own.contains(&f.node_id()) && !free_ids.contains(&f.node_id()));
+            for library_function in member_reached.chain(bare_reached) {
+                // Newly seen — also a library function, so mark it before `reach`
+                // queues its body, which is then walked with `inside_library` set.
+                if !walk.is_collected(library_function.node_id()) {
+                    library_ids.insert(library_function.node_id());
+                }
+                walk.reach(library_function);
+            }
+            // Walk reached free functions for the library calls *they* make,
+            // without collecting them (they emit separately under their own name)
+            // — this catches `function fu() { L.inter(); }` called as `fu()`.
+            for reached_function in collector.reached {
+                if free_ids.contains(&reached_function.node_id()) {
+                    walk.enqueue(reached_function);
+                }
+            }
+        }
+
+        walk.into_reached()
     }
 }
 
