@@ -5,6 +5,7 @@ use melior::ir::BlockRef;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MultiTypedDeclaration;
 use slang_solidity_v2::ast::SingleTypedDeclaration;
+use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::VariableDeclarationStatement;
 use slang_solidity_v2::ast::VariableDeclarationTarget;
 
@@ -34,11 +35,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         declaration: &SingleTypedDeclaration,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let declared_type = declaration
-            .declaration()
-            .get_type()
+        let slang_declared_type = declaration.declaration().get_type();
+        let declared_type = slang_declared_type
+            .as_ref()
             .map(|slang_type| {
-                TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
+                TypeConversion::resolve_slang_type(slang_type, None, &self.state.builder)
             })
             .unwrap_or_else(|| self.state.builder.types.ui256);
 
@@ -59,6 +60,38 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let pointer = if let Some(value) = initial_value {
             let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
             self.state.builder.emit_sol_store(value, pointer, &block);
+            pointer
+        } else if matches!(
+            slang_declared_type.as_ref(),
+            Some(SlangType::FixedSizeArray(_) | SlangType::Struct(_))
+        ) {
+            // A memory aggregate (`T[n] memory a;`, `S memory s;`) declared
+            // without an initializer is default-initialised by Solidity to a
+            // freshly allocated zero-filled buffer, not left as a dangling
+            // pointer (indexing it would otherwise revert / read garbage).
+            let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
+            let zero = self
+                .state
+                .builder
+                .emit_sol_malloc_zeroed(declared_type, &block);
+            self.state.builder.emit_sol_store(zero, pointer, &block);
+            pointer
+        } else if matches!(
+            slang_declared_type.as_ref(),
+            Some(SlangType::String(_) | SlangType::Bytes(_))
+        ) {
+            // A dynamic `string` / `bytes` without an initializer is an empty
+            // (length-0) buffer, so `""` reads back rather than garbage.
+            let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
+            let size =
+                self.state
+                    .builder
+                    .emit_sol_constant(0, self.state.builder.types.ui256, &block);
+            let zero = self
+                .state
+                .builder
+                .emit_sol_malloc_sized_zeroed(declared_type, size, &block);
+            self.state.builder.emit_sol_store(zero, pointer, &block);
             pointer
         } else {
             self.state
