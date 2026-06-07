@@ -801,6 +801,56 @@ impl<'context> Builder<'context> {
             .into()
     }
 
+    /// Emits a `sol.malloc` of a fixed aggregate, zero-initialising it — the
+    /// default value of a freshly-allocated aggregate.
+    pub fn emit_sol_malloc_zeroed<'block, B>(
+        &self,
+        result_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                MallocOperation::builder(self.context, self.unknown_location)
+                    .addr(result_type)
+                    .zero_init(Attribute::unit(self.context))
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.malloc always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.malloc` of a dynamic aggregate of `size` elements/bytes,
+    /// zero-initialised — `new T[](n)` / `new bytes(n)` / `new string(n)`.
+    pub fn emit_sol_malloc_sized_zeroed<'block, B>(
+        &self,
+        result_type: Type<'context>,
+        size: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                MallocOperation::builder(self.context, self.unknown_location)
+                    .addr(result_type)
+                    .size(size)
+                    .zero_init(Attribute::unit(self.context))
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.malloc always produces one result")
+            .into()
+    }
+
     /// Emits a `sol.copy` between two references.
     ///
     /// Use for source-level assignments that cross data locations (e.g. a

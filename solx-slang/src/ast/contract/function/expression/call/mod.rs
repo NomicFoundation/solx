@@ -149,7 +149,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 )
                 .map(|(value, block)| (Some(value), block))
             }
-            CallKind::New => unimplemented!("call dispatch: new expression"),
+            CallKind::New => self
+                .expression_emitter
+                .emit_new(call, positional_arguments, block),
             CallKind::WithOptions(_) => {
                 unimplemented!("call dispatch: call with options")
             }
@@ -222,6 +224,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 Some(_) => CallKind::BuiltInMemberAccess(access.clone()),
                 None => CallKind::Member(self.classify_member(access)),
             };
+        }
+
+        if let Expression::NewExpression(_) = &callee {
+            return CallKind::New;
         }
 
         let Expression::Identifier(callee_identifier) = &callee else {
