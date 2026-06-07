@@ -6,13 +6,17 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StateVariableDefinition;
+use slang_solidity_v2::ast::Type as SlangType;
+use solx_utils::DataLocation;
 
+use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::expression::call::static_mode::StaticMode;
 use crate::ast::type_conversion::TypeConversion;
@@ -65,8 +69,84 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
     }
 
-    /// Emits a self getter call (`this.v(args)`); A4 (#H-M7): nested/reference
-    /// getters are a LOUD residual here.
+    /// The ABI signature of a `public` state variable's synthesised getter:
+    /// the key/index parameter types and the returned value types.
+    ///
+    /// A scalar variable `T public x` is `() -> (T)`; a mapping `mapping(K => V)`
+    /// is `(K) -> (V)`; an array is `(uint256) -> (element)`; a struct is
+    /// `() -> (flattened returnable members)` (sharing the synthesised getter's
+    /// member layout, so the call decodes exactly what the getter returns).
+    /// Single-level only — a nested or reference-typed key / value / element
+    /// returns `None`, a LOUD residual at the (already-classified) call site.
+    fn getter_signature(
+        &self,
+        state_variable: &StateVariableDefinition,
+    ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)> {
+        let declared_type = state_variable.get_type()?;
+        let builder = &self.expression_emitter.state.builder;
+        match &declared_type {
+            SlangType::Mapping(mapping_type) => {
+                let key = mapping_type.key_type();
+                let value = mapping_type.value_type();
+                if key.is_reference_type() || value.is_reference_type() {
+                    return None;
+                }
+                Some((
+                    vec![TypeConversion::resolve_slang_type(&key, None, builder)],
+                    vec![TypeConversion::resolve_slang_type(&value, None, builder)],
+                ))
+            }
+            SlangType::Array(array_type) => {
+                let element = array_type.element_type();
+                if element.is_reference_type() {
+                    return None;
+                }
+                Some((
+                    vec![builder.types.ui256],
+                    vec![TypeConversion::resolve_slang_type(&element, None, builder)],
+                ))
+            }
+            SlangType::FixedSizeArray(array_type) => {
+                let element = array_type.element_type();
+                if element.is_reference_type() {
+                    return None;
+                }
+                Some((
+                    vec![builder.types.ui256],
+                    vec![TypeConversion::resolve_slang_type(&element, None, builder)],
+                ))
+            }
+            SlangType::Struct(struct_type) => {
+                let Definition::Struct(struct_definition) = struct_type.definition() else {
+                    return None;
+                };
+                let struct_mlir_type = TypeConversion::resolve_slang_type(
+                    &declared_type,
+                    Some(DataLocation::Storage),
+                    builder,
+                );
+                let plan = ContractEmitter::struct_getter_layout(
+                    &struct_definition,
+                    struct_mlir_type,
+                    builder,
+                )?;
+                let return_types = plan
+                    .iter()
+                    .map(|(_, _, result_type)| *result_type)
+                    .collect();
+                Some((Vec::new(), return_types))
+            }
+            other if !other.is_reference_type() => Some((
+                Vec::new(),
+                vec![TypeConversion::resolve_slang_type(other, None, builder)],
+            )),
+            _ => None,
+        }
+    }
+
+    /// Emits a self getter call (`this.x()` / `this.m(key)`); A4 (#H-M7):
+    /// nested / reference-typed getters are a LOUD residual via
+    /// [`Self::getter_signature`].
     pub fn emit_self_getter_call(
         &self,
         access: &MemberAccessExpression,
@@ -75,8 +155,30 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         call_value: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let _ = (access, state_variable, arguments, call_value, block);
-        unimplemented!("self getter call")
+        let selector = state_variable
+            .compute_selector()
+            .expect("a public state variable has a getter selector");
+        let Some((parameter_types, return_types)) = self.getter_signature(state_variable) else {
+            unimplemented!(
+                "self getter of a nested or reference-typed state variable is not yet supported"
+            );
+        };
+        let (argument_values, current_block) =
+            self.emit_coerced_arguments(arguments, &parameter_types, block)?;
+        let (receiver, current_block) = self
+            .expression_emitter
+            .emit_value(&access.operand(), current_block)?;
+        let results = self.emit_external_call(
+            receiver,
+            selector,
+            &parameter_types,
+            &return_types,
+            &argument_values,
+            call_value,
+            StaticMode::Call,
+            &current_block,
+        )?;
+        Ok((results, current_block))
     }
 
     /// Emits an external getter call (`instance.value()` scalar); A4
@@ -88,8 +190,34 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let _ = (access, state_variable, arguments, block);
-        unimplemented!("external getter call")
+        // The oracle's external accessor is single-valued, so an arg-bearing
+        // mapping / array getter on another instance is a LOUD residual
+        // (#H-M10/M11); only the no-argument scalar / struct getter lowers here.
+        if !arguments.is_empty() {
+            unimplemented!("external getter with key/index arguments is not yet supported");
+        }
+        let selector = state_variable
+            .compute_selector()
+            .expect("a public state variable has a getter selector");
+        let Some((parameter_types, return_types)) = self.getter_signature(state_variable) else {
+            unimplemented!(
+                "external getter of a nested or reference-typed state variable is not yet supported"
+            );
+        };
+        let (receiver, current_block) = self
+            .expression_emitter
+            .emit_value(&access.operand(), block)?;
+        let results = self.emit_external_call(
+            receiver,
+            selector,
+            &parameter_types,
+            &return_types,
+            &[],
+            None,
+            StaticMode::Call,
+            &current_block,
+        )?;
+        Ok((results.into_iter().next(), current_block))
     }
 
     /// Emits a bare address call (`addr.call`/`delegatecall`/`staticcall`),
