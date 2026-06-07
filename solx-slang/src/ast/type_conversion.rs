@@ -2,7 +2,9 @@
 //! Solidity type conversion classification and dispatch.
 //!
 
+use melior::ir::BlockRef;
 use melior::ir::Type;
+use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
@@ -205,6 +207,53 @@ impl<'context> TypeConversion<'context> {
                 Self::resolve_slang_type(&target_type, inherited_location, builder)
             }
             _ => unimplemented!("unsupported Slang type"),
+        }
+    }
+
+    /// Emits the zero value of a scalar value type that is not a plain
+    /// integer/bool: `address(0)`, a zero `bytesN`, or an enum's `0` variant
+    /// (a UDVT defers to its underlying type). The zero constant is materialised
+    /// at the representation's own width and bridged with that type's dedicated
+    /// cast — never by narrowing a wider constant, which the `sol.cast` fold
+    /// mishandles. Plain integers/bools are zeroed directly by
+    /// `Builder::emit_zero_initialized_alloca` and do not reach here.
+    pub fn emit_scalar_zero<'block>(
+        slang_type: &SlangType,
+        mlir_type: Type<'context>,
+        builder: &solx_mlir::Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        match slang_type {
+            SlangType::Integer(_) | SlangType::Boolean(_) => {
+                builder.emit_sol_constant(0, mlir_type, block)
+            }
+            SlangType::Address(_) => {
+                // `sol.address_cast`'s operand is the 160-bit address width;
+                // emit the zero at that width directly (no constant narrowing).
+                let zero = builder.emit_sol_constant(0, builder.types.ui160, block);
+                builder.emit_sol_address_cast(zero, mlir_type, block)
+            }
+            SlangType::ByteArray(byte_array_type) => {
+                // `sol.bytes_cast`'s operand must match the fixed-bytes width
+                // (`N * 8` bits), so emit the zero at that width directly.
+                let bits = byte_array_type.width() * 8;
+                let int_type = Type::from(IntegerType::unsigned(builder.context, bits));
+                let zero = builder.emit_sol_constant(0, int_type, block);
+                builder.emit_sol_bytes_cast(zero, mlir_type, block)
+            }
+            SlangType::Enum(_) => {
+                let zero = builder.emit_sol_constant(0, builder.types.ui256, block);
+                builder.emit_sol_enum_cast(zero, mlir_type, block)
+            }
+            SlangType::UserDefinedValue(udvt) => {
+                let target_type = udvt
+                    .target_type()
+                    .expect("UDVT target type resolved by semantic analysis");
+                Self::emit_scalar_zero(&target_type, mlir_type, builder, block)
+            }
+            _ => unreachable!(
+                "emit_scalar_zero handles only address/bytesN/enum/integer/bool/UDVT value types"
+            ),
         }
     }
 

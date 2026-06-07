@@ -409,6 +409,20 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             let zero = builder.emit_sol_malloc_sized_zeroed(return_type, size, block);
             builder.emit_sol_store(zero, pointer, block);
             pointer
+        } else if let Some(
+            scalar_value_type @ (SlangType::Address(_)
+            | SlangType::ByteArray(_)
+            | SlangType::Enum(_)
+            | SlangType::UserDefinedValue(_)),
+        ) = slang_type
+        {
+            // A non-integer/bool scalar value type (address, `bytesN`, enum, or
+            // a UDVT over one) needs its representation's own zero.
+            let pointer = builder.emit_sol_alloca(return_type, block);
+            let zero =
+                TypeConversion::emit_scalar_zero(scalar_value_type, return_type, builder, block);
+            builder.emit_sol_store(zero, pointer, block);
+            pointer
         } else {
             builder.emit_zero_initialized_alloca(return_type, block)
         }

@@ -93,6 +93,25 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 .emit_sol_malloc_sized_zeroed(declared_type, size, &block);
             self.state.builder.emit_sol_store(zero, pointer, &block);
             pointer
+        } else if let Some(
+            scalar_value_type @ (SlangType::Address(_)
+            | SlangType::ByteArray(_)
+            | SlangType::Enum(_)
+            | SlangType::UserDefinedValue(_)),
+        ) = slang_declared_type.as_ref()
+        {
+            // A value type that is not a plain integer/bool (an address,
+            // `bytesN`, an enum, or a UDVT over one) needs its representation's
+            // own zero, not a raw zeroed integer slot.
+            let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
+            let zero = TypeConversion::emit_scalar_zero(
+                scalar_value_type,
+                declared_type,
+                &self.state.builder,
+                &block,
+            );
+            self.state.builder.emit_sol_store(zero, pointer, &block);
+            pointer
         } else {
             self.state
                 .builder
