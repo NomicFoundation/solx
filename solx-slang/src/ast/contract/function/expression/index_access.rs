@@ -2,6 +2,7 @@
 //! Index access expression lowering: `a[i]`, `m[k]`, `s[i]`.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -11,6 +12,7 @@ use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::ods::sol::SliceOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
@@ -28,6 +30,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         index_access: &IndexAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        // A slice `a[start:end]` produces a sub-array VALUE (not an element
+        // address), lowered to `sol.slice`. The bounded forms `a[i:j]` / `a[:j]`
+        // are detectable through this slang pin's typed API as `end().is_some()`.
+        // The open-ended `a[i:]` is indistinguishable from the index `a[i]`
+        // (both have `end() == None`) without slang's `is_slice()` colon flag —
+        // an un-upstreamed slang patch absent from this upstream pin — so it
+        // stays deferred until that API is vendored.
+        if index_access.end().is_some() {
+            return self
+                .emit_slice(index_access, block)
+                .map(|(value, block)| (Some(value), block));
+        }
         let (address, element_type, block) = self.emit_index_access_address(index_access, block)?;
         let value = self
             .state
@@ -43,6 +57,66 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .builder
             .emit_sol_bytes_cast(value, slang_expected, &block);
         Ok((Some(value), block))
+    }
+
+    /// Emits a bounded calldata slice `a[start:end]` as a `sol.slice` value.
+    /// `start` defaults to `0` when omitted (`a[:end]`); both indices are
+    /// widened to `ui256`. Dispatched only when `end()` is `Some` (see
+    /// [`Self::emit_index_access`]), so the upper bound is always explicit.
+    fn emit_slice(
+        &self,
+        index_access: &IndexAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let base = index_access.operand();
+        let (base_value, block) = self.emit_value(&base, block)?;
+        let ui256 = self.state.builder.types.ui256;
+        let (start_value, block) = match index_access.start() {
+            Some(start_expression) => {
+                let (value, block) = self.emit_value(&start_expression, block)?;
+                let value = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
+                    value,
+                    &self.state.builder,
+                    &block,
+                );
+                (value, block)
+            }
+            None => {
+                let zero = self.state.builder.emit_sol_constant(0, ui256, &block);
+                (zero, block)
+            }
+        };
+        let end_expression = index_access
+            .end()
+            .expect("emit_slice is dispatched only when end() is Some");
+        let (end_value, block) = self.emit_value(&end_expression, block)?;
+        let end_value = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
+            end_value,
+            &self.state.builder,
+            &block,
+        );
+        let result_type = TypeConversion::resolve_slang_type(
+            &index_access
+                .get_type()
+                .expect("slang types every slice expression"),
+            None,
+            &self.state.builder,
+        );
+        let builder = &self.state.builder;
+        let value = block
+            .append_operation(
+                SliceOperation::builder(builder.context, builder.unknown_location)
+                    .arr(base_value)
+                    .start(start_value)
+                    .end(end_value)
+                    .res(result_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.slice always produces one result")
+            .into();
+        Ok((value, block))
     }
 
     /// Emits the address yielded by `a[i]` / `m[k]` together with the element
