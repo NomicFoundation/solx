@@ -17,6 +17,7 @@ use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use solx_mlir::ods::sol::AddModOperation;
+use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::GasLeftOperation;
 use solx_mlir::ods::sol::Keccak256Operation;
@@ -261,8 +262,38 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let (value, block) = self.emit_type_name(access, block)?;
                 Ok((Some(value), block))
             }
+            Some(BuiltIn::StringConcat | BuiltIn::BytesConcat) => {
+                let arguments = arguments.expect("concat is a member-access call");
+                self.emit_concat(arguments, block)
+            }
             resolved => self.emit_environment_global(resolved, access, block),
         }
+    }
+
+    /// Lowers `string.concat(...)` / `bytes.concat(...)` to `sol.concat`, which
+    /// takes a variadic list of string / `bytesN` values and yields a freshly
+    /// allocated memory string. An empty argument list is valid
+    /// (`string.concat()` → `""`).
+    fn emit_concat(
+        &self,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let (values, block) = self.emit_argument_values(arguments, block)?;
+        let builder = &self.expression_emitter.state.builder;
+        let result_type = builder.types.string(solx_utils::DataLocation::Memory);
+        let value = block
+            .append_operation(
+                ConcatOperation::builder(builder.context, builder.unknown_location)
+                    .args(&values)
+                    .result(result_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.concat always produces one result")
+            .into();
+        Ok((Some(value), block))
     }
 
     /// Emits each positional argument and returns the resulting values
