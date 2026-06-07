@@ -9,7 +9,6 @@ use melior::ir::Value;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Expression;
-use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::storage_layout::StorageSlot;
@@ -76,7 +75,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let builder = &self.state.builder;
             let element_type = TypeConversion::resolve_slang_type(&declared_type, None, builder);
             let address_type =
-                Self::address_type(builder, element_type, DataLocation::Storage, &declared_type);
+                Self::address_type(builder, element_type, slot.location, &declared_type);
             let storage_ref = builder.emit_sol_addr_of(&slot.name, address_type, &block);
             let (value, next_block) = self.emit_value(&initializer, block)?;
             block = next_block;
@@ -102,7 +101,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .state
             .builder
             .types
-            .pointer(element_type, DataLocation::Storage);
+            .pointer(element_type, slot.location);
         self.state
             .builder
             .emit_sol_addr_of(&slot.name, pointer_type, block)

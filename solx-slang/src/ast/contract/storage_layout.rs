@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use ruint::aliases::U256;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::NodeId;
+use solx_utils::DataLocation;
 
 use crate::ast::contract::ContractEmitter;
 
@@ -22,15 +23,27 @@ pub struct StorageSlot {
     /// The slang AST node id disambiguates like-named variables across
     /// inherited contracts.
     pub name: String,
+    /// Storage class: `Storage` selects SLOAD/SSTORE, `Transient`
+    /// (EIP-1153 `transient` variables) selects TLOAD/TSTORE. The two number
+    /// their slots independently; the node-id-qualified symbol keeps them
+    /// distinct without a name prefix.
+    pub location: DataLocation,
 }
 
 impl StorageSlot {
     /// Creates a slot with `{label}_{node_id}` as the MLIR symbol name.
-    pub fn new(slot: U256, byte_offset: u32, label: &str, node_id: impl std::fmt::Display) -> Self {
+    pub fn new(
+        slot: U256,
+        byte_offset: u32,
+        label: &str,
+        node_id: impl std::fmt::Display,
+        location: DataLocation,
+    ) -> Self {
         Self {
             slot,
             byte_offset,
             name: format!("{label}_{node_id}"),
+            location,
         }
     }
 }
@@ -45,7 +58,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let Some(abi) = contract.compute_abi() else {
             return HashMap::new();
         };
-        abi.storage_layout()
+        // Persistent (`storage_layout`) and transient (`transient_storage_layout`)
+        // variables both come from slang's ABI computation — never recomputed
+        // here. The storage class is carried on the slot so each access selects
+        // SLOAD/SSTORE versus TLOAD/TSTORE.
+        let mut layout: HashMap<NodeId, StorageSlot> = abi
+            .storage_layout()
             .iter()
             .map(|item| {
                 (
@@ -55,9 +73,23 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         item.offset() as u32,
                         item.label(),
                         item.node_id(),
+                        DataLocation::Storage,
                     ),
                 )
             })
-            .collect()
+            .collect();
+        for item in abi.transient_storage_layout() {
+            layout.insert(
+                item.node_id(),
+                StorageSlot::new(
+                    item.slot(),
+                    item.offset() as u32,
+                    item.label(),
+                    item.node_id(),
+                    DataLocation::Transient,
+                ),
+            );
+        }
+        layout
     }
 }

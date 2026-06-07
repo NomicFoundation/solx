@@ -29,6 +29,7 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Builder;
@@ -220,6 +221,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             }
             Expression::Identifier(identifier) => match identifier.resolve_to_definition() {
                 Some(Definition::StateVariable(state_variable)) => {
+                    // A `constant` state variable holds no storage; reading it
+                    // inlines its compile-time initializer, exactly as a
+                    // file-level `constant` (the `Definition::Constant` arm) does.
+                    if matches!(
+                        state_variable.mutability(),
+                        StateVariableMutability::Constant
+                    ) {
+                        let initializer = state_variable
+                            .value()
+                            .expect("a constant state variable has an initializer");
+                        return self.emit(&initializer, block);
+                    }
                     let slot = self
                         .storage_layout
                         .get(&state_variable.node_id())
@@ -246,7 +259,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let address_type = Self::address_type(
                             &self.state.builder,
                             element_type,
-                            DataLocation::Storage,
+                            slot.location,
                             &declared_type,
                         );
                         let address =
