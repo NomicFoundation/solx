@@ -206,6 +206,31 @@ impl<'context> TypeConversion<'context> {
                     .expect("UDVT target type resolved by semantic analysis");
                 Self::resolve_slang_type(&target_type, inherited_location, builder)
             }
+            SlangType::Function(function_type) => {
+                // A function pointer lowers to `!sol.func_ref<fnTy>` (internal)
+                // or `!sol.ext_func_ref<fnTy>` (external — address + selector).
+                // A void return contributes zero result types; a tuple return
+                // expands to one result per element.
+                let parameter_types: Vec<_> = function_type
+                    .parameter_types()
+                    .iter()
+                    .map(|parameter_type| Self::resolve_slang_type(parameter_type, None, builder))
+                    .collect();
+                let result_types: Vec<_> = match function_type.return_type() {
+                    SlangType::Void(_) => Vec::new(),
+                    SlangType::Tuple(tuple_type) => tuple_type
+                        .types()
+                        .iter()
+                        .map(|element_type| Self::resolve_slang_type(element_type, None, builder))
+                        .collect(),
+                    other => vec![Self::resolve_slang_type(&other, None, builder)],
+                };
+                if function_type.is_externally_visible() {
+                    builder.types.ext_func_ref(&parameter_types, &result_types)
+                } else {
+                    builder.types.func_ref(&parameter_types, &result_types)
+                }
+            }
             _ => unimplemented!("unsupported Slang type"),
         }
     }
