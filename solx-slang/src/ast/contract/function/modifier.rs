@@ -124,16 +124,28 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         )?;
 
         // Every return needs a slot so the chain's results can be captured and
-        // read back by the epilogue; an unnamed return gets a zero-initialised
-        // one (a never-reached `_;` then yields the zero default).
+        // read back by the epilogue; an unnamed return gets a default-initialised
+        // one (a never-reached `_;` then yields the zero default — for a memory
+        // aggregate that default must be a fresh zero-filled allocation, not a
+        // dangling pointer).
+        let return_slang_types: Vec<_> = function
+            .returns()
+            .map(|returns| {
+                returns
+                    .iter()
+                    .map(|parameter| parameter.get_type())
+                    .collect()
+            })
+            .unwrap_or_default();
         for (index, slot) in return_slots.iter_mut().enumerate() {
             if slot.is_none() {
                 let return_type = result_types[index];
-                *slot = Some(
-                    self.state
-                        .builder
-                        .emit_zero_initialized_alloca(return_type, function_entry_block),
-                );
+                let slang_type = return_slang_types.get(index).and_then(|t| t.as_ref());
+                *slot = Some(self.emit_default_initialized_return_slot(
+                    slang_type,
+                    return_type,
+                    function_entry_block,
+                ));
             }
         }
 

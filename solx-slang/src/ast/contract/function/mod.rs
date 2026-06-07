@@ -20,6 +20,7 @@ use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -368,15 +369,49 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     continue;
                 }
                 let return_type = result_types[index];
-                let pointer = self
-                    .state
-                    .builder
-                    .emit_zero_initialized_alloca(return_type, entry_block);
+                let pointer = self.emit_default_initialized_return_slot(
+                    parameter.get_type().as_ref(),
+                    return_type,
+                    entry_block,
+                );
                 environment.define_variable(parameter.node_id(), pointer, return_type);
                 return_slots.push(Some(pointer));
             }
         }
         Ok(return_slots)
+    }
+
+    /// Allocates a stack slot for a return value and default-initialises it to
+    /// the type's zero value. A scalar/integer return gets a zeroed slot; a
+    /// memory aggregate (`T[n] memory`, `S memory`, `string`, `bytes`) instead
+    /// points at a fresh zero-filled allocation, so a write through the return
+    /// reference does not hit an uninitialised pointer and `return result`
+    /// ABI-encodes the empty default rather than garbage. Mirrors the local
+    /// default-initialisation in `variable_declaration`.
+    fn emit_default_initialized_return_slot<'block>(
+        &self,
+        slang_type: Option<&SlangType>,
+        return_type: Type<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        let builder = &self.state.builder;
+        if matches!(
+            slang_type,
+            Some(SlangType::FixedSizeArray(_) | SlangType::Struct(_))
+        ) {
+            let pointer = builder.emit_sol_alloca(return_type, block);
+            let zero = builder.emit_sol_malloc_zeroed(return_type, block);
+            builder.emit_sol_store(zero, pointer, block);
+            pointer
+        } else if matches!(slang_type, Some(SlangType::String(_) | SlangType::Bytes(_))) {
+            let pointer = builder.emit_sol_alloca(return_type, block);
+            let size = builder.emit_sol_constant(0, builder.types.ui256, block);
+            let zero = builder.emit_sol_malloc_sized_zeroed(return_type, size, block);
+            builder.emit_sol_store(zero, pointer, block);
+            pointer
+        } else {
+            builder.emit_zero_initialized_alloca(return_type, block)
+        }
     }
 
     /// Emits the contract's constructor as a `sol.func`.
