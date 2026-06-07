@@ -17,6 +17,9 @@
 // CHECK: sol.func @{{.*from_enum.*}}
 // CHECK: sol.enum_cast %{{.*}} : !sol.enum<2> to ui8
 
+// CHECK: sol.func @{{.*to_enum.*}}
+// CHECK: sol.enum_cast %{{.*}} : ui8 to !sol.enum<2>
+
 contract C {
     enum E {
         A,
@@ -38,5 +41,9 @@ contract C {
 
     function from_enum(E e) public pure returns (uint8) {
         return uint8(e);
+    }
+
+    function to_enum(uint8 x) public pure returns (E) {
+        return E(x);
     }
 }
