@@ -153,6 +153,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 slot.slot,
                 slot.byte_offset,
                 element_type,
+                matches!(slot.location, DataLocation::Transient),
                 &contract_body,
             );
         }
@@ -210,7 +211,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 self.emit_state_variable_getter(
                     &state_variable,
                     slot,
-                    DataLocation::Storage,
+                    slot.location,
                     contract_body,
                 )?;
             }

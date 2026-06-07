@@ -1604,6 +1604,7 @@ impl<'context> Builder<'context> {
         slot: U256,
         byte_offset: u32,
         element_type: Type<'context>,
+        transient: bool,
         block: &B,
     ) where
         B: BlockLike<'context, 'block>,
@@ -1618,15 +1619,17 @@ impl<'context> Builder<'context> {
             IntegerType::new(self.context, solx_utils::BIT_LENGTH_X32 as u32).into(),
             byte_offset.into(),
         );
-        block.append_operation(
-            StateVarOperation::builder(self.context, self.unknown_location)
-                .sym_name(StringAttribute::new(self.context, name))
-                .r#type(TypeAttribute::new(element_type))
-                .slot(slot_attribute)
-                .byte_offset(byte_offset_attribute)
-                .build()
-                .into(),
-        );
+        let mut operation = StateVarOperation::builder(self.context, self.unknown_location)
+            .sym_name(StringAttribute::new(self.context, name))
+            .r#type(TypeAttribute::new(element_type))
+            .slot(slot_attribute)
+            .byte_offset(byte_offset_attribute);
+        // A `transient` variable (EIP-1153) lives in the separate transient
+        // slot space; the attribute makes its accesses lower to TLOAD/TSTORE.
+        if transient {
+            operation = operation.transient(Attribute::unit(self.context));
+        }
+        block.append_operation(operation.build().into());
     }
 
     /// Emits a `sol.addr_of` returning a `!sol.ptr<ui256, Storage>`.

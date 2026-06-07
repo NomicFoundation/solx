@@ -10,7 +10,6 @@ use melior::ir::ValueLike;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
-use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::operator::Operator;
@@ -74,7 +73,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             let address_type = Self::address_type(
                                 &self.state.builder,
                                 element_type,
-                                DataLocation::Storage,
+                                slot.location,
                                 &declared_type,
                             );
                             let storage_ref = self.state.builder.emit_sol_addr_of(
