@@ -235,8 +235,33 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Value<'context, 'block>,
         BlockRef<'context, 'block>,
     )> {
-        let _ = (access, kind, arguments, call_value, block);
-        unimplemented!("bare address call")
+        let (address, block) = self
+            .expression_emitter
+            .emit_value(&access.operand(), block)?;
+        let argument = arguments
+            .iter()
+            .next()
+            .expect("a bare call takes one bytes argument");
+        let (input, block) = self.expression_emitter.emit_value(&argument, block)?;
+
+        let builder = &self.expression_emitter.state.builder;
+        // `sol.bare_call`'s input rejects a non-memory operand, so an argument
+        // sourced from storage / calldata is copied into memory first.
+        let input = TypeConversion::from_target_type(builder.types.sol_string_memory, builder)
+            .emit(input, builder, &block);
+        let (status, ret_data) = match kind {
+            BuiltIn::AddressCall => {
+                let value = call_value
+                    .unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &block));
+                builder.emit_sol_bare_call(address, value, input, &block)
+            }
+            BuiltIn::AddressDelegatecall => {
+                builder.emit_sol_bare_delegate_call(address, input, &block)
+            }
+            BuiltIn::AddressStaticcall => builder.emit_sol_bare_static_call(address, input, &block),
+            _ => unreachable!("bare call kind must be Call, Delegatecall, or Staticcall"),
+        };
+        Ok((status, ret_data, block))
     }
 
     /// Emits a bare address call in result-binding position
@@ -249,8 +274,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let _ = (access, kind, call_value, arguments, block);
-        unimplemented!("bare address call results")
+        let (status, ret_data, block) =
+            self.emit_bare_call(access, kind, arguments, call_value, block)?;
+        Ok((vec![status, ret_data], block))
     }
 
     /// Emits a multi-result external call (`(a, b) = recv.f(args)`); always a
