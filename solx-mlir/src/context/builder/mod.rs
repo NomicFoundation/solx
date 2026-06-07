@@ -1385,6 +1385,48 @@ impl<'context> Builder<'context> {
         Ok(results)
     }
 
+    /// Emits a `sol.ext_icall` with `try_call` set — the `try` form. Unlike the
+    /// plain [`Self::emit_sol_ext_icall`], a failing callee yields a `false`
+    /// status (the first result) instead of reverting, so the caller can run a
+    /// `catch` handler. Returns `(status, decoded-returns)`.
+    pub fn emit_sol_ext_icall_try<'block, B>(
+        &self,
+        callee: Value<'context, 'block>,
+        operands: &[Value<'context, 'block>],
+        result_types: &[Type<'context>],
+        value: Value<'context, 'block>,
+        block: &B,
+    ) -> anyhow::Result<(Value<'context, 'block>, Vec<Value<'context, 'block>>)>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let gas: Value<'context, 'block> = self.emit_sol_gas_left(block);
+        let mut out_types = Vec::with_capacity(result_types.len() + 1);
+        out_types.push(self.types.i1);
+        out_types.extend_from_slice(result_types);
+        let operation = block.append_operation(
+            ExtICallOperation::builder(self.context, self.unknown_location)
+                .outs(&out_types)
+                .callee(callee)
+                .callee_operands(operands)
+                .gas(gas)
+                .value(value)
+                .try_call(Attribute::unit(self.context))
+                .build()
+                .into(),
+        );
+        let status: Value<'context, 'block> = operation
+            .result(0)
+            .expect("sol.ext_icall try produces a status result")
+            .into();
+        let mut results = Vec::with_capacity(result_types.len());
+        for index in 0..result_types.len() {
+            results.push(operation.result(index + 1)?.into());
+        }
+        Ok((status, results))
+    }
+
     // ==== Bare low-level calls ====
 
     /// Appends a built bare-call operation and returns its `(status, ret_data)`

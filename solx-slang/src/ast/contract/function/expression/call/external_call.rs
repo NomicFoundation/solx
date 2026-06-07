@@ -5,8 +5,10 @@
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionMutability;
@@ -332,7 +334,52 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             BlockRef<'context, 'block>,
         )>,
     > {
-        let _ = (call, block);
-        unimplemented!("external call try")
+        // Only a bare member-access callee (`recv.f(args)`) is try-lowerable
+        // here. The `{value: v}` call-options layer needs `capture_call_value`,
+        // which lands with the call-options cluster; until then such a call is
+        // "not try-lowerable" (`None`), and the caller runs the success body.
+        let Expression::MemberAccessExpression(access) = call.operand() else {
+            return Ok(None);
+        };
+        let Some(Definition::Function(function_definition)) =
+            access.member().resolve_to_definition()
+        else {
+            return Ok(None);
+        };
+        let Some(selector) = function_definition.compute_selector() else {
+            return Ok(None);
+        };
+        let ArgumentsDeclaration::PositionalArguments(positional_arguments) = call.arguments()
+        else {
+            return Ok(None);
+        };
+        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
+            &function_definition,
+            &self.expression_emitter.state.builder,
+        );
+        let (receiver, current_block) = self
+            .expression_emitter
+            .emit_value(&access.operand(), block)?;
+        let (argument_values, current_block) =
+            self.emit_coerced_arguments(&positional_arguments, &parameter_types, current_block)?;
+        let builder = &self.expression_emitter.state.builder;
+        let address =
+            builder.emit_sol_address_cast(receiver, builder.types.sol_address, &current_block);
+        let ext_func_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
+        let callee = builder.emit_sol_ext_func_constant(
+            address,
+            selector,
+            ext_func_ref_type,
+            &current_block,
+        );
+        let value = builder.emit_sol_constant(0, builder.types.ui256, &current_block);
+        let (status, results) = builder.emit_sol_ext_icall_try(
+            callee,
+            &argument_values,
+            &return_types,
+            value,
+            &current_block,
+        )?;
+        Ok(Some((status, results, current_block)))
     }
 }
