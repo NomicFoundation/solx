@@ -8,12 +8,14 @@ use melior::ir::Value;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StateVariableDefinition;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::expression::call::static_mode::StaticMode;
+use crate::ast::type_conversion::TypeConversion;
 
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
     /// The SOLE `ext_icall` sink for `SelfExternal` + `ExternalInstance`.
@@ -35,17 +37,32 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         static_mode: StaticMode,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Vec<Value<'context, 'block>>> {
-        let _ = (
-            receiver,
-            selector,
-            parameter_types,
-            return_types,
+        let builder = &self.expression_emitter.state.builder;
+        // The receiver is cast to an address and packed with the selector into
+        // an external function reference; the call value defaults to zero wei.
+        let address = builder.emit_sol_address_cast(receiver, builder.types.sol_address, block);
+        let ext_func_ref_type = builder.types.ext_func_ref(parameter_types, return_types);
+        let callee =
+            builder.emit_sol_ext_func_constant(address, selector, ext_func_ref_type, block);
+        let value =
+            call_value.unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, block));
+        builder.emit_sol_ext_icall(
+            callee,
             argument_values,
-            call_value,
-            static_mode,
+            return_types,
+            value,
+            matches!(static_mode, StaticMode::Static),
             block,
-        );
-        unimplemented!("external call sink")
+        )
+    }
+
+    /// Maps the callee's state mutability to its external-call mode: a `view` or
+    /// `pure` function lowers to a `STATICCALL`; anything else a normal `CALL`.
+    fn static_mode(function_definition: &FunctionDefinition) -> StaticMode {
+        match function_definition.mutability() {
+            FunctionMutability::View | FunctionMutability::Pure => StaticMode::Static,
+            _ => StaticMode::Call,
+        }
     }
 
     /// Emits a self getter call (`this.v(args)`); A4 (#H-M7): nested/reference
@@ -118,8 +135,34 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let _ = (access, function_definition, call_value, arguments, block);
-        unimplemented!("external call results")
+        let selector = function_definition
+            .compute_selector()
+            .expect("an external call resolves to a function with a selector");
+        // The signature comes from the callee's definition (valid for both a
+        // foreign instance and the current contract's own function), so the
+        // unified path never depends on the callee being in the local registry.
+        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
+            function_definition,
+            &self.expression_emitter.state.builder,
+        );
+        // The receiver is the member operand: `this` for a self call, the
+        // instance value for an external one — both evaluate to an address.
+        let (receiver, current_block) = self
+            .expression_emitter
+            .emit_value(&access.operand(), block)?;
+        let (argument_values, current_block) =
+            self.emit_coerced_arguments(arguments, &parameter_types, current_block)?;
+        let results = self.emit_external_call(
+            receiver,
+            selector,
+            &parameter_types,
+            &return_types,
+            &argument_values,
+            call_value,
+            Self::static_mode(function_definition),
+            &current_block,
+        )?;
+        Ok((results, current_block))
     }
 
     /// Recognises and emits an external call in `try` position; `None` = "not a
