@@ -24,6 +24,7 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Parameters;
 use slang_solidity_v2::ast::Statement;
 use slang_solidity_v2::ast::Statements;
+use slang_solidity_v2::ast::YulFunctionDefinition;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -64,6 +65,15 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     /// [`ArithmeticMode::Checked`] by default; [`ArithmeticMode::Unchecked`]
     /// inside `unchecked {}` blocks.
     arithmetic_mode: ArithmeticMode,
+    /// User-defined Yul functions in scope within an `assembly { … }` block,
+    /// keyed by name. Each is inlined at its call sites; an entry lives only
+    /// for the duration of the Yul block (or inlined function frame) that
+    /// declares it, then is removed so outer-scope definitions remain.
+    yul_functions: HashMap<String, YulFunctionDefinition>,
+    /// Per-name inline-recursion guard: a Yul function currently being inlined
+    /// has depth ≥ 1, so a recursive call is rejected (it would otherwise loop
+    /// the compiler) rather than emitted.
+    yul_inline_depth: HashMap<String, usize>,
 }
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
@@ -85,6 +95,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             return_slots,
             modifier_body_call: None,
             arithmetic_mode: ArithmeticMode::Checked,
+            yul_functions: HashMap::new(),
+            yul_inline_depth: HashMap::new(),
         }
     }
 

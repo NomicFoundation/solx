@@ -7,6 +7,7 @@
 //!
 
 pub mod type_factory;
+pub mod yul;
 
 use melior::ir::Attribute;
 use melior::ir::Block;
@@ -50,6 +51,7 @@ use crate::ods::sol::ConditionOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ContinueOperation;
 use crate::ods::sol::ContractOperation;
+use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::CopyOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::EnumCastOperation;
@@ -1256,6 +1258,34 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.address_cast always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.conv_cast` — a representation-preserving reinterpretation
+    /// that the conversion pipeline rewrites to the remapped value. It bridges
+    /// the Sol-typed variable environment to the Yul world at the inline-assembly
+    /// boundary: a Solidity local's `!sol.ptr<T, Stack>` is reinterpreted as the
+    /// `!llvm.ptr` that Yul `llvm.load`/`llvm.store` operate on.
+    pub fn emit_sol_conv_cast<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        to_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                ConvCastOperation::builder(self.context, self.unknown_location)
+                    .inp(value)
+                    .out(to_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.conv_cast always produces one result")
             .into()
     }
 
