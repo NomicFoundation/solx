@@ -28,6 +28,11 @@ pub struct TypeFactory<'context> {
     pub ui160: Type<'context>,
     /// Unsigned 256-bit integer type (`ui256`).
     pub ui256: Type<'context>,
+    /// Signless 256-bit integer type (`i256`) — the Yul-dialect word type.
+    pub i256: Type<'context>,
+    /// Opaque LLVM pointer type (`!llvm.ptr`) — the address of a Yul-local
+    /// `llvm.alloca` and the target of a `sol.conv_cast` at the Yul boundary.
+    pub llvm_ptr: Type<'context>,
     /// Sol address type (`!sol.address`).
     pub sol_address: Type<'context>,
     /// Sol storage pointer type (`!sol.ptr<ui256, Storage>`).
@@ -58,6 +63,11 @@ impl<'context> TypeFactory<'context> {
             context,
             solx_utils::BIT_LENGTH_FIELD as u32,
         ));
+        let i256 = Type::from(IntegerType::new(
+            context,
+            solx_utils::BIT_LENGTH_FIELD as u32,
+        ));
+        let llvm_ptr = melior::dialect::llvm::r#type::pointer(context, 0);
         // SAFETY: `solxCreateAddressType` returns a valid MlirType from
         // the C++ Sol dialect. The context pointer is valid.
         let sol_address =
@@ -85,6 +95,8 @@ impl<'context> TypeFactory<'context> {
             ui64,
             ui160,
             ui256,
+            i256,
+            llvm_ptr,
             sol_address,
             sol_ptr_storage,
             sol_string_memory,
