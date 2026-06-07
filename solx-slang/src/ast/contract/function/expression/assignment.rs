@@ -10,6 +10,7 @@ use melior::ir::ValueLike;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::operator::Operator;
@@ -25,6 +26,10 @@ enum AssignmentTarget<'context, 'block> {
     Pointer(Value<'context, 'block>, Type<'context>),
     /// State variable — storage slot and declared element type.
     Storage(StorageSlot, Type<'context>),
+    /// Reference-typed location (array/struct/`string`/`bytes` addressed by
+    /// reference, in storage or calldata): the destination reference into
+    /// which the RHS reference's contents are copied via `sol.copy`.
+    ReferenceCopy(Value<'context, 'block>),
 }
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
@@ -42,11 +47,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         let declared_type = state_variable
                             .get_type()
                             .expect("slang types every state variable");
-                        if declared_type.is_reference_type() {
-                            unimplemented!(
-                                "assignment to a reference-typed state variable is not yet supported"
-                            );
-                        }
                         let slot = self
                             .storage_layout
                             .get(&state_variable.node_id())
@@ -62,7 +62,30 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                             None,
                             &self.state.builder,
                         );
-                        AssignmentTarget::Storage(slot, element_type)
+                        // Reference-typed storage (fixed/dynamic arrays, `string`,
+                        // `bytes`, structs) is assigned by copying the RHS
+                        // reference's contents into the slot via `sol.copy`, just
+                        // like a reference-typed inline initializer; a whole
+                        // mapping is not assignable. Value-typed storage stores
+                        // the coerced scalar directly.
+                        if declared_type.is_reference_type()
+                            && !matches!(declared_type, ast::Type::Mapping(_))
+                        {
+                            let address_type = Self::address_type(
+                                &self.state.builder,
+                                element_type,
+                                DataLocation::Storage,
+                                &declared_type,
+                            );
+                            let storage_ref = self.state.builder.emit_sol_addr_of(
+                                &slot.name,
+                                address_type,
+                                &block,
+                            );
+                            AssignmentTarget::ReferenceCopy(storage_ref)
+                        } else {
+                            AssignmentTarget::Storage(slot, element_type)
+                        }
                     }
                     Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
                         let (pointer, element_type) =
@@ -81,21 +104,25 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let (address, element_type, block) =
                     self.emit_index_access_address(index_access, block)?;
                 if address.r#type() == element_type {
-                    unimplemented!(
-                        "assignment to a reference-typed `a[i]` element in storage/calldata is not yet supported"
-                    );
+                    // A reference-typed element is addressed by reference (the
+                    // address value's type IS the element type), so it is copied
+                    // into rather than stored over.
+                    (AssignmentTarget::ReferenceCopy(address), block)
+                } else {
+                    (AssignmentTarget::Pointer(address, element_type), block)
                 }
-                (AssignmentTarget::Pointer(address, element_type), block)
             }
             Expression::MemberAccessExpression(access) => {
                 let (address, element_type, block) =
                     self.emit_struct_field_address(access, block)?;
                 if address.r#type() == element_type {
-                    unimplemented!(
-                        "assignment to a reference-typed struct field in storage/calldata is not yet supported"
-                    );
+                    // A reference-typed field is addressed by reference (the
+                    // address value's type IS the element type), so it is copied
+                    // into rather than stored over.
+                    (AssignmentTarget::ReferenceCopy(address), block)
+                } else {
+                    (AssignmentTarget::Pointer(address, element_type), block)
                 }
-                (AssignmentTarget::Pointer(address, element_type), block)
             }
             _ => unimplemented!(
                 "assignment target {:?} is not yet supported",
@@ -142,6 +169,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     let old = self.emit_storage_load(slot, *element_type, &block)?;
                     (old, *element_type)
                 }
+                AssignmentTarget::ReferenceCopy(_) => unreachable!(
+                    "a compound assignment to a reference-typed lvalue is rejected by the type checker"
+                ),
             };
             let (rhs, block) = self.emit_value(&right, block)?;
             let old = TypeConversion::from_target_type(target_type, &self.state.builder).emit(
@@ -188,6 +218,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .emit(value, &self.state.builder, &block);
                 self.emit_storage_store(slot, stored_value, *element_type, &block);
                 stored_value
+            }
+            AssignmentTarget::ReferenceCopy(address) => {
+                // The RHS is already a reference of the matching type; copy its
+                // contents into the destination reference (no scalar coercion).
+                self.state.builder.emit_sol_copy(value, *address, &block);
+                value
             }
         };
         Ok((result, block))
