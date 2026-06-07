@@ -50,10 +50,13 @@ use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConditionOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ContinueOperation;
+use crate::ods::sol::ContractCastOperation;
 use crate::ods::sol::ContractOperation;
 use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::CopyOperation;
+use crate::ods::sol::DataLocCastOperation;
 use crate::ods::sol::DoWhileOperation;
+use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::ExtICallOperation;
@@ -1194,6 +1197,74 @@ impl<'context> Builder<'context> {
         if value.r#type() == to_type {
             return value;
         }
+        // `sol.cast` is integer-only; its verifier rejects enum, address,
+        // contract, and fixedbytes operands/results — each belongs to a
+        // dedicated cast op. Dispatch by type kind here, centrally, so every
+        // caller (event/ABI encoders, comparisons, value transfers, explicit
+        // conversions) gets the right op without repeating the classification.
+        let source = value.r#type();
+        // Enum ↔ integer (`sol.enum_cast` accepts the integer-backed enum;
+        // narrowing to an enum range-checks and may revert).
+        if TypeFactory::is_sol_enum(source) || TypeFactory::is_sol_enum(to_type) {
+            return self.emit_sol_enum_cast(value, to_type, block);
+        }
+        // Contract ↔ contract (inheritance up/downcast, interface).
+        if TypeFactory::is_sol_contract(source) && TypeFactory::is_sol_contract(to_type) {
+            return self.emit_sol_contract_cast(value, to_type, block);
+        }
+        // address ↔ {integer, contract, fixedbytes<20>}. `sol.address_cast`
+        // requires the integer side to be exactly `ui160`, so a wider/narrower
+        // integer bridges through `ui160` (then a plain `sol.cast` resizes it).
+        if TypeFactory::is_sol_address(source) || TypeFactory::is_sol_address(to_type) {
+            let ui160 = self.types.ui160;
+            if TypeFactory::is_sol_address(source) {
+                if TypeFactory::is_sol_contract(to_type)
+                    || TypeFactory::is_sol_fixed_bytes(to_type)
+                    || to_type == ui160
+                {
+                    return self.emit_sol_address_cast(value, to_type, block);
+                }
+                let as_160 = self.emit_sol_address_cast(value, ui160, block);
+                return self.emit_sol_cast(as_160, to_type, block);
+            }
+            if TypeFactory::is_sol_contract(source)
+                || TypeFactory::is_sol_fixed_bytes(source)
+                || source == ui160
+            {
+                return self.emit_sol_address_cast(value, to_type, block);
+            }
+            let as_160 = self.emit_sol_cast(value, ui160, block);
+            return self.emit_sol_address_cast(as_160, to_type, block);
+        }
+        // Dynamic `bytes`/`string` → `bytesN`: take the leading N bytes via the
+        // dedicated op (`sol.bytes_cast` rejects a `!sol.string` operand).
+        if TypeFactory::is_sol_reference(source) && TypeFactory::is_sol_fixed_bytes(to_type) {
+            return block
+                .append_operation(
+                    DynBytesToFixedBytesOperation::builder(self.context, self.unknown_location)
+                        .inp(value)
+                        .out(to_type)
+                        .build()
+                        .into(),
+                )
+                .result(0)
+                .expect("sol.dyn_bytes_to_fixedbytes always produces one result")
+                .into();
+        }
+        // byte / bytesN ↔ {byte, bytesN, integer}.
+        if TypeFactory::is_sol_fixed_bytes(source)
+            || TypeFactory::is_sol_fixed_bytes(to_type)
+            || TypeFactory::is_sol_byte(source)
+            || TypeFactory::is_sol_byte(to_type)
+        {
+            return self.emit_sol_bytes_cast(value, to_type, block);
+        }
+        // Reference types (array / struct / string / bytes / mapping) differ
+        // only by data location; a reference→reference cast routes through
+        // `sol.data_loc_cast`.
+        if TypeFactory::is_sol_reference(source) && TypeFactory::is_sol_reference(to_type) {
+            return self.emit_sol_data_loc_cast(value, to_type, block);
+        }
         block
             .append_operation(
                 CastOperation::builder(self.context, self.unknown_location)
@@ -1204,6 +1275,62 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.cast always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.contract_cast` between two contract/interface types
+    /// (inheritance up/downcast).
+    pub fn emit_sol_contract_cast<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        to_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        if value.r#type() == to_type {
+            return value;
+        }
+        block
+            .append_operation(
+                ContractCastOperation::builder(self.context, self.unknown_location)
+                    .inp(value)
+                    .out(to_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.contract_cast always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.data_loc_cast` reinterpreting a reference value at a
+    /// different data location (e.g. a storage array assigned to a memory one).
+    pub fn emit_sol_data_loc_cast<'block, B>(
+        &self,
+        value: Value<'context, 'block>,
+        to_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        if value.r#type() == to_type {
+            return value;
+        }
+        block
+            .append_operation(
+                DataLocCastOperation::builder(self.context, self.unknown_location)
+                    .inp(value)
+                    .out(to_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.data_loc_cast always produces one result")
             .into()
     }
 

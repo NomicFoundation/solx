@@ -110,6 +110,50 @@ impl<'context> TypeFactory<'context> {
         })
     }
 
+    /// Whether `ty` is a Sol enum type (`!sol.enum<N>`).
+    pub fn is_sol_enum(ty: Type<'_>) -> bool {
+        // SAFETY: `solxIsEnumType` is a pure `isa<>` predicate on a valid type.
+        unsafe { crate::ffi::solxIsEnumType(ty.to_raw()) }
+    }
+
+    /// Whether `ty` is the Sol address type (`!sol.address`).
+    pub fn is_sol_address(ty: Type<'_>) -> bool {
+        // SAFETY: pure `isa<>` predicate on a valid type.
+        unsafe { crate::ffi::solxIsAddressType(ty.to_raw()) }
+    }
+
+    /// Whether `ty` is a Sol contract type (`!sol.contract<…>`).
+    pub fn is_sol_contract(ty: Type<'_>) -> bool {
+        // SAFETY: pure `isa<>` predicate on a valid type.
+        unsafe { crate::ffi::solxIsContractType(ty.to_raw()) }
+    }
+
+    /// Whether `ty` is a Sol fixed-bytes type (`!sol.fixedbytes<N>`).
+    pub fn is_sol_fixed_bytes(ty: Type<'_>) -> bool {
+        // SAFETY: pure `isa<>` predicate on a valid type.
+        unsafe { crate::ffi::solxIsFixedBytesType(ty.to_raw()) }
+    }
+
+    /// Whether `ty` is the single-byte `!sol.byte` — the element type of
+    /// `bytes`/`string`, distinct from `!sol.fixedbytes<1>`.
+    pub fn is_sol_byte(ty: Type<'_>) -> bool {
+        // SAFETY: pure `isa<>` predicate on a valid type.
+        unsafe { crate::ffi::solxIsByteType(ty.to_raw()) }
+    }
+
+    /// Whether `ty` is a Sol reference type: array, struct, string/`bytes`, or
+    /// mapping (`bytes` and `string` share `!sol.string`).
+    pub fn is_sol_reference(ty: Type<'_>) -> bool {
+        let raw = ty.to_raw();
+        // SAFETY: pure `isa<>` predicates on a valid type.
+        unsafe {
+            crate::ffi::solxIsStringType(raw)
+                || crate::ffi::solxIsArrayType(raw)
+                || crate::ffi::solxIsStructType(raw)
+                || crate::ffi::solxIsMappingType(raw)
+        }
+    }
+
     /// Creates a `sol::AddressType` with the given payability.
     pub fn address(&self, payable: bool) -> Type<'context> {
         // SAFETY: `solxCreateAddressType` returns a valid MlirType from the
