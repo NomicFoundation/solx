@@ -215,7 +215,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 // from the member-access built-ins whose result follows from their
                 // operands — like `abi.decode` above.
                 Some(BuiltIn::Wrap | BuiltIn::Unwrap) => CallKind::UdvtWrapUnwrap,
-                _ => CallKind::BuiltInMemberAccess(access.clone()),
+                // A member resolving to any other built-in is an intrinsic
+                // (`abi.encode`, `arr.push`, `a.transfer`, `msg.sender`); one
+                // resolving to a definition (a function or state variable) is a
+                // user / external member call dispatched by `classify_member`.
+                Some(_) => CallKind::BuiltInMemberAccess(access.clone()),
+                None => CallKind::Member(self.classify_member(access)),
             };
         }
 
@@ -239,8 +244,55 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// Classifies a member-access callee (`x.f(...)`) into its
     /// [`MemberCallKind`] ahead of emission, mirroring [`Self::classify_call`].
     pub fn classify_member(&self, access: &MemberAccessExpression) -> MemberCallKind {
-        let _ = access;
-        unimplemented!("member-call classification")
+        let operand = access.operand();
+        // `super.f()` dispatches up the C3 linearisation (inheritance cluster),
+        // distinct from an external call on a contract instance.
+        if matches!(operand, Expression::SuperKeyword(_)) {
+            return MemberCallKind::Super;
+        }
+        // `L.f()` on a library lowers to an internal or delegatecall library
+        // call, not an external instance call. An external/public library
+        // function (one with a selector) is delegatecalled; an internal one is
+        // inlined.
+        if let Expression::Identifier(identifier) = &operand
+            && matches!(
+                identifier.resolve_to_definition(),
+                Some(Definition::Library(_))
+            )
+        {
+            let external = matches!(
+                access.member().resolve_to_definition(),
+                Some(Definition::Function(function)) if function.compute_selector().is_some()
+            );
+            return MemberCallKind::Library { external };
+        }
+        let is_this = matches!(operand, Expression::ThisKeyword(_));
+        match access.member().resolve_to_definition() {
+            Some(Definition::Function(function)) => {
+                if is_this {
+                    MemberCallKind::SelfExternal
+                } else if function.compute_selector().is_none() {
+                    // `x.f(...)` using-for on an internal (no-selector) library
+                    // function: an internal contract function cannot be reached
+                    // via member access, so this is a library call with `x` as
+                    // the implicit `self`.
+                    MemberCallKind::Library { external: false }
+                } else {
+                    MemberCallKind::ExternalInstance
+                }
+            }
+            Some(Definition::StateVariable(_)) => {
+                if is_this {
+                    MemberCallKind::SelfGetter
+                } else {
+                    MemberCallKind::ExternalGetter
+                }
+            }
+            other => unimplemented!(
+                "unsupported member call: {:?}",
+                other.map(|definition| definition.node_id())
+            ),
+        }
     }
 
     /// The single member-call dispatcher: lowers a member-access callee
