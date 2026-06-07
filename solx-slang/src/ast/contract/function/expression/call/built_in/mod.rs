@@ -5,6 +5,7 @@
 pub mod abi;
 pub mod array;
 pub mod global;
+pub mod member_reference;
 pub mod require;
 pub mod type_introspection;
 
@@ -204,6 +205,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: Option<&PositionalArguments>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        // An enum-variant reference (`E.Variant`) resolves to a value, not a
+        // built-in or intrinsic; handle it before the built-in dispatch.
+        if let Some(ordinal) = self.enum_variant_ordinal(access, arguments) {
+            let (value, block) = self.emit_enum_variant(access, ordinal, block);
+            return Ok((Some(value), block));
+        }
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressBalance) => self.emit_address_balance(access, block),
             Some(BuiltIn::AddressCodehash) => self.emit_address_codehash(access, block),
