@@ -20,6 +20,7 @@ use slang_solidity_v2::ast::SourceUnit;
 use solx_mlir::Context;
 
 use self::contract::ContractEmitter;
+use self::operator_binding::OperatorBindings;
 
 /// Walks a Slang AST and lowers its contract definitions to MLIR.
 pub struct AstEmitter<'state, 'context> {
@@ -44,7 +45,9 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
     ///
     /// `free_functions` is the compilation unit's full set of file-level (free)
     /// functions; the contract emitter pre-registers and emits the ones this
-    /// contract reaches.
+    /// contract reaches. `operator_bindings` is the unit's set of user-defined
+    /// operator bindings (`using {f as op} for T global;`), shared across every
+    /// contract.
     ///
     /// # Errors
     ///
@@ -55,6 +58,7 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         &mut self,
         unit: &SourceUnit,
         free_functions: &[FunctionDefinition],
+        operator_bindings: &OperatorBindings,
     ) -> anyhow::Result<Option<(String, BTreeMap<String, String>)>> {
         let contracts = unit.contracts();
         // TODO: support multiple contracts
@@ -64,7 +68,7 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
 
         let name = contract.name().name();
         let mut emitter = ContractEmitter::new(self.state);
-        emitter.emit(contract, free_functions)?;
+        emitter.emit(contract, free_functions, operator_bindings)?;
 
         let mut method_identifiers = BTreeMap::new();
         for contract_member in contract.members().iter() {

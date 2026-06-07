@@ -186,6 +186,7 @@ impl Frontend for Slang {
 
         let file_identifiers = unit.file_ids();
         let free_functions = Self::gather_free_functions(&unit);
+        let operator_bindings = crate::ast::operator_binding::OperatorBindings::gather(&unit);
 
         for file_identifier in &file_identifiers {
             let Some(file) = unit.file(file_identifier) else {
@@ -198,7 +199,7 @@ impl Frontend for Slang {
             let mut context = solx_mlir::Context::new(&melior_context, evm_version);
             let mut emitter = AstEmitter::new(&mut context);
             let Some((contract_name, method_identifiers)) =
-                emitter.emit(&source_unit, &free_functions)?
+                emitter.emit(&source_unit, &free_functions, &operator_bindings)?
             else {
                 continue;
             };

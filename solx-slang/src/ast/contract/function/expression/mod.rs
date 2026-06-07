@@ -34,6 +34,7 @@ use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::UserDefinedOperator;
 use solx_mlir::ods::sol::ThisOperation;
 use solx_utils::DataLocation;
 
@@ -71,6 +72,63 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             storage_layout,
             arithmetic_mode,
         }
+    }
+
+    /// The function bound to `user_operator` for `operand`'s user-defined value
+    /// type via `using {f as op} for T global;`, or `None` when `operand` is not
+    /// such a type or the operator carries no binding. The shared UDVT lookup
+    /// behind the binary ([`Self::user_defined_binary_operator`]) and unary
+    /// ([`Self::user_defined_unary_operator`]) operator classification.
+    ///
+    /// [`Self::user_defined_binary_operator`]: ExpressionEmitter::user_defined_binary_operator
+    /// [`Self::user_defined_unary_operator`]: ExpressionEmitter::user_defined_unary_operator
+    fn user_defined_operator(
+        &self,
+        operand: &Expression,
+        user_operator: UserDefinedOperator,
+    ) -> Option<NodeId> {
+        let SlangType::UserDefinedValue(udvt_type) = operand.get_type()? else {
+            return None;
+        };
+        let Definition::UserDefinedValueType(udvt_definition) = udvt_type.definition() else {
+            return None;
+        };
+        self.state
+            .operator_bindings
+            .get(&(udvt_definition.node_id(), user_operator))
+            .copied()
+    }
+
+    /// Calls the bound user-defined-operator function `function_id` with the
+    /// already-evaluated `argument_values`, each coerced to its parameter type,
+    /// and returns the operator's single result value. Shared by the binary
+    /// ([`Self::emit_binary_op`]) and unary ([`Self::emit_prefix`]) operator
+    /// dispatch (`using {f as op} for T global;`).
+    fn emit_operator_call(
+        &self,
+        function_id: NodeId,
+        mut argument_values: Vec<Value<'context, 'block>>,
+        block: &BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Value<'context, 'block>> {
+        let (mlir_name, parameter_types, return_types) =
+            self.state.resolve_function(function_id)?;
+        for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
+            *value = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
+                *value,
+                &self.state.builder,
+                block,
+            );
+        }
+        let results = self.state.builder.emit_sol_call_results(
+            mlir_name,
+            &argument_values,
+            return_types,
+            block,
+        )?;
+        Ok(results
+            .into_iter()
+            .next()
+            .expect("a user-defined operator returns one value"))
     }
 
     /// Emits MLIR for an expression that must produce a value.
