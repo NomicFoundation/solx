@@ -28,6 +28,7 @@ use solx_mlir::StateMutability;
 use self::body_kind::BodyKind;
 use self::expression::ExpressionEmitter;
 use self::expression::arithmetic_mode::ArithmeticMode;
+use self::modifier::ModifiedBody;
 use self::signature::InnerSignature;
 use self::statement::StatementEmitter;
 use crate::ast::contract::storage_layout::StorageSlot;
@@ -154,7 +155,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             &mut environment,
         )?;
 
-        let return_slots = self.init_return_slots(
+        let mut return_slots = self.init_return_slots(
             function,
             &result_types,
             parameter_count,
@@ -169,8 +170,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut current_block = function_entry_block;
 
         // State variable initializers run at the top of the constructor body,
-        // before any user-written statements.
-        if matches!(function.kind(), FunctionKind::Constructor) {
+        // before any user-written statements. The wrapping modified function
+        // already runs them, so a `$body` emission must not run them again.
+        if matches!(function.kind(), FunctionKind::Constructor) && body_kind == BodyKind::Function {
             let emitter = ExpressionEmitter::new(
                 self.state,
                 &environment,
@@ -180,21 +182,57 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             current_block = emitter.emit_state_var_initializers(self.contract, current_block)?;
         }
 
+        // Collect the modifier bodies that wrap this function
+        // (`function f() onlyOwner {...}`). In modifier-body mode the stages are
+        // emitted by the wrapping call, so this raw `$body` emission collects
+        // none.
+        let (modifier_stages, modifier_stage_params) = if body_kind == BodyKind::ModifierBody {
+            (Vec::new(), Vec::new())
+        } else {
+            let (stages, params, next_block) =
+                self.build_modifier_stages(function, &environment, current_block)?;
+            current_block = next_block;
+            (stages, params)
+        };
+
         let mut terminated = false;
-        for statement in body.statements().iter() {
-            let mut emitter = StatementEmitter::new(
-                self.state,
-                &mut environment,
-                &region,
-                self.storage_layout,
-                &result_types,
-            );
-            match emitter.emit(&statement, current_block)? {
-                Some(next) => current_block = next,
-                None => {
-                    terminated = true;
-                    break;
+        if modifier_stages.is_empty() {
+            for statement in body.statements().iter() {
+                let mut emitter = StatementEmitter::new(
+                    self.state,
+                    &mut environment,
+                    &region,
+                    self.storage_layout,
+                    &result_types,
+                    &return_slots,
+                );
+                match emitter.emit(&statement, current_block)? {
+                    Some(next) => current_block = next,
+                    None => {
+                        terminated = true;
+                        break;
+                    }
                 }
+            }
+        } else {
+            let frame = ModifiedBody::new(
+                function,
+                &mlir_name,
+                &mlir_parameter_types,
+                &result_types,
+                contract_body,
+                &function_entry_block,
+            );
+            match self.emit_modified_body(
+                &frame,
+                &mut environment,
+                &mut return_slots,
+                modifier_stages,
+                modifier_stage_params,
+                current_block,
+            )? {
+                Some(next) => current_block = next,
+                None => terminated = true,
             }
         }
 
@@ -300,11 +338,27 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     ) -> anyhow::Result<Vec<Option<Value<'context, 'block>>>> {
         // A modifier body seeds every return slot (named or not) from the values
         // threaded in as trailing block arguments at the `parameter_count`
-        // offset, rather than zero-initialising only the named ones. Filled with
-        // the function-modifier cluster.
+        // offset, rather than zero-initialising only the named ones, so the
+        // shared return state is observable and survives an empty body or a
+        // partial `_` reach.
         if body_kind == BodyKind::ModifierBody {
-            let _ = parameter_count;
-            unimplemented!("return slots for a modifier body");
+            let mut return_slots: Vec<Option<Value<'context, 'block>>> = Vec::new();
+            if let Some(returns) = function.returns() {
+                for (index, parameter) in returns.iter().enumerate() {
+                    let return_type = result_types[index];
+                    let pointer = self.state.builder.emit_sol_alloca(return_type, entry_block);
+                    let incoming: Value<'context, 'block> =
+                        entry_block.argument(parameter_count + index)?.into();
+                    self.state
+                        .builder
+                        .emit_sol_store(incoming, pointer, entry_block);
+                    if parameter.name().is_some() {
+                        environment.define_variable(parameter.node_id(), pointer, return_type);
+                    }
+                    return_slots.push(Some(pointer));
+                }
+            }
+            return Ok(return_slots);
         }
         let mut return_slots: Vec<Option<Value<'context, 'block>>> = Vec::new();
         if let Some(returns) = function.returns() {
