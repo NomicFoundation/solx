@@ -13,6 +13,7 @@ use melior::ir::Block;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Location;
+use melior::ir::Operation;
 use melior::ir::Region;
 use melior::ir::RegionLike;
 use melior::ir::Type;
@@ -37,6 +38,9 @@ use crate::ods::sol::AddressCastOperation;
 use crate::ods::sol::AllocaOperation;
 use crate::ods::sol::ArrayLitOperation;
 use crate::ods::sol::AssertOperation;
+use crate::ods::sol::BareCallOperation;
+use crate::ods::sol::BareDelegateCallOperation;
+use crate::ods::sol::BareStaticCallOperation;
 use crate::ods::sol::BreakOperation;
 use crate::ods::sol::BytesCastOperation;
 use crate::ods::sol::CallOperation;
@@ -1306,6 +1310,107 @@ impl<'context> Builder<'context> {
             results.push(operation.result(index + 1)?.into());
         }
         Ok(results)
+    }
+
+    // ==== Bare low-level calls ====
+
+    /// Appends a built bare-call operation and returns its `(status, ret_data)`
+    /// results: a boolean success flag and the returned bytes in memory. Unlike
+    /// `sol.ext_icall`, a bare call does not revert on failure — the caller
+    /// inspects the status flag.
+    fn emit_sol_bare_call_results<'block, B>(
+        &self,
+        operation: Operation<'context>,
+        block: &B,
+    ) -> (Value<'context, 'block>, Value<'context, 'block>)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let operation = block.append_operation(operation);
+        let status = operation
+            .result(0)
+            .expect("a bare call always produces a status")
+            .into();
+        let ret_data = operation
+            .result(1)
+            .expect("a bare call always produces return data")
+            .into();
+        (status, ret_data)
+    }
+
+    /// Emits a `sol.bare_call` — a low-level `addr.call{value}(input)` — forwarding
+    /// all remaining gas (`gasleft()`).
+    pub fn emit_sol_bare_call<'block, B>(
+        &self,
+        address: Value<'context, 'block>,
+        value: Value<'context, 'block>,
+        input: Value<'context, 'block>,
+        block: &B,
+    ) -> (Value<'context, 'block>, Value<'context, 'block>)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let gas = self.emit_sol_gas_left(block);
+        let operation = BareCallOperation::builder(self.context, self.unknown_location)
+            .addr(address)
+            .gas(gas)
+            .val(value)
+            .inp(input)
+            .status(self.types.i1)
+            .ret_data(self.types.sol_string_memory)
+            .build()
+            .into();
+        self.emit_sol_bare_call_results(operation, block)
+    }
+
+    /// Emits a `sol.bare_delegate_call` — a low-level `addr.delegatecall(input)`,
+    /// which carries no value — forwarding all remaining gas (`gasleft()`).
+    pub fn emit_sol_bare_delegate_call<'block, B>(
+        &self,
+        address: Value<'context, 'block>,
+        input: Value<'context, 'block>,
+        block: &B,
+    ) -> (Value<'context, 'block>, Value<'context, 'block>)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let gas = self.emit_sol_gas_left(block);
+        let operation = BareDelegateCallOperation::builder(self.context, self.unknown_location)
+            .addr(address)
+            .gas(gas)
+            .inp(input)
+            .status(self.types.i1)
+            .ret_data(self.types.sol_string_memory)
+            .build()
+            .into();
+        self.emit_sol_bare_call_results(operation, block)
+    }
+
+    /// Emits a `sol.bare_static_call` — a low-level `addr.staticcall(input)`,
+    /// which carries no value — forwarding all remaining gas (`gasleft()`).
+    pub fn emit_sol_bare_static_call<'block, B>(
+        &self,
+        address: Value<'context, 'block>,
+        input: Value<'context, 'block>,
+        block: &B,
+    ) -> (Value<'context, 'block>, Value<'context, 'block>)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let gas = self.emit_sol_gas_left(block);
+        let operation = BareStaticCallOperation::builder(self.context, self.unknown_location)
+            .addr(address)
+            .gas(gas)
+            .inp(input)
+            .status(self.types.i1)
+            .ret_data(self.types.sol_string_memory)
+            .build()
+            .into();
+        self.emit_sol_bare_call_results(operation, block)
     }
 
     // ==== State variables ====
