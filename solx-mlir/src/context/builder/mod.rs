@@ -56,9 +56,11 @@ use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::ForOperation;
+use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::FuncOperation;
 use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::GepOperation;
+use crate::ods::sol::ICallOperation;
 use crate::ods::sol::IfOperation;
 use crate::ods::sol::LoadOperation;
 use crate::ods::sol::MallocOperation;
@@ -1287,6 +1289,67 @@ impl<'context> Builder<'context> {
             .result(0)
             .expect("sol.enum_cast always produces one result")
             .into()
+    }
+
+    /// Emits a `sol.func_constant` producing an internal function pointer
+    /// (`!sol.func_ref<…>`) to the function named `name`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed.
+    pub fn emit_sol_func_constant<'block, B>(
+        &self,
+        name: &str,
+        func_ref_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                FuncConstantOperation::builder(self.context, self.unknown_location)
+                    .addr(func_ref_type)
+                    .sym(FlatSymbolRefAttribute::new(self.context, name))
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.func_constant always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.icall` — an indirect call through an internal function
+    /// pointer `callee` — and returns its result values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a result cannot be retrieved.
+    pub fn emit_sol_icall<'block, B>(
+        &self,
+        callee: Value<'context, 'block>,
+        operands: &[Value<'context, 'block>],
+        result_types: &[Type<'context>],
+        block: &B,
+    ) -> anyhow::Result<Vec<Value<'context, 'block>>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let operation = block.append_operation(
+            ICallOperation::builder(self.context, self.unknown_location)
+                .outs(result_types)
+                .callee(callee)
+                .callee_operands(operands)
+                .build()
+                .into(),
+        );
+        let mut results = Vec::with_capacity(result_types.len());
+        for index in 0..result_types.len() {
+            results.push(operation.result(index)?.into());
+        }
+        Ok(results)
     }
 
     /// Emits a `sol.ext_func_constant` packing a callee `address` and a 4-byte

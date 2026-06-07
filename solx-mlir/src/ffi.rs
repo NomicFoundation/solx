@@ -155,6 +155,17 @@ unsafe extern "C" {
     /// (one less than the number of enum members).
     pub fn solxCreateEnumType(context: MlirContext, max: u32) -> mlir_sys::MlirType;
 
+    /// Creates a `sol::FuncRefType` (internal function pointer) over the
+    /// function signature `param_types -> result_types`. Used as the callee
+    /// of a `sol.icall`.
+    pub fn solxCreateFuncRefType(
+        context: MlirContext,
+        param_types: *const mlir_sys::MlirType,
+        param_count: usize,
+        result_types: *const mlir_sys::MlirType,
+        result_count: usize,
+    ) -> mlir_sys::MlirType;
+
     /// Creates a `sol::ExtFuncRefType` (external function reference: callee
     /// address + selector) over the function signature
     /// `param_types -> result_types`. Used as the callee of an external call.

@@ -22,6 +22,7 @@ use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StructDefinition;
+use slang_solidity_v2::ast::Type as SlangType;
 use solx_utils::DataLocation;
 
 use self::call_kind::CallKind;
@@ -162,7 +163,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 unimplemented!("call dispatch: reference-field struct as conversion")
             }
             CallKind::IndirectPointer => {
-                unimplemented!("call dispatch: indirect function pointer")
+                let callee = call.operand();
+                let function_slang_type = callee
+                    .get_type()
+                    .expect("slang types every indirect-call callee");
+                let (results, block) = self.emit_indirect_call_results(
+                    &callee,
+                    &function_slang_type,
+                    positional_arguments,
+                    None,
+                    block,
+                )?;
+                Ok((results.into_iter().next(), block))
             }
             CallKind::Member(member_kind) => {
                 let Expression::MemberAccessExpression(access) = call.operand() else {
@@ -231,6 +243,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
 
         let Expression::Identifier(callee_identifier) = &callee else {
+            // A non-identifier callee of function type — `arr[i](args)`,
+            // `(cond ? f : g)(args)` — is an indirect call through the pointer
+            // value the callee evaluates to.
+            if matches!(callee.get_type(), Some(SlangType::Function(_))) {
+                return CallKind::IndirectPointer;
+            }
             unimplemented!("unsupported callee expression");
         };
         match callee_identifier.resolve_to_definition() {
@@ -239,6 +257,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             Some(Definition::Struct(struct_definition)) => {
                 CallKind::StructConstructor(struct_definition)
+            }
+            // A function-typed variable / parameter / state variable named as a
+            // callee (`fp(args)`) is an indirect call through its stored pointer
+            // value, distinct from a direct call to a function definition above.
+            Some(
+                Definition::Variable(_) | Definition::Parameter(_) | Definition::StateVariable(_),
+            ) if matches!(callee_identifier.get_type(), Some(SlangType::Function(_))) => {
+                CallKind::IndirectPointer
             }
             _ => unimplemented!(
                 "callee '{}' does not resolve to a function",
@@ -551,6 +577,70 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             self.emit_coerced_arguments(positional_arguments, parameter_types, block)?;
 
         Ok((mlir_name, argument_values, return_types, current_block))
+    }
+
+    /// Emits an indirect call through the function-pointer value `callee`
+    /// yields, returning the result values. Parameter and result types come
+    /// from the pointer's function type (a void return is zero results; a tuple
+    /// return expands per element). Internal pointers dispatch through
+    /// `sol.icall`; external ones through `sol.ext_icall`, forwarding
+    /// `call_value` (or zero) as `msg.value`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a subexpression or the call op cannot be emitted.
+    fn emit_indirect_call_results(
+        &self,
+        callee: &Expression,
+        function_slang_type: &SlangType,
+        positional_arguments: &PositionalArguments,
+        call_value: Option<Value<'context, 'block>>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let (callee_value, block) = self.expression_emitter.emit_value(callee, block)?;
+        let SlangType::Function(function_type) = function_slang_type else {
+            unreachable!("an indirect-call callee is always a function type");
+        };
+        let builder = &self.expression_emitter.state.builder;
+        let parameter_types: Vec<Type<'context>> = function_type
+            .parameter_types()
+            .iter()
+            .map(|parameter_type| TypeConversion::resolve_slang_type(parameter_type, None, builder))
+            .collect();
+        let result_types: Vec<Type<'context>> = match function_type.return_type() {
+            SlangType::Void(_) => Vec::new(),
+            SlangType::Tuple(tuple_type) => tuple_type
+                .types()
+                .iter()
+                .map(|element_type| TypeConversion::resolve_slang_type(element_type, None, builder))
+                .collect(),
+            other => vec![TypeConversion::resolve_slang_type(&other, None, builder)],
+        };
+        let (argument_values, current_block) =
+            self.emit_coerced_arguments(positional_arguments, &parameter_types, block)?;
+        let builder = &self.expression_emitter.state.builder;
+        let results = if function_type.is_externally_visible() {
+            // `fp{value: v}(args)` forwards `v`; a plain `fp(args)` sends zero.
+            let value = call_value.unwrap_or_else(|| {
+                builder.emit_sol_constant(0, builder.types.ui256, &current_block)
+            });
+            builder.emit_sol_ext_icall(
+                callee_value,
+                &argument_values,
+                &result_types,
+                value,
+                false,
+                &current_block,
+            )?
+        } else {
+            builder.emit_sol_icall(
+                callee_value,
+                &argument_values,
+                &result_types,
+                &current_block,
+            )?
+        };
+        Ok((results, current_block))
     }
 
     /// Emits a bare member access expression (e.g. `tx.origin`, `msg.sender`).

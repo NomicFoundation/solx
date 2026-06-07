@@ -27,6 +27,7 @@ use operator::Operator;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 
@@ -275,6 +276,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         .expect("a Solidity constant has an initializer");
                     self.emit(&initializer, block)
                 }
+                Some(Definition::Function(function_definition)) => self
+                    .emit_internal_function_pointer(&function_definition, block)
+                    .map(|(value, block)| (Some(value), block)),
                 None => unreachable!("slang resolves every identifier reference"),
                 Some(other) => {
                     unimplemented!("unsupported identifier reference {:?}", other.node_id())
@@ -446,6 +450,39 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 unimplemented!("expression lowering: bare type/keyword")
             }
         }
+    }
+
+    /// Emits an internal function used as a value (`g` in `f = g;`) as a
+    /// `sol.func_constant` producing an `!sol.func_ref<…>` pointer.
+    ///
+    /// The target is routed through the virtual redirect exactly as a direct
+    /// call is, so a base-body `f = g` binds the most-derived override of `g`
+    /// — the lexical base version is shadowed and thus unregistered when the
+    /// derived contract is compiled.
+    fn emit_internal_function_pointer(
+        &self,
+        function_definition: &FunctionDefinition,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let node_id = function_definition.node_id();
+        let target_id = self
+            .state
+            .virtual_redirect
+            .get(&node_id)
+            .copied()
+            .unwrap_or(node_id);
+        let (mlir_name, parameter_types, return_types) = self.state.resolve_function(target_id)?;
+        let func_ref_type = self
+            .state
+            .builder
+            .types
+            .func_ref(parameter_types, return_types);
+        let mlir_name = mlir_name.to_owned();
+        let value = self
+            .state
+            .builder
+            .emit_sol_func_constant(&mlir_name, func_ref_type, &block);
+        Ok((value, block))
     }
 
     /// Emits a `sol.cmp ne 0` producing `i1` from a value.
