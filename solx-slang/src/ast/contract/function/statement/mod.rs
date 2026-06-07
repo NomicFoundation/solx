@@ -15,6 +15,7 @@ use std::collections::hash_map::Entry;
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::Type;
+use melior::ir::Value;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
@@ -29,6 +30,7 @@ use solx_mlir::Environment;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::contract::function::modifier_body_call::ModifierBodyCall;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::type_conversion::TypeConversion;
 
@@ -49,6 +51,14 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     storage_layout: &'state HashMap<NodeId, StorageSlot>,
     /// The function's declared return types, for `emit_return` to cast to.
     return_types: &'state [Type<'context>],
+    /// The function's return slots, parallel to `return_types` (`None` for an
+    /// unnamed return). A bare `return;` and the fall-through epilogue load these
+    /// so the `sol.return` arity matches the declared returns.
+    return_slots: &'state [Option<Value<'context, 'block>>],
+    /// Set while emitting a modifier stage: the hand-off the `_;` placeholder
+    /// lowers to (call the wrapped body / next stage, threading the shared return
+    /// values). `None` outside a modifier stage.
+    modifier_body_call: Option<ModifierBodyCall<'context, 'block>>,
     /// Arithmetic overflow-checking mode for binary operations.
     ///
     /// [`ArithmeticMode::Checked`] by default; [`ArithmeticMode::Unchecked`]
@@ -64,6 +74,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         region: &Region<'context>,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
         return_types: &'state [Type<'context>],
+        return_slots: &'state [Option<Value<'context, 'block>>],
     ) -> Self {
         Self {
             state,
@@ -71,8 +82,19 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             region_pointer: region as *const Region<'context>,
             storage_layout,
             return_types,
+            return_slots,
+            modifier_body_call: None,
             arithmetic_mode: ArithmeticMode::Checked,
         }
+    }
+
+    /// Sets the modifier-stage hand-off the `_;` placeholder lowers to. Called by
+    /// [`FunctionEmitter::emit_modifier_stage_func`] before threading a modifier
+    /// body's statements.
+    ///
+    /// [`FunctionEmitter::emit_modifier_stage_func`]: crate::ast::contract::function::FunctionEmitter::emit_modifier_stage_func
+    pub fn set_modifier_body_call(&mut self, call: ModifierBodyCall<'context, 'block>) {
+        self.modifier_body_call = Some(call);
     }
 
     /// Returns a reference to the current region.
@@ -145,6 +167,16 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             Statement::ExpressionStatement(expression_statement) => {
                 let expression = expression_statement.expression();
+                // A bare `_;` inside a modifier body is the placeholder for the
+                // wrapped function body (or the next modifier stage).
+                if let Expression::Identifier(identifier) = &expression
+                    && matches!(
+                        identifier.resolve_to_built_in(),
+                        Some(BuiltIn::ModifierUnderscore)
+                    )
+                {
+                    return self.emit_modifier_body_call(block);
+                }
                 if let Expression::FunctionCallExpression(call) = &expression
                     && let Expression::Identifier(identifier) = call.operand()
                     && matches!(identifier.resolve_to_built_in(), Some(BuiltIn::Revert))
@@ -234,7 +266,15 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let Some(expression) = return_statement.expression() else {
-            self.state.builder.emit_sol_return(&[], &block);
+            // A bare `return;` returns the current values of the return slots
+            // (zero for an unnamed/unset slot), so its `sol.return` arity matches
+            // the enclosing function — like the fall-through epilogue. This
+            // matters for a `return;` in a modifier stage of a value-returning
+            // function, where a 0-operand return would fail verification; a void
+            // function has no slots and returns nothing.
+            self.state
+                .builder
+                .emit_return_from_slots(self.return_types, self.return_slots, &block);
             return Ok(None);
         };
 
@@ -274,6 +314,24 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         self.state.builder.emit_sol_return(&cast_values, &block);
         Ok(None)
+    }
+
+    /// Lowers a modifier stage's `_;` placeholder to the modifier-body hand-off
+    /// (call the wrapped body / next stage, threading the shared return values),
+    /// delegating to [`ModifierBodyCall::emit`]. Outside a modifier stage `_;`
+    /// has no hand-off set and emits nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the hand-off call cannot be lowered.
+    fn emit_modifier_body_call(
+        &self,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        if let Some(body_call) = &self.modifier_body_call {
+            body_call.emit(&self.state.builder, &block)?;
+        }
+        Ok(Some(block))
     }
 
     /// Orders named arguments by the callee's parameter declaration order.
