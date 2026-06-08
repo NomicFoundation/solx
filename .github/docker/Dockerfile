@@ -5,7 +5,7 @@
 # The custom LLVM 21.1 backend is NOT baked into this image — it is built from
 # source in every CI job via the build-llvm composite action.
 
-FROM ubuntu:24.04@sha256:c4a8d5503dfb2a3eb8ab5f807da5bc69a85730fb49b5cfca2330194ebcc41c7b
+FROM ubuntu:24.04@sha256:786a8b558f7be160c6c8c4a54f9a57274f3b4fb1491cf65146521ae77ff1dc54
 
 LABEL org.opencontainers.image.source="https://github.com/NomicFoundation/solx"
 LABEL org.opencontainers.image.description="CI runner image for solx"
