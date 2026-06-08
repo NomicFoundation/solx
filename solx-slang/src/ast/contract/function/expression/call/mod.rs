@@ -520,7 +520,28 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 self.emit_library_call(access, &library_function, arguments, block)
             }
             MemberCallKind::Library { external: true } => {
-                unimplemented!("external (delegatecall) library call")
+                // `L.f(args)` on a library whose `f` is external/public: a
+                // `delegatecall` to the deployed library, whose link symbol is
+                // the fully-qualified `"<file>:<Library>"`.
+                let Expression::Identifier(identifier) = access.operand() else {
+                    unreachable!("a direct external library call has a library-name operand");
+                };
+                let Some(Definition::Library(library)) = identifier.resolve_to_definition() else {
+                    unreachable!("an external library call's operand resolves to a library");
+                };
+                let Some(Definition::Function(library_function)) =
+                    access.member().resolve_to_definition()
+                else {
+                    unreachable!("an external library call resolves to a function");
+                };
+                let library_name = format!("{}:{}", library.get_file_id(), library.name().name());
+                self.emit_library_external_call(
+                    &library_name,
+                    &library_function,
+                    arguments,
+                    None,
+                    block,
+                )
             }
             MemberCallKind::Super => unimplemented!("super call"),
             MemberCallKind::FunctionPointer => unimplemented!("function pointer call"),

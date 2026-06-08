@@ -14,6 +14,7 @@ use melior::ir::Attribute;
 use melior::ir::Block;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Identifier;
 use melior::ir::Location;
 use melior::ir::Operation;
 use melior::ir::Region;
@@ -62,6 +63,7 @@ use crate::ods::sol::DeleteOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::EnumCastOperation;
+use crate::ods::sol::ExtCallOperation;
 use crate::ods::sol::ExtFuncAddrOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::ExtFuncSelectorOperation;
@@ -1879,6 +1881,96 @@ impl<'context> Builder<'context> {
             results.push(operation.result(index + 1)?.into());
         }
         Ok((status, results))
+    }
+
+    /// Emits a `sol.lib_addr` yielding the deployed address of the library named
+    /// by the link-reference symbol `name` (`"<file>:<Library>"`) — a link-time
+    /// placeholder the linker resolves.
+    pub fn emit_sol_lib_addr<'block, B>(&self, name: &str, block: &B) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        // Built via the raw `OperationBuilder`: the op's `name` `StrAttr` collides
+        // with a melior-reserved builder setter, so the generated binding cannot
+        // set it.
+        block
+            .append_operation(
+                OperationBuilder::new("sol.lib_addr", self.unknown_location)
+                    .add_attributes(&[(
+                        Identifier::new(self.context, "name"),
+                        StringAttribute::new(self.context, name).into(),
+                    )])
+                    .add_results(&[self.types.sol_address])
+                    .build()
+                    .expect("valid sol.lib_addr"),
+            )
+            .result(0)
+            .expect("sol.lib_addr always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.ext_call` with the `delegate_call` + `library_call` flags — an
+    /// external library `delegatecall` to `address` (a `sol.lib_addr`). The op
+    /// owns the ABI encode, the delegatecall, the revert-bubble on failure, and
+    /// the result decode, so the frontend supplies only the typed arguments, the
+    /// selector, and the callee's function type; returns the decoded results.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed.
+    pub fn emit_sol_ext_call_library<'block, B>(
+        &self,
+        callee: &str,
+        arguments: &[Value<'context, 'block>],
+        address: Value<'context, 'block>,
+        selector: u32,
+        callee_type: FunctionType<'context>,
+        block: &B,
+    ) -> Vec<Value<'context, 'block>>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let gas = self.emit_sol_gas_left(block);
+        let value = self.emit_sol_constant(0, self.types.ui256, block);
+        let selector_value = self.emit_sol_constant(i64::from(selector), self.types.ui256, block);
+        let return_types: Vec<Type<'context>> = (0..callee_type.result_count())
+            .map(|index| {
+                callee_type
+                    .result(index)
+                    .expect("function-type result index in range")
+            })
+            .collect();
+        // `sol.ext_call` has two result groups: the `i1` success `status` and the
+        // variadic decoded `outs`. The op's lowering reverts internally on
+        // failure, so the status is dropped and only the decoded results return.
+        let operation = block.append_operation(
+            ExtCallOperation::builder(self.context, self.unknown_location)
+                .callee(StringAttribute::new(self.context, callee))
+                .ins(arguments)
+                .addr(address)
+                .gas(gas)
+                .val(value)
+                .selector(selector_value)
+                .delegate_call(Attribute::unit(self.context))
+                .library_call(Attribute::unit(self.context))
+                .callee_type(TypeAttribute::new(callee_type.into()))
+                .status(self.types.i1)
+                .outs(&return_types)
+                .build()
+                .into(),
+        );
+        let mut results = Vec::with_capacity(return_types.len());
+        for index in 0..return_types.len() {
+            results.push(
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_call produces the declared results")
+                    .into(),
+            );
+        }
+        results
     }
 
     // ==== Bare low-level calls ====

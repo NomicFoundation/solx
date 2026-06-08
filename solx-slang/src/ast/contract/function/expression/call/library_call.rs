@@ -4,12 +4,14 @@
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use melior::ir::r#type::FunctionType;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 
+use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::type_conversion::TypeConversion;
 
@@ -82,7 +84,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     }
 
     /// Emits an external (`Library { external: true }`) library call — a
-    /// `delegatecall` to the deployed library.
+    /// `delegatecall` to the deployed library via the native `sol.ext_call`
+    /// (with `delegate_call` + `library_call` flags), whose lowering owns the ABI
+    /// encode, the delegatecall, the revert-bubble, and the result decode. The
+    /// library address is a `sol.lib_addr` link placeholder; a `using for`
+    /// receiver becomes the implicit leading `self` argument.
     pub fn emit_library_external_call(
         &self,
         library_name: &str,
@@ -90,9 +96,45 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: &PositionalArguments,
         self_receiver: Option<&Expression>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let _ = (library_name, function, arguments, self_receiver, block);
-        unimplemented!("external library delegatecall")
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
+            function,
+            &self.expression_emitter.state.builder,
+        );
+        let selector = function
+            .compute_selector()
+            .expect("an external library function has a selector");
+        let mlir_name = FunctionEmitter::mlir_function_name(function);
+
+        let (argument_values, current_block) = match self_receiver {
+            Some(receiver) => {
+                let (parameter_self, parameter_rest) = parameter_types
+                    .split_first()
+                    .expect("a using-for library function has a self parameter");
+                let (self_value, block) = self.expression_emitter.emit_value(receiver, block)?;
+                let builder = &self.expression_emitter.state.builder;
+                let self_value = TypeConversion::from_target_type(*parameter_self, builder)
+                    .emit(self_value, builder, &block);
+                let (mut rest_values, block) =
+                    self.emit_coerced_arguments(arguments, parameter_rest, block)?;
+                rest_values.insert(0, self_value);
+                (rest_values, block)
+            }
+            None => self.emit_coerced_arguments(arguments, &parameter_types, block)?,
+        };
+
+        let builder = &self.expression_emitter.state.builder;
+        let address = builder.emit_sol_lib_addr(library_name, &current_block);
+        let callee_type = FunctionType::new(builder.context, &parameter_types, &return_types);
+        let results = builder.emit_sol_ext_call_library(
+            &mlir_name,
+            &argument_values,
+            address,
+            selector,
+            callee_type,
+            &current_block,
+        );
+        Ok((results, current_block))
     }
 
     /// Re-raises a bubbled revert (`returndatacopy` + `revert`). Oracle free
