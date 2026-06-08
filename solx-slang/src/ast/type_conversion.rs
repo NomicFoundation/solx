@@ -276,8 +276,25 @@ impl<'context> TypeConversion<'context> {
                     .expect("UDVT target type resolved by semantic analysis");
                 Self::emit_scalar_zero(&target_type, mlir_type, builder, block)
             }
+            SlangType::Function(function_type) => {
+                // The zero value of an external function pointer is a zero
+                // address + zero selector packed into an `!sol.ext_func_ref`; of
+                // an internal one, the dialect's `default_func_constant` (a
+                // pointer that reverts when called).
+                if function_type.is_externally_visible() {
+                    let zero_address = builder.emit_sol_constant(0, builder.types.ui160, block);
+                    let address = builder.emit_sol_address_cast(
+                        zero_address,
+                        builder.types.sol_address,
+                        block,
+                    );
+                    builder.emit_sol_ext_func_constant(address, 0, mlir_type, block)
+                } else {
+                    builder.emit_sol_default_func_constant(mlir_type, block)
+                }
+            }
             _ => unreachable!(
-                "emit_scalar_zero handles only address/bytesN/enum/integer/bool/UDVT value types"
+                "emit_scalar_zero handles only address/bytesN/enum/integer/bool/UDVT/function value types"
             ),
         }
     }

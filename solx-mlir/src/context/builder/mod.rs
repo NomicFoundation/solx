@@ -57,6 +57,7 @@ use crate::ods::sol::ContractOperation;
 use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::CopyOperation;
 use crate::ods::sol::DataLocCastOperation;
+use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::DeleteOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::DynBytesToFixedBytesOperation;
@@ -1630,6 +1631,30 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.func_constant always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.default_func_constant` — the zero value of an internal
+    /// function pointer (`!sol.func_ref<…>`), a default-initialised pointer that
+    /// reverts when called.
+    pub fn emit_sol_default_func_constant<'block, B>(
+        &self,
+        func_ref_type: Type<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                DefaultFuncConstantOperation::builder(self.context, self.unknown_location)
+                    .addr(func_ref_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.default_func_constant always produces one result")
             .into()
     }
 
