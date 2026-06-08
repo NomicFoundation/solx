@@ -120,6 +120,31 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Ok((result, block))
     }
 
+    /// Emits `delete x` — resets the lvalue to its zero value. A reference-typed
+    /// storage aggregate (array / `string` / `bytes` / struct) is deep-cleared
+    /// via `sol.delete`; a value-typed lvalue (scalar state variable, `a[i]`,
+    /// `m[k]`) is overwritten with zero, reusing the assignment store path.
+    pub fn emit_delete(
+        &self,
+        operand: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+        let (target, block) = self.resolve_assignment_target(operand, block)?;
+        match &target {
+            AssignmentTarget::ReferenceCopy(reference) => {
+                self.state.builder.emit_sol_delete(*reference, &block);
+            }
+            AssignmentTarget::Pointer(..) | AssignmentTarget::Storage(..) => {
+                let zero =
+                    self.state
+                        .builder
+                        .emit_sol_constant(0, self.state.builder.types.ui256, &block);
+                self.store_into_target(&target, zero, &block);
+            }
+        }
+        Ok(block)
+    }
+
     /// Resolves a single left-hand-side expression to its assignment target.
     fn resolve_assignment_target(
         &self,

@@ -31,10 +31,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ///
     /// # Returns
     ///
-    /// Returns the block after the `sol.revert` op. `sol.revert` is not a
-    /// terminator at the dialect level, so codegen continues in the same
-    /// block; the function epilogue (or an enclosing region's yield) supplies
-    /// the structural terminator.
+    /// Returns `None`: `sol.revert` is a block terminator, so the current block
+    /// is complete and codegen does not continue in it (no epilogue or enclosing
+    /// yield is appended after the revert).
     pub fn emit_revert(
         &self,
         revert: &RevertStatement,
@@ -43,7 +42,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let error = match revert.error().resolve_to_definition() {
             None => {
                 self.state.builder.emit_sol_revert("", &[], false, &block);
-                return Ok(Some(block));
+                return Ok(None);
             }
             Some(Definition::Error(error)) => error,
             Some(_) => unreachable!("slang resolves a revert target to an error definition"),
@@ -78,7 +77,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         self.state
             .builder
             .emit_sol_revert(&signature, &evaluated.values, true, &evaluated.block);
-        Ok(Some(evaluated.block))
+        Ok(None)
     }
 
     /// Emits a `sol.revert` for the call form `revert()` or `revert("message")`.
@@ -92,10 +91,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ///
     /// # Returns
     ///
-    /// Returns the block after the `sol.revert` op. `sol.revert` is not a
-    /// terminator at the dialect level, so codegen continues in the same
-    /// block; the function epilogue (or an enclosing region's yield) supplies
-    /// the structural terminator.
+    /// Returns `None`: `sol.revert` is a block terminator, so the current block
+    /// is complete and codegen does not continue in it.
     pub fn emit_revert_call(
         &self,
         call: &FunctionCallExpression,
@@ -128,7 +125,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         self.state
             .builder
             .emit_sol_revert(&signature, &[], false, &block);
-        Ok(Some(block))
+        Ok(None)
     }
 
     /// Evaluates revert argument expressions left-to-right, threading the
