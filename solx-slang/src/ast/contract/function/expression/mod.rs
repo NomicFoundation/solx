@@ -457,8 +457,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::IndexAccessExpression(index_access) => {
                 self.emit_index_access(index_access, block)
             }
-            Expression::CallOptionsExpression(_) => {
-                unimplemented!("expression lowering: call options")
+            Expression::CallOptionsExpression(call_options) => {
+                // A call-options expression in value position (decorated but not
+                // immediately called) contributes only its options' side effects;
+                // its value is that of the wrapped operand.
+                let mut current_block = block;
+                for option in call_options.options().iter() {
+                    let (_value, next) = self.emit_value(&option.value(), current_block)?;
+                    current_block = next;
+                }
+                self.emit(&call_options.operand(), current_block)
             }
             Expression::NewExpression(_)
             | Expression::TypeExpression(_)

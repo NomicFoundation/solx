@@ -17,6 +17,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::CallOptionsExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
@@ -69,6 +70,15 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &arguments else {
             unreachable!("call arguments are either positional or named");
         };
+
+        // A `recv.f{value: v}(args)` / `new C{value, salt}(args)` callee is a
+        // `CallOptionsExpression`; capture the options and dispatch the inner
+        // callee, taking the single result.
+        if let Expression::CallOptionsExpression(call_options) = call.operand() {
+            let (results, block) =
+                self.emit_call_with_options(call, &call_options, positional_arguments, block)?;
+            return Ok((results.into_iter().next(), block));
+        }
 
         match self.classify_call(call, positional_arguments) {
             CallKind::TypeConversion => {
@@ -157,9 +167,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 )
                 .map(|(value, block)| (Some(value), block))
             }
-            CallKind::New => self
-                .expression_emitter
-                .emit_new(call, positional_arguments, block),
+            CallKind::New => {
+                self.expression_emitter
+                    .emit_new(call, positional_arguments, None, None, block)
+            }
             CallKind::WithOptions(_) => {
                 unimplemented!("call dispatch: call with options")
             }
@@ -198,6 +209,123 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 )?;
                 Ok((results.into_iter().next(), block))
             }
+        }
+    }
+
+    /// Evaluates a `{value: …, gas: …, salt: …}` option list in source order
+    /// (each value emitted for its side effects) and returns the captured
+    /// `value` (as `msg.value`, coerced to `ui256`) and `salt` (the CREATE2 salt
+    /// for `new`, cast from `bytes32`). The option KIND comes from slang's typed
+    /// `BuiltIn::CallOption*` classification, never from comparing the option
+    /// name as text (Rule-7). The `{gas: …}` option is not yet threaded into the
+    /// call op and is deferred loudly.
+    fn capture_call_options(
+        &self,
+        call_options: &CallOptionsExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        Option<Value<'context, 'block>>,
+        Option<Value<'context, 'block>>,
+        BlockRef<'context, 'block>,
+    )> {
+        let mut value = None;
+        let mut salt = None;
+        let mut current_block = block;
+        for option in call_options.options().iter() {
+            let (option_value, next_block) = self
+                .expression_emitter
+                .emit_value(&option.value(), current_block)?;
+            current_block = next_block;
+            let builder = &self.expression_emitter.state.builder;
+            match option.name().resolve_to_built_in() {
+                Some(BuiltIn::CallOptionValue) => {
+                    value = Some(
+                        TypeConversion::from_target_type(builder.types.ui256, builder).emit(
+                            option_value,
+                            builder,
+                            &current_block,
+                        ),
+                    );
+                }
+                Some(BuiltIn::CallOptionSalt) => {
+                    salt = Some(builder.emit_sol_bytes_cast(
+                        option_value,
+                        builder.types.ui256,
+                        &current_block,
+                    ));
+                }
+                Some(BuiltIn::CallOptionGas) => {
+                    unimplemented!("the `{{gas: …}}` call option is not yet threaded into the call")
+                }
+                _ => unreachable!("a call option resolves to a value, gas, or salt built-in"),
+            }
+        }
+        Ok((value, salt, current_block))
+    }
+
+    /// Lowers a call whose callee is a `CallOptionsExpression`
+    /// (`recv.f{value: v}(args)`, `addr.call{value: v}(data)`,
+    /// `new C{value: v, salt: s}(args)`, `fp{value: v}(args)`): captures the
+    /// options, then dispatches the inner callee, forwarding the `value` as
+    /// `msg.value` (and, for contract creation, the `salt`). Returns the full
+    /// result tuple.
+    fn emit_call_with_options(
+        &self,
+        call: &FunctionCallExpression,
+        call_options: &CallOptionsExpression,
+        positional_arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let (value, salt, block) = self.capture_call_options(call_options, block)?;
+        let callee = call_options.operand();
+        match &callee {
+            Expression::NewExpression(_) => {
+                let (result, block) = self.expression_emitter.emit_new(
+                    call,
+                    positional_arguments,
+                    value,
+                    salt,
+                    block,
+                )?;
+                Ok((result.into_iter().collect(), block))
+            }
+            Expression::MemberAccessExpression(access) => {
+                if let Some(
+                    kind @ (BuiltIn::AddressCall
+                    | BuiltIn::AddressDelegatecall
+                    | BuiltIn::AddressStaticcall),
+                ) = access.member().resolve_to_built_in()
+                {
+                    return self.emit_bare_call_results(
+                        access,
+                        kind,
+                        value,
+                        positional_arguments,
+                        block,
+                    );
+                }
+                let member_kind = self.classify_member(access);
+                self.emit_member_call_results(
+                    member_kind,
+                    access,
+                    value,
+                    positional_arguments,
+                    block,
+                )
+            }
+            _ if matches!(callee.get_type(), Some(SlangType::Function(_))) => {
+                let function_slang_type = callee
+                    .get_type()
+                    .expect("an indirect call-options callee is function-typed");
+                self.emit_indirect_call_results(
+                    &callee,
+                    &function_slang_type,
+                    positional_arguments,
+                    value,
+                    block,
+                )
+            }
+            _ => unimplemented!("unsupported call-options callee"),
         }
     }
 
@@ -498,6 +626,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &arguments else {
             unreachable!("call arguments are either positional or named");
         };
+
+        // A `recv.f{value: v}(args)` / `new C{value, salt}(args)` callee in
+        // result-binding position dispatches through the same options handler.
+        if let Expression::CallOptionsExpression(call_options) = call.operand() {
+            return self.emit_call_with_options(call, &call_options, positional_arguments, block);
+        }
 
         // A member-access callee yields its full result tuple through the same
         // dispatchers as the single-result path: a bare low-level call (member

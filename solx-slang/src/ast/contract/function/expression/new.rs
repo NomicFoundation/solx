@@ -35,6 +35,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         &self,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
+        value: Option<Value<'context, 'block>>,
+        salt: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let slang_type = call.get_type();
@@ -78,8 +80,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
 
         // Contract creation: `new C(args)` lowers to `sol.new`, which embeds
         // `C`'s deploy bytecode. Record the dependency so the linker pulls the
-        // object in. Value transfer (`new C{value: x}()`) and CREATE2 salt go
-        // through call options and are not handled here.
+        // object in. A `new C{value: v}()` forwards `v` wei; a `new C{salt: s}()`
+        // selects CREATE2 with the (already `ui256`-cast) salt operand.
         let Some(SlangType::Contract(contract_type)) = slang_type else {
             unimplemented!("new expression has no resolved type or unsupported new target");
         };
@@ -93,23 +95,28 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (ctor_args, block) = self.emit_argument_values(arguments, block)?;
         let builder = &self.state.builder;
         let result_type = builder.types.contract(&contract_name, payable);
-        let val = builder.emit_sol_constant(0, builder.types.ui256, &block);
+        let val =
+            value.unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &block));
 
-        let mut operation: Operation =
-            NewOperation::builder(builder.context, builder.unknown_location)
-                .obj_name(StringAttribute::new(builder.context, &contract_name))
-                .val(val)
-                .ctor_args(&ctor_args)
-                .out(result_type)
-                .build()
-                .into();
-        // Set `operand_segment_sizes` manually (val=1, salt=0, ctorArgs=N): the
-        // optional `salt` and `try_call` are left unset, and melior's ODS builder
-        // does not synthesize the attribute for this `AttrSizedOperandSegments`
-        // op, so the dialect verifier rejects the op without it.
+        let mut new_builder = NewOperation::builder(builder.context, builder.unknown_location)
+            .obj_name(StringAttribute::new(builder.context, &contract_name))
+            .val(val)
+            .ctor_args(&ctor_args)
+            .out(result_type);
+        if let Some(salt) = salt {
+            new_builder = new_builder.salt(salt);
+        }
+        let mut operation: Operation = new_builder.build().into();
+        // Set `operand_segment_sizes` manually (val=1, salt=0|1, ctorArgs=N):
+        // melior's ODS builder does not synthesize the attribute for this
+        // `AttrSizedOperandSegments` op, so the dialect verifier rejects the op
+        // without it. The `salt` segment is 1 when CREATE2 is requested, else 0
+        // (and `try_call` is left unset).
         let ctor_args_count =
             i32::try_from(ctor_args.len()).expect("constructor argument count fits in i32");
-        let segment_sizes = DenseI32ArrayAttribute::new(builder.context, &[1, 0, ctor_args_count]);
+        let salt_segment = i32::from(salt.is_some());
+        let segment_sizes =
+            DenseI32ArrayAttribute::new(builder.context, &[1, salt_segment, ctor_args_count]);
         operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
         let value = block
             .append_operation(operation)
