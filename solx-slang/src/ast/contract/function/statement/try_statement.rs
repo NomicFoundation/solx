@@ -8,22 +8,24 @@ use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::CatchClause;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::TryStatement;
+use slang_solidity_v2::ast::Type as SlangType;
+use solx_mlir::TryFallbackKind;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::statement::StatementEmitter;
 use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
-    /// Emits a `try` statement: an external call with try semantics, a
-    /// `sol.if(status)` on the success flag, the success body (binding the
-    /// declared `returns (...)`), and the failure region.
-    ///
-    /// This fill covers the success path and the parameter-less `catch {}`
-    /// clause. The revert-data-binding clauses — low-level `catch (bytes r)`,
-    /// typed `catch Error(...)` / `catch Panic(...)` — decode the returndata via
-    /// `sol.get_returndata`, which the current dialect pin lacks; those land
-    /// with the pin advance in a later fill and are deferred loudly here.
+    /// Emits a `try` statement as a `sol.try`: an external call with try
+    /// semantics produces the success `status`, and the op carries four regions
+    /// — success, panic, error, fallback. The success region binds the declared
+    /// `returns (...)` and runs the body; each present catch clause populates its
+    /// region, receiving the lowering-decoded panic code / error reason / raw
+    /// returndata as a block argument. Absent clauses leave empty regions, and
+    /// the op's lowering owns the selector dispatch, payload decode, and raw
+    /// re-revert when no clause matches.
     pub fn emit_try(
         &mut self,
         try_statement: &TryStatement,
@@ -45,20 +47,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             return self.emit_try_success_only(try_statement, block);
         };
 
-        // Typed `catch Error(...)` / `catch Panic(...)` clauses dispatch on the
-        // 4-byte error selector (returndata decode + per-selector compare) — a
-        // later fill. Detect them structurally — a typed clause names its error,
-        // so the discriminator is `error().name().is_some()`, never a comparison
-        // of that name as text (Rule-7) — and defer loudly; the success body +
-        // parameter-less `catch {}` path is emitted here.
-        let has_typed_catch = try_statement
-            .catch_clauses()
-            .iter()
-            .any(|clause| clause.error().and_then(|error| error.name()).is_some());
-        if has_typed_catch {
-            unimplemented!("typed catch clause (Error / Panic)");
-        }
-
         // Emit the external call with try semantics → (status, results). A
         // non-try-lowerable shape (`None`) falls back to the success body.
         let lowered = {
@@ -71,28 +59,83 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             None => return self.emit_try_success_only(try_statement, block),
         };
 
-        let (then_block, else_block) = self.state.builder.emit_sol_if(status, &current_block);
-        let then_region = then_block
-            .parent_region()
-            .expect("block belongs to a region");
-        let else_region = else_block
-            .parent_region()
-            .expect("block belongs to a region");
+        // Classify the catch clauses into the `sol.try` regions, all structurally
+        // (Rule-7): a parameter-less `catch {}` has no error group; a low-level
+        // `catch (bytes r)` has an error group with no name; a typed
+        // `catch Error(...)` / `catch Panic(...)` names its error, and Error vs
+        // Panic is told apart by its bound parameter's type (`Error(string)` vs
+        // `Panic(uint256)`), never by the identifier text.
+        let mut panic_clause: Option<CatchClause> = None;
+        let mut error_clause: Option<CatchClause> = None;
+        let mut fallback_clause: Option<CatchClause> = None;
+        let mut fallback_kind = TryFallbackKind::None;
+        for clause in try_statement.catch_clauses().iter() {
+            match clause.error() {
+                None => {
+                    fallback_kind = TryFallbackKind::Parameterless;
+                    fallback_clause = Some(clause);
+                }
+                Some(error) if error.name().is_none() => {
+                    fallback_kind = TryFallbackKind::Bytes;
+                    fallback_clause = Some(clause);
+                }
+                Some(error) => {
+                    let parameter = error
+                        .parameters()
+                        .iter()
+                        .next()
+                        .expect("a typed catch clause declares one parameter");
+                    match parameter
+                        .get_type()
+                        .expect("catch parameter type resolved by semantic analysis")
+                    {
+                        SlangType::String(_) => error_clause = Some(clause),
+                        SlangType::Integer(_) => panic_clause = Some(clause),
+                        _ => unreachable!(
+                            "a typed catch clause binds Error(string) or Panic(uint256)"
+                        ),
+                    }
+                }
+            }
+        }
+
         let saved_region = self.region_pointer;
+        let (success_block, panic_block, error_block, fallback_block) =
+            self.state.builder.emit_sol_try(
+                status,
+                panic_clause.is_some(),
+                error_clause.is_some(),
+                fallback_kind,
+                &current_block,
+            );
 
         // Success region: bind the declared returns from the call results, then
         // run the body.
-        self.set_region(&then_region);
-        self.bind_try_returns(try_statement, &results, &then_block);
-        let then_end = self.emit_block(try_statement.body().statements(), then_block)?;
-        if let Some(end) = then_end {
+        let success_region = success_block
+            .parent_region()
+            .expect("block belongs to a region");
+        self.set_region(&success_region);
+        self.bind_try_returns(try_statement, &results, &success_block);
+        let success_end = self.emit_block(try_statement.body().statements(), success_block)?;
+        if let Some(end) = success_end {
             self.state.builder.emit_sol_yield(&end);
         }
 
-        // Failure region: the single low-level / parameter-less clause.
-        self.set_region(&else_region);
-        let fallback = try_statement.catch_clauses().iter().next();
-        self.emit_fallback_catch_clause(fallback.as_ref(), else_block)?;
+        // Typed `catch Panic(uint)` / `catch Error(string)`: the decoded value
+        // arrives as the region's block argument.
+        if let Some(panic_block) = panic_block {
+            let clause = panic_clause.expect("a panic region implies a panic clause");
+            self.emit_typed_catch_clause(&clause, panic_block)?;
+        }
+        if let Some(error_block) = error_block {
+            let clause = error_clause.expect("an error region implies an error clause");
+            self.emit_typed_catch_clause(&clause, error_block)?;
+        }
+        // The single low-level `catch (bytes r)` / parameter-less `catch {}`.
+        if let Some(fallback_block) = fallback_block {
+            let clause = fallback_clause.expect("a fallback region implies a fallback clause");
+            self.emit_fallback_catch_clause(&clause, fallback_kind, fallback_block)?;
+        }
 
         self.region_pointer = saved_region;
         Ok(Some(current_block))
@@ -114,31 +157,41 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             if parameter.name().is_none() {
                 continue;
             }
-            let parameter_type = parameter
-                .get_type()
-                .map(|slang_type| {
-                    TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
-                })
-                .unwrap_or_else(|| self.state.builder.types.ui256);
-            let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
-                *result,
-                &self.state.builder,
-                then_entry,
-            );
-            let pointer = self
-                .state
-                .builder
-                .emit_sol_alloca(parameter_type, then_entry);
-            self.state.builder.emit_sol_store(cast, pointer, then_entry);
-            self.environment
-                .define_variable(parameter.node_id(), pointer, parameter_type);
+            self.bind_catch_parameter(&parameter, *result, then_entry);
         }
     }
 
+    /// Casts a lowering-decoded catch value to the bound parameter's declared
+    /// type, stores it into a fresh stack slot, and defines the parameter in
+    /// scope by its node id — the shared binding for the success `returns (...)`,
+    /// the typed `Error`/`Panic` reason/code, and the low-level `bytes` data.
+    fn bind_catch_parameter(
+        &mut self,
+        parameter: &Parameter,
+        value: Value<'context, 'block>,
+        block: &BlockRef<'context, 'block>,
+    ) {
+        let parameter_type = parameter
+            .get_type()
+            .map(|slang_type| {
+                TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
+            })
+            .unwrap_or_else(|| self.state.builder.types.ui256);
+        let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
+            value,
+            &self.state.builder,
+            block,
+        );
+        let pointer = self.state.builder.emit_sol_alloca(parameter_type, block);
+        self.state.builder.emit_sol_store(cast, pointer, block);
+        self.environment
+            .define_variable(parameter.node_id(), pointer, parameter_type);
+    }
+
     /// Decodes the returndata from `start` into `result_types`
-    /// (`GetReturnData` + `Decode`) — used by the revert-data-binding catch
-    /// clauses. Needs the `sol.get_returndata` op (pin advance), so it lands
-    /// with the typed-catch fill.
+    /// (`GetReturnData` + `Decode`). The `sol.try` lowering owns returndata
+    /// decoding for the catch clauses (the decoded values arrive as region block
+    /// arguments), so this skeleton method is currently unused.
     pub fn emit_returndata_decode(
         &self,
         start: i64,
@@ -149,32 +202,58 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         unimplemented!("returndata decode")
     }
 
-    /// Emits a typed `catch Error(...)` / `catch Panic(...)` clause (bind the
-    /// param past the 4-byte selector, body, yield).
+    /// Emits a typed `catch Error(string memory r)` / `catch Panic(uint c)`
+    /// clause. The lowering decodes the reason / code and delivers it as the
+    /// region's block argument, which is bound to the clause parameter before
+    /// the body runs.
     pub fn emit_typed_catch_clause(
         &mut self,
         clause: &CatchClause,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<()> {
-        let _ = (clause, block);
-        unimplemented!("typed catch clause")
+        let region = block.parent_region().expect("block belongs to a region");
+        self.set_region(&region);
+        let error = clause
+            .error()
+            .expect("a typed catch clause has an error group");
+        let parameter = error
+            .parameters()
+            .iter()
+            .next()
+            .expect("a typed catch clause declares one parameter");
+        let decoded: Value<'context, 'block> = block.argument(0)?.into();
+        self.bind_catch_parameter(&parameter, decoded, &block);
+        let end = self.emit_block(clause.body().statements(), block)?;
+        if let Some(end) = end {
+            self.state.builder.emit_sol_yield(&end);
+        }
+        Ok(())
     }
 
-    /// Emits the fallback clause. A parameter-less `catch {}` simply runs its
-    /// body. A low-level `catch (bytes memory r)` binds the whole revert data
-    /// via `sol.get_returndata` (pin advance) and is deferred; `None` (no clause
-    /// applied) re-reverts the exact data, reachable only once typed clauses
-    /// exist, so it too is deferred.
+    /// Emits the fallback clause. A parameter-less `catch { ... }` runs its body
+    /// directly; a low-level `catch (bytes memory r)` binds `r` to the raw
+    /// returndata delivered as the region's block argument. The no-clause-matched
+    /// re-revert is synthesised by the `sol.try` lowering when the fallback
+    /// region is empty, so it is never emitted here.
     pub fn emit_fallback_catch_clause(
         &mut self,
-        clause: Option<&CatchClause>,
+        clause: &CatchClause,
+        kind: TryFallbackKind,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<()> {
-        let Some(clause) = clause else {
-            unimplemented!("re-revert when no catch clause applies");
-        };
-        if clause.error().is_some() {
-            unimplemented!("low-level catch clause with a bound parameter");
+        let region = block.parent_region().expect("block belongs to a region");
+        self.set_region(&region);
+        if let TryFallbackKind::Bytes = kind {
+            let error = clause
+                .error()
+                .expect("a low-level catch clause has a parameter group");
+            let parameter = error
+                .parameters()
+                .iter()
+                .next()
+                .expect("a low-level catch clause binds one bytes parameter");
+            let data: Value<'context, 'block> = block.argument(0)?.into();
+            self.bind_catch_parameter(&parameter, data, &block);
         }
         let end = self.emit_block(clause.body().statements(), block)?;
         if let Some(end) = end {
