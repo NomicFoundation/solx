@@ -342,6 +342,46 @@ impl<'context> Builder<'context> {
             .into()
     }
 
+    /// Emits a `sol.string_lit` from raw `bytes` that need not be valid UTF-8 (a
+    /// `hex"..."` literal, an escaped `"\xff"`). The `value` attribute is built
+    /// from the bytes via the C API (melior's `StringAttribute::new` takes a
+    /// UTF-8 `&str`), and the op via the raw `OperationBuilder` because the
+    /// generated `.value()` setter requires a `StringAttribute`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed.
+    pub fn emit_sol_string_lit_bytes<'block, B>(
+        &self,
+        bytes: &[u8],
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        // SAFETY: `solxCreateStringAttr` builds a `StringAttr` from the pointer
+        // and length of the live byte slice.
+        let value_attribute = unsafe {
+            Attribute::from_raw(crate::ffi::solxCreateStringAttr(
+                self.context.to_raw(),
+                bytes.as_ptr(),
+                bytes.len(),
+            ))
+        };
+        block
+            .append_operation(
+                OperationBuilder::new("sol.string_lit", self.unknown_location)
+                    .add_attributes(&[(Identifier::new(self.context, "value"), value_attribute)])
+                    .add_results(&[self.types.sol_string_memory])
+                    .build()
+                    .expect("valid sol.string_lit"),
+            )
+            .result(0)
+            .expect("sol.string_lit always produces one result")
+            .into()
+    }
+
     /// Emits a `sol.revert` carrying an optional payload.
     ///
     /// `signature` doubles as the payload string: for custom errors
