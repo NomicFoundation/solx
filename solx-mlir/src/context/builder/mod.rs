@@ -56,6 +56,7 @@ use crate::ods::sol::ContractOperation;
 use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::CopyOperation;
 use crate::ods::sol::DataLocCastOperation;
+use crate::ods::sol::DeleteOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::EnumCastOperation;
@@ -205,7 +206,16 @@ impl<'context> Builder<'context> {
             ));
         }
 
-        if selector.is_some() || matches!(kind, Some(crate::FunctionKind::Constructor)) {
+        // The fallback dispatcher in SolToYul reads `orig_fn_type` to recover the
+        // pre-lowering Sol signature, so a fallback (like a selector-bearing
+        // function or the constructor) must carry it; without it the pass
+        // dereferences a null type.
+        if selector.is_some()
+            || matches!(
+                kind,
+                Some(crate::FunctionKind::Constructor | crate::FunctionKind::Fallback)
+            )
+        {
             builder = builder.orig_fn_type(TypeAttribute::new(function_type.into()));
         }
 
@@ -1051,6 +1061,22 @@ impl<'context> Builder<'context> {
                 .add_operands(&[address, value])
                 .build()
                 .expect("valid sol.push_string"),
+        );
+    }
+
+    /// Emits a `sol.delete` recursively clearing the reference-typed storage
+    /// aggregate at `reference` to its zero value (`delete x` for arrays,
+    /// strings/bytes, and structs). The op's lowering performs the deep clear.
+    pub fn emit_sol_delete<'block, B>(&self, reference: Value<'context, 'block>, block: &B)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block.append_operation(
+            DeleteOperation::builder(self.context, self.unknown_location)
+                .reference(reference)
+                .build()
+                .into(),
         );
     }
 

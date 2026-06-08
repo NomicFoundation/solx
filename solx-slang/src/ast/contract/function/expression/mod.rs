@@ -374,14 +374,19 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::PrefixExpression(expression) => {
+                // `delete x` zeroes an lvalue and is void-typed, so it is routed
+                // before the result-type resolution the arithmetic/logical prefix
+                // operators need (resolving a void type would fail).
+                if let ast::PrefixExpressionOperator::DeleteKeyword(_) = expression.operator() {
+                    return self
+                        .emit_delete(&expression.operand(), block)
+                        .map(|block| (None, block));
+                }
                 let result_type = self.resolve_slang_type(expression.get_type());
                 let operator = match expression.operator() {
                     ast::PrefixExpressionOperator::Bang(_) => Operator::Not,
-                    // `delete x` zeroes an lvalue — not an arithmetic/logical
-                    // prefix operator — so it is its own (loud) residual rather
-                    // than an `Operator` variant the prefix emitter must reject.
                     ast::PrefixExpressionOperator::DeleteKeyword(_) => {
-                        unimplemented!("delete is not yet supported")
+                        unreachable!("delete is routed before prefix-operator classification")
                     }
                     ast::PrefixExpressionOperator::Minus(_) => Operator::Subtract,
                     ast::PrefixExpressionOperator::MinusMinus(_) => Operator::Decrement,
