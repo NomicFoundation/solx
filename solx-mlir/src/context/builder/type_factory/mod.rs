@@ -122,6 +122,13 @@ impl<'context> TypeFactory<'context> {
         unsafe { crate::ffi::solxIsAddressType(ty.to_raw()) }
     }
 
+    /// Whether `ty` is a Sol external function reference (`!sol.ext_func_ref<…>`)
+    /// — the runtime address+selector value of a `function (...) external`.
+    pub fn is_sol_ext_function_ref(ty: Type<'_>) -> bool {
+        // SAFETY: pure `isa<>` predicate on a valid type.
+        unsafe { crate::ffi::solxIsExtFuncRefType(ty.to_raw()) }
+    }
+
     /// Whether `ty` is a Sol contract type (`!sol.contract<…>`).
     pub fn is_sol_contract(ty: Type<'_>) -> bool {
         // SAFETY: pure `isa<>` predicate on a valid type.
