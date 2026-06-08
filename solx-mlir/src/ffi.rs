@@ -95,6 +95,14 @@ unsafe extern "C" {
         magnitude: *const u64,
     ) -> mlir_sys::MlirAttribute;
 
+    /// Creates an MLIR `StringAttr` from `len` raw bytes — a Solidity string
+    /// literal need not be valid UTF-8 (`hex"..."`, `"\xff"`).
+    pub fn solxCreateStringAttr(
+        context: MlirContext,
+        data: *const u8,
+        len: usize,
+    ) -> mlir_sys::MlirAttribute;
+
     // ---- Sol type constructors (from sol_attr_stubs.cpp) ----
 
     /// Creates a `sol::PointerType` with the given element type and data location.

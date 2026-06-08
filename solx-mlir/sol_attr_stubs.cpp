@@ -66,6 +66,14 @@ MlirAttribute solxCreateIntegerAttr(MlirType ty, bool isNegative,
     return mlirIntegerAttrGetFromWords(ty, value.getNumWords(), value.getRawData());
 }
 
+MlirAttribute solxCreateStringAttr(MlirContext ctx, const uint8_t *data,
+                                   size_t len) {
+    // A Solidity string literal need not be valid UTF-8 (`hex"..."`,
+    // `"\xff"`); a `StringAttr` stores the raw bytes verbatim.
+    return mlirStringAttrGet(
+        ctx, mlirStringRefCreate(reinterpret_cast<const char *>(data), len));
+}
+
 MlirType solxCreatePointerType(MlirContext ctx, MlirType elementType, uint32_t dataLocation) {
     if (dataLocation > 5) abort();
     auto *context = unwrap(ctx);
