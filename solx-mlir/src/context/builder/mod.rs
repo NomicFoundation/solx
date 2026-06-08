@@ -6,6 +6,7 @@
 //! memory, comparisons, calls, state variables, and EVM context intrinsics.
 //!
 
+pub mod try_fallback_kind;
 pub mod type_factory;
 pub mod yul;
 
@@ -80,8 +81,11 @@ use crate::ods::sol::RevertOperation;
 use crate::ods::sol::StateVarOperation;
 use crate::ods::sol::StoreOperation;
 use crate::ods::sol::StringLitOperation;
+use crate::ods::sol::TryOperation;
 use crate::ods::sol::WhileOperation;
 use crate::ods::sol::YieldOperation;
+
+use crate::context::builder::try_fallback_kind::TryFallbackKind;
 
 /// Cached MLIR types and emission methods for building MLIR operations.
 pub struct Builder<'context> {
@@ -484,6 +488,112 @@ impl<'context> Builder<'context> {
             .first_block()
             .expect("else region has a block");
         (then_ref, else_ref)
+    }
+
+    /// Emits a `sol.try` carrying the external call's success `status` and four
+    /// regions — success, panic, error, fallback. A clause that is absent
+    /// produces an empty region; the op's lowering performs the returndata-size
+    /// guard, the selector switch over `Error(string)` / `Panic(uint256)`, the
+    /// payload decode (delivered as each region's block argument), and the raw
+    /// re-revert when no clause matches, so the frontend emits no returndata or
+    /// selector ops itself.
+    ///
+    /// Returns `(success, panic, error, fallback)` entry blocks; the three catch
+    /// blocks are `Some` exactly when their clause is present (an absent clause
+    /// left an empty region). The panic block carries the decoded panic code
+    /// (`ui256`), the error block the decoded reason (`string<Memory>`), and a
+    /// [`TryFallbackKind::Bytes`] fallback block the raw returndata
+    /// (`string<Memory>`), each as block argument 0. The caller binds those,
+    /// emits each body, and terminates every region with `sol.yield`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the MLIR operation cannot be constructed.
+    pub fn emit_sol_try<'block>(
+        &self,
+        status: Value<'context, 'block>,
+        has_panic: bool,
+        has_error: bool,
+        fallback: TryFallbackKind,
+        block: &BlockRef<'context, 'block>,
+    ) -> (
+        BlockRef<'context, 'block>,
+        Option<BlockRef<'context, 'block>>,
+        Option<BlockRef<'context, 'block>>,
+        Option<BlockRef<'context, 'block>>,
+    )
+    where
+        'context: 'block,
+    {
+        let success_region = Region::new();
+        success_region.append_block(Block::new(&[]));
+
+        let panic_region = Region::new();
+        if has_panic {
+            panic_region.append_block(Block::new(&[(self.types.ui256, self.unknown_location)]));
+        }
+
+        let error_region = Region::new();
+        if has_error {
+            error_region.append_block(Block::new(&[(
+                self.types.sol_string_memory,
+                self.unknown_location,
+            )]));
+        }
+
+        let fallback_region = Region::new();
+        match fallback {
+            TryFallbackKind::None => {}
+            TryFallbackKind::Parameterless => {
+                fallback_region.append_block(Block::new(&[]));
+            }
+            TryFallbackKind::Bytes => {
+                fallback_region.append_block(Block::new(&[(
+                    self.types.sol_string_memory,
+                    self.unknown_location,
+                )]));
+            }
+        }
+
+        let operation = block.append_operation(
+            TryOperation::builder(self.context, self.unknown_location)
+                .status(status)
+                .success_region(success_region)
+                .panic_region(panic_region)
+                .error_region(error_region)
+                .fallback_region(fallback_region)
+                .build()
+                .into(),
+        );
+
+        let success = operation
+            .region(0)
+            .expect("sol.try has a success region")
+            .first_block()
+            .expect("success region has a block");
+        let panic = has_panic.then(|| {
+            operation
+                .region(1)
+                .expect("sol.try has a panic region")
+                .first_block()
+                .expect("panic region has a block")
+        });
+        let error = has_error.then(|| {
+            operation
+                .region(2)
+                .expect("sol.try has an error region")
+                .first_block()
+                .expect("error region has a block")
+        });
+        let fallback = (!matches!(fallback, TryFallbackKind::None)).then(|| {
+            operation
+                .region(3)
+                .expect("sol.try has a fallback region")
+                .first_block()
+                .expect("fallback region has a block")
+        });
+
+        (success, panic, error, fallback)
     }
 
     /// Emits a `sol.while` with condition and body regions.

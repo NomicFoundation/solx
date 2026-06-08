@@ -23,6 +23,7 @@ pub use self::attributes::yul_cmp_predicate::YulCmpPredicate;
 pub use self::context::Context;
 pub use self::context::UserDefinedOperator;
 pub use self::context::builder::Builder;
+pub use self::context::builder::try_fallback_kind::TryFallbackKind;
 pub use self::context::builder::type_factory::TypeFactory;
 pub use self::context::builder::type_factory::array_size::ArraySize;
 pub use self::context::environment::Environment;
