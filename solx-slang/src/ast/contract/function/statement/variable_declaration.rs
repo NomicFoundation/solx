@@ -97,12 +97,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             scalar_value_type @ (SlangType::Address(_)
             | SlangType::ByteArray(_)
             | SlangType::Enum(_)
-            | SlangType::UserDefinedValue(_)),
+            | SlangType::UserDefinedValue(_)
+            | SlangType::Function(_)),
         ) = slang_declared_type.as_ref()
         {
             // A value type that is not a plain integer/bool (an address,
-            // `bytesN`, an enum, or a UDVT over one) needs its representation's
-            // own zero, not a raw zeroed integer slot.
+            // `bytesN`, an enum, a UDVT over one, or a function pointer) needs
+            // its representation's own zero, not a raw zeroed integer slot.
             let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
             let zero = TypeConversion::emit_scalar_zero(
                 scalar_value_type,

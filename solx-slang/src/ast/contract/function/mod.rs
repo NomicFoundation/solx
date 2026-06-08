@@ -413,11 +413,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             scalar_value_type @ (SlangType::Address(_)
             | SlangType::ByteArray(_)
             | SlangType::Enum(_)
-            | SlangType::UserDefinedValue(_)),
+            | SlangType::UserDefinedValue(_)
+            | SlangType::Function(_)),
         ) = slang_type
         {
-            // A non-integer/bool scalar value type (address, `bytesN`, enum, or
-            // a UDVT over one) needs its representation's own zero.
+            // A non-integer/bool scalar value type (address, `bytesN`, enum, a
+            // UDVT over one, or a function pointer) needs its representation's
+            // own zero.
             let pointer = builder.emit_sol_alloca(return_type, block);
             let zero =
                 TypeConversion::emit_scalar_zero(scalar_value_type, return_type, builder, block);
