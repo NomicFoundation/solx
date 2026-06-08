@@ -12,10 +12,12 @@ use num_bigint::BigInt;
 use num_bigint::Sign;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::type_conversion::TypeConversion;
 
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
     /// Classifies a member access as an enum-variant reference (`E.Variant` or
@@ -135,6 +137,33 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .builder
             .emit_sol_ext_func_addr(operand_value, &block);
         Ok((Some(address), block))
+    }
+
+    /// `this.f` / `instance.f` used as a value (not called) is an external
+    /// function pointer: the receiver address packed with the function's
+    /// selector into a `!sol.ext_func_ref` via `sol.ext_func_constant` (the same
+    /// representation an external call builds for its callee).
+    pub fn emit_external_function_pointer(
+        &self,
+        access: &MemberAccessExpression,
+        function_definition: &FunctionDefinition,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let selector = function_definition
+            .compute_selector()
+            .expect("an external function pointer resolves to a function with a selector");
+        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
+            function_definition,
+            &self.expression_emitter.state.builder,
+        );
+        let (receiver, block) = self
+            .expression_emitter
+            .emit_value(&access.operand(), block)?;
+        let builder = &self.expression_emitter.state.builder;
+        let address = builder.emit_sol_address_cast(receiver, builder.types.sol_address, &block);
+        let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
+        let value = builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &block);
+        Ok((Some(value), block))
     }
 
     /// `MyError.selector` — the error's 4-byte selector (`bytes4`) as a

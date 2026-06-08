@@ -14,6 +14,7 @@ use melior::ir::BlockRef;
 use melior::ir::Operation;
 use melior::ir::Value;
 use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use solx_mlir::ods::sol::AddModOperation;
@@ -270,7 +271,19 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             Some(BuiltIn::FunctionAddress) => self.emit_function_address(access, block),
             Some(BuiltIn::ErrorSelector) => self.emit_error_selector(access, block),
             Some(BuiltIn::EventSelector) => self.emit_event_selector(access, block),
-            resolved => self.emit_environment_global(resolved, access, block),
+            // A member that resolves to an externally-visible function but is not
+            // called (`this.f`, `instance.f` as a value) is an external function
+            // pointer, not an EVM-context global.
+            resolved => {
+                if let Some(Definition::Function(function_definition)) =
+                    access.member().resolve_to_definition()
+                    && function_definition.compute_selector().is_some()
+                {
+                    self.emit_external_function_pointer(access, &function_definition, block)
+                } else {
+                    self.emit_environment_global(resolved, access, block)
+                }
+            }
         }
     }
 
