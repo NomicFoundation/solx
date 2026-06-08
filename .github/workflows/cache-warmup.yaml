@@ -38,10 +38,10 @@ jobs:
             runner: macos-15
           - name: "Linux x86 gnu"
             runner: ubuntu-24.04
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:79b926f62cddf00086b8a385f89e3f3281e2f37b993491e773f17d7549f7363a
           - name: "Linux ARM64 gnu"
             runner: ubuntu-24.04-arm
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:79b926f62cddf00086b8a385f89e3f3281e2f37b993491e773f17d7549f7363a
           - name: "Windows"
             runner: windows-2025
     runs-on: ${{ matrix.runner }}
@@ -117,10 +117,10 @@ jobs:
             runner: macos-15
           - name: "Linux x86 gnu"
             runner: ubuntu-24.04
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:79b926f62cddf00086b8a385f89e3f3281e2f37b993491e773f17d7549f7363a
           - name: "Linux ARM64 gnu"
             runner: ubuntu-24.04-arm
-            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+            image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:79b926f62cddf00086b8a385f89e3f3281e2f37b993491e773f17d7549f7363a
           - name: "Windows"
             runner: windows-2025
     runs-on: ${{ matrix.runner }}
@@ -175,7 +175,7 @@ jobs:
   warm-llvm-sanitizer:
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:79b926f62cddf00086b8a385f89e3f3281e2f37b993491e773f17d7549f7363a
       volumes: *free-disk-volumes
     name: "LLVM · Sanitizer"
     steps:
@@ -216,7 +216,7 @@ jobs:
   warm-llvm-coverage:
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:79b926f62cddf00086b8a385f89e3f3281e2f37b993491e773f17d7549f7363a
       volumes: *free-disk-volumes
     name: "LLVM · Coverage"
     steps:
@@ -258,7 +258,7 @@ jobs:
   warm-llvm-integration:
     runs-on: ubuntu-24.04
     container:
-      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:c2b03000a1074d2cc3e6cf25a1c4fdc6eb0a61d23e63bef59205050249fa1d6e
+      image: ghcr.io/nomicfoundation/solx-ci-runner@sha256:79b926f62cddf00086b8a385f89e3f3281e2f37b993491e773f17d7549f7363a
       volumes: *free-disk-volumes
     name: "LLVM + solc · Integration"
     steps:
