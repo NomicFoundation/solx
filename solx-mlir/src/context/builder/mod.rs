@@ -61,7 +61,9 @@ use crate::ods::sol::DeleteOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::EnumCastOperation;
+use crate::ods::sol::ExtFuncAddrOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
+use crate::ods::sol::ExtFuncSelectorOperation;
 use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::ForOperation;
 use crate::ods::sol::FuncConstantOperation;
@@ -1691,6 +1693,54 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.ext_func_constant always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.ext_func_selector` extracting the 4-byte selector
+    /// (`!sol.fixedbytes<4>`) from an external function-reference value.
+    pub fn emit_sol_ext_func_selector<'block, B>(
+        &self,
+        func: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                ExtFuncSelectorOperation::builder(self.context, self.unknown_location)
+                    .func(func)
+                    .result(self.types.fixed_bytes(4))
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.ext_func_selector always produces one result")
+            .into()
+    }
+
+    /// Emits a `sol.ext_func_addr` extracting the address (`!sol.address`) from
+    /// an external function-reference value.
+    pub fn emit_sol_ext_func_addr<'block, B>(
+        &self,
+        func: Value<'context, 'block>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block
+            .append_operation(
+                ExtFuncAddrOperation::builder(self.context, self.unknown_location)
+                    .func(func)
+                    .result(self.types.sol_address)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.ext_func_addr always produces one result")
             .into()
     }
 

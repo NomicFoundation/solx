@@ -211,4 +211,8 @@ bool solxIsMappingType(MlirType ty) {
     return mlir::isa<mlir::sol::MappingType>(unwrap(ty));
 }
 
+bool solxIsExtFuncRefType(MlirType ty) {
+    return mlir::isa<mlir::sol::ExtFuncRefType>(unwrap(ty));
+}
+
 } /* extern "C" */
