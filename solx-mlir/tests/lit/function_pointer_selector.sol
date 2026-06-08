@@ -23,6 +23,10 @@
 // CHECK: sol.constant {{.*}} : ui256
 // CHECK: sol.bytes_cast {{.*}} to !sol.fixedbytes<32>
 
+// `this.bar` used as a value (not called) is an external function pointer.
+// CHECK-LABEL: sol.func @{{.*}}pointer_value
+// CHECK: sol.ext_func_constant {{.*}} -> !sol.ext_func_ref<() -> ui256>
+
 pragma solidity ^0.8.4;
 
 error MyError(uint256 x);
@@ -48,5 +52,9 @@ contract C {
 
     function event_selector() external pure returns (bytes32) {
         return MyEvent.selector;
+    }
+
+    function pointer_value() external view returns (function() external returns (uint256)) {
+        return this.bar;
     }
 }
