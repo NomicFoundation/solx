@@ -30,8 +30,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     }
 
     /// Emits `arr.push(x)` / `arr.push()` / `bytes.push()` as `sol.push`,
-    /// followed by `sol.store` of the cast value when one is provided.
-    /// Returns the new slot reference for the no-arg form, otherwise `None`.
+    /// followed by `sol.store` of the cast value when one is provided; returns
+    /// the new slot reference for the no-arg form, otherwise `None`. The special
+    /// case `bytes.push(x)` appends the byte in place via `sol.push_string`.
     pub fn emit_array_push(
         &self,
         access: &MemberAccessExpression,
@@ -43,8 +44,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .get_type()
             .expect("slang types the base of an array push");
         let value_argument = arguments.iter().next();
-        if value_argument.is_some() && matches!(&base_slang_type, SlangType::Bytes(_)) {
-            unimplemented!("bytes.push(x) lowers to sol.push_string, which is not yet wired");
+        if let (SlangType::Bytes(_), Some(value_argument)) = (&base_slang_type, &value_argument) {
+            // `bytes.push(x)` appends a single byte in place via `sol.push_string`;
+            // the packed element is not separately addressable, so unlike an array
+            // push there is no returned slot to store into.
+            let (bytes_reference, block) = self.expression_emitter.emit_value(&base, block)?;
+            let (value, block) = self.expression_emitter.emit_value(value_argument, block)?;
+            let builder = &self.expression_emitter.state.builder;
+            let byte_value =
+                TypeConversion::from_target_type(builder.types.fixed_bytes(1), builder)
+                    .emit(value, builder, &block);
+            builder.emit_sol_push_string(bytes_reference, byte_value, &block);
+            return Ok((None, block));
         }
         let builder = &self.expression_emitter.state.builder;
 

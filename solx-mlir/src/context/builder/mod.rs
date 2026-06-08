@@ -24,6 +24,7 @@ use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
+use melior::ir::operation::OperationBuilder;
 use melior::ir::operation::OperationLike;
 use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
@@ -1034,6 +1035,28 @@ impl<'context> Builder<'context> {
             .result(0)
             .expect("sol.push always produces one result")
             .into()
+    }
+
+    /// Emits a `sol.push_string` appending the byte `value` to the `bytes`
+    /// reference `address` in place. Unlike `sol.push`, the value is passed
+    /// directly and the op yields no slot reference (it has no result), since a
+    /// packed `bytes` element is not separately addressable. Built via the raw
+    /// `OperationBuilder` because the op has no generated ODS binding yet.
+    pub fn emit_sol_push_string<'block, B>(
+        &self,
+        address: Value<'context, 'block>,
+        value: Value<'context, 'block>,
+        block: &B,
+    ) where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        block.append_operation(
+            OperationBuilder::new("sol.push_string", self.unknown_location)
+                .add_operands(&[address, value])
+                .build()
+                .expect("valid sol.push_string"),
+        );
     }
 
     /// Emits a `sol.pop` removing the last element from the array.
