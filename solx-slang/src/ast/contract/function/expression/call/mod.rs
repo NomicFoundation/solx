@@ -9,6 +9,8 @@ pub mod library_call;
 pub mod member_call_kind;
 pub mod static_mode;
 
+use std::collections::HashMap;
+
 use anyhow::Context as _;
 use melior::ir::BlockRef;
 use melior::ir::Type;
@@ -20,6 +22,8 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
+use slang_solidity_v2::ast::NamedArguments;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -58,9 +62,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
-        else {
-            unimplemented!("only positional arguments supported");
+        let arguments = call.arguments();
+        if let ArgumentsDeclaration::NamedArguments(named_arguments) = &arguments {
+            return self.emit_named_call(call, named_arguments, block);
+        }
+        let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &arguments else {
+            unreachable!("call arguments are either positional or named");
         };
 
         match self.classify_call(call, positional_arguments) {
@@ -419,6 +426,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         positional_arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let arguments: Vec<Expression> = positional_arguments.iter().collect();
+        self.emit_struct_constructor_expressions(struct_definition, result_type, &arguments, block)
+    }
+
+    /// Emits a struct-literal constructor from its field initializers already in
+    /// member-declaration order, storing each into the malloc'd struct. Shared by
+    /// positional `S(a, b)` and named `S({b: …, a: …})` construction (the latter
+    /// reorders its arguments to member order first).
+    fn emit_struct_constructor_expressions(
+        &self,
+        struct_definition: &StructDefinition,
+        result_type: Type<'context>,
+        arguments: &[Expression],
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let builder = &self.expression_emitter.state.builder;
         let struct_address = builder.emit_sol_malloc(result_type, &block);
 
@@ -426,7 +448,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         for (index, (member, argument)) in struct_definition
             .members()
             .iter()
-            .zip(positional_arguments.iter())
+            .zip(arguments.iter())
             .enumerate()
         {
             let field_slang_type = member.get_type().expect("slang types every struct member");
@@ -440,7 +462,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 builder.emit_sol_gep(struct_address, index_value, field_type, &block);
 
             let (argument_value, next_block) =
-                self.expression_emitter.emit_value(&argument, block)?;
+                self.expression_emitter.emit_value(argument, block)?;
             block = next_block;
             let stored = TypeConversion::from_target_type(field_type, builder).emit(
                 argument_value,
@@ -469,9 +491,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
-        else {
-            unimplemented!("only positional arguments supported");
+        let arguments = call.arguments();
+        if let ArgumentsDeclaration::NamedArguments(named_arguments) = &arguments {
+            return self.emit_named_call_results(call, named_arguments, block);
+        }
+        let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &arguments else {
+            unreachable!("call arguments are either positional or named");
         };
 
         // A member-access callee yields its full result tuple through the same
@@ -542,7 +567,27 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         parameter_types: &[melior::ir::Type<'context>],
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (mut argument_values, block) = self.emit_argument_values(arguments, block)?;
+        let arguments: Vec<Expression> = arguments.iter().collect();
+        self.emit_coerced_argument_expressions(&arguments, parameter_types, block)
+    }
+
+    /// Evaluates `arguments` left-to-right and coerces each value to its declared
+    /// parameter type. The expression-keyed core of [`Self::emit_coerced_arguments`]:
+    /// named calls feed it a reordered argument list, positional calls the source
+    /// order.
+    pub fn emit_coerced_argument_expressions(
+        &self,
+        arguments: &[Expression],
+        parameter_types: &[melior::ir::Type<'context>],
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let mut argument_values = Vec::with_capacity(arguments.len());
+        let mut block = block;
+        for argument in arguments {
+            let (value, next_block) = self.expression_emitter.emit_value(argument, block)?;
+            argument_values.push(value);
+            block = next_block;
+        }
         let builder = &self.expression_emitter.state.builder;
         for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
             let conversion = TypeConversion::from_target_type(parameter_type, builder);
@@ -568,15 +613,152 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         &'a [melior::ir::Type<'context>],
         BlockRef<'context, 'block>,
     )> {
+        let arguments: Vec<Expression> = positional_arguments.iter().collect();
+        self.emit_call_setup_expressions(function_definition, &arguments, block)
+    }
+
+    /// Resolves the callee's MLIR signature and evaluates/coerces its arguments,
+    /// already in parameter-declaration order. The expression-keyed core of
+    /// [`Self::emit_call_setup`], shared with the named-argument call path.
+    fn emit_call_setup_expressions<'a>(
+        &'a self,
+        function_definition: &FunctionDefinition,
+        arguments: &[Expression],
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        &'a str,
+        Vec<Value<'context, 'block>>,
+        &'a [melior::ir::Type<'context>],
+        BlockRef<'context, 'block>,
+    )> {
         let (mlir_name, parameter_types, return_types) = self
             .expression_emitter
             .state
             .resolve_function(function_definition.node_id())?;
 
         let (argument_values, current_block) =
-            self.emit_coerced_arguments(positional_arguments, parameter_types, block)?;
+            self.emit_coerced_argument_expressions(arguments, parameter_types, block)?;
 
         Ok((mlir_name, argument_values, return_types, current_block))
+    }
+
+    /// Routes a single-result call with named arguments `f({…})` / `S({…})` to
+    /// the matching emitter. Named arguments only apply to a direct function or
+    /// struct-constructor identifier; a named `using for` member call is not yet
+    /// supported.
+    fn emit_named_call(
+        &self,
+        call: &FunctionCallExpression,
+        named_arguments: &NamedArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let Expression::Identifier(callee_identifier) = call.operand() else {
+            unimplemented!(
+                "named arguments are only supported on a direct function or struct call"
+            );
+        };
+        match callee_identifier.resolve_to_definition() {
+            Some(Definition::Function(function_definition)) => {
+                let (results, block) =
+                    self.emit_named_function_call(&function_definition, named_arguments, block)?;
+                Ok((results.into_iter().next(), block))
+            }
+            Some(Definition::Struct(struct_definition)) => {
+                let result_type = self
+                    .expression_emitter
+                    .resolve_slang_type(call.get_type())
+                    .expect("slang types a struct constructor call");
+                let member_ids: Vec<NodeId> = struct_definition
+                    .members()
+                    .iter()
+                    .map(|member| member.node_id())
+                    .collect();
+                let arguments = Self::order_named_arguments(named_arguments, &member_ids);
+                let (value, block) = self.emit_struct_constructor_expressions(
+                    &struct_definition,
+                    result_type,
+                    &arguments,
+                    block,
+                )?;
+                Ok((Some(value), block))
+            }
+            _ => unimplemented!(
+                "named arguments are only supported on a function or struct-constructor callee"
+            ),
+        }
+    }
+
+    /// Routes a multi-result call with named arguments (e.g. tuple
+    /// deconstruction `(a, b) = f({…})`) to the named function-call emitter.
+    fn emit_named_call_results(
+        &self,
+        call: &FunctionCallExpression,
+        named_arguments: &NamedArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let Expression::Identifier(callee_identifier) = call.operand() else {
+            unimplemented!("named multi-result calls require a direct function callee");
+        };
+        let Some(Definition::Function(function_definition)) =
+            callee_identifier.resolve_to_definition()
+        else {
+            unimplemented!("named multi-result calls require a function callee");
+        };
+        self.emit_named_function_call(&function_definition, named_arguments, block)
+    }
+
+    /// Emits a direct function call whose arguments are passed by name,
+    /// returning all result values. The named arguments are reordered into the
+    /// callee's parameter-declaration order, then evaluated and coerced through
+    /// the same setup path as a positional call.
+    fn emit_named_function_call(
+        &self,
+        function_definition: &FunctionDefinition,
+        named_arguments: &NamedArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let parameter_ids: Vec<NodeId> = function_definition
+            .parameters()
+            .iter()
+            .map(|parameter| parameter.node_id())
+            .collect();
+        let arguments = Self::order_named_arguments(named_arguments, &parameter_ids);
+        let (mlir_name, argument_values, return_types, current_block) =
+            self.emit_call_setup_expressions(function_definition, &arguments, block)?;
+        let results = self
+            .expression_emitter
+            .state
+            .builder
+            .emit_sol_call_results(mlir_name, &argument_values, return_types, &current_block)?;
+        Ok((results, current_block))
+    }
+
+    /// Reorders named call arguments into the declaration order given by
+    /// `ordered_definition_ids` (the callee's parameter or struct-member node
+    /// ids). Each argument binds to its target through slang's typed resolution,
+    /// keyed by the resolved definition's [`NodeId`], never by comparing name
+    /// strings. slang has already validated the binding, so a missing or unknown
+    /// name is unreachable.
+    fn order_named_arguments(
+        named_arguments: &NamedArguments,
+        ordered_definition_ids: &[NodeId],
+    ) -> Vec<Expression> {
+        let mut by_definition: HashMap<NodeId, Expression> = HashMap::new();
+        for argument in named_arguments.iter() {
+            let definition = argument
+                .name()
+                .resolve_to_definition()
+                .expect("slang resolves every named argument to its target definition");
+            by_definition.insert(definition.node_id(), argument.value());
+        }
+        ordered_definition_ids
+            .iter()
+            .map(|definition_id| {
+                by_definition
+                    .remove(definition_id)
+                    .expect("slang binds a named argument for every declared name")
+            })
+            .collect()
     }
 
     /// Emits an indirect call through the function-pointer value `callee`
