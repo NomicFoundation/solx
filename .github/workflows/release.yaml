@@ -61,6 +61,14 @@ on:
 # Zero permissions baseline — each job declares only what it needs.
 permissions: {}
 
+# Dry-run release builds (pull_request with the `ci:release` label) re-trigger on
+# every `labeled` event; without dedup each one launches a full multi-platform
+# build. Collapse them into one run per PR. Real releases (tag push /
+# workflow_dispatch) get a per-ref group and are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
 
   label-check:
