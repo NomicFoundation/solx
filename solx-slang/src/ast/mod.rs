@@ -7,14 +7,14 @@ pub mod contract;
 
 use std::collections::BTreeMap;
 
+use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
-use slang_solidity_v2::ast::SourceUnit;
 
 use solx_mlir::Context;
 
 use self::contract::ContractEmitter;
 
-/// Walks a Slang AST and lowers its contract definitions to MLIR.
+/// Walks a Slang AST and lowers a single contract definition to MLIR.
 pub struct AstEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state mut Context<'context>,
@@ -26,30 +26,20 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         Self { state }
     }
 
-    /// Emits MLIR for the first contract definition in the source unit.
+    /// Emits MLIR for `contract` and returns its name and method-identifier
+    /// table.
     ///
-    /// The current pipeline creates one MLIR module per source file, so
-    /// only the first contract is processed. Multi-contract files will be
-    /// supported in a future pass.
-    ///
-    /// Source files containing only interfaces, libraries, or abstract
-    /// contracts are skipped without error.
+    /// One [`Context`] holds one contract's MLIR module, so the caller is
+    /// expected to iterate the source unit's contracts and call this with a
+    /// fresh [`Context`] per contract.
     ///
     /// # Errors
     ///
     /// Returns an error if code generation encounters unsupported constructs.
-    /// Returns `Some((contract_name, method_identifiers))` if a contract was
-    /// emitted, `None` otherwise.
     pub fn emit(
         &mut self,
-        unit: &SourceUnit,
-    ) -> anyhow::Result<Option<(String, BTreeMap<String, String>)>> {
-        let contracts = unit.contracts();
-        // TODO: support multiple contracts
-        let Some(contract) = contracts.first() else {
-            return Ok(None);
-        };
-
+        contract: &ContractDefinition,
+    ) -> anyhow::Result<(String, BTreeMap<String, String>)> {
         let name = contract.name().name();
         let mut emitter = ContractEmitter::new(self.state);
         emitter.emit(contract)?;
@@ -68,6 +58,6 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
             method_identifiers.insert(signature, format!("{selector:08x}"));
         }
 
-        Ok(Some((name, method_identifiers)))
+        Ok((name, method_identifiers))
     }
 }

@@ -164,43 +164,47 @@ impl Frontend for Slang {
                 continue;
             };
             let source_unit = file.ast();
-            let melior_context = solx_mlir::Context::create_mlir_context();
 
-            let evm_version = input_json.settings.evm_version.unwrap_or_default();
-            let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-            let mut emitter = AstEmitter::new(&mut context);
-            let Some((contract_name, method_identifiers)) = emitter.emit(&source_unit)? else {
-                continue;
-            };
+            for contract in source_unit.contracts() {
+                if contract.abstract_keyword().is_some() {
+                    continue;
+                }
 
-            let runtime_code_identifier = format!(
-                "{contract_name}{}",
-                solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX
-            );
-            let capture_sol_dialect = input_json.settings.output_selection.check_selection(
-                file_identifier,
-                Some(contract_name.as_str()),
-                solx_standard_json::InputSelector::MLIR,
-            );
-            let mlir_stages =
-                context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
+                let melior_context = solx_mlir::Context::create_mlir_context();
 
-            let evm = Some(solx_standard_json::output::contract::evm::EVM {
-                method_identifiers: Some(method_identifiers),
-                ..Default::default()
-            });
+                let evm_version = input_json.settings.evm_version.unwrap_or_default();
+                let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+                let mut emitter = AstEmitter::new(&mut context);
+                let (contract_name, method_identifiers) = emitter.emit(&contract)?;
 
-            let contract = solx_standard_json::output::contract::Contract {
-                mlir: Some(mlir_stages),
-                evm,
-                ..Default::default()
-            };
+                let runtime_code_identifier = format!(
+                    "{contract_name}{}",
+                    solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX
+                );
+                let capture_sol_dialect = input_json.settings.output_selection.check_selection(
+                    file_identifier,
+                    Some(contract_name.as_str()),
+                    solx_standard_json::InputSelector::MLIR,
+                );
+                let mlir_stages =
+                    context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
 
-            output
-                .contracts
-                .entry(file_identifier.to_string())
-                .or_default()
-                .insert(contract_name, contract);
+                output
+                    .contracts
+                    .entry(file_identifier.to_string())
+                    .or_default()
+                    .insert(
+                        contract_name,
+                        solx_standard_json::output::contract::Contract {
+                            mlir: Some(mlir_stages),
+                            evm: Some(solx_standard_json::output::contract::evm::EVM {
+                                method_identifiers: Some(method_identifiers),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        },
+                    );
+            }
         }
 
         Ok(output)
