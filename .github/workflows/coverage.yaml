@@ -5,7 +5,11 @@ on:
     types: [opened, synchronize, reopened, labeled]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # Put the triggering label in the group so a `labeled` event for an unrelated
+  # label lands in its own group and can't cancel the in-flight run started by
+  # the label this workflow gates on. Other PR events (push, synchronize)
+  # share the `main` group and cancel-on-new as usual.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name || 'main' }}
   cancel-in-progress: true
 
 defaults:
