@@ -7,7 +7,6 @@ on:
 permissions:
   contents: read
 
-# Cancel the workflow if any new changes pushed to a feature branch or the trunk
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -18,19 +17,13 @@ defaults:
 
 jobs:
 
-  label-check:
+  cooldown-check:
+    name: Cargo cooldown check
     if: >-
       (github.event.action == 'labeled' && github.event.label.name == 'ci:integration'
       || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:integration'))
       && !github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
-    steps:
-      - run: 'true'
-
-  cooldown-check:
-    name: Cargo cooldown check
-    runs-on: ubuntu-24.04
-    needs: label-check
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -39,7 +32,7 @@ jobs:
       - uses: ./.github/actions/cooldown-check
 
   integration:
-    needs: [label-check, cooldown-check]
+    needs: cooldown-check
     permissions:
       contents: read
       pull-requests: write
