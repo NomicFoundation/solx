@@ -5,7 +5,11 @@ on:
     types: [opened, synchronize, reopened, labeled]
 
 concurrency:
-  group: ${{ github.repository_id }}-${{ github.workflow }}-${{ github.ref }}
+  # Put the triggering label in the group so a `labeled` event for an unrelated
+  # label lands in its own group and can't cancel the in-flight run started by
+  # the label this workflow gates on. Other PR events (push, synchronize)
+  # share the `main` group and cancel-on-new as usual.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name || 'main' }}
   cancel-in-progress: true
 
 defaults:
@@ -17,19 +21,13 @@ permissions:
 
 jobs:
 
-  label-check:
+  cooldown-check:
+    name: Cargo cooldown check
     if: >-
       (github.event.action == 'labeled' && github.event.label.name == 'ci:coverage'
       || github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci:coverage'))
       && !github.event.pull_request.head.repo.fork
     runs-on: ubuntu-24.04
-    steps:
-      - run: 'true'
-
-  cooldown-check:
-    name: Cargo cooldown check
-    runs-on: ubuntu-24.04
-    needs: label-check
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -37,7 +35,7 @@ jobs:
       - uses: ./.github/actions/cooldown-check
 
   coverage:
-    needs: [label-check, cooldown-check]
+    needs: cooldown-check
     runs-on: solx-linux-amd64-self-hosted
     permissions:
       contents: read
