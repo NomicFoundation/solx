@@ -76,6 +76,24 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 .emit_sol_malloc_zeroed(declared_type, &block);
             self.state.builder.emit_sol_store(zero, pointer, &block);
             pointer
+        } else if let Some(SlangType::Array(array_type)) = slang_declared_type.as_ref()
+            && matches!(
+                array_type.location(),
+                slang_solidity_v2::ast::DataLocation::Memory
+            )
+        {
+            // A dynamic memory array (`T[] memory a;`) without an initializer
+            // default-initialises to a freshly allocated zero-length buffer
+            // (`sol.malloc zero_init`), exactly like a fixed-size memory array.
+            // A storage/calldata array reference cannot reach here uninitialised
+            // (Solidity requires it to be bound), so the Memory guard is exact.
+            let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
+            let zero = self
+                .state
+                .builder
+                .emit_sol_malloc_zeroed(declared_type, &block);
+            self.state.builder.emit_sol_store(zero, pointer, &block);
+            pointer
         } else if matches!(
             slang_declared_type.as_ref(),
             Some(SlangType::String(_) | SlangType::Bytes(_))
@@ -98,7 +116,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             | SlangType::ByteArray(_)
             | SlangType::Enum(_)
             | SlangType::UserDefinedValue(_)
-            | SlangType::Function(_)),
+            | SlangType::Function(_)
+            | SlangType::Contract(_)
+            | SlangType::Interface(_)),
         ) = slang_declared_type.as_ref()
         {
             // A value type that is not a plain integer/bool (an address,

@@ -416,6 +416,21 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             let zero = builder.emit_sol_malloc_zeroed(return_type, block);
             builder.emit_sol_store(zero, pointer, block);
             pointer
+        } else if let Some(SlangType::Array(array_type)) = slang_type
+            && matches!(
+                array_type.location(),
+                slang_solidity_v2::ast::DataLocation::Memory
+            )
+        {
+            // A dynamic memory array named return (`returns (T[] memory)`) is
+            // default-initialised to a fresh zero-length buffer, like a
+            // fixed-size memory array. A storage named return (an internal
+            // function returning `T[] storage`) is excluded by the Memory guard
+            // — it is a reference assigned in the body, not a malloc'd buffer.
+            let pointer = builder.emit_sol_alloca(return_type, block);
+            let zero = builder.emit_sol_malloc_zeroed(return_type, block);
+            builder.emit_sol_store(zero, pointer, block);
+            pointer
         } else if matches!(slang_type, Some(SlangType::String(_) | SlangType::Bytes(_))) {
             let pointer = builder.emit_sol_alloca(return_type, block);
             let size = builder.emit_sol_constant(0, builder.types.ui256, block);
@@ -427,7 +442,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             | SlangType::ByteArray(_)
             | SlangType::Enum(_)
             | SlangType::UserDefinedValue(_)
-            | SlangType::Function(_)),
+            | SlangType::Function(_)
+            | SlangType::Contract(_)
+            | SlangType::Interface(_)),
         ) = slang_type
         {
             // A non-integer/bool scalar value type (address, `bytesN`, enum, a
