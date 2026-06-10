@@ -108,23 +108,35 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             arguments.next().is_none(),
             "revert accepts at most one argument"
         );
-        let signature: String = match message_argument {
-            None => String::new(),
-            Some(Expression::StringExpression(string_expression)) => {
+        match message_argument {
+            None => {
+                self.state.builder.emit_sol_revert("", &[], false, &block);
+            }
+            // A non-empty string literal bakes the message into the op as the
+            // `Error(string)` payload (no runtime encoding).
+            Some(Expression::StringExpression(string_expression))
+                if !string_expression.value().is_empty() =>
+            {
                 let message = String::from_utf8(string_expression.value())
                     .expect("revert message is valid UTF-8");
-                if message.is_empty() {
-                    unimplemented!(
-                        "revert(\"\") would emit ambiguous bytecode under the current Sol dialect; use revert() for no-data revert"
-                    );
-                }
-                message
+                self.state
+                    .builder
+                    .emit_sol_revert(&message, &[], false, &block);
             }
-            Some(_) => unimplemented!("revert message must be a string literal"),
-        };
-        self.state
-            .builder
-            .emit_sol_revert(&signature, &[], false, &block);
+            // A non-literal message (`revert(expr)`) or an empty literal
+            // (`revert("")`, which is `Error("")` — selector + an empty string,
+            // NOT a no-data revert) is evaluated at runtime and ABI-encoded under
+            // the `Error(string)` selector, exactly like `require(cond, expr)`.
+            Some(expression) => {
+                let emitter = self.expression_emitter();
+                let (message_value, block) = emitter.emit_value(&expression, block)?;
+                let builder = &self.state.builder;
+                let string_memory_type = builder.types.string(solx_utils::DataLocation::Memory);
+                let message_value = TypeConversion::from_target_type(string_memory_type, builder)
+                    .emit(message_value, builder, &block);
+                builder.emit_sol_revert("Error(string)", &[message_value], true, &block);
+            }
+        }
         Ok(None)
     }
 
