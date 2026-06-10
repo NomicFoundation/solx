@@ -13,9 +13,9 @@ pub use self::expression_ext::ExpressionExt;
 
 use std::collections::BTreeMap;
 
+use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::SourceUnit;
 
 use solx_mlir::Context;
 
@@ -34,14 +34,13 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         Self { state }
     }
 
-    /// Emits MLIR for the first contract definition in the source unit.
+    /// Emits MLIR for a single contract definition into this emitter's module.
     ///
-    /// The current pipeline creates one MLIR module per source file, so
-    /// only the first contract is processed. Multi-contract files will be
-    /// supported in a future pass.
-    ///
-    /// Source files containing only interfaces, libraries, or abstract
-    /// contracts are skipped without error.
+    /// Each contract becomes its own deployable object (the caller gives every
+    /// contract a fresh MLIR context), with the contract's C3-linearised bases'
+    /// state variables and functions pulled in by the contract emitter — so a
+    /// multi-contract file emits one complete object per contract, not just the
+    /// first.
     ///
     /// `free_functions` is the compilation unit's full set of file-level (free)
     /// functions; the contract emitter pre-registers and emits the ones this
@@ -52,20 +51,13 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
     /// # Errors
     ///
     /// Returns an error if code generation encounters unsupported constructs.
-    /// Returns `Some((contract_name, method_identifiers))` if a contract was
-    /// emitted, `None` otherwise.
-    pub fn emit(
+    /// Returns the contract's name and its public-method selector table.
+    pub fn emit_contract(
         &mut self,
-        unit: &SourceUnit,
+        contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],
         operator_bindings: &OperatorBindings,
-    ) -> anyhow::Result<Option<(String, BTreeMap<String, String>)>> {
-        let contracts = unit.contracts();
-        // TODO: support multiple contracts
-        let Some(contract) = contracts.first() else {
-            return Ok(None);
-        };
-
+    ) -> anyhow::Result<(String, BTreeMap<String, String>)> {
         let name = contract.name().name();
         let mut emitter = ContractEmitter::new(self.state);
         emitter.emit(contract, free_functions, operator_bindings)?;
@@ -84,6 +76,6 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
             method_identifiers.insert(signature, format!("{selector:08x}"));
         }
 
-        Ok(Some((name, method_identifiers)))
+        Ok((name, method_identifiers))
     }
 }

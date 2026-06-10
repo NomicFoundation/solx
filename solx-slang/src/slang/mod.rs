@@ -230,23 +230,42 @@ impl Frontend for Slang {
             };
             let source_unit = file.ast();
 
-            {
-                let melior_context = solx_mlir::Context::create_mlir_context();
-                let evm_version = input_json.settings.evm_version.unwrap_or_default();
-                let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-                let mut emitter = AstEmitter::new(&mut context);
-                if let Some((contract_name, method_identifiers)) =
-                    emitter.emit(&source_unit, &free_functions, &operator_bindings)?
-                {
-                    Self::record_object(
-                        context,
-                        contract_name,
-                        method_identifiers,
-                        input_json,
-                        file_identifier,
-                        &mut output,
-                    )?;
+            // Emit every contract in the file as its own deployable object. A
+            // file commonly defines several contracts (bases plus the deployed,
+            // most-derived one); the test harness deploys any of them by name, so
+            // each must be present — not just the first. Each contract gets its
+            // own MLIR context/module, with its C3-linearised bases pulled in by
+            // the contract emitter. A contract the recut cannot yet lower is
+            // simply absent from the artifacts — exactly as when only the first
+            // contract was emitted — so a sibling's gap (an `Err` or a `panic!`
+            // in lowering) never aborts the file or the other contracts; the
+            // missing object instead surfaces as that contract's failing tests.
+            for contract in source_unit.contracts().iter() {
+                // An `abstract contract` cannot be instantiated and is never
+                // deployed by the harness; skip it (its bodyless functions have
+                // no code to lower anyway).
+                if contract.abstract_keyword().is_some() {
+                    continue;
                 }
+                let emitted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
+                    || -> anyhow::Result<()> {
+                        let melior_context = solx_mlir::Context::create_mlir_context();
+                        let evm_version = input_json.settings.evm_version.unwrap_or_default();
+                        let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+                        let mut emitter = AstEmitter::new(&mut context);
+                        let (contract_name, method_identifiers) =
+                            emitter.emit_contract(contract, &free_functions, &operator_bindings)?;
+                        Self::record_object(
+                            context,
+                            contract_name,
+                            method_identifiers,
+                            input_json,
+                            file_identifier,
+                            &mut output,
+                        )
+                    },
+                ));
+                let _ = emitted;
             }
 
             // Emit every library as its own deployable object, including

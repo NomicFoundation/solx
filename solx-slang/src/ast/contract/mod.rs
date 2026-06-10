@@ -173,12 +173,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             &module_body,
         );
 
-        // TODO: emit declarations for inherited state variables once derived
-        // contracts compile through this path.
-        for member in contract.members().iter() {
-            let ContractMember::StateVariableDefinition(state_variable) = member else {
-                continue;
-            };
+        // Declare every state variable in the C3-linearised hierarchy (inherited
+        // + own), not just this contract's own members: a derived contract owns
+        // the FULL storage layout, and an inherited getter / inherited function
+        // body emits `sol.addr_of @var` against an inherited slot, which the
+        // backend's `AddrOfOpLowering` resolves by `lookupSymbol` in this
+        // contract's module (asserts if the `sol.state_var` declaration is
+        // absent).
+        for state_variable in contract.compute_linearised_state_variables() {
             let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };
@@ -199,8 +201,33 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             .emit_constructor(&contract_body)?;
         self.state.current_contract_type = None;
 
-        // Slang's `functions()` filters out Constructor and Modifier kinds.
-        for function in contract.functions() {
+        // An overridden public function whose signature matches an inherited
+        // public state variable's auto-getter would emit a second function under
+        // the getter's selector symbol (`redefinition of symbol`); the getter
+        // (emitted last) wins, so skip such functions here.
+        let getter_selectors: std::collections::HashSet<u32> = contract
+            .compute_linearised_state_variables()
+            .iter()
+            .filter_map(|state_variable| state_variable.compute_selector())
+            .collect();
+
+        // Walk the C3-linearised function set so a derived contract emits its
+        // inherited methods (regular functions, fallback, receive) too — not just
+        // its own — subject to override resolution. Constructors and modifiers are
+        // emitted by their own paths (the constructor below; modifiers inline at
+        // their call sites), so skip them here.
+        for function in contract.compute_linearised_functions() {
+            if matches!(
+                function.kind(),
+                FunctionKind::Constructor | FunctionKind::Modifier
+            ) {
+                continue;
+            }
+            if let Some(selector) = function.compute_selector()
+                && getter_selectors.contains(&selector)
+            {
+                continue;
+            }
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, Some(contract), &storage_layout)
                 .emit_sol(&function, &contract_body)?;
