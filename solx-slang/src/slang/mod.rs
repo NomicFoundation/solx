@@ -98,6 +98,42 @@ impl Slang {
             })
             .collect()
     }
+
+    /// Finalises a freshly-emitted object's module and records its MLIR stages
+    /// and method identifiers under `(file_identifier, name)` in the output.
+    /// Shared by the contract and deployable-library emission paths.
+    fn record_object(
+        context: solx_mlir::Context<'_>,
+        name: String,
+        method_identifiers: BTreeMap<String, String>,
+        input_json: &solx_standard_json::Input,
+        file_identifier: &str,
+        output: &mut solx_standard_json::Output,
+    ) -> anyhow::Result<()> {
+        let runtime_code_identifier = format!("{name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX);
+        let capture_sol_dialect = input_json.settings.output_selection.check_selection(
+            file_identifier,
+            Some(name.as_str()),
+            solx_standard_json::InputSelector::MLIR,
+        );
+        let mlir_stages = context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
+        output
+            .contracts
+            .entry(file_identifier.to_string())
+            .or_default()
+            .insert(
+                name,
+                solx_standard_json::output::contract::Contract {
+                    mlir: Some(mlir_stages),
+                    evm: Some(solx_standard_json::output::contract::evm::EVM {
+                        method_identifiers: Some(method_identifiers),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+            );
+        Ok(())
+    }
 }
 
 impl Frontend for Slang {
@@ -196,45 +232,54 @@ impl Frontend for Slang {
                 continue;
             };
             let source_unit = file.ast();
-            let melior_context = solx_mlir::Context::create_mlir_context();
 
-            let evm_version = input_json.settings.evm_version.unwrap_or_default();
-            let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-            let mut emitter = AstEmitter::new(&mut context);
-            let Some((contract_name, method_identifiers)) =
-                emitter.emit(&source_unit, &free_functions, &operator_bindings)?
-            else {
-                continue;
-            };
+            {
+                let melior_context = solx_mlir::Context::create_mlir_context();
+                let evm_version = input_json.settings.evm_version.unwrap_or_default();
+                let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+                let mut emitter = AstEmitter::new(&mut context);
+                if let Some((contract_name, method_identifiers)) =
+                    emitter.emit(&source_unit, &free_functions, &operator_bindings)?
+                {
+                    Self::record_object(
+                        context,
+                        contract_name,
+                        method_identifiers,
+                        input_json,
+                        file_identifier,
+                        &mut output,
+                    )?;
+                }
+            }
 
-            let runtime_code_identifier = format!(
-                "{contract_name}{}",
-                solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX
-            );
-            let capture_sol_dialect = input_json.settings.output_selection.check_selection(
-                file_identifier,
-                Some(contract_name.as_str()),
-                solx_standard_json::InputSelector::MLIR,
-            );
-            let mlir_stages =
-                context.finalize_module(&runtime_code_identifier, capture_sol_dialect)?;
+            // Emit every library as its own deployable object, including
+            // internal-only ones. solc emits a (call-protected stub) object for
+            // every library regardless of visibility, and the test harness's
+            // `// library:` directive deploys and links it by name — so the
+            // object must exist in the build artifacts even when all functions
+            // are `internal`. Each library gets its own MLIR context / module,
+            // emitted like a contract: an unsupported construct propagates the
+            // same way any contract's would.
+            for member in source_unit.members().iter() {
+                let SourceUnitMember::LibraryDefinition(library) = member else {
+                    continue;
+                };
 
-            let evm = Some(solx_standard_json::output::contract::evm::EVM {
-                method_identifiers: Some(method_identifiers),
-                ..Default::default()
-            });
-
-            let contract = solx_standard_json::output::contract::Contract {
-                mlir: Some(mlir_stages),
-                evm,
-                ..Default::default()
-            };
-
-            output
-                .contracts
-                .entry(file_identifier.to_string())
-                .or_default()
-                .insert(contract_name, contract);
+                let melior_context = solx_mlir::Context::create_mlir_context();
+                let evm_version = input_json.settings.evm_version.unwrap_or_default();
+                let mut context = solx_mlir::Context::new(&melior_context, evm_version);
+                let (library_name, method_identifiers) =
+                    crate::ast::contract::ContractEmitter::new(&mut context)
+                        .emit_library(&library)?;
+                Self::record_object(
+                    context,
+                    library_name,
+                    method_identifiers,
+                    input_json,
+                    file_identifier,
+                    &mut output,
+                )?;
+            }
         }
 
         Ok(output)

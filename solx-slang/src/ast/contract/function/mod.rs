@@ -39,8 +39,10 @@ use crate::ast::type_conversion::TypeConversion;
 pub struct FunctionEmitter<'state, 'context> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
-    /// Containing contract.
-    contract: &'state ContractDefinition,
+    /// Containing contract, when emitting a contract's functions. `None` for a
+    /// library's functions — libraries have no constructor / state variables /
+    /// inheritance, so the constructor-only uses of this field never run.
+    contract: Option<&'state ContractDefinition>,
     /// State variable node ID to `(slot, byte_offset)` mapping. The byte
     /// offset is zero for unpacked variables and non-zero for variables
     /// packed into a shared slot.
@@ -51,7 +53,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Creates a new function emitter.
     pub fn new(
         state: &'state Context<'context>,
-        contract: &'state ContractDefinition,
+        contract: Option<&'state ContractDefinition>,
         storage_layout: &'state HashMap<NodeId, StorageSlot>,
     ) -> Self {
         Self {
@@ -191,7 +193,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 self.storage_layout,
                 ArithmeticMode::Checked,
             );
-            current_block = emitter.emit_state_var_initializers(self.contract, current_block)?;
+            current_block = emitter.emit_state_var_initializers(
+                self.contract
+                    .expect("a constructor is emitted only within a contract"),
+                current_block,
+            )?;
         }
 
         // Collect the modifier bodies that wrap this function
@@ -475,7 +481,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Panics if an entry block is not attached to a region, which is
     /// unreachable because `emit_sol_func` always creates a region.
     pub fn emit_constructor(&self, contract_body: &BlockRef<'context, '_>) -> anyhow::Result<()> {
-        if let Some(constructor) = self.contract.constructor() {
+        let contract = self
+            .contract
+            .expect("the constructor emitter requires a contract");
+        if let Some(constructor) = contract.constructor() {
             self.emit_sol(&constructor, contract_body)?;
             return Ok(());
         }
@@ -496,7 +505,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             self.storage_layout,
             ArithmeticMode::Checked,
         );
-        let block = emitter.emit_state_var_initializers(self.contract, entry)?;
+        let block = emitter.emit_state_var_initializers(contract, entry)?;
         self.state.builder.emit_sol_return(&[], &block);
         Ok(())
     }
