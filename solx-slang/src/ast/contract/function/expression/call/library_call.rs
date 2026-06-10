@@ -93,7 +93,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         &self,
         library_name: &str,
         function: &FunctionDefinition,
-        arguments: &PositionalArguments,
+        arguments: &[Expression],
         self_receiver: Option<&Expression>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
@@ -116,11 +116,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let self_value = TypeConversion::from_target_type(*parameter_self, builder)
                     .emit(self_value, builder, &block);
                 let (mut rest_values, block) =
-                    self.emit_coerced_arguments(arguments, parameter_rest, block)?;
+                    self.emit_coerced_argument_expressions(arguments, parameter_rest, block)?;
                 rest_values.insert(0, self_value);
                 (rest_values, block)
             }
-            None => self.emit_coerced_arguments(arguments, &parameter_types, block)?,
+            None => self.emit_coerced_argument_expressions(arguments, &parameter_types, block)?,
         };
 
         let builder = &self.expression_emitter.state.builder;

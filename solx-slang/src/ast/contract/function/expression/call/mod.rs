@@ -472,6 +472,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     // via member access, so this is a library call with `x` as
                     // the implicit `self`.
                     MemberCallKind::Library { external: false }
+                } else if matches!(
+                    function.enclosing_definition(),
+                    Some(Definition::Library(_))
+                ) {
+                    // `x.f(...)` (using-for) / `L.f(...)` onto an external/public
+                    // library function: a delegatecall to the deployed library.
+                    // It has an ABI selector like a contract method, so the
+                    // enclosing-definition check is what distinguishes it from a
+                    // contract-instance external call.
+                    MemberCallKind::Library { external: true }
                 } else {
                     MemberCallKind::ExternalInstance
                 }
@@ -556,26 +566,43 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 self.emit_library_call(access, &library_function, arguments, block)
             }
             MemberCallKind::Library { external: true } => {
-                // `L.f(args)` on a library whose `f` is external/public: a
-                // `delegatecall` to the deployed library, whose link symbol is
-                // the fully-qualified `"<file>:<Library>"`.
-                let Expression::Identifier(identifier) = access.operand() else {
-                    unreachable!("a direct external library call has a library-name operand");
-                };
-                let Some(Definition::Library(library)) = identifier.resolve_to_definition() else {
-                    unreachable!("an external library call's operand resolves to a library");
-                };
+                // `L.f(args)` (namespace) or `x.f(args)` (using-for) onto an
+                // external/public library function: a `delegatecall` to the
+                // deployed library. The link symbol is the fully-qualified
+                // `"<file>:<Library>"` recorded in the side-table; a namespace
+                // operand contributes no receiver, while a value operand is the
+                // implicit `self` first argument.
                 let Some(Definition::Function(library_function)) =
                     access.member().resolve_to_definition()
                 else {
                     unreachable!("an external library call resolves to a function");
                 };
+                let Some(Definition::Library(library)) = library_function.enclosing_definition()
+                else {
+                    unreachable!("an external library call's target is a library member");
+                };
                 let library_name = format!("{}:{}", library.get_file_id(), library.name().name());
+                let self_receiver = match access.operand() {
+                    Expression::Identifier(identifier)
+                        if matches!(
+                            identifier.resolve_to_definition(),
+                            Some(
+                                Definition::Library(_)
+                                    | Definition::Import(_)
+                                    | Definition::ImportedSymbol(_)
+                            )
+                        ) =>
+                    {
+                        None
+                    }
+                    operand => Some(operand),
+                };
+                let argument_expressions: Vec<Expression> = arguments.iter().collect();
                 self.emit_library_external_call(
                     &library_name,
                     &library_function,
-                    arguments,
-                    None,
+                    &argument_expressions,
+                    self_receiver.as_ref(),
                     block,
                 )
             }
@@ -851,50 +878,118 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((mlir_name, argument_values, return_types, current_block))
     }
 
-    /// Routes a single-result call with named arguments `f({…})` / `S({…})` to
-    /// the matching emitter. Named arguments only apply to a direct function or
-    /// struct-constructor identifier; a named `using for` member call is not yet
-    /// supported.
+    /// Routes a single-result call with named arguments to the matching emitter:
+    /// a direct function `f({…})`, a struct constructor `S({…})`, or a member
+    /// call `x.f({…})` / `L.f({…})` (a `using for` / direct library call).
     fn emit_named_call(
         &self,
         call: &FunctionCallExpression,
         named_arguments: &NamedArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let Expression::Identifier(callee_identifier) = call.operand().unwrap_parens() else {
-            unimplemented!(
-                "named arguments are only supported on a direct function or struct call"
-            );
-        };
-        match callee_identifier.resolve_to_definition() {
-            Some(Definition::Function(function_definition)) => {
-                let (results, block) =
-                    self.emit_named_function_call(&function_definition, named_arguments, block)?;
-                Ok((results.into_iter().next(), block))
+        match call.operand().unwrap_parens() {
+            Expression::Identifier(callee_identifier) => {
+                match callee_identifier.resolve_to_definition() {
+                    Some(Definition::Function(function_definition)) => {
+                        let (results, block) = self.emit_named_function_call(
+                            &function_definition,
+                            named_arguments,
+                            block,
+                        )?;
+                        Ok((results.into_iter().next(), block))
+                    }
+                    Some(Definition::Struct(struct_definition)) => {
+                        let result_type = self
+                            .expression_emitter
+                            .resolve_slang_type(call.get_type())
+                            .expect("slang types a struct constructor call");
+                        let member_ids: Vec<NodeId> = struct_definition
+                            .members()
+                            .iter()
+                            .map(|member| member.node_id())
+                            .collect();
+                        let arguments = Self::order_named_arguments(named_arguments, &member_ids);
+                        let (value, block) = self.emit_struct_constructor_expressions(
+                            &struct_definition,
+                            result_type,
+                            &arguments,
+                            block,
+                        )?;
+                        Ok((Some(value), block))
+                    }
+                    _ => unimplemented!(
+                        "named arguments are only supported on a function or struct-constructor callee"
+                    ),
+                }
             }
-            Some(Definition::Struct(struct_definition)) => {
-                let result_type = self
-                    .expression_emitter
-                    .resolve_slang_type(call.get_type())
-                    .expect("slang types a struct constructor call");
-                let member_ids: Vec<NodeId> = struct_definition
-                    .members()
-                    .iter()
-                    .map(|member| member.node_id())
-                    .collect();
-                let arguments = Self::order_named_arguments(named_arguments, &member_ids);
-                let (value, block) = self.emit_struct_constructor_expressions(
-                    &struct_definition,
-                    result_type,
-                    &arguments,
-                    block,
-                )?;
-                Ok((Some(value), block))
-            }
+            Expression::MemberAccessExpression(access) => match self.classify_member(&access) {
+                MemberCallKind::Library { external: true } => {
+                    let (results, block) =
+                        self.emit_named_library_external_call(&access, named_arguments, block)?;
+                    Ok((results.into_iter().next(), block))
+                }
+                _ => unimplemented!("named arguments on this member call are not yet supported"),
+            },
             _ => unimplemented!(
-                "named arguments are only supported on a function or struct-constructor callee"
+                "named arguments are only supported on a direct function, struct, or member call"
             ),
         }
+    }
+
+    /// Emits a named-argument external/public library call — `x.f({…})`
+    /// (`using for`) or `L.f({…})`. Resolves the library link symbol from the
+    /// callee's enclosing library, reorders the named arguments to the explicit
+    /// parameters (those after the implicit `self` for the `using for` form),
+    /// and delegates to the shared [`Self::emit_library_external_call`].
+    fn emit_named_library_external_call(
+        &self,
+        access: &MemberAccessExpression,
+        named_arguments: &NamedArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let Some(Definition::Function(library_function)) = access.member().resolve_to_definition()
+        else {
+            unreachable!("an external library call resolves to a function");
+        };
+        let Some(Definition::Library(library)) = library_function.enclosing_definition() else {
+            unreachable!("an external library call's target is a library member");
+        };
+        let library_name = format!("{}:{}", library.get_file_id(), library.name().name());
+        let self_receiver = match access.operand() {
+            Expression::Identifier(identifier)
+                if matches!(
+                    identifier.resolve_to_definition(),
+                    Some(
+                        Definition::Library(_)
+                            | Definition::Import(_)
+                            | Definition::ImportedSymbol(_)
+                    )
+                ) =>
+            {
+                None
+            }
+            operand => Some(operand),
+        };
+        // A `using for` receiver is the implicit `self` first parameter, so the
+        // named arguments name only the parameters after it.
+        let parameter_ids: Vec<NodeId> = library_function
+            .parameters()
+            .iter()
+            .map(|parameter| parameter.node_id())
+            .collect();
+        let explicit_parameter_ids = if self_receiver.is_some() {
+            &parameter_ids[1..]
+        } else {
+            &parameter_ids[..]
+        };
+        let arguments = Self::order_named_arguments(named_arguments, explicit_parameter_ids);
+        self.emit_library_external_call(
+            &library_name,
+            &library_function,
+            &arguments,
+            self_receiver.as_ref(),
+            block,
+        )
     }
 
     /// Routes a multi-result call with named arguments (e.g. tuple
