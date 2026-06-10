@@ -23,6 +23,7 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
+use melior::ir::r#type::IntegerType;
 use operator::Operator;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Definition;
@@ -38,6 +39,7 @@ use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::UserDefinedOperator;
 use solx_mlir::ods::sol::ThisOperation;
+use solx_utils::BIT_LENGTH_BYTE;
 use solx_utils::DataLocation;
 
 use crate::ast::ExpressionExt;
@@ -146,6 +148,103 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (value, block) = self.emit(expression, block)?;
         let value = value.expect("an expression in value position produces a value");
         Ok((value, block))
+    }
+
+    /// Emits a value-position expression toward a known `target_type`,
+    /// special-casing a string literal converted to a fixed-bytes type.
+    ///
+    /// A string literal used where `bytesN` / `byte` is expected (`bytes7 x =
+    /// "abc"`, `b == "1234567"`, a `bytes`/`string` element `s[i] = "c"`) is a
+    /// compile-time fixed-bytes constant, not a runtime `sol.string`: emitting
+    /// the runtime string and letting the coercion `sol.cast` it fails the
+    /// integer-only verifier (`operand #0 must be integer, but got !sol.string`).
+    /// `bytesN` is left-aligned — the literal occupies the high-order bytes,
+    /// zero-padded on the right. Every other expression / target combination is
+    /// a plain [`Self::emit_value`], so routing a coercion site through this is a
+    /// pure superset.
+    pub fn emit_value_for_target(
+        &self,
+        expression: &Expression,
+        target_type: Type<'context>,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        if let Expression::StringExpression(string_expression) = expression {
+            let builder = &self.state.builder;
+            // A string literal toward a single `byte` (an element of
+            // `bytes`/`string`) materialises as a `!sol.byte` constant.
+            if solx_mlir::TypeFactory::is_sol_byte(target_type) {
+                let byte = string_expression.value().first().copied().unwrap_or(0);
+                let ui8 = Type::from(IntegerType::unsigned(
+                    builder.context,
+                    BIT_LENGTH_BYTE as u32,
+                ));
+                let integer = builder.emit_constant(&num_bigint::BigInt::from(byte), ui8, &block);
+                let value = builder.emit_sol_bytes_cast(integer, target_type, &block);
+                return Ok((value, block));
+            }
+            if let Some(width) = solx_mlir::TypeFactory::fixed_bytes_or_byte_width(target_type) {
+                let literal_bytes = string_expression.value();
+                let mut buffer = vec![0u8; width as usize];
+                for (slot, byte) in buffer.iter_mut().zip(literal_bytes.iter()) {
+                    *slot = *byte;
+                }
+                let int_value = num_bigint::BigInt::from_bytes_be(num_bigint::Sign::Plus, &buffer);
+                let integer_type = Type::from(IntegerType::unsigned(
+                    builder.context,
+                    width * BIT_LENGTH_BYTE as u32,
+                ));
+                let integer = builder.emit_constant(&int_value, integer_type, &block);
+                let value =
+                    builder.emit_sol_bytes_cast(integer, builder.types.fixed_bytes(width), &block);
+                return Ok((value, block));
+            }
+        }
+        self.emit_value(expression, block)
+    }
+
+    /// Emits the two operands of a binary expression, materialising a string
+    /// literal compared/combined with a `bytesN` / `byte` operand (`b == "d"`,
+    /// `b | "x"`) as a fixed-bytes constant rather than a runtime `sol.string`.
+    ///
+    /// The non-string operand is emitted first to learn its MLIR type; the
+    /// string operand is then emitted toward it via [`Self::emit_value_for_target`]
+    /// when that type is fixed-bytes-like. When neither (or both) operand is a
+    /// string literal, this is exactly two `emit_value` calls.
+    pub fn emit_binary_operands(
+        &self,
+        left: &Expression,
+        right: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        Value<'context, 'block>,
+        Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    )> {
+        let is_bytes_like =
+            |ty: Type<'context>| solx_mlir::TypeFactory::fixed_bytes_or_byte_width(ty).is_some();
+        let left_is_string = matches!(left, Expression::StringExpression(_));
+        let right_is_string = matches!(right, Expression::StringExpression(_));
+        if right_is_string && !left_is_string {
+            let (lhs, block) = self.emit_value(left, block)?;
+            let (rhs, block) = if is_bytes_like(lhs.r#type()) {
+                self.emit_value_for_target(right, lhs.r#type(), block)?
+            } else {
+                self.emit_value(right, block)?
+            };
+            Ok((lhs, rhs, block))
+        } else if left_is_string && !right_is_string {
+            let (rhs, block) = self.emit_value(right, block)?;
+            let (lhs, block) = if is_bytes_like(rhs.r#type()) {
+                self.emit_value_for_target(left, rhs.r#type(), block)?
+            } else {
+                self.emit_value(left, block)?
+            };
+            Ok((lhs, rhs, block))
+        } else {
+            let (lhs, block) = self.emit_value(left, block)?;
+            let (rhs, block) = self.emit_value(right, block)?;
+            Ok((lhs, rhs, block))
+        }
     }
 
     /// Emits MLIR for an expression, appending operations to `block`.
@@ -583,6 +682,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         state_variable: &ast::StateVariableDefinition,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        let declared_type = state_variable
+            .get_type()
+            .expect("slang types every state variable");
+        let element_type =
+            TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
         if matches!(
             state_variable.mutability(),
             StateVariableMutability::Constant
@@ -590,7 +694,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let initializer = state_variable
                 .value()
                 .expect("a constant state variable has an initializer");
-            return self.emit_value(&initializer, block);
+            // Emit toward the declared type so a `bytesN constant` initialised
+            // from a string literal folds to a fixed-bytes constant.
+            return self.emit_value_for_target(&initializer, element_type, block);
         }
         let slot = self
             .storage_layout
@@ -598,11 +704,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .unwrap_or_else(|| {
                 unimplemented!("unregistered state variable {:?}", state_variable.node_id())
             });
-        let declared_type = state_variable
-            .get_type()
-            .expect("slang types every state variable");
-        let element_type =
-            TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
         let value = if declared_type.is_reference_type() {
             let address_type = Self::address_type(
                 &self.state.builder,

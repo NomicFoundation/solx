@@ -107,12 +107,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .iter()
                     .next()
                     .expect("a type conversion has exactly one argument");
-                let (value, block) = self.expression_emitter.emit_value(&first, block)?;
-                let builder = &self.expression_emitter.state.builder;
                 let target_type = self
                     .expression_emitter
                     .resolve_slang_type(call.get_type())
                     .expect("slang types a type-conversion call");
+                // A `bytesN("…")` conversion of a string literal folds to a
+                // fixed-bytes constant rather than a runtime `sol.string`.
+                let (value, block) =
+                    self.expression_emitter
+                        .emit_value_for_target(&first, target_type, block)?;
+                let builder = &self.expression_emitter.state.builder;
                 let result = TypeConversion::from_target_type(target_type, builder)
                     .emit(value, builder, &block);
                 Ok((Some(result), block))
@@ -890,8 +894,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let mut argument_values = Vec::with_capacity(arguments.len());
         let mut block = block;
-        for argument in arguments {
-            let (value, next_block) = self.expression_emitter.emit_value(argument, block)?;
+        for (index, argument) in arguments.iter().enumerate() {
+            // Emit each argument toward its parameter type so a string literal
+            // bound to a `bytesN` / `byte` parameter materialises as a fixed-bytes
+            // constant rather than a runtime `sol.string` the coercion rejects.
+            let (value, next_block) = match parameter_types.get(index) {
+                Some(&parameter_type) => self.expression_emitter.emit_value_for_target(
+                    argument,
+                    parameter_type,
+                    block,
+                )?,
+                None => self.expression_emitter.emit_value(argument, block)?,
+            };
             argument_values.push(value);
             block = next_block;
         }

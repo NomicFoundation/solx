@@ -326,7 +326,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 }
             }
         } else {
-            let (value, block) = emitter.emit_value(&expression, block)?;
+            // A single-value return materialises a string literal toward the
+            // declared return type (a `bytesN`/`byte` constant), not a runtime
+            // string the cast below would reject.
+            let return_type = self.return_types[0];
+            let (value, block) = emitter.emit_value_for_target(&expression, return_type, block)?;
             (vec![value], block)
         };
 
