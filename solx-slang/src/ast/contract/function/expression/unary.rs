@@ -7,6 +7,7 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
+use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
@@ -72,19 +73,36 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let operand_type = target_type.unwrap_or_else(|| value.r#type());
                 let value = TypeConversion::from_target_type(operand_type, &self.state.builder)
                     .emit(value, &self.state.builder, &block);
-                let result = block
+                // `sol.not` is integer-only; for a `bytesN` / `byte` operand
+                // bridge through the equivalent unsigned integer `ui(8*N)` and
+                // cast the result back to the fixed-bytes type.
+                let builder = &self.state.builder;
+                let (value, restore_type) =
+                    match solx_mlir::TypeFactory::fixed_bytes_or_byte_width(operand_type) {
+                        Some(width) => {
+                            let int_type =
+                                Type::from(IntegerType::unsigned(builder.context, 8 * width));
+                            (
+                                builder.emit_sol_cast(value, int_type, &block),
+                                Some(operand_type),
+                            )
+                        }
+                        None => (value, None),
+                    };
+                let result: Value<'context, 'block> = block
                     .append_operation(
-                        NotOperation::builder(
-                            self.state.builder.context,
-                            self.state.builder.unknown_location,
-                        )
-                        .value(value)
-                        .build()
-                        .into(),
+                        NotOperation::builder(builder.context, builder.unknown_location)
+                            .value(value)
+                            .build()
+                            .into(),
                     )
                     .result(0)
                     .expect("sol.not always produces one result")
                     .into();
+                let result = match restore_type {
+                    Some(fixed) => builder.emit_sol_cast(result, fixed, &block),
+                    None => result,
+                };
                 Ok((result, block))
             }
             Operator::Not => {

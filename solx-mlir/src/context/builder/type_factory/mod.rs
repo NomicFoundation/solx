@@ -148,6 +148,20 @@ impl<'context> TypeFactory<'context> {
         unsafe { crate::ffi::solxFixedBytesTypeSize(ty.to_raw()) }
     }
 
+    /// The byte width of a fixed-bytes-like type: `N` for `!sol.fixedbytes<N>`,
+    /// `1` for the single `!sol.byte`, and `None` for any other type. Used to
+    /// bridge a `bytesN` / `byte` operand through `ui(8*N)` for the integer-only
+    /// bitwise ops.
+    pub fn fixed_bytes_or_byte_width(ty: Type<'_>) -> Option<u32> {
+        if Self::is_sol_fixed_bytes(ty) {
+            Some(Self::fixed_bytes_size(ty))
+        } else if Self::is_sol_byte(ty) {
+            Some(1)
+        } else {
+            None
+        }
+    }
+
     /// Whether `ty` is the single-byte `!sol.byte` — the element type of
     /// `bytes`/`string`, distinct from `!sol.fixedbytes<1>`.
     pub fn is_sol_byte(ty: Type<'_>) -> bool {

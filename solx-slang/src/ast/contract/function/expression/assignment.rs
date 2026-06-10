@@ -2,7 +2,6 @@
 //! Assignment expression lowering.
 //!
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -92,27 +91,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 ),
             };
             let (rhs, block) = self.emit_value(&right, block)?;
-            let old = TypeConversion::from_target_type(target_type, &self.state.builder).emit(
-                old,
-                &self.state.builder,
-                &block,
-            );
-            let rhs = TypeConversion::from_target_type(target_type, &self.state.builder).emit(
-                rhs,
-                &self.state.builder,
-                &block,
-            );
-            let result = block
-                .append_operation(operator.emit_sol_binary_operation(
-                    self.arithmetic_mode,
-                    self.state.builder.context,
-                    self.state.builder.unknown_location,
-                    old,
-                    rhs,
-                ))
-                .result(0)
-                .expect("binary operation always produces one result")
-                .into();
+            // Shares the binary-operation emitter with `a op b` so a compound
+            // bitwise assignment (`a ^= b`, `a <<= b`) on a `bytesN` / `byte`
+            // lvalue gets the same fixed-bytes bridge.
+            let result = self.emit_value_binary_operation(operator, old, rhs, target_type, &block);
             (result, block)
         };
 
