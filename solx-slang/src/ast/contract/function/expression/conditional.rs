@@ -37,9 +37,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         conditional: &ConditionalExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        // The conditional's own type is the common type of its branches; when
+        // the binder leaves it untyped (e.g. `cond ? f : g` over public
+        // functions, where slang types the whole expression as `None`), fall
+        // back to a branch's type rather than silently defaulting to `ui256` —
+        // that masked the mismatch and `sol.cast`-ed a `func_ref` to an integer.
         let result_type = self
             .resolve_slang_type(conditional.get_type())
-            .unwrap_or(self.state.builder.types.ui256);
+            .or_else(|| self.resolve_slang_type(conditional.true_expression().get_type()))
+            .or_else(|| self.resolve_slang_type(conditional.false_expression().get_type()))
+            .expect("a conditional resolves its type from itself or one of its branches");
         let condition = conditional.operand();
         let (condition_value, block) = self.emit_value(&condition, block)?;
         let condition_boolean = self.emit_is_nonzero(condition_value, &block);
