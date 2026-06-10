@@ -293,8 +293,17 @@ impl<'context> TypeConversion<'context> {
                     builder.emit_sol_default_func_constant(mlir_type, block)
                 }
             }
+            SlangType::Contract(_) | SlangType::Interface(_) => {
+                // A contract/interface reference's zero is `address(0)`
+                // reinterpreted as the contract type (solc: `ui160` zero ->
+                // `address` -> contract, two `sol.address_cast`s).
+                let zero = builder.emit_sol_constant(0, builder.types.ui160, block);
+                let address =
+                    builder.emit_sol_address_cast(zero, builder.types.sol_address, block);
+                builder.emit_sol_address_cast(address, mlir_type, block)
+            }
             _ => unreachable!(
-                "emit_scalar_zero handles only address/bytesN/enum/integer/bool/UDVT/function value types"
+                "emit_scalar_zero handles only address/bytesN/enum/integer/bool/UDVT/function/contract value types"
             ),
         }
     }
