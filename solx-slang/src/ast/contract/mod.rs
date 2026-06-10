@@ -13,6 +13,7 @@ pub mod reachability;
 pub mod storage_layout;
 pub mod super_call;
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -22,6 +23,8 @@ use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionMutability;
+use slang_solidity_v2::ast::FunctionVisibility;
+use slang_solidity_v2::ast::LibraryDefinition;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableMutability;
 
@@ -159,14 +162,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
 
         self.state.current_contract_type = Some(contract_type);
-        FunctionEmitter::new(self.state, contract, &storage_layout)
+        FunctionEmitter::new(self.state, Some(contract), &storage_layout)
             .emit_constructor(&contract_body)?;
         self.state.current_contract_type = None;
 
         // Slang's `functions()` filters out Constructor and Modifier kinds.
         for function in contract.functions() {
             self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, contract, &storage_layout)
+            FunctionEmitter::new(self.state, Some(contract), &storage_layout)
                 .emit_sol(&function, &contract_body)?;
             self.state.current_contract_type = None;
         }
@@ -176,17 +179,121 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // functions of the same name and signature do not collide on one symbol.
         for free in &reached_free_functions {
             self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, contract, &storage_layout).emit_sol_with_symbol(
-                free,
-                &Self::node_id_qualified_symbol(free),
-                &contract_body,
-            )?;
+            FunctionEmitter::new(self.state, Some(contract), &storage_layout)
+                .emit_sol_with_symbol(
+                    free,
+                    &Self::node_id_qualified_symbol(free),
+                    &contract_body,
+                )?;
             self.state.current_contract_type = None;
         }
 
         self.emit_state_variable_getters(contract, &storage_layout, &contract_body)?;
 
         Ok(())
+    }
+
+    /// Emits a deployable library object — its externally-dispatchable functions
+    /// as `sol.func`s under a `sol.contract`, plus the method-identifier map.
+    ///
+    /// A `delegatecall`ed library object dispatches only its `external` /
+    /// `public` functions; `internal` / `private` functions and modifiers are
+    /// inlined into their callers, so they are not part of the library's own
+    /// object. A library with no externally-visible function is therefore
+    /// emitted as an empty, call-protected stub — matching solc, and avoiding
+    /// standalone emission of inlined-only helpers that assume a caller context
+    /// (e.g. a storage-parameter modifier), which would otherwise panic. The
+    /// stub still exists in the build artifacts so the harness's `// library:`
+    /// directive can deploy and link it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any function body contains unsupported constructs.
+    pub fn emit_library(
+        &mut self,
+        library: &LibraryDefinition,
+    ) -> anyhow::Result<(String, BTreeMap<String, String>)> {
+        let library_name = library.name().name();
+
+        let has_deployable_function = library.members().iter().any(|member| {
+            matches!(
+                member,
+                ContractMember::FunctionDefinition(function)
+                    if matches!(function.kind(), FunctionKind::Regular)
+                        && matches!(
+                            function.visibility(),
+                            FunctionVisibility::External | FunctionVisibility::Public
+                        )
+            )
+        });
+        // When the library is deployable, emit all of its `Regular` functions
+        // (the internal ones the dispatched functions call included); the
+        // backend DCEs any left unreferenced. When it is not, emit none — the
+        // empty stub.
+        let functions: Vec<FunctionDefinition> = if has_deployable_function {
+            library
+                .members()
+                .iter()
+                .filter_map(|member| match member {
+                    ContractMember::FunctionDefinition(function)
+                        if matches!(function.kind(), FunctionKind::Regular) =>
+                    {
+                        Some(function)
+                    }
+                    _ => None,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        // Pre-register every function so calls between the library's functions
+        // resolve before any body is emitted.
+        for function in &functions {
+            let mlir_name = FunctionEmitter::mlir_function_name(function);
+            let (parameter_types, return_types) =
+                TypeConversion::resolve_function_types(function, &self.state.builder);
+            self.state.register_function_signature(
+                function.node_id(),
+                mlir_name,
+                parameter_types,
+                return_types,
+            );
+        }
+
+        // A library has no state, so the storage layout is empty.
+        let storage_layout: HashMap<NodeId, StorageSlot> = HashMap::new();
+        let library_type = self.state.builder.types.contract(&library_name, false);
+        let module_body = self.state.module.body();
+        let contract_body = self.state.builder.emit_sol_contract(
+            &library_name,
+            // Emit as a plain contract: a `delegatecall`ed library object only
+            // needs the external-function dispatcher, which the contract kind
+            // provides; the `Library` kind would add a library-address
+            // self-reference the slang path does not set up.
+            solx_mlir::ContractKind::Contract,
+            &module_body,
+        );
+
+        for function in &functions {
+            self.state.current_contract_type = Some(library_type);
+            FunctionEmitter::new(self.state, None, &storage_layout)
+                .emit_sol(function, &contract_body)?;
+            self.state.current_contract_type = None;
+        }
+
+        let mut method_identifiers = BTreeMap::new();
+        for function in &functions {
+            let Some(signature) = function.compute_canonical_signature() else {
+                continue;
+            };
+            let Some(selector) = function.compute_selector() else {
+                continue;
+            };
+            method_identifiers.insert(signature, format!("{selector:08x}"));
+        }
+
+        Ok((library_name, method_identifiers))
     }
 
     /// Synthesises the auto-generated external accessor for each `public` state
