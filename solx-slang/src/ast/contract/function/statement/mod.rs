@@ -31,6 +31,7 @@ use solx_mlir::Environment;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::modifier_body_call::ModifierBodyCall;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::type_conversion::TypeConversion;
@@ -307,6 +308,16 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 current = next;
             }
             (values, current)
+        } else if self.return_types.len() > 1 {
+            // `return f()` where `f` yields a tuple: solc emits one `sol.call`
+            // with N results, then `sol.return` over them. A multi-return
+            // function's only non-tuple-literal return expression is such a call,
+            // so expand its full result list rather than taking the first value.
+            let Expression::FunctionCallExpression(call) = &expression else {
+                unimplemented!("multi-value return of a non-call expression is not supported");
+            };
+            let call_emitter = CallEmitter::new(&emitter);
+            call_emitter.emit_function_call_results(call, block)?
         } else {
             let (value, block) = emitter.emit_value(&expression, block)?;
             (vec![value], block)
