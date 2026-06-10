@@ -275,6 +275,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             Some(BuiltIn::FunctionAddress) => self.emit_function_address(access, block),
             Some(BuiltIn::ErrorSelector) => self.emit_error_selector(access, block),
             Some(BuiltIn::EventSelector) => self.emit_event_selector(access, block),
+            // A bare `T.wrap` / `T.unwrap` named without a call (a discarded
+            // `(MyInt).wrap;` statement) references the built-in itself, which
+            // has no runtime value. The call forms `T.wrap(x)` / `T.unwrap(v)`
+            // lower in the call dispatch (`CallKind::UdvtWrapUnwrap`); a bare
+            // reference is a no-op, so yield a placeholder.
+            Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
+                let builder = &self.expression_emitter.state.builder;
+                let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                Ok((Some(placeholder), block))
+            }
             // A member that resolves to an externally-visible function but is not
             // called (`this.f`, `instance.f` as a value) is an external function
             // pointer, not an EVM-context global.
