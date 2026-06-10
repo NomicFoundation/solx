@@ -3,6 +3,7 @@
 //!
 
 use melior::ir::BlockRef;
+use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::MemberAccessExpression;
@@ -57,8 +58,43 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             builder.emit_sol_push_string(bytes_reference, byte_value, &block);
             return Ok((None, block));
         }
+        let (new_slot, element_type, block) = self.emit_push_slot(access, block)?;
+        let Some(value_argument) = value_argument else {
+            // `arr.push()` in value position yields the freshly-appended element:
+            // `sol.load` reads a value element as a fresh default and yields a
+            // reference element as its canonical storage reference (the same dual
+            // behaviour as an index access `a[i]`; the raw slot pointer would
+            // mis-cast in the consumer).
+            let builder = &self.expression_emitter.state.builder;
+            let loaded = builder.emit_sol_load(new_slot, element_type, &block)?;
+            return Ok((Some(loaded), block));
+        };
+        let (value, block) = self.expression_emitter.emit_value(&value_argument, block)?;
         let builder = &self.expression_emitter.state.builder;
+        let cast_value =
+            TypeConversion::from_target_type(element_type, builder).emit(value, builder, &block);
+        builder.emit_sol_store(cast_value, new_slot, &block);
+        Ok((None, block))
+    }
 
+    /// Appends a default element to a dynamic array (or `bytes`) and returns the
+    /// freshly-allocated slot reference together with its element MLIR type.
+    /// Shared by `arr.push(x)` (which then stores `x` into the slot) and the
+    /// `arr.push() = v` lvalue (which copies the right-hand side into it).
+    pub fn emit_push_slot(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        Value<'context, 'block>,
+        Type<'context>,
+        BlockRef<'context, 'block>,
+    )> {
+        let base = access.operand();
+        let base_slang_type = base
+            .get_type()
+            .expect("slang types the base of an array push");
+        let builder = &self.expression_emitter.state.builder;
         let (element_type, slang_location) = match &base_slang_type {
             SlangType::Array(array_type) => (
                 TypeConversion::resolve_slang_type(&array_type.element_type(), None, builder),
@@ -76,18 +112,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             other => solx_utils::DataLocation::from_slang(other, None),
         };
-
         let (array_value, block) = self.expression_emitter.emit_value(&base, block)?;
         let address_type = builder.types.pointer(element_type, base_location);
         let new_slot = builder.emit_sol_push(array_value, address_type, &block);
-
-        let Some(value_argument) = value_argument else {
-            return Ok((Some(new_slot), block));
-        };
-        let (value, block) = self.expression_emitter.emit_value(&value_argument, block)?;
-        let cast_value =
-            TypeConversion::from_target_type(element_type, builder).emit(value, builder, &block);
-        builder.emit_sol_store(cast_value, new_slot, &block);
-        Ok((None, block))
+        Ok((new_slot, element_type, block))
     }
 }
