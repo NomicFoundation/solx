@@ -105,8 +105,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 self.emit_built_in_call(built_in, positional_arguments, block)
             }
             CallKind::AbiDecode => {
-                let (value, block) = self.emit_abi_decode(call, positional_arguments, block)?;
-                Ok((Some(value), block))
+                let (values, block) = self.emit_abi_decode(call, positional_arguments, block)?;
+                // A single-result context only ever sees a single-type decode.
+                Ok((values.into_iter().next(), block))
             }
             CallKind::UdvtWrapUnwrap => {
                 let argument = positional_arguments
@@ -751,6 +752,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         positional_arguments,
                         block,
                     ),
+                    // `(a, b, …) = abi.decode(payload, (A, B, …))` returns one
+                    // value per requested type.
+                    BuiltIn::AbiDecode => self.emit_abi_decode(call, positional_arguments, block),
                     _ => unimplemented!("multi-result built-in member call is not yet supported"),
                 };
             }
