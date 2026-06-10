@@ -134,11 +134,22 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             AssignmentTarget::ReferenceCopy(reference) => {
                 self.state.builder.emit_sol_delete(*reference, &block);
             }
-            AssignmentTarget::Pointer(..) | AssignmentTarget::Storage(..) => {
-                let zero =
-                    self.state
-                        .builder
-                        .emit_sol_constant(0, self.state.builder.types.ui256, &block);
+            AssignmentTarget::Pointer(_, element_type)
+            | AssignmentTarget::Storage(_, element_type) => {
+                // The zero of a value lvalue is its type's own zero, not a raw
+                // `ui256` 0: a function pointer resets to `default_func_constant`,
+                // an address to `address(0)`, a `bytesN`/enum to its typed zero.
+                // Emitting a `ui256` 0 and letting the store coerce it would
+                // `sol.cast` it to e.g. a `func_ref` (an ill-typed integer cast).
+                let slang_type = operand
+                    .get_type()
+                    .expect("slang types every delete operand");
+                let zero = TypeConversion::emit_scalar_zero(
+                    &slang_type,
+                    *element_type,
+                    &self.state.builder,
+                    &block,
+                );
                 self.store_into_target(&target, zero, &block);
             }
         }
