@@ -81,6 +81,22 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             return Ok((results.into_iter().next(), block));
         }
 
+        // A bare low-level call (`addr.call(data)` / `.delegatecall` /
+        // `.staticcall`) whose `(bool, bytes)` result is discarded in statement
+        // position: emit it through the same dispatcher as the result-binding and
+        // call-options paths, keeping the success flag (the first result).
+        if let Expression::MemberAccessExpression(access) = call.operand().unwrap_parens()
+            && let Some(
+                kind @ (BuiltIn::AddressCall
+                | BuiltIn::AddressDelegatecall
+                | BuiltIn::AddressStaticcall),
+            ) = access.member().resolve_to_built_in()
+        {
+            let (results, block) =
+                self.emit_bare_call_results(&access, kind, None, positional_arguments, block)?;
+            return Ok((results.into_iter().next(), block));
+        }
+
         match self.classify_call(call, positional_arguments) {
             CallKind::TypeConversion | CallKind::RefFieldStructAsConversion => {
                 // Both lower a single argument cast to the call's own type: a
