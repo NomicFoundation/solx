@@ -167,11 +167,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         );
         let selector_value =
             builder.emit_sol_bytes_cast(selector_integer, builder.types.fixed_bytes(4), &block);
-        let (values, block) = self.emit_coerced_argument_expressions(
-            &argument_expressions,
-            &parameter_types,
-            block,
-        )?;
+        let (values, block) =
+            self.emit_coerced_argument_expressions(&argument_expressions, &parameter_types, block)?;
         let result =
             self.emit_sol_encode(&values, Some(selector_value), EncodeMode::Standard, &block);
         Ok((Some(result), block))

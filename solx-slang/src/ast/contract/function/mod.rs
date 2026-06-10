@@ -145,8 +145,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // symbol override but are still referenceable (`p(libFn)`); only modifier
         // bodies (`BodyKind::ModifierBody`) and synthetic dispatchers are excluded.
         let function_id = (body_kind == BodyKind::Function && mlir_kind.is_none()).then(|| {
-            i64::try_from(usize::from(function.node_id()))
-                .expect("a function node id fits in i64")
+            i64::try_from(usize::from(function.node_id())).expect("a function node id fits in i64")
         });
 
         let function_entry_block = self.state.builder.emit_sol_func(
