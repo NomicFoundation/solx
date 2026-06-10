@@ -1462,12 +1462,33 @@ impl<'context> Builder<'context> {
                 .expect("sol.dyn_bytes_to_fixedbytes always produces one result")
                 .into();
         }
-        // byte / bytesN ↔ {byte, bytesN, integer}.
-        if TypeFactory::is_sol_fixed_bytes(source)
-            || TypeFactory::is_sol_fixed_bytes(to_type)
-            || TypeFactory::is_sol_byte(source)
-            || TypeFactory::is_sol_byte(to_type)
-        {
+        // byte / bytesN ↔ {byte, bytesN, integer}. `sol.bytes_cast` connects
+        // `fixedbytes<N>` ↔ `ui(N*8)` (and `byte` ↔ `ui8`) and also resizes
+        // fixedbytes↔fixedbytes / fixedbytes↔byte directly (right-aligned byte
+        // padding, NOT integer sign/zero extension). Only an integer counterpart
+        // whose width differs from the fixed-bytes partner width must first be
+        // resized through that partner integer (e.g. `fixedbytes<1>` → `ui256`
+        // via `ui8`); same-width and fixedbytes/byte counterparts stay direct.
+        if TypeFactory::is_sol_fixed_bytes(source) || TypeFactory::is_sol_byte(source) {
+            let partner_bits = Self::bytes_partner_bits(source);
+            if let Ok(integer) = IntegerType::try_from(to_type)
+                && integer.width() != partner_bits
+            {
+                let partner = Type::from(IntegerType::unsigned(self.context, partner_bits));
+                let as_int = self.emit_sol_bytes_cast(value, partner, block);
+                return self.emit_sol_cast(as_int, to_type, block);
+            }
+            return self.emit_sol_bytes_cast(value, to_type, block);
+        }
+        if TypeFactory::is_sol_fixed_bytes(to_type) || TypeFactory::is_sol_byte(to_type) {
+            let partner_bits = Self::bytes_partner_bits(to_type);
+            if let Ok(integer) = IntegerType::try_from(source)
+                && integer.width() != partner_bits
+            {
+                let partner = Type::from(IntegerType::unsigned(self.context, partner_bits));
+                let as_int = self.emit_sol_cast(value, partner, block);
+                return self.emit_sol_bytes_cast(as_int, to_type, block);
+            }
             return self.emit_sol_bytes_cast(value, to_type, block);
         }
         // Reference types (array / struct / string / bytes / mapping) differ
@@ -1487,6 +1508,16 @@ impl<'context> Builder<'context> {
             .result(0)
             .expect("sol.cast always produces one result")
             .into()
+    }
+
+    /// The bit width of the integer a `sol.bytes_cast` pairs with a fixed-bytes
+    /// type: `8 * N` for `!sol.fixedbytes<N>`, and 8 for the single `!sol.byte`.
+    fn bytes_partner_bits(ty: Type<'context>) -> u32 {
+        if TypeFactory::is_sol_byte(ty) {
+            8
+        } else {
+            TypeFactory::fixed_bytes_size(ty) * 8
+        }
     }
 
     /// Emits a `sol.contract_cast` between two contract/interface types

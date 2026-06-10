@@ -199,6 +199,10 @@ bool solxIsFixedBytesType(MlirType ty) {
     return mlir::isa<mlir::sol::FixedBytesType>(unwrap(ty));
 }
 
+uint32_t solxFixedBytesTypeSize(MlirType ty) {
+    return mlir::cast<mlir::sol::FixedBytesType>(unwrap(ty)).getSize();
+}
+
 bool solxIsByteType(MlirType ty) {
     return mlir::isa<mlir::sol::ByteType>(unwrap(ty));
 }

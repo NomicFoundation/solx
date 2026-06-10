@@ -208,6 +208,9 @@ unsafe extern "C" {
     pub fn solxIsContractType(ty: mlir_sys::MlirType) -> bool;
     /// Whether `ty` is a `!sol.fixedbytes<N>`.
     pub fn solxIsFixedBytesType(ty: mlir_sys::MlirType) -> bool;
+    /// The byte width `N` of a `!sol.fixedbytes<N>` (the caller must ensure `ty`
+    /// is a fixed-bytes type).
+    pub fn solxFixedBytesTypeSize(ty: mlir_sys::MlirType) -> u32;
     /// Whether `ty` is the single `!sol.byte` (the `bytes`/`string` element).
     pub fn solxIsByteType(ty: mlir_sys::MlirType) -> bool;
     /// Whether `ty` is a `!sol.string<…>` (`bytes` and `string` share it).

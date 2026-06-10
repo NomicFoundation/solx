@@ -141,6 +141,13 @@ impl<'context> TypeFactory<'context> {
         unsafe { crate::ffi::solxIsFixedBytesType(ty.to_raw()) }
     }
 
+    /// The byte width `N` of a `!sol.fixedbytes<N>`. The caller must first check
+    /// [`Self::is_sol_fixed_bytes`].
+    pub fn fixed_bytes_size(ty: Type<'_>) -> u32 {
+        // SAFETY: caller guarantees `ty` is a fixed-bytes type.
+        unsafe { crate::ffi::solxFixedBytesTypeSize(ty.to_raw()) }
+    }
+
     /// Whether `ty` is the single-byte `!sol.byte` — the element type of
     /// `bytes`/`string`, distinct from `!sol.fixedbytes<1>`.
     pub fn is_sol_byte(ty: Type<'_>) -> bool {
