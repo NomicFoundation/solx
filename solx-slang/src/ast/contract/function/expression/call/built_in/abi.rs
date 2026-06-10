@@ -11,6 +11,7 @@ use melior::ir::Value;
 use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::operation::OperationMutLike;
 use melior::ir::r#type::IntegerType;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::PositionalArguments;
@@ -112,6 +113,68 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             &current,
         );
         Ok((Some(result), current))
+    }
+
+    /// Emits `abi.encodeCall(C.f, (args))`: the callee's 4-byte selector, folded
+    /// to a compile-time constant via `compute_selector` and prepended to the
+    /// ABI-encoded arguments. The arguments come from the second (tuple) argument
+    /// and are coerced to `C.f`'s declared parameter types, so an integer literal
+    /// encodes at the parameter's width (matching solc). The callee is classified
+    /// by resolving the function reference to its definition, never by name text
+    /// (Rule-7).
+    pub fn emit_abi_encode_call(
+        &self,
+        arguments: &PositionalArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let mut iter = arguments.iter();
+        let function_expression = iter
+            .next()
+            .expect("abi.encodeCall takes a function reference");
+        let arguments_tuple = iter
+            .next()
+            .expect("abi.encodeCall takes a call-arguments tuple");
+        let definition = match &function_expression {
+            Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
+            Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+            _ => None,
+        };
+        let Some(Definition::Function(function)) = definition else {
+            unimplemented!(
+                "abi.encodeCall with a non-static function-pointer callee is not yet supported"
+            );
+        };
+        let selector = function
+            .compute_selector()
+            .expect("abi.encodeCall's callee is an external function with an ABI selector");
+        let Expression::TupleExpression(arguments_tuple) = &arguments_tuple else {
+            unimplemented!("abi.encodeCall's second argument is the call-arguments tuple");
+        };
+        let argument_expressions: Vec<Expression> = arguments_tuple
+            .items()
+            .iter()
+            .map(|item| {
+                item.expression()
+                    .expect("a call-arguments tuple element has an expression")
+            })
+            .collect();
+        let builder = &self.expression_emitter.state.builder;
+        let (parameter_types, _) = TypeConversion::resolve_function_types(&function, builder);
+        let selector_integer = builder.emit_sol_constant(
+            i64::from(selector),
+            Type::from(IntegerType::unsigned(builder.context, 32)),
+            &block,
+        );
+        let selector_value =
+            builder.emit_sol_bytes_cast(selector_integer, builder.types.fixed_bytes(4), &block);
+        let (values, block) = self.emit_coerced_argument_expressions(
+            &argument_expressions,
+            &parameter_types,
+            block,
+        )?;
+        let result =
+            self.emit_sol_encode(&values, Some(selector_value), EncodeMode::Standard, &block);
+        Ok((Some(result), block))
     }
 
     /// Emits a `sol.encode` operation producing a `bytes memory` payload.
