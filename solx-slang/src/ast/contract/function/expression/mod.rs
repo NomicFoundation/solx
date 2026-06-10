@@ -40,6 +40,7 @@ use solx_mlir::UserDefinedOperator;
 use solx_mlir::ods::sol::ThisOperation;
 use solx_utils::DataLocation;
 
+use crate::ast::ExpressionExt;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::type_conversion::TypeConversion;
@@ -333,7 +334,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::PostfixExpression(expression) => {
-                let operand = expression.operand();
+                // Peel parenthesised single-element tuples so `(i)++` / `(arr[j])--`
+                // resolve their lvalue exactly like the bare `i++` / `arr[j]--`.
+                let operand = expression.operand().unwrap_parens();
                 let operator = match expression.operator() {
                     ast::PostfixExpressionOperator::MinusMinus(_) => Operator::Decrement,
                     ast::PostfixExpressionOperator::PlusPlus(_) => Operator::Increment,
@@ -361,7 +364,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     ast::PrefixExpressionOperator::PlusPlus(_) => Operator::Increment,
                     ast::PrefixExpressionOperator::Tilde(_) => Operator::BitwiseNot,
                 };
-                let operand = expression.operand();
+                // Peel parenthesised single-element tuples so `--(i)` / `~(x)`
+                // operate on the bare inner lvalue / value, as solc treats them.
+                let operand = expression.operand().unwrap_parens();
                 self.emit_prefix(operator, &operand, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
