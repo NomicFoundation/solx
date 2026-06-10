@@ -138,14 +138,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             mlir_kind,
         } = self.resolve_inner_signature(function, symbol_override, body_kind);
 
-        // Only the canonical emission of a regular function (no symbol override,
-        // a real function body, not a constructor/fallback/receive) is the target
-        // of an internal function pointer, so only it carries an `id` — the slang
-        // node id, matching solc. Modifier stages and synthetic dispatchers do not.
-        let function_id = (symbol_override.is_none()
-            && body_kind == BodyKind::Function
-            && mlir_kind.is_none())
-        .then(|| {
+        // A regular function (real body, not a constructor/fallback/receive, and
+        // not a modifier-stage `$body`) is the target of an internal function
+        // pointer, so it carries an `id` — the slang node id, matching solc. This
+        // includes free and library functions, which are emitted under a node-id
+        // symbol override but are still referenceable (`p(libFn)`); only modifier
+        // bodies (`BodyKind::ModifierBody`) and synthetic dispatchers are excluded.
+        let function_id = (body_kind == BodyKind::Function && mlir_kind.is_none()).then(|| {
             i64::try_from(usize::from(function.node_id()))
                 .expect("a function node id fits in i64")
         });
