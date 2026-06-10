@@ -230,60 +230,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 Ok((Some(value), block))
             }
             Expression::Identifier(identifier) => match identifier.resolve_to_definition() {
-                Some(Definition::StateVariable(state_variable)) => {
-                    // A `constant` state variable holds no storage; reading it
-                    // inlines its compile-time initializer, exactly as a
-                    // file-level `constant` (the `Definition::Constant` arm) does.
-                    if matches!(
-                        state_variable.mutability(),
-                        StateVariableMutability::Constant
-                    ) {
-                        let initializer = state_variable
-                            .value()
-                            .expect("a constant state variable has an initializer");
-                        return self.emit(&initializer, block);
-                    }
-                    let slot = self
-                        .storage_layout
-                        .get(&state_variable.node_id())
-                        .unwrap_or_else(|| {
-                            unimplemented!(
-                                "unregistered state variable {:?}",
-                                state_variable.node_id()
-                            )
-                        });
-                    let declared_type = state_variable
-                        .get_type()
-                        .expect("slang types every state variable");
-                    let element_type = TypeConversion::resolve_slang_type(
-                        &declared_type,
-                        None,
-                        &self.state.builder,
-                    );
-                    // A value-typed state variable reads through the shared
-                    // storage-load helper. A reference-typed one evaluates to its
-                    // storage reference, whose address type is the reference
-                    // itself — the single `address_type` rule, shared with the
-                    // initializer path.
-                    let value = if declared_type.is_reference_type() {
-                        let address_type = Self::address_type(
-                            &self.state.builder,
-                            element_type,
-                            slot.location,
-                            &declared_type,
-                        );
-                        let address =
-                            self.state
-                                .builder
-                                .emit_sol_addr_of(&slot.name, address_type, &block);
-                        self.state
-                            .builder
-                            .emit_sol_load(address, element_type, &block)?
-                    } else {
-                        self.emit_storage_load(slot, element_type, &block)?
-                    };
-                    Ok((Some(value), block))
-                }
+                Some(Definition::StateVariable(state_variable)) => self
+                    .emit_state_variable_read(&state_variable, block)
+                    .map(|(value, block)| (Some(value), block)),
                 Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
                     let (pointer, element_type) =
                         self.environment.variable_with_type(definition.node_id());
@@ -462,6 +411,38 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .emit_array_literal(array_expression, block)
                 .map(|(value, block)| (Some(value), block)),
             Expression::MemberAccessExpression(access) => {
+                // A namespace-qualified state-variable / constant read — `C.x`,
+                // `L.CONST`, `M.a` — reads the named member exactly like the bare
+                // identifier would, disambiguating from a shadowing local. The
+                // operand must be a namespace name (a contract / library / import
+                // alias); `this.x` keeps the external-getter path since its
+                // operand is the `this` keyword, not an identifier.
+                if let Expression::Identifier(operand) = access.operand()
+                    && matches!(
+                        operand.resolve_to_definition(),
+                        Some(
+                            Definition::Contract(_)
+                                | Definition::Library(_)
+                                | Definition::Import(_)
+                                | Definition::ImportedSymbol(_)
+                        )
+                    )
+                {
+                    match access.member().resolve_to_definition() {
+                        Some(Definition::StateVariable(state_variable)) => {
+                            return self
+                                .emit_state_variable_read(&state_variable, block)
+                                .map(|(value, block)| (Some(value), block));
+                        }
+                        Some(Definition::Constant(constant)) => {
+                            let initializer = constant
+                                .value()
+                                .expect("a Solidity constant has an initializer");
+                            return self.emit(&initializer, block);
+                        }
+                        _ => {}
+                    }
+                }
                 // A struct-typed base is a field read (`s.field`); anything else
                 // (e.g. `msg.sender`, `addr.balance`) is a built-in member access.
                 if matches!(access.operand().get_type(), Some(SlangType::Struct(_))) {
@@ -581,6 +562,59 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .state
             .builder
             .emit_sol_func_constant(&mlir_name, func_ref_type, &block);
+        Ok((value, block))
+    }
+
+    /// Reads a contract state variable's value: a `constant` inlines its
+    /// compile-time initializer (exactly as a file-level `constant`), otherwise
+    /// the storage slot is loaded. A value-typed slot reads through the shared
+    /// storage-load helper; a reference-typed one evaluates to its storage
+    /// reference, whose address type is the reference itself (the single
+    /// `address_type` rule). Shared by a bare identifier reference and a
+    /// namespace-qualified `C.stateVar` / `L.CONST` access (the latter
+    /// disambiguating from a shadowing local).
+    fn emit_state_variable_read(
+        &self,
+        state_variable: &ast::StateVariableDefinition,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+        if matches!(
+            state_variable.mutability(),
+            StateVariableMutability::Constant
+        ) {
+            let initializer = state_variable
+                .value()
+                .expect("a constant state variable has an initializer");
+            return self.emit_value(&initializer, block);
+        }
+        let slot = self
+            .storage_layout
+            .get(&state_variable.node_id())
+            .unwrap_or_else(|| {
+                unimplemented!("unregistered state variable {:?}", state_variable.node_id())
+            });
+        let declared_type = state_variable
+            .get_type()
+            .expect("slang types every state variable");
+        let element_type =
+            TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
+        let value = if declared_type.is_reference_type() {
+            let address_type = Self::address_type(
+                &self.state.builder,
+                element_type,
+                slot.location,
+                &declared_type,
+            );
+            let address = self
+                .state
+                .builder
+                .emit_sol_addr_of(&slot.name, address_type, &block);
+            self.state
+                .builder
+                .emit_sol_load(address, element_type, &block)?
+        } else {
+            self.emit_storage_load(slot, element_type, &block)?
+        };
         Ok((value, block))
     }
 

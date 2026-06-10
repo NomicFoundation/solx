@@ -119,8 +119,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // contract's module below, where they lower as ordinary internal
         // functions. (No `super`/library roots yet — those clusters extend the
         // `extra_roots` walk and add the duplicate-symbol filtering.)
-        let mut reached_free_functions =
-            FreeCallCollector::reachable_free_functions(contract, free_functions, &shadowed_functions);
+        let mut reached_free_functions = FreeCallCollector::reachable_free_functions(
+            contract,
+            free_functions,
+            &shadowed_functions,
+        );
 
         // Out-of-band function sources the reachability walk does not reach by
         // name are appended through one growing `seen` set, so each dedup is

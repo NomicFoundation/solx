@@ -511,6 +511,20 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             Some(Definition::StateVariable(_)) => {
                 if is_this {
                     MemberCallKind::SelfGetter
+                } else if matches!(
+                    &operand,
+                    Expression::Identifier(identifier)
+                        if matches!(
+                            identifier.resolve_to_definition(),
+                            Some(Definition::Contract(_))
+                        )
+                ) && matches!(access.get_type(), Some(SlangType::Function(_)))
+                {
+                    // `C.x(args)` where `x` is a function-pointer state variable:
+                    // read the pointer via the namespace-qualified state-variable
+                    // read, then call through it indirectly — not an external
+                    // getter (the operand is a contract name, not an instance).
+                    MemberCallKind::FunctionPointer
                 } else {
                     MemberCallKind::ExternalGetter
                 }
@@ -649,12 +663,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     parameter_types,
                     block,
                 )?;
-                let results = self.expression_emitter.state.builder.emit_sol_call_results(
-                    mlir_name,
-                    &argument_values,
-                    return_types,
-                    &current_block,
-                )?;
+                let results = self
+                    .expression_emitter
+                    .state
+                    .builder
+                    .emit_sol_call_results(
+                        mlir_name,
+                        &argument_values,
+                        return_types,
+                        &current_block,
+                    )?;
                 Ok((results, current_block))
             }
             MemberCallKind::FunctionPointer => {
