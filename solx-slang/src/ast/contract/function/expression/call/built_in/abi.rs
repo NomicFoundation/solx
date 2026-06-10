@@ -259,7 +259,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let payload_expression = arguments
             .iter()
             .next()
@@ -267,25 +267,41 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let (payload_value, block) = self
             .expression_emitter
             .emit_value(&payload_expression, block)?;
+        let result_types = self.abi_decode_result_types(call);
+        let builder = &self.expression_emitter.state.builder;
+        let operation = block.append_operation(
+            DecodeOperation::builder(builder.context, builder.unknown_location)
+                .addr(payload_value)
+                .outs(&result_types)
+                .build()
+                .into(),
+        );
+        let values = (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index)
+                    .expect("sol.decode yields one result per requested type")
+                    .into()
+            })
+            .collect();
+        Ok((values, block))
+    }
+
+    /// The MLIR result types of an `abi.decode` call — one per requested type.
+    /// `abi.decode(data, T)` yields one; `abi.decode(data, (A, B, …))` yields
+    /// one per tuple element. Resolved from the call's binder-assigned type.
+    fn abi_decode_result_types(&self, call: &FunctionCallExpression) -> Vec<Type<'context>> {
+        let builder = &self.expression_emitter.state.builder;
         let return_slang_type = call
             .get_type()
             .expect("abi.decode call is typed by the binder");
-        if matches!(return_slang_type, SlangType::Tuple(_)) {
-            unimplemented!("abi.decode returning multiple values is not yet supported");
+        match return_slang_type {
+            SlangType::Tuple(tuple) => tuple
+                .types()
+                .iter()
+                .map(|slang_type| TypeConversion::resolve_slang_type(slang_type, None, builder))
+                .collect(),
+            other => vec![TypeConversion::resolve_slang_type(&other, None, builder)],
         }
-        let builder = &self.expression_emitter.state.builder;
-        let result_type = TypeConversion::resolve_slang_type(&return_slang_type, None, builder);
-        let value = block
-            .append_operation(
-                DecodeOperation::builder(builder.context, builder.unknown_location)
-                    .addr(payload_value)
-                    .outs(&[result_type])
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("abi.decode single-result always produces one value")
-            .into();
-        Ok((value, block))
     }
 }
