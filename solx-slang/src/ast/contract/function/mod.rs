@@ -15,6 +15,7 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -412,9 +413,18 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
+        // A fixed-size array / struct named return is malloc-backed only when it
+        // lives in `memory`; a `storage` reference return (`returns (S storage)`,
+        // `returns (T[n] storage)`) is a slot pointer assigned in the body, not a
+        // buffer — mallocing it would feed a `Storage` aggregate into genMemAlloc.
+        let aggregate_location = match slang_type {
+            Some(SlangType::FixedSizeArray(array)) => Some(array.location()),
+            Some(SlangType::Struct(struct_type)) => Some(struct_type.location()),
+            _ => None,
+        };
         if matches!(
-            slang_type,
-            Some(SlangType::FixedSizeArray(_) | SlangType::Struct(_))
+            aggregate_location,
+            Some(slang_solidity_v2::ast::DataLocation::Memory)
         ) {
             let pointer = builder.emit_sol_alloca(return_type, block);
             let zero = builder.emit_sol_malloc_zeroed(return_type, block);
@@ -460,7 +470,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             builder.emit_sol_store(zero, pointer, block);
             pointer
         } else {
-            builder.emit_zero_initialized_alloca(return_type, block)
+            // Integers/bools get a zeroed slot; any other type reaching here is a
+            // reference (a `storage`/`calldata` aggregate, a mapping) that the
+            // body binds before reading, so a bare slot suffices.
+            let pointer = builder.emit_sol_alloca(return_type, block);
+            if IntegerType::try_from(return_type).is_ok() {
+                let zero = builder.emit_sol_constant(0, return_type, block);
+                builder.emit_sol_store(zero, pointer, block);
+            }
+            pointer
         }
     }
 
