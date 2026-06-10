@@ -309,15 +309,22 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             (values, current)
         } else if self.return_types.len() > 1 {
-            // `return f()` where `f` yields a tuple: solc emits one `sol.call`
-            // with N results, then `sol.return` over them. A multi-return
-            // function's only non-tuple-literal return expression is such a call,
-            // so expand its full result list rather than taking the first value.
-            let Expression::FunctionCallExpression(call) = &expression else {
-                unimplemented!("multi-value return of a non-call expression is not supported");
-            };
-            let call_emitter = CallEmitter::new(&emitter);
-            call_emitter.emit_function_call_results(call, block)?
+            // A single expression that yields multiple values is either a
+            // tuple-returning call (`return f();`), where solc emits one
+            // `sol.call` with N results, or a conditional with tuple branches
+            // (`return cond ? (1, 2) : (3, 4);`). Expand its full result list so
+            // the `sol.return` arity matches rather than taking the first value.
+            match &expression {
+                Expression::FunctionCallExpression(call) => {
+                    CallEmitter::new(&emitter).emit_function_call_results(call, block)?
+                }
+                Expression::ConditionalExpression(conditional) => {
+                    emitter.emit_conditional_tuple_values(conditional, block)?
+                }
+                _ => {
+                    unimplemented!("multi-value return of a non-call expression is not supported")
+                }
+            }
         } else {
             let (value, block) = emitter.emit_value(&expression, block)?;
             (vec![value], block)
