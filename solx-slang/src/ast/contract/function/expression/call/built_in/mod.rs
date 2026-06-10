@@ -235,6 +235,30 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let (value, block) = self.emit_enum_variant(access, ordinal, block);
             return Ok((Some(value), block));
         }
+        // `addr.transfer` / `addr.send` / `addr.call` (and `delegatecall` /
+        // `staticcall`) referenced WITHOUT a call — e.g. a discarded
+        // `payable(this).transfer;` statement — is a member reference, not the
+        // action itself (which the call dispatch handles). Evaluate the operand
+        // for its side effects and yield a placeholder value.
+        if arguments.is_none()
+            && matches!(
+                access.member().resolve_to_built_in(),
+                Some(
+                    BuiltIn::AddressTransfer
+                        | BuiltIn::AddressSend
+                        | BuiltIn::AddressCall
+                        | BuiltIn::AddressDelegatecall
+                        | BuiltIn::AddressStaticcall
+                )
+            )
+        {
+            let (_operand, block) = self
+                .expression_emitter
+                .emit_value(&access.operand(), block)?;
+            let builder = &self.expression_emitter.state.builder;
+            let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            return Ok((Some(placeholder), block));
+        }
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressBalance) => self.emit_address_balance(access, block),
             Some(BuiltIn::AddressCodehash) => self.emit_address_codehash(access, block),
