@@ -171,6 +171,7 @@ impl<'context> Builder<'context> {
         selector: Option<u32>,
         state_mutability: StateMutability,
         kind: Option<crate::FunctionKind>,
+        id: Option<i64>,
         block: &BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
         let function_type = FunctionType::new(self.context, parameter_types, result_types);
@@ -212,6 +213,17 @@ impl<'context> Builder<'context> {
             builder = builder.selector(IntegerAttribute::new(
                 IntegerType::new(self.context, TypeFactory::SELECTOR_BIT_WIDTH).into(),
                 selector_value as i64,
+            ));
+        }
+
+        // An internal function pointer (`sol.func_constant`) lowers in SolToYul
+        // to the i256 constant `id`, and the `sol.icall` dispatch switches over
+        // every same-signature function's `id`; both read this attribute, so a
+        // referenceable function must carry a unique `id` (its slang node id).
+        if let Some(function_id) = id {
+            builder = builder.id(IntegerAttribute::new(
+                IntegerType::new(self.context, 64).into(),
+                function_id,
             ));
         }
 

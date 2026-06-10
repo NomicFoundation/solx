@@ -250,6 +250,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             None,
             StateMutability::NonPayable,
             None,
+            None,
             contract_body,
         );
         let region = entry

@@ -138,6 +138,18 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             mlir_kind,
         } = self.resolve_inner_signature(function, symbol_override, body_kind);
 
+        // Only the canonical emission of a regular function (no symbol override,
+        // a real function body, not a constructor/fallback/receive) is the target
+        // of an internal function pointer, so only it carries an `id` — the slang
+        // node id, matching solc. Modifier stages and synthetic dispatchers do not.
+        let function_id = (symbol_override.is_none()
+            && body_kind == BodyKind::Function
+            && mlir_kind.is_none())
+        .then(|| {
+            i64::try_from(usize::from(function.node_id()))
+                .expect("a function node id fits in i64")
+        });
+
         let function_entry_block = self.state.builder.emit_sol_func(
             &mlir_name,
             &mlir_parameter_types,
@@ -145,6 +157,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             selector,
             state_mutability,
             mlir_kind,
+            function_id,
             contract_body,
         );
 
@@ -458,6 +471,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             None,
             StateMutability::NonPayable,
             Some(solx_mlir::FunctionKind::Constructor),
+            None,
             contract_body,
         );
         let environment = Environment::new();

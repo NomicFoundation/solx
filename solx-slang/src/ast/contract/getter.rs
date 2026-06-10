@@ -139,6 +139,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             Some(selector),
             StateMutability::View,
             None,
+            None,
             contract_body,
         );
         let storage_ref = builder.emit_sol_addr_of(&slot.name, address_type, &entry);
@@ -209,6 +210,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             &result_types,
             Some(selector),
             StateMutability::View,
+            None,
             None,
             contract_body,
         );
@@ -391,6 +393,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             Some(selector),
             StateMutability::Pure,
             None,
+            None,
             contract_body,
         );
         let constant = builder.emit_constant(&value, element_type, &entry);
@@ -493,6 +496,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     &result_types,
                     Some(selector),
                     StateMutability::View,
+                    None,
                     None,
                     contract_body,
                 );
