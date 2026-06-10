@@ -84,7 +84,34 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let contract_name = contract.name().name();
         self.state.operator_bindings = operator_bindings.map.clone();
 
+        // Re-resolve `super.f(...)` / `Base.f(...)` against the C3 linearisation
+        // (slang resolves them lexically, which is wrong in a diamond). The
+        // redirect drives the call site; the shadowed base overrides reached
+        // through `super` are emitted internal-only under contract-qualified
+        // symbols below, and their bodies are walked by the free / library
+        // collectors so the internals they call also register.
+        let super_dispatch = super_call::SuperDispatch::build_super_dispatch(contract);
+        self.state.super_redirect = super_dispatch.redirect.clone();
+        self.state.virtual_redirect = super_dispatch.virtual_redirect.clone();
+        let shadowed_functions: Vec<FunctionDefinition> = super_dispatch
+            .shadowed
+            .iter()
+            .map(|(_, function)| function.clone())
+            .collect();
+
         self.pre_register_functions(contract);
+        // Register each shadowed base override under its contract-qualified
+        // symbol so a `super`/`Base` call resolves to it by node id.
+        for (symbol, function) in &super_dispatch.shadowed {
+            let (parameter_types, return_types) =
+                TypeConversion::resolve_function_types(function, &self.state.builder);
+            self.state.register_function_signature(
+                function.node_id(),
+                symbol.clone(),
+                parameter_types,
+                return_types,
+            );
+        }
 
         // Free functions (`f(...)` declared at file level) reachable from this
         // contract, transitively. They are not in the linearised function set,
@@ -93,7 +120,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // functions. (No `super`/library roots yet — those clusters extend the
         // `extra_roots` walk and add the duplicate-symbol filtering.)
         let mut reached_free_functions =
-            FreeCallCollector::reachable_free_functions(contract, free_functions, &[]);
+            FreeCallCollector::reachable_free_functions(contract, free_functions, &shadowed_functions);
 
         // Out-of-band function sources the reachability walk does not reach by
         // name are appended through one growing `seen` set, so each dedup is
@@ -117,8 +144,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // using-for `x.f(...)` are not in the linearised set either; append the
         // not-already-reached ones so they register and emit as ordinary internal
         // `sol.func`s (a library call resolves them by node id).
-        let library_functions =
-            LibraryCallCollector::reachable_library_functions(contract, free_functions, &[]);
+        let library_functions = LibraryCallCollector::reachable_library_functions(
+            contract,
+            free_functions,
+            &shadowed_functions,
+        );
         Self::extend_unreached(&mut reached_free_functions, &mut seen, library_functions);
 
         self.register_function_signatures(&reached_free_functions);
@@ -171,6 +201,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, Some(contract), &storage_layout)
                 .emit_sol(&function, &contract_body)?;
+            self.state.current_contract_type = None;
+        }
+
+        // Emit shadowed base overrides reached through `super` under their
+        // contract-qualified symbols (internal-only, no selector).
+        for (symbol, function) in &super_dispatch.shadowed {
+            self.state.current_contract_type = Some(contract_type);
+            FunctionEmitter::new(self.state, Some(contract), &storage_layout)
+                .emit_sol_with_symbol(function, symbol, &contract_body)?;
             self.state.current_contract_type = None;
         }
 

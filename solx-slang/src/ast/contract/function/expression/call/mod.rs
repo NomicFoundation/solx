@@ -628,7 +628,35 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     block,
                 )
             }
-            MemberCallKind::Super => unimplemented!("super call"),
+            MemberCallKind::Super => {
+                // `super.f(args)` / `Base.f(args)`: the C3-resolved target is
+                // recorded in `super_redirect` and emitted as an internal
+                // `sol.func` (a shadowed base override under a contract-qualified
+                // symbol, or the most-derived version under its canonical one).
+                // Resolve by that target's node id and emit an internal call.
+                let target_id = self
+                    .expression_emitter
+                    .state
+                    .super_redirect
+                    .get(&access.node_id())
+                    .copied()
+                    .expect("a super/base call has a recorded redirect target");
+                let argument_expressions: Vec<Expression> = arguments.iter().collect();
+                let (mlir_name, parameter_types, return_types) =
+                    self.expression_emitter.state.resolve_function(target_id)?;
+                let (argument_values, current_block) = self.emit_coerced_argument_expressions(
+                    &argument_expressions,
+                    parameter_types,
+                    block,
+                )?;
+                let results = self.expression_emitter.state.builder.emit_sol_call_results(
+                    mlir_name,
+                    &argument_values,
+                    return_types,
+                    &current_block,
+                )?;
+                Ok((results, current_block))
+            }
             MemberCallKind::FunctionPointer => {
                 // `s.f(args)` through a function-pointer struct field: evaluate
                 // the member access (gep + load of the `func_ref`) as the callee
