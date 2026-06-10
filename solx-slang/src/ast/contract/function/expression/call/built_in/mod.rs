@@ -285,15 +285,39 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
                 Ok((Some(placeholder), block))
             }
-            // A member that resolves to an externally-visible function but is not
-            // called (`this.f`, `instance.f` as a value) is an external function
-            // pointer, not an EVM-context global.
+            // A member that resolves to a function used as a value (not called) is
+            // a function pointer: an externally-visible function with a selector
+            // (`this.f`, `instance.f`) is an external pointer, while a
+            // namespace-qualified internal function with none (`C.f`, `(L.f)`) is
+            // an internal pointer (`sol.func_constant`), like a bare `f`.
             resolved => {
                 if let Some(Definition::Function(function_definition)) =
                     access.member().resolve_to_definition()
-                    && function_definition.compute_selector().is_some()
                 {
-                    self.emit_external_function_pointer(access, &function_definition, block)
+                    if function_definition.compute_selector().is_some() {
+                        self.emit_external_function_pointer(access, &function_definition, block)
+                    } else {
+                        // The literal target lowers (no virtual redirect): an
+                        // explicit `Base.f` names Base's own implementation, not
+                        // the most-derived override a bare `f` would bind.
+                        let (mlir_name, parameter_types, return_types) = self
+                            .expression_emitter
+                            .state
+                            .resolve_function(function_definition.node_id())?;
+                        let func_ref_type = self
+                            .expression_emitter
+                            .state
+                            .builder
+                            .types
+                            .func_ref(parameter_types, return_types);
+                        let mlir_name = mlir_name.to_owned();
+                        let value = self
+                            .expression_emitter
+                            .state
+                            .builder
+                            .emit_sol_func_constant(&mlir_name, func_ref_type, &block);
+                        Ok((Some(value), block))
+                    }
                 } else {
                     self.emit_environment_global(resolved, access, block)
                 }
