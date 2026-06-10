@@ -257,6 +257,32 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     (AssignmentTarget::Pointer(address, element_type), block)
                 }
             }
+            Expression::FunctionCallExpression(call)
+                if matches!(
+                    &call.operand(),
+                    Expression::MemberAccessExpression(access)
+                        if matches!(
+                            access.member().resolve_to_built_in(),
+                            Some(ast::BuiltIn::ArrayPush)
+                        )
+                ) =>
+            {
+                // `arr.push() = v` — `push` appends a default element and returns a
+                // reference to it; resolve that reference as the lvalue so the RHS
+                // is stored into the freshly-appended slot (like `arr.push(v)`).
+                let Expression::MemberAccessExpression(access) = call.operand() else {
+                    unreachable!("guarded by the match arm");
+                };
+                let (new_slot, element_type, block) =
+                    CallEmitter::new(self).emit_push_slot(&access, block)?;
+                if new_slot.r#type() == element_type {
+                    // A reference-typed element is addressed by reference, so the
+                    // RHS reference's contents are copied into it.
+                    (AssignmentTarget::ReferenceCopy(new_slot), block)
+                } else {
+                    (AssignmentTarget::Pointer(new_slot, element_type), block)
+                }
+            }
             _ => unimplemented!(
                 "assignment target {:?} is not yet supported",
                 std::mem::discriminant(target_expression)
