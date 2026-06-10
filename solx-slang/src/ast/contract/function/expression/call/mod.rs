@@ -81,7 +81,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
 
         match self.classify_call(call, positional_arguments) {
-            CallKind::TypeConversion => {
+            CallKind::TypeConversion | CallKind::RefFieldStructAsConversion => {
+                // Both lower a single argument cast to the call's own type: a
+                // genuine `T(x)` conversion and a reference-field struct `S(ref)`
+                // that slang reports as a conversion and the backend cannot yet
+                // construct (its `sol.copy` into a struct destination is NYI).
                 let first = positional_arguments
                     .iter()
                     .next()
@@ -176,9 +180,6 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             CallKind::ArrayTypeConversion => {
                 unimplemented!("call dispatch: array type conversion")
-            }
-            CallKind::RefFieldStructAsConversion => {
-                unimplemented!("call dispatch: reference-field struct as conversion")
             }
             CallKind::IndirectPointer => {
                 let callee = call.operand();
@@ -346,6 +347,31 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let callee = call.operand();
 
         if call.is_type_conversion() && positional_arguments.len() == 1 {
+            // A single-argument struct constructor `S(x)` is reported as a type
+            // conversion by slang (the struct name types as a `UserMetaType`),
+            // yet it must build a struct, not cast its argument to the struct
+            // type (`sol.cast` is integer-only and rejects a struct result).
+            // Multi-field constructors carry more than one argument and never
+            // reach here. When the struct's sole field is a reference type the
+            // construction would `sol.copy` an aggregate into a struct
+            // destination the backend cannot yet lower, so it stays on the
+            // conversion path as `RefFieldStructAsConversion`.
+            if let Expression::Identifier(identifier) = &callee
+                && let Some(Definition::Struct(struct_definition)) =
+                    identifier.resolve_to_definition()
+            {
+                let first_field_is_value = struct_definition
+                    .members()
+                    .iter()
+                    .next()
+                    .and_then(|member| member.get_type())
+                    .is_some_and(|field_type| !field_type.is_reference_type());
+                return if first_field_is_value {
+                    CallKind::StructConstructor(struct_definition)
+                } else {
+                    CallKind::RefFieldStructAsConversion
+                };
+            }
             return CallKind::TypeConversion;
         }
 
