@@ -8,7 +8,6 @@ use melior::ir::Value;
 
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
-use slang_solidity_v2::ast::Expression;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::storage_layout::StorageSlot;
@@ -66,9 +65,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let Some(initializer) = state_variable.value() else {
                 continue;
             };
-            if matches!(initializer, Expression::ArrayExpression(_)) {
-                unimplemented!("array-literal state variable initializers are not yet supported");
-            }
             let declared_type = state_variable
                 .get_type()
                 .expect("slang types every state variable");
