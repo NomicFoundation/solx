@@ -81,9 +81,13 @@ impl<'context> TypeConversion<'context> {
                 LiteralKind::HexString { bytes } => builder
                     .types
                     .fixed_bytes(bytes.try_into().expect("hex string length fits in u32")),
-                LiteralKind::Rational { .. } => unimplemented!(
-                    "MLIR type resolution is not yet implemented for rational literals"
-                ),
+                LiteralKind::Rational { .. } => {
+                    // Sentinel: a rational appears only as a compile-time
+                    // intermediate that constant folding consumes (see the folding
+                    // gate in `ExpressionEmitter::emit`); a rational that survived
+                    // to runtime would fail downstream, not at type resolution.
+                    builder.types.ui256
+                }
             },
             SlangType::String(string_type) => {
                 let location = solx_utils::DataLocation::from_slang(

@@ -160,6 +160,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         expression: &Expression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        // Constant folding: slang assigns a `Literal` type carrying the exact
+        // computed value to compile-time-constant arithmetic/bitwise expressions.
+        // Emitting that value directly matches solc's exact rational arithmetic
+        // (`1/2*2 == 1`, `2**256-1` without 256-bit wraparound) and is the only
+        // way to lower a rational intermediate, which has no runtime type.
+        if Self::is_foldable_constant(expression) {
+            let value = self.emit_folded_constant(expression, &block);
+            return Ok((Some(value), block));
+        }
         match expression {
             Expression::DecimalNumberExpression(decimal_number) => {
                 let value = decimal_number
@@ -477,6 +486,60 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 unimplemented!("expression lowering: bare type/keyword")
             }
         }
+    }
+
+    /// Whether `expression` is a compile-time-constant arithmetic/bitwise
+    /// expression that slang has folded to an exact integer — the case
+    /// [`Self::emit`] lowers straight to a constant instead of runtime ops.
+    /// Only computed expressions qualify (a bare literal keeps its own arm);
+    /// a non-integer rational is excluded, having no integer constant to emit.
+    fn is_foldable_constant(expression: &Expression) -> bool {
+        use slang_solidity_v2::ast::LiteralKind;
+        let is_computed = matches!(
+            expression,
+            Expression::AdditiveExpression(_)
+                | Expression::MultiplicativeExpression(_)
+                | Expression::ExponentiationExpression(_)
+                | Expression::ShiftExpression(_)
+                | Expression::BitwiseAndExpression(_)
+                | Expression::BitwiseOrExpression(_)
+                | Expression::BitwiseXorExpression(_)
+                | Expression::PrefixExpression(_)
+        );
+        if !is_computed {
+            return false;
+        }
+        let Some(SlangType::Literal(literal_type)) = expression.get_type() else {
+            return false;
+        };
+        match literal_type.kind() {
+            LiteralKind::Integer { .. } | LiteralKind::HexInteger { .. } => true,
+            LiteralKind::Rational { value } => value.is_integer(),
+            _ => false,
+        }
+    }
+
+    /// Emits the folded integer value of a constant expression that
+    /// [`Self::is_foldable_constant`] has accepted (its invariants are relied on
+    /// here: a `Literal` type whose kind is an integer or integer-valued rational).
+    fn emit_folded_constant(
+        &self,
+        expression: &Expression,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        use slang_solidity_v2::ast::LiteralKind;
+        let Some(SlangType::Literal(literal_type)) = expression.get_type() else {
+            unreachable!("is_foldable_constant guarantees a literal type");
+        };
+        let value = match literal_type.kind() {
+            LiteralKind::Integer { value } | LiteralKind::HexInteger { value, .. } => value,
+            LiteralKind::Rational { value } => value.to_integer(),
+            _ => unreachable!("is_foldable_constant guarantees a numeric literal"),
+        };
+        let result_type = self
+            .resolve_slang_type(expression.get_type())
+            .expect("binder types every folded constant expression");
+        self.state.builder.emit_constant(&value, result_type, block)
     }
 
     /// Emits an internal function used as a value (`g` in `f = g;`) as a
