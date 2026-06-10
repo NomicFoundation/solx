@@ -33,6 +33,7 @@ use solx_utils::DataLocation;
 use self::call_kind::CallKind;
 use self::member_call_kind::MemberCallKind;
 use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::expression_ext::ExpressionExt;
 use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers function call and member access expressions to MLIR.
@@ -74,7 +75,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // A `recv.f{value: v}(args)` / `new C{value, salt}(args)` callee is a
         // `CallOptionsExpression`; capture the options and dispatch the inner
         // callee, taking the single result.
-        if let Expression::CallOptionsExpression(call_options) = call.operand() {
+        if let Expression::CallOptionsExpression(call_options) = call.operand().unwrap_parens() {
             let (results, block) =
                 self.emit_call_with_options(call, &call_options, positional_arguments, block)?;
             return Ok((results.into_iter().next(), block));
@@ -182,7 +183,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 unimplemented!("call dispatch: array type conversion")
             }
             CallKind::IndirectPointer => {
-                let callee = call.operand();
+                let callee = call.operand().unwrap_parens();
                 let function_slang_type = callee
                     .get_type()
                     .expect("slang types every indirect-call callee");
@@ -196,7 +197,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 Ok((results.into_iter().next(), block))
             }
             CallKind::Member(member_kind) => {
-                let Expression::MemberAccessExpression(access) = call.operand() else {
+                let Expression::MemberAccessExpression(access) = call.operand().unwrap_parens()
+                else {
                     unreachable!("a member call classifies only a member-access callee");
                 };
                 // Single-result position takes the first decoded value; the full
@@ -344,7 +346,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         call: &FunctionCallExpression,
         positional_arguments: &PositionalArguments,
     ) -> CallKind {
-        let callee = call.operand();
+        let callee = call.operand().unwrap_parens();
 
         if call.is_type_conversion() && positional_arguments.len() == 1 {
             // A single-argument struct constructor `S(x)` is reported as a type
@@ -702,7 +704,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
         // A `recv.f{value: v}(args)` / `new C{value, salt}(args)` callee in
         // result-binding position dispatches through the same options handler.
-        if let Expression::CallOptionsExpression(call_options) = call.operand() {
+        if let Expression::CallOptionsExpression(call_options) = call.operand().unwrap_parens() {
             return self.emit_call_with_options(call, &call_options, positional_arguments, block);
         }
 
@@ -710,7 +712,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // dispatchers as the single-result path: a bare low-level call (member
         // resolves to a built-in) via `emit_bare_call_results`, any other member
         // via the shared `emit_member_call_results`.
-        if let Expression::MemberAccessExpression(access) = call.operand() {
+        if let Expression::MemberAccessExpression(access) = call.operand().unwrap_parens() {
             if let Some(built_in) = access.member().resolve_to_built_in() {
                 return match built_in {
                     kind @ (BuiltIn::AddressCall
@@ -735,7 +737,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             );
         }
 
-        let Expression::Identifier(callee_identifier) = call.operand() else {
+        let Expression::Identifier(callee_identifier) = call.operand().unwrap_parens() else {
             unimplemented!("multi-result calls only support direct named or member callees");
         };
         let Some(Definition::Function(function_definition)) =
@@ -859,7 +861,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         named_arguments: &NamedArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let Expression::Identifier(callee_identifier) = call.operand() else {
+        let Expression::Identifier(callee_identifier) = call.operand().unwrap_parens() else {
             unimplemented!(
                 "named arguments are only supported on a direct function or struct call"
             );
@@ -903,7 +905,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         named_arguments: &NamedArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let Expression::Identifier(callee_identifier) = call.operand() else {
+        let Expression::Identifier(callee_identifier) = call.operand().unwrap_parens() else {
             unimplemented!("named multi-result calls require a direct function callee");
         };
         let Some(Definition::Function(function_definition)) =
