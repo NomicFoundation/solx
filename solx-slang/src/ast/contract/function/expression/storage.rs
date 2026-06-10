@@ -7,7 +7,6 @@ use melior::ir::Type;
 use melior::ir::Value;
 
 use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::ContractMember;
 
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::storage_layout::StorageSlot;
@@ -55,10 +54,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         contract: &ContractDefinition,
         mut block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        for member in contract.members().iter() {
-            let ContractMember::StateVariableDefinition(state_variable) = member else {
-                continue;
-            };
+        // Run initializers for the whole C3-linearised hierarchy (inherited +
+        // own) in linearisation order, so a derived contract's construction
+        // executes its base contracts' state-variable initializers — including
+        // their side effects (`uint y = f();`) — exactly as solc does.
+        for state_variable in contract.compute_linearised_state_variables() {
             let Some(slot) = self.storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };
