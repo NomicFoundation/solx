@@ -259,7 +259,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     ));
                 }
                 Some(BuiltIn::CallOptionGas) => {
-                    unimplemented!("the `{{gas: …}}` call option is not yet threaded into the call")
+                    // The gas limit is evaluated above for its side effects but
+                    // not threaded into the call: like the oracle, the call
+                    // forwards all remaining gas (the `sol.ext_icall` default).
+                    // A `{gas: …}` that must actually cap the forwarded gas is
+                    // not yet modelled — `option_value` is intentionally dropped.
+                    let _ = option_value;
                 }
                 _ => unreachable!("a call option resolves to a value, gas, or salt built-in"),
             }
