@@ -57,11 +57,19 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             &self.state.builder,
             &block,
         );
-        let rhs = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
-            rhs,
-            &self.state.builder,
-            &block,
-        );
+        // `**` keeps its exponent its own (unsigned) type: `sol.exp`/`sol.cexp`
+        // take an unsigned exponent of any width alongside a possibly-signed
+        // base, so the exponent must NOT be coerced to the (signed) result type
+        // the way a symmetric operator's operands are. (solc: `cexp si256, ui8`.)
+        let rhs = if matches!(operator, Operator::Exponentiation) {
+            rhs
+        } else {
+            TypeConversion::from_target_type(result_type, &self.state.builder).emit(
+                rhs,
+                &self.state.builder,
+                &block,
+            )
+        };
         let value = block
             .append_operation(operator.emit_sol_binary_operation(
                 self.arithmetic_mode,
