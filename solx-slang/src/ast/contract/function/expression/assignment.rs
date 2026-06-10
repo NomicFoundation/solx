@@ -164,6 +164,50 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Ok(block)
     }
 
+    /// Resolves a state-variable lvalue — bare `x` or namespace-qualified `C.x`
+    /// (e.g. a function-pointer state variable) — to its assignment target.
+    ///
+    /// Reference-typed storage (fixed/dynamic arrays, `string`, `bytes`,
+    /// structs) is assigned by copying the RHS reference's contents into the
+    /// slot via `sol.copy` (a [`ReferenceCopy`](AssignmentTarget::ReferenceCopy)),
+    /// just like a reference-typed inline initializer; a whole mapping is not
+    /// assignable. Value-typed storage stores the coerced scalar directly.
+    fn resolve_state_variable_target(
+        &self,
+        state_variable: &ast::StateVariableDefinition,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(
+        AssignmentTarget<'context, 'block>,
+        BlockRef<'context, 'block>,
+    )> {
+        let declared_type = state_variable
+            .get_type()
+            .expect("slang types every state variable");
+        let slot = self
+            .storage_layout
+            .get(&state_variable.node_id())
+            .unwrap_or_else(|| {
+                unimplemented!("unregistered state variable {:?}", state_variable.node_id())
+            })
+            .clone();
+        let element_type =
+            TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
+        if declared_type.is_reference_type() && !matches!(declared_type, ast::Type::Mapping(_)) {
+            let address_type = Self::address_type(
+                &self.state.builder,
+                element_type,
+                slot.location,
+                &declared_type,
+            );
+            let storage_ref = self
+                .state
+                .builder
+                .emit_sol_addr_of(&slot.name, address_type, &block);
+            return Ok((AssignmentTarget::ReferenceCopy(storage_ref), block));
+        }
+        Ok((AssignmentTarget::Storage(slot, element_type), block))
+    }
+
     /// Resolves a single left-hand-side expression to its assignment target.
     fn resolve_assignment_target(
         &self,
@@ -177,48 +221,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::Identifier(identifier) => {
                 let target = match identifier.resolve_to_definition() {
                     Some(Definition::StateVariable(state_variable)) => {
-                        let declared_type = state_variable
-                            .get_type()
-                            .expect("slang types every state variable");
-                        let slot = self
-                            .storage_layout
-                            .get(&state_variable.node_id())
-                            .unwrap_or_else(|| {
-                                unimplemented!(
-                                    "unregistered state variable {:?}",
-                                    state_variable.node_id()
-                                )
-                            })
-                            .clone();
-                        let element_type = TypeConversion::resolve_slang_type(
-                            &declared_type,
-                            None,
-                            &self.state.builder,
-                        );
-                        // Reference-typed storage (fixed/dynamic arrays, `string`,
-                        // `bytes`, structs) is assigned by copying the RHS
-                        // reference's contents into the slot via `sol.copy`, just
-                        // like a reference-typed inline initializer; a whole
-                        // mapping is not assignable. Value-typed storage stores
-                        // the coerced scalar directly.
-                        if declared_type.is_reference_type()
-                            && !matches!(declared_type, ast::Type::Mapping(_))
-                        {
-                            let address_type = Self::address_type(
-                                &self.state.builder,
-                                element_type,
-                                slot.location,
-                                &declared_type,
-                            );
-                            let storage_ref = self.state.builder.emit_sol_addr_of(
-                                &slot.name,
-                                address_type,
-                                &block,
-                            );
-                            AssignmentTarget::ReferenceCopy(storage_ref)
-                        } else {
-                            AssignmentTarget::Storage(slot, element_type)
-                        }
+                        return self.resolve_state_variable_target(&state_variable, block);
                     }
                     Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
                         let (pointer, element_type) =
@@ -246,6 +249,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 }
             }
             Expression::MemberAccessExpression(access) => {
+                // A namespace-qualified state-variable lvalue (`C.x = v`, notably
+                // a function-pointer state variable) is not a struct field;
+                // resolve it to its storage target exactly like the bare `x = v`.
+                // A genuine struct field resolves to a `StructMember`, so it falls
+                // through to the field-address path.
+                if let Some(Definition::StateVariable(state_variable)) =
+                    access.member().resolve_to_definition()
+                {
+                    return self.resolve_state_variable_target(&state_variable, block);
+                }
                 let (address, element_type, block) =
                     self.emit_struct_field_address(access, block)?;
                 if address.r#type() == element_type {
