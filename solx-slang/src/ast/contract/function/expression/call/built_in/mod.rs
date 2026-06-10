@@ -242,6 +242,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let arguments = arguments.expect("abi.encodeWithSignature is a member-access call");
                 self.emit_abi_encode_with_signature(arguments, block)
             }
+            Some(BuiltIn::AbiEncodeCall) => {
+                let arguments = arguments.expect("abi.encodeCall is a member-access call");
+                self.emit_abi_encode_call(arguments, block)
+            }
             Some(BuiltIn::ArrayPop) => self.emit_array_pop(access, block),
             Some(BuiltIn::ArrayPush) => {
                 let arguments = arguments.expect("array push is a member-access call");
