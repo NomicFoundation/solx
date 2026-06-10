@@ -24,8 +24,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         predicate: CmpPredicate,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (lhs, block) = self.emit_value(left, block)?;
-        let (rhs, block) = self.emit_value(right, block)?;
+        let (lhs, rhs, block) = self.emit_binary_operands(left, right, block)?;
         let common_type = if lhs.r#type() == rhs.r#type() {
             lhs.r#type()
         } else {

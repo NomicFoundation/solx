@@ -50,11 +50,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             // the packed element is not separately addressable, so unlike an array
             // push there is no returned slot to store into.
             let (bytes_reference, block) = self.expression_emitter.emit_value(&base, block)?;
-            let (value, block) = self.expression_emitter.emit_value(value_argument, block)?;
+            // `data.push("a")` appends a string-literal byte: materialise it as a
+            // `byte` constant rather than a runtime `sol.string`.
+            let byte_target = self.expression_emitter.state.builder.types.fixed_bytes(1);
+            let (value, block) = self.expression_emitter.emit_value_for_target(
+                value_argument,
+                byte_target,
+                block,
+            )?;
             let builder = &self.expression_emitter.state.builder;
             let byte_value =
-                TypeConversion::from_target_type(builder.types.fixed_bytes(1), builder)
-                    .emit(value, builder, &block);
+                TypeConversion::from_target_type(byte_target, builder).emit(value, builder, &block);
             builder.emit_sol_push_string(bytes_reference, byte_value, &block);
             return Ok((None, block));
         }
@@ -69,7 +75,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let loaded = builder.emit_sol_load(new_slot, element_type, &block)?;
             return Ok((Some(loaded), block));
         };
-        let (value, block) = self.expression_emitter.emit_value(&value_argument, block)?;
+        let (value, block) =
+            self.expression_emitter
+                .emit_value_for_target(&value_argument, element_type, block)?;
         let builder = &self.expression_emitter.state.builder;
         let cast_value =
             TypeConversion::from_target_type(element_type, builder).emit(value, builder, &block);

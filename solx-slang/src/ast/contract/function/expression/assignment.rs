@@ -52,7 +52,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             assign.operator(),
             ast::AssignmentExpressionOperator::Equal(_)
         ) {
-            self.emit_value(&right, block)?
+            // A string literal assigned to a `bytesN` / `byte` value lvalue is a
+            // fixed-bytes constant; emit it toward the target's element type so
+            // it does not become a runtime `sol.string` the store would reject.
+            match &target {
+                AssignmentTarget::Pointer(_, element_type)
+                | AssignmentTarget::Storage(_, element_type) => {
+                    self.emit_value_for_target(&right, *element_type, block)?
+                }
+                AssignmentTarget::ReferenceCopy(_) => self.emit_value(&right, block)?,
+            }
         } else {
             let operator = match assign.operator() {
                 ast::AssignmentExpressionOperator::AmpersandEqual(_) => Operator::BitwiseAnd,

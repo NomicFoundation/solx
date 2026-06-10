@@ -56,7 +56,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (then_block, else_block) = self.state.builder.emit_sol_if(condition_boolean, &block);
 
         let true_expression = conditional.true_expression();
-        let (then_value, then_end) = self.emit_value(&true_expression, then_block)?;
+        let (then_value, then_end) =
+            self.emit_value_for_target(&true_expression, result_type, then_block)?;
         let then_cast = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
             then_value,
             &self.state.builder,
@@ -68,7 +69,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         self.state.builder.emit_sol_yield(&then_end);
 
         let false_expression = conditional.false_expression();
-        let (else_value, else_end) = self.emit_value(&false_expression, else_block)?;
+        let (else_value, else_end) =
+            self.emit_value_for_target(&false_expression, result_type, else_block)?;
         let else_cast = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
             else_value,
             &self.state.builder,
