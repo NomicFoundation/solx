@@ -298,8 +298,7 @@ impl<'context> TypeConversion<'context> {
                 // reinterpreted as the contract type (solc: `ui160` zero ->
                 // `address` -> contract, two `sol.address_cast`s).
                 let zero = builder.emit_sol_constant(0, builder.types.ui160, block);
-                let address =
-                    builder.emit_sol_address_cast(zero, builder.types.sol_address, block);
+                let address = builder.emit_sol_address_cast(zero, builder.types.sol_address, block);
                 builder.emit_sol_address_cast(address, mlir_type, block)
             }
             _ => unreachable!(
