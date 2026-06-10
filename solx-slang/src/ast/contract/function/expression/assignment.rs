@@ -399,6 +399,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 );
                 (values, current)
             }
+            Expression::ConditionalExpression(conditional) => {
+                // `(a, b) = cond ? (x, y) : (z, w)` — the conditional yields one
+                // value per tuple element via the shared tuple-conditional path.
+                let (values, current) = self.emit_conditional_tuple_values(conditional, block)?;
+                assert!(
+                    values.len() == lhs_items.len(),
+                    "tuple assignment arity mismatch: {} LHS slots vs {} conditional values",
+                    lhs_items.len(),
+                    values.len(),
+                );
+                (values, current)
+            }
             _ => unimplemented!(
                 "tuple assignment with this right-hand side shape is not yet supported"
             ),
