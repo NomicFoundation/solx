@@ -256,7 +256,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         if !terminated {
-            self.emit_default_return(&result_types, &return_slots, &current_block);
+            self.emit_default_return(function, &result_types, &return_slots, &current_block);
         }
 
         Ok(mlir_name)
@@ -576,18 +576,86 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// For each return position, loads the current value from the named-return
     /// slot when one was allocated, otherwise materializes a typed zero
     /// constant.
-    fn emit_default_return(
+    fn emit_default_return<'block>(
         &self,
+        function: &FunctionDefinition,
         result_types: &[Type<'context>],
-        return_slots: &[Option<Value<'context, '_>>],
-        block: &BlockRef<'context, '_>,
+        return_slots: &[Option<Value<'context, 'block>>],
+        block: &BlockRef<'context, 'block>,
     ) {
         if block.terminator().is_some() {
             return;
         }
-        self.state
-            .builder
-            .emit_return_from_slots(result_types, return_slots, block);
+        // Named returns load from their slot; an unnamed return (no slot) reached
+        // on this fall-through path materialises its type's own default. The
+        // default must be type-correct, not `emit_sol_constant(0, ty)` — a string
+        // / bytes / aggregate / address / fixed-bytes type is not an integer, so
+        // an integer-attribute zero of that type is an ill-typed op.
+        let returns: Vec<_> = function
+            .returns()
+            .map(|params| params.iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+        let builder = &self.state.builder;
+        let values: Vec<Value<'context, 'block>> = result_types
+            .iter()
+            .enumerate()
+            .map(
+                |(index, &return_type)| match return_slots.get(index).copied().flatten() {
+                    Some(pointer) => builder
+                        .emit_sol_load(pointer, return_type, block)
+                        .expect("a return slot loads with the declared type"),
+                    None => {
+                        let slang_type = returns
+                            .get(index)
+                            .and_then(|parameter| parameter.get_type());
+                        self.default_return_value(slang_type.as_ref(), return_type, block)
+                    }
+                },
+            )
+            .collect();
+        builder.emit_sol_return(&values, block);
+    }
+
+    /// The default value of a return position reached without an explicit
+    /// `return <value>` (a fall-through epilogue past a body that does not end in
+    /// a return — e.g. after a `try` whose branches all return). Mirrors solc's
+    /// default-initialised return: a fresh zeroed buffer for a memory aggregate,
+    /// an empty buffer for dynamic `string` / `bytes`, the representation's own
+    /// zero for the other scalar value types, and an integer-width zero for an
+    /// integer / bool (or a dead-path storage reference / mapping).
+    fn default_return_value<'block>(
+        &self,
+        slang_type: Option<&SlangType>,
+        return_type: Type<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        let builder = &self.state.builder;
+        let is_memory = |location| matches!(location, slang_solidity_v2::ast::DataLocation::Memory);
+        match slang_type {
+            Some(SlangType::FixedSizeArray(array)) if is_memory(array.location()) => {
+                builder.emit_sol_malloc_zeroed(return_type, block)
+            }
+            Some(SlangType::Struct(structure)) if is_memory(structure.location()) => {
+                builder.emit_sol_malloc_zeroed(return_type, block)
+            }
+            Some(SlangType::Array(array)) if is_memory(array.location()) => {
+                builder.emit_sol_malloc_zeroed(return_type, block)
+            }
+            Some(SlangType::String(_) | SlangType::Bytes(_)) => {
+                let size = builder.emit_sol_constant(0, builder.types.ui256, block);
+                builder.emit_sol_malloc_sized_zeroed(return_type, size, block)
+            }
+            Some(
+                scalar @ (SlangType::Address(_)
+                | SlangType::ByteArray(_)
+                | SlangType::Enum(_)
+                | SlangType::UserDefinedValue(_)
+                | SlangType::Function(_)
+                | SlangType::Contract(_)
+                | SlangType::Interface(_)),
+            ) => TypeConversion::emit_scalar_zero(scalar, return_type, builder, block),
+            _ => builder.emit_sol_constant(0, return_type, block),
+        }
     }
 
     /// Maps Slang's `FunctionMutability` to the Sol dialect's `StateMutability`.

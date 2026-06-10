@@ -184,6 +184,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 .chain(mlir_parameter_types.iter().copied())
                 .collect();
             self.emit_modifier_stage_func(
+                function,
                 stage_symbols[index].as_str(),
                 &modifier_stages[index],
                 &modifier_stage_params[index],
@@ -228,6 +229,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// and finishes with the default epilogue when the body falls through.
     pub fn emit_modifier_stage_func(
         &self,
+        function: &FunctionDefinition,
         stage_symbol: &str,
         modifier_body: &Statements,
         modifier_params: &ModifierStageParams<'context, '_>,
@@ -311,7 +313,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             }
         }
         if !terminated {
-            self.emit_default_return(result_types, return_slots.as_slice(), &current_block);
+            self.emit_default_return(
+                function,
+                result_types,
+                return_slots.as_slice(),
+                &current_block,
+            );
         }
         Ok(())
     }
