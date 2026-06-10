@@ -455,6 +455,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     MemberCallKind::ExternalGetter
                 }
             }
+            // `s.f(...)` where `f` is a function-pointer struct field: a call
+            // through the member-resolved pointer, classified by the member's
+            // function type (never by the member name).
+            Some(Definition::StructMember(_))
+                if matches!(access.get_type(), Some(SlangType::Function(_))) =>
+            {
+                MemberCallKind::FunctionPointer
+            }
             other => unimplemented!(
                 "unsupported member call: {:?}",
                 other.map(|definition| definition.node_id())
@@ -544,7 +552,24 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 )
             }
             MemberCallKind::Super => unimplemented!("super call"),
-            MemberCallKind::FunctionPointer => unimplemented!("function pointer call"),
+            MemberCallKind::FunctionPointer => {
+                // `s.f(args)` through a function-pointer struct field: evaluate
+                // the member access (gep + load of the `func_ref`) as the callee
+                // value, then `sol.icall` / `sol.ext_icall` per the pointer's
+                // visibility — exactly the indirect-call path used for a plain
+                // function-pointer identifier callee.
+                let callee = Expression::MemberAccessExpression(access.clone());
+                let function_slang_type = access
+                    .get_type()
+                    .expect("a function-pointer member call is function-typed");
+                self.emit_indirect_call_results(
+                    &callee,
+                    &function_slang_type,
+                    arguments,
+                    call_value,
+                    block,
+                )
+            }
         }
     }
 
