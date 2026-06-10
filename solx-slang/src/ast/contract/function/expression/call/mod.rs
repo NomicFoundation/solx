@@ -609,6 +609,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             (BuiltIn::Assert, 1)
                 | (BuiltIn::Require, 1 | 2)
                 | (BuiltIn::Gasleft, 0)
+                | (BuiltIn::Blockhash, 1)
                 | (BuiltIn::Keccak256, 1)
                 | (BuiltIn::Sha256, 1)
                 | (BuiltIn::Ripemd160, 1)

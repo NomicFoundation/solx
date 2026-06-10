@@ -18,6 +18,7 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use solx_mlir::ods::sol::AddModOperation;
+use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::GasLeftOperation;
@@ -27,6 +28,7 @@ use solx_mlir::ods::sol::Ripemd160Operation;
 use solx_mlir::ods::sol::Sha256Operation;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::type_conversion::TypeConversion;
 
 /// ABI encoding mode for `abi.encode` / `abi.encodePacked`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,6 +85,26 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     )
                     .result(0)
                     .expect("gasleft always produces one result")
+                    .into();
+                Ok((Some(value), block))
+            }
+            BuiltIn::Blockhash => {
+                let (values, block) = self.emit_argument_values(arguments, block)?;
+                let builder = &self.expression_emitter.state.builder;
+                // `sol.blockhash` takes a `ui256` block number; coerce a narrower
+                // argument type up first.
+                let block_number = TypeConversion::from_target_type(builder.types.ui256, builder)
+                    .emit(values[0], builder, &block);
+                let value = block
+                    .append_operation(
+                        BlockHashOperation::builder(builder.context, builder.unknown_location)
+                            .block_number(block_number)
+                            .val(builder.types.fixed_bytes(32))
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("blockhash always produces one result")
                     .into();
                 Ok((Some(value), block))
             }
