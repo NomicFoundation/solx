@@ -15,6 +15,7 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
+use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
@@ -553,11 +554,22 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut modifier_stages: Vec<Statements> = Vec::new();
         let mut modifier_params: Vec<ModifierStageParams<'context, 'env>> = Vec::new();
         for invocation in function.modifier_invocations().iter() {
-            let Some(Definition::Modifier(modifier_definition)) =
-                invocation.name().resolve_to_definition()
-            else {
-                continue;
+            // Resolve the invocation lexically (a plain `m`), else by its final
+            // path segment (a namespace-qualified `M.C.m`); a base-constructor
+            // invocation `Base(args)` resolves to neither and is skipped here.
+            let resolved_modifier = match invocation.name().resolve_to_definition() {
+                Some(Definition::Modifier(modifier)) => modifier,
+                _ => match self.resolve_qualified_modifier(&invocation) {
+                    Some(modifier) => modifier,
+                    None => continue,
+                },
             };
+            // Re-dispatch to the most-derived override of this modifier (a
+            // `virtual` modifier overridden in a derived contract); a non-virtual
+            // or library modifier keeps its lexical resolution.
+            let modifier_definition = self
+                .resolve_modifier_override(&invocation, &resolved_modifier)
+                .unwrap_or(resolved_modifier);
             let Some(modifier_body) = modifier_definition.body() else {
                 continue;
             };
@@ -608,23 +620,89 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
     /// Re-dispatches a virtual modifier invocation to its most-derived
     /// implementation with a body (qualified invocations resolve directly).
+    ///
+    /// A `virtual` modifier may be declared abstract (or with a base body) in a
+    /// base and `override`-n in a derived contract; a lexical invocation picks
+    /// the base declaration, so re-resolve against the contract's C3-linearised
+    /// modifiers (most-derived first). Returns `None` — keep the lexical
+    /// resolution — when the invocation is qualified (`Base.m`, which names a
+    /// specific modifier and bypasses virtual dispatch) or when the resolved
+    /// modifier is not part of this contract's hierarchy (e.g. a library
+    /// modifier reached through `using L for *`, which must not be
+    /// virtual-dispatched against a same-named modifier of the using contract).
     pub fn resolve_modifier_override(
         &self,
         invocation: &ModifierInvocation,
         resolved: &FunctionDefinition,
     ) -> Option<FunctionDefinition> {
-        let _ = (invocation, resolved);
-        unimplemented!("virtual modifier override resolution")
+        if invocation.name().len() > 1 {
+            return None;
+        }
+        let resolved_id = resolved.node_id();
+        if !self
+            .linearised_modifiers()
+            .iter()
+            .any(|modifier| modifier.node_id() == resolved_id)
+        {
+            return None;
+        }
+        let name = resolved.name().map(|identifier| identifier.name())?;
+        self.most_derived_modifiers_by_name().get(&name).cloned()
     }
 
     /// Resolves a qualified modifier invocation by last-segment name against the
     /// C3 modifiers; `None` marks a base-constructor invocation.
+    ///
+    /// A namespace-qualified path (`M.M.C.m`) does not resolve to a definition
+    /// directly, so its final segment (the modifier name) is matched against the
+    /// contract's C3-linearised modifiers, preferring the most-derived one with a
+    /// body. `None` when no modifier of that name exists — in particular a
+    /// base-constructor invocation `Base(args)`, whose final segment is a
+    /// contract name, so the caller leaves it to the constructor path.
     pub fn resolve_qualified_modifier(
         &self,
         invocation: &ModifierInvocation,
     ) -> Option<FunctionDefinition> {
-        let _ = invocation;
-        unimplemented!("qualified modifier resolution")
+        let modifier_name = invocation.name().iter().last()?.name();
+        self.most_derived_modifiers_by_name()
+            .get(&modifier_name)
+            .cloned()
+    }
+
+    /// Every modifier across the contract's C3-linearised bases (most-derived
+    /// first). Empty in a library context (no contract / no inheritance).
+    fn linearised_modifiers(&self) -> Vec<FunctionDefinition> {
+        let Some(contract) = self.contract else {
+            return Vec::new();
+        };
+        contract
+            .linearised_bases()
+            .into_iter()
+            .filter_map(|base| match base {
+                ContractBase::Contract(base_contract) => Some(base_contract),
+                ContractBase::Interface(_) => None,
+            })
+            .flat_map(|base_contract| base_contract.modifiers())
+            .collect()
+    }
+
+    /// The most-derived modifier with a body, per name, across the contract's C3
+    /// linearisation. Modifiers cannot be overloaded, so the name uniquely keys
+    /// an override chain; `linearised_bases` is most-derived first, so the first
+    /// body-bearing modifier of each name is the active override. The name is
+    /// only ever a map key — never string-compared (rule 7).
+    fn most_derived_modifiers_by_name(&self) -> HashMap<String, FunctionDefinition> {
+        let mut by_name: HashMap<String, FunctionDefinition> = HashMap::new();
+        for modifier in self.linearised_modifiers() {
+            if modifier.body().is_none() {
+                continue;
+            }
+            let Some(name) = modifier.name().map(|identifier| identifier.name()) else {
+                continue;
+            };
+            by_name.entry(name).or_insert(modifier);
+        }
+        by_name
     }
 
     /// Resolves an `IdentifierPath` modifier/base reference to a contract in the
