@@ -22,7 +22,6 @@ use melior::ir::Attribute;
 use melior::ir::Block;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Identifier;
 use melior::ir::Region;
 use melior::ir::RegionLike;
 use melior::ir::TypeLike;
@@ -30,13 +29,13 @@ use melior::ir::Value;
 use melior::ir::attribute::DenseElementsAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::TypeAttribute;
-use melior::ir::operation::OperationBuilder;
 use melior::ir::operation::OperationLike;
 use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::RankedTensorType;
 use num::BigInt;
 
 use super::Builder;
+use crate::ods::yul;
 
 /// Byte alignment of a 256-bit word slot — the alignment `solc` emits on every
 /// `llvm.alloca`/`llvm.load`/`llvm.store` of a Yul value.
@@ -49,14 +48,18 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let value_attribute = self.yul_word_attribute(value);
+        // `yul_word_attribute` builds the i256 integer attribute via the FFI
+        // (a 256-bit value exceeds `IntegerAttribute::new`'s `i64`); the typed
+        // `.value()` setter wants an `IntegerAttribute`, which it is.
+        let value_attribute = IntegerAttribute::try_from(self.yul_word_attribute(value))
+            .expect("yul.constant value is an i256 integer attribute");
         block
             .append_operation(
-                OperationBuilder::new("yul.constant", self.unknown_location)
-                    .add_attributes(&[(Identifier::new(self.context, "value"), value_attribute)])
-                    .add_results(&[self.types.i256])
+                yul::ConstantOperation::builder(self.context, self.unknown_location)
+                    .value(value_attribute)
+                    .out(self.types.i256)
                     .build()
-                    .expect("valid yul.constant"),
+                    .into(),
             )
             .result(0)
             .expect("yul.constant always produces one result")
@@ -81,15 +84,13 @@ impl<'context> Builder<'context> {
         );
         block
             .append_operation(
-                OperationBuilder::new("yul.cmp", self.unknown_location)
-                    .add_attributes(&[(
-                        Identifier::new(self.context, "predicate"),
-                        predicate_attribute.into(),
-                    )])
-                    .add_operands(&[lhs, rhs])
-                    .add_results(&[self.types.i256])
+                yul::CmpOperation::builder(self.context, self.unknown_location)
+                    .predicate(predicate_attribute.into())
+                    .lhs(lhs)
+                    .rhs(rhs)
+                    .out(self.types.i256)
                     .build()
-                    .expect("valid yul.cmp"),
+                    .into(),
             )
             .result(0)
             .expect("yul.cmp always produces one result")
@@ -176,11 +177,13 @@ impl<'context> Builder<'context> {
 
         block
             .append_operation(
-                OperationBuilder::new("yul.if", self.unknown_location)
-                    .add_operands(&[condition])
-                    .add_regions([then_region, else_region])
+                yul::IfOperation::builder(self.context, self.unknown_location)
+                    .cond(condition)
+                    .then_region(then_region)
+                    .else_region(else_region)
+                    .results(&[])
                     .build()
-                    .expect("valid yul.if"),
+                    .into(),
             )
             .region(0)
             .expect("yul.if has then region")
@@ -207,10 +210,14 @@ impl<'context> Builder<'context> {
         step_region.append_block(Block::new(&[]));
 
         let operation = block.append_operation(
-            OperationBuilder::new("yul.for", self.unknown_location)
-                .add_regions([cond_region, body_region, step_region])
+            yul::ForOperation::builder(self.context, self.unknown_location)
+                .cond(cond_region)
+                .body(body_region)
+                .step(step_region)
+                .init_args(&[])
+                .results(&[])
                 .build()
-                .expect("valid yul.for"),
+                .into(),
         );
         let cond_block = operation
             .region(0)
@@ -241,11 +248,11 @@ impl<'context> Builder<'context> {
     ) -> (BlockRef<'context, 'block>, Vec<BlockRef<'context, 'block>>) {
         let default_region = Region::new();
         default_region.append_block(Block::new(&[]));
-        let mut regions = vec![default_region];
+        let mut case_regions = Vec::with_capacity(case_values.len());
         for _ in case_values {
             let case_region = Region::new();
             case_region.append_block(Block::new(&[]));
-            regions.push(case_region);
+            case_regions.push(case_region);
         }
 
         let case_attributes: Vec<Attribute<'context>> = case_values
@@ -258,12 +265,14 @@ impl<'context> Builder<'context> {
             .expect("valid i256 switch-case elements");
 
         let operation = block.append_operation(
-            OperationBuilder::new("yul.switch", self.unknown_location)
-                .add_operands(&[selector])
-                .add_attributes(&[(Identifier::new(self.context, "cases"), cases.into())])
-                .add_regions_vec(regions)
+            yul::SwitchOperation::builder(self.context, self.unknown_location)
+                .arg(selector)
+                .cases(cases.into())
+                .default_region(default_region)
+                .case_regions(case_regions)
+                .results(&[])
                 .build()
-                .expect("valid yul.switch"),
+                .into(),
         );
         let default_block = operation
             .region(0)
@@ -290,10 +299,11 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new("yul.condition", self.unknown_location)
-                .add_operands(&[condition])
+            yul::ConditionOperation::builder(self.context, self.unknown_location)
+                .condition(condition)
+                .args(&[])
                 .build()
-                .expect("valid yul.condition"),
+                .into(),
         );
     }
 
@@ -304,9 +314,10 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new("yul.yield", self.unknown_location)
+            yul::YieldOperation::builder(self.context, self.unknown_location)
+                .operands(&[])
                 .build()
-                .expect("valid yul.yield"),
+                .into(),
         );
     }
 
@@ -317,9 +328,9 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new("yul.break", self.unknown_location)
+            yul::BreakOperation::builder(self.context, self.unknown_location)
                 .build()
-                .expect("valid yul.break"),
+                .into(),
         );
     }
 
@@ -330,9 +341,9 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new("yul.continue", self.unknown_location)
+            yul::ContinueOperation::builder(self.context, self.unknown_location)
                 .build()
-                .expect("valid yul.continue"),
+                .into(),
         );
     }
 
