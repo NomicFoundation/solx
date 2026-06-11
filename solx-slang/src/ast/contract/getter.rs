@@ -29,7 +29,14 @@ use solx_mlir::StateMutability;
 use solx_mlir::ods::sol::LengthOperation;
 use solx_utils::DataLocation;
 
+use std::collections::HashMap;
+
+use slang_solidity_v2::ast::NodeId;
+use solx_mlir::Environment;
+
 use crate::ast::contract::ContractEmitter;
+use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::getter_level::GetterLevel;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::type_conversion::TypeConversion;
@@ -369,6 +376,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     pub fn emit_constant_getter(
         &self,
         state_variable: &StateVariableDefinition,
+        storage_layout: &HashMap<NodeId, StorageSlot>,
         contract_body: &BlockRef<'context, '_>,
     ) -> anyhow::Result<()> {
         let Some((abi, signature, selector)) = Self::getter_abi_prologue(state_variable) else {
@@ -380,12 +388,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let Some(initializer) = state_variable.value() else {
             return Ok(());
         };
-        let Some(value) = Self::fold_constant_int(&initializer) else {
-            return Ok(());
-        };
 
         let builder = &self.state.builder;
-        let element_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
+        // The getter returns the constant's value type, reference types
+        // (`string` / `bytes`) in `Memory` — what an external getter call hands
+        // back — not their declared storage location.
+        let slang_type = state_variable
+            .get_type()
+            .expect("slang types every state variable");
+        let element_type = TypeConversion::resolve_slang_type_in_memory(&slang_type, builder);
         let entry = builder.emit_sol_func(
             &signature,
             &[],
@@ -396,8 +407,31 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             None,
             contract_body,
         );
-        let constant = builder.emit_constant(&value, element_type, &entry);
-        builder.emit_sol_return(&[constant], &entry);
+        if let Some(value) = Self::fold_constant_int(&initializer) {
+            let constant = builder.emit_constant(&value, element_type, &entry);
+            builder.emit_sol_return(&[constant], &entry);
+            return Ok(());
+        }
+        // A non-integer constant — a `string` / `bytesN` literal — is not
+        // integer-foldable; materialise its initializer toward the return type
+        // through the expression emitter, exactly as an explicit getter
+        // `return <const>` would (a constant body has no locals, so an empty
+        // environment suffices). Matches solc: a `sol.string_lit`, or the
+        // literal's value `bytes_cast` to `bytesN`.
+        let environment = Environment::new();
+        let emitter = ExpressionEmitter::new(
+            self.state,
+            &environment,
+            storage_layout,
+            ArithmeticMode::Checked,
+        );
+        let (value, entry) = emitter.emit_value_for_target(&initializer, element_type, entry)?;
+        let value = TypeConversion::from_target_type(element_type, &self.state.builder).emit(
+            value,
+            &self.state.builder,
+            &entry,
+        );
+        builder.emit_sol_return(&[value], &entry);
         Ok(())
     }
 

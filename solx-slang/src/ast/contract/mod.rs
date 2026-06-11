@@ -393,7 +393,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 state_variable.mutability(),
                 StateVariableMutability::Constant
             ) {
-                self.emit_constant_getter(&state_variable, contract_body)?;
+                self.emit_constant_getter(&state_variable, storage_layout, contract_body)?;
             } else if let Some(slot) = storage_layout.get(&state_variable.node_id()) {
                 self.emit_state_variable_getter(
                     &state_variable,
