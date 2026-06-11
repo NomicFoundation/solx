@@ -75,6 +75,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let loaded = builder.emit_sol_load(new_slot, element_type, &block)?;
             return Ok((Some(loaded), block));
         };
+        if solx_mlir::TypeFactory::is_sol_reference(element_type) {
+            // A reference-typed element (nested array / struct / string) is
+            // appended by copying the source (a memory aggregate) into the
+            // storage slot `push` returns — the same memory→storage `sol.copy`
+            // solc emits, and what the lvalue form `arr.push() = v` already does.
+            let (value, block) = self.expression_emitter.emit_value(&value_argument, block)?;
+            self.expression_emitter
+                .state
+                .builder
+                .emit_sol_copy(value, new_slot, &block);
+            return Ok((None, block));
+        }
         let (value, block) =
             self.expression_emitter
                 .emit_value_for_target(&value_argument, element_type, block)?;
@@ -121,8 +133,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             other => solx_utils::DataLocation::from_slang(other, None),
         };
         let (array_value, block) = self.expression_emitter.emit_value(&base, block)?;
-        let address_type = builder.types.pointer(element_type, base_location);
-        let new_slot = builder.emit_sol_push(array_value, address_type, &block);
+        // solc's `sol.push` yields the new element's reference type directly when
+        // the element is a reference type (nested array / struct / string) — the
+        // slot is then copied into via `sol.copy` — and a `!sol.ptr` to the
+        // element when it is a value type, stored into via `sol.store`. Mirror
+        // that: a reference element pushed to a pointer would force a
+        // memory→storage data-location cast the backend cannot lower.
+        let push_result_type = if solx_mlir::TypeFactory::is_sol_reference(element_type) {
+            element_type
+        } else {
+            builder.types.pointer(element_type, base_location)
+        };
+        let new_slot = builder.emit_sol_push(array_value, push_result_type, &block);
         Ok((new_slot, element_type, block))
     }
 }
