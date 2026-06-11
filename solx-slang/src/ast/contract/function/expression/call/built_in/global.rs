@@ -137,10 +137,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .expression_emitter
             .emit_value(&access.operand(), block)?;
         let (values, block) = self.emit_argument_values(arguments, block)?;
+        // `sol.transfer` takes a `ui256` amount; a narrow literal (`x.transfer(1)`
+        // → ui8) must be widened first.
+        let amount = builder.emit_sol_cast(values[0], builder.types.ui256, &block);
         block.append_operation(
             TransferOperation::builder(builder.context, builder.unknown_location)
                 .addr(addr)
-                .val(values[0])
+                .val(amount)
                 .build()
                 .into(),
         );
