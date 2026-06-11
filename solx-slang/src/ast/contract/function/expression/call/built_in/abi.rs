@@ -12,6 +12,7 @@ use melior::ir::ValueLike;
 use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::operation::OperationMutLike;
 use melior::ir::r#type::IntegerType;
+use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
@@ -314,6 +315,24 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .emit_value(&payload_expression, block)?;
         let result_types = self.abi_decode_result_types(call);
         let builder = &self.expression_emitter.state.builder;
+        // `sol.decode` requires a memory or calldata byte buffer; a storage
+        // `bytes` / `string` is a reference, so copy it to memory first (solc
+        // emits a Storage->Memory `sol.data_loc_cast` here). Memory and calldata
+        // payloads are already valid buffers and pass through unchanged.
+        let payload_value = if matches!(
+            payload_expression
+                .get_type()
+                .and_then(|payload_type| payload_type.data_location()),
+            Some(SlangDataLocation::Storage)
+        ) {
+            TypeConversion::from_target_type(builder.types.sol_string_memory, builder).emit(
+                payload_value,
+                builder,
+                &block,
+            )
+        } else {
+            payload_value
+        };
         let operation = block.append_operation(
             DecodeOperation::builder(builder.context, builder.unknown_location)
                 .addr(payload_value)
