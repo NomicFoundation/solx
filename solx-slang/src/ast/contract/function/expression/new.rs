@@ -26,6 +26,7 @@ use solx_utils::DataLocation;
 
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
@@ -92,7 +93,18 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let payable = ContractEmitter::is_contract_payable(&contract_definition);
         self.state.add_dependency(contract_name.clone());
 
-        let (ctor_args, block) = self.emit_argument_values(arguments, block)?;
+        // Coerce each constructor argument to its declared parameter type so a
+        // literal materialises in the parameter's representation (e.g. "abc" as
+        // `bytes3`, not a memory `string`) — the deployed constructor ABI-decodes
+        // its arguments by parameter type, so a mismatched encoding reverts.
+        let parameter_types = contract_definition
+            .constructor()
+            .map(|constructor| {
+                TypeConversion::resolve_function_types(&constructor, &self.state.builder).0
+            })
+            .unwrap_or_default();
+        let (ctor_args, block) =
+            CallEmitter::new(self).emit_coerced_arguments(arguments, &parameter_types, block)?;
         let builder = &self.state.builder;
         let result_type = builder.types.contract(&contract_name, payable);
         let val =
