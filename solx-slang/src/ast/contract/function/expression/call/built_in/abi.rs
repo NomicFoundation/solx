@@ -8,6 +8,7 @@ use melior::ir::BlockRef;
 use melior::ir::Operation;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::ValueLike;
 use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::operation::OperationMutLike;
 use melior::ir::r#type::IntegerType;
@@ -146,13 +147,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((Some(result), current))
     }
 
-    /// Emits `abi.encodeCall(C.f, (args))`: the callee's 4-byte selector, folded
-    /// to a compile-time constant via `compute_selector` and prepended to the
-    /// ABI-encoded arguments. The arguments come from the second (tuple) argument
-    /// and are coerced to `C.f`'s declared parameter types, so an integer literal
-    /// encodes at the parameter's width (matching solc). The callee is classified
-    /// by resolving the function reference to its definition, never by name text
-    /// (Rule-7).
+    /// Emits `abi.encodeCall(callee, args)`: the callee's 4-byte selector
+    /// prepended to its ABI-encoded arguments. A static function reference
+    /// (`C.f`, `this.f`) folds its selector to a compile-time constant via
+    /// `compute_selector`; a runtime function-pointer value (a state/local
+    /// variable, a returned pointer) reads its selector at runtime via
+    /// `sol.ext_func_selector`. The arguments are the second argument — a tuple
+    /// `(a, b)` spread element-wise, or a single non-tuple value — coerced to the
+    /// callee's declared parameter types, so an integer literal encodes at the
+    /// parameter's width (matching solc). The callee is classified by resolving
+    /// the reference to its definition / function-pointer type, never by name
+    /// text (Rule-7).
     pub fn emit_abi_encode_call(
         &self,
         arguments: &PositionalArguments,
@@ -162,47 +167,87 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let function_expression = iter
             .next()
             .expect("abi.encodeCall takes a function reference");
-        let arguments_tuple = iter
+        let call_arguments = iter
             .next()
-            .expect("abi.encodeCall takes a call-arguments tuple");
+            .expect("abi.encodeCall takes a call-arguments argument");
         let definition = match &function_expression {
             Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
             Expression::Identifier(identifier) => identifier.resolve_to_definition(),
             _ => None,
         };
-        let Some(Definition::Function(function)) = definition else {
-            unimplemented!(
-                "abi.encodeCall with a non-static function-pointer callee is not yet supported"
-            );
-        };
-        let selector = function
-            .compute_selector()
-            .expect("abi.encodeCall's callee is an external function with an ABI selector");
-        let Expression::TupleExpression(arguments_tuple) = &arguments_tuple else {
-            unimplemented!("abi.encodeCall's second argument is the call-arguments tuple");
-        };
-        let argument_expressions: Vec<Expression> = arguments_tuple
-            .items()
-            .iter()
-            .map(|item| {
-                item.expression()
-                    .expect("a call-arguments tuple element has an expression")
-            })
-            .collect();
         let builder = &self.expression_emitter.state.builder;
-        let (parameter_types, _) = TypeConversion::resolve_function_types(&function, builder);
-        let selector_integer = builder.emit_sol_constant(
-            i64::from(selector),
-            Type::from(IntegerType::unsigned(builder.context, 32)),
-            &block,
+        // The selector and the parameter types the arguments are coerced to come
+        // from either a static function reference — selector folded to a
+        // compile-time constant, parameter types from the function definition —
+        // or a runtime function-pointer value — selector read with
+        // `sol.ext_func_selector`, parameter types from the pointer's declared
+        // function type.
+        let (selector_value, parameter_types, current) = match definition {
+            Some(Definition::Function(function)) => {
+                let selector = function
+                    .compute_selector()
+                    .expect("abi.encodeCall's callee is an external function with an ABI selector");
+                let selector_integer = builder.emit_sol_constant(
+                    i64::from(selector),
+                    Type::from(IntegerType::unsigned(builder.context, 32)),
+                    &block,
+                );
+                let selector_value = builder.emit_sol_bytes_cast(
+                    selector_integer,
+                    builder.types.fixed_bytes(4),
+                    &block,
+                );
+                let (parameter_types, _) =
+                    TypeConversion::resolve_function_types(&function, builder);
+                (selector_value, parameter_types, block)
+            }
+            _ => {
+                let (function_value, current) = self
+                    .expression_emitter
+                    .emit_value(&function_expression, block)?;
+                assert!(
+                    solx_mlir::TypeFactory::is_sol_ext_function_ref(function_value.r#type()),
+                    "abi.encodeCall's runtime callee resolves to an external function pointer"
+                );
+                let selector_value = builder.emit_sol_ext_func_selector(function_value, &current);
+                let SlangType::Function(function_type) = function_expression
+                    .get_type()
+                    .expect("slang types every function-pointer expression")
+                else {
+                    unreachable!("a non-static abi.encodeCall callee is a function pointer")
+                };
+                let parameter_types = function_type
+                    .parameter_types()
+                    .iter()
+                    .map(|parameter_type| {
+                        TypeConversion::resolve_slang_type(parameter_type, None, builder)
+                    })
+                    .collect();
+                (selector_value, parameter_types, current)
+            }
+        };
+        // The call arguments are the second argument: a tuple spreads to one
+        // value per element, a single non-tuple value is the sole argument.
+        let argument_expressions: Vec<Expression> = match call_arguments {
+            Expression::TupleExpression(tuple) => tuple
+                .items()
+                .iter()
+                .filter_map(|item| item.expression())
+                .collect(),
+            other => vec![other],
+        };
+        let (values, current) = self.emit_coerced_argument_expressions(
+            &argument_expressions,
+            &parameter_types,
+            current,
+        )?;
+        let result = self.emit_sol_encode(
+            &values,
+            Some(selector_value),
+            EncodeMode::Standard,
+            &current,
         );
-        let selector_value =
-            builder.emit_sol_bytes_cast(selector_integer, builder.types.fixed_bytes(4), &block);
-        let (values, block) =
-            self.emit_coerced_argument_expressions(&argument_expressions, &parameter_types, block)?;
-        let result =
-            self.emit_sol_encode(&values, Some(selector_value), EncodeMode::Standard, &block);
-        Ok((Some(result), block))
+        Ok((Some(result), current))
     }
 
     /// Emits a `sol.encode` operation producing a `bytes memory` payload.
