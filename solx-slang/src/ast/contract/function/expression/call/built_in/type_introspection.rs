@@ -2,9 +2,11 @@
 //! `type(T).min`/`max`/`interfaceId`/`code`/`name` lowering.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::attribute::StringAttribute;
 use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
 use slang_solidity_v2::ast::BuiltIn;
@@ -13,6 +15,8 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
+use solx_mlir::ods::sol::ObjectCodeOperation;
+use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
 
@@ -126,14 +130,70 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((value, block))
     }
 
-    /// Emits `type(C).creationCode` / `type(C).runtimeCode` (+ `add_dependency`).
+    /// Emits `type(C).creationCode` / `type(C).runtimeCode` as the contract's
+    /// deploy / deployed bytecode (`bytes memory`), lowered to `sol.object_code`
+    /// referencing the object by name — `C` for creation, `C_deployed` for
+    /// runtime. The reference is registered as a linker dependency so the
+    /// assembler pulls the object in (as `new C()` does); the deployed object is
+    /// a distinct top-level object, so `runtimeCode` must depend on `C_deployed`
+    /// — depending on `C` alone leaves its `__datasize__`/`__dataoffset__`
+    /// symbols unresolved.
     pub fn emit_type_code(
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let _ = (access, block);
-        unimplemented!("type(C).creationCode/runtimeCode")
+        let builtin = access
+            .member()
+            .resolve_to_built_in()
+            .expect("type(C).creationCode/runtimeCode dispatches on its built-in member");
+        let Expression::TypeExpression(type_expression) = access.operand() else {
+            unreachable!("type(C).creationCode/runtimeCode operand is a type expression");
+        };
+        let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name() else {
+            unreachable!("type(C) names a contract via an identifier path");
+        };
+        let Some(Definition::Contract(contract_definition)) =
+            identifier_path.resolve_to_definition()
+        else {
+            unreachable!("type(C).creationCode/runtimeCode resolves to a contract definition");
+        };
+        let contract_name = contract_definition.name().name();
+        let object_name = match builtin {
+            BuiltIn::TypeRuntimeCode => {
+                format!(
+                    "{contract_name}{}",
+                    solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX
+                )
+            }
+            _ => contract_name,
+        };
+        self.expression_emitter
+            .state
+            .add_dependency(object_name.clone());
+        let result_type = self
+            .expression_emitter
+            .resolve_slang_type(access.get_type())
+            .unwrap_or_else(|| {
+                self.expression_emitter
+                    .state
+                    .builder
+                    .types
+                    .string(DataLocation::Memory)
+            });
+        let builder = &self.expression_emitter.state.builder;
+        let value = block
+            .append_operation(
+                ObjectCodeOperation::builder(builder.context, builder.unknown_location)
+                    .obj_name(StringAttribute::new(builder.context, &object_name))
+                    .out(result_type)
+                    .build()
+                    .into(),
+            )
+            .result(0)
+            .expect("sol.object_code always produces one result")
+            .into();
+        Ok((value, block))
     }
 
     /// Emits `type(C).name` — the contract / interface name as a `string memory`
