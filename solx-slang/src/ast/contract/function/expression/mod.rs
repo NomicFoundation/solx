@@ -672,6 +672,34 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         Ok((value, block))
     }
 
+    /// If `expression` is a bare function name — always an *internal* function
+    /// pointer — returns its `!sol.func_ref` type, built from the function's
+    /// declared signature. slang types such a reference from the function's
+    /// visibility (a `Public` function resolves to its return type, not the
+    /// pointer type), so a caller inferring a result type from the expression —
+    /// e.g. a ternary whose branches are function names — uses this to recover
+    /// the authoritative internal-pointer type the branch values carry. Returns
+    /// `None` for any expression that is not a bare reference to a function.
+    fn bare_function_ref_type(&self, expression: &Expression) -> Option<Type<'context>> {
+        let Expression::Identifier(identifier) = expression else {
+            return None;
+        };
+        let Some(Definition::Function(function_definition)) = identifier.resolve_to_definition()
+        else {
+            return None;
+        };
+        let (_, parameter_types, return_types) = self
+            .state
+            .resolve_function(function_definition.node_id())
+            .ok()?;
+        Some(
+            self.state
+                .builder
+                .types
+                .func_ref(parameter_types, return_types),
+        )
+    }
+
     /// Reads a contract state variable's value: a `constant` inlines its
     /// compile-time initializer (exactly as a file-level `constant`), otherwise
     /// the storage slot is loaded. A value-typed slot reads through the shared
