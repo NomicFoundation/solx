@@ -313,6 +313,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let (value, block) = self.emit_type_name(access, block)?;
                 Ok((Some(value), block))
             }
+            Some(BuiltIn::TypeCreationCode | BuiltIn::TypeRuntimeCode) => {
+                let (value, block) = self.emit_type_code(access, block)?;
+                Ok((Some(value), block))
+            }
             Some(BuiltIn::StringConcat | BuiltIn::BytesConcat) => {
                 let arguments = arguments.expect("concat is a member-access call");
                 self.emit_concat(arguments, block)
