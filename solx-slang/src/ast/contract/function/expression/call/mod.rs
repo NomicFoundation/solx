@@ -256,13 +256,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let mut salt = None;
         let mut current_block = block;
         for option in call_options.options().iter() {
-            let (option_value, next_block) = self
-                .expression_emitter
-                .emit_value(&option.value(), current_block)?;
-            current_block = next_block;
-            let builder = &self.expression_emitter.state.builder;
+            // Emit each option toward the type that option expects, so a literal
+            // folds correctly: `value`/`gas` are `ui256`, the CREATE2 `salt` is
+            // `bytes32` (a hex/string literal `salt: hex"00"` must fold to a
+            // fixedbytes constant, NOT a memory string the salt bridge can't take).
             match option.name().resolve_to_built_in() {
                 Some(BuiltIn::CallOptionValue) => {
+                    let (option_value, next_block) = self
+                        .expression_emitter
+                        .emit_value(&option.value(), current_block)?;
+                    current_block = next_block;
+                    let builder = &self.expression_emitter.state.builder;
                     value = Some(
                         TypeConversion::from_target_type(builder.types.ui256, builder).emit(
                             option_value,
@@ -272,19 +276,29 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     );
                 }
                 Some(BuiltIn::CallOptionSalt) => {
+                    let bytes32 = self.expression_emitter.state.builder.types.fixed_bytes(32);
+                    let (salt_bytes, next_block) = self.expression_emitter.emit_value_for_target(
+                        &option.value(),
+                        bytes32,
+                        current_block,
+                    )?;
+                    current_block = next_block;
+                    let builder = &self.expression_emitter.state.builder;
                     salt = Some(builder.emit_sol_bytes_cast(
-                        option_value,
+                        salt_bytes,
                         builder.types.ui256,
                         &current_block,
                     ));
                 }
                 Some(BuiltIn::CallOptionGas) => {
-                    // The gas limit is evaluated above for its side effects but
-                    // not threaded into the call: like the oracle, the call
-                    // forwards all remaining gas (the `sol.ext_icall` default).
-                    // A `{gas: …}` that must actually cap the forwarded gas is
-                    // not yet modelled — `option_value` is intentionally dropped.
-                    let _ = option_value;
+                    // The gas limit is evaluated for its side effects but not
+                    // threaded into the call: like the oracle, the call forwards
+                    // all remaining gas (the `sol.ext_icall` default). A `{gas: …}`
+                    // that must actually cap the forwarded gas is not yet modelled.
+                    let (_gas, next_block) = self
+                        .expression_emitter
+                        .emit_value(&option.value(), current_block)?;
+                    current_block = next_block;
                 }
                 _ => unreachable!("a call option resolves to a value, gas, or salt built-in"),
             }
