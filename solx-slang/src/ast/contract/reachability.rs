@@ -39,7 +39,7 @@ impl ReachabilityWalk {
     /// and `extra_roots` — bodies emitted into this contract's module that are
     /// outside the linearised set (e.g. `super`-reached base overrides).
     pub fn new(contract: &ContractDefinition, extra_roots: &[FunctionDefinition]) -> Self {
-        let mut to_walk = contract.compute_linearised_functions();
+        let mut to_walk = contract.linearised_functions();
         if let Some(constructor) = contract.constructor() {
             to_walk.push(constructor);
         }

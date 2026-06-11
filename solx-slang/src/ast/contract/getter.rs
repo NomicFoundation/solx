@@ -455,7 +455,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .and_then(|slang_type| match slang_type {
                     SlangType::Literal(literal) => match literal.kind() {
                         LiteralKind::Integer { value } => Some(value),
-                        LiteralKind::HexInteger { value, .. } => Some(value),
+                        LiteralKind::HexInteger { value, .. } => Some(BigInt::from(value)),
                         _ => None,
                     },
                     _ => None,

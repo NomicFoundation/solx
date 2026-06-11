@@ -50,7 +50,7 @@ impl SuperDispatch {
     /// constructor against its C3 linearisation.
     pub fn build_super_dispatch(contract: &ContractDefinition) -> SuperDispatch {
         let mro: Vec<ContractDefinition> = contract
-            .compute_linearised_bases()
+            .linearised_bases()
             .into_iter()
             .filter_map(|base| match base {
                 ContractBase::Contract(base_contract) => Some(base_contract),
@@ -58,7 +58,7 @@ impl SuperDispatch {
             })
             .collect();
         let most_derived_ids: HashSet<NodeId> = contract
-            .compute_linearised_functions()
+            .linearised_functions()
             .iter()
             .map(|function| function.node_id())
             .collect();
@@ -68,9 +68,9 @@ impl SuperDispatch {
         // Virtual dispatch: map every shadowed (overridden) base function to the
         // most-derived implementation of its signature, so a plain `g()` call in
         // a base body reaches the override. The most-derived version of each
-        // signature is exactly the one kept by `compute_linearised_functions`.
+        // signature is exactly the one kept by `linearised_functions`.
         let mut most_derived_by_signature: HashMap<String, NodeId> = HashMap::new();
-        for function in contract.compute_linearised_functions() {
+        for function in contract.linearised_functions() {
             most_derived_by_signature
                 .entry(FunctionEmitter::mlir_function_name(&function))
                 .or_insert_with(|| function.node_id());
@@ -97,7 +97,7 @@ impl SuperDispatch {
         // linearised functions and the constructors along the chain), each tagged
         // with the mro index of the contract whose body it is.
         let mut to_walk: Vec<(usize, FunctionDefinition)> = Vec::new();
-        for function in contract.compute_linearised_functions() {
+        for function in contract.linearised_functions() {
             let index = Self::defining_index(&mro, function.node_id()).unwrap_or(0);
             to_walk.push((index, function));
         }
