@@ -166,12 +166,18 @@ impl Operator {
                 .rhs(rhs)
                 .build()
                 .into(),
+            // `sol.shl`/`sol.shr` now accept a `bytesN` (or integer) value with an
+            // independent integer shift amount (`AllTypesMatch<lhs, result>`, rhs
+            // free), so the result type is no longer inferable from both operands
+            // and must be set explicitly — it follows the shifted value (`lhs`).
             Self::ShiftLeft => ShlOperation::builder(context, location)
+                .result(lhs.r#type())
                 .lhs(lhs)
                 .rhs(rhs)
                 .build()
                 .into(),
             Self::ShiftRight => ShrOperation::builder(context, location)
+                .result(lhs.r#type())
                 .lhs(lhs)
                 .rhs(rhs)
                 .build()
