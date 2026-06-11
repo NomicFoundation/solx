@@ -15,6 +15,7 @@ use anyhow::Context as _;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::ValueLike;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::CallOptionsExpression;
@@ -1246,7 +1247,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let (argument_values, current_block) =
             self.emit_coerced_arguments(positional_arguments, &parameter_types, block)?;
         let builder = &self.expression_emitter.state.builder;
-        let results = if function_type.is_externally_visible() {
+        // Dispatch internal (`sol.icall`) vs external (`sol.ext_icall`) on the
+        // callee value's actual reference kind, not slang's
+        // `is_externally_visible`: a bare function name used as a value is an
+        // INTERNAL pointer (`func_ref`) even for a `public` function, but slang
+        // reports the function type as externally visible — so an inline
+        // `(cond ? g : h)(args)` over public functions yields an internal
+        // `func_ref` value that an `ext_icall` would mis-cast to `ext_func_ref`.
+        let results = if solx_mlir::TypeFactory::is_sol_ext_function_ref(callee_value.r#type()) {
             // `fp{value: v}(args)` forwards `v`; a plain `fp(args)` sends zero.
             let value = call_value.unwrap_or_else(|| {
                 builder.emit_sol_constant(0, builder.types.ui256, &current_block)
