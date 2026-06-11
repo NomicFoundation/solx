@@ -111,10 +111,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             BuiltIn::Keccak256 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
                 let builder = &self.expression_emitter.state.builder;
+                // `sol.keccak256` hashes a memory buffer; a storage / calldata
+                // `bytes` argument is a reference, so copy it to memory first
+                // (solc emits a Storage|CallData -> Memory `sol.data_loc_cast`
+                // here). An already-memory buffer passes through unchanged.
+                let input =
+                    TypeConversion::from_target_type(builder.types.sol_string_memory, builder)
+                        .emit(values[0], builder, &block);
                 let value = block
                     .append_operation(
                         Keccak256Operation::builder(builder.context, builder.unknown_location)
-                            .addr(values[0])
+                            .addr(input)
                             .result(builder.types.fixed_bytes(32))
                             .build()
                             .into(),
