@@ -12,6 +12,7 @@ use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::SliceOperation;
 use solx_utils::DataLocation;
 
@@ -31,13 +32,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         // A slice `a[start:end]` produces a sub-array VALUE (not an element
-        // address), lowered to `sol.slice`. The bounded forms `a[i:j]` / `a[:j]`
-        // are detectable through this slang pin's typed API as `end().is_some()`.
-        // The open-ended `a[i:]` is indistinguishable from the index `a[i]`
-        // (both have `end() == None`) without slang's `is_slice()` colon flag —
-        // an un-upstreamed slang patch absent from this upstream pin — so it
-        // stays deferred until that API is vendored.
-        if index_access.end().is_some() {
+        // address), lowered to `sol.slice`. `is_slice()` (the colon-presence
+        // flag) distinguishes every slice form — including the open-ended
+        // `a[i:]`, indistinguishable from the index `a[i]` by `end()` alone
+        // (both `None`) — from a plain index access.
+        if index_access.is_slice() {
             return self
                 .emit_slice(index_access, block)
                 .map(|(value, block)| (Some(value), block));
@@ -86,15 +85,34 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 (zero, block)
             }
         };
-        let end_expression = index_access
-            .end()
-            .expect("emit_slice is dispatched only when end() is Some");
-        let (end_value, block) = self.emit_value(&end_expression, block)?;
-        let end_value = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
-            end_value,
-            &self.state.builder,
-            &block,
-        );
+        let (end_value, block) = match index_access.end() {
+            Some(end_expression) => {
+                let (value, block) = self.emit_value(&end_expression, block)?;
+                let value = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
+                    value,
+                    &self.state.builder,
+                    &block,
+                );
+                (value, block)
+            }
+            None => {
+                // Open-ended slice `a[start:]` runs to the end of the array; its
+                // upper bound is the operand's length.
+                let builder = &self.state.builder;
+                let length = block
+                    .append_operation(
+                        LengthOperation::builder(builder.context, builder.unknown_location)
+                            .inp(base_value)
+                            .len(ui256)
+                            .build()
+                            .into(),
+                    )
+                    .result(0)
+                    .expect("sol.length always produces one result")
+                    .into();
+                (length, block)
+            }
+        };
         let result_type = TypeConversion::resolve_slang_type(
             &index_access
                 .get_type()
