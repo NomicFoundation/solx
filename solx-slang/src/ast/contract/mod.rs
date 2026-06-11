@@ -216,12 +216,23 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // its own — subject to override resolution. Constructors and modifiers are
         // emitted by their own paths (the constructor below; modifiers inline at
         // their call sites), so skip them here.
+        // A contract has a single fallback and a single receive dispatcher
+        // entry. The C3 linearisation lists the most-derived override first, so
+        // emit the first fallback / receive encountered and skip any inherited
+        // base versions — they have distinct signatures (`fallback(bytes)` vs an
+        // overriding `fallback()`) so override resolution does not collapse them,
+        // and emitting a second `sol.func` of either kind makes the backend
+        // assert there is exactly one fallback / receive (`!fallbackFn`).
+        let mut fallback_emitted = false;
+        let mut receive_emitted = false;
         for function in contract.linearised_functions() {
-            if matches!(
-                function.kind(),
-                FunctionKind::Constructor | FunctionKind::Modifier
-            ) {
-                continue;
+            match function.kind() {
+                FunctionKind::Constructor | FunctionKind::Modifier => continue,
+                FunctionKind::Fallback if fallback_emitted => continue,
+                FunctionKind::Fallback => fallback_emitted = true,
+                FunctionKind::Receive if receive_emitted => continue,
+                FunctionKind::Receive => receive_emitted = true,
+                _ => {}
             }
             if let Some(selector) = function.compute_selector()
                 && getter_selectors.contains(&selector)
