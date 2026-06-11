@@ -427,6 +427,36 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     _ => {}
                 }
             }
+
+            // `localRef.slot` / `localRef.offset` for a `storage` reference local
+            // (`T storage x = …`): the local stores the slot index, and a storage
+            // reference is slot-aligned, so the in-slot byte offset is 0 (matching
+            // solc). Without this, the fall-through below loads the local for both
+            // suffixes, so `.offset` wrongly returns the slot.
+            if matches!(
+                parts[0].resolve_to_definition(),
+                Some(Definition::Variable(_) | Definition::Parameter(_))
+            ) {
+                match parts[1].resolve_to_built_in() {
+                    Some(BuiltIn::YulSlot) => {
+                        let declaration = parts[0]
+                            .resolve_to_definition()
+                            .expect("yul path head resolves to a declaration")
+                            .node_id();
+                        let (pointer, _) = self.environment.variable_with_type(declaration);
+                        let llvm_pointer = self.yul_local_pointer(pointer, &block);
+                        let value = builder.emit_yul_local_load(llvm_pointer, &block);
+                        return Ok((value, block));
+                    }
+                    Some(BuiltIn::YulOffset) => {
+                        return Ok((
+                            builder.emit_yul_constant(&BigInt::from(0u32), &block),
+                            block,
+                        ));
+                    }
+                    _ => {}
+                }
+            }
         }
 
         let declaration = identifier
