@@ -24,11 +24,13 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Parameters;
 use slang_solidity_v2::ast::Statement;
 use slang_solidity_v2::ast::Statements;
+use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::YulFunctionDefinition;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
 
+use crate::ast::ExpressionExt;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::expression::call::CallEmitter;
@@ -216,6 +218,20 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     return Ok(Some(block));
                 }
                 let emitter = self.expression_emitter();
+                // A discarded tuple-valued conditional `(c ? (1, 2, 3) : (3, 2, 1));`
+                // has no single value to emit, but its condition and the selected
+                // branch may have side effects; route it through the tuple path
+                // and discard the results. The statement is usually parenthesised
+                // (a single-element tuple), so peel those first. A single-valued
+                // conditional resolves a scalar type and emits normally below.
+                let unwrapped = expression_statement.expression().unwrap_parens();
+                if let Expression::ConditionalExpression(conditional) = &unwrapped
+                    && matches!(conditional.get_type(), Some(SlangType::Tuple(_)))
+                {
+                    let (_values, block) =
+                        emitter.emit_conditional_tuple_values(conditional, block)?;
+                    return Ok(Some(block));
+                }
                 let (_, block) = emitter.emit(&expression, block)?;
                 Ok(Some(block))
             }
