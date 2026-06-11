@@ -393,6 +393,13 @@ impl<'context> Context<'context> {
     /// Parses the source, verifies it, and translates to LLVM IR.
     /// Returns owned `(LLVMContextRef, LLVMModuleRef)`.
     ///
+    /// `immutables` (the deploy segment's id -> reserved-offsets map, harvested
+    /// from the runtime object) lowers every `llvm.setimmutable` to heap stores
+    /// at those offsets before translation — `llvm.setimmutable` has no LLVM-IR
+    /// translation, so a `ContractKind::Library`'s library-address immutable must
+    /// be lowered here. `None` (the runtime segment, or a non-library) leaves the
+    /// module unchanged (the runtime carries no `setimmutable`).
+    ///
     /// # Errors
     ///
     /// Returns an error if the source cannot be parsed, fails verification,
@@ -400,12 +407,17 @@ impl<'context> Context<'context> {
     pub fn translate_source_to_llvm(
         context: &melior::Context,
         source: &str,
+        immutables: Option<&std::collections::BTreeMap<String, std::collections::BTreeSet<u64>>>,
     ) -> anyhow::Result<RawLlvmModule> {
         let module = Module::parse(context, source)
             .ok_or_else(|| anyhow::anyhow!("failed to parse MLIR source text"))?;
 
         if !module.as_operation().verify() {
             anyhow::bail!("MLIR module verification failed");
+        }
+
+        if let Some(immutables) = immutables {
+            Self::lower_set_immutables(&module, immutables);
         }
 
         // SAFETY: `raw_operation` is a valid MlirOperation from a verified
@@ -432,6 +444,39 @@ impl<'context> Context<'context> {
                 context: llvm_context,
                 module: llvm_module as *mut _,
             })
+        }
+    }
+
+    /// Lowers every `llvm.setimmutable` in `module` to heap stores at its
+    /// immutable's reserved offsets (then erases it), via the solx-llvm C-API.
+    /// The id -> offsets map is flattened to parallel arrays (one (id, offset)
+    /// entry per pair), which the C-API rebuilds.
+    fn lower_set_immutables(
+        module: &Module,
+        immutables: &std::collections::BTreeMap<String, std::collections::BTreeSet<u64>>,
+    ) {
+        let mut id_cstrings: Vec<std::ffi::CString> = Vec::new();
+        let mut offsets: Vec<u64> = Vec::new();
+        for (id, id_offsets) in immutables {
+            for &offset in id_offsets {
+                id_cstrings.push(
+                    std::ffi::CString::new(id.as_str()).expect("immutable id has no interior NUL"),
+                );
+                offsets.push(offset);
+            }
+        }
+        let id_pointers: Vec<*const std::ffi::c_char> =
+            id_cstrings.iter().map(|id| id.as_ptr()).collect();
+        // SAFETY: `id_pointers` and `offsets` (parallel, length `offsets.len()`)
+        // outlive the call; `id_cstrings` keeps the pointed-to bytes alive. The
+        // module is a valid, verified MLIR module.
+        unsafe {
+            crate::ffi::mlirEvmLowerSetImmutables(
+                module.to_raw(),
+                id_pointers.as_ptr(),
+                offsets.as_ptr(),
+                offsets.len() as u64,
+            );
         }
     }
 }

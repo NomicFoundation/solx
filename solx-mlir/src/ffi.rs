@@ -10,6 +10,7 @@ use mlir_sys::MlirBlock;
 use mlir_sys::MlirContext;
 use mlir_sys::MlirDialectHandle;
 use mlir_sys::MlirDialectRegistry;
+use mlir_sys::MlirModule;
 use mlir_sys::MlirPass;
 use mlir_sys::MlirRegion;
 
@@ -184,6 +185,21 @@ unsafe extern "C" {
         result_types: *const mlir_sys::MlirType,
         result_count: usize,
     ) -> mlir_sys::MlirType;
+
+    // ---- Sol immutables ----
+
+    /// Lowers each `llvm.setimmutable` op in `module` to heap stores at its
+    /// immutable's reserved offsets, then erases it. The id -> offsets mapping is
+    /// passed flattened: `imm_ids[i]` reserves offset `imm_offsets[i]` (one entry
+    /// per (id, offset) pair, `imm_count` entries). An op whose id is absent is
+    /// erased as a no-op. Mirrors the EVM-assembly `setimmutable` for the MLIR
+    /// (Slang) pipeline, which reaches codegen-evm as LLVM IR, not Yul.
+    pub fn mlirEvmLowerSetImmutables(
+        module: MlirModule,
+        imm_ids: *const *const std::ffi::c_char,
+        imm_offsets: *const u64,
+        imm_count: u64,
+    );
 
     // ---- Sol type inference ----
 

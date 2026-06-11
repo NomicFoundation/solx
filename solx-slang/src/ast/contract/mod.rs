@@ -347,20 +347,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let module_body = self.state.module.body();
         let contract_body = self.state.builder.emit_sol_contract(
             &library_name,
-            // Emit as a plain contract: a `delegatecall`ed library object only
-            // needs the external-function dispatcher, which the contract kind
-            // provides; the `Library` kind would add a library-address
-            // self-reference the slang path does not set up.
-            //
-            // TODO: a library with a `storage` reference parameter
-            // (`f(S storage)`) needs `ContractKind::Library` so the backend
-            // dispatcher passes the slot instead of ABI-decoding the struct
-            // (`genABITupleDecoding` aborts on a storage location otherwise) —
-            // but `Library` kind emits the library-address immutable
-            // (`llvm.setimmutable`), which fails MLIR→LLVM translation until the
-            // slang pipeline declares and links that immutable. Blocks
-            // libraries/library_function_selectors_struct and using_library_structs.
-            solx_mlir::ContractKind::Contract,
+            // A library is `ContractKind::Library`: the backend dispatcher passes
+            // a `storage` reference parameter as its slot (instead of ABI-decoding
+            // it) and emits the library-address self-reference as a
+            // `llvm.setimmutable`. That immutable is lowered to a heap store in the
+            // deploy segment's MLIR→LLVM step (`translate_source_to_llvm`'s
+            // `lowerSetImmutables`), using the offsets the runtime object reserves.
+            solx_mlir::ContractKind::Library,
             &module_body,
         );
 
