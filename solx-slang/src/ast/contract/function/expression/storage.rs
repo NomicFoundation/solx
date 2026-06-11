@@ -58,7 +58,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         // own) in linearisation order, so a derived contract's construction
         // executes its base contracts' state-variable initializers — including
         // their side effects (`uint y = f();`) — exactly as solc does.
-        for state_variable in contract.compute_linearised_state_variables() {
+        for state_variable in contract.linearised_state_variables() {
             let Some(slot) = self.storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };

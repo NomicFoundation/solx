@@ -626,7 +626,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             unreachable!("is_foldable_constant guarantees a literal type");
         };
         let value = match literal_type.kind() {
-            LiteralKind::Integer { value } | LiteralKind::HexInteger { value, .. } => value,
+            LiteralKind::Integer { value } => value,
+            // A hex literal's value is now an unsigned `BigUint`; widen to the
+            // signed `BigInt` the constant emitter expects.
+            LiteralKind::HexInteger { value, .. } => num_bigint::BigInt::from(value),
             LiteralKind::Rational { value } => value.to_integer(),
             _ => unreachable!("is_foldable_constant guarantees a numeric literal"),
         };

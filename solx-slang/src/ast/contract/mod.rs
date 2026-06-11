@@ -180,7 +180,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // backend's `AddrOfOpLowering` resolves by `lookupSymbol` in this
         // contract's module (asserts if the `sol.state_var` declaration is
         // absent).
-        for state_variable in contract.compute_linearised_state_variables() {
+        for state_variable in contract.linearised_state_variables() {
             let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };
@@ -206,7 +206,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // the getter's selector symbol (`redefinition of symbol`); the getter
         // (emitted last) wins, so skip such functions here.
         let getter_selectors: std::collections::HashSet<u32> = contract
-            .compute_linearised_state_variables()
+            .linearised_state_variables()
             .iter()
             .filter_map(|state_variable| state_variable.compute_selector())
             .collect();
@@ -216,7 +216,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // its own — subject to override resolution. Constructors and modifiers are
         // emitted by their own paths (the constructor below; modifiers inline at
         // their call sites), so skip them here.
-        for function in contract.compute_linearised_functions() {
+        for function in contract.linearised_functions() {
             if matches!(
                 function.kind(),
                 FunctionKind::Constructor | FunctionKind::Modifier
@@ -377,7 +377,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         storage_layout: &HashMap<NodeId, StorageSlot>,
         contract_body: &BlockRef<'context, '_>,
     ) -> anyhow::Result<()> {
-        for state_variable in contract.compute_linearised_state_variables() {
+        for state_variable in contract.linearised_state_variables() {
             if matches!(
                 state_variable.mutability(),
                 StateVariableMutability::Constant

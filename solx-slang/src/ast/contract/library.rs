@@ -53,7 +53,7 @@ impl LibraryCallCollector {
         extra_roots: &[FunctionDefinition],
     ) -> Vec<FunctionDefinition> {
         let own: HashSet<NodeId> = contract
-            .compute_linearised_functions()
+            .linearised_functions()
             .iter()
             .map(|function| function.node_id())
             .collect();
