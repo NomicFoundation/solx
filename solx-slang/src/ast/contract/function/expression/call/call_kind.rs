@@ -42,14 +42,6 @@ pub enum CallKind {
     WithOptions(Box<CallKind>),
     /// `T[](n)` — array type conversion of an empty `T[]` callee.
     ArrayTypeConversion,
-    /// `S(ref)` — a struct constructor whose sole field is a reference type,
-    /// which the backend mis-compiles as a conversion.
-    ///
-    /// #H1: routed here (NOT `StructConstructor`) ONLY because the backend's
-    /// `genCopy` for a `sol::StructType` destination is NYI / `llvm_unreachable`
-    /// (`solx-llvm/mlir/lib/Conversion/SolToYul/EVMUtil.cpp:2843-2848`). Flagged
-    /// for removal once the backend supports struct copy.
-    RefFieldStructAsConversion,
     /// A call through an internal function pointer value (`(f)(x)`, a callee
     /// resolving to a `Variable`/`Parameter`/`StateVariable` of function type).
     IndirectPointer,
