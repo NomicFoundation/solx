@@ -99,16 +99,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
 
         match self.classify_call(call, positional_arguments) {
-            CallKind::TypeConversion
-            | CallKind::RefFieldStructAsConversion
-            | CallKind::ArrayTypeConversion => {
-                // All three lower a single argument cast to the call's own type:
-                // a genuine `T(x)` conversion, an array-type conversion `T[](x)`
+            CallKind::TypeConversion | CallKind::ArrayTypeConversion => {
+                // Both lower a single argument cast to the call's own type: a
+                // genuine `T(x)` conversion and an array-type conversion `T[](x)`
                 // (an identity / data-location cast, e.g. forcing a calldata
-                // slice into `uint256[]` to read `.length` / an element), and a
-                // reference-field struct `S(ref)` that slang reports as a
-                // conversion and the backend cannot yet construct (its `sol.copy`
-                // into a struct destination is NYI).
+                // slice into `uint256[]` to read `.length` / an element).
                 let first = positional_arguments
                     .iter()
                     .next()
@@ -397,10 +392,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             // yet it must build a struct, not cast its argument to the struct
             // type (`sol.cast` is integer-only and rejects a struct result).
             // Multi-field constructors carry more than one argument and never
-            // reach here. When the struct's sole field is a reference type the
-            // construction would `sol.copy` an aggregate into a struct
-            // destination the backend cannot yet lower, so it stays on the
-            // conversion path as `RefFieldStructAsConversion`.
+            // reach here. `S(x)` always *constructs* (you cannot convert a value
+            // to a struct), including when the sole field is a reference type:
+            // the construction stores the field's reference into the freshly
+            // malloc'd struct (a pointer store, matching solc), not a `sol.copy`.
             // The struct name may be bare (`S(x)`) or namespace-qualified
             // (`L.S(x)`); both resolve the member/identifier to the same struct
             // definition.
@@ -412,17 +407,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 _ => None,
             };
             if let Some(Definition::Struct(struct_definition)) = struct_callee {
-                let first_field_is_value = struct_definition
-                    .members()
-                    .iter()
-                    .next()
-                    .and_then(|member| member.get_type())
-                    .is_some_and(|field_type| !field_type.is_reference_type());
-                return if first_field_is_value {
-                    CallKind::StructConstructor(struct_definition)
-                } else {
-                    CallKind::RefFieldStructAsConversion
-                };
+                return CallKind::StructConstructor(struct_definition);
             }
             return CallKind::TypeConversion;
         }
