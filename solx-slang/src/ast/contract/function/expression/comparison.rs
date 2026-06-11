@@ -31,6 +31,34 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let comparison = self.state.builder.emit_sol_cmp(lhs, rhs, predicate, &block);
             return Ok((comparison, block));
         }
+        // Two fixed-bytes operands of different widths (`bytes3("abc") ==
+        // bytes4("abc")`): `bytesN` are LEFT-aligned, so the operands share a
+        // word once the narrower is zero-extended on the right. Widen the
+        // smaller to the larger fixed-bytes width with a `sol.bytes_cast` and
+        // compare AS fixed-bytes, matching solc. Bridging each through its own
+        // width integer (the mixed-integer path below) right-aligns the values
+        // — `bytes3("abc")` as `ui24` (0x616263) differs from `bytes4("abc")` as
+        // `ui32` (0x61626300) — yielding the wrong result.
+        if let (Some(lhs_width), Some(rhs_width)) = (
+            solx_mlir::TypeFactory::fixed_bytes_or_byte_width(lhs.r#type()),
+            solx_mlir::TypeFactory::fixed_bytes_or_byte_width(rhs.r#type()),
+        ) {
+            let builder = &self.state.builder;
+            let common_width = lhs_width.max(rhs_width);
+            let common = builder.types.fixed_bytes(common_width);
+            let lhs_common = if lhs_width == common_width {
+                lhs
+            } else {
+                builder.emit_sol_bytes_cast(lhs, common, &block)
+            };
+            let rhs_common = if rhs_width == common_width {
+                rhs
+            } else {
+                builder.emit_sol_bytes_cast(rhs, common, &block)
+            };
+            let comparison = builder.emit_sol_cmp(lhs_common, rhs_common, predicate, &block);
+            return Ok((comparison, block));
+        }
         // Mixed-type comparison (`i < 10` with `i : int8`, `10 : uint8`): widen
         // each operand to 256 bits preserving ITS OWN signedness — a signed
         // operand sign-extends, an unsigned one zero-extends — so a signed
