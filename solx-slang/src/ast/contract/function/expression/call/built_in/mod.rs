@@ -254,11 +254,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let (value, block) = self.emit_enum_variant(access, ordinal, block);
             return Ok((Some(value), block));
         }
-        // `addr.transfer` / `addr.send` / `addr.call` (and `delegatecall` /
-        // `staticcall`) referenced WITHOUT a call — e.g. a discarded
-        // `payable(this).transfer;` statement — is a member reference, not the
-        // action itself (which the call dispatch handles). Evaluate the operand
-        // for its side effects and yield a placeholder value.
+        // A function-like built-in member over a value operand referenced
+        // WITHOUT a call — `addr.transfer` / `addr.send` / `addr.call` /
+        // `delegatecall` / `staticcall`, or `data.pop` / `data.push` — e.g. a
+        // discarded `payable(this).transfer;` or `data.pop;` statement — is a
+        // member reference, not the action itself (which the call dispatch
+        // handles; for the uncalled form solc only binds the function and checks
+        // its stack size). Evaluate the operand for its side effects and yield a
+        // placeholder value. (The `abi.*` forms are also no-ops uncalled but
+        // their operand is the `abi` namespace keyword, not a value, so they are
+        // not bound here.)
         if arguments.is_none()
             && matches!(
                 access.member().resolve_to_built_in(),
@@ -268,6 +273,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         | BuiltIn::AddressCall
                         | BuiltIn::AddressDelegatecall
                         | BuiltIn::AddressStaticcall
+                        | BuiltIn::ArrayPop
+                        | BuiltIn::ArrayPush
                 )
             )
         {
