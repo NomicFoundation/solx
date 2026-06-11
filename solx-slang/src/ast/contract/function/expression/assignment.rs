@@ -365,75 +365,83 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         right: &Expression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let lhs_items = tuple.items();
-
-        let (values, block) = match right {
+        // Materialise the assignment as `(lvalue, value)` pairs, evaluating
+        // every value before any store (Solidity's `(a, b) = (b, a)` swap).
+        let (assignments, mut block): (Vec<(Expression, Value<'context, 'block>)>, _) = match right
+        {
             Expression::TupleExpression(rhs_tuple) => {
-                let rhs_items = rhs_tuple.items();
-                assert!(
-                    rhs_items.len() == lhs_items.len(),
-                    "tuple assignment arity mismatch: {} LHS slots vs {} RHS values",
-                    lhs_items.len(),
-                    rhs_items.len(),
-                );
-                let mut values = Vec::with_capacity(rhs_items.len());
+                // Pair LHS lvalues with RHS value expressions, recursing only
+                // where BOTH sides are tuples — so a blank slot
+                // (`(a, ) = (4, (8, 16, 32))`) discards the whole nested tuple
+                // rather than spreading it across slots.
+                let pairs = Self::pair_tuple_assignment(tuple, rhs_tuple);
+                let mut assignments = Vec::new();
                 let mut current = block;
-                for item in rhs_items.iter() {
-                    let inner = item
-                        .expression()
-                        .expect("a tuple assignment RHS element has an inner expression");
-                    let (value, next) = self.emit_value(&inner, current)?;
-                    values.push(value);
-                    current = next;
+                for (lvalue, rhs_expression) in pairs {
+                    match lvalue {
+                        Some(lvalue) => {
+                            let (value, next) = self.emit_value(&rhs_expression, current)?;
+                            current = next;
+                            assignments.push((lvalue, value));
+                        }
+                        // A discarded scalar is still evaluated for its side
+                        // effects; a discarded nested tuple is dropped wholesale.
+                        None if !matches!(rhs_expression, Expression::TupleExpression(_)) => {
+                            let (_discarded, next) = self.emit_value(&rhs_expression, current)?;
+                            current = next;
+                        }
+                        None => {}
+                    }
                 }
-                (values, current)
+                (assignments, current)
             }
+            // A call / conditional yields a flat value list, so the LHS pairs by
+            // flattened leaf (no syntactic nesting can match these).
             Expression::FunctionCallExpression(call) => {
-                let call_emitter = CallEmitter::new(self);
-                let (values, current) = call_emitter.emit_function_call_results(call, block)?;
+                let lhs_leaves = Self::flatten_tuple_lvalues(tuple);
+                let (values, current) =
+                    CallEmitter::new(self).emit_function_call_results(call, block)?;
                 assert!(
-                    values.len() == lhs_items.len(),
+                    values.len() == lhs_leaves.len(),
                     "tuple assignment arity mismatch: {} LHS slots vs {} call results",
-                    lhs_items.len(),
+                    lhs_leaves.len(),
                     values.len(),
                 );
-                (values, current)
+                (Self::zip_assignments(lhs_leaves, values), current)
             }
             Expression::ConditionalExpression(conditional) => {
                 // `(a, b) = cond ? (x, y) : (z, w)` — the conditional yields one
                 // value per tuple element via the shared tuple-conditional path.
+                let lhs_leaves = Self::flatten_tuple_lvalues(tuple);
                 let (values, current) = self.emit_conditional_tuple_values(conditional, block)?;
                 assert!(
-                    values.len() == lhs_items.len(),
+                    values.len() == lhs_leaves.len(),
                     "tuple assignment arity mismatch: {} LHS slots vs {} conditional values",
-                    lhs_items.len(),
+                    lhs_leaves.len(),
                     values.len(),
                 );
-                (values, current)
+                (Self::zip_assignments(lhs_leaves, values), current)
             }
             _ => unimplemented!(
                 "tuple assignment with this right-hand side shape is not yet supported"
             ),
         };
 
-        let mut targets = Vec::with_capacity(lhs_items.len());
-        let mut block = block;
-        for item in lhs_items.iter() {
-            match item.expression() {
-                Some(lvalue) => {
-                    let (target, next) = self.resolve_assignment_target(&lvalue, block)?;
-                    targets.push(Some(target));
-                    block = next;
-                }
-                None => targets.push(None),
-            }
+        // Resolve every LHS lvalue address first, left-to-right against the
+        // pre-assignment state, then store RIGHT-TO-LEFT: invisible for value
+        // types, but reproducing Solidity's storage-aggregate quirk that a
+        // `(x, y) = (y, x)` swap does not work and that the leftmost write to an
+        // aliased destination wins (`(y, y, y) = (1, 2, 3)` leaves `y == 1`).
+        let mut targets = Vec::with_capacity(assignments.len());
+        for (lvalue, value) in assignments {
+            let (target, next) = self.resolve_assignment_target(&lvalue, block)?;
+            block = next;
+            targets.push((target, value));
         }
 
         let mut result = None;
-        for (target, value) in targets.iter().zip(values).rev() {
-            if let Some(target) = target {
-                result = Some(self.store_into_target(target, value, &block));
-            }
+        for (target, value) in targets.into_iter().rev() {
+            result = Some(self.store_into_target(&target, value, &block));
         }
         // A fully blank LHS `(, ) = f()` binds nothing; the assignment still has
         // a value in expression position, so fall back to a zero sentinel.
@@ -443,6 +451,69 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .emit_sol_constant(0, self.state.builder.types.ui256, &block)
         });
         Ok((result, block))
+    }
+
+    /// Pairs a tuple LHS with a tuple RHS into `(lvalue, value-expression)`
+    /// pairs, recursing into nested tuples only where BOTH sides nest, so a
+    /// blank LHS slot opposite a nested RHS tuple discards it as a unit. A blank
+    /// slot yields `None` for its lvalue.
+    fn pair_tuple_assignment(
+        lhs: &TupleExpression,
+        rhs: &TupleExpression,
+    ) -> Vec<(Option<Expression>, Expression)> {
+        let lhs_items = lhs.items();
+        let rhs_items = rhs.items();
+        assert!(
+            lhs_items.len() == rhs_items.len(),
+            "tuple assignment arity mismatch: {} LHS slots vs {} RHS values",
+            lhs_items.len(),
+            rhs_items.len(),
+        );
+        let mut pairs = Vec::new();
+        for (lhs_item, rhs_item) in lhs_items.iter().zip(rhs_items.iter()) {
+            let lhs_expression = lhs_item.expression();
+            let rhs_expression = rhs_item
+                .expression()
+                .expect("a tuple assignment RHS element has an inner expression");
+            match (&lhs_expression, &rhs_expression) {
+                (
+                    Some(Expression::TupleExpression(lhs_nested)),
+                    Expression::TupleExpression(rhs_nested),
+                ) => {
+                    pairs.extend(Self::pair_tuple_assignment(lhs_nested, rhs_nested));
+                }
+                _ => pairs.push((lhs_expression, rhs_expression)),
+            }
+        }
+        pairs
+    }
+
+    /// Flattens a tuple's left-hand-side leaves, recursing into nested tuples
+    /// (`(a, (b, c))` -> `[a, b, c]`). A blank slot is `None` (discarded). Used
+    /// for call / conditional right-hand sides, whose values are already flat.
+    fn flatten_tuple_lvalues(tuple: &TupleExpression) -> Vec<Option<Expression>> {
+        let mut leaves = Vec::new();
+        for item in tuple.items().iter() {
+            match item.expression() {
+                Some(Expression::TupleExpression(nested)) => {
+                    leaves.extend(Self::flatten_tuple_lvalues(&nested));
+                }
+                other => leaves.push(other),
+            }
+        }
+        leaves
+    }
+
+    /// Zips flattened LHS leaves with their values, dropping blank slots.
+    fn zip_assignments(
+        lhs_leaves: Vec<Option<Expression>>,
+        values: Vec<Value<'context, 'block>>,
+    ) -> Vec<(Expression, Value<'context, 'block>)> {
+        lhs_leaves
+            .into_iter()
+            .zip(values)
+            .filter_map(|(lvalue, value)| lvalue.map(|lvalue| (lvalue, value)))
+            .collect()
     }
 
     /// Peels parenthesised single-element tuples so `((x))` resolves to `x`.
