@@ -198,8 +198,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     builder.types.fixed_bytes(4),
                     &block,
                 );
+                // `abi.encodeCall` ABI-encodes the arguments as an external call
+                // would: reference parameters are encoded from `Memory`, not
+                // their declared `calldata`/`storage` location (which cannot
+                // cross the call boundary). Use the external (memory) signature
+                // so a memory struct/array argument needs no data-location cast
+                // (solc encodes the same).
                 let (parameter_types, _) =
-                    TypeConversion::resolve_function_types(&function, builder);
+                    TypeConversion::resolve_external_function_types(&function, builder);
                 (selector_value, parameter_types, block)
             }
             _ => {
@@ -221,7 +227,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .parameter_types()
                     .iter()
                     .map(|parameter_type| {
-                        TypeConversion::resolve_slang_type(parameter_type, None, builder)
+                        TypeConversion::resolve_slang_type_in_memory(parameter_type, builder)
                     })
                     .collect();
                 (selector_value, parameter_types, current)
