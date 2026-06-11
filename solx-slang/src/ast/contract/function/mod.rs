@@ -10,6 +10,7 @@ pub mod signature;
 pub mod statement;
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
@@ -17,7 +18,9 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::abi::AbiEntry;
+use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::NodeId;
@@ -502,30 +505,138 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let contract = self
             .contract
             .expect("the constructor emitter requires a contract");
-        if let Some(constructor) = contract.constructor() {
-            self.emit_sol(&constructor, contract_body)?;
+
+        // C3 linearisation, most-derived (self) first. Interfaces have no
+        // constructor, so only contracts contribute to the construction chain.
+        let mro: Vec<ContractDefinition> = contract
+            .linearised_bases()
+            .into_iter()
+            .filter_map(|base| match base {
+                ContractBase::Contract(base_contract) => Some(base_contract),
+                ContractBase::Interface(_) => None,
+            })
+            .collect();
+
+        // When no base contributes a constructor, the contract's own constructor
+        // (or an empty one running just the state-variable initializers) is the
+        // entire construction. A constructor carrying real modifiers also stays
+        // on this path: the inline chain below has no modifier dispatch, so the
+        // modifier+inheritance combination keeps the single-constructor emission
+        // (its base bodies are not yet run — a separate capability).
+        // TODO: run base constructor bodies even when a chain constructor carries
+        // a real modifier (needs constructor-modifier dispatch in the chain).
+        let has_base_constructor = mro.iter().skip(1).any(|base| base.constructor().is_some());
+        let chain_has_modifier = mro
+            .iter()
+            .filter_map(|base| base.constructor())
+            .any(|constructor| Self::constructor_has_real_modifier(&constructor));
+        if !has_base_constructor || chain_has_modifier {
+            if let Some(constructor) = contract.constructor() {
+                self.emit_sol(&constructor, contract_body)?;
+                return Ok(());
+            }
+            let entry = self.state.builder.emit_sol_func(
+                "constructor()",
+                &[],
+                &[],
+                None,
+                StateMutability::NonPayable,
+                Some(solx_mlir::FunctionKind::Constructor),
+                None,
+                contract_body,
+            );
+            let environment = Environment::new();
+            let emitter = ExpressionEmitter::new(
+                self.state,
+                &environment,
+                self.storage_layout,
+                ArithmeticMode::Checked,
+            );
+            let block = emitter.emit_state_var_initializers(contract, entry)?;
+            self.state.builder.emit_sol_return(&[], &block);
             return Ok(());
         }
+
+        // Inheritance chain: one `constructor()` runs every base constructor
+        // (base-first), each in its own parameter scope, after the linearised
+        // state-variable initializers. The deployed constructor takes the
+        // most-derived contract's own constructor parameters.
+        let derived_constructor = contract.constructor();
+        let (parameter_types, mutability) = match &derived_constructor {
+            Some(constructor) => {
+                let (parameter_types, _) =
+                    TypeConversion::resolve_function_types(constructor, &self.state.builder);
+                (parameter_types, Self::map_state_mutability(constructor))
+            }
+            None => (Vec::new(), StateMutability::NonPayable),
+        };
         let entry = self.state.builder.emit_sol_func(
             "constructor()",
-            &[],
+            &parameter_types,
             &[],
             None,
-            StateMutability::NonPayable,
+            mutability,
             Some(solx_mlir::FunctionKind::Constructor),
             None,
             contract_body,
         );
-        let environment = Environment::new();
-        let emitter = ExpressionEmitter::new(
-            self.state,
-            &environment,
-            self.storage_layout,
-            ArithmeticMode::Checked,
-        );
-        let block = emitter.emit_state_var_initializers(contract, entry)?;
-        self.state.builder.emit_sol_return(&[], &block);
-        Ok(())
+
+        // Per-contract constructor scopes, keyed by contract node id. Each holds
+        // that contract's constructor parameters (and, while its body is emitted,
+        // its local variables). Base constructors routinely reuse the derived
+        // contract's parameter names, so a single flat scope would clobber them.
+        let mut root_environment = Environment::new();
+        if let Some(constructor) = &derived_constructor {
+            for (index, parameter) in constructor.parameters().iter().enumerate() {
+                let parameter_type = parameter_types[index];
+                let parameter_value: Value<'context, '_> = entry.argument(index)?.into();
+                let pointer = self.state.builder.emit_sol_alloca(parameter_type, &entry);
+                self.state
+                    .builder
+                    .emit_sol_store(parameter_value, pointer, &entry);
+                root_environment.define_variable(parameter.node_id(), pointer, parameter_type);
+            }
+        }
+
+        // State-variable initializers (whole C3 hierarchy) run first; they cannot
+        // reference constructor parameters, so the scope only matters for the
+        // shared storage layout.
+        let mut current_block = {
+            let emitter = ExpressionEmitter::new(
+                self.state,
+                &root_environment,
+                self.storage_layout,
+                ArithmeticMode::Checked,
+            );
+            emitter.emit_state_var_initializers(contract, entry)?
+        };
+
+        let mut scopes: HashMap<NodeId, Environment<'context, '_>> = HashMap::new();
+        scopes.insert(contract.node_id(), root_environment);
+        let mut bound_scopes: HashSet<NodeId> = HashSet::new();
+        bound_scopes.insert(contract.node_id());
+
+        let mro_node_ids: HashSet<NodeId> = mro.iter().map(|base| base.node_id()).collect();
+        current_block = self.bind_base_constructor_scopes(
+            &mro,
+            &mro_node_ids,
+            &mut scopes,
+            &mut bound_scopes,
+            current_block,
+        )?;
+        self.emit_constructor_bodies(&mro, &mut scopes, &bound_scopes, &entry, current_block)
+    }
+
+    /// Returns whether a constructor carries a real modifier (as opposed to a
+    /// base-constructor invocation `Base(args)`, which shares the same
+    /// modifier-style syntax but resolves to a contract, not a modifier).
+    fn constructor_has_real_modifier(constructor: &FunctionDefinition) -> bool {
+        constructor.modifier_invocations().iter().any(|invocation| {
+            matches!(
+                invocation.name().resolve_to_definition(),
+                Some(Definition::Modifier(_))
+            )
+        })
     }
 
     /// Returns the unique MLIR symbol name for a function.
