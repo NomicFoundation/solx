@@ -297,7 +297,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // The signature comes from the callee's definition (valid for both a
         // foreign instance and the current contract's own function), so the
         // unified path never depends on the callee being in the local registry.
-        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
+        // External calls cross the ABI boundary, so a `calldata` reference
+        // parameter is encoded from / decoded to memory — the callee type and
+        // argument coercions use the EXTERNAL (memory) representation.
+        let (parameter_types, return_types) = TypeConversion::resolve_external_function_types(
             function_definition,
             &self.expression_emitter.state.builder,
         );
@@ -368,7 +371,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         else {
             return Ok(None);
         };
-        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
+        // External (ABI) signature: `calldata` reference parameters cross the
+        // call boundary as memory (see `resolve_external_function_types`).
+        let (parameter_types, return_types) = TypeConversion::resolve_external_function_types(
             &function_definition,
             &self.expression_emitter.state.builder,
         );
