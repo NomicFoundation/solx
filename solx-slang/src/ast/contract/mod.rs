@@ -396,9 +396,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     }
 
     /// Pre-registers all function signatures for call resolution before bodies
-    /// are emitted.
+    /// are emitted. Walks the C3-linearised function set (override-resolved, one
+    /// entry per signature) so an inherited method called by its bare name in a
+    /// derived contract resolves to its registered symbol — not only the
+    /// contract's own functions, which would leave every inherited call
+    /// unresolved.
     fn pre_register_functions(&mut self, contract: &ContractDefinition) {
-        for function in contract.functions() {
+        for function in contract.linearised_functions() {
             if matches!(function.kind(), FunctionKind::Modifier) {
                 continue;
             }

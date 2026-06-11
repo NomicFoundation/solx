@@ -471,6 +471,20 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         if matches!(operand, Expression::SuperKeyword(_)) {
             return MemberCallKind::Super;
         }
+        // `Base.f()` — an explicit base-qualified internal call (the base need
+        // not be the immediate parent). The super / C3 precompute records the
+        // redirect target keyed by this access's node id; a recorded redirect
+        // means dispatch to that specific base version up the linearisation, not
+        // an external call on a contract-typed value (the operand is a base
+        // contract name, not an instance).
+        if self
+            .expression_emitter
+            .state
+            .super_redirect
+            .contains_key(&access.node_id())
+        {
+            return MemberCallKind::Super;
+        }
         // `L.f()` on a library lowers to an internal or delegatecall library
         // call, not an external instance call. An external/public library
         // function (one with a selector) is delegatecalled; an internal one is
@@ -952,10 +966,22 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         &'a [melior::ir::Type<'context>],
         BlockRef<'context, 'block>,
     )> {
-        let (mlir_name, parameter_types, return_types) = self
+        // Virtual dispatch: a bare internal call resolving (lexically) to an
+        // overridden base function is routed to the most-derived override of its
+        // signature, so a base-body `g()` reaches the derived `g`. The redirect
+        // holds only shadowed-override nodes, so a non-virtual callee passes
+        // through unchanged. (`super`/`Base.f` bypass this — they resolve the
+        // exact linearised target by id through `super_redirect`.)
+        let node_id = function_definition.node_id();
+        let call_id = self
             .expression_emitter
             .state
-            .resolve_function(function_definition.node_id())?;
+            .virtual_redirect
+            .get(&node_id)
+            .copied()
+            .unwrap_or(node_id);
+        let (mlir_name, parameter_types, return_types) =
+            self.expression_emitter.state.resolve_function(call_id)?;
 
         let (argument_values, current_block) =
             self.emit_coerced_argument_expressions(arguments, parameter_types, block)?;
