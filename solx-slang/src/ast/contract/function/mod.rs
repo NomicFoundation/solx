@@ -20,7 +20,6 @@ use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::NodeId;
@@ -523,18 +522,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         // When no base contributes a constructor, the contract's own constructor
         // (or an empty one running just the state-variable initializers) is the
-        // entire construction. A constructor carrying real modifiers also stays
-        // on this path: the inline chain below has no modifier dispatch, so the
-        // modifier+inheritance combination keeps the single-constructor emission
-        // (its base bodies are not yet run — a separate capability).
-        // TODO: run base constructor bodies even when a chain constructor carries
-        // a real modifier (needs constructor-modifier dispatch in the chain).
+        // entire construction, emitted via `emit_sol` (which wraps its own
+        // modifiers as separate `sol.func`s). A chain that DOES have a base
+        // constructor — with or without modifiers — takes the chain path below,
+        // where `emit_constructor_bodies` runs every base body in C3 order and
+        // applies each constructor's modifiers as an inline chain.
         let has_base_constructor = mro.iter().skip(1).any(|base| base.constructor().is_some());
-        let chain_has_modifier = mro
-            .iter()
-            .filter_map(|base| base.constructor())
-            .any(|constructor| Self::constructor_has_real_modifier(&constructor));
-        if !has_base_constructor || chain_has_modifier {
+        if !has_base_constructor {
             if let Some(constructor) = contract.constructor() {
                 self.emit_sol(&constructor, contract_body)?;
                 return Ok(());
@@ -629,18 +623,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             current_block,
         )?;
         self.emit_constructor_bodies(&mro, &mut scopes, &bound_scopes, &entry, current_block)
-    }
-
-    /// Returns whether a constructor carries a real modifier (as opposed to a
-    /// base-constructor invocation `Base(args)`, which shares the same
-    /// modifier-style syntax but resolves to a contract, not a modifier).
-    fn constructor_has_real_modifier(constructor: &FunctionDefinition) -> bool {
-        constructor.modifier_invocations().iter().any(|invocation| {
-            matches!(
-                invocation.name().resolve_to_definition(),
-                Some(Definition::Modifier(_))
-            )
-        })
     }
 
     /// Returns the unique MLIR symbol name for a function.

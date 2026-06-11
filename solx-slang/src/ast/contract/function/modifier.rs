@@ -493,7 +493,41 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             }
             let environment = scopes.entry(contract.node_id()).or_default();
             environment.enter_scope();
-            for statement in body.statements().iter() {
+
+            // A constructor may carry modifiers (`constructor() mod1`). They are
+            // virtually dispatched against the *deployed* contract (resolved by
+            // `build_modifier_stages`, so an overridden modifier runs its
+            // most-derived body even while a base constructor executes). Base
+            // invocations in the same list (`Base(args)`) resolve to no modifier
+            // and are skipped — their arguments were already bound above.
+            let (mut modifier_stages, mut modifier_stage_params, next_block) =
+                self.build_modifier_stages(&base_constructor, environment, current_block)?;
+            current_block = next_block;
+
+            if modifier_stages.is_empty() {
+                for statement in body.statements().iter() {
+                    let mut emitter = StatementEmitter::new(
+                        self.state,
+                        environment,
+                        &region,
+                        self.storage_layout,
+                        &return_types,
+                        &[],
+                    );
+                    match emitter.emit(&statement, current_block)? {
+                        Some(next) => current_block = next,
+                        None => {
+                            terminated = true;
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // The constructor body is the innermost stage: the last modifier's
+                // `_;` runs it inline. A constructor has no return value, so the
+                // body need not be a separate `sol.func`.
+                modifier_stages.push(body.statements());
+                modifier_stage_params.push(Vec::new());
                 let mut emitter = StatementEmitter::new(
                     self.state,
                     environment,
@@ -502,14 +536,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     &return_types,
                     &[],
                 );
-                match emitter.emit(&statement, current_block)? {
+                emitter.set_modifier_stages(modifier_stages, modifier_stage_params);
+                match emitter.emit_inline_modifier_chain(current_block)? {
                     Some(next) => current_block = next,
-                    None => {
-                        terminated = true;
-                        break;
-                    }
+                    None => terminated = true,
                 }
             }
+
             environment.exit_scope();
             if terminated {
                 break;
