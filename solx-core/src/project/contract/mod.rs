@@ -548,9 +548,17 @@ impl Contract {
                 }
 
                 let melior_context = solx_mlir::Context::create_mlir_context();
-                let raw_llvm =
-                    solx_mlir::Context::translate_source_to_llvm(&melior_context, &mlir.source)
-                        .context("MLIR translation")?;
+                // The deploy segment carries the runtime object's immutable
+                // offsets (`Some`); lowering its `llvm.setimmutable` ops to heap
+                // stores at those offsets is required because that op has no LLVM
+                // translation (a `ContractKind::Library`'s library-address
+                // immutable). The runtime segment passes `None` (no setimmutable).
+                let raw_llvm = solx_mlir::Context::translate_source_to_llvm(
+                    &melior_context,
+                    &mlir.source,
+                    immutables.as_ref(),
+                )
+                .context("MLIR translation")?;
                 let context = unsafe { inkwell::context::Context::new(raw_llvm.context) };
                 let module = unsafe { inkwell::module::Module::new(raw_llvm.module) };
                 module.set_name(code_identifier.as_str());
