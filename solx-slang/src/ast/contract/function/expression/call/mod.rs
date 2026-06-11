@@ -318,7 +318,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let (value, salt, block) = self.capture_call_options(call_options, block)?;
-        let callee = call_options.operand();
+        // Peel parentheses: `(new C){value: v}(args)` wraps the `new` in a
+        // single-element tuple, so the callee is the parenthesised form — unwrap
+        // it so the `new` / member-access / function-pointer arms below match.
+        let callee = call_options.operand().unwrap_parens();
         match &callee {
             Expression::NewExpression(_) => {
                 let (result, block) = self.expression_emitter.emit_new(
