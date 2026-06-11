@@ -1040,38 +1040,43 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         )?;
                         Ok((results.into_iter().next(), block))
                     }
-                    Some(Definition::Struct(struct_definition)) => {
-                        let result_type = self
-                            .expression_emitter
-                            .resolve_slang_type(call.get_type())
-                            .expect("slang types a struct constructor call");
-                        let member_ids: Vec<NodeId> = struct_definition
-                            .members()
-                            .iter()
-                            .map(|member| member.node_id())
-                            .collect();
-                        let arguments = Self::order_named_arguments(named_arguments, &member_ids);
-                        let (value, block) = self.emit_struct_constructor_expressions(
+                    Some(Definition::Struct(struct_definition)) => self
+                        .emit_named_struct_constructor(
                             &struct_definition,
-                            result_type,
-                            &arguments,
+                            call,
+                            named_arguments,
                             block,
-                        )?;
-                        Ok((Some(value), block))
-                    }
+                        ),
                     _ => unimplemented!(
                         "named arguments are only supported on a function or struct-constructor callee"
                     ),
                 }
             }
-            Expression::MemberAccessExpression(access) => match self.classify_member(&access) {
-                MemberCallKind::Library { external: true } => {
-                    let (results, block) =
-                        self.emit_named_library_external_call(&access, named_arguments, block)?;
-                    Ok((results.into_iter().next(), block))
+            Expression::MemberAccessExpression(access) => {
+                // A namespace-qualified struct constructor `Lib.S({a: …})` builds
+                // the struct exactly like the bare `S({…})`; the member resolves
+                // to the struct definition regardless of the qualifying contract.
+                if let Some(Definition::Struct(struct_definition)) =
+                    access.member().resolve_to_definition()
+                {
+                    return self.emit_named_struct_constructor(
+                        &struct_definition,
+                        call,
+                        named_arguments,
+                        block,
+                    );
                 }
-                _ => unimplemented!("named arguments on this member call are not yet supported"),
-            },
+                match self.classify_member(&access) {
+                    MemberCallKind::Library { external: true } => {
+                        let (results, block) =
+                            self.emit_named_library_external_call(&access, named_arguments, block)?;
+                        Ok((results.into_iter().next(), block))
+                    }
+                    _ => {
+                        unimplemented!("named arguments on this member call are not yet supported")
+                    }
+                }
+            }
             _ => unimplemented!(
                 "named arguments are only supported on a direct function, struct, or member call"
             ),
@@ -1136,6 +1141,36 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
     /// Routes a multi-result call with named arguments (e.g. tuple
     /// deconstruction `(a, b) = f({…})`) to the named function-call emitter.
+    /// Builds a struct from a named-argument constructor `S({a: …})` /
+    /// `Lib.S({a: …})`: orders the arguments by the struct's member declaration
+    /// order (keyed by node id, never name text) and emits the field stores.
+    /// Shared by the bare-identifier and namespace-qualified callee paths.
+    fn emit_named_struct_constructor(
+        &self,
+        struct_definition: &StructDefinition,
+        call: &FunctionCallExpression,
+        named_arguments: &NamedArguments,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+        let result_type = self
+            .expression_emitter
+            .resolve_slang_type(call.get_type())
+            .expect("slang types a struct constructor call");
+        let member_ids: Vec<NodeId> = struct_definition
+            .members()
+            .iter()
+            .map(|member| member.node_id())
+            .collect();
+        let arguments = Self::order_named_arguments(named_arguments, &member_ids);
+        let (value, block) = self.emit_struct_constructor_expressions(
+            struct_definition,
+            result_type,
+            &arguments,
+            block,
+        )?;
+        Ok((Some(value), block))
+    }
+
     fn emit_named_call_results(
         &self,
         call: &FunctionCallExpression,
