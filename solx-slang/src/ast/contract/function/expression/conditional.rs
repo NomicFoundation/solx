@@ -187,8 +187,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             ),
         };
         let builder = &self.state.builder;
+        // An array literal is always a memory aggregate, so its reference
+        // elements live in memory — a `calldata`/`storage` reference element
+        // (e.g. a calldata slice `[b[i:j]]`) is copied in. Resolve the element
+        // and result types in their memory representation so the per-element
+        // coercion below is a `data_loc_cast` into memory (matching solc),
+        // rather than leaving a calldata element inside a memory `sol.array_lit`
+        // that the backend cannot lower.
         let declared_element_type =
-            TypeConversion::resolve_slang_type(&element_slang_type, None, builder);
+            TypeConversion::resolve_slang_type_in_memory(&element_slang_type, builder);
         // Emit the element values before fixing the element type: for a
         // function-pointer array literal the emitted values are authoritative.
         // A bare function name lowers to an internal `func_ref`, but slang types
@@ -221,10 +228,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 builder.types.array(
                     solx_mlir::ArraySize::Fixed(fixed_array_type.size() as u64),
                     element_type,
-                    solx_utils::DataLocation::from_slang(fixed_array_type.location(), None),
+                    solx_utils::DataLocation::Memory,
                 )
             }
-            _ => TypeConversion::resolve_slang_type(&result_slang_type, None, builder),
+            _ => TypeConversion::resolve_slang_type_in_memory(&result_slang_type, builder),
         };
         let element_values: Vec<_> = element_values
             .into_iter()

@@ -46,6 +46,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .state
             .builder
             .emit_sol_load(address, element_type, &block)?;
+        // A scalar element loaded from a packed slot may need a fixed-bytes
+        // re-alignment toward its declared element type (`sol.bytes_cast`). A
+        // reference-typed element (a nested array / struct) is loaded as its
+        // canonical reference and is authoritative: bytes_cast is undefined on
+        // it, and slang can mis-type the *result* of indexing an array literal
+        // whose element is a calldata reference (`[b[i:j]][0]`) as `calldata`
+        // while the loaded value is the correct memory reference.
+        if solx_mlir::TypeFactory::is_sol_reference(value.r#type()) {
+            return Ok((Some(value), block));
+        }
         let result_type = index_access
             .get_type()
             .expect("slang types every index-access expression");
