@@ -12,7 +12,9 @@ pub mod type_introspection;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Operation;
+use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::MemberAccessExpression;
@@ -166,13 +168,27 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             BuiltIn::Ecrecover => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
                 let builder = &self.expression_emitter.state.builder;
+                // `ecrecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s)`: the
+                // hash / r / s arguments keep their literal `uint256` type, but
+                // `sol.ecrecover` takes `fixedbytes<32>` for them and `ui8` for
+                // `v`. Coerce each to its signature type (matching solc).
+                let bytes32 = builder.types.fixed_bytes(32);
+                let ui8 = Type::from(IntegerType::unsigned(builder.context, 8));
+                let hash = TypeConversion::from_target_type(bytes32, builder)
+                    .emit(values[0], builder, &block);
+                let v =
+                    TypeConversion::from_target_type(ui8, builder).emit(values[1], builder, &block);
+                let r = TypeConversion::from_target_type(bytes32, builder)
+                    .emit(values[2], builder, &block);
+                let s = TypeConversion::from_target_type(bytes32, builder)
+                    .emit(values[3], builder, &block);
                 let value = block
                     .append_operation(
                         EcrecoverOperation::builder(builder.context, builder.unknown_location)
-                            .hash(values[0])
-                            .v(values[1])
-                            .r(values[2])
-                            .s(values[3])
+                            .hash(hash)
+                            .v(v)
+                            .r(r)
+                            .s(s)
                             .result(builder.types.sol_address)
                             .build()
                             .into(),
