@@ -4,6 +4,7 @@
 
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use melior::ir::ValueLike;
 use slang_solidity_v2::ast::ArrayExpression;
 use slang_solidity_v2::ast::ConditionalExpression;
 use slang_solidity_v2::ast::Expression;
@@ -186,17 +187,52 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             ),
         };
         let builder = &self.state.builder;
-        let array_type = TypeConversion::resolve_slang_type(&result_slang_type, None, builder);
-        let element_type = TypeConversion::resolve_slang_type(&element_slang_type, None, builder);
+        let declared_element_type =
+            TypeConversion::resolve_slang_type(&element_slang_type, None, builder);
+        // Emit the element values before fixing the element type: for a
+        // function-pointer array literal the emitted values are authoritative.
+        // A bare function name lowers to an internal `func_ref`, but slang types
+        // the literal from the function's `Public` visibility, which resolves to
+        // `ext_func_ref` — so the declared element type disagrees with the value.
+        // Adopt the value's function-ref type when it does, and rebuild the
+        // array type to match (otherwise the per-element coercion casts a
+        // function ref through the integer-only `sol.cast`, which the verifier
+        // rejects).
         let mut element_values = Vec::new();
         let mut current = block;
         for item in array_expression.items().iter() {
             let (value, next) = self.emit_value(&item, current)?;
-            let cast_value =
-                TypeConversion::from_target_type(element_type, builder).emit(value, builder, &next);
-            element_values.push(cast_value);
+            element_values.push(value);
             current = next;
         }
+        let element_type = match element_values.first() {
+            Some(&first)
+                if solx_mlir::TypeFactory::is_sol_function_ref(first.r#type())
+                    && first.r#type() != declared_element_type =>
+            {
+                first.r#type()
+            }
+            _ => declared_element_type,
+        };
+        let array_type = match &result_slang_type {
+            SlangType::FixedSizeArray(fixed_array_type)
+                if element_type != declared_element_type =>
+            {
+                builder.types.array(
+                    solx_mlir::ArraySize::Fixed(fixed_array_type.size() as u64),
+                    element_type,
+                    solx_utils::DataLocation::from_slang(fixed_array_type.location(), None),
+                )
+            }
+            _ => TypeConversion::resolve_slang_type(&result_slang_type, None, builder),
+        };
+        let element_values: Vec<_> = element_values
+            .into_iter()
+            .map(|value| {
+                TypeConversion::from_target_type(element_type, builder)
+                    .emit(value, builder, &current)
+            })
+            .collect();
         let value = builder.emit_sol_array_lit(&element_values, array_type, &current);
         Ok((value, current))
     }

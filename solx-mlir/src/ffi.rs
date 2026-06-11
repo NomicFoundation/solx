@@ -223,6 +223,8 @@ unsafe extern "C" {
     pub fn solxIsMappingType(ty: mlir_sys::MlirType) -> bool;
     /// Whether `ty` is a `!sol.ext_func_ref<…>` (external function reference).
     pub fn solxIsExtFuncRefType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.func_ref<…>` (internal function reference).
+    pub fn solxIsFuncRefType(ty: mlir_sys::MlirType) -> bool;
 
     // ---- MLIR core (not in mlir-sys) ----
 

@@ -129,6 +129,16 @@ impl<'context> TypeFactory<'context> {
         unsafe { crate::ffi::solxIsExtFuncRefType(ty.to_raw()) }
     }
 
+    /// Whether `ty` is a Sol function reference of either kind — internal
+    /// (`!sol.func_ref<…>`) or external (`!sol.ext_func_ref<…>`).
+    pub fn is_sol_function_ref(ty: Type<'_>) -> bool {
+        // SAFETY: pure `isa<>` predicates on a valid type.
+        unsafe {
+            crate::ffi::solxIsFuncRefType(ty.to_raw())
+                || crate::ffi::solxIsExtFuncRefType(ty.to_raw())
+        }
+    }
+
     /// Whether `ty` is a Sol contract type (`!sol.contract<…>`).
     pub fn is_sol_contract(ty: Type<'_>) -> bool {
         // SAFETY: pure `isa<>` predicate on a valid type.

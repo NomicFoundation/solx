@@ -227,4 +227,8 @@ bool solxIsExtFuncRefType(MlirType ty) {
     return mlir::isa<mlir::sol::ExtFuncRefType>(unwrap(ty));
 }
 
+bool solxIsFuncRefType(MlirType ty) {
+    return mlir::isa<mlir::sol::FuncRefType>(unwrap(ty));
+}
+
 } /* extern "C" */
