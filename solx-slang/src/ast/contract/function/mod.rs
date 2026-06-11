@@ -450,8 +450,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             pointer
         } else if matches!(slang_type, Some(SlangType::String(_) | SlangType::Bytes(_))) {
             let pointer = builder.emit_sol_alloca(return_type, block);
-            let size = builder.emit_sol_constant(0, builder.types.ui256, block);
-            let zero = builder.emit_sol_malloc_sized_zeroed(return_type, size, block);
+            // An empty `bytes`/`string memory` default is a plain `sol.malloc`
+            // of a fresh zero-length buffer (matching solc), not a sized
+            // `new bytes(0)` — the latter advances the free pointer as a sized
+            // allocation, which misplaces a buffer that inline assembly then
+            // writes past its length (e.g. mcopy into the data area).
+            let zero = builder.emit_sol_malloc(return_type, block);
             builder.emit_sol_store(zero, pointer, block);
             pointer
         } else if let Some(
@@ -753,8 +757,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 builder.emit_sol_malloc_zeroed(return_type, block)
             }
             Some(SlangType::String(_) | SlangType::Bytes(_)) => {
-                let size = builder.emit_sol_constant(0, builder.types.ui256, block);
-                builder.emit_sol_malloc_sized_zeroed(return_type, size, block)
+                // A fresh zero-length buffer (plain `sol.malloc`, matching solc),
+                // not a sized `new bytes(0)`.
+                builder.emit_sol_malloc(return_type, block)
             }
             Some(
                 scalar @ (SlangType::Address(_)
