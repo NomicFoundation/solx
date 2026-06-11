@@ -98,14 +98,19 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let val =
             value.unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &block));
 
+        // Append operands in the ODS declaration order (val, salt, ctorArgs) so
+        // the flat operand list matches `operand_segment_sizes` below: melior's
+        // builder appends in call order, so adding the optional CREATE2 salt
+        // *before* the variadic ctor args is required — appending it after would
+        // transpose the salt and the first constructor argument (the salt value
+        // would be passed to the constructor, and a ctor arg read as the salt).
         let mut new_builder = NewOperation::builder(builder.context, builder.unknown_location)
             .obj_name(StringAttribute::new(builder.context, &contract_name))
-            .val(val)
-            .ctor_args(&ctor_args)
-            .out(result_type);
+            .val(val);
         if let Some(salt) = salt {
             new_builder = new_builder.salt(salt);
         }
+        let new_builder = new_builder.ctor_args(&ctor_args).out(result_type);
         let mut operation: Operation = new_builder.build().into();
         // Set `operand_segment_sizes` manually (val=1, salt=0|1, ctorArgs=N):
         // melior's ODS builder does not synthesize the attribute for this
