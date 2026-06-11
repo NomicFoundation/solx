@@ -351,6 +351,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             // needs the external-function dispatcher, which the contract kind
             // provides; the `Library` kind would add a library-address
             // self-reference the slang path does not set up.
+            //
+            // TODO: a library with a `storage` reference parameter
+            // (`f(S storage)`) needs `ContractKind::Library` so the backend
+            // dispatcher passes the slot instead of ABI-decoding the struct
+            // (`genABITupleDecoding` aborts on a storage location otherwise) —
+            // but `Library` kind emits the library-address immutable
+            // (`llvm.setimmutable`), which fails MLIR→LLVM translation until the
+            // slang pipeline declares and links that immutable. Blocks
+            // libraries/library_function_selectors_struct and using_library_structs.
             solx_mlir::ContractKind::Contract,
             &module_body,
         );
