@@ -401,10 +401,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             // construction would `sol.copy` an aggregate into a struct
             // destination the backend cannot yet lower, so it stays on the
             // conversion path as `RefFieldStructAsConversion`.
-            if let Expression::Identifier(identifier) = &callee
-                && let Some(Definition::Struct(struct_definition)) =
-                    identifier.resolve_to_definition()
-            {
+            // The struct name may be bare (`S(x)`) or namespace-qualified
+            // (`L.S(x)`); both resolve the member/identifier to the same struct
+            // definition.
+            let struct_callee = match &callee {
+                Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+                Expression::MemberAccessExpression(access) => {
+                    access.member().resolve_to_definition()
+                }
+                _ => None,
+            };
+            if let Some(Definition::Struct(struct_definition)) = struct_callee {
                 let first_field_is_value = struct_definition
                     .members()
                     .iter()
