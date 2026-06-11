@@ -63,6 +63,17 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     /// lowers to (call the wrapped body / next stage, threading the shared return
     /// values). `None` outside a modifier stage.
     modifier_body_call: Option<ModifierBodyCall<'context, 'block>>,
+    /// Inline modifier-chain stages for a *constructor* body emission: each stage
+    /// is one modifier's body statements, with the constructor body pushed as the
+    /// final stage; a `_;` placeholder recurses to the next stage. Empty for a
+    /// regular (non-constructor) emission, whose modifiers are wrapped as separate
+    /// `sol.func`s reached through `modifier_body_call` instead. A constructor has
+    /// no return value, so it needs no separate body func.
+    modifier_stages: Vec<Statements>,
+    /// Per-stage modifier parameter bindings, parallel to `modifier_stages`.
+    modifier_stage_params: Vec<Vec<(NodeId, Value<'context, 'block>, Type<'context>)>>,
+    /// The stage [`Self::emit_inline_modifier_chain`] is currently emitting.
+    modifier_stage_index: usize,
     /// Arithmetic overflow-checking mode for binary operations.
     ///
     /// [`ArithmeticMode::Checked`] by default; [`ArithmeticMode::Unchecked`]
@@ -97,6 +108,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             return_types,
             return_slots,
             modifier_body_call: None,
+            modifier_stages: Vec::new(),
+            modifier_stage_params: Vec::new(),
+            modifier_stage_index: 0,
             arithmetic_mode: ArithmeticMode::Checked,
             yul_functions: HashMap::new(),
             yul_inline_depth: HashMap::new(),
@@ -110,6 +124,53 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// [`FunctionEmitter::emit_modifier_stage_func`]: crate::ast::contract::function::FunctionEmitter::emit_modifier_stage_func
     pub fn set_modifier_body_call(&mut self, call: ModifierBodyCall<'context, 'block>) {
         self.modifier_body_call = Some(call);
+    }
+
+    /// Loads the inline modifier-chain stages for a constructor body emission
+    /// (built by [`FunctionEmitter::build_modifier_stages`], with the constructor
+    /// body pushed as the final stage), then drive them with
+    /// [`Self::emit_inline_modifier_chain`].
+    pub fn set_modifier_stages(
+        &mut self,
+        modifier_stages: Vec<Statements>,
+        modifier_stage_params: Vec<Vec<(NodeId, Value<'context, 'block>, Type<'context>)>>,
+    ) {
+        self.modifier_stages = modifier_stages;
+        self.modifier_stage_params = modifier_stage_params;
+        self.modifier_stage_index = 0;
+    }
+
+    /// Emits the inline modifier chain for a constructor body from the current
+    /// stage. Stage 0 is the outermost modifier body; each `_;` placeholder
+    /// recurses to the next stage, and the constructor body (the final stage)
+    /// runs at the innermost `_;`. Each stage's modifier parameters are bound in a
+    /// scope that brackets the whole stage — including the `_;` tail — so a
+    /// repeated modifier keeps a distinct binding per use and the binding is gone
+    /// once the stage unwinds. A constructor has no return value, so the chain
+    /// simply unwinds past the last stage (no separate body call).
+    pub fn emit_inline_modifier_chain(
+        &mut self,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        let stage = self.modifier_stage_index;
+        let Some(statements) = self.modifier_stages.get(stage).cloned() else {
+            return Ok(Some(block));
+        };
+        self.modifier_stage_index = stage + 1;
+        let params = self
+            .modifier_stage_params
+            .get(stage)
+            .cloned()
+            .unwrap_or_default();
+        self.environment.enter_scope();
+        for (node_id, pointer, element_type) in params {
+            self.environment
+                .define_variable(node_id, pointer, element_type);
+        }
+        let result = self.emit_block(statements, block);
+        self.environment.exit_scope();
+        self.modifier_stage_index = stage;
+        result
     }
 
     /// Returns a reference to the current region.
@@ -183,14 +244,21 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             Statement::ExpressionStatement(expression_statement) => {
                 let expression = expression_statement.expression();
                 // A bare `_;` inside a modifier body is the placeholder for the
-                // wrapped function body (or the next modifier stage).
+                // wrapped body (or the next modifier stage). A constructor's
+                // modifiers run as an inline chain (`modifier_stages` set), where
+                // `_;` recurses to the next stage / the constructor body; a regular
+                // function's modifiers are separate `sol.func`s, where `_;` hands
+                // off through `modifier_body_call`.
                 if let Expression::Identifier(identifier) = &expression
                     && matches!(
                         identifier.resolve_to_built_in(),
                         Some(BuiltIn::ModifierUnderscore)
                     )
                 {
-                    return self.emit_modifier_body_call(block);
+                    if self.modifier_stages.is_empty() {
+                        return self.emit_modifier_body_call(block);
+                    }
+                    return self.emit_inline_modifier_chain(block);
                 }
                 if let Expression::FunctionCallExpression(call) = &expression
                     && let Expression::Identifier(identifier) = call.operand()
