@@ -18,6 +18,7 @@ use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::visitor::Visitor;
 use slang_solidity_v2::ast::visitor::accept_function_definition;
+use slang_solidity_v2::ast::visitor::accept_inheritance_type;
 
 use crate::ast::ExpressionExt;
 use crate::ast::contract::function::FunctionEmitter;
@@ -104,6 +105,35 @@ impl SuperDispatch {
         for (index, base_contract) in mro.iter().enumerate() {
             if let Some(constructor) = base_contract.constructor() {
                 to_walk.push((index, constructor));
+            }
+        }
+
+        // A base-qualified call can also appear in an inheritance-specifier
+        // argument (`contract C is Base(Other.f())`), which no function body
+        // contains — the per-function walk below never visits it. Collect those
+        // `Base.f()` calls up front so each gets a `redirect` entry like an
+        // in-body base call; `super.f()` cannot appear here (no instance
+        // context), so only `base_calls` are processed. The target's own body is
+        // pushed onto `to_walk` by `record_target`, so its calls are walked too.
+        for base_contract in mro.iter() {
+            let mut collector = SuperDispatch::default();
+            for inheritance in base_contract.inheritance_types().iter() {
+                accept_inheritance_type(&inheritance, &mut collector);
+            }
+            for (access_id, target) in collector.base_calls {
+                let Some(target_index) = Self::defining_index(&mro, target.node_id()) else {
+                    continue;
+                };
+                Self::record_target(
+                    &mut dispatch,
+                    &mut shadowed_ids,
+                    &mut to_walk,
+                    &mro,
+                    access_id,
+                    target_index,
+                    target,
+                    &most_derived_ids,
+                );
             }
         }
 
