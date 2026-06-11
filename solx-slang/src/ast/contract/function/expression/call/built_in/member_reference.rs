@@ -152,7 +152,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let selector = function_definition
             .compute_selector()
             .expect("an external function pointer resolves to a function with a selector");
-        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
+        // An external function pointer's ABI representation (address + selector)
+        // types its reference parameters as `Memory`, not their declared
+        // `calldata`/`storage` location — calldata cannot cross the call
+        // boundary. solc emits the `ext_func_constant` at this memory signature,
+        // so assigning `this.g` (declared `string calldata`) to a
+        // `function (string memory) external` pointer needs no cast: both are the
+        // same `ext_func_ref<(string<Memory>) -> …>`.
+        let (parameter_types, return_types) = TypeConversion::resolve_external_function_types(
             function_definition,
             &self.expression_emitter.state.builder,
         );
