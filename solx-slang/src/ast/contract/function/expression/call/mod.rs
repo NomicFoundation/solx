@@ -879,6 +879,25 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let Expression::Identifier(callee_identifier) = call.operand().unwrap_parens() else {
             unimplemented!("multi-result calls only support direct named or member callees");
         };
+        // A function-pointer value callee (`(a, …) = _f()` where `_f` is a
+        // parameter / local / state variable of function type) is an indirect
+        // call returning its full result tuple — the single-result path's
+        // `IndirectPointer`. It does not resolve to a function definition.
+        if matches!(
+            callee_identifier.resolve_to_definition(),
+            Some(Definition::Variable(_) | Definition::Parameter(_) | Definition::StateVariable(_))
+        ) && let Some(function_slang_type @ SlangType::Function(_)) =
+            callee_identifier.get_type()
+        {
+            let callee = call.operand().unwrap_parens();
+            return self.emit_indirect_call_results(
+                &callee,
+                &function_slang_type,
+                positional_arguments,
+                None,
+                block,
+            );
+        }
         let Some(Definition::Function(function_definition)) =
             callee_identifier.resolve_to_definition()
         else {
