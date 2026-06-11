@@ -414,7 +414,7 @@ impl<'context> TypeConversion<'context> {
     /// `Memory`, recursively (the external/ABI representation; see
     /// [`Self::resolve_external_function_types`]). Value types are
     /// location-independent and resolve exactly as [`Self::resolve_slang_type`].
-    fn resolve_slang_type_in_memory(
+    pub fn resolve_slang_type_in_memory(
         slang_type: &SlangType,
         builder: &solx_mlir::Builder<'context>,
     ) -> Type<'context> {
