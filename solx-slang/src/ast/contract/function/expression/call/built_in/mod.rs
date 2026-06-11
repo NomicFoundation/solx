@@ -285,6 +285,28 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
             return Ok((Some(placeholder), block));
         }
+        // The `abi.*` builtins referenced WITHOUT a call — `abi.encode;`,
+        // `abi.encodePacked;`, `abi.decode;` and friends, e.g. a discarded
+        // statement — are no-ops too, but unlike the actions above their operand
+        // is the `abi` namespace keyword, not a value, so nothing is evaluated
+        // (binding `abi` would itself fail); just yield a placeholder.
+        if arguments.is_none()
+            && matches!(
+                access.member().resolve_to_built_in(),
+                Some(
+                    BuiltIn::AbiEncode
+                        | BuiltIn::AbiEncodePacked
+                        | BuiltIn::AbiEncodeWithSelector
+                        | BuiltIn::AbiEncodeWithSignature
+                        | BuiltIn::AbiEncodeCall
+                        | BuiltIn::AbiDecode
+                )
+            )
+        {
+            let builder = &self.expression_emitter.state.builder;
+            let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            return Ok((Some(placeholder), block));
+        }
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressBalance) => self.emit_address_balance(access, block),
             Some(BuiltIn::AddressCodehash) => self.emit_address_codehash(access, block),
