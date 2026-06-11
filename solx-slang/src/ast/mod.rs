@@ -14,7 +14,6 @@ pub use self::expression_ext::ExpressionExt;
 use std::collections::BTreeMap;
 
 use slang_solidity_v2::ast::ContractDefinition;
-use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionDefinition;
 
 use solx_mlir::Context;
@@ -63,14 +62,28 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
         emitter.emit(contract, free_functions, operator_bindings)?;
 
         let mut method_identifiers = BTreeMap::new();
-        for contract_member in contract.members().iter() {
-            let ContractMember::FunctionDefinition(function) = contract_member else {
-                continue;
-            };
+        // Walk the C3-linearised function list (inherited + own) so a derived
+        // contract exposes its inherited external functions in the ABI — not
+        // only the contract's own members.
+        for function in contract.linearised_functions() {
             let Some(signature) = function.compute_canonical_signature() else {
                 continue;
             };
             let Some(selector) = function.compute_selector() else {
+                continue;
+            };
+            method_identifiers.insert(signature, format!("{selector:08x}"));
+        }
+        // Walk the C3-linearised state-variable list so every `public` state
+        // variable's auto-generated getter — own or inherited — appears in the
+        // ABI. The getter code is already emitted over the same linearised set
+        // (`emit_state_variable_getters`), so a contract with only a `public`
+        // state variable (`string public greet;`) still exposes its selector.
+        for state_variable in contract.linearised_state_variables() {
+            let Some(signature) = state_variable.compute_canonical_signature() else {
+                continue;
+            };
+            let Some(selector) = state_variable.compute_selector() else {
                 continue;
             };
             method_identifiers.insert(signature, format!("{selector:08x}"));
