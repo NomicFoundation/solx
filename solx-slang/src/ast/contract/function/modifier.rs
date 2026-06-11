@@ -325,30 +325,200 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
     /// Binds each base constructor's parameters into its own scope, in C3 order,
     /// threading the entry block forward (argument evaluation has side effects).
+    ///
+    /// Each contract's base invocations — its constructor's modifier-style list
+    /// (`constructor() Base(args)`) and its inheritance specifiers
+    /// (`is Base(args)`) — are matched to their linearised entries and their
+    /// argument expressions evaluated in this contract's scope, building each
+    /// base's parameter scope. Walking most-derived first means the scope an
+    /// argument is evaluated in is already populated (a base's arguments are
+    /// written by a more-derived contract and may reference its parameters).
+    /// `bound_scopes` records every base whose parameters were bound, so a base
+    /// whose arguments could not be matched is skipped during body emission
+    /// rather than run against unbound parameters.
     pub fn bind_base_constructor_scopes<'block>(
         &self,
         mro: &[ContractDefinition],
         mro_node_ids: &HashSet<NodeId>,
         scopes: &mut HashMap<NodeId, Environment<'context, 'block>>,
         bound_scopes: &mut HashSet<NodeId>,
-        current_block: BlockRef<'context, 'block>,
+        mut current_block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        let _ = (mro, mro_node_ids, scopes, bound_scopes, current_block);
-        unimplemented!("base-constructor scope binding")
+        for contract in mro.iter() {
+            // A contract whose constructor takes no externally-supplied
+            // parameters evaluates its own base-argument expressions in a fresh
+            // empty scope; one with parameters was already bound by a more-derived
+            // contract (this leaves that scope untouched).
+            scopes.entry(contract.node_id()).or_default();
+
+            let mut base_argument_specs: Vec<(ContractDefinition, Vec<Expression>)> = Vec::new();
+            if let Some(constructor) = contract.constructor() {
+                for invocation in constructor.modifier_invocations().iter() {
+                    let Some(arguments) = Self::positional_arguments(invocation.arguments()) else {
+                        continue;
+                    };
+                    if let Some(base_contract) =
+                        Self::match_linearised_base(&invocation.name(), mro, mro_node_ids)
+                    {
+                        base_argument_specs.push((base_contract, arguments));
+                    }
+                }
+            }
+            for inheritance in contract.inheritance_types().iter() {
+                let Some(arguments) = Self::positional_arguments(inheritance.arguments()) else {
+                    continue;
+                };
+                if let Some(base_contract) =
+                    Self::match_linearised_base(&inheritance.type_name(), mro, mro_node_ids)
+                {
+                    base_argument_specs.push((base_contract, arguments));
+                }
+            }
+
+            // solc evaluates base-constructor arguments in C3-linearisation order
+            // (most-derived base first), not source order, so a side-effecting
+            // argument runs in the right order. Pure arguments are
+            // order-insensitive, so this is invisible to value-only base-ctor
+            // tests.
+            base_argument_specs.sort_by_key(|(base, _)| {
+                mro.iter()
+                    .position(|contract| contract.node_id() == base.node_id())
+                    .unwrap_or(usize::MAX)
+            });
+
+            // Evaluate the arguments in this contract's scope and build each
+            // base's parameter scope. The immutable borrow of the evaluating
+            // scope must end before the new scopes are inserted, so collect first.
+            let evaluated: Vec<(NodeId, Environment<'context, '_>)> = {
+                let evaluating_scope = scopes
+                    .get(&contract.node_id())
+                    .expect("scope ensured at the top of this iteration");
+                let mut evaluated = Vec::new();
+                for (base_contract, arguments) in base_argument_specs {
+                    let base_id = base_contract.node_id();
+                    // A more-derived contract already supplied this base's
+                    // arguments (most-derived wins).
+                    if scopes.contains_key(&base_id) {
+                        continue;
+                    }
+                    let Some(base_constructor) = base_contract.constructor() else {
+                        continue;
+                    };
+                    let mut base_environment = Environment::new();
+                    for (parameter, argument) in
+                        base_constructor.parameters().iter().zip(arguments.iter())
+                    {
+                        // Evaluate the argument even when the parameter is unnamed
+                        // (`constructor(uint)`) — the evaluation may have side
+                        // effects that must still run, in base-linearisation order.
+                        let (value, next_block) = {
+                            let emitter = ExpressionEmitter::new(
+                                self.state,
+                                evaluating_scope,
+                                self.storage_layout,
+                                ArithmeticMode::Checked,
+                            );
+                            emitter.emit_value(argument, current_block)?
+                        };
+                        current_block = next_block;
+                        let parameter_type = parameter
+                            .get_type()
+                            .map(|slang_type| {
+                                TypeConversion::resolve_slang_type(
+                                    &slang_type,
+                                    None,
+                                    &self.state.builder,
+                                )
+                            })
+                            .unwrap_or_else(|| self.state.builder.types.ui256);
+                        let cast =
+                            TypeConversion::from_target_type(parameter_type, &self.state.builder)
+                                .emit(value, &self.state.builder, &current_block);
+                        let pointer = self
+                            .state
+                            .builder
+                            .emit_sol_alloca(parameter_type, &current_block);
+                        self.state
+                            .builder
+                            .emit_sol_store(cast, pointer, &current_block);
+                        // Bind by the parameter's node id (the recut keys variables
+                        // by declaration id, so an unnamed parameter binds harmlessly
+                        // and a reference resolves through `resolve_to_definition`).
+                        base_environment.define_variable(
+                            parameter.node_id(),
+                            pointer,
+                            parameter_type,
+                        );
+                    }
+                    evaluated.push((base_id, base_environment));
+                }
+                evaluated
+            };
+            for (base_id, base_environment) in evaluated {
+                bound_scopes.insert(base_id);
+                scopes.entry(base_id).or_insert(base_environment);
+            }
+        }
+        Ok(current_block)
     }
 
-    /// Emits each base constructor's body, base-first (reversed MRO), driving the
-    /// modifier chain for a modified constructor.
+    /// Emits each base constructor's body, base-first (reversed MRO), each in its
+    /// own parameter scope, then finishes the constructor with a `sol.return`
+    /// unless a body already terminated the block. A base whose constructor takes
+    /// parameters that were never bound (its arguments could not be matched) is
+    /// skipped — its body would reference unbound parameters.
     pub fn emit_constructor_bodies<'block>(
         &self,
         mro: &[ContractDefinition],
         scopes: &mut HashMap<NodeId, Environment<'context, 'block>>,
         bound_scopes: &HashSet<NodeId>,
         entry: &BlockRef<'context, 'block>,
-        current_block: BlockRef<'context, 'block>,
+        mut current_block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<()> {
-        let _ = (mro, scopes, bound_scopes, entry, current_block);
-        unimplemented!("base-first constructor body emission")
+        let region = entry.parent_region().expect("entry block has a region");
+        let return_types: [Type<'context>; 0] = [];
+        let mut terminated = false;
+        for contract in mro.iter().rev() {
+            let Some(base_constructor) = contract.constructor() else {
+                continue;
+            };
+            let Some(body) = base_constructor.body() else {
+                continue;
+            };
+            if !base_constructor.parameters().is_empty()
+                && !bound_scopes.contains(&contract.node_id())
+            {
+                continue;
+            }
+            let environment = scopes.entry(contract.node_id()).or_default();
+            environment.enter_scope();
+            for statement in body.statements().iter() {
+                let mut emitter = StatementEmitter::new(
+                    self.state,
+                    environment,
+                    &region,
+                    self.storage_layout,
+                    &return_types,
+                    &[],
+                );
+                match emitter.emit(&statement, current_block)? {
+                    Some(next) => current_block = next,
+                    None => {
+                        terminated = true;
+                        break;
+                    }
+                }
+            }
+            environment.exit_scope();
+            if terminated {
+                break;
+            }
+        }
+
+        if !terminated {
+            self.state.builder.emit_sol_return(&[], &current_block);
+        }
+        Ok(())
     }
 
     /// Resolves the modifier invocations on `function` to their modifier bodies,
@@ -459,13 +629,36 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
     /// Resolves an `IdentifierPath` modifier/base reference to a contract in the
     /// MRO (by definition, else by the aliased last-segment name).
+    ///
+    /// The path in `is Base` or in a base-constructor invocation `Base(args)`
+    /// resolves to a contract definition; if that contract is in the
+    /// linearisation, its `mro` entry is returned so callers key scopes
+    /// consistently with the linearisation-driven body walk. An import-aliased
+    /// path (`M.C`) does not resolve to a definition on its own, so it falls
+    /// back to matching the final path segment's name against the linearised
+    /// contracts (the alias renames the namespace, not the contract).
     pub fn match_linearised_base(
         path: &IdentifierPath,
         mro: &[ContractDefinition],
         mro_node_ids: &HashSet<NodeId>,
     ) -> Option<ContractDefinition> {
-        let _ = (path, mro, mro_node_ids);
-        unimplemented!("base-contract resolution in the MRO")
+        // Resolve the path to its contract definition: the whole path
+        // (`Base`), else its final segment (`M.Base` — an import-aliased path
+        // does not resolve as a whole, but its last segment names the contract).
+        // Matching by the resolved node id keeps this rule-7-clean — no name
+        // comparison — and keys the entry to the linearisation-driven body walk.
+        let base_definition = path
+            .resolve_to_definition()
+            .or_else(|| path.iter().last()?.resolve_to_definition());
+        let Some(Definition::Contract(base_contract)) = base_definition else {
+            return None;
+        };
+        if !mro_node_ids.contains(&base_contract.node_id()) {
+            return None;
+        }
+        mro.iter()
+            .find(|contract| contract.node_id() == base_contract.node_id())
+            .cloned()
     }
 
     /// Extracts the positional arguments of a modifier/base invocation, or `None`
