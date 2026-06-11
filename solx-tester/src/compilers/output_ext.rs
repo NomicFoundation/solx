@@ -67,25 +67,29 @@ pub fn get_last_contract(
                 }
             }
 
-            // TODO: Slang frontend produces a CST instead of the solc AST, so
-            // `last_contract_name` cannot extract the name from the AST
-            // `nodes` array. Fall back to the contracts map directly — but
-            // prefer a non-library object. solc selects the main contract by
-            // source order; the (name-sorted) Slang output would otherwise
-            // mis-pick an alphabetically-later `library` (emitted as its own
-            // object) as the main contract.
+            // The Slang frontend produces a CST, not the solc AST, so
+            // `last_contract_name` cannot read the contract order off the AST
+            // `nodes` array, and the Slang output is a name-sorted map. solc
+            // selects the main contract by SOURCE order (the last contract
+            // definition), so recover that order from the source text directly:
+            // the source-last non-library contract that has an emitted object.
+            // Picking the name-sorted last would mis-deploy an alphabetically
+            // later contract / library (e.g. `contract X` after the real main
+            // `contract B`).
             #[cfg(feature = "slang-ast")]
             {
                 let library_names = collect_library_names(sources);
-                for (path, _source) in sources.iter().rev() {
-                    if let Some(contracts) = output.contracts.get(path) {
-                        if let Some((name, _)) = contracts
-                            .iter()
+                for (path, source) in sources.iter().rev() {
+                    if let Some(contracts) = output.contracts.get(path)
+                        && let Some(name) = contract_names_in_source_order(source)
+                            .into_iter()
                             .rev()
-                            .find(|(name, _)| !library_names.contains(name.as_str()))
-                        {
-                            return Ok(format!("{path}:{name}"));
-                        }
+                            .find(|name| {
+                                !library_names.contains(name.as_str())
+                                    && contracts.contains_key(name.as_str())
+                            })
+                    {
+                        return Ok(format!("{path}:{name}"));
                     }
                 }
                 // Library-only sources: fall back to any object.
@@ -207,6 +211,35 @@ fn last_contract_name(
 /// `library <identifier>` adjacency, which covers the Solidity semantic-test
 /// corpus (the Slang frontend lacks a solc AST to consult instead).
 ///
+///
+/// Collects top-level `contract` definition names in SOURCE-declaration order
+/// from one source's text, so the main-contract heuristic can pick the
+/// source-last contract the way solc does (the Slang output map is name-sorted
+/// and carries no order). Matches `contract <identifier>` adjacency — covering
+/// `contract C`, `abstract contract C`, and `contract C is B` — after stripping
+/// `//` line comments, mirroring [`collect_library_names`]. Libraries and
+/// interfaces are not `contract` declarations and are excluded by the keyword.
+///
+#[cfg(feature = "slang-ast")]
+fn contract_names_in_source_order(source: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    for line in source.lines() {
+        let code = line.split("//").next().unwrap_or("");
+        let tokens: Vec<&str> = code
+            .split(|character: char| {
+                !(character.is_alphanumeric() || character == '_' || character == '$')
+            })
+            .filter(|token| !token.is_empty())
+            .collect();
+        for window in tokens.windows(2) {
+            if window[0] == "contract" {
+                names.push(window[1].to_owned());
+            }
+        }
+    }
+    names
+}
+
 #[cfg(feature = "slang-ast")]
 fn collect_library_names(sources: &[(String, String)]) -> std::collections::HashSet<String> {
     let mut names = std::collections::HashSet::new();
