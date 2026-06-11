@@ -98,11 +98,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
 
         match self.classify_call(call, positional_arguments) {
-            CallKind::TypeConversion | CallKind::RefFieldStructAsConversion => {
-                // Both lower a single argument cast to the call's own type: a
-                // genuine `T(x)` conversion and a reference-field struct `S(ref)`
-                // that slang reports as a conversion and the backend cannot yet
-                // construct (its `sol.copy` into a struct destination is NYI).
+            CallKind::TypeConversion
+            | CallKind::RefFieldStructAsConversion
+            | CallKind::ArrayTypeConversion => {
+                // All three lower a single argument cast to the call's own type:
+                // a genuine `T(x)` conversion, an array-type conversion `T[](x)`
+                // (an identity / data-location cast, e.g. forcing a calldata
+                // slice into `uint256[]` to read `.length` / an element), and a
+                // reference-field struct `S(ref)` that slang reports as a
+                // conversion and the backend cannot yet construct (its `sol.copy`
+                // into a struct destination is NYI).
                 let first = positional_arguments
                     .iter()
                     .next()
@@ -199,9 +204,6 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             CallKind::WithOptions(_) => {
                 unimplemented!("call dispatch: call with options")
-            }
-            CallKind::ArrayTypeConversion => {
-                unimplemented!("call dispatch: array type conversion")
             }
             CallKind::IndirectPointer => {
                 let callee = call.operand().unwrap_parens();
@@ -446,6 +448,20 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
 
         let Expression::Identifier(callee_identifier) = &callee else {
+            // `T[](x)` — an array type-name used as a conversion. The callee
+            // `T[]` parses as an index access with empty brackets (no index, no
+            // slice `:`); slang does not report it via `is_type_conversion`
+            // (that covers only elementary / `type(C)` callees). It is an
+            // identity / data-location cast of the sole argument to the array
+            // type (e.g. `uint256[](calldataSlice)` to read `.length` / an
+            // element). A real `x[i]` / `x[i:j]` access carries an index or `:`.
+            if let Expression::IndexAccessExpression(array_type) = &callee
+                && array_type.start().is_none()
+                && array_type.end().is_none()
+                && !array_type.is_slice()
+            {
+                return CallKind::ArrayTypeConversion;
+            }
             // A non-identifier callee of function type — `arr[i](args)`,
             // `(cond ? f : g)(args)` — is an indirect call through the pointer
             // value the callee evaluates to.
