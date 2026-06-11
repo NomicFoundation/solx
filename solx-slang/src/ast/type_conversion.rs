@@ -382,6 +382,87 @@ impl<'context> TypeConversion<'context> {
         (parameter_types, return_types)
     }
 
+    /// Resolves a function's parameter and return types in their EXTERNAL (ABI)
+    /// representation: every reference-type data location forced to `Memory`,
+    /// recursively. An external call ABI-encodes its arguments and decodes its
+    /// results into memory — `calldata` cannot cross the call boundary — so the
+    /// callee type and the argument coercions use `Memory`, not the function's
+    /// DECLARED (possibly `calldata`) locations, which apply only inside the
+    /// callee's own body. solc emits the same: a `bytes calldata` parameter
+    /// appears in the call's `callee_type` as `!sol.string<Memory>`.
+    pub fn resolve_external_function_types(
+        function: &FunctionDefinition,
+        builder: &solx_mlir::Builder<'context>,
+    ) -> (Vec<Type<'context>>, Vec<Type<'context>>) {
+        let resolve = |parameter: Parameter| {
+            Self::resolve_slang_type_in_memory(
+                &parameter
+                    .get_type()
+                    .expect("parameter type resolved by semantic analysis"),
+                builder,
+            )
+        };
+        let parameter_types = function.parameters().iter().map(&resolve).collect();
+        let return_types = function
+            .returns()
+            .map(|returns| returns.iter().map(&resolve).collect())
+            .unwrap_or_default();
+        (parameter_types, return_types)
+    }
+
+    /// Resolves a slang type with every reference-type data location forced to
+    /// `Memory`, recursively (the external/ABI representation; see
+    /// [`Self::resolve_external_function_types`]). Value types are
+    /// location-independent and resolve exactly as [`Self::resolve_slang_type`].
+    fn resolve_slang_type_in_memory(
+        slang_type: &SlangType,
+        builder: &solx_mlir::Builder<'context>,
+    ) -> Type<'context> {
+        match slang_type {
+            SlangType::String(_) | SlangType::Bytes(_) => {
+                builder.types.string(solx_utils::DataLocation::Memory)
+            }
+            SlangType::Array(array_type) => {
+                let element =
+                    Self::resolve_slang_type_in_memory(&array_type.element_type(), builder);
+                builder.types.array(
+                    solx_mlir::ArraySize::Dynamic,
+                    element,
+                    solx_utils::DataLocation::Memory,
+                )
+            }
+            SlangType::FixedSizeArray(fixed_array_type) => {
+                let element =
+                    Self::resolve_slang_type_in_memory(&fixed_array_type.element_type(), builder);
+                builder.types.array(
+                    solx_mlir::ArraySize::Fixed(fixed_array_type.size() as u64),
+                    element,
+                    solx_utils::DataLocation::Memory,
+                )
+            }
+            SlangType::Struct(struct_type) => {
+                let struct_definition = match struct_type.definition() {
+                    Definition::Struct(definition) => definition,
+                    _ => unreachable!("Slang StructType always references a Struct definition"),
+                };
+                let mut member_types = Vec::new();
+                for member in struct_definition.members().iter() {
+                    let member_slang_type = member
+                        .get_type()
+                        .expect("struct member type resolved by semantic analysis");
+                    member_types.push(Self::resolve_slang_type_in_memory(
+                        &member_slang_type,
+                        builder,
+                    ));
+                }
+                builder
+                    .types
+                    .structure(&member_types, solx_utils::DataLocation::Memory)
+            }
+            other => Self::resolve_slang_type(other, None, builder),
+        }
+    }
+
     /// Emits the conversion, returning the cast value.
     pub fn emit<'block>(
         self,
