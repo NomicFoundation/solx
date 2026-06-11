@@ -14,7 +14,6 @@ use melior::ir::Attribute;
 use melior::ir::Block;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Identifier;
 use melior::ir::Location;
 use melior::ir::Operation;
 use melior::ir::Region;
@@ -26,7 +25,6 @@ use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
-use melior::ir::operation::OperationBuilder;
 use melior::ir::operation::OperationLike;
 use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
@@ -75,11 +73,13 @@ use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::GepOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::IfOperation;
+use crate::ods::sol::LibAddrOperation;
 use crate::ods::sol::LoadOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::MapOperation;
 use crate::ods::sol::PopOperation;
 use crate::ods::sol::PushOperation;
+use crate::ods::sol::PushStringOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
@@ -372,22 +372,18 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        // SAFETY: `solxCreateStringAttr` builds a `StringAttr` from the pointer
-        // and length of the live byte slice.
-        let value_attribute = unsafe {
-            Attribute::from_raw(crate::ffi::solxCreateStringAttr(
-                self.context.to_raw(),
-                bytes.as_ptr(),
-                bytes.len(),
-            ))
-        };
+        // SAFETY: the `&str` is only consumed by `StringAttribute::new`, which
+        // hands it to `StringRef::new` — that reads `.as_ptr()` and `.len()` and
+        // never assumes UTF-8 validity. No other code observes it as a Rust
+        // string, so non-UTF-8 bytes are sound here.
+        let value = unsafe { std::str::from_utf8_unchecked(bytes) };
         block
             .append_operation(
-                OperationBuilder::new("sol.string_lit", self.unknown_location)
-                    .add_attributes(&[(Identifier::new(self.context, "value"), value_attribute)])
-                    .add_results(&[self.types.sol_string_memory])
+                StringLitOperation::builder(self.context, self.unknown_location)
+                    .value(StringAttribute::new(self.context, value))
+                    .addr(self.types.sol_string_memory)
                     .build()
-                    .expect("valid sol.string_lit"),
+                    .into(),
             )
             .result(0)
             .expect("sol.string_lit always produces one result")
@@ -1212,8 +1208,7 @@ impl<'context> Builder<'context> {
     /// Emits a `sol.push_string` appending the byte `value` to the `bytes`
     /// reference `address` in place. Unlike `sol.push`, the value is passed
     /// directly and the op yields no slot reference (it has no result), since a
-    /// packed `bytes` element is not separately addressable. Built via the raw
-    /// `OperationBuilder` because the op has no generated ODS binding yet.
+    /// packed `bytes` element is not separately addressable.
     pub fn emit_sol_push_string<'block, B>(
         &self,
         address: Value<'context, 'block>,
@@ -1224,10 +1219,11 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         block.append_operation(
-            OperationBuilder::new("sol.push_string", self.unknown_location)
-                .add_operands(&[address, value])
+            PushStringOperation::builder(self.context, self.unknown_location)
+                .addr(address)
+                .value(value)
                 .build()
-                .expect("valid sol.push_string"),
+                .into(),
         );
     }
 
@@ -1974,19 +1970,17 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        // Built via the raw `OperationBuilder`: the op's `name` `StrAttr` collides
-        // with a melior-reserved builder setter, so the generated binding cannot
-        // set it.
+        // melior renames the reserved attribute name `name` to `_name` (its
+        // `dialect!` macro prefixes `name`/`operation`/`builder` with `_` to
+        // avoid clashing with the builder's own methods), so the generated
+        // setter is `_name` — the typed builder does expose it.
         block
             .append_operation(
-                OperationBuilder::new("sol.lib_addr", self.unknown_location)
-                    .add_attributes(&[(
-                        Identifier::new(self.context, "name"),
-                        StringAttribute::new(self.context, name).into(),
-                    )])
-                    .add_results(&[self.types.sol_address])
+                LibAddrOperation::builder(self.context, self.unknown_location)
+                    ._name(StringAttribute::new(self.context, name))
+                    .val(self.types.sol_address)
                     .build()
-                    .expect("valid sol.lib_addr"),
+                    .into(),
             )
             .result(0)
             .expect("sol.lib_addr always produces one result")
