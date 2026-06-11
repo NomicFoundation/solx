@@ -285,6 +285,19 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 if is_type_or_super_noop {
                     return Ok(Some(block));
                 }
+                // A discarded statement whose value is a *type* reference — e.g.
+                // `(cond ? M : M).D;`, where `M` is an imported module and `D` a
+                // contract in it — has no runtime value (materialising a
+                // module/contract would have no `sol` representation), but its
+                // subexpressions may still have side effects (here the ternary
+                // condition's `flag = true`). solc evaluates those and discards the
+                // type, so emit only the side-effecting subexpressions.
+                if Self::is_type_reference(&expression) {
+                    return self.emit_type_reference_side_effects(
+                        expression_statement.expression(),
+                        block,
+                    );
+                }
                 let emitter = self.expression_emitter();
                 // A discarded tuple-valued conditional `(c ? (1, 2, 3) : (3, 2, 1));`
                 // has no single value to emit, but its condition and the selected
@@ -350,6 +363,40 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         }
         self.environment.exit_scope();
         Ok(Some(current))
+    }
+
+    /// Whether `expression` is a member access that is a compile-time type /
+    /// module reference (`M.D`, `(cond ? M : M).D`, `C.S`) rather than a runtime
+    /// value. slang gives a value-returning member access (a field, getter,
+    /// `.length`, a built-in like `block.timestamp`) a type; a member access onto
+    /// a module/contract namespace that names a type has none.
+    fn is_type_reference(expression: &Expression) -> bool {
+        matches!(
+            expression,
+            Expression::MemberAccessExpression(access) if access.get_type().is_none()
+        )
+    }
+
+    /// Emits only the side effects of a discarded type-reference expression: a
+    /// member access recurses into its operand; a conditional whose branches are
+    /// types runs only its condition (the type branches are compile-time, with no
+    /// runtime value or side effect); any other type/module reference has none.
+    fn emit_type_reference_side_effects(
+        &mut self,
+        expression: Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        match expression.unwrap_parens() {
+            Expression::MemberAccessExpression(access) => {
+                self.emit_type_reference_side_effects(access.operand(), block)
+            }
+            Expression::ConditionalExpression(conditional) => {
+                let emitter = self.expression_emitter();
+                let (_, block) = emitter.emit_value(&conditional.operand(), block)?;
+                Ok(Some(block))
+            }
+            _ => Ok(Some(block)),
+        }
     }
 
     /// Emits a `sol.break` terminator.
