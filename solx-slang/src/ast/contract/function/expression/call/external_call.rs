@@ -334,12 +334,27 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             BlockRef<'context, 'block>,
         )>,
     > {
-        // Only a bare member-access callee (`recv.f(args)`) is try-lowerable
-        // here. The `{value: v}` call-options layer needs `capture_call_value`,
-        // which lands with the call-options cluster; until then such a call is
-        // "not try-lowerable" (`None`), and the caller runs the success body.
-        let Expression::MemberAccessExpression(access) = call.operand() else {
-            return Ok(None);
+        // The try-able callee is a member access (`recv.f(args)`), optionally
+        // wrapped in a `{value: v}` / `{gas: g}` call-options layer
+        // (`recv.f{gas: g}(args)`). Unwrap the options — capturing the forwarded
+        // `value` (gas/salt follow the same drop/forward rule as a normal call) —
+        // to the inner member access. Anything else is "not try-lowerable"
+        // (`None`), and the caller runs the success body only.
+        let mut current_block = block;
+        let mut call_value = None;
+        let access = match call.operand() {
+            Expression::MemberAccessExpression(access) => access,
+            Expression::CallOptionsExpression(call_options) => {
+                let (value, _salt, next_block) =
+                    self.capture_call_options(&call_options, current_block)?;
+                current_block = next_block;
+                call_value = value;
+                let Expression::MemberAccessExpression(access) = call_options.operand() else {
+                    return Ok(None);
+                };
+                access
+            }
+            _ => return Ok(None),
         };
         let Some(Definition::Function(function_definition)) =
             access.member().resolve_to_definition()
@@ -359,7 +374,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         );
         let (receiver, current_block) = self
             .expression_emitter
-            .emit_value(&access.operand(), block)?;
+            .emit_value(&access.operand(), current_block)?;
         let (argument_values, current_block) =
             self.emit_coerced_arguments(&positional_arguments, &parameter_types, current_block)?;
         let builder = &self.expression_emitter.state.builder;
@@ -372,7 +387,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             ext_func_ref_type,
             &current_block,
         );
-        let value = builder.emit_sol_constant(0, builder.types.ui256, &current_block);
+        let value = call_value
+            .unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &current_block));
         let (status, results) = builder.emit_sol_ext_icall_try(
             callee,
             &argument_values,
