@@ -71,8 +71,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Operator::BitwiseNot => {
                 let (value, block) = self.emit_value(operand, block)?;
                 let operand_type = target_type.unwrap_or_else(|| value.r#type());
-                let value = TypeConversion::from_target_type(operand_type, &self.state.builder)
-                    .emit(value, &self.state.builder, &block);
+                let value =
+                    TypeConversion::coerce(value, operand_type, &self.state.builder, &block);
                 // `sol.not` is integer-only; for a `bytesN` / `byte` operand
                 // bridge through the equivalent unsigned integer `ui(8*N)` and
                 // cast the result back to the fixed-bytes type.
@@ -89,16 +89,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         }
                         None => (value, None),
                     };
-                let result: Value<'context, 'block> = block
-                    .append_operation(
-                        NotOperation::builder(builder.context, builder.unknown_location)
-                            .value(value)
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("sol.not always produces one result")
-                    .into();
+                let result: Value<'context, 'block> =
+                    sol_op!(builder, block, NotOperation.value(value));
                 let result = match restore_type {
                     Some(fixed) => builder.emit_sol_cast(result, fixed, &block),
                     None => result,
@@ -116,8 +108,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .builder
                     .emit_sol_cmp(value, zero, CmpPredicate::Eq, &block);
                 let result_type = target_type.unwrap_or(self.state.builder.types.ui256);
-                let result = TypeConversion::from_target_type(result_type, &self.state.builder)
-                    .emit(cmp, &self.state.builder, &block);
+                let result = TypeConversion::coerce(cmp, result_type, &self.state.builder, &block);
                 Ok((result, block))
             }
             Operator::Subtract => {
@@ -127,26 +118,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 // since the operand may be in an unsigned literal type.
                 let (value, block) = self.emit_value(operand, block)?;
                 let operand_type = target_type.unwrap_or_else(|| value.r#type());
-                let value = TypeConversion::from_target_type(operand_type, &self.state.builder)
-                    .emit(value, &self.state.builder, &block);
+                let value =
+                    TypeConversion::coerce(value, operand_type, &self.state.builder, &block);
                 let zero = self
                     .state
                     .builder
                     .emit_sol_constant(0, operand_type, &block);
-                let result = block
-                    .append_operation(
-                        SubOperation::builder(
-                            self.state.builder.context,
-                            self.state.builder.unknown_location,
-                        )
-                        .lhs(zero)
-                        .rhs(value)
-                        .build()
-                        .into(),
-                    )
-                    .result(0)
-                    .expect("sol.sub always produces one result")
-                    .into();
+                let result = sol_op!(
+                    &self.state.builder,
+                    block,
+                    SubOperation.lhs(zero).rhs(value)
+                );
                 Ok((result, block))
             }
             _ => unimplemented!("unsupported prefix operator: {operator:?}"),
@@ -261,8 +243,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         block
             .append_operation(operator.emit_sol_binary_operation(
                 self.arithmetic_mode,
-                self.state.builder.context,
-                self.state.builder.unknown_location,
+                &self.state.builder,
                 old,
                 one,
             ))

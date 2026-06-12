@@ -26,12 +26,11 @@ use crate::ast::type_conversion::TypeConversion;
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
     /// The SOLE `ext_icall` sink for `SelfExternal` + `ExternalInstance`.
     ///
-    /// The oracle took a single `&ExternalCall` bundle (a forbidden second
-    /// top-level type under §2a); the recut flattens the bundle and enum-izes
-    /// `static_call` into [`StaticMode`] (R8-4). At 9 args (`&self` + 8) this is
-    /// the one signature above the `clippy.toml` `too-many-arguments-threshold`;
-    /// the fill bundles a frozen param struct or splits the receiver (R8-4) — NO
-    /// `#[allow]` (Rule 11). It is a deliberate WARN at the skeleton tip.
+    /// The call's inputs are passed flat — a single bundle struct would be a
+    /// forbidden second top-level type under §2a — with `static_call` enum-ized
+    /// into [`StaticMode`] (R8-4). At 9 args (`&self` + 8) this is the one
+    /// signature above the `clippy.toml` `too-many-arguments-threshold`; it is a
+    /// deliberate WARN at the skeleton tip, never an `#[allow]` (Rule 11).
     pub fn emit_external_call(
         &self,
         receiver: Value<'context, 'block>,
@@ -43,13 +42,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         static_mode: StaticMode,
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Vec<Value<'context, 'block>>> {
-        let builder = &self.expression_emitter.state.builder;
-        // The receiver is cast to an address and packed with the selector into
-        // an external function reference; the call value defaults to zero wei.
-        let address = builder.emit_sol_address_cast(receiver, builder.types.sol_address, block);
-        let ext_func_ref_type = builder.types.ext_func_ref(parameter_types, return_types);
         let callee =
-            builder.emit_sol_ext_func_constant(address, selector, ext_func_ref_type, block);
+            self.emit_external_callee(receiver, selector, parameter_types, return_types, block);
+        let builder = &self.expression_emitter.state.builder;
+        // The call value defaults to zero wei.
         let value =
             call_value.unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, block));
         builder.emit_sol_ext_icall(
@@ -60,6 +56,25 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             matches!(static_mode, StaticMode::Static),
             block,
         )
+    }
+
+    /// Packs a receiver address and `selector` into the `!sol.ext_func_ref`
+    /// callee an external interaction carries, via `sol.address_cast` +
+    /// `sol.ext_func_constant`. The single builder of that representation,
+    /// shared by `CALL`/`STATICCALL`, the `try`-call, and a `this.f` /
+    /// `instance.f` external function-pointer value.
+    pub fn emit_external_callee(
+        &self,
+        receiver: Value<'context, 'block>,
+        selector: u32,
+        parameter_types: &[Type<'context>],
+        return_types: &[Type<'context>],
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        let builder = &self.expression_emitter.state.builder;
+        let address = builder.emit_sol_address_cast(receiver, builder.types.sol_address, block);
+        let ext_func_ref_type = builder.types.ext_func_ref(parameter_types, return_types);
+        builder.emit_sol_ext_func_constant(address, selector, ext_func_ref_type, block)
     }
 
     /// Maps the callee's state mutability to its external-call mode: a `view` or
@@ -192,7 +207,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        // The oracle's external accessor is single-valued, so an arg-bearing
+        // The external accessor lowered here is single-valued, so an arg-bearing
         // mapping / array getter on another instance is a LOUD residual
         // (#H-M10/M11); only the no-argument scalar / struct getter lowers here.
         if !arguments.is_empty() {
@@ -249,8 +264,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let builder = &self.expression_emitter.state.builder;
         // `sol.bare_call`'s input rejects a non-memory operand, so an argument
         // sourced from storage / calldata is copied into memory first.
-        let input = TypeConversion::from_target_type(builder.types.sol_string_memory, builder)
-            .emit(input, builder, &block);
+        let input = TypeConversion::coerce(input, builder.types.sol_string_memory, builder, &block);
         let (status, ret_data) = match kind {
             BuiltIn::AddressCall => {
                 let value = call_value
@@ -382,16 +396,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .emit_value(&access.operand(), current_block)?;
         let (argument_values, current_block) =
             self.emit_coerced_arguments(&positional_arguments, &parameter_types, current_block)?;
-        let builder = &self.expression_emitter.state.builder;
-        let address =
-            builder.emit_sol_address_cast(receiver, builder.types.sol_address, &current_block);
-        let ext_func_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
-        let callee = builder.emit_sol_ext_func_constant(
-            address,
+        let callee = self.emit_external_callee(
+            receiver,
             selector,
-            ext_func_ref_type,
+            &parameter_types,
+            &return_types,
             &current_block,
         );
+        let builder = &self.expression_emitter.state.builder;
         let value = call_value
             .unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &current_block));
         let (status, results) = builder.emit_sol_ext_icall_try(

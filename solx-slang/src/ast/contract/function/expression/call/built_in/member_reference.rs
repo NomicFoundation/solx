@@ -55,10 +55,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         ordinal: usize,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
-        let result_type = self
-            .expression_emitter
-            .resolve_slang_type(access.get_type())
-            .expect("slang types an enum-variant reference as the enum");
+        let result_type = TypeConversion::resolve_optional_slang_type(
+            access.get_type(),
+            &self.expression_emitter.state.builder,
+        )
+        .expect("slang types an enum-variant reference as the enum");
         let builder = &self.expression_emitter.state.builder;
         let raw = builder.emit_sol_constant(ordinal as i64, builder.types.ui256, &block);
         let value = builder.emit_sol_enum_cast(raw, result_type, &block);
@@ -166,10 +167,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let (receiver, block) = self
             .expression_emitter
             .emit_value(&access.operand(), block)?;
-        let builder = &self.expression_emitter.state.builder;
-        let address = builder.emit_sol_address_cast(receiver, builder.types.sol_address, &block);
-        let ext_ref_type = builder.types.ext_func_ref(&parameter_types, &return_types);
-        let value = builder.emit_sol_ext_func_constant(address, selector, ext_ref_type, &block);
+        let value =
+            self.emit_external_callee(receiver, selector, &parameter_types, &return_types, &block);
         Ok((Some(value), block))
     }
 
@@ -216,8 +215,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// Emits a compile-time selector value of `width_bytes`: an unsigned integer
     /// constant of the matching width bridged to `!sol.fixedbytes<width_bytes>`
     /// via `sol.bytes_cast` (the fixed-bytes type rejects a bare integer
-    /// attribute).
-    fn emit_selector_constant(
+    /// attribute). Shared with `abi.encodeWithSignature` / `abi.encodeCall`,
+    /// which prepend the same 4-byte selector constant to their payload.
+    pub fn emit_selector_constant(
         &self,
         value: &BigInt,
         width_bytes: u32,

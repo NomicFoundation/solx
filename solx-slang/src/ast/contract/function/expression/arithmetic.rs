@@ -94,20 +94,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             && let Some(width) = solx_mlir::TypeFactory::fixed_bytes_or_byte_width(result_type)
         {
             let int_type = Type::from(IntegerType::unsigned(builder.context, 8 * width));
-            let lhs_fb =
-                TypeConversion::from_target_type(result_type, builder).emit(lhs, builder, block);
+            let lhs_fb = TypeConversion::coerce(lhs, result_type, builder, block);
             let lhs = builder.emit_sol_cast(lhs_fb, int_type, block);
             let rhs = if is_shift {
-                TypeConversion::from_target_type(int_type, builder).emit(rhs, builder, block)
+                TypeConversion::coerce(rhs, int_type, builder, block)
             } else {
-                let rhs_fb = TypeConversion::from_target_type(result_type, builder)
-                    .emit(rhs, builder, block);
+                let rhs_fb = TypeConversion::coerce(rhs, result_type, builder, block);
                 builder.emit_sol_cast(rhs_fb, int_type, block)
             };
             (lhs, rhs, Some(result_type))
         } else {
-            let lhs =
-                TypeConversion::from_target_type(result_type, builder).emit(lhs, builder, block);
+            let lhs = TypeConversion::coerce(lhs, result_type, builder, block);
             // `**` keeps its exponent its own (unsigned) type: `sol.exp`/`sol.cexp`
             // take an unsigned exponent of any width alongside a possibly-signed
             // base, so the exponent must NOT be coerced to the (signed) result
@@ -116,7 +113,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             let rhs = if matches!(operator, Operator::Exponentiation) {
                 rhs
             } else {
-                TypeConversion::from_target_type(result_type, builder).emit(rhs, builder, block)
+                TypeConversion::coerce(rhs, result_type, builder, block)
             };
             (lhs, rhs, None)
         };
@@ -124,8 +121,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let result = block
             .append_operation(operator.emit_sol_binary_operation(
                 self.arithmetic_mode,
-                builder.context,
-                builder.unknown_location,
+                builder,
                 lhs,
                 rhs,
             ))

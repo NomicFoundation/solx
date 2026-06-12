@@ -16,7 +16,6 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
@@ -389,9 +388,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     continue;
                 }
                 let return_type = result_types[index];
-                let pointer = self.emit_default_initialized_return_slot(
+                let pointer = TypeConversion::emit_default_initialized_slot(
                     parameter.get_type().as_ref(),
                     return_type,
+                    &self.state.builder,
                     entry_block,
                 );
                 environment.define_variable(parameter.node_id(), pointer, return_type);
@@ -399,93 +399,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             }
         }
         Ok(return_slots)
-    }
-
-    /// Allocates a stack slot for a return value and default-initialises it to
-    /// the type's zero value. A scalar/integer return gets a zeroed slot; a
-    /// memory aggregate (`T[n] memory`, `S memory`, `string`, `bytes`) instead
-    /// points at a fresh zero-filled allocation, so a write through the return
-    /// reference does not hit an uninitialised pointer and `return result`
-    /// ABI-encodes the empty default rather than garbage. Mirrors the local
-    /// default-initialisation in `variable_declaration`.
-    fn emit_default_initialized_return_slot<'block>(
-        &self,
-        slang_type: Option<&SlangType>,
-        return_type: Type<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        let builder = &self.state.builder;
-        // A fixed-size array / struct named return is malloc-backed only when it
-        // lives in `memory`; a `storage` reference return (`returns (S storage)`,
-        // `returns (T[n] storage)`) is a slot pointer assigned in the body, not a
-        // buffer — mallocing it would feed a `Storage` aggregate into genMemAlloc.
-        let aggregate_location = match slang_type {
-            Some(SlangType::FixedSizeArray(array)) => Some(array.location()),
-            Some(SlangType::Struct(struct_type)) => Some(struct_type.location()),
-            _ => None,
-        };
-        if matches!(
-            aggregate_location,
-            Some(slang_solidity_v2::ast::DataLocation::Memory)
-        ) {
-            let pointer = builder.emit_sol_alloca(return_type, block);
-            let zero = builder.emit_sol_malloc_zeroed(return_type, block);
-            builder.emit_sol_store(zero, pointer, block);
-            pointer
-        } else if let Some(SlangType::Array(array_type)) = slang_type
-            && matches!(
-                array_type.location(),
-                slang_solidity_v2::ast::DataLocation::Memory
-            )
-        {
-            // A dynamic memory array named return (`returns (T[] memory)`) is
-            // default-initialised to a fresh zero-length buffer, like a
-            // fixed-size memory array. A storage named return (an internal
-            // function returning `T[] storage`) is excluded by the Memory guard
-            // — it is a reference assigned in the body, not a malloc'd buffer.
-            let pointer = builder.emit_sol_alloca(return_type, block);
-            let zero = builder.emit_sol_malloc_zeroed(return_type, block);
-            builder.emit_sol_store(zero, pointer, block);
-            pointer
-        } else if matches!(slang_type, Some(SlangType::String(_) | SlangType::Bytes(_))) {
-            let pointer = builder.emit_sol_alloca(return_type, block);
-            // An empty `bytes`/`string memory` default is a plain `sol.malloc`
-            // of a fresh zero-length buffer (matching solc), not a sized
-            // `new bytes(0)` — the latter advances the free pointer as a sized
-            // allocation, which misplaces a buffer that inline assembly then
-            // writes past its length (e.g. mcopy into the data area).
-            let zero = builder.emit_sol_malloc(return_type, block);
-            builder.emit_sol_store(zero, pointer, block);
-            pointer
-        } else if let Some(
-            scalar_value_type @ (SlangType::Address(_)
-            | SlangType::ByteArray(_)
-            | SlangType::Enum(_)
-            | SlangType::UserDefinedValue(_)
-            | SlangType::Function(_)
-            | SlangType::Contract(_)
-            | SlangType::Interface(_)),
-        ) = slang_type
-        {
-            // A non-integer/bool scalar value type (address, `bytesN`, enum, a
-            // UDVT over one, or a function pointer) needs its representation's
-            // own zero.
-            let pointer = builder.emit_sol_alloca(return_type, block);
-            let zero =
-                TypeConversion::emit_scalar_zero(scalar_value_type, return_type, builder, block);
-            builder.emit_sol_store(zero, pointer, block);
-            pointer
-        } else {
-            // Integers/bools get a zeroed slot; any other type reaching here is a
-            // reference (a `storage`/`calldata` aggregate, a mapping) that the
-            // body binds before reading, so a bare slot suffices.
-            let pointer = builder.emit_sol_alloca(return_type, block);
-            if IntegerType::try_from(return_type).is_ok() {
-                let zero = builder.emit_sol_constant(0, return_type, block);
-                builder.emit_sol_store(zero, pointer, block);
-            }
-            pointer
-        }
     }
 
     /// Emits the contract's constructor as a `sol.func`.

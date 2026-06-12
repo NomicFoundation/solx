@@ -75,16 +75,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let unsigned_256 = self.state.builder.types.ui256;
         let lhs_wide_type = if signed_lhs { signed_256 } else { unsigned_256 };
         let rhs_wide_type = if signed_rhs { signed_256 } else { unsigned_256 };
-        let lhs_wide = TypeConversion::from_target_type(lhs_wide_type, &self.state.builder).emit(
-            lhs,
-            &self.state.builder,
-            &block,
-        );
-        let rhs_wide = TypeConversion::from_target_type(rhs_wide_type, &self.state.builder).emit(
-            rhs,
-            &self.state.builder,
-            &block,
-        );
+        let lhs_wide = TypeConversion::coerce(lhs, lhs_wide_type, &self.state.builder, &block);
+        let rhs_wide = TypeConversion::coerce(rhs, rhs_wide_type, &self.state.builder, &block);
         // Both are now 256 bits. Retype each to the common signedness with a
         // bit-preserving `sol.cast` (same width), then compare.
         let common = if signed_lhs || signed_rhs {

@@ -25,38 +25,15 @@ use slang_solidity_v2::ast::YulValueCase;
 use crate::ast::contract::function::statement::StatementEmitter;
 
 impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
-    /// Emits an `assembly { … }` block: pre-register the block's Yul function
-    /// definitions (so calls resolve regardless of textual order — Yul hoists
-    /// functions), emit each non-definition statement, then drop the entries
-    /// added here so an enclosing scope's definitions remain.
+    /// Emits an `assembly { … }` block — the top-level Yul block, emitted with
+    /// function-definition hoisting ([`Self::emit_yul_statements_hoisted`]) while
+    /// reusing the enclosing function scope (no nested lexical scope).
     pub fn emit_assembly(
         &mut self,
         assembly: &AssemblyStatement,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let saved_functions: Vec<String> = self.yul_functions.keys().cloned().collect();
-        for statement in assembly.body().statements().iter() {
-            if let YulStatement::YulFunctionDefinition(definition) = &statement {
-                self.yul_functions
-                    .insert(definition.name().name(), definition.clone());
-            }
-        }
-        let mut current_block = block;
-        for statement in assembly.body().statements().iter() {
-            if matches!(statement, YulStatement::YulFunctionDefinition(_)) {
-                continue;
-            }
-            current_block = self.emit_yul_statement(&statement, current_block)?;
-        }
-        let added: Vec<String> = self
-            .yul_functions
-            .keys()
-            .filter(|key| !saved_functions.contains(*key))
-            .cloned()
-            .collect();
-        for key in added {
-            self.yul_functions.remove(&key);
-        }
+        let current_block = self.emit_yul_statements_hoisted(&assembly.body(), block)?;
         Ok(Some(current_block))
     }
 
@@ -122,14 +99,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let condition = if_statement.condition();
                 let (condition_value, block) = self.emit_yul_expression(&condition, block)?;
                 let then_block = self.state.builder.emit_yul_if(condition_value, &block);
-                let then_region = then_block
-                    .parent_region()
-                    .expect("block belongs to a region");
-
-                let saved_region = self.region_pointer;
-                self.set_region(&then_region);
-                self.emit_yul_region_statements(&if_statement.body(), then_block)?;
-                self.region_pointer = saved_region;
+                self.emit_yul_body_in_region(then_block, &if_statement.body())?;
                 Ok(block)
             }
             YulStatement::YulForStatement(for_statement) => {
@@ -155,12 +125,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let cond_region = cond_block
                     .parent_region()
                     .expect("block belongs to a region");
-                let body_region = body_block
-                    .parent_region()
-                    .expect("block belongs to a region");
-                let step_region = step_block
-                    .parent_region()
-                    .expect("block belongs to a region");
                 let saved_region = self.region_pointer;
 
                 self.set_region(&cond_region);
@@ -168,45 +132,17 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let (cond_value, cond_end) =
                     self.emit_yul_expression(&cond_expression, cond_block)?;
                 self.state.builder.emit_yul_condition(cond_value, &cond_end);
-
-                self.set_region(&body_region);
-                self.emit_yul_region_statements(&for_statement.body(), body_block)?;
-
-                self.set_region(&step_region);
-                self.emit_yul_region_statements(&for_statement.iterator(), step_block)?;
-
                 self.region_pointer = saved_region;
+
+                self.emit_yul_body_in_region(body_block, &for_statement.body())?;
+                self.emit_yul_body_in_region(step_block, &for_statement.iterator())?;
+
                 self.environment.exit_scope();
                 Ok(current)
             }
             YulStatement::YulBlock(yul_block) => {
                 self.environment.enter_scope();
-                let saved_functions: Vec<String> = self.yul_functions.keys().cloned().collect();
-                for inner in yul_block.statements().iter() {
-                    if let YulStatement::YulFunctionDefinition(definition) = &inner {
-                        self.yul_functions
-                            .insert(definition.name().name(), definition.clone());
-                    }
-                }
-                let mut current = block;
-                for inner in yul_block.statements().iter() {
-                    if matches!(inner, YulStatement::YulFunctionDefinition(_)) {
-                        continue;
-                    }
-                    current = self.emit_yul_statement(&inner, current)?;
-                    if Self::is_terminating_yul_statement(&inner) {
-                        break;
-                    }
-                }
-                let added: Vec<String> = self
-                    .yul_functions
-                    .keys()
-                    .filter(|key| !saved_functions.contains(*key))
-                    .cloned()
-                    .collect();
-                for key in added {
-                    self.yul_functions.remove(&key);
-                }
+                let current = self.emit_yul_statements_hoisted(yul_block, block)?;
                 self.environment.exit_scope();
                 Ok(current)
             }
@@ -278,6 +214,65 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         Ok(current)
     }
 
+    /// Emits a Yul region body into the region owning `target_block` — an `if`
+    /// branch, a `for` body / step, or a `switch` case / default — switching the
+    /// current region for the duration and restoring it after.
+    fn emit_yul_body_in_region(
+        &mut self,
+        target_block: BlockRef<'context, 'block>,
+        body: &YulBlock,
+    ) -> anyhow::Result<()> {
+        let region = target_block
+            .parent_region()
+            .expect("block belongs to a region");
+        let saved_region = self.region_pointer;
+        self.set_region(&region);
+        self.emit_yul_region_statements(body, target_block)?;
+        self.region_pointer = saved_region;
+        Ok(())
+    }
+
+    /// Emits a Yul block's statements with function-definition hoisting:
+    /// pre-registers the block's `function` definitions (Yul resolves calls
+    /// regardless of textual order), emits each non-definition statement
+    /// (stopping after a `break` / `continue` terminator), then drops the
+    /// definitions added here so an enclosing scope's stay intact. Does NOT open
+    /// a lexical scope — the caller decides: the top-level `assembly` block reuses
+    /// the function scope, a nested `{ … }` brackets its own.
+    fn emit_yul_statements_hoisted(
+        &mut self,
+        body: &YulBlock,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+        let saved_functions: Vec<String> = self.yul_functions.keys().cloned().collect();
+        for statement in body.statements().iter() {
+            if let YulStatement::YulFunctionDefinition(definition) = &statement {
+                self.yul_functions
+                    .insert(definition.name().name(), definition.clone());
+            }
+        }
+        let mut current = block;
+        for statement in body.statements().iter() {
+            if matches!(statement, YulStatement::YulFunctionDefinition(_)) {
+                continue;
+            }
+            current = self.emit_yul_statement(&statement, current)?;
+            if Self::is_terminating_yul_statement(&statement) {
+                break;
+            }
+        }
+        let added: Vec<String> = self
+            .yul_functions
+            .keys()
+            .filter(|key| !saved_functions.contains(*key))
+            .cloned()
+            .collect();
+        for key in added {
+            self.yul_functions.remove(&key);
+        }
+        Ok(current)
+    }
+
     /// Lowers a Yul `switch` to a single `yul.switch`: one region per value case
     /// keyed by the case word, plus the default region. A value-less `switch X
     /// default { … }` runs the default body unconditionally (no `yul.switch`).
@@ -307,25 +302,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 .builder
                 .emit_yul_switch(selector, &case_values, &block);
 
-        let saved_region = self.region_pointer;
         for (case, case_block) in value_cases.iter().zip(case_blocks) {
-            let case_region = case_block
-                .parent_region()
-                .expect("block belongs to a region");
-            self.set_region(&case_region);
-            self.emit_yul_region_statements(&case.body(), case_block)?;
+            self.emit_yul_body_in_region(case_block, &case.body())?;
         }
-        let default_region = default_block
-            .parent_region()
-            .expect("block belongs to a region");
-        self.set_region(&default_region);
         match default_body {
-            Some(default_body) => {
-                self.emit_yul_region_statements(default_body, default_block)?;
-            }
+            Some(default_body) => self.emit_yul_body_in_region(default_block, default_body)?,
             None => self.state.builder.emit_yul_yield(&default_block),
         }
-        self.region_pointer = saved_region;
         Ok(())
     }
 

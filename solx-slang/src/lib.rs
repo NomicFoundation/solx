@@ -2,6 +2,9 @@
 //! Slang Solidity frontend for solx.
 //!
 
+#[macro_use]
+mod macros;
+
 /// Slang AST lowering to MLIR.
 pub mod ast;
 /// Slang Solidity frontend implementation.

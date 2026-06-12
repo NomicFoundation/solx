@@ -78,16 +78,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             BuiltIn::Gasleft => {
                 let builder = &self.expression_emitter.state.builder;
-                let value = block
-                    .append_operation(
-                        GasLeftOperation::builder(builder.context, builder.unknown_location)
-                            .val(builder.types.ui256)
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("gasleft always produces one result")
-                    .into();
+                let value = sol_op!(builder, block, GasLeftOperation.val(builder.types.ui256));
                 Ok((Some(value), block))
             }
             BuiltIn::Blockhash => {
@@ -95,74 +86,44 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let builder = &self.expression_emitter.state.builder;
                 // `sol.blockhash` takes a `ui256` block number; coerce a narrower
                 // argument type up first.
-                let block_number = TypeConversion::from_target_type(builder.types.ui256, builder)
-                    .emit(values[0], builder, &block);
-                let value = block
-                    .append_operation(
-                        BlockHashOperation::builder(builder.context, builder.unknown_location)
-                            .block_number(block_number)
-                            .val(builder.types.fixed_bytes(32))
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("blockhash always produces one result")
-                    .into();
+                let block_number =
+                    TypeConversion::coerce(values[0], builder.types.ui256, builder, &block);
+                let value = sol_op!(
+                    builder,
+                    block,
+                    BlockHashOperation
+                        .block_number(block_number)
+                        .val(builder.types.fixed_bytes(32))
+                );
                 Ok((Some(value), block))
             }
             BuiltIn::Keccak256 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
-                // `sol.keccak256` hashes a memory buffer; a storage / calldata
-                // `bytes` argument is a reference, so copy it to memory first
-                // (solc emits a Storage|CallData -> Memory `sol.data_loc_cast`
-                // here). An already-memory buffer passes through unchanged.
-                let input =
-                    TypeConversion::from_target_type(builder.types.sol_string_memory, builder)
-                        .emit(values[0], builder, &block);
-                let value = block
-                    .append_operation(
-                        Keccak256Operation::builder(builder.context, builder.unknown_location)
-                            .addr(input)
-                            .result(builder.types.fixed_bytes(32))
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("keccak256 always produces one result")
-                    .into();
+                let value = self.emit_keccak256(values[0], &block);
                 Ok((Some(value), block))
             }
             BuiltIn::Sha256 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
                 let builder = &self.expression_emitter.state.builder;
-                let value = block
-                    .append_operation(
-                        Sha256Operation::builder(builder.context, builder.unknown_location)
-                            .data(values[0])
-                            .result(builder.types.fixed_bytes(32))
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("sha256 always produces one result")
-                    .into();
+                let value = sol_op!(
+                    builder,
+                    block,
+                    Sha256Operation
+                        .data(values[0])
+                        .result(builder.types.fixed_bytes(32))
+                );
                 Ok((Some(value), block))
             }
             BuiltIn::Ripemd160 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
                 let builder = &self.expression_emitter.state.builder;
-                let value = block
-                    .append_operation(
-                        Ripemd160Operation::builder(builder.context, builder.unknown_location)
-                            .data(values[0])
-                            .result(builder.types.fixed_bytes(20))
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("ripemd160 always produces one result")
-                    .into();
+                let value = sol_op!(
+                    builder,
+                    block,
+                    Ripemd160Operation
+                        .data(values[0])
+                        .result(builder.types.fixed_bytes(20))
+                );
                 Ok((Some(value), block))
             }
             BuiltIn::Ecrecover => {
@@ -174,28 +135,20 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 // `v`. Coerce each to its signature type (matching solc).
                 let bytes32 = builder.types.fixed_bytes(32);
                 let ui8 = Type::from(IntegerType::unsigned(builder.context, 8));
-                let hash = TypeConversion::from_target_type(bytes32, builder)
-                    .emit(values[0], builder, &block);
-                let v =
-                    TypeConversion::from_target_type(ui8, builder).emit(values[1], builder, &block);
-                let r = TypeConversion::from_target_type(bytes32, builder)
-                    .emit(values[2], builder, &block);
-                let s = TypeConversion::from_target_type(bytes32, builder)
-                    .emit(values[3], builder, &block);
-                let value = block
-                    .append_operation(
-                        EcrecoverOperation::builder(builder.context, builder.unknown_location)
-                            .hash(hash)
-                            .v(v)
-                            .r(r)
-                            .s(s)
-                            .result(builder.types.sol_address)
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("ecrecover always produces one result")
-                    .into();
+                let hash = TypeConversion::coerce(values[0], bytes32, builder, &block);
+                let v = TypeConversion::coerce(values[1], ui8, builder, &block);
+                let r = TypeConversion::coerce(values[2], bytes32, builder, &block);
+                let s = TypeConversion::coerce(values[3], bytes32, builder, &block);
+                let value = sol_op!(
+                    builder,
+                    block,
+                    EcrecoverOperation
+                        .hash(hash)
+                        .v(v)
+                        .r(r)
+                        .s(s)
+                        .result(builder.types.sol_address)
+                );
                 Ok((Some(value), block))
             }
             BuiltIn::Addmod => {
@@ -205,24 +158,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 // narrow type (`addmod(1, 2, d)` → ui8, ui8, ui256); `sol.addmod`
                 // requires identical operand/result types, so widen all to ui256.
                 let ui256 = builder.types.ui256;
-                let x = TypeConversion::from_target_type(ui256, builder)
-                    .emit(values[0], builder, &block);
-                let y = TypeConversion::from_target_type(ui256, builder)
-                    .emit(values[1], builder, &block);
-                let modulus = TypeConversion::from_target_type(ui256, builder)
-                    .emit(values[2], builder, &block);
-                let value = block
-                    .append_operation(
-                        AddModOperation::builder(builder.context, builder.unknown_location)
-                            .x(x)
-                            .y(y)
-                            .r#mod(modulus)
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("addmod always produces one result")
-                    .into();
+                let x = TypeConversion::coerce(values[0], ui256, builder, &block);
+                let y = TypeConversion::coerce(values[1], ui256, builder, &block);
+                let modulus = TypeConversion::coerce(values[2], ui256, builder, &block);
+                let value = sol_op!(builder, block, AddModOperation.x(x).y(y).r#mod(modulus));
                 Ok((Some(value), block))
             }
             BuiltIn::Mulmod => {
@@ -231,24 +170,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 // `mulmod` operates on `uint256`; widen narrow literal operands so
                 // all operands/result share the type `sol.mulmod` requires.
                 let ui256 = builder.types.ui256;
-                let x = TypeConversion::from_target_type(ui256, builder)
-                    .emit(values[0], builder, &block);
-                let y = TypeConversion::from_target_type(ui256, builder)
-                    .emit(values[1], builder, &block);
-                let modulus = TypeConversion::from_target_type(ui256, builder)
-                    .emit(values[2], builder, &block);
-                let value = block
-                    .append_operation(
-                        MulModOperation::builder(builder.context, builder.unknown_location)
-                            .x(x)
-                            .y(y)
-                            .r#mod(modulus)
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("mulmod always produces one result")
-                    .into();
+                let x = TypeConversion::coerce(values[0], ui256, builder, &block);
+                let y = TypeConversion::coerce(values[1], ui256, builder, &block);
+                let modulus = TypeConversion::coerce(values[2], ui256, builder, &block);
+                let value = sol_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus));
                 Ok((Some(value), block))
             }
             _ => unreachable!("classify_call only routes emittable identifier built-ins here"),
@@ -421,23 +346,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         // The literal target lowers (no virtual redirect): an
                         // explicit `Base.f` names Base's own implementation, not
                         // the most-derived override a bare `f` would bind.
-                        let (mlir_name, parameter_types, return_types) = self
-                            .expression_emitter
-                            .state
-                            .resolve_function(function_definition.node_id())?;
-                        let func_ref_type = self
-                            .expression_emitter
-                            .state
-                            .builder
-                            .types
-                            .func_ref(parameter_types, return_types);
-                        let mlir_name = mlir_name.to_owned();
-                        let value = self
-                            .expression_emitter
-                            .state
-                            .builder
-                            .emit_sol_func_constant(&mlir_name, func_ref_type, &block);
-                        Ok((Some(value), block))
+                        self.expression_emitter
+                            .emit_function_constant(function_definition.node_id(), block)
+                            .map(|(value, block)| (Some(value), block))
                     }
                 } else {
                     self.emit_environment_global(resolved, access, block)
@@ -458,17 +369,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let (values, block) = self.emit_argument_values(arguments, block)?;
         let builder = &self.expression_emitter.state.builder;
         let result_type = builder.types.string(solx_utils::DataLocation::Memory);
-        let value = block
-            .append_operation(
-                ConcatOperation::builder(builder.context, builder.unknown_location)
-                    .args(&values)
-                    .result(result_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.concat always produces one result")
-            .into();
+        let value = sol_op!(
+            builder,
+            block,
+            ConcatOperation.args(&values).result(result_type)
+        );
         Ok((Some(value), block))
     }
 
@@ -490,6 +395,28 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             current = next;
         }
         Ok((values, current))
+    }
+
+    /// Emits `keccak256` over a byte buffer, returning the 32-byte hash. The
+    /// buffer is coerced to memory first — a storage / calldata `bytes` is a
+    /// reference, which solc copies to memory before hashing (`sol.keccak256`
+    /// hashes a memory buffer) — a no-op when the buffer is already memory.
+    /// Shared by the `keccak256` built-in and `abi.encodeWithSignature`'s
+    /// runtime-signature hash.
+    pub fn emit_keccak256(
+        &self,
+        buffer: Value<'context, 'block>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        let builder = &self.expression_emitter.state.builder;
+        let input = TypeConversion::coerce(buffer, builder.types.sol_string_memory, builder, block);
+        sol_op!(
+            builder,
+            block,
+            Keccak256Operation
+                .addr(input)
+                .result(builder.types.fixed_bytes(32))
+        )
     }
 
     /// Emits an intrinsic whose single operand is the receiver of a member

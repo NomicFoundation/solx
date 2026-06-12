@@ -59,8 +59,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 block,
             )?;
             let builder = &self.expression_emitter.state.builder;
-            let byte_value =
-                TypeConversion::from_target_type(byte_target, builder).emit(value, builder, &block);
+            let byte_value = TypeConversion::coerce(value, byte_target, builder, &block);
             builder.emit_sol_push_string(bytes_reference, byte_value, &block);
             return Ok((None, block));
         }
@@ -91,8 +90,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             self.expression_emitter
                 .emit_value_for_target(&value_argument, element_type, block)?;
         let builder = &self.expression_emitter.state.builder;
-        let cast_value =
-            TypeConversion::from_target_type(element_type, builder).emit(value, builder, &block);
+        let cast_value = TypeConversion::coerce(value, element_type, builder, &block);
         builder.emit_sol_store(cast_value, new_slot, &block);
         Ok((None, block))
     }

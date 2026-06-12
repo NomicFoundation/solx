@@ -8,6 +8,7 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::RevertStatement;
 
+use crate::ast::arguments_declaration_ext::ArgumentsDeclarationExt;
 use crate::ast::contract::function::statement::StatementEmitter;
 use crate::ast::type_conversion::TypeConversion;
 
@@ -51,15 +52,12 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .compute_canonical_signature()
             .expect("slang computes a canonical signature for an error");
         let parameters = error.parameters();
-        let mut evaluated = match revert.arguments() {
-            ArgumentsDeclaration::PositionalArguments(positional) => {
-                self.emit_revert_argument_values(positional.iter(), block)?
-            }
-            ArgumentsDeclaration::NamedArguments(named) => {
-                let ordered = Self::order_named_arguments(&named, &parameters)?;
-                self.emit_revert_argument_values(ordered, block)?
-            }
-        };
+        let parameter_ids = parameters
+            .iter()
+            .map(|parameter| parameter.node_id())
+            .collect::<Vec<_>>();
+        let ordered = revert.arguments().ordered_by(&parameter_ids);
+        let mut evaluated = self.emit_revert_argument_values(ordered, block)?;
         for (value, parameter) in evaluated.values.iter_mut().zip(parameters.iter()) {
             let parameter_type = TypeConversion::resolve_slang_type(
                 &parameter
@@ -68,8 +66,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 None,
                 &self.state.builder,
             );
-            *value = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
+            *value = TypeConversion::coerce(
                 *value,
+                parameter_type,
                 &self.state.builder,
                 &evaluated.block,
             );
@@ -132,8 +131,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let (message_value, block) = emitter.emit_value(&expression, block)?;
                 let builder = &self.state.builder;
                 let string_memory_type = builder.types.string(solx_utils::DataLocation::Memory);
-                let message_value = TypeConversion::from_target_type(string_memory_type, builder)
-                    .emit(message_value, builder, &block);
+                let message_value =
+                    TypeConversion::coerce(message_value, string_memory_type, builder, &block);
                 builder.emit_sol_revert("Error(string)", &[message_value], true, &block);
             }
         }

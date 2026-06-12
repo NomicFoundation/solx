@@ -78,8 +78,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             if declared_type.is_reference_type() {
                 builder.emit_sol_copy(value, storage_ref, &block);
             } else {
-                let stored_value = TypeConversion::from_target_type(element_type, builder)
-                    .emit(value, builder, &block);
+                let stored_value = TypeConversion::coerce(value, element_type, builder, &block);
                 builder.emit_sol_store(stored_value, storage_ref, &block);
             }
         }

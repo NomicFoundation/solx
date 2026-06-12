@@ -43,6 +43,7 @@ use solx_utils::BIT_LENGTH_BYTE;
 use solx_utils::DataLocation;
 
 use crate::ast::ExpressionExt;
+use crate::ast::LibraryExt;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::type_conversion::TypeConversion;
@@ -118,11 +119,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (mlir_name, parameter_types, return_types) =
             self.state.resolve_function(function_id)?;
         for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
-            *value = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
-                *value,
-                &self.state.builder,
-                block,
-            );
+            *value = TypeConversion::coerce(*value, parameter_type, &self.state.builder, block);
         }
         let results = self.state.builder.emit_sol_call_results(
             mlir_name,
@@ -274,9 +271,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let value = decimal_number
                     .integer_value()
                     .expect("a lowered decimal literal evaluates to an integer after units");
-                let result_type = self
-                    .resolve_slang_type(decimal_number.get_type())
-                    .expect("binder types every decimal literal node");
+                let result_type = TypeConversion::resolve_optional_slang_type(
+                    decimal_number.get_type(),
+                    &self.state.builder,
+                )
+                .expect("binder types every decimal literal node");
                 let constant = self
                     .state
                     .builder
@@ -287,9 +286,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 let value = hex_number
                     .integer_value()
                     .expect("hex literals always evaluate to integers");
-                let result_type = self
-                    .resolve_slang_type(hex_number.get_type())
-                    .expect("binder types every hex literal node");
+                let result_type = TypeConversion::resolve_optional_slang_type(
+                    hex_number.get_type(),
+                    &self.state.builder,
+                )
+                .expect("binder types every hex literal node");
                 let constant = self
                     .state
                     .builder
@@ -309,19 +310,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .state
                     .current_contract_type
                     .expect("`this` only appears inside a contract method");
-                let operation = ThisOperation::builder(
-                    self.state.builder.context,
-                    self.state.builder.unknown_location,
-                )
-                .addr(contract_type)
-                .build();
-                let value = block
-                    .append_operation(operation.into())
-                    .result(0)
-                    .expect("sol.this always produces one result")
-                    .into();
+                let value = sol_op!(
+                    &self.state.builder,
+                    block,
+                    ThisOperation.addr(contract_type)
+                );
                 Ok((Some(value), block))
             }
+
             Expression::StringExpression(string_expression) => {
                 // A string literal's bytes are emitted verbatim — they need not be
                 // valid UTF-8 (`hex"..."`, `"\xff"`).
@@ -353,11 +349,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .map(|(value, block)| (Some(value), block)),
                 Some(Definition::Library(library)) => {
                     // A library name used as a value (`address(L)`) is its linked
-                    // deploy address. The linker symbol is the fully-qualified
-                    // `file:Library` name (matching solc), so `link_references`
-                    // round-trips.
-                    let symbol = format!("{}:{}", library.get_file_id(), library.name().name());
-                    let value = self.state.builder.emit_sol_lib_addr(&symbol, &block);
+                    // deploy address, placed by its link symbol.
+                    let value = self
+                        .state
+                        .builder
+                        .emit_sol_lib_addr(&library.link_symbol(), &block);
                     Ok((Some(value), block))
                 }
                 None => unreachable!("slang resolves every identifier reference"),
@@ -369,7 +365,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .emit_assignment(assign, block)
                 .map(|(value, block)| (Some(value), block)),
             Expression::AdditiveExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
+                let result_type = TypeConversion::resolve_optional_slang_type(
+                    expression.get_type(),
+                    &self.state.builder,
+                );
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = match expression.operator() {
@@ -380,7 +379,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::MultiplicativeExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
+                let result_type = TypeConversion::resolve_optional_slang_type(
+                    expression.get_type(),
+                    &self.state.builder,
+                );
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = match expression.operator() {
@@ -392,7 +394,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::ExponentiationExpression(expression) => {
-                let target_type = self.resolve_slang_type(expression.get_type());
+                let target_type = TypeConversion::resolve_optional_slang_type(
+                    expression.get_type(),
+                    &self.state.builder,
+                );
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 self.emit_binary_op(&left, &right, Operator::Exponentiation, target_type, block)
@@ -452,7 +457,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         .emit_delete(&expression.operand(), block)
                         .map(|block| (None, block));
                 }
-                let result_type = self.resolve_slang_type(expression.get_type());
+                let result_type = TypeConversion::resolve_optional_slang_type(
+                    expression.get_type(),
+                    &self.state.builder,
+                );
                 let operator = match expression.operator() {
                     ast::PrefixExpressionOperator::Bang(_) => Operator::Not,
                     ast::PrefixExpressionOperator::DeleteKeyword(_) => {
@@ -470,28 +478,40 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::BitwiseAndExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
+                let result_type = TypeConversion::resolve_optional_slang_type(
+                    expression.get_type(),
+                    &self.state.builder,
+                );
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 self.emit_binary_op(&left, &right, Operator::BitwiseAnd, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::BitwiseOrExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
+                let result_type = TypeConversion::resolve_optional_slang_type(
+                    expression.get_type(),
+                    &self.state.builder,
+                );
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 self.emit_binary_op(&left, &right, Operator::BitwiseOr, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::BitwiseXorExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
+                let result_type = TypeConversion::resolve_optional_slang_type(
+                    expression.get_type(),
+                    &self.state.builder,
+                );
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 self.emit_binary_op(&left, &right, Operator::BitwiseXor, result_type, block)
                     .map(|(value, block)| (Some(value), block))
             }
             Expression::ShiftExpression(expression) => {
-                let result_type = self.resolve_slang_type(expression.get_type());
+                let result_type = TypeConversion::resolve_optional_slang_type(
+                    expression.get_type(),
+                    &self.state.builder,
+                );
                 let left = expression.left_operand();
                 let right = expression.right_operand();
                 let operator = match expression.operator() {
@@ -633,9 +653,9 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             LiteralKind::Rational { value } => value.to_integer(),
             _ => unreachable!("is_foldable_constant guarantees a numeric literal"),
         };
-        let result_type = self
-            .resolve_slang_type(expression.get_type())
-            .expect("binder types every folded constant expression");
+        let result_type =
+            TypeConversion::resolve_optional_slang_type(expression.get_type(), &self.state.builder)
+                .expect("binder types every folded constant expression");
         self.state.builder.emit_constant(&value, result_type, block)
     }
 
@@ -658,6 +678,19 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .get(&node_id)
             .copied()
             .unwrap_or(node_id);
+        self.emit_function_constant(target_id, block)
+    }
+
+    /// Emits a `sol.func_constant` for the already-resolved internal function
+    /// `target_id`, producing its `!sol.func_ref<…>` pointer. The literal target
+    /// lowers as-is (no virtual redirect); a caller wanting the most-derived
+    /// override resolves the redirect first (see
+    /// [`Self::emit_internal_function_pointer`]).
+    pub fn emit_function_constant(
+        &self,
+        target_id: NodeId,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (mlir_name, parameter_types, return_types) = self.state.resolve_function(target_id)?;
         let func_ref_type = self
             .state
@@ -774,26 +807,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         self.state
             .builder
             .emit_sol_cmp(value, zero, CmpPredicate::Ne, block)
-    }
-
-    /// Resolves the Solidity type from Slang to an MLIR type.
-    ///
-    /// Returns `None` when the incoming slang type is `None`. This can happen when calling
-    /// `node.get_type()` if the node doesn't have typing information, for example when
-    /// there are unresolved references or semantic errors.
-    /// Panics on types that `TypeConversion::resolve_slang_type` does not yet handle.
-    // TODO: slang's binder does not fold binary expressions of literal operands —
-    // its typing rules return the type of one operand (e.g. type of the left
-    // operand for shifts), so `1 << 100` gets typed as ui8 (the type of `1`)
-    // and constant subexpressions overflow at that width. solc folds via
-    // `RationalNumberType::binaryOperatorResult`, sizing the result to fit the
-    // folded value. Either teach slang to fold, or fold here before lowering.
-    pub fn resolve_slang_type(&self, slang_type: Option<SlangType>) -> Option<Type<'context>> {
-        Some(TypeConversion::resolve_slang_type(
-            &slang_type?,
-            None,
-            &self.state.builder,
-        ))
     }
 
     /// Picks the MLIR type of the address yielded by `sol.gep` / `sol.map`.

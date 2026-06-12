@@ -83,11 +83,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (start_value, block) = match index_access.start() {
             Some(start_expression) => {
                 let (value, block) = self.emit_value(&start_expression, block)?;
-                let value = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
-                    value,
-                    &self.state.builder,
-                    &block,
-                );
+                let value = TypeConversion::coerce(value, ui256, &self.state.builder, &block);
                 (value, block)
             }
             None => {
@@ -98,28 +94,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let (end_value, block) = match index_access.end() {
             Some(end_expression) => {
                 let (value, block) = self.emit_value(&end_expression, block)?;
-                let value = TypeConversion::from_target_type(ui256, &self.state.builder).emit(
-                    value,
-                    &self.state.builder,
-                    &block,
-                );
+                let value = TypeConversion::coerce(value, ui256, &self.state.builder, &block);
                 (value, block)
             }
             None => {
                 // Open-ended slice `a[start:]` runs to the end of the array; its
                 // upper bound is the operand's length.
                 let builder = &self.state.builder;
-                let length = block
-                    .append_operation(
-                        LengthOperation::builder(builder.context, builder.unknown_location)
-                            .inp(base_value)
-                            .len(ui256)
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("sol.length always produces one result")
-                    .into();
+                let length = sol_op!(builder, block, LengthOperation.inp(base_value).len(ui256));
                 (length, block)
             }
         };
@@ -131,19 +113,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             &self.state.builder,
         );
         let builder = &self.state.builder;
-        let value = block
-            .append_operation(
-                SliceOperation::builder(builder.context, builder.unknown_location)
-                    .arr(base_value)
-                    .start(start_value)
-                    .end(end_value)
-                    .res(result_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.slice always produces one result")
-            .into();
+        let value = sol_op!(
+            builder,
+            block,
+            SliceOperation
+                .arr(base_value)
+                .start(start_value)
+                .end(end_value)
+                .res(result_type)
+        );
         Ok((value, block))
     }
 

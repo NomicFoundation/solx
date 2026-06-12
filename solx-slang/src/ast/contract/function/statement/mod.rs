@@ -10,18 +10,14 @@ pub mod try_statement;
 pub mod variable_declaration;
 
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::BuiltIn;
-use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::NamedArguments;
 use slang_solidity_v2::ast::NodeId;
-use slang_solidity_v2::ast::Parameters;
 use slang_solidity_v2::ast::Statement;
 use slang_solidity_v2::ast::Statements;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -488,11 +484,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .into_iter()
             .zip(self.return_types.iter())
             .map(|(value, &return_type)| {
-                TypeConversion::from_target_type(return_type, &self.state.builder).emit(
-                    value,
-                    &self.state.builder,
-                    &block,
-                )
+                TypeConversion::coerce(value, return_type, &self.state.builder, &block)
             })
             .collect();
 
@@ -516,49 +508,5 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             body_call.emit(&self.state.builder, &block)?;
         }
         Ok(Some(block))
-    }
-
-    /// Orders named arguments by the callee's parameter declaration order.
-    ///
-    /// Shared by `emit` and `revert` statements, both of which accept either
-    /// positional or named arguments. Each argument is bound to its parameter
-    /// through slang's typed resolution — keyed by the parameter's [`NodeId`],
-    /// never by comparing name strings. slang has already bound the named
-    /// arguments to the parameters, so a duplicate, missing, unknown, or
-    /// unnamed-parameter mismatch is unreachable.
-    fn order_named_arguments(
-        named_arguments: &NamedArguments,
-        parameters: &Parameters,
-    ) -> anyhow::Result<Vec<Expression>> {
-        let mut arguments: HashMap<NodeId, Expression> = HashMap::new();
-        for argument in named_arguments.iter() {
-            let Some(Definition::Parameter(parameter)) = argument.name().resolve_to_definition()
-            else {
-                unreachable!("slang resolves a named argument to its parameter");
-            };
-            match arguments.entry(parameter.node_id()) {
-                Entry::Vacant(entry) => {
-                    entry.insert(argument.value());
-                }
-                Entry::Occupied(_) => {
-                    unreachable!("slang rejects a duplicate named argument");
-                }
-            }
-        }
-
-        let mut ordered_arguments = Vec::new();
-        for parameter in parameters.iter() {
-            let argument = arguments
-                .remove(&parameter.node_id())
-                .expect("slang validates a matching named argument for every parameter");
-            ordered_arguments.push(argument);
-        }
-
-        assert!(
-            arguments.is_empty(),
-            "slang binds every named argument to a declared parameter"
-        );
-
-        Ok(ordered_arguments)
     }
 }

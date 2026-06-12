@@ -239,6 +239,23 @@ impl<'context> TypeConversion<'context> {
         }
     }
 
+    /// `Option`-lifted [`Self::resolve_slang_type`]: maps a possibly-absent
+    /// slang type — as returned by `node.get_type()` on a node the binder left
+    /// untyped (an unresolved reference or semantic error) — through with a
+    /// `None` inherited location, yielding `None` when the slang type is absent.
+    // TODO: slang's binder does not fold binary expressions of literal operands —
+    // its typing rules return the type of one operand (e.g. type of the left
+    // operand for shifts), so `1 << 100` gets typed as ui8 (the type of `1`)
+    // and constant subexpressions overflow at that width. solc folds via
+    // `RationalNumberType::binaryOperatorResult`, sizing the result to fit the
+    // folded value. Either teach slang to fold, or fold here before lowering.
+    pub fn resolve_optional_slang_type(
+        slang_type: Option<SlangType>,
+        builder: &solx_mlir::Builder<'context>,
+    ) -> Option<Type<'context>> {
+        Some(Self::resolve_slang_type(&slang_type?, None, builder))
+    }
+
     /// Emits the zero value of a scalar value type that is not a plain
     /// integer/bool: `address(0)`, a zero `bytesN`, or an enum's `0` variant
     /// (a UDVT defers to its underlying type). The zero constant is materialised
@@ -311,6 +328,69 @@ impl<'context> TypeConversion<'context> {
         }
     }
 
+    /// Allocates a stack slot for a value of `slang_type` (lowered to
+    /// `mlir_type`) and default-initialises it to the type's zero, mirroring
+    /// solc's `print-init` emission:
+    /// - a **memory aggregate** (fixed array, struct, or dynamic array) points
+    ///   at a fresh zero-filled allocation (`sol.malloc zero_init`);
+    /// - an empty **`string` / `bytes`** is a plain `sol.malloc` of a
+    ///   zero-length buffer — never a *sized* allocation, which advances the
+    ///   free pointer and misplaces a buffer inline assembly writes past its
+    ///   length;
+    /// - a **non-integer scalar value type** (address, `bytesN`, enum, a UDVT
+    ///   over one, a function pointer, a contract/interface ref) gets its
+    ///   representation's own zero ([`Self::emit_scalar_zero`]);
+    /// - an **integer/bool** gets a zeroed slot;
+    /// - **anything else** is a reference (a `storage`/`calldata` aggregate, a
+    ///   mapping, or a `storage` named return) the body binds before reading, so
+    ///   a bare slot suffices.
+    ///
+    /// The single default-initialisation primitive shared by local variable
+    /// declarations and named return slots.
+    pub fn emit_default_initialized_slot<'block>(
+        slang_type: Option<&SlangType>,
+        mlir_type: Type<'context>,
+        builder: &solx_mlir::Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        let pointer = builder.emit_sol_alloca(mlir_type, block);
+        // A memory aggregate is malloc-backed; a `storage` reference (e.g.
+        // `returns (S storage)`) is a slot pointer assigned in the body, so the
+        // `Memory` guard keeps it a bare slot.
+        let aggregate_location = match slang_type {
+            Some(SlangType::FixedSizeArray(array)) => Some(array.location()),
+            Some(SlangType::Struct(struct_type)) => Some(struct_type.location()),
+            Some(SlangType::Array(array_type)) => Some(array_type.location()),
+            _ => None,
+        };
+        if matches!(
+            aggregate_location,
+            Some(slang_solidity_v2::ast::DataLocation::Memory)
+        ) {
+            let zero = builder.emit_sol_malloc_zeroed(mlir_type, block);
+            builder.emit_sol_store(zero, pointer, block);
+        } else if matches!(slang_type, Some(SlangType::String(_) | SlangType::Bytes(_))) {
+            let zero = builder.emit_sol_malloc(mlir_type, block);
+            builder.emit_sol_store(zero, pointer, block);
+        } else if let Some(
+            scalar_value_type @ (SlangType::Address(_)
+            | SlangType::ByteArray(_)
+            | SlangType::Enum(_)
+            | SlangType::UserDefinedValue(_)
+            | SlangType::Function(_)
+            | SlangType::Contract(_)
+            | SlangType::Interface(_)),
+        ) = slang_type
+        {
+            let zero = Self::emit_scalar_zero(scalar_value_type, mlir_type, builder, block);
+            builder.emit_sol_store(zero, pointer, block);
+        } else if IntegerType::try_from(mlir_type).is_ok() {
+            let zero = builder.emit_sol_constant(0, mlir_type, block);
+            builder.emit_sol_store(zero, pointer, block);
+        }
+        pointer
+    }
+
     // TODO: Remove when nomicFoundation/slang#1793 is merged and we can instead
     // depend on `LiteralType::mobile_type()` for literal type conversion.
     fn integer_bits_required(value: &BigInt) -> u32 {
@@ -324,6 +404,21 @@ impl<'context> TypeConversion<'context> {
                 .expect("literal bit count fits in u32")
                 .max(1)
         }
+    }
+
+    /// Coerces `value` to `target_type`, emitting the conversion (nothing when
+    /// the types already match). The single entry callers use for implicit
+    /// widening and explicit conversions.
+    pub fn coerce<'block>(
+        value: Value<'context, 'block>,
+        target_type: Type<'context>,
+        builder: &solx_mlir::Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block>
+    where
+        'context: 'block,
+    {
+        Self::from_target_type(target_type, builder).emit(value, builder, block)
     }
 
     /// Classifies a target type into the appropriate conversion variant.

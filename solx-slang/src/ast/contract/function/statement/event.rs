@@ -7,11 +7,11 @@ use melior::ir::Value;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::r#type::IntegerType;
-use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::EmitStatement;
 use solx_mlir::ods::sol::EmitOperation;
 
+use crate::ast::arguments_declaration_ext::ArgumentsDeclarationExt;
 use crate::ast::contract::function::statement::StatementEmitter;
 use crate::ast::type_conversion::TypeConversion;
 
@@ -40,14 +40,11 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             unreachable!("slang resolves an emit target to an event definition");
         };
         let parameters = event_definition.parameters();
-        let ordered_arguments = match &emit_statement.arguments() {
-            ArgumentsDeclaration::PositionalArguments(positional) => {
-                positional.iter().collect::<Vec<_>>()
-            }
-            ArgumentsDeclaration::NamedArguments(named) => {
-                Self::order_named_arguments(named, &parameters)?
-            }
-        };
+        let parameter_ids = parameters
+            .iter()
+            .map(|parameter| parameter.node_id())
+            .collect::<Vec<_>>();
+        let ordered_arguments = emit_statement.arguments().ordered_by(&parameter_ids);
         assert!(
             ordered_arguments.len() == parameters.len(),
             "event argument count {} does not match parameter count {}",
@@ -62,7 +59,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         for (parameter, argument) in parameters.iter().zip(ordered_arguments) {
             let (value, next_block) = emitter.emit_value(&argument, current_block)?;
             current_block = next_block;
-            let indexed = parameter.is_indexed();
+            let indexed = parameter.indexed();
             let parameter_type = TypeConversion::resolve_slang_type(
                 &parameter
                     .get_type()
@@ -70,12 +67,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 None,
                 &self.state.builder,
             );
-            let value = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
-                value,
-                &self.state.builder,
-                &current_block,
-            );
-            if indexed {
+            let value =
+                TypeConversion::coerce(value, parameter_type, &self.state.builder, &current_block);
+            if indexed.is_some() {
                 // TODO: indexed reference-type parameters (string, bytes,
                 // arrays, structs) must store the keccak256 hash of their
                 // encoded value as the topic, not the value itself. That
@@ -86,7 +80,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
         }
 
-        let signature = if event_definition.is_anonymous() {
+        let signature = if event_definition.anonymous_keyword().is_some() {
             None
         } else {
             Some(

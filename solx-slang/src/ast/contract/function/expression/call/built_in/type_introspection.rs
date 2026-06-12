@@ -19,6 +19,7 @@ use solx_mlir::ods::sol::ObjectCodeOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::type_conversion::TypeConversion;
 
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
     /// Emits `type(E).min` / `type(E).max` for an enum — the lowest (`0`) or
@@ -43,10 +44,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         else {
             unreachable!("type(E).min/max resolves to an enum definition");
         };
-        let result_type = self
-            .expression_emitter
-            .resolve_slang_type(access.get_type())
-            .expect("slang types type(E).min/max as the enum");
+        let result_type = TypeConversion::resolve_optional_slang_type(
+            access.get_type(),
+            &self.expression_emitter.state.builder,
+        )
+        .expect("slang types type(E).min/max as the enum");
         let member_count = enum_definition.members().iter().count();
         let ordinal = match builtin {
             BuiltIn::TypeEnumMin => 0,
@@ -70,10 +72,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .member()
             .resolve_to_built_in()
             .expect("type(T).min/max dispatches on its built-in member");
-        let result_type = self
-            .expression_emitter
-            .resolve_slang_type(access.get_type())
-            .expect("slang types type(T).min/max as the integer type");
+        let result_type = TypeConversion::resolve_optional_slang_type(
+            access.get_type(),
+            &self.expression_emitter.state.builder,
+        )
+        .expect("slang types type(T).min/max as the integer type");
         let integer_type =
             IntegerType::try_from(result_type).expect("type(T).min/max is an integer type");
         let bits = solx_mlir::TypeFactory::integer_bit_width(result_type) as usize;
@@ -171,28 +174,25 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         self.expression_emitter
             .state
             .add_dependency(object_name.clone());
-        let result_type = self
-            .expression_emitter
-            .resolve_slang_type(access.get_type())
-            .unwrap_or_else(|| {
-                self.expression_emitter
-                    .state
-                    .builder
-                    .types
-                    .string(DataLocation::Memory)
-            });
+        let result_type = TypeConversion::resolve_optional_slang_type(
+            access.get_type(),
+            &self.expression_emitter.state.builder,
+        )
+        .unwrap_or_else(|| {
+            self.expression_emitter
+                .state
+                .builder
+                .types
+                .string(DataLocation::Memory)
+        });
         let builder = &self.expression_emitter.state.builder;
-        let value = block
-            .append_operation(
-                ObjectCodeOperation::builder(builder.context, builder.unknown_location)
-                    .obj_name(StringAttribute::new(builder.context, &object_name))
-                    .out(result_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.object_code always produces one result")
-            .into();
+        let value = sol_op!(
+            builder,
+            block,
+            ObjectCodeOperation
+                .obj_name(StringAttribute::new(builder.context, &object_name))
+                .out(result_type)
+        );
         Ok((value, block))
     }
 

@@ -11,17 +11,15 @@ use melior::ir::Value;
 use melior::ir::ValueLike;
 use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::operation::OperationMutLike;
-use melior::ir::r#type::IntegerType;
+use num_bigint::BigInt;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
-use solx_mlir::ods::sol::BytesCastOperation;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::EncodeOperation;
-use solx_mlir::ods::sol::Keccak256Operation;
 
 use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::expression::call::built_in::EncodeMode;
@@ -86,50 +84,20 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .try_into()
                     .expect("keccak256 always yields 32 bytes");
                 let selector_word = u32::from_be_bytes(selector_bytes);
-                let builder = &self.expression_emitter.state.builder;
-                let selector_int = builder.emit_sol_constant(
-                    i64::from(selector_word),
-                    Type::from(IntegerType::unsigned(builder.context, 32)),
-                    &block,
-                );
-                let selector_value = block
-                    .append_operation(
-                        BytesCastOperation::builder(builder.context, builder.unknown_location)
-                            .inp(selector_int)
-                            .out(builder.types.fixed_bytes(4))
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("sol.bytes_cast always produces one result")
-                    .into();
+                let selector_value =
+                    self.emit_selector_constant(&BigInt::from(selector_word), 4, &block);
                 (selector_value, block)
             }
             _ => {
                 let (signature_value, current) = self
                     .expression_emitter
                     .emit_value(&signature_expression, block)?;
+                // The runtime signature is hashed by `keccak256` and truncated to
+                // its leading four bytes.
+                let hash = self.emit_keccak256(signature_value, &current);
                 let builder = &self.expression_emitter.state.builder;
-                // `keccak256` hashes a memory buffer; a signature held in
-                // storage/calldata is a reference, so coerce it to memory first
-                // (a no-op when already memory).
-                let signature_value =
-                    TypeConversion::from_target_type(builder.types.sol_string_memory, builder)
-                        .emit(signature_value, builder, &current);
-                let hash = current
-                    .append_operation(
-                        Keccak256Operation::builder(builder.context, builder.unknown_location)
-                            .addr(signature_value)
-                            .result(builder.types.fixed_bytes(32))
-                            .build()
-                            .into(),
-                    )
-                    .result(0)
-                    .expect("keccak256 always produces one result")
-                    .into();
                 let selector_value =
-                    TypeConversion::from_target_type(builder.types.fixed_bytes(4), builder)
-                        .emit(hash, builder, &current);
+                    TypeConversion::coerce(hash, builder.types.fixed_bytes(4), builder, &current);
                 (selector_value, current)
             }
         };
@@ -188,16 +156,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let selector = function
                     .compute_selector()
                     .expect("abi.encodeCall's callee is an external function with an ABI selector");
-                let selector_integer = builder.emit_sol_constant(
-                    i64::from(selector),
-                    Type::from(IntegerType::unsigned(builder.context, 32)),
-                    &block,
-                );
-                let selector_value = builder.emit_sol_bytes_cast(
-                    selector_integer,
-                    builder.types.fixed_bytes(4),
-                    &block,
-                );
+                let selector_value =
+                    self.emit_selector_constant(&BigInt::from(selector), 4, &block);
                 // `abi.encodeCall` ABI-encodes the arguments as an external call
                 // would: reference parameters are encoded from `Memory`, not
                 // their declared `calldata`/`storage` location (which cannot
@@ -331,8 +291,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .and_then(|payload_type| payload_type.data_location()),
             Some(SlangDataLocation::Storage)
         ) {
-            TypeConversion::from_target_type(builder.types.sol_string_memory, builder).emit(
+            TypeConversion::coerce(
                 payload_value,
+                builder.types.sol_string_memory,
                 builder,
                 &block,
             )

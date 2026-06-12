@@ -42,11 +42,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let builder = &self.expression_emitter.state.builder;
         self.emit_unary_member_intrinsic(access, block, |address_value| {
-            BalanceOperation::builder(builder.context, builder.unknown_location)
-                .cont_addr(address_value)
-                .out(builder.types.ui256)
-                .build()
-                .into()
+            sol_op_build!(
+                builder,
+                BalanceOperation
+                    .cont_addr(address_value)
+                    .out(builder.types.ui256)
+            )
         })
     }
 
@@ -58,11 +59,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let builder = &self.expression_emitter.state.builder;
         self.emit_unary_member_intrinsic(access, block, |address_value| {
-            CodeHashOperation::builder(builder.context, builder.unknown_location)
-                .cont_addr(address_value)
-                .out(builder.types.ui256)
-                .build()
-                .into()
+            sol_op_build!(
+                builder,
+                CodeHashOperation
+                    .cont_addr(address_value)
+                    .out(builder.types.ui256)
+            )
         })
     }
 
@@ -74,11 +76,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let builder = &self.expression_emitter.state.builder;
         self.emit_unary_member_intrinsic(access, block, |address_value| {
-            CodeOperation::builder(builder.context, builder.unknown_location)
-                .cont_addr(address_value)
-                .out(builder.types.sol_string_memory)
-                .build()
-                .into()
+            sol_op_build!(
+                builder,
+                CodeOperation
+                    .cont_addr(address_value)
+                    .out(builder.types.sol_string_memory)
+            )
         })
     }
 
@@ -90,11 +93,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let builder = &self.expression_emitter.state.builder;
         self.emit_unary_member_intrinsic(access, block, |operand| {
-            LengthOperation::builder(builder.context, builder.unknown_location)
-                .inp(operand)
-                .len(builder.types.ui256)
-                .build()
-                .into()
+            sol_op_build!(
+                builder,
+                LengthOperation.inp(operand).len(builder.types.ui256)
+            )
         })
     }
 
@@ -113,18 +115,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // `sol.send` takes a `ui256` amount; a narrow literal (`r.send(0)` → ui8)
         // must be widened first, like `address.transfer`.
         let amount = builder.emit_sol_cast(values[0], builder.types.ui256, &block);
-        let value = block
-            .append_operation(
-                SendOperation::builder(builder.context, builder.unknown_location)
-                    .addr(addr)
-                    .val(amount)
-                    .status(builder.types.i1)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("send always produces one result")
-            .into();
+        let value = sol_op!(
+            builder,
+            block,
+            SendOperation
+                .addr(addr)
+                .val(amount)
+                .status(builder.types.i1)
+        );
         Ok((Some(value), block))
     }
 
@@ -143,13 +141,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // `sol.transfer` takes a `ui256` amount; a narrow literal (`x.transfer(1)`
         // → ui8) must be widened first.
         let amount = builder.emit_sol_cast(values[0], builder.types.ui256, &block);
-        block.append_operation(
-            TransferOperation::builder(builder.context, builder.unknown_location)
-                .addr(addr)
-                .val(amount)
-                .build()
-                .into(),
-        );
+        sol_op_void!(builder, block, TransferOperation.addr(addr).val(amount));
         Ok((None, block))
     }
 
@@ -167,94 +159,53 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let builder = &self.expression_emitter.state.builder;
         let operation = match resolved {
             Some(BuiltIn::TxOrigin) => {
-                OriginOperation::builder(builder.context, builder.unknown_location)
-                    .addr(builder.types.sol_address)
-                    .build()
-                    .into()
+                sol_op_build!(builder, OriginOperation.addr(builder.types.sol_address))
             }
             Some(BuiltIn::TxGasPrice) => {
-                GasPriceOperation::builder(builder.context, builder.unknown_location)
-                    .val(builder.types.ui256)
-                    .build()
-                    .into()
+                sol_op_build!(builder, GasPriceOperation.val(builder.types.ui256))
             }
             Some(BuiltIn::MsgSender) => {
-                CallerOperation::builder(builder.context, builder.unknown_location)
-                    .addr(builder.types.sol_address)
-                    .build()
-                    .into()
+                sol_op_build!(builder, CallerOperation.addr(builder.types.sol_address))
             }
             Some(BuiltIn::MsgValue) => {
-                CallValueOperation::builder(builder.context, builder.unknown_location)
-                    .val(builder.types.ui256)
-                    .build()
-                    .into()
+                sol_op_build!(builder, CallValueOperation.val(builder.types.ui256))
             }
             Some(BuiltIn::BlockTimestamp) => {
-                TimestampOperation::builder(builder.context, builder.unknown_location)
-                    .val(builder.types.ui256)
-                    .build()
-                    .into()
+                sol_op_build!(builder, TimestampOperation.val(builder.types.ui256))
             }
             Some(BuiltIn::BlockNumber) => {
-                BlockNumberOperation::builder(builder.context, builder.unknown_location)
-                    .val(builder.types.ui256)
-                    .build()
-                    .into()
+                sol_op_build!(builder, BlockNumberOperation.val(builder.types.ui256))
             }
             Some(BuiltIn::BlockCoinbase) => {
-                CoinbaseOperation::builder(builder.context, builder.unknown_location)
-                    .addr(builder.types.sol_address)
-                    .build()
-                    .into()
+                sol_op_build!(builder, CoinbaseOperation.addr(builder.types.sol_address))
             }
             Some(BuiltIn::BlockChainid) => {
-                ChainIdOperation::builder(builder.context, builder.unknown_location)
-                    .val(builder.types.ui256)
-                    .build()
-                    .into()
+                sol_op_build!(builder, ChainIdOperation.val(builder.types.ui256))
             }
             Some(BuiltIn::BlockBasefee) => {
-                BaseFeeOperation::builder(builder.context, builder.unknown_location)
-                    .val(builder.types.ui256)
-                    .build()
-                    .into()
+                sol_op_build!(builder, BaseFeeOperation.val(builder.types.ui256))
             }
             Some(BuiltIn::BlockGaslimit) => {
-                GasLimitOperation::builder(builder.context, builder.unknown_location)
-                    .val(builder.types.ui256)
-                    .build()
-                    .into()
+                sol_op_build!(builder, GasLimitOperation.val(builder.types.ui256))
             }
             Some(BuiltIn::BlockBlobbasefee) => {
-                BlobBaseFeeOperation::builder(builder.context, builder.unknown_location)
-                    .val(builder.types.ui256)
-                    .build()
-                    .into()
+                sol_op_build!(builder, BlobBaseFeeOperation.val(builder.types.ui256))
             }
             Some(BuiltIn::BlockDifficulty) => {
-                DifficultyOperation::builder(builder.context, builder.unknown_location)
-                    .val(builder.types.ui256)
-                    .build()
-                    .into()
+                sol_op_build!(builder, DifficultyOperation.val(builder.types.ui256))
             }
             Some(BuiltIn::BlockPrevrandao) => {
-                PrevRandaoOperation::builder(builder.context, builder.unknown_location)
-                    .val(builder.types.ui256)
-                    .build()
-                    .into()
+                sol_op_build!(builder, PrevRandaoOperation.val(builder.types.ui256))
             }
             Some(BuiltIn::MsgSig) => {
-                SigOperation::builder(builder.context, builder.unknown_location)
-                    .val(builder.types.fixed_bytes(4))
-                    .build()
-                    .into()
+                sol_op_build!(builder, SigOperation.val(builder.types.fixed_bytes(4)))
             }
             Some(BuiltIn::MsgData) => {
-                GetCallDataOperation::builder(builder.context, builder.unknown_location)
-                    .addr(builder.types.string(solx_utils::DataLocation::CallData))
-                    .build()
-                    .into()
+                sol_op_build!(
+                    builder,
+                    GetCallDataOperation
+                        .addr(builder.types.string(solx_utils::DataLocation::CallData))
+                )
             }
             // TODO: split this catch-all so non-built-in member accesses (struct fields, etc.) and unimplemented built-ins surface distinct errors.
             _ => unimplemented!("unsupported member access: {}", access.member().name()),

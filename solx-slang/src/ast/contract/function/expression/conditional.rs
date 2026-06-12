@@ -52,9 +52,24 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let result_type = self
             .bare_function_ref_type(&conditional.true_expression())
             .or_else(|| self.bare_function_ref_type(&conditional.false_expression()))
-            .or_else(|| self.resolve_slang_type(conditional.get_type()))
-            .or_else(|| self.resolve_slang_type(conditional.true_expression().get_type()))
-            .or_else(|| self.resolve_slang_type(conditional.false_expression().get_type()))
+            .or_else(|| {
+                TypeConversion::resolve_optional_slang_type(
+                    conditional.get_type(),
+                    &self.state.builder,
+                )
+            })
+            .or_else(|| {
+                TypeConversion::resolve_optional_slang_type(
+                    conditional.true_expression().get_type(),
+                    &self.state.builder,
+                )
+            })
+            .or_else(|| {
+                TypeConversion::resolve_optional_slang_type(
+                    conditional.false_expression().get_type(),
+                    &self.state.builder,
+                )
+            })
             .expect("a conditional resolves its type from itself or one of its branches");
         let condition = conditional.operand();
         let (condition_value, block) = self.emit_value(&condition, block)?;
@@ -66,11 +81,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let true_expression = conditional.true_expression();
         let (then_value, then_end) =
             self.emit_value_for_target(&true_expression, result_type, then_block)?;
-        let then_cast = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
-            then_value,
-            &self.state.builder,
-            &then_end,
-        );
+        let then_cast =
+            TypeConversion::coerce(then_value, result_type, &self.state.builder, &then_end);
         self.state
             .builder
             .emit_sol_store(then_cast, result_slot, &then_end);
@@ -79,11 +91,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let false_expression = conditional.false_expression();
         let (else_value, else_end) =
             self.emit_value_for_target(&false_expression, result_type, else_block)?;
-        let else_cast = TypeConversion::from_target_type(result_type, &self.state.builder).emit(
-            else_value,
-            &self.state.builder,
-            &else_end,
-        );
+        let else_cast =
+            TypeConversion::coerce(else_value, result_type, &self.state.builder, &else_end);
         self.state
             .builder
             .emit_sol_store(else_cast, result_slot, &else_end);
@@ -137,8 +146,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 true_items
                     .iter()
                     .map(|item| {
-                        self.resolve_slang_type(item.get_type())
-                            .expect("slang types every conditional-branch tuple element")
+                        TypeConversion::resolve_optional_slang_type(
+                            item.get_type(),
+                            &self.state.builder,
+                        )
+                        .expect("slang types every conditional-branch tuple element")
                     })
                     .collect()
             }
@@ -156,8 +168,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     .types()
                     .iter()
                     .map(|element_type| {
-                        self.resolve_slang_type(Some(element_type.clone()))
-                            .expect("slang types every conditional result element")
+                        TypeConversion::resolve_optional_slang_type(
+                            Some(element_type.clone()),
+                            &self.state.builder,
+                        )
+                        .expect("slang types every conditional result element")
                     })
                     .collect()
             }
@@ -183,8 +198,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 "a conditional branch yields one value per result slot"
             );
             for (index, value) in values.into_iter().enumerate() {
-                let cast = TypeConversion::from_target_type(result_types[index], builder)
-                    .emit(value, builder, &current);
+                let cast = TypeConversion::coerce(value, result_types[index], builder, &current);
                 builder.emit_sol_store(cast, slots[index], &current);
             }
             builder.emit_sol_yield(&current);
@@ -300,10 +314,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         };
         let element_values: Vec<_> = element_values
             .into_iter()
-            .map(|value| {
-                TypeConversion::from_target_type(element_type, builder)
-                    .emit(value, builder, &current)
-            })
+            .map(|value| TypeConversion::coerce(value, element_type, builder, &current))
             .collect();
         let value = builder.emit_sol_array_lit(&element_values, array_type, &current);
         Ok((value, current))

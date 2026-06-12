@@ -5,7 +5,6 @@ use melior::ir::BlockRef;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MultiTypedDeclaration;
 use slang_solidity_v2::ast::SingleTypedDeclaration;
-use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::VariableDeclarationStatement;
 use slang_solidity_v2::ast::VariableDeclarationTarget;
 
@@ -51,8 +50,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let (block, initial_value) = if let Some(ref initializer_expression) = declaration.value() {
             let (initial_value, block) =
                 emitter.emit_value_for_target(initializer_expression, declared_type, block)?;
-            let cast_value = TypeConversion::from_target_type(declared_type, &self.state.builder)
-                .emit(initial_value, &self.state.builder, &block);
+            let cast_value =
+                TypeConversion::coerce(initial_value, declared_type, &self.state.builder, &block);
             (block, Some(cast_value))
         } else {
             (block, None)
@@ -62,82 +61,17 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
             self.state.builder.emit_sol_store(value, pointer, &block);
             pointer
-        } else if matches!(
-            slang_declared_type.as_ref(),
-            Some(SlangType::FixedSizeArray(_) | SlangType::Struct(_))
-        ) {
-            // A memory aggregate (`T[n] memory a;`, `S memory s;`) declared
-            // without an initializer is default-initialised by Solidity to a
-            // freshly allocated zero-filled buffer, not left as a dangling
-            // pointer (indexing it would otherwise revert / read garbage).
-            let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
-            let zero = self
-                .state
-                .builder
-                .emit_sol_malloc_zeroed(declared_type, &block);
-            self.state.builder.emit_sol_store(zero, pointer, &block);
-            pointer
-        } else if let Some(SlangType::Array(array_type)) = slang_declared_type.as_ref()
-            && matches!(
-                array_type.location(),
-                slang_solidity_v2::ast::DataLocation::Memory
-            )
-        {
-            // A dynamic memory array (`T[] memory a;`) without an initializer
-            // default-initialises to a freshly allocated zero-length buffer
-            // (`sol.malloc zero_init`), exactly like a fixed-size memory array.
-            // A storage/calldata array reference cannot reach here uninitialised
-            // (Solidity requires it to be bound), so the Memory guard is exact.
-            let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
-            let zero = self
-                .state
-                .builder
-                .emit_sol_malloc_zeroed(declared_type, &block);
-            self.state.builder.emit_sol_store(zero, pointer, &block);
-            pointer
-        } else if matches!(
-            slang_declared_type.as_ref(),
-            Some(SlangType::String(_) | SlangType::Bytes(_))
-        ) {
-            // A dynamic `string` / `bytes` without an initializer is an empty
-            // (length-0) buffer, so `""` reads back rather than garbage.
-            let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
-            let size =
-                self.state
-                    .builder
-                    .emit_sol_constant(0, self.state.builder.types.ui256, &block);
-            let zero = self
-                .state
-                .builder
-                .emit_sol_malloc_sized_zeroed(declared_type, size, &block);
-            self.state.builder.emit_sol_store(zero, pointer, &block);
-            pointer
-        } else if let Some(
-            scalar_value_type @ (SlangType::Address(_)
-            | SlangType::ByteArray(_)
-            | SlangType::Enum(_)
-            | SlangType::UserDefinedValue(_)
-            | SlangType::Function(_)
-            | SlangType::Contract(_)
-            | SlangType::Interface(_)),
-        ) = slang_declared_type.as_ref()
-        {
-            // A value type that is not a plain integer/bool (an address,
-            // `bytesN`, an enum, a UDVT over one, or a function pointer) needs
-            // its representation's own zero, not a raw zeroed integer slot.
-            let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
-            let zero = TypeConversion::emit_scalar_zero(
-                scalar_value_type,
+        } else {
+            // No initializer: default-initialise the slot to the type's zero
+            // through the shared primitive (memory aggregates malloc'd, empty
+            // `string`/`bytes` a plain malloc, scalar value types their own
+            // zero, integers a zeroed slot, references a bare slot).
+            TypeConversion::emit_default_initialized_slot(
+                slang_declared_type.as_ref(),
                 declared_type,
                 &self.state.builder,
                 &block,
-            );
-            self.state.builder.emit_sol_store(zero, pointer, &block);
-            pointer
-        } else {
-            self.state
-                .builder
-                .emit_zero_initialized_alloca(declared_type, &block)
+            )
         };
 
         self.environment.define_variable(
@@ -218,8 +152,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 .get_type()
                 .map(|slang_type| TypeConversion::resolve_slang_type(&slang_type, None, builder))
                 .unwrap_or_else(|| builder.types.ui256);
-            let cast = TypeConversion::from_target_type(declared_type, builder)
-                .emit(value, builder, &current);
+            let cast = TypeConversion::coerce(value, declared_type, builder, &current);
             let pointer = builder.emit_sol_alloca(declared_type, &current);
             builder.emit_sol_store(cast, pointer, &current);
             self.environment

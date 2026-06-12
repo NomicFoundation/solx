@@ -177,11 +177,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
             })
             .unwrap_or_else(|| self.state.builder.types.ui256);
-        let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
-            value,
-            &self.state.builder,
-            block,
-        );
+        let cast = TypeConversion::coerce(value, parameter_type, &self.state.builder, block);
         let pointer = self.state.builder.emit_sol_alloca(parameter_type, block);
         self.state.builder.emit_sol_store(cast, pointer, block);
         self.environment
@@ -286,11 +282,8 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                     TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
                 })
                 .unwrap_or_else(|| self.state.builder.types.ui256);
-            let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder).emit(
-                value,
-                &self.state.builder,
-                &current_block,
-            );
+            let cast =
+                TypeConversion::coerce(value, parameter_type, &self.state.builder, &current_block);
             let pointer = self
                 .state
                 .builder

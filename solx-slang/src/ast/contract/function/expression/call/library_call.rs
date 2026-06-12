@@ -5,7 +5,6 @@
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use melior::ir::r#type::FunctionType;
-use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
@@ -13,6 +12,7 @@ use slang_solidity_v2::ast::PositionalArguments;
 
 use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::expression_ext::ExpressionExt;
 use crate::ast::type_conversion::TypeConversion;
 
 impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
@@ -33,20 +33,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // implicit `self` — the function's first parameter; a namespace qualifier
         // — a library (`L.f`) or import alias (`M.f`) — is not a value, so only
         // the explicit arguments pass.
-        let receiver_is_qualifier = matches!(
-            access.operand(),
-            Expression::Identifier(identifier)
-                if matches!(
-                    identifier.resolve_to_definition(),
-                    Some(
-                        Definition::Library(_)
-                            | Definition::Import(_)
-                            | Definition::ImportedSymbol(_)
-                    )
-                )
-        );
-
-        if receiver_is_qualifier {
+        if access.operand().is_namespace_qualifier() {
             let (argument_values, current_block) =
                 self.emit_coerced_arguments(positional_arguments, parameter_types, block)?;
             let results = self
@@ -67,11 +54,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .expression_emitter
             .emit_value(&access.operand(), block)?;
         let builder = &self.expression_emitter.state.builder;
-        let self_value = TypeConversion::from_target_type(*parameter_self, builder).emit(
-            self_value,
-            builder,
-            &current_block,
-        );
+        let self_value =
+            TypeConversion::coerce(self_value, *parameter_self, builder, &current_block);
         let (mut argument_values, current_block) =
             self.emit_coerced_arguments(positional_arguments, parameter_rest, current_block)?;
         argument_values.insert(0, self_value);
@@ -113,8 +97,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .expect("a using-for library function has a self parameter");
                 let (self_value, block) = self.expression_emitter.emit_value(receiver, block)?;
                 let builder = &self.expression_emitter.state.builder;
-                let self_value = TypeConversion::from_target_type(*parameter_self, builder)
-                    .emit(self_value, builder, &block);
+                let self_value =
+                    TypeConversion::coerce(self_value, *parameter_self, builder, &block);
                 let (mut rest_values, block) =
                     self.emit_coerced_argument_expressions(arguments, parameter_rest, block)?;
                 rest_values.insert(0, self_value);
@@ -137,8 +121,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Ok((results, current_block))
     }
 
-    /// Re-raises a bubbled revert (`returndatacopy` + `revert`). Oracle free
-    /// assoc fn → `&self` method (Rule-5).
+    /// Re-raises a bubbled revert (`returndatacopy` + `revert`). An inherent
+    /// method per Rule-5 (no free functions).
     pub fn emit_bubble_revert(&self, block: &BlockRef<'context, 'block>) {
         let _ = block;
         unimplemented!("bubble revert")

@@ -4,7 +4,7 @@
 //!
 //! An [`ExpressionEmitter`] method: `new.rs` lives in the expression module
 //! subtree, so it lowers through the expression emitter directly rather than
-//! the call emitter (the oracle's `built_in/new.rs` placement).
+//! the call emitter.
 //!
 
 use melior::ir::BlockLike;
@@ -65,17 +65,21 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             _ => None,
         };
         if let Some(result_type) = dynamic_result_type {
-            let (values, current_block) = self.emit_argument_values(arguments, block)?;
+            let (values, current_block) =
+                CallEmitter::new(self).emit_argument_values(arguments, block)?;
             let builder = &self.state.builder;
-            let address =
-                match values.first() {
-                    Some(&size_value) => {
-                        let size = TypeConversion::from_target_type(builder.types.ui256, builder)
-                            .emit(size_value, builder, &current_block);
-                        builder.emit_sol_malloc_sized_zeroed(result_type, size, &current_block)
-                    }
-                    None => builder.emit_sol_malloc_zeroed(result_type, &current_block),
-                };
+            let address = match values.first() {
+                Some(&size_value) => {
+                    let size = TypeConversion::coerce(
+                        size_value,
+                        builder.types.ui256,
+                        builder,
+                        &current_block,
+                    );
+                    builder.emit_sol_malloc_sized_zeroed(result_type, size, &current_block)
+                }
+                None => builder.emit_sol_malloc_zeroed(result_type, &current_block),
+            };
             return Ok((Some(address), current_block));
         }
 
@@ -141,22 +145,5 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .expect("sol.new always produces one result")
             .into();
         Ok((Some(value), block))
-    }
-
-    /// Evaluates a positional argument list left-to-right, threading the block
-    /// through each sub-expression, and returns the values with the final block.
-    fn emit_argument_values(
-        &self,
-        arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let mut values = Vec::with_capacity(arguments.len());
-        let mut current_block = block;
-        for argument in arguments.iter() {
-            let (value, next) = self.emit_value(&argument, current_block)?;
-            values.push(value);
-            current_block = next;
-        }
-        Ok((values, current_block))
     }
 }

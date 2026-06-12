@@ -142,9 +142,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             if slot.is_none() {
                 let return_type = result_types[index];
                 let slang_type = return_slang_types.get(index).and_then(|t| t.as_ref());
-                *slot = Some(self.emit_default_initialized_return_slot(
+                *slot = Some(TypeConversion::emit_default_initialized_slot(
                     slang_type,
                     return_type,
+                    &self.state.builder,
                     function_entry_block,
                 ));
             }
@@ -432,9 +433,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                                 )
                             })
                             .unwrap_or_else(|| self.state.builder.types.ui256);
-                        let cast =
-                            TypeConversion::from_target_type(parameter_type, &self.state.builder)
-                                .emit(value, &self.state.builder, &current_block);
+                        let cast = TypeConversion::coerce(
+                            value,
+                            parameter_type,
+                            &self.state.builder,
+                            &current_block,
+                        );
                         let pointer = self
                             .state
                             .builder
@@ -639,8 +643,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
                     })
                     .unwrap_or_else(|| self.state.builder.types.ui256);
-                let cast = TypeConversion::from_target_type(parameter_type, &self.state.builder)
-                    .emit(value, &self.state.builder, &block);
+                let cast =
+                    TypeConversion::coerce(value, parameter_type, &self.state.builder, &block);
                 let pointer = self.state.builder.emit_sol_alloca(parameter_type, &block);
                 self.state.builder.emit_sol_store(cast, pointer, &block);
                 stage_params.push((parameter.node_id(), pointer, parameter_type));

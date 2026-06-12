@@ -15,6 +15,7 @@ use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::contract::storage_layout::StorageSlot;
+use crate::ast::expression_ext::ExpressionExt;
 use crate::ast::type_conversion::TypeConversion;
 
 /// Assignment target resolved from the Slang binder.
@@ -41,7 +42,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         // `(x) = v` is the scalar `x = v`; a multi-element (or blank-bearing)
         // tuple on the left is a destructuring assignment.
-        let left = Self::unwrap_parenthesised(assign.left_operand());
+        let left = assign.left_operand().unwrap_parens();
         let right = assign.right_operand();
         if let Expression::TupleExpression(tuple) = &left {
             return self.emit_tuple_assignment(tuple, &right, block);
@@ -248,14 +249,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::IndexAccessExpression(index_access) => {
                 let (address, element_type, block) =
                     self.emit_index_access_address(index_access, block)?;
-                if address.r#type() == element_type {
-                    // A reference-typed element is addressed by reference (the
-                    // address value's type IS the element type), so it is copied
-                    // into rather than stored over.
-                    (AssignmentTarget::ReferenceCopy(address), block)
-                } else {
-                    (AssignmentTarget::Pointer(address, element_type), block)
-                }
+                (Self::address_target(address, element_type), block)
             }
             Expression::MemberAccessExpression(access) => {
                 // A namespace-qualified state-variable lvalue (`C.x = v`, notably
@@ -270,14 +264,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 }
                 let (address, element_type, block) =
                     self.emit_struct_field_address(access, block)?;
-                if address.r#type() == element_type {
-                    // A reference-typed field is addressed by reference (the
-                    // address value's type IS the element type), so it is copied
-                    // into rather than stored over.
-                    (AssignmentTarget::ReferenceCopy(address), block)
-                } else {
-                    (AssignmentTarget::Pointer(address, element_type), block)
-                }
+                (Self::address_target(address, element_type), block)
             }
             Expression::FunctionCallExpression(call)
                 if matches!(
@@ -297,13 +284,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 };
                 let (new_slot, element_type, block) =
                     CallEmitter::new(self).emit_push_slot(&access, block)?;
-                if new_slot.r#type() == element_type {
-                    // A reference-typed element is addressed by reference, so the
-                    // RHS reference's contents are copied into it.
-                    (AssignmentTarget::ReferenceCopy(new_slot), block)
-                } else {
-                    (AssignmentTarget::Pointer(new_slot, element_type), block)
-                }
+                (Self::address_target(new_slot, element_type), block)
             }
             _ => unimplemented!(
                 "assignment target {:?} is not yet supported",
@@ -311,6 +292,23 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             ),
         };
         Ok(resolved)
+    }
+
+    /// Classifies a computed lvalue `address` (with its `element_type`) into its
+    /// assignment target: a reference-typed element is addressed BY reference —
+    /// the address value's type IS the element type — so it is copied into
+    /// ([`AssignmentTarget::ReferenceCopy`]); any other element is a pointer
+    /// stored through ([`AssignmentTarget::Pointer`]). Shared by the index,
+    /// struct-field, and `push()` lvalue paths.
+    fn address_target(
+        address: Value<'context, 'block>,
+        element_type: Type<'context>,
+    ) -> AssignmentTarget<'context, 'block> {
+        if address.r#type() == element_type {
+            AssignmentTarget::ReferenceCopy(address)
+        } else {
+            AssignmentTarget::Pointer(address, element_type)
+        }
     }
 
     /// Stores a coerced value into a resolved assignment target.
@@ -322,22 +320,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ) -> Value<'context, 'block> {
         match target {
             AssignmentTarget::Pointer(pointer, element_type) => {
-                let stored_value = TypeConversion::from_target_type(
-                    *element_type,
-                    &self.state.builder,
-                )
-                .emit(value, &self.state.builder, block);
+                let stored_value =
+                    TypeConversion::coerce(value, *element_type, &self.state.builder, block);
                 self.state
                     .builder
                     .emit_sol_store(stored_value, *pointer, block);
                 stored_value
             }
             AssignmentTarget::Storage(slot, element_type) => {
-                let stored_value = TypeConversion::from_target_type(
-                    *element_type,
-                    &self.state.builder,
-                )
-                .emit(value, &self.state.builder, block);
+                let stored_value =
+                    TypeConversion::coerce(value, *element_type, &self.state.builder, block);
                 self.emit_storage_store(slot, stored_value, *element_type, block);
                 stored_value
             }
@@ -514,26 +506,5 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .zip(values)
             .filter_map(|(lvalue, value)| lvalue.map(|lvalue| (lvalue, value)))
             .collect()
-    }
-
-    /// Peels parenthesised single-element tuples so `((x))` resolves to `x`.
-    fn unwrap_parenthesised(expression: Expression) -> Expression {
-        let mut expression = expression;
-        while let Expression::TupleExpression(tuple) = &expression {
-            let items = tuple.items();
-            if items.len() != 1 {
-                break;
-            }
-            let Some(inner) = items
-                .iter()
-                .next()
-                .expect("a one-element tuple has its element")
-                .expression()
-            else {
-                break;
-            };
-            expression = inner;
-        }
-        expression
     }
 }

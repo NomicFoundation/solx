@@ -351,17 +351,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         Some(size) => {
                             builder.emit_sol_constant(*size as i64, builder.types.ui256, entry)
                         }
-                        None => entry
-                            .append_operation(
-                                LengthOperation::builder(builder.context, builder.unknown_location)
-                                    .inp(base)
-                                    .len(builder.types.ui256)
-                                    .build()
-                                    .into(),
+                        None => {
+                            sol_op!(
+                                builder,
+                                entry,
+                                LengthOperation.inp(base).len(builder.types.ui256)
                             )
-                            .result(0)
-                            .expect("sol.length produces one result")
-                            .into(),
+                        }
                     };
                     let in_bounds = builder.emit_sol_cmp(arg, length, CmpPredicate::Lt, entry);
                     builder.emit_sol_require(in_bounds, None, &[], false, entry);
@@ -426,11 +422,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             ArithmeticMode::Checked,
         );
         let (value, entry) = emitter.emit_value_for_target(&initializer, element_type, entry)?;
-        let value = TypeConversion::from_target_type(element_type, &self.state.builder).emit(
-            value,
-            &self.state.builder,
-            &entry,
-        );
+        let value = TypeConversion::coerce(value, element_type, &self.state.builder, &entry);
         builder.emit_sol_return(&[value], &entry);
         Ok(())
     }
@@ -574,8 +566,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             // A `string`/`bytes` member returns a memory copy; every other member
             // reaching here is a value type (mapping/array/struct/string/bytes are
             // skipped above). A function-pointer member would need a func-ref
-            // guard (oracle `is_sol_function_ref`), which the recut's solx-mlir
-            // does not yet expose; such a struct is vanishingly rare and absent
+            // guard (an `is_sol_function_ref` predicate), which solx-mlir does
+            // not yet expose; such a struct is vanishingly rare and absent
             // from the test corpus — left to the solx-mlir Sol-type-predicate fill.
             let result_member_type = if is_string_or_bytes {
                 builder.types.string(DataLocation::Memory)
@@ -603,10 +595,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         if member_type == result_member_type {
             builder.emit_sol_load(address, result_member_type, block)
         } else {
-            Ok(
-                TypeConversion::from_target_type(result_member_type, builder)
-                    .emit(address, builder, block),
-            )
+            Ok(TypeConversion::coerce(
+                address,
+                result_member_type,
+                builder,
+                block,
+            ))
         }
     }
 }

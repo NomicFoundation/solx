@@ -9,8 +9,6 @@ pub mod library_call;
 pub mod member_call_kind;
 pub mod static_mode;
 
-use std::collections::HashMap;
-
 use anyhow::Context as _;
 use melior::ir::BlockRef;
 use melior::ir::Type;
@@ -35,6 +33,8 @@ use self::call_kind::CallKind;
 use self::member_call_kind::MemberCallKind;
 use crate::ast::contract::function::expression::ExpressionEmitter;
 use crate::ast::expression_ext::ExpressionExt;
+use crate::ast::library_ext::LibraryExt;
+use crate::ast::named_arguments_ext::NamedArgumentsExt;
 use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers function call and member access expressions to MLIR.
@@ -108,18 +108,18 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .iter()
                     .next()
                     .expect("a type conversion has exactly one argument");
-                let target_type = self
-                    .expression_emitter
-                    .resolve_slang_type(call.get_type())
-                    .expect("slang types a type-conversion call");
+                let target_type = TypeConversion::resolve_optional_slang_type(
+                    call.get_type(),
+                    &self.expression_emitter.state.builder,
+                )
+                .expect("slang types a type-conversion call");
                 // A `bytesN("…")` conversion of a string literal folds to a
                 // fixed-bytes constant rather than a runtime `sol.string`.
                 let (value, block) =
                     self.expression_emitter
                         .emit_value_for_target(&first, target_type, block)?;
                 let builder = &self.expression_emitter.state.builder;
-                let result = TypeConversion::from_target_type(target_type, builder)
-                    .emit(value, builder, &block);
+                let result = TypeConversion::coerce(value, target_type, builder, &block);
                 Ok((Some(result), block))
             }
             CallKind::BuiltInIdentifier(built_in) => {
@@ -141,11 +141,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 // (the UDVT for `wrap`, its underlying type for `unwrap`). With no
                 // resolved call type the value already has the right
                 // representation, so it passes through unchanged.
-                let result = match self.expression_emitter.resolve_slang_type(call.get_type()) {
+                let result = match TypeConversion::resolve_optional_slang_type(
+                    call.get_type(),
+                    &self.expression_emitter.state.builder,
+                ) {
                     Some(result_type) => {
                         let builder = &self.expression_emitter.state.builder;
-                        TypeConversion::from_target_type(result_type, builder)
-                            .emit(value, builder, &block)
+                        TypeConversion::coerce(value, result_type, builder, &block)
                     }
                     None => value,
                 };
@@ -182,10 +184,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 }
             }
             CallKind::StructConstructor(struct_definition) => {
-                let result_type = self
-                    .expression_emitter
-                    .resolve_slang_type(call.get_type())
-                    .expect("slang types a struct constructor call");
+                let result_type = TypeConversion::resolve_optional_slang_type(
+                    call.get_type(),
+                    &self.expression_emitter.state.builder,
+                )
+                .expect("slang types a struct constructor call");
                 self.emit_struct_constructor(
                     &struct_definition,
                     result_type,
@@ -265,13 +268,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         .emit_value(&option.value(), current_block)?;
                     current_block = next_block;
                     let builder = &self.expression_emitter.state.builder;
-                    value = Some(
-                        TypeConversion::from_target_type(builder.types.ui256, builder).emit(
-                            option_value,
-                            builder,
-                            &current_block,
-                        ),
-                    );
+                    value = Some(TypeConversion::coerce(
+                        option_value,
+                        builder.types.ui256,
+                        builder,
+                        &current_block,
+                    ));
                 }
                 Some(BuiltIn::CallOptionSalt) => {
                     let bytes32 = self.expression_emitter.state.builder.types.fixed_bytes(32);
@@ -290,8 +292,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 }
                 Some(BuiltIn::CallOptionGas) => {
                     // The gas limit is evaluated for its side effects but not
-                    // threaded into the call: like the oracle, the call forwards
-                    // all remaining gas (the `sol.ext_icall` default). A `{gas: …}`
+                    // threaded into the call: the call forwards all remaining gas
+                    // (the `sol.ext_icall` default). A `{gas: …}`
                     // that must actually cap the forwarded gas is not yet modelled.
                     let (_gas, next_block) = self
                         .expression_emitter
@@ -652,31 +654,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 // `"<file>:<Library>"` recorded in the side-table; a namespace
                 // operand contributes no receiver, while a value operand is the
                 // implicit `self` first argument.
-                let Some(Definition::Function(library_function)) =
-                    access.member().resolve_to_definition()
-                else {
-                    unreachable!("an external library call resolves to a function");
-                };
-                let Some(Definition::Library(library)) = library_function.enclosing_definition()
-                else {
-                    unreachable!("an external library call's target is a library member");
-                };
-                let library_name = format!("{}:{}", library.get_file_id(), library.name().name());
-                let self_receiver = match access.operand() {
-                    Expression::Identifier(identifier)
-                        if matches!(
-                            identifier.resolve_to_definition(),
-                            Some(
-                                Definition::Library(_)
-                                    | Definition::Import(_)
-                                    | Definition::ImportedSymbol(_)
-                            )
-                        ) =>
-                    {
-                        None
-                    }
-                    operand => Some(operand),
-                };
+                let (library_name, library_function, self_receiver) =
+                    Self::resolve_external_library(access);
                 let argument_expressions: Vec<Expression> = arguments.iter().collect();
                 self.emit_library_external_call(
                     &library_name,
@@ -806,11 +785,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let (argument_value, next_block) =
                 self.expression_emitter.emit_value(argument, block)?;
             block = next_block;
-            let stored = TypeConversion::from_target_type(field_type, builder).emit(
-                argument_value,
-                builder,
-                &block,
-            );
+            let stored = TypeConversion::coerce(argument_value, field_type, builder, &block);
             builder.emit_sol_store(stored, field_address, &block);
         }
 
@@ -970,8 +945,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         }
         let builder = &self.expression_emitter.state.builder;
         for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
-            let conversion = TypeConversion::from_target_type(parameter_type, builder);
-            *value = conversion.emit(*value, builder, &block);
+            *value = TypeConversion::coerce(*value, parameter_type, builder, &block);
         }
         Ok((argument_values, block))
     }
@@ -1108,29 +1082,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         named_arguments: &NamedArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let Some(Definition::Function(library_function)) = access.member().resolve_to_definition()
-        else {
-            unreachable!("an external library call resolves to a function");
-        };
-        let Some(Definition::Library(library)) = library_function.enclosing_definition() else {
-            unreachable!("an external library call's target is a library member");
-        };
-        let library_name = format!("{}:{}", library.get_file_id(), library.name().name());
-        let self_receiver = match access.operand() {
-            Expression::Identifier(identifier)
-                if matches!(
-                    identifier.resolve_to_definition(),
-                    Some(
-                        Definition::Library(_)
-                            | Definition::Import(_)
-                            | Definition::ImportedSymbol(_)
-                    )
-                ) =>
-            {
-                None
-            }
-            operand => Some(operand),
-        };
+        let (library_name, library_function, self_receiver) =
+            Self::resolve_external_library(access);
         // A `using for` receiver is the implicit `self` first parameter, so the
         // named arguments name only the parameters after it.
         let parameter_ids: Vec<NodeId> = library_function
@@ -1143,7 +1096,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         } else {
             &parameter_ids[..]
         };
-        let arguments = Self::order_named_arguments(named_arguments, explicit_parameter_ids);
+        let arguments = named_arguments.ordered_by(explicit_parameter_ids);
         self.emit_library_external_call(
             &library_name,
             &library_function,
@@ -1151,6 +1104,25 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             self_receiver.as_ref(),
             block,
         )
+    }
+
+    /// Resolves an external library call's link target from its member-access
+    /// callee: the `"<file>:<Library>"` link symbol, the callee function, and
+    /// the `self` receiver (`None` for a namespace-qualified `L.f`, the operand
+    /// value for a `using for` `x.f`). Shared by the positional and named paths.
+    fn resolve_external_library(
+        access: &MemberAccessExpression,
+    ) -> (String, FunctionDefinition, Option<Expression>) {
+        let Some(Definition::Function(library_function)) = access.member().resolve_to_definition()
+        else {
+            unreachable!("an external library call resolves to a function");
+        };
+        let Some(Definition::Library(library)) = library_function.enclosing_definition() else {
+            unreachable!("an external library call's target is a library member");
+        };
+        let operand = access.operand();
+        let self_receiver = (!operand.is_namespace_qualifier()).then_some(operand);
+        (library.link_symbol(), library_function, self_receiver)
     }
 
     /// Routes a multi-result call with named arguments (e.g. tuple
@@ -1166,16 +1138,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         named_arguments: &NamedArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let result_type = self
-            .expression_emitter
-            .resolve_slang_type(call.get_type())
-            .expect("slang types a struct constructor call");
+        let result_type = TypeConversion::resolve_optional_slang_type(
+            call.get_type(),
+            &self.expression_emitter.state.builder,
+        )
+        .expect("slang types a struct constructor call");
         let member_ids: Vec<NodeId> = struct_definition
             .members()
             .iter()
             .map(|member| member.node_id())
             .collect();
-        let arguments = Self::order_named_arguments(named_arguments, &member_ids);
+        let arguments = named_arguments.ordered_by(&member_ids);
         let (value, block) = self.emit_struct_constructor_expressions(
             struct_definition,
             result_type,
@@ -1217,7 +1190,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .iter()
             .map(|parameter| parameter.node_id())
             .collect();
-        let arguments = Self::order_named_arguments(named_arguments, &parameter_ids);
+        let arguments = named_arguments.ordered_by(&parameter_ids);
         let (mlir_name, argument_values, return_types, current_block) =
             self.emit_call_setup_expressions(function_definition, &arguments, block)?;
         let results = self
@@ -1226,34 +1199,6 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .builder
             .emit_sol_call_results(mlir_name, &argument_values, return_types, &current_block)?;
         Ok((results, current_block))
-    }
-
-    /// Reorders named call arguments into the declaration order given by
-    /// `ordered_definition_ids` (the callee's parameter or struct-member node
-    /// ids). Each argument binds to its target through slang's typed resolution,
-    /// keyed by the resolved definition's [`NodeId`], never by comparing name
-    /// strings. slang has already validated the binding, so a missing or unknown
-    /// name is unreachable.
-    fn order_named_arguments(
-        named_arguments: &NamedArguments,
-        ordered_definition_ids: &[NodeId],
-    ) -> Vec<Expression> {
-        let mut by_definition: HashMap<NodeId, Expression> = HashMap::new();
-        for argument in named_arguments.iter() {
-            let definition = argument
-                .name()
-                .resolve_to_definition()
-                .expect("slang resolves every named argument to its target definition");
-            by_definition.insert(definition.node_id(), argument.value());
-        }
-        ordered_definition_ids
-            .iter()
-            .map(|definition_id| {
-                by_definition
-                    .remove(definition_id)
-                    .expect("slang binds a named argument for every declared name")
-            })
-            .collect()
     }
 
     /// Emits an indirect call through the function-pointer value `callee`

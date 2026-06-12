@@ -63,8 +63,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let (message_value, block) =
                     self.expression_emitter.emit_value(expression, block)?;
                 let string_memory_type = builder.types.string(solx_utils::DataLocation::Memory);
-                let message_value = TypeConversion::from_target_type(string_memory_type, builder)
-                    .emit(message_value, builder, &block);
+                let message_value =
+                    TypeConversion::coerce(message_value, string_memory_type, builder, &block);
                 builder.emit_sol_require(
                     condition_boolean,
                     Some("Error(string)"),
@@ -119,11 +119,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 None,
                 builder,
             );
-            *value = TypeConversion::from_target_type(parameter_type, builder).emit(
-                *value,
-                builder,
-                &current_block,
-            );
+            *value = TypeConversion::coerce(*value, parameter_type, builder, &current_block);
         }
         builder.emit_sol_require(
             condition,
