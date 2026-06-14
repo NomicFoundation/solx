@@ -50,6 +50,7 @@ use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::expression_ext::ExpressionExt;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveType;
 use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers Solidity expressions to MLIR SSA values.
@@ -176,11 +177,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let declared_type = state_variable
             .get_type()
             .expect("slang types every state variable");
-        let element_type = TypeConversion::resolve_slang_type(
-            &declared_type,
-            LocationPolicy::Declared(None),
-            &self.state.builder,
-        );
+        let element_type =
+            declared_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder);
         if matches!(
             state_variable.mutability(),
             StateVariableMutability::Constant

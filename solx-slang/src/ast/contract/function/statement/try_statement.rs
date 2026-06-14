@@ -19,7 +19,7 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::try_external_call::TryExternalCall;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::TypeConversion;
+use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Emits a `try` statement as a `sol.try`: an external call with try
@@ -161,11 +161,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         let parameter_type = parameter
             .get_type()
             .map(|slang_type| {
-                TypeConversion::resolve_slang_type(
-                    &slang_type,
-                    LocationPolicy::Declared(None),
-                    &self.state.builder,
-                )
+                slang_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder)
             })
             .unwrap_or_else(|| {
                 crate::ast::Type::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
@@ -271,11 +267,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             let parameter_type = parameter
                 .get_type()
                 .map(|slang_type| {
-                    TypeConversion::resolve_slang_type(
-                        &slang_type,
-                        LocationPolicy::Declared(None),
-                        &self.state.builder,
-                    )
+                    slang_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder)
                 })
                 .unwrap_or_else(|| {
                     crate::ast::Type::unsigned(

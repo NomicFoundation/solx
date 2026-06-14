@@ -47,6 +47,7 @@ use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::getter_level::GetterLevel;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveType;
 use crate::ast::type_conversion::TypeConversion;
 
 /// The per-getter emission frame: the state variable, its canonical ABI
@@ -201,11 +202,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             return Ok(());
         }
         let container_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
-        let result_type = TypeConversion::resolve_slang_type(
-            &result_slang,
-            LocationPolicy::Declared(Some(location)),
-            builder,
-        );
+        let result_type =
+            result_slang.resolve_type(LocationPolicy::Declared(Some(location)), builder);
         // A struct result expands into its flattened returnable-member tuple;
         // other reference results aren't handled yet (left ungenerated).
         let struct_plan = match &result_slang {
@@ -306,11 +304,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 SlangType::Mapping(mapping_type) => {
                     let key_slang = mapping_type.key_type();
                     let value_slang = mapping_type.value_type();
-                    let resolved_value = TypeConversion::resolve_slang_type(
-                        &value_slang,
-                        LocationPolicy::Declared(Some(location)),
-                        builder,
-                    );
+                    let resolved_value =
+                        value_slang.resolve_type(LocationPolicy::Declared(Some(location)), builder);
                     // Intermediate containers are addressed by their reference; a
                     // value terminal by a `!sol.ptr<V>`.
                     let level_type = if value_slang.is_reference_type() {
@@ -327,11 +322,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     let key_type = if key_slang.is_reference_type() {
                         crate::ast::Type::string(builder.context, DataLocation::Memory).into_mlir()
                     } else {
-                        TypeConversion::resolve_slang_type(
-                            &key_slang,
-                            LocationPolicy::Declared(Some(location)),
-                            builder,
-                        )
+                        key_slang.resolve_type(LocationPolicy::Declared(Some(location)), builder)
                     };
                     input_types.push(key_type);
                     levels.push(GetterLevel::Mapping(level_type));
@@ -339,11 +330,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
                 SlangType::Array(array_type) => {
                     let element_slang = array_type.element_type();
-                    let element_type = TypeConversion::resolve_slang_type(
-                        &element_slang,
-                        LocationPolicy::Declared(Some(location)),
-                        builder,
-                    );
+                    let element_type = element_slang
+                        .resolve_type(LocationPolicy::Declared(Some(location)), builder);
                     input_types.push(
                         crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir(),
@@ -353,11 +341,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
                 SlangType::FixedSizeArray(array_type) => {
                     let element_slang = array_type.element_type();
-                    let element_type = TypeConversion::resolve_slang_type(
-                        &element_slang,
-                        LocationPolicy::Declared(Some(location)),
-                        builder,
-                    );
+                    let element_type = element_slang
+                        .resolve_type(LocationPolicy::Declared(Some(location)), builder);
                     input_types.push(
                         crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir(),
@@ -462,8 +447,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let slang_type = state_variable
             .get_type()
             .expect("slang types every state variable");
-        let element_type =
-            TypeConversion::resolve_slang_type(&slang_type, LocationPolicy::ForceMemory, builder);
+        let element_type = slang_type.resolve_type(LocationPolicy::ForceMemory, builder);
         let entry = builder.emit_sol_func(
             &signature,
             &[],
@@ -589,11 +573,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         if let SlangType::Struct(struct_type) = declared_type
             && let Definition::Struct(struct_definition) = struct_type.definition()
         {
-            let struct_mlir_type = TypeConversion::resolve_slang_type(
-                declared_type,
-                LocationPolicy::Declared(Some(location)),
-                builder,
-            );
+            let struct_mlir_type =
+                declared_type.resolve_type(LocationPolicy::Declared(Some(location)), builder);
             if let Some(plan) =
                 Self::struct_getter_layout(&struct_definition, struct_mlir_type, builder)
             {

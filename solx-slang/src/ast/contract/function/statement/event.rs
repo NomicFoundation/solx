@@ -17,7 +17,7 @@ use crate::ast::arguments_declaration_ext::ArgumentsDeclarationExt;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::TypeConversion;
+use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Lowers an `emit Event(args);` statement to a `sol.emit` operation.
@@ -67,13 +67,10 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             } = argument.emit(&emitter, current_block)?;
             current_block = next_block;
             let indexed = parameter.indexed();
-            let parameter_type = TypeConversion::resolve_slang_type(
-                &parameter
-                    .get_type()
-                    .expect("parameter type resolved by semantic analysis"),
-                LocationPolicy::Declared(None),
-                &self.state.builder,
-            );
+            let parameter_type = parameter
+                .get_type()
+                .expect("parameter type resolved by semantic analysis")
+                .resolve_type(LocationPolicy::Declared(None), &self.state.builder);
             let value = value
                 .coerce_to(
                     crate::ast::Type::new(parameter_type),

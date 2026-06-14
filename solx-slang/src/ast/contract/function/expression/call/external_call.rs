@@ -20,6 +20,7 @@ use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::static_mode::StaticMode;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveType;
 use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -113,16 +114,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     return None;
                 }
                 Some((
-                    vec![TypeConversion::resolve_slang_type(
-                        &key,
-                        LocationPolicy::Declared(None),
-                        builder,
-                    )],
-                    vec![TypeConversion::resolve_slang_type(
-                        &value,
-                        LocationPolicy::Declared(None),
-                        builder,
-                    )],
+                    vec![key.resolve_type(LocationPolicy::Declared(None), builder)],
+                    vec![value.resolve_type(LocationPolicy::Declared(None), builder)],
                 ))
             }
             SlangType::Array(array_type) => {
@@ -135,11 +128,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir(),
                     ],
-                    vec![TypeConversion::resolve_slang_type(
-                        &element,
-                        LocationPolicy::Declared(None),
-                        builder,
-                    )],
+                    vec![element.resolve_type(LocationPolicy::Declared(None), builder)],
                 ))
             }
             SlangType::FixedSizeArray(array_type) => {
@@ -152,19 +141,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir(),
                     ],
-                    vec![TypeConversion::resolve_slang_type(
-                        &element,
-                        LocationPolicy::Declared(None),
-                        builder,
-                    )],
+                    vec![element.resolve_type(LocationPolicy::Declared(None), builder)],
                 ))
             }
             SlangType::Struct(struct_type) => {
                 let Definition::Struct(struct_definition) = struct_type.definition() else {
                     return None;
                 };
-                let struct_mlir_type = TypeConversion::resolve_slang_type(
-                    &declared_type,
+                let struct_mlir_type = declared_type.resolve_type(
                     LocationPolicy::Declared(Some(DataLocation::Storage)),
                     builder,
                 );
@@ -181,11 +165,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             }
             other if !other.is_reference_type() => Some((
                 Vec::new(),
-                vec![TypeConversion::resolve_slang_type(
-                    other,
-                    LocationPolicy::Declared(None),
-                    builder,
-                )],
+                vec![other.resolve_type(LocationPolicy::Declared(None), builder)],
             )),
             _ => None,
         }

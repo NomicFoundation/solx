@@ -19,7 +19,7 @@ use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::TypeConversion;
+use crate::ast::type_conversion::ResolveType;
 
 impl StorageSlot {
     /// Emits a load of this slot via `sol.addr_of` + `sol.load`.
@@ -104,11 +104,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .get_type()
                 .expect("slang types every state variable");
             let builder = &self.state.builder;
-            let element_type = TypeConversion::resolve_slang_type(
-                &declared_type,
-                LocationPolicy::Declared(None),
-                builder,
-            );
+            let element_type = declared_type.resolve_type(LocationPolicy::Declared(None), builder);
             let address_type =
                 Self::address_type(builder, element_type, slot.location, &declared_type);
             let storage_ref = sol_op!(

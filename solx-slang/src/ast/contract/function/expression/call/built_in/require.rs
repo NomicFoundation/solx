@@ -15,7 +15,7 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::TypeConversion;
+use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits an `assert(condition)` built-in via `sol.assert`.
@@ -133,13 +133,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .into_iter()
             .zip(parameters.iter())
             .map(|(value, parameter)| {
-                let parameter_type = TypeConversion::resolve_slang_type(
-                    &parameter
-                        .get_type()
-                        .expect("error parameter type resolved by semantic analysis"),
-                    LocationPolicy::Declared(None),
-                    builder,
-                );
+                let parameter_type = parameter
+                    .get_type()
+                    .expect("error parameter type resolved by semantic analysis")
+                    .resolve_type(LocationPolicy::Declared(None), builder);
                 value
                     .coerce_to(
                         crate::ast::Type::new(parameter_type),

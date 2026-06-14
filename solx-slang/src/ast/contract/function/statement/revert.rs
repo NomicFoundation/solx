@@ -13,7 +13,7 @@ use crate::ast::arguments_declaration_ext::ArgumentsDeclarationExt;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::TypeConversion;
+use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Emits a `sol.revert` for a `revert ErrorName(args);` statement.
@@ -55,13 +55,10 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         let parameter_types: Vec<_> = parameters
             .iter()
             .map(|parameter| {
-                TypeConversion::resolve_slang_type(
-                    &parameter
-                        .get_type()
-                        .expect("parameter type resolved by semantic analysis"),
-                    LocationPolicy::Declared(None),
-                    &self.state.builder,
-                )
+                parameter
+                    .get_type()
+                    .expect("parameter type resolved by semantic analysis")
+                    .resolve_type(LocationPolicy::Declared(None), &self.state.builder)
             })
             .collect();
         let emitter = ExpressionContext::from(self);

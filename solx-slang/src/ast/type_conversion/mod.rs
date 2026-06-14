@@ -5,6 +5,8 @@
 pub mod location_policy;
 
 pub use self::location_policy::LocationPolicy;
+pub mod resolve_type;
+pub use self::resolve_type::ResolveType;
 
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
@@ -14,17 +16,13 @@ use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
 use num_traits::sign::Signed;
-use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::DefaultFuncConstantOperation;
 use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::StoreOperation;
-
-use crate::ast::contract::ContractEmitter;
 
 /// Solidity type resolution and default-initialisation.
 ///
@@ -36,240 +34,7 @@ use crate::ast::contract::ContractEmitter;
 pub struct TypeConversion;
 
 impl TypeConversion {
-    /// Maps a Slang semantic type to an MLIR type.
-    ///
-    /// `policy` picks each reference type's data location: [`LocationPolicy::Declared`]
-    /// uses the type's own Slang location (with an inherited fallback for
-    /// struct-field-relative `Inherited`), [`LocationPolicy::ForceMemory`] forces
-    /// the external (ABI) representation where `calldata` cannot cross the call
-    /// boundary. Top-level callers pass `LocationPolicy::Declared(None)`; the
-    /// `Struct` arm carries the parent struct's location into member resolution.
-    pub fn resolve_slang_type<'context>(
-        slang_type: &SlangType,
-        policy: LocationPolicy,
-        builder: &solx_mlir::Builder<'context>,
-    ) -> Type<'context> {
-        match slang_type {
-            SlangType::Integer(integer_type) => {
-                let bits = integer_type.bits();
-                if integer_type.is_signed() {
-                    Type::from(IntegerType::signed(builder.context, bits))
-                } else {
-                    Type::from(IntegerType::unsigned(builder.context, bits))
-                }
-            }
-            SlangType::Boolean(_) => Type::from(IntegerType::new(
-                builder.context,
-                solx_utils::BIT_LENGTH_BOOLEAN as u32,
-            )),
-            SlangType::Address(_) => crate::ast::Type::address(builder.context, false).into_mlir(),
-            SlangType::Literal(literal_type) => match literal_type.kind() {
-                LiteralKind::Address { .. } => {
-                    crate::ast::Type::address(builder.context, false).into_mlir()
-                }
-                LiteralKind::Integer { value } => {
-                    let bits = Self::integer_bits_required(&value) as usize;
-                    let bits = bits
-                        .next_multiple_of(solx_utils::BIT_LENGTH_BYTE)
-                        .max(solx_utils::BIT_LENGTH_BYTE);
-                    let bits = u32::try_from(bits).expect("bit size fits in 32 bits");
-                    if value.is_negative() {
-                        Type::from(IntegerType::signed(builder.context, bits))
-                    } else {
-                        Type::from(IntegerType::unsigned(builder.context, bits))
-                    }
-                }
-                LiteralKind::HexInteger { bytes, .. } => {
-                    let bits = bytes * solx_utils::BIT_LENGTH_BYTE as u32;
-                    Type::from(IntegerType::unsigned(builder.context, bits))
-                }
-                LiteralKind::String { .. } => {
-                    crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
-                        .into_mlir()
-                }
-                LiteralKind::HexString { bytes } => crate::ast::Type::fixed_bytes(
-                    builder.context,
-                    bytes.try_into().expect("hex string length fits in u32"),
-                )
-                .into_mlir(),
-                LiteralKind::Rational { .. } => {
-                    // Sentinel: a rational appears only as a compile-time
-                    // intermediate that constant folding consumes (see the folding
-                    // gate in `ExpressionContext::emit`); a rational that survived
-                    // to runtime would fail downstream, not at type resolution.
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir()
-                }
-            },
-            SlangType::String(string_type) => crate::ast::Type::string(
-                builder.context,
-                policy.data_location(string_type.location()),
-            )
-            .into_mlir(),
-            SlangType::Bytes(bytes_type) => crate::ast::Type::string(
-                builder.context,
-                policy.data_location(bytes_type.location()),
-            )
-            .into_mlir(),
-            SlangType::ByteArray(byte_array_type) => {
-                crate::ast::Type::fixed_bytes(builder.context, byte_array_type.width()).into_mlir()
-            }
-            SlangType::Array(array_type) => {
-                let element_type =
-                    Self::resolve_slang_type(&array_type.element_type(), policy, builder);
-                let location = policy.data_location(array_type.location());
-                crate::ast::Type::array(
-                    builder.context,
-                    solx_mlir::ArraySize::Dynamic,
-                    element_type,
-                    location,
-                )
-                .into_mlir()
-            }
-            SlangType::FixedSizeArray(fixed_array_type) => {
-                let element_type =
-                    Self::resolve_slang_type(&fixed_array_type.element_type(), policy, builder);
-                let location = policy.data_location(fixed_array_type.location());
-                crate::ast::Type::array(
-                    builder.context,
-                    solx_mlir::ArraySize::Fixed(fixed_array_type.size() as u64),
-                    element_type,
-                    location,
-                )
-                .into_mlir()
-            }
-            SlangType::Mapping(mapping_type) => {
-                let key_type = Self::resolve_slang_type(
-                    &mapping_type.key_type(),
-                    LocationPolicy::Declared(Some(solx_utils::DataLocation::Storage)),
-                    builder,
-                );
-                let value_type = Self::resolve_slang_type(
-                    &mapping_type.value_type(),
-                    LocationPolicy::Declared(Some(solx_utils::DataLocation::Storage)),
-                    builder,
-                );
-                crate::ast::Type::mapping(builder.context, key_type, value_type).into_mlir()
-            }
-            SlangType::Struct(struct_type) => {
-                let struct_location = policy.data_location(struct_type.location());
-                let member_policy = policy.within_struct(struct_location);
-                let struct_definition = match struct_type.definition() {
-                    Definition::Struct(definition) => definition,
-                    _ => unreachable!("Slang StructType always references a Struct definition"),
-                };
-                // TODO(v2): move struct-member type resolution into Slang itself
-                // so consumers don't have to walk `members()` and propagate the
-                // struct's data location by hand.
-                let mut member_types = Vec::new();
-                for member in struct_definition.members().iter() {
-                    let member_slang_type = member
-                        .get_type()
-                        .expect("struct member type resolved by semantic analysis");
-                    member_types.push(Self::resolve_slang_type(
-                        &member_slang_type,
-                        member_policy,
-                        builder,
-                    ));
-                }
-                crate::ast::Type::structure(builder.context, &member_types, struct_location)
-                    .into_mlir()
-            }
-            SlangType::Contract(contract_type) => {
-                let contract_definition = match contract_type.definition() {
-                    Definition::Contract(definition) => definition,
-                    _ => unreachable!("Slang ContractType always references a Contract definition"),
-                };
-                crate::ast::Type::contract(
-                    builder.context,
-                    contract_definition.name().name().as_str(),
-                    ContractEmitter::is_contract_payable(&contract_definition),
-                )
-                .into_mlir()
-            }
-            SlangType::Interface(interface_type) => {
-                let interface_definition = match interface_type.definition() {
-                    Definition::Interface(definition) => definition,
-                    _ => unreachable!(
-                        "Slang InterfaceType always references an Interface definition"
-                    ),
-                };
-                // Interfaces are never `payable` themselves; payability lives
-                // on the address-cast at the call site.
-                crate::ast::Type::contract(
-                    builder.context,
-                    interface_definition.name().name().as_str(),
-                    false,
-                )
-                .into_mlir()
-            }
-            SlangType::Enum(enum_type) => {
-                let enum_definition = match enum_type.definition() {
-                    Definition::Enum(definition) => definition,
-                    _ => unreachable!("Slang EnumType always references an Enum definition"),
-                };
-                let member_count = enum_definition.members().iter().count();
-                // Solidity caps enums at 256 members, so the max enumerator
-                // index always fits in a `u8`.
-                let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
-                crate::ast::Type::enumeration(builder.context, max.into()).into_mlir()
-            }
-            SlangType::UserDefinedValue(udvt) => {
-                let target_type = udvt
-                    .target_type()
-                    .expect("UDVT target type resolved by semantic analysis");
-                Self::resolve_slang_type(&target_type, policy, builder)
-            }
-            SlangType::Function(function_type) => {
-                // A function pointer lowers to `!sol.func_ref<fnTy>` (internal)
-                // or `!sol.ext_func_ref<fnTy>` (external — address + selector).
-                // A void return contributes zero result types; a tuple return
-                // expands to one result per element.
-                let parameter_types: Vec<_> = function_type
-                    .parameter_types()
-                    .iter()
-                    .map(|parameter_type| {
-                        Self::resolve_slang_type(
-                            parameter_type,
-                            LocationPolicy::Declared(None),
-                            builder,
-                        )
-                    })
-                    .collect();
-                let result_types: Vec<_> = match function_type.return_type() {
-                    SlangType::Void(_) => Vec::new(),
-                    SlangType::Tuple(tuple_type) => tuple_type
-                        .types()
-                        .iter()
-                        .map(|element_type| {
-                            Self::resolve_slang_type(
-                                element_type,
-                                LocationPolicy::Declared(None),
-                                builder,
-                            )
-                        })
-                        .collect(),
-                    other => {
-                        vec![Self::resolve_slang_type(
-                            &other,
-                            LocationPolicy::Declared(None),
-                            builder,
-                        )]
-                    }
-                };
-                if function_type.is_externally_visible() {
-                    crate::ast::Type::ext_func_ref(builder.context, &parameter_types, &result_types)
-                        .into_mlir()
-                } else {
-                    crate::ast::Type::func_ref(builder.context, &parameter_types, &result_types)
-                        .into_mlir()
-                }
-            }
-            _ => unimplemented!("unsupported Slang type"),
-        }
-    }
-
-    /// `Option`-lifted [`Self::resolve_slang_type`]: maps a possibly-absent
+    /// `Option`-lifted [`ResolveType::resolve_type`]: maps a possibly-absent
     /// slang type — as returned by `node.get_type()` on a node the binder left
     /// untyped (an unresolved reference or semantic error) — through with a
     /// `None` inherited location, yielding `None` when the slang type is absent.
@@ -283,11 +48,7 @@ impl TypeConversion {
         slang_type: Option<SlangType>,
         builder: &solx_mlir::Builder<'context>,
     ) -> Option<Type<'context>> {
-        Some(Self::resolve_slang_type(
-            &slang_type?,
-            LocationPolicy::Declared(None),
-            builder,
-        ))
+        Some(slang_type?.resolve_type(LocationPolicy::Declared(None), builder))
     }
 
     /// Emits the zero value of a scalar value type that is not a plain
@@ -493,11 +254,7 @@ impl TypeConversion {
         let slang_type = state_variable
             .get_type()
             .expect("slang types every state variable");
-        Ok(Self::resolve_slang_type(
-            &slang_type,
-            LocationPolicy::Declared(None),
-            builder,
-        ))
+        Ok(slang_type.resolve_type(LocationPolicy::Declared(None), builder))
     }
 
     /// Resolves a function's parameter and return types from Slang AST to MLIR.
@@ -515,13 +272,10 @@ impl TypeConversion {
         builder: &solx_mlir::Builder<'context>,
     ) -> (Vec<Type<'context>>, Vec<Type<'context>>) {
         let resolve = |parameter: Parameter| {
-            Self::resolve_slang_type(
-                &parameter
-                    .get_type()
-                    .expect("parameter type resolved by semantic analysis"),
-                policy,
-                builder,
-            )
+            parameter
+                .get_type()
+                .expect("parameter type resolved by semantic analysis")
+                .resolve_type(policy, builder)
         };
         let parameter_types = function.parameters().iter().map(&resolve).collect();
         let return_types = function

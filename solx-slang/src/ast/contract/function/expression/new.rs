@@ -29,6 +29,7 @@ use solx_utils::DataLocation;
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveType;
 use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -50,8 +51,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // to the syntactic elementary type name (both lower to a memory string).
         let dynamic_result_type = match &slang_type {
             Some(inner @ (SlangType::Array(_) | SlangType::Bytes(_) | SlangType::String(_))) => {
-                Some(TypeConversion::resolve_slang_type(
-                    inner,
+                Some(inner.resolve_type(
                     LocationPolicy::Declared(Some(DataLocation::Memory)),
                     &self.state.builder,
                 ))

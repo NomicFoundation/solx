@@ -26,6 +26,7 @@ use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::built_in::EncodeMode;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveType;
 use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -211,11 +212,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .parameter_types()
                     .iter()
                     .map(|parameter_type| {
-                        TypeConversion::resolve_slang_type(
-                            parameter_type,
-                            LocationPolicy::ForceMemory,
-                            builder,
-                        )
+                        parameter_type.resolve_type(LocationPolicy::ForceMemory, builder)
                     })
                     .collect();
                 (selector_value, parameter_types, current)
@@ -361,19 +358,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             SlangType::Tuple(tuple) => tuple
                 .types()
                 .iter()
-                .map(|slang_type| {
-                    TypeConversion::resolve_slang_type(
-                        slang_type,
-                        LocationPolicy::Declared(None),
-                        builder,
-                    )
-                })
+                .map(|slang_type| slang_type.resolve_type(LocationPolicy::Declared(None), builder))
                 .collect(),
-            other => vec![TypeConversion::resolve_slang_type(
-                &other,
-                LocationPolicy::Declared(None),
-                builder,
-            )],
+            other => vec![other.resolve_type(LocationPolicy::Declared(None), builder)],
         }
     }
 }

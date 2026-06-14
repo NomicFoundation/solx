@@ -16,6 +16,7 @@ use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveType;
 use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
@@ -44,11 +45,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         let declared_type = slang_declared_type
             .as_ref()
             .map(|slang_type| {
-                TypeConversion::resolve_slang_type(
-                    slang_type,
-                    LocationPolicy::Declared(None),
-                    &self.state.builder,
-                )
+                slang_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder)
             })
             .unwrap_or_else(|| {
                 crate::ast::Type::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
@@ -177,13 +174,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             let builder = &self.state.builder;
             let declared_type = declaration
                 .get_type()
-                .map(|slang_type| {
-                    TypeConversion::resolve_slang_type(
-                        &slang_type,
-                        LocationPolicy::Declared(None),
-                        builder,
-                    )
-                })
+                .map(|slang_type| slang_type.resolve_type(LocationPolicy::Declared(None), builder))
                 .unwrap_or_else(|| {
                     crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                         .into_mlir()

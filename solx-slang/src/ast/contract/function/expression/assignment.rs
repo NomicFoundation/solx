@@ -30,6 +30,7 @@ use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::expression_ext::ExpressionExt;
 use crate::ast::tuple_expression_ext::TupleExpressionExt;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveType;
 use crate::ast::type_conversion::TypeConversion;
 
 /// Assignment target resolved from the Slang binder.
@@ -141,11 +142,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 unimplemented!("unregistered state variable {:?}", state_variable.node_id())
             })
             .clone();
-        let element_type = TypeConversion::resolve_slang_type(
-            &declared_type,
-            LocationPolicy::Declared(None),
-            &context.state.builder,
-        );
+        let element_type =
+            declared_type.resolve_type(LocationPolicy::Declared(None), &context.state.builder);
         if declared_type.is_reference_type() && !matches!(declared_type, ast::Type::Mapping(_)) {
             let address_type = ExpressionContext::address_type(
                 &context.state.builder,

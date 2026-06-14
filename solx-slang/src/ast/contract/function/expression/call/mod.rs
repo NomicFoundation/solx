@@ -37,7 +37,7 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::expression_ext::ExpressionExt;
 use crate::ast::library_ext::LibraryExt;
 use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::TypeConversion;
+use crate::ast::type_conversion::ResolveType;
 
 /// Call-expression entry points and the shared lowering primitives the call
 /// kinds dispatch through (argument coercion, call-options capture, indirect
@@ -175,8 +175,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .enumerate()
         {
             let field_slang_type = member.get_type().expect("slang types every struct member");
-            let field_type = TypeConversion::resolve_slang_type(
-                &field_slang_type,
+            let field_type = field_slang_type.resolve_type(
                 LocationPolicy::Declared(Some(DataLocation::Memory)),
                 builder,
             );
@@ -351,11 +350,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .parameter_types()
             .iter()
             .map(|parameter_type| {
-                TypeConversion::resolve_slang_type(
-                    parameter_type,
-                    LocationPolicy::Declared(None),
-                    builder,
-                )
+                parameter_type.resolve_type(LocationPolicy::Declared(None), builder)
             })
             .collect();
         let result_types: Vec<Type<'context>> = match function_type.return_type() {
@@ -364,18 +359,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .types()
                 .iter()
                 .map(|element_type| {
-                    TypeConversion::resolve_slang_type(
-                        element_type,
-                        LocationPolicy::Declared(None),
-                        builder,
-                    )
+                    element_type.resolve_type(LocationPolicy::Declared(None), builder)
                 })
                 .collect(),
-            other => vec![TypeConversion::resolve_slang_type(
-                &other,
-                LocationPolicy::Declared(None),
-                builder,
-            )],
+            other => vec![other.resolve_type(LocationPolicy::Declared(None), builder)],
         };
         let (argument_values, current_block) =
             self.emit_coerced_arguments(positional_arguments, &parameter_types, block)?;

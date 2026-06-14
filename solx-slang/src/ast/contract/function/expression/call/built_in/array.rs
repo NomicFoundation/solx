@@ -21,7 +21,7 @@ use crate::ast::Emit;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::TypeConversion;
+use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits `arr.pop()` / `bytes.pop()` as `sol.pop`.
@@ -148,11 +148,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         let (element_type, slang_location) = match &base_slang_type {
             SlangType::Array(array_type) => (
-                TypeConversion::resolve_slang_type(
-                    &array_type.element_type(),
-                    LocationPolicy::Declared(None),
-                    builder,
-                ),
+                array_type
+                    .element_type()
+                    .resolve_type(LocationPolicy::Declared(None), builder),
                 array_type.location(),
             ),
             SlangType::Bytes(bytes_type) => (

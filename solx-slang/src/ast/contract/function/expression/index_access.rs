@@ -21,7 +21,7 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::TypeConversion;
+use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Lowers `a[i]` / `m[k]` for arrays, dynamic `bytes`, mappings, and
@@ -64,11 +64,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let result_type = index_access
             .get_type()
             .expect("slang types every index-access expression");
-        let slang_expected = TypeConversion::resolve_slang_type(
-            &result_type,
-            LocationPolicy::Declared(None),
-            &self.state.builder,
-        );
+        let slang_expected =
+            result_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder);
         let value = crate::ast::Value::from(value).cast(
             crate::ast::Type::new(slang_expected),
             &self.state.builder,
@@ -130,13 +127,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 (length, block)
             }
         };
-        let result_type = TypeConversion::resolve_slang_type(
-            &index_access
-                .get_type()
-                .expect("slang types every slice expression"),
-            LocationPolicy::Declared(None),
-            &self.state.builder,
-        );
+        let result_type = index_access
+            .get_type()
+            .expect("slang types every slice expression")
+            .resolve_type(LocationPolicy::Declared(None), &self.state.builder);
         let builder = &self.state.builder;
         let value: Value<'context, 'block> = sol_op!(
             builder,
@@ -191,11 +185,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
 
         let (address, element_type) = match &base_type {
             SlangType::Mapping(_) => {
-                let element_type = TypeConversion::resolve_slang_type(
-                    &result_type,
-                    LocationPolicy::Declared(None),
-                    &self.state.builder,
-                );
+                let element_type =
+                    result_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder);
                 let base_location = Self::resolve_base_location(&base_type);
                 let address_type = Self::address_type(
                     &self.state.builder,

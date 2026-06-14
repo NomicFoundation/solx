@@ -40,6 +40,7 @@ use crate::ast::contract::function::modifier_body_call::ModifierBodyCall;
 use crate::ast::contract::function::modifier_parameter_binding::ModifierParameterBinding;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveType;
 use crate::ast::type_conversion::TypeConversion;
 
 /// The evaluated arguments of one modifier stage: one
@@ -441,8 +442,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         let parameter_type = parameter
                             .get_type()
                             .map(|slang_type| {
-                                TypeConversion::resolve_slang_type(
-                                    &slang_type,
+                                slang_type.resolve_type(
                                     LocationPolicy::Declared(None),
                                     &self.state.builder,
                                 )
@@ -671,11 +671,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 let parameter_type = parameter
                     .get_type()
                     .map(|slang_type| {
-                        TypeConversion::resolve_slang_type(
-                            &slang_type,
-                            LocationPolicy::Declared(None),
-                            &self.state.builder,
-                        )
+                        slang_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder)
                     })
                     .unwrap_or_else(|| {
                         crate::ast::Type::unsigned(

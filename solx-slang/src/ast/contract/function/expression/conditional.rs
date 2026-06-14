@@ -20,6 +20,7 @@ use crate::ast::Emit;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveType;
 use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -338,11 +339,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // coercion below is a `data_loc_cast` into memory (matching solc),
         // rather than leaving a calldata element inside a memory `sol.array_lit`
         // that the backend cannot lower.
-        let declared_element_type = TypeConversion::resolve_slang_type(
-            &element_slang_type,
-            LocationPolicy::ForceMemory,
-            builder,
-        );
+        let declared_element_type =
+            element_slang_type.resolve_type(LocationPolicy::ForceMemory, builder);
         // Emit the element values before fixing the element type: for a
         // function-pointer array literal the emitted values are authoritative.
         // A bare function name lowers to an internal `func_ref`, but slang types
@@ -380,11 +378,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 )
                 .into_mlir()
             }
-            _ => TypeConversion::resolve_slang_type(
-                &result_slang_type,
-                LocationPolicy::ForceMemory,
-                builder,
-            ),
+            _ => result_slang_type.resolve_type(LocationPolicy::ForceMemory, builder),
         };
         let element_values: Vec<_> = element_values
             .into_iter()
