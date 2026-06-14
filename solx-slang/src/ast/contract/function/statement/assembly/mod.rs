@@ -27,18 +27,6 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
-    /// Emits an `assembly { … }` block — the top-level Yul block, emitted with
-    /// function-definition hoisting ([`Self::emit_yul_statements_hoisted`]) while
-    /// reusing the enclosing function scope (no nested lexical scope).
-    pub fn emit_assembly(
-        &mut self,
-        assembly: &AssemblyStatement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let current_block = self.emit_yul_statements_hoisted(&assembly.body(), block)?;
-        Ok(Some(current_block))
-    }
-
     /// Emits one Yul statement — an exhaustive `match` over all 11
     /// [`YulStatement`] variants (no `_`). Returns `BlockRef` (NOT `Option`):
     /// Yul never terminates solx control flow.
@@ -677,6 +665,10 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     }
 }
 
+// An `assembly { … }` block is the top-level Yul block, emitted with
+// function-definition hoisting (emit_yul_statements_hoisted) while reusing the
+// enclosing function scope (no nested lexical scope).
 statement_emit!(AssemblyStatement; |node, context, block| {
-    context.emit_assembly(node, block)
+    let current_block = context.emit_yul_statements_hoisted(&node.body(), block)?;
+    Ok(Some(current_block))
 });
