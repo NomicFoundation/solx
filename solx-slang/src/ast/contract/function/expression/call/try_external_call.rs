@@ -16,7 +16,7 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::TypeConversion;
+use crate::ast::type_conversion::ResolveSignature;
 
 /// A `try recv.f(args)` external call, resolved from the `try` expression. Only
 /// this shape carries a real catch path; classification is a pure precondition,
@@ -96,11 +96,9 @@ impl TryExternalCall {
         }
         // External (ABI) signature: `calldata` reference parameters cross the call
         // boundary as memory (see `resolve_external_function_types`).
-        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
-            &self.function,
-            LocationPolicy::ForceMemory,
-            &context.state.builder,
-        );
+        let (parameter_types, return_types) = self
+            .function
+            .resolve_signature_types(LocationPolicy::ForceMemory, &context.state.builder);
         let BlockAnd {
             value: receiver,
             block: current_block,

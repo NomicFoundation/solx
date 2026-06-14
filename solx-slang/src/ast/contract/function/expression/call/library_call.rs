@@ -19,7 +19,7 @@ use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::expression_ext::ExpressionExt;
 use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::TypeConversion;
+use crate::ast::type_conversion::ResolveSignature;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits an internal (`Library { external: false }`) library call — inlined
@@ -93,11 +93,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         self_receiver: Option<&Expression>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
-            function,
-            LocationPolicy::Declared(None),
-            &self.state.builder,
-        );
+        let (parameter_types, return_types) =
+            function.resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder);
         let selector = function
             .compute_selector()
             .expect("an external library function has a selector");

@@ -20,8 +20,8 @@ use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::static_mode::StaticMode;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveSignature;
 use crate::ast::type_conversion::ResolveType;
-use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// The SOLE `ext_icall` sink for `SelfExternal` + `ExternalInstance`.
@@ -343,11 +343,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // External calls cross the ABI boundary, so a `calldata` reference
         // parameter is encoded from / decoded to memory — the callee type and
         // argument coercions use the EXTERNAL (memory) representation.
-        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
-            function_definition,
-            LocationPolicy::ForceMemory,
-            &self.state.builder,
-        );
+        let (parameter_types, return_types) = function_definition
+            .resolve_signature_types(LocationPolicy::ForceMemory, &self.state.builder);
         // The receiver is the member operand: `this` for a self call, the
         // instance value for an external one — both evaluate to an address.
         let BlockAnd {

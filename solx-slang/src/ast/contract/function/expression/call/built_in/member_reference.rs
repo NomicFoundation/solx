@@ -22,6 +22,7 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveSignature;
 use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -175,11 +176,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // so assigning `this.g` (declared `string calldata`) to a
         // `function (string memory) external` pointer needs no cast: both are the
         // same `ext_func_ref<(string<Memory>) -> …>`.
-        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
-            function_definition,
-            LocationPolicy::ForceMemory,
-            &self.state.builder,
-        );
+        let (parameter_types, return_types) = function_definition
+            .resolve_signature_types(LocationPolicy::ForceMemory, &self.state.builder);
         let BlockAnd {
             value: receiver,
             block,

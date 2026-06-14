@@ -26,8 +26,8 @@ use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::built_in::EncodeMode;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveSignature;
 use crate::ast::type_conversion::ResolveType;
-use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits `abi.encode(args)` as a standard `sol.encode`.
@@ -179,11 +179,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // cross the call boundary). Use the external (memory) signature
                 // so a memory struct/array argument needs no data-location cast
                 // (solc encodes the same).
-                let (parameter_types, _) = TypeConversion::resolve_function_types(
-                    &function,
-                    LocationPolicy::ForceMemory,
-                    builder,
-                );
+                let (parameter_types, _) =
+                    function.resolve_signature_types(LocationPolicy::ForceMemory, builder);
                 (selector_value, parameter_types, block)
             }
             _ => {

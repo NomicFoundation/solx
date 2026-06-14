@@ -38,6 +38,7 @@ use self::library::LibraryCallCollector;
 use self::storage_layout::StorageSlot;
 use crate::ast::operator_binding::OperatorBindings;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveSignature;
 use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers a Solidity contract to Sol dialect MLIR.
@@ -105,11 +106,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // Register each shadowed base override under its contract-qualified
         // symbol so a `super`/`Base` call resolves to it by node id.
         for (symbol, function) in &super_dispatch.shadowed {
-            let (parameter_types, return_types) = TypeConversion::resolve_function_types(
-                function,
-                LocationPolicy::Declared(None),
-                &self.state.builder,
-            );
+            let (parameter_types, return_types) = function
+                .resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder);
             self.state.register_function_signature(
                 function.node_id(),
                 symbol.clone(),
@@ -337,11 +335,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // resolve before any body is emitted.
         for function in &functions {
             let mlir_name = FunctionEmitter::mlir_function_name(function);
-            let (parameter_types, return_types) = TypeConversion::resolve_function_types(
-                function,
-                LocationPolicy::Declared(None),
-                &self.state.builder,
-            );
+            let (parameter_types, return_types) = function
+                .resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder);
             self.state.register_function_signature(
                 function.node_id(),
                 mlir_name,
@@ -431,11 +426,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 continue;
             }
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
-            let (parameter_types, return_types) = TypeConversion::resolve_function_types(
-                &function,
-                LocationPolicy::Declared(None),
-                &self.state.builder,
-            );
+            let (parameter_types, return_types) = function
+                .resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder);
 
             self.state.register_function_signature(
                 function.node_id(),
@@ -470,11 +462,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// resolve regardless of emission order.
     fn register_function_signatures(&mut self, functions: &[FunctionDefinition]) {
         for function in functions {
-            let (parameter_types, return_types) = TypeConversion::resolve_function_types(
-                function,
-                LocationPolicy::Declared(None),
-                &self.state.builder,
-            );
+            let (parameter_types, return_types) = function
+                .resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder);
             self.state.register_function_signature(
                 function.node_id(),
                 Self::node_id_qualified_symbol(function),

@@ -29,8 +29,8 @@ use solx_utils::DataLocation;
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveSignature;
 use crate::ast::type_conversion::ResolveType;
-use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits a `new` expression: dynamic-aggregate allocation (`new T[](n)`,
@@ -125,12 +125,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let parameter_types = contract_definition
             .constructor()
             .map(|constructor| {
-                TypeConversion::resolve_function_types(
-                    &constructor,
-                    LocationPolicy::Declared(None),
-                    &self.state.builder,
-                )
-                .0
+                constructor
+                    .resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder)
+                    .0
             })
             .unwrap_or_default();
         let (ctor_args, block) = self.emit_coerced_arguments(arguments, &parameter_types, block)?;

@@ -5,7 +5,9 @@
 pub mod location_policy;
 
 pub use self::location_policy::LocationPolicy;
+pub mod resolve_signature;
 pub mod resolve_type;
+pub use self::resolve_signature::ResolveSignature;
 pub use self::resolve_type::ResolveType;
 
 use melior::ir::Attribute;
@@ -16,8 +18,6 @@ use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
 use num_traits::sign::Signed;
-use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::DefaultFuncConstantOperation;
@@ -255,33 +255,5 @@ impl TypeConversion {
             .get_type()
             .expect("slang types every state variable");
         Ok(slang_type.resolve_type(LocationPolicy::Declared(None), builder))
-    }
-
-    /// Resolves a function's parameter and return types from Slang AST to MLIR.
-    ///
-    /// `policy` is the data-location policy for the resolved types:
-    /// [`LocationPolicy::Declared`] for the DECLARED signature (used inside the
-    /// callee's own body), [`LocationPolicy::ForceMemory`] for the EXTERNAL (ABI)
-    /// signature — an external call ABI-encodes its arguments and decodes its
-    /// results into memory (`calldata` cannot cross the call boundary), so solc
-    /// shows a `bytes calldata` parameter as `!sol.string<Memory>` in the call's
-    /// `callee_type`.
-    pub fn resolve_function_types<'context>(
-        function: &FunctionDefinition,
-        policy: LocationPolicy,
-        builder: &solx_mlir::Builder<'context>,
-    ) -> (Vec<Type<'context>>, Vec<Type<'context>>) {
-        let resolve = |parameter: Parameter| {
-            parameter
-                .get_type()
-                .expect("parameter type resolved by semantic analysis")
-                .resolve_type(policy, builder)
-        };
-        let parameter_types = function.parameters().iter().map(&resolve).collect();
-        let return_types = function
-            .returns()
-            .map(|returns| returns.iter().map(&resolve).collect())
-            .unwrap_or_default();
-        (parameter_types, return_types)
     }
 }
