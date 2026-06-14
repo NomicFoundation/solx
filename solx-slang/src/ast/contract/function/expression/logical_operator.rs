@@ -55,7 +55,12 @@ impl LogicalOperator {
             solx_utils::BIT_LENGTH_BOOLEAN,
         )
         .into_mlir();
-        let result_ptr = emitter.state.builder.emit_sol_alloca(i1_type, &block);
+        let result_ptr = crate::ast::Pointer::stack_slot(
+            crate::ast::Type::new(i1_type),
+            &emitter.state.builder,
+            &block,
+        )
+        .into_mlir();
         let default_value =
             crate::ast::Value::boolean(short_circuit_value, &emitter.state.builder, &block)
                 .into_mlir();

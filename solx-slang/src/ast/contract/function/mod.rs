@@ -340,10 +340,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         for (index, parameter) in function.parameters().iter().enumerate() {
             let parameter_type = parameter_types[index];
             let parameter_value: Value<'context, 'block> = entry_block.argument(index)?.into();
-            let pointer = self
-                .state
-                .builder
-                .emit_sol_alloca(parameter_type, entry_block);
+            let pointer = crate::ast::Pointer::stack_slot(
+                crate::ast::Type::new(parameter_type),
+                &self.state.builder,
+                entry_block,
+            )
+            .into_mlir();
             sol_op_void!(
                 &self.state.builder,
                 entry_block,
@@ -376,7 +378,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             if let Some(returns) = function.returns() {
                 for (index, parameter) in returns.iter().enumerate() {
                     let return_type = result_types[index];
-                    let pointer = self.state.builder.emit_sol_alloca(return_type, entry_block);
+                    let pointer = crate::ast::Pointer::stack_slot(
+                        crate::ast::Type::new(return_type),
+                        &self.state.builder,
+                        entry_block,
+                    )
+                    .into_mlir();
                     let incoming: Value<'context, 'block> =
                         entry_block.argument(parameter_count + index)?.into();
                     sol_op_void!(
@@ -513,7 +520,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             for (index, parameter) in constructor.parameters().iter().enumerate() {
                 let parameter_type = parameter_types[index];
                 let parameter_value: Value<'context, '_> = entry.argument(index)?.into();
-                let pointer = self.state.builder.emit_sol_alloca(parameter_type, &entry);
+                let pointer = crate::ast::Pointer::stack_slot(
+                    crate::ast::Type::new(parameter_type),
+                    &self.state.builder,
+                    &entry,
+                )
+                .into_mlir();
                 sol_op_void!(
                     &self.state.builder,
                     &entry,

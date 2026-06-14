@@ -174,7 +174,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 block,
             )
             .into_mlir();
-        let pointer = self.state.builder.emit_sol_alloca(parameter_type, block);
+        let pointer = crate::ast::Pointer::stack_slot(
+            crate::ast::Type::new(parameter_type),
+            &self.state.builder,
+            block,
+        )
+        .into_mlir();
         sol_op_void!(
             &self.state.builder,
             block,
@@ -283,10 +288,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     &current_block,
                 )
                 .into_mlir();
-            let pointer = self
-                .state
-                .builder
-                .emit_sol_alloca(parameter_type, &current_block);
+            let pointer = crate::ast::Pointer::stack_slot(
+                crate::ast::Type::new(parameter_type),
+                &self.state.builder,
+                &current_block,
+            )
+            .into_mlir();
             sol_op_void!(
                 &self.state.builder,
                 &current_block,

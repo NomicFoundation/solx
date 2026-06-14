@@ -267,10 +267,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut environment = Environment::new();
         for (index, binding) in modifier_params.iter().enumerate() {
             let value: Value<'context, '_> = entry.argument(index)?.into();
-            let pointer = self
-                .state
-                .builder
-                .emit_sol_alloca(binding.element_type, &entry);
+            let pointer = crate::ast::Pointer::stack_slot(
+                crate::ast::Type::new(binding.element_type),
+                &self.state.builder,
+                &entry,
+            )
+            .into_mlir();
             sol_op_void!(
                 &self.state.builder,
                 &entry,
@@ -291,7 +293,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut return_slots: Vec<Option<Value<'context, '_>>> =
             Vec::with_capacity(result_types.len());
         for (index, &return_type) in result_types.iter().enumerate() {
-            let pointer = self.state.builder.emit_sol_alloca(return_type, &entry);
+            let pointer = crate::ast::Pointer::stack_slot(
+                crate::ast::Type::new(return_type),
+                &self.state.builder,
+                &entry,
+            )
+            .into_mlir();
             let incoming: Value<'context, '_> = entry.argument(return_offset + index)?.into();
             sol_op_void!(
                 &self.state.builder,
@@ -461,10 +468,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                                 &current_block,
                             )
                             .into_mlir();
-                        let pointer = self
-                            .state
-                            .builder
-                            .emit_sol_alloca(parameter_type, &current_block);
+                        let pointer = crate::ast::Pointer::stack_slot(
+                            crate::ast::Type::new(parameter_type),
+                            &self.state.builder,
+                            &current_block,
+                        )
+                        .into_mlir();
                         sol_op_void!(
                             &self.state.builder,
                             &current_block,
@@ -687,7 +696,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         &block,
                     )
                     .into_mlir();
-                let pointer = self.state.builder.emit_sol_alloca(parameter_type, &block);
+                let pointer = crate::ast::Pointer::stack_slot(
+                    crate::ast::Type::new(parameter_type),
+                    &self.state.builder,
+                    &block,
+                )
+                .into_mlir();
                 sol_op_void!(
                     &self.state.builder,
                     &block,

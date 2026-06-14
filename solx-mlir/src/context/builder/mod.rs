@@ -30,7 +30,6 @@ use melior::ir::r#type::IntegerType;
 use ruint::aliases::U256;
 
 use crate::StateMutability;
-use crate::ods::sol::AllocaOperation;
 use crate::ods::sol::BareCallOperation;
 use crate::ods::sol::BareDelegateCallOperation;
 use crate::ods::sol::BareStaticCallOperation;
@@ -50,7 +49,6 @@ use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
 use crate::ods::sol::StateVarOperation;
-use crate::ods::sol::StoreOperation;
 use crate::ods::sol::TryOperation;
 use crate::ods::sol::WhileOperation;
 
@@ -585,31 +583,6 @@ impl<'context> Builder<'context> {
     ///
     /// Panics if the MLIR type or operation cannot be constructed, indicating
     /// a bug in the builder.
-    pub fn emit_sol_alloca<'block, B>(
-        &self,
-        element_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let ptr_type =
-            crate::Type::pointer(self.context, element_type, solx_utils::DataLocation::Stack)
-                .into_mlir();
-        block
-            .append_operation(
-                AllocaOperation::builder(self.context, self.unknown_location)
-                    .alloc_type(TypeAttribute::new(ptr_type))
-                    .addr(ptr_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.alloca always produces one result")
-            .into()
-    }
-
     /// Allocates a stack slot for `element_type` and zero-initialises it,
     /// returning the slot address.
     ///
@@ -630,21 +603,14 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let pointer = self.emit_sol_alloca(element_type, block);
+        let pointer = crate::Pointer::stack_slot(crate::Type::new(element_type), self, block);
         if IntegerType::try_from(element_type).is_ok() {
-            let zero =
-                crate::Value::constant(0, crate::Type::new(element_type), self, block).into_mlir();
-            block.append_operation(
-                StoreOperation::builder(self.context, self.unknown_location)
-                    .val(zero)
-                    .addr(pointer)
-                    .build()
-                    .into(),
-            );
+            let zero = crate::Value::constant(0, crate::Type::new(element_type), self, block);
+            pointer.store(zero, self, block);
         } else {
             unimplemented!("zero-initialization for non-integer type {element_type}");
         }
-        pointer
+        pointer.into_mlir()
     }
 
     /// Emits a `sol.return` whose operands are loaded from the per-return slots:

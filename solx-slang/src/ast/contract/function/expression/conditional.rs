@@ -91,7 +91,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .is_nonzero(&self.state.builder, &block)
             .into_mlir();
 
-        let result_slot = self.state.builder.emit_sol_alloca(result_type, &block);
+        let result_slot = crate::ast::Pointer::stack_slot(
+            crate::ast::Type::new(result_type),
+            &self.state.builder,
+            &block,
+        )
+        .into_mlir();
         let (then_block, else_block) = self.state.builder.emit_sol_if(condition_boolean, &block);
 
         let true_expression = conditional.true_expression();
@@ -228,7 +233,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let condition_boolean = condition_value.is_nonzero(builder, &block).into_mlir();
         let slots: Vec<Value<'context, 'block>> = result_types
             .iter()
-            .map(|&result_type| builder.emit_sol_alloca(result_type, &block))
+            .map(|&result_type| {
+                crate::ast::Pointer::stack_slot(crate::ast::Type::new(result_type), builder, &block)
+                    .into_mlir()
+            })
             .collect();
         let (then_block, else_block) = builder.emit_sol_if(condition_boolean, &block);
 

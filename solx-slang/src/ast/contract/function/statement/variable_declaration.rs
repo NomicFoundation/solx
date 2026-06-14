@@ -79,7 +79,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         };
 
         let pointer = if let Some(value) = initial_value {
-            let pointer = self.state.builder.emit_sol_alloca(declared_type, &block);
+            let pointer = crate::ast::Pointer::stack_slot(
+                crate::ast::Type::new(declared_type),
+                &self.state.builder,
+                &block,
+            )
+            .into_mlir();
             sol_op_void!(
                 &self.state.builder,
                 &block,
@@ -182,7 +187,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             let cast = crate::ast::Value::from(value)
                 .coerce_to(crate::ast::Type::new(declared_type), builder, &current)
                 .into_mlir();
-            let pointer = builder.emit_sol_alloca(declared_type, &current);
+            let pointer = crate::ast::Pointer::stack_slot(
+                crate::ast::Type::new(declared_type),
+                builder,
+                &current,
+            )
+            .into_mlir();
             sol_op_void!(builder, &current, StoreOperation.val(cast).addr(pointer));
             self.environment
                 .define_variable(declaration.node_id(), pointer, declared_type);

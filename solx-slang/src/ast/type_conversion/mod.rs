@@ -184,7 +184,9 @@ impl TypeConversion {
         builder: &solx_mlir::Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let pointer = builder.emit_sol_alloca(mlir_type, block);
+        let pointer =
+            crate::ast::Pointer::stack_slot(crate::ast::Type::new(mlir_type), builder, block)
+                .into_mlir();
         // A memory aggregate is malloc-backed; a `storage` reference (e.g.
         // `returns (S storage)`) is a slot pointer assigned in the body, so the
         // `Memory` guard keeps it a bare slot.
