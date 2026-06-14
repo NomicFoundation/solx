@@ -12,7 +12,6 @@ use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::ods::sol::LengthOperation;
-use solx_mlir::ods::sol::MapOperation;
 use solx_mlir::ods::sol::SliceOperation;
 use solx_utils::DataLocation;
 
@@ -200,14 +199,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     base_location,
                     &result_type,
                 );
-                let address = sol_op!(
-                    &self.state.builder,
-                    &block,
-                    MapOperation
-                        .mapping(base_value.into_mlir())
-                        .key(index_value.into_mlir())
-                        .addr(address_type)
-                );
+                let address = base_value
+                    .into_pointer()
+                    .entry(
+                        index_value,
+                        crate::ast::Type::new(address_type),
+                        &self.state.builder,
+                        &block,
+                    )
+                    .into_mlir();
                 (address, element_type)
             }
             _ => {

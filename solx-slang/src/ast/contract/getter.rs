@@ -29,7 +29,6 @@ use solx_mlir::CmpPredicate;
 use solx_mlir::StateMutability;
 use solx_mlir::ods::sol::AddrOfOperation;
 use solx_mlir::ods::sol::LengthOperation;
-use solx_mlir::ods::sol::MapOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 use solx_utils::DataLocation;
 
@@ -386,13 +385,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         for (index, level) in levels.iter().enumerate() {
             let arg: Value<'context, 'block> = entry.argument(index)?.into();
             base = match level {
-                GetterLevel::Mapping(level_type) => {
-                    sol_op!(
+                GetterLevel::Mapping(level_type) => crate::ast::Pointer::new(base)
+                    .entry(
+                        crate::ast::Value::new(arg),
+                        crate::ast::Type::new(*level_type),
                         builder,
                         entry,
-                        MapOperation.mapping(base).key(arg).addr(*level_type)
                     )
-                }
+                    .into_mlir(),
                 GetterLevel::Array(element_type, fixed_size) => {
                     let length = match fixed_size {
                         Some(size) => crate::ast::Value::constant(

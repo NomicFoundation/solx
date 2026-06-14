@@ -17,6 +17,7 @@ use crate::Value;
 use crate::ods::sol::AllocaOperation;
 use crate::ods::sol::GepOperation;
 use crate::ods::sol::LoadOperation;
+use crate::ods::sol::MapOperation;
 use crate::ods::sol::StoreOperation;
 
 /// A `!sol.ptr<T, Loc>` place: a typed address into stack / memory / storage /
@@ -153,6 +154,35 @@ impl<'context, 'block> Pointer<'context, 'block> {
                 .base_addr(self.inner)
                 .idx(index.into_mlir())
                 .addr(address_type)
+        ))
+    }
+
+    /// Steps to the place of the mapping entry for `key` (`sol.map`). The dialect
+    /// derives no map result type C-side (unlike [`gep`]), so the caller supplies
+    /// the entry place type `entry_type` — the value type in the mapping's data
+    /// location, or, for a reference value in `Storage` / `CallData`, the value
+    /// type itself (the gep/map result-type rule returns a reference element
+    /// unwrapped).
+    ///
+    /// [`gep`]: Self::gep
+    pub fn entry<B>(
+        self,
+        key: Value<'context, 'block>,
+        entry_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Self::new(sol_op!(
+            builder,
+            block,
+            MapOperation
+                .mapping(self.inner)
+                .key(key.into_mlir())
+                .addr(entry_type.into_mlir())
         ))
     }
 }
