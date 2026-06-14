@@ -56,7 +56,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         let builder = &self.state.builder;
         let int_value = builder.emit_sol_constant(ordinal, builder.types.ui256, &block);
-        let enum_value = builder.emit_sol_enum_cast(int_value, result_type, &block);
+        let enum_value = crate::ast::Value::from(int_value)
+            .cast(result_type, builder, &block)
+            .into_mlir();
         Ok((enum_value, block))
     }
 
@@ -125,7 +127,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         let integer_type = Type::from(IntegerType::unsigned(builder.context, 32));
         let integer = builder.emit_constant(&BigInt::from(interface_id), integer_type, &block);
-        let value = builder.emit_sol_bytes_cast(integer, builder.types.fixed_bytes(4), &block);
+        let value = crate::ast::Value::from(integer)
+            .cast(builder.types.fixed_bytes(4), builder, &block)
+            .into_mlir();
         Ok((value, block))
     }
 

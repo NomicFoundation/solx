@@ -32,7 +32,6 @@ use solx_mlir::ods::sol::Sha256Operation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::type_conversion::TypeConversion;
 
 /// ABI encoding mode for `abi.encode` / `abi.encodePacked`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,8 +87,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let builder = &self.state.builder;
                 // `sol.blockhash` takes a `ui256` block number; coerce a narrower
                 // argument type up first.
-                let block_number =
-                    TypeConversion::coerce(values[0], builder.types.ui256, builder, &block);
+                let block_number = crate::ast::Value::from(values[0])
+                    .coerce_to(builder.types.ui256, builder, &block)
+                    .into_mlir();
                 let value = sol_op!(
                     builder,
                     block,
@@ -137,10 +137,18 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // `v`. Coerce each to its signature type (matching solc).
                 let bytes32 = builder.types.fixed_bytes(32);
                 let ui8 = Type::from(IntegerType::unsigned(builder.context, 8));
-                let hash = TypeConversion::coerce(values[0], bytes32, builder, &block);
-                let v = TypeConversion::coerce(values[1], ui8, builder, &block);
-                let r = TypeConversion::coerce(values[2], bytes32, builder, &block);
-                let s = TypeConversion::coerce(values[3], bytes32, builder, &block);
+                let hash = crate::ast::Value::from(values[0])
+                    .coerce_to(bytes32, builder, &block)
+                    .into_mlir();
+                let v = crate::ast::Value::from(values[1])
+                    .coerce_to(ui8, builder, &block)
+                    .into_mlir();
+                let r = crate::ast::Value::from(values[2])
+                    .coerce_to(bytes32, builder, &block)
+                    .into_mlir();
+                let s = crate::ast::Value::from(values[3])
+                    .coerce_to(bytes32, builder, &block)
+                    .into_mlir();
                 let value = sol_op!(
                     builder,
                     block,
@@ -160,9 +168,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // narrow type (`addmod(1, 2, d)` → ui8, ui8, ui256); `sol.addmod`
                 // requires identical operand/result types, so widen all to ui256.
                 let ui256 = builder.types.ui256;
-                let x = TypeConversion::coerce(values[0], ui256, builder, &block);
-                let y = TypeConversion::coerce(values[1], ui256, builder, &block);
-                let modulus = TypeConversion::coerce(values[2], ui256, builder, &block);
+                let x = crate::ast::Value::from(values[0])
+                    .coerce_to(ui256, builder, &block)
+                    .into_mlir();
+                let y = crate::ast::Value::from(values[1])
+                    .coerce_to(ui256, builder, &block)
+                    .into_mlir();
+                let modulus = crate::ast::Value::from(values[2])
+                    .coerce_to(ui256, builder, &block)
+                    .into_mlir();
                 let value = sol_op!(builder, block, AddModOperation.x(x).y(y).r#mod(modulus));
                 Ok((Some(value), block))
             }
@@ -172,9 +186,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // `mulmod` operates on `uint256`; widen narrow literal operands so
                 // all operands/result share the type `sol.mulmod` requires.
                 let ui256 = builder.types.ui256;
-                let x = TypeConversion::coerce(values[0], ui256, builder, &block);
-                let y = TypeConversion::coerce(values[1], ui256, builder, &block);
-                let modulus = TypeConversion::coerce(values[2], ui256, builder, &block);
+                let x = crate::ast::Value::from(values[0])
+                    .coerce_to(ui256, builder, &block)
+                    .into_mlir();
+                let y = crate::ast::Value::from(values[1])
+                    .coerce_to(ui256, builder, &block)
+                    .into_mlir();
+                let modulus = crate::ast::Value::from(values[2])
+                    .coerce_to(ui256, builder, &block)
+                    .into_mlir();
                 let value = sol_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus));
                 Ok((Some(value), block))
             }
@@ -411,7 +431,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
-        let input = TypeConversion::coerce(buffer, builder.types.sol_string_memory, builder, block);
+        let input = crate::ast::Value::from(buffer)
+            .coerce_to(builder.types.sol_string_memory, builder, block)
+            .into_mlir();
         sol_op!(
             builder,
             block,

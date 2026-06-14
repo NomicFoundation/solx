@@ -96,12 +96,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let lhs_common = if lhs_width == common_width {
                 lhs
             } else {
-                crate::ast::Value::from(builder.emit_sol_bytes_cast(lhs.into_mlir(), common, &block))
+                lhs.cast(common, builder, &block)
             };
             let rhs_common = if rhs_width == common_width {
                 rhs
             } else {
-                crate::ast::Value::from(builder.emit_sol_bytes_cast(rhs.into_mlir(), common, &block))
+                rhs.cast(common, builder, &block)
             };
             let comparison = lhs_common
                 .compare(rhs_common, predicate, builder, &block)

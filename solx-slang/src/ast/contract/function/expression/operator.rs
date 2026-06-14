@@ -322,7 +322,7 @@ impl Operator {
             .into();
 
         match restore_type {
-            Some(fixed) => builder.emit_sol_cast(result, fixed, block).into(),
+            Some(fixed) => crate::ast::Value::from(result).cast(fixed, builder, block),
             None => result.into(),
         }
     }
@@ -404,7 +404,9 @@ impl Operator {
                 let result: Value<'context, 'block> =
                     sol_op!(builder, block, NotOperation.value(value));
                 let result = match restore_type {
-                    Some(fixed) => builder.emit_sol_cast(result, fixed, &block),
+                    Some(fixed) => crate::ast::Value::from(result)
+                        .cast(fixed, builder, &block)
+                        .into_mlir(),
                     None => result,
                 };
                 Ok((result.into(), block))

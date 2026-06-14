@@ -168,7 +168,9 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 )
             })
             .unwrap_or_else(|| self.state.builder.types.ui256);
-        let cast = TypeConversion::coerce(value, parameter_type, &self.state.builder, block);
+        let cast = crate::ast::Value::from(value)
+            .coerce_to(parameter_type, &self.state.builder, block)
+            .into_mlir();
         let pointer = self.state.builder.emit_sol_alloca(parameter_type, block);
         sol_op_void!(
             &self.state.builder,

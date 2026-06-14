@@ -11,7 +11,6 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
 use num_traits::sign::Signed;
@@ -27,20 +26,16 @@ use solx_mlir::ods::sol::StoreOperation;
 
 use crate::ast::contract::ContractEmitter;
 
-/// Classification of Solidity type conversions.
+/// Solidity type resolution and default-initialisation.
 ///
-/// Used for both explicit conversions (`uint256(x)`, `address(x)`, `bool(x)`)
-/// and implicit operand widening in arithmetic, assignment, and comparison.
-pub enum TypeConversion<'context> {
-    /// `bool(x)` — comparison against zero, not bit-truncation.
-    Bool,
-    /// `address(x)` / `payable(x)` — `sol.cast` to ui160 then `sol.address_cast`.
-    Address,
-    /// Integer type cast — `sol.cast` to target.
-    Cast(Type<'context>),
-}
+/// A transitional namespace: the cast/coercion this type once classified now
+/// lives on [`crate::ast::Value`] (`coerce_to` / `cast`), routed by the target
+/// [`crate::ast::Type`]. What remains here — Slang→MLIR type resolution and
+/// zero / default-initialisation — moves onto `Type` and `Value` / `Pointer` in
+/// the resolution and constants stages.
+pub struct TypeConversion;
 
-impl<'context> TypeConversion<'context> {
+impl TypeConversion {
     /// Maps a Slang semantic type to an MLIR type.
     ///
     /// `policy` picks each reference type's data location: [`LocationPolicy::Declared`]
@@ -49,7 +44,7 @@ impl<'context> TypeConversion<'context> {
     /// the external (ABI) representation where `calldata` cannot cross the call
     /// boundary. Top-level callers pass `LocationPolicy::Declared(None)`; the
     /// `Struct` arm carries the parent struct's location into member resolution.
-    pub fn resolve_slang_type(
+    pub fn resolve_slang_type<'context>(
         slang_type: &SlangType,
         policy: LocationPolicy,
         builder: &solx_mlir::Builder<'context>,
@@ -260,7 +255,7 @@ impl<'context> TypeConversion<'context> {
     // and constant subexpressions overflow at that width. solc folds via
     // `RationalNumberType::binaryOperatorResult`, sizing the result to fit the
     // folded value. Either teach slang to fold, or fold here before lowering.
-    pub fn resolve_optional_slang_type(
+    pub fn resolve_optional_slang_type<'context>(
         slang_type: Option<SlangType>,
         builder: &solx_mlir::Builder<'context>,
     ) -> Option<Type<'context>> {
@@ -278,7 +273,7 @@ impl<'context> TypeConversion<'context> {
     /// cast — never by narrowing a wider constant, which the `sol.cast` fold
     /// mishandles. Plain integers/bools are zeroed directly by
     /// `Builder::emit_zero_initialized_alloca` and do not reach here.
-    pub fn emit_scalar_zero<'block>(
+    pub fn emit_scalar_zero<'context, 'block>(
         slang_type: &SlangType,
         mlir_type: Type<'context>,
         builder: &solx_mlir::Builder<'context>,
@@ -292,7 +287,9 @@ impl<'context> TypeConversion<'context> {
                 // `sol.address_cast`'s operand is the 160-bit address width;
                 // emit the zero at that width directly (no constant narrowing).
                 let zero = builder.emit_sol_constant(0, builder.types.ui160, block);
-                builder.emit_sol_address_cast(zero, mlir_type, block)
+                crate::ast::Value::from(zero)
+                    .cast(mlir_type, builder, block)
+                    .into_mlir()
             }
             SlangType::ByteArray(byte_array_type) => {
                 // `sol.bytes_cast`'s operand must match the fixed-bytes width
@@ -300,11 +297,15 @@ impl<'context> TypeConversion<'context> {
                 let bits = byte_array_type.width() * 8;
                 let int_type = Type::from(IntegerType::unsigned(builder.context, bits));
                 let zero = builder.emit_sol_constant(0, int_type, block);
-                builder.emit_sol_bytes_cast(zero, mlir_type, block)
+                crate::ast::Value::from(zero)
+                    .cast(mlir_type, builder, block)
+                    .into_mlir()
             }
             SlangType::Enum(_) => {
                 let zero = builder.emit_sol_constant(0, builder.types.ui256, block);
-                builder.emit_sol_enum_cast(zero, mlir_type, block)
+                crate::ast::Value::from(zero)
+                    .cast(mlir_type, builder, block)
+                    .into_mlir()
             }
             SlangType::UserDefinedValue(udvt) => {
                 let target_type = udvt
@@ -319,11 +320,9 @@ impl<'context> TypeConversion<'context> {
                 // pointer that reverts when called).
                 if function_type.is_externally_visible() {
                     let zero_address = builder.emit_sol_constant(0, builder.types.ui160, block);
-                    let address = builder.emit_sol_address_cast(
-                        zero_address,
-                        builder.types.sol_address,
-                        block,
-                    );
+                    let address = crate::ast::Value::from(zero_address)
+                        .cast(builder.types.sol_address, builder, block)
+                        .into_mlir();
                     builder.emit_sol_ext_func_constant(address, 0, mlir_type, block)
                 } else {
                     sol_op!(builder, block, DefaultFuncConstantOperation.addr(mlir_type))
@@ -334,8 +333,12 @@ impl<'context> TypeConversion<'context> {
                 // reinterpreted as the contract type (solc: `ui160` zero ->
                 // `address` -> contract, two `sol.address_cast`s).
                 let zero = builder.emit_sol_constant(0, builder.types.ui160, block);
-                let address = builder.emit_sol_address_cast(zero, builder.types.sol_address, block);
-                builder.emit_sol_address_cast(address, mlir_type, block)
+                let address = crate::ast::Value::from(zero)
+                    .cast(builder.types.sol_address, builder, block)
+                    .into_mlir();
+                crate::ast::Value::from(address)
+                    .cast(mlir_type, builder, block)
+                    .into_mlir()
             }
             _ => unreachable!(
                 "emit_scalar_zero handles only address/bytesN/enum/integer/bool/UDVT/function/contract value types"
@@ -362,7 +365,7 @@ impl<'context> TypeConversion<'context> {
     ///
     /// The single default-initialisation primitive shared by local variable
     /// declarations and named return slots.
-    pub fn emit_default_initialized_slot<'block>(
+    pub fn emit_default_initialized_slot<'context, 'block>(
         slang_type: Option<&SlangType>,
         mlir_type: Type<'context>,
         builder: &solx_mlir::Builder<'context>,
@@ -427,46 +430,8 @@ impl<'context> TypeConversion<'context> {
         }
     }
 
-    /// Coerces `value` to `target_type`, emitting the conversion (nothing when
-    /// the types already match). The single entry callers use for implicit
-    /// widening and explicit conversions.
-    pub fn coerce<'block>(
-        value: Value<'context, 'block>,
-        target_type: Type<'context>,
-        builder: &solx_mlir::Builder<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block>
-    where
-        'context: 'block,
-    {
-        Self::from_target_type(target_type, builder).emit(value, builder, block)
-    }
-
-    /// Classifies a target type into the appropriate conversion variant.
-    pub fn from_target_type(
-        target_type: Type<'context>,
-        builder: &solx_mlir::Builder<'context>,
-    ) -> Self {
-        if target_type == builder.types.i1 {
-            Self::Bool
-        } else if target_type == builder.types.sol_address {
-            Self::Address
-        } else {
-            Self::Cast(target_type)
-        }
-    }
-
-    /// Returns the MLIR target type this conversion produces.
-    pub fn to_target_type(&self, builder: &solx_mlir::Builder<'context>) -> Type<'context> {
-        match self {
-            Self::Bool => builder.types.i1,
-            Self::Address => builder.types.sol_address,
-            Self::Cast(target_type) => *target_type,
-        }
-    }
-
     /// Resolves the declared Solidity type of a state variable to an MLIR type.
-    pub fn resolve_state_variable_type(
+    pub fn resolve_state_variable_type<'context>(
         state_variable: &StateVariableDefinition,
         builder: &solx_mlir::Builder<'context>,
     ) -> anyhow::Result<Type<'context>> {
@@ -489,7 +454,7 @@ impl<'context> TypeConversion<'context> {
     /// results into memory (`calldata` cannot cross the call boundary), so solc
     /// shows a `bytes calldata` parameter as `!sol.string<Memory>` in the call's
     /// `callee_type`.
-    pub fn resolve_function_types(
+    pub fn resolve_function_types<'context>(
         function: &FunctionDefinition,
         policy: LocationPolicy,
         builder: &solx_mlir::Builder<'context>,
@@ -509,45 +474,5 @@ impl<'context> TypeConversion<'context> {
             .map(|returns| returns.iter().map(&resolve).collect())
             .unwrap_or_default();
         (parameter_types, return_types)
-    }
-
-    /// Emits the conversion, returning the cast value.
-    pub fn emit<'block>(
-        self,
-        value: melior::ir::Value<'context, 'block>,
-        builder: &solx_mlir::Builder<'context>,
-        block: &melior::ir::BlockRef<'context, 'block>,
-    ) -> melior::ir::Value<'context, 'block>
-    where
-        'context: 'block,
-    {
-        if value.r#type() == self.to_target_type(builder) {
-            return value;
-        }
-        match self {
-            Self::Bool => {
-                let zero = builder.emit_sol_constant(0, value.r#type(), block);
-                crate::ast::Value::from(value)
-                    .compare(
-                        crate::ast::Value::from(zero),
-                        solx_mlir::CmpPredicate::Ne,
-                        builder,
-                        block,
-                    )
-                    .into_mlir()
-            }
-            Self::Address => {
-                let address_type = builder.types.sol_address;
-                let truncated = if melior::ir::r#type::IntegerType::try_from(value.r#type()).is_ok()
-                {
-                    let ui160 = builder.types.ui160;
-                    builder.emit_sol_cast(value, ui160, block)
-                } else {
-                    value
-                };
-                builder.emit_sol_address_cast(truncated, address_type, block)
-            }
-            Self::Cast(target_type) => builder.emit_sol_cast(value, target_type, block),
-        }
     }
 }

@@ -114,7 +114,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let (values, block) = self.emit_argument_values(arguments, block)?;
         // `sol.send` takes a `ui256` amount; a narrow literal (`r.send(0)` → ui8)
         // must be widened first, like `address.transfer`.
-        let amount = builder.emit_sol_cast(values[0], builder.types.ui256, &block);
+        let amount = crate::ast::Value::from(values[0])
+            .cast(builder.types.ui256, builder, &block)
+            .into_mlir();
         let value = sol_op!(
             builder,
             block,
@@ -138,7 +140,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let (values, block) = self.emit_argument_values(arguments, block)?;
         // `sol.transfer` takes a `ui256` amount; a narrow literal (`x.transfer(1)`
         // → ui8) must be widened first.
-        let amount = builder.emit_sol_cast(values[0], builder.types.ui256, &block);
+        let amount = crate::ast::Value::from(values[0])
+            .cast(builder.types.ui256, builder, &block)
+            .into_mlir();
         sol_op_void!(
             builder,
             block,

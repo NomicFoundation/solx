@@ -10,7 +10,6 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::RegionLike;
 use melior::ir::Value;
-use melior::ir::ValueLike;
 use num_bigint::BigInt;
 use slang_solidity_v2::ast::AssemblyStatement;
 use slang_solidity_v2::ast::BuiltIn;
@@ -381,7 +380,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             let initializer = constant.value().expect("constant has no initializer");
             let emitter = ExpressionContext::from(self);
             let BlockAnd { value, block } = initializer.emit(&emitter, block)?;
-            let widened = builder.emit_sol_cast(value.into_mlir(), i256, &block);
+            let widened = value.cast(i256, builder, &block).into_mlir();
             return Ok((widened, block));
         }
 
@@ -606,11 +605,9 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
-        if pointer.r#type() == builder.types.llvm_ptr {
-            pointer
-        } else {
-            builder.emit_sol_conv_cast(pointer, builder.types.llvm_ptr, block)
-        }
+        crate::ast::Value::from(pointer)
+            .reinterpret(builder.types.llvm_ptr, builder, block)
+            .into_mlir()
     }
 
     /// Stores `value` (an `i256` word) into the local/Yul variable named by a

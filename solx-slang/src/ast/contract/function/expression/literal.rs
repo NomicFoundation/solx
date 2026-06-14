@@ -143,11 +143,9 @@ where
                     BIT_LENGTH_BYTE as u32,
                 ));
                 let integer = builder.emit_constant(&BigInt::from(byte), ui8, &block);
-                let value = builder.emit_sol_bytes_cast(integer, self.target_type, &block);
-                return Ok(BlockAnd {
-                    block,
-                    value: value.into(),
-                });
+                let value =
+                    crate::ast::Value::from(integer).cast(self.target_type, builder, &block);
+                return Ok(BlockAnd { block, value });
             }
             if let Some(width) = solx_mlir::TypeFactory::fixed_bytes_or_byte_width(self.target_type)
             {
@@ -161,12 +159,12 @@ where
                     width * BIT_LENGTH_BYTE as u32,
                 ));
                 let integer = builder.emit_constant(&integer_value, integer_type, &block);
-                let value =
-                    builder.emit_sol_bytes_cast(integer, builder.types.fixed_bytes(width), &block);
-                return Ok(BlockAnd {
-                    block,
-                    value: value.into(),
-                });
+                let value = crate::ast::Value::from(integer).cast(
+                    builder.types.fixed_bytes(width),
+                    builder,
+                    &block,
+                );
+                return Ok(BlockAnd { block, value });
             }
         }
         self.expression.emit(context, block)

@@ -71,7 +71,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
-        let address = builder.emit_sol_address_cast(receiver, builder.types.sol_address, block);
+        let address = crate::ast::Value::from(receiver)
+            .cast(builder.types.sol_address, builder, block)
+            .into_mlir();
         let ext_func_ref_type = builder.types.ext_func_ref(parameter_types, return_types);
         builder.emit_sol_ext_func_constant(address, selector, ext_func_ref_type, block)
     }

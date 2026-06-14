@@ -65,7 +65,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .expect("slang types an enum-variant reference as the enum");
         let builder = &self.state.builder;
         let raw = builder.emit_sol_constant(ordinal as i64, builder.types.ui256, &block);
-        let value = builder.emit_sol_enum_cast(raw, result_type, &block);
+        let value = crate::ast::Value::from(raw)
+            .cast(result_type, builder, &block)
+            .into_mlir();
         (value, block)
     }
 
@@ -245,7 +247,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             width_bytes * solx_utils::BIT_LENGTH_BYTE as u32,
         ));
         let integer = builder.emit_constant(value, integer_type, block);
-        builder.emit_sol_bytes_cast(integer, builder.types.fixed_bytes(width_bytes), block)
+        crate::ast::Value::from(integer)
+            .cast(builder.types.fixed_bytes(width_bytes), builder, block)
+            .into_mlir()
     }
 
     /// Evaluates the receiver of a `<receiver>.member.selector` for its side

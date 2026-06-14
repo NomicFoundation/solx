@@ -71,12 +71,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let builder = &self.state.builder;
             let address = match values.first() {
                 Some(&size_value) => {
-                    let size = TypeConversion::coerce(
-                        size_value,
-                        builder.types.ui256,
-                        builder,
-                        &current_block,
-                    );
+                    let size = crate::ast::Value::from(size_value)
+                        .coerce_to(builder.types.ui256, builder, &current_block)
+                        .into_mlir();
                     sol_op!(
                         builder,
                         &current_block,

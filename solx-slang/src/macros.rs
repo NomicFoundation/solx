@@ -1,17 +1,18 @@
 //!
 //! Crate-wide macros.
 //!
-//! - [`sol_op_build`] / [`sol_op`] / [`sol_op_void`] — inlined Sol dialect op
-//!   construction (Set B, §2b).
+//! - [`sol_op_build`] / [`sol_op`] / [`sol_op_void`] — the ODS-construction
+//!   bridge (§2b): inline Sol dialect op construction, used inside the entity or
+//!   node that owns the op.
 //! - [`expression_emit`] — generates `impl Emit` for value-producing expression
 //!   nodes that share one lowering body (so identically-lowered nodes — e.g. the
 //!   decimal and hex integer literals — are written once).
 //!
-//! Set-B ops (§2b) are constructed inline via `<Op>::builder(…)`; these macros
-//! collapse the surrounding ceremony — the `(context, unknown_location)` head
-//! and the `.build().into()` tail — so only the op name and its field setters
-//! stay on screen. They do NOT add `emit_sol_*` Builder methods (that is Set A):
-//! the expansion is still an inline ODS construction.
+//! An op is constructed inline via `<Op>::builder(…)`; these macros collapse the
+//! surrounding ceremony — the `(context, unknown_location)` head and the
+//! `.build().into()` tail — so only the op name and its field setters stay on
+//! screen. They re-spell nothing: the expansion *is* the inline ODS construction
+//! (there is no `emit_sol_*` Builder layer that a call site reaches for instead).
 //!
 //! [`sol_op_build`] is the core (build the `Operation`); [`sol_op`] and
 //! [`sol_op_void`] layer the append (and single-result extraction) on top of it,

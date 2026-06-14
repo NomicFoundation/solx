@@ -11,6 +11,8 @@ pub mod library_ext;
 pub mod named_arguments_ext;
 pub mod operator_binding;
 pub mod tuple_expression_ext;
+/// An MLIR type produced during emission, and the casts it routes.
+pub mod r#type;
 /// Solidity type conversion classification and dispatch.
 pub mod type_conversion;
 /// A value produced during emission, and the conversions it undergoes.
@@ -24,6 +26,7 @@ pub use self::expression_ext::ExpressionExt;
 pub use self::library_ext::LibraryExt;
 pub use self::named_arguments_ext::NamedArgumentsExt;
 pub use self::tuple_expression_ext::TupleExpressionExt;
+pub use self::r#type::Type;
 pub use self::value::Value;
 
 use std::collections::BTreeMap;

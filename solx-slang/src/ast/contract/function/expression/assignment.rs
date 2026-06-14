@@ -191,8 +191,9 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
     ) -> Value<'context, 'block> {
         match self {
             Self::Pointer(pointer, element_type) => {
-                let stored_value =
-                    TypeConversion::coerce(value, *element_type, &context.state.builder, block);
+                let stored_value = crate::ast::Value::from(value)
+                    .coerce_to(*element_type, &context.state.builder, block)
+                    .into_mlir();
                 sol_op_void!(
                     &context.state.builder,
                     block,
@@ -201,8 +202,9 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 stored_value
             }
             Self::Storage(slot, element_type) => {
-                let stored_value =
-                    TypeConversion::coerce(value, *element_type, &context.state.builder, block);
+                let stored_value = crate::ast::Value::from(value)
+                    .coerce_to(*element_type, &context.state.builder, block)
+                    .into_mlir();
                 slot.store(&context.state.builder, stored_value, *element_type, block);
                 stored_value
             }

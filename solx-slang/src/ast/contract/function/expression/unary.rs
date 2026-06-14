@@ -25,7 +25,7 @@ expression_emit!(PostfixExpression; |node, context, block| {
         PostfixExpressionOperator::PlusPlus(_) => Operator::Increment,
     };
     let (value, block) = operator.emit_postfix(context, &operand, block)?;
-    Ok(BlockAnd { block, value: value.into() })
+    Ok(BlockAnd { block, value })
 });
 
 expression_emit!(PrefixExpression; |node, context, block| {
@@ -50,5 +50,5 @@ expression_emit!(PrefixExpression; |node, context, block| {
     // bare inner lvalue / value, as solc treats them.
     let operand = node.operand().unwrap_parentheses();
     let (value, block) = operator.emit_prefix(context, &operand, result_type, block)?;
-    Ok(BlockAnd { block, value: value.into() })
+    Ok(BlockAnd { block, value })
 });

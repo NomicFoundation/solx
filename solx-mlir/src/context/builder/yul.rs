@@ -7,9 +7,8 @@
 //! `yul.*` op rather than a behaviourally-equivalent `sol.*` op. Every Yul value
 //! is the signless `i256` word. Yul local variables live in `llvm.alloca` slots
 //! (loaded/stored as `i256`); a Solidity variable referenced from assembly is
-//! reached by reinterpreting its `!sol.ptr<…, Stack>` as `!llvm.ptr` via
-//! `sol.conv_cast` (see [`super::Builder::emit_sol_conv_cast`]) and then a plain
-//! `llvm.load`/`llvm.store`.
+//! reached by reinterpreting its `!sol.ptr<…, Stack>` as `!llvm.ptr` via a
+//! `sol.conv_cast` and then a plain `llvm.load`/`llvm.store`.
 //!
 //! These methods mirror what `solc`'s own MLIR backend emits for the same
 //! source (`--mlir-action=print-init --mlir-target=evm`).

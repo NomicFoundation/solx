@@ -103,9 +103,6 @@ expression_emit!(
             result_type,
             block,
         )?;
-        Ok(BlockAnd {
-            block,
-            value: value.into(),
-        })
+        Ok(BlockAnd { block, value })
     }
 );

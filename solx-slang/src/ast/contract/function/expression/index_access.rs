@@ -69,11 +69,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             LocationPolicy::Declared(None),
             &self.state.builder,
         );
-        let value = self
-            .state
-            .builder
-            .emit_sol_bytes_cast(value, slang_expected, &block);
-        Ok((value.into(), block))
+        let value =
+            crate::ast::Value::from(value).cast(slang_expected, &self.state.builder, &block);
+        Ok((value, block))
     }
 
     /// Emits a bounded calldata slice `a[start:end]` as a `sol.slice` value.

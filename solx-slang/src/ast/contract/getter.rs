@@ -400,7 +400,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         }
                     };
                     let in_bounds = crate::ast::Value::from(arg)
-                        .compare(crate::ast::Value::from(length), CmpPredicate::Lt, builder, entry)
+                        .compare(
+                            crate::ast::Value::from(length),
+                            CmpPredicate::Lt,
+                            builder,
+                            entry,
+                        )
                         .into_mlir();
                     builder.emit_sol_require(in_bounds, None, &[], false, entry);
                     builder.emit_sol_gep(base, arg, *element_type, entry)
@@ -656,12 +661,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         if member_type == result_member_type {
             builder.emit_sol_load(address, result_member_type, block)
         } else {
-            Ok(TypeConversion::coerce(
-                address,
-                result_member_type,
-                builder,
-                block,
-            ))
+            Ok(crate::ast::Value::from(address)
+                .coerce_to(result_member_type, builder, block)
+                .into_mlir())
         }
     }
 }

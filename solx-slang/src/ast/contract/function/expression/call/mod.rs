@@ -115,11 +115,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .emit(self, current_block)?;
                     current_block = next_block;
                     let builder = &self.state.builder;
-                    salt = Some(builder.emit_sol_bytes_cast(
-                        salt_bytes.into_mlir(),
-                        builder.types.ui256,
-                        &current_block,
-                    ));
+                    salt = Some(
+                        salt_bytes
+                            .cast(builder.types.ui256, builder, &current_block)
+                            .into_mlir(),
+                    );
                 }
                 Some(BuiltIn::CallOptionGas) => {
                     // The gas limit is evaluated for its side effects but not
@@ -241,7 +241,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         }
         let builder = &self.state.builder;
         for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
-            *value = TypeConversion::coerce(*value, parameter_type, builder, &block);
+            *value = crate::ast::Value::from(*value)
+                .coerce_to(parameter_type, builder, &block)
+                .into_mlir();
         }
         Ok((argument_values, block))
     }

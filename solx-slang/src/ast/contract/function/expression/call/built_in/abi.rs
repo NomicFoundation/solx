@@ -60,8 +60,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let (mut values, block) = self.emit_argument_values(arguments, block)?;
         let builder = &self.state.builder;
-        let selector =
-            builder.emit_sol_cast(values.remove(0), builder.types.fixed_bytes(4), &block);
+        let selector = crate::ast::Value::from(values.remove(0))
+            .cast(builder.types.fixed_bytes(4), builder, &block)
+            .into_mlir();
         let result = self.emit_sol_encode(&values, Some(selector), EncodeMode::Standard, &block);
         Ok((Some(result), block))
     }
@@ -100,8 +101,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // its leading four bytes.
                 let hash = self.emit_keccak256(signature_value.into_mlir(), &current);
                 let builder = &self.state.builder;
-                let selector_value =
-                    TypeConversion::coerce(hash, builder.types.fixed_bytes(4), builder, &current);
+                let selector_value = crate::ast::Value::from(hash)
+                    .coerce_to(builder.types.fixed_bytes(4), builder, &current)
+                    .into_mlir();
                 (selector_value, current)
             }
         };

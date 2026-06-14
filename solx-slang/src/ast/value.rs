@@ -12,6 +12,7 @@ use melior::ir::r#type::IntegerType;
 use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
 use solx_mlir::ods::sol::CmpOperation;
+use solx_mlir::ods::sol::ConvCastOperation;
 use solx_utils::BIT_LENGTH_X64;
 
 /// An MLIR value produced during emission.
@@ -45,9 +46,9 @@ impl<'context, 'block> Value<'context, 'block> {
 
     /// Coerces to `target_type`, emitting the conversion (nothing when the types
     /// already match). The single path every implicit widening and explicit
-    /// `bool(x)` / `address(x)` / `uint(x)` takes: `i1` is a truthiness test,
-    /// `address` truncates an integer through `ui160` then `address_cast`s,
-    /// anything else is a plain `sol.cast`.
+    /// `bool(x)` / `address(x)` / `uint(x)` takes: `bool(x)` is a truthiness
+    /// test ([`Self::is_nonzero`]); every other target is a plain cast routed by
+    /// the target type ([`Self::cast`]).
     pub fn coerce_to(
         self,
         target_type: Type<'context>,
@@ -57,32 +58,46 @@ impl<'context, 'block> Value<'context, 'block> {
         if self.r#type() == target_type {
             return self;
         }
-        let coerced = if target_type == builder.types.i1 {
-            let zero = builder.emit_sol_constant(0, self.r#type(), block);
-            self.compare(Self::new(zero), CmpPredicate::Ne, builder, block)
-                .into_mlir()
-        } else if target_type == builder.types.sol_address {
-            let truncated = if IntegerType::try_from(self.r#type()).is_ok() {
-                builder.emit_sol_cast(self.inner, builder.types.ui160, block)
-            } else {
-                self.inner
-            };
-            builder.emit_sol_address_cast(truncated, target_type, block)
-        } else {
-            builder.emit_sol_cast(self.inner, target_type, block)
-        };
-        Self::new(coerced)
+        if target_type == builder.types.i1 {
+            return self.is_nonzero(builder, block);
+        }
+        self.cast(target_type, builder, block)
     }
 
-    /// A plain `sol.cast` to `target_type` — the integer-only conversion, without
-    /// the truthiness / address special cases of [`Self::coerce_to`].
+    /// Casts to `target_type`, handing the value to the target type's cast router
+    /// ([`crate::ast::Type::cast`]) — the kind-dispatch that selects the dialect
+    /// cast op (`sol.cast` / `sol.bytes_cast` / `sol.address_cast` / …). Unlike
+    /// [`Self::coerce_to`], a cast to `i1` is a plain representation cast, not a
+    /// `bool(x)` truthiness test.
     pub fn cast(
         self,
         target_type: Type<'context>,
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        Self::new(builder.emit_sol_cast(self.inner, target_type, block))
+        crate::ast::Type::new(target_type).cast(self, builder, block)
+    }
+
+    /// Reinterprets the value's representation as `target_type` via
+    /// `sol.conv_cast` — a representation-preserving cast the conversion pipeline
+    /// rewrites to the remapped value. It crosses the inline-assembly boundary: a
+    /// Solidity local's `!sol.ptr<T, Stack>` is reinterpreted as the `!llvm.ptr`
+    /// that Yul `llvm.load`/`llvm.store` operate on. Returns the value unchanged
+    /// when it already has `target_type`.
+    pub fn reinterpret(
+        self,
+        target_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        if self.r#type() == target_type {
+            return self;
+        }
+        Self::new(sol_op!(
+            builder,
+            block,
+            ConvCastOperation.inp(self.inner).out(target_type)
+        ))
     }
 
     /// Compares this value against `other` under `predicate` via `sol.cmp`,
