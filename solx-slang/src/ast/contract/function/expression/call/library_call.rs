@@ -126,7 +126,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &current_block,
             LibAddrOperation
                 ._name(StringAttribute::new(builder.context, library_name))
-                .val(builder.types.sol_address)
+                .val(crate::ast::Type::address(builder.context, false).into_mlir())
         );
         let callee_type = FunctionType::new(builder.context, &parameter_types, &return_types);
         let results = builder.emit_sol_ext_call_library(

@@ -67,7 +67,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             } = base.emit(self, block)?;
             // `data.push("a")` appends a string-literal byte: materialise it as a
             // `byte` constant rather than a runtime `sol.string`.
-            let byte_target = self.state.builder.types.fixed_bytes(1);
+            let byte_target =
+                crate::ast::Type::fixed_bytes(self.state.builder.context, 1).into_mlir();
             let BlockAnd { value, block } = (Toward {
                 expression: value_argument,
                 target_type: byte_target,
@@ -95,7 +96,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let loaded = builder.emit_sol_load(new_slot, element_type, &block)?;
             return Ok((Some(loaded), block));
         };
-        if solx_mlir::TypeFactory::is_sol_reference(element_type) {
+        if crate::ast::Type::new(element_type).is_reference() {
             // A reference-typed element (nested array / struct / string) is
             // appended by copying the source (a memory aggregate) into the
             // storage slot `push` returns — the same memory→storage `sol.copy`
@@ -150,7 +151,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 ),
                 array_type.location(),
             ),
-            SlangType::Bytes(bytes_type) => (builder.types.fixed_bytes(1), bytes_type.location()),
+            SlangType::Bytes(bytes_type) => (
+                crate::ast::Type::fixed_bytes(builder.context, 1).into_mlir(),
+                bytes_type.location(),
+            ),
             other => unreachable!(
                 "Solidity's .push is a member of dynamic arrays and bytes only; got {:?}",
                 std::mem::discriminant(other)
@@ -172,10 +176,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // element when it is a value type, stored into via `sol.store`. Mirror
         // that: a reference element pushed to a pointer would force a
         // memory→storage data-location cast the backend cannot lower.
-        let push_result_type = if solx_mlir::TypeFactory::is_sol_reference(element_type) {
+        let push_result_type = if crate::ast::Type::new(element_type).is_reference() {
             element_type
         } else {
-            builder.types.pointer(element_type, base_location)
+            crate::ast::Type::pointer(builder.context, element_type, base_location).into_mlir()
         };
         let new_slot = sol_op!(
             builder,

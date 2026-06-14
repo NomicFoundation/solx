@@ -78,9 +78,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
         let address = crate::ast::Value::from(receiver)
-            .cast(builder.types.sol_address, builder, block)
+            .cast(
+                crate::ast::Type::address(builder.context, false).into_mlir(),
+                builder,
+                block,
+            )
             .into_mlir();
-        let ext_func_ref_type = builder.types.ext_func_ref(parameter_types, return_types);
+        let ext_func_ref_type =
+            crate::ast::Type::ext_func_ref(builder.context, parameter_types, return_types)
+                .into_mlir();
         builder.emit_sol_ext_func_constant(address, selector, ext_func_ref_type, block)
     }
 
@@ -295,7 +301,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // `sol.bare_call`'s input rejects a non-memory operand, so an argument
         // sourced from storage / calldata is copied into memory first.
         let input = input
-            .coerce_to(builder.types.sol_string_memory, builder, &block)
+            .coerce_to(
+                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
+                    .into_mlir(),
+                builder,
+                &block,
+            )
             .into_mlir();
         let address = address.into_mlir();
         let (status, ret_data) = match kind {

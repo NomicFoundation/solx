@@ -60,7 +60,8 @@ impl StorageSlot {
     where
         'context: 'block,
     {
-        let pointer_type = builder.types.pointer(element_type, self.location);
+        let pointer_type =
+            crate::ast::Type::pointer(builder.context, element_type, self.location).into_mlir();
         sol_op!(
             builder,
             block,

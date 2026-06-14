@@ -11,12 +11,8 @@ pub mod library_ext;
 pub mod named_arguments_ext;
 pub mod operator_binding;
 pub mod tuple_expression_ext;
-/// An MLIR type produced during emission, and the casts it routes.
-pub mod r#type;
 /// Solidity type conversion classification and dispatch.
 pub mod type_conversion;
-/// A value produced during emission, and the conversions it undergoes.
-pub mod value;
 
 pub use self::arguments_declaration_ext::ArgumentsDeclarationExt;
 pub use self::contract::function::expression::Toward;
@@ -26,8 +22,11 @@ pub use self::expression_ext::ExpressionExt;
 pub use self::library_ext::LibraryExt;
 pub use self::named_arguments_ext::NamedArgumentsExt;
 pub use self::tuple_expression_ext::TupleExpressionExt;
-pub use self::r#type::Type;
-pub use self::value::Value;
+// The `Type`/`Value` entities live in `solx-mlir` (with the Builder and ODS
+// ops), mirroring how `solx-yul` uses `solx-codegen-evm`'s `Value`/`Pointer`;
+// re-exported here so slang code names them as `crate::ast::{Type, Value}`.
+pub use solx_mlir::Type;
+pub use solx_mlir::Value;
 
 use std::collections::BTreeMap;
 

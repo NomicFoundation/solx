@@ -7,7 +7,6 @@
 //!
 
 pub mod try_fallback_kind;
-pub mod type_factory;
 pub mod yul;
 
 use melior::ir::Attribute;
@@ -33,7 +32,6 @@ use num::BigInt;
 use ruint::aliases::U256;
 
 use crate::StateMutability;
-use crate::context::builder::type_factory::TypeFactory;
 use crate::ods::sol::AddressCastOperation;
 use crate::ods::sol::AllocaOperation;
 use crate::ods::sol::BareCallOperation;
@@ -63,14 +61,12 @@ use crate::ods::sol::WhileOperation;
 
 use crate::context::builder::try_fallback_kind::TryFallbackKind;
 
-/// Cached MLIR types and emission methods for building MLIR operations.
+/// Emission methods for building MLIR operations.
 pub struct Builder<'context> {
     /// The MLIR context with all dialects and translations registered.
     pub context: &'context melior::Context,
     /// Cached unknown source location.
     pub unknown_location: Location<'context>,
-    /// Type factory: pre-cached common types and parameterized constructors.
-    pub types: TypeFactory<'context>,
 }
 
 impl<'context> Builder<'context> {
@@ -79,7 +75,6 @@ impl<'context> Builder<'context> {
         Self {
             context,
             unknown_location: Location::unknown(context),
-            types: TypeFactory::new(context),
         }
     }
 
@@ -182,7 +177,7 @@ impl<'context> Builder<'context> {
 
         if let Some(selector_value) = selector {
             builder = builder.selector(IntegerAttribute::new(
-                IntegerType::new(self.context, TypeFactory::SELECTOR_BIT_WIDTH).into(),
+                IntegerType::new(self.context, crate::Type::SELECTOR_BIT_WIDTH).into(),
                 selector_value as i64,
             ));
         }
@@ -267,11 +262,17 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        if result_type == self.types.sol_address {
-            let integer = self.emit_constant(value, self.types.ui160, block);
+        if result_type == crate::Type::address(self.context, false).into_mlir() {
+            let integer = self.emit_constant(
+                value,
+                crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_ETH_ADDRESS).into_mlir(),
+                block,
+            );
             return self.emit_sol_address_cast(integer, result_type, block);
         }
-        if TypeFactory::integer_bit_width(result_type) == solx_utils::BIT_LENGTH_BOOLEAN as u32 {
+        if crate::Type::new(result_type).integer_bit_width()
+            == solx_utils::BIT_LENGTH_BOOLEAN as u32
+        {
             let boolean_attribute =
                 IntegerAttribute::new(result_type, i64::from(*value != BigInt::ZERO)).into();
             return self
@@ -297,7 +298,11 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        self.emit_constant(&BigInt::from(u8::from(value)), self.types.i1, block)
+        self.emit_constant(
+            &BigInt::from(u8::from(value)),
+            crate::Type::signless(self.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
+            block,
+        )
     }
 
     // ==== String literals ====
@@ -459,13 +464,16 @@ impl<'context> Builder<'context> {
 
         let panic_region = Region::new();
         if has_panic {
-            panic_region.append_block(Block::new(&[(self.types.ui256, self.unknown_location)]));
+            panic_region.append_block(Block::new(&[(
+                crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+                self.unknown_location,
+            )]));
         }
 
         let error_region = Region::new();
         if has_error {
             error_region.append_block(Block::new(&[(
-                self.types.sol_string_memory,
+                crate::Type::string(self.context, solx_utils::DataLocation::Memory).into_mlir(),
                 self.unknown_location,
             )]));
         }
@@ -478,7 +486,7 @@ impl<'context> Builder<'context> {
             }
             TryFallbackKind::Bytes => {
                 fallback_region.append_block(Block::new(&[(
-                    self.types.sol_string_memory,
+                    crate::Type::string(self.context, solx_utils::DataLocation::Memory).into_mlir(),
                     self.unknown_location,
                 )]));
             }
@@ -682,9 +690,9 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let ptr_type = self
-            .types
-            .pointer(element_type, solx_utils::DataLocation::Stack);
+        let ptr_type =
+            crate::Type::pointer(self.context, element_type, solx_utils::DataLocation::Stack)
+                .into_mlir();
         block
             .append_operation(
                 AllocaOperation::builder(self.context, self.unknown_location)
@@ -982,7 +990,7 @@ impl<'context> Builder<'context> {
                 ExtFuncConstantOperation::builder(self.context, self.unknown_location)
                     .addr(address)
                     .selector(IntegerAttribute::new(
-                        IntegerType::new(self.context, TypeFactory::SELECTOR_BIT_WIDTH).into(),
+                        IntegerType::new(self.context, crate::Type::SELECTOR_BIT_WIDTH).into(),
                         selector as i64,
                     ))
                     .result(ext_func_ref_type)
@@ -1005,7 +1013,10 @@ impl<'context> Builder<'context> {
         block
             .append_operation(
                 GasLeftOperation::builder(self.context, self.unknown_location)
-                    .val(self.types.ui256)
+                    .val(
+                        crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
+                    )
                     .build()
                     .into(),
             )
@@ -1043,7 +1054,8 @@ impl<'context> Builder<'context> {
         // the status type and drop it from the values handed back — a non-try
         // call reverts internally on failure, so the status is always true here.
         let mut out_types = Vec::with_capacity(result_types.len() + 1);
-        out_types.push(self.types.i1);
+        out_types
+            .push(crate::Type::signless(self.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
         out_types.extend_from_slice(result_types);
         // A call to a `view`/`pure` function lowers to `STATICCALL`, which
         // reverts if the callee attempts a state change (matching solc).
@@ -1082,7 +1094,8 @@ impl<'context> Builder<'context> {
     {
         let gas: Value<'context, 'block> = self.emit_sol_gas_left(block);
         let mut out_types = Vec::with_capacity(result_types.len() + 1);
-        out_types.push(self.types.i1);
+        out_types
+            .push(crate::Type::signless(self.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
         out_types.extend_from_slice(result_types);
         let operation = block.append_operation(
             ExtICallOperation::builder(self.context, self.unknown_location)
@@ -1129,8 +1142,16 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         let gas = self.emit_sol_gas_left(block);
-        let value = self.emit_sol_constant(0, self.types.ui256, block);
-        let selector_value = self.emit_sol_constant(i64::from(selector), self.types.ui256, block);
+        let value = self.emit_sol_constant(
+            0,
+            crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+            block,
+        );
+        let selector_value = self.emit_sol_constant(
+            i64::from(selector),
+            crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+            block,
+        );
         let return_types: Vec<Type<'context>> = (0..callee_type.result_count())
             .map(|index| {
                 callee_type
@@ -1152,7 +1173,9 @@ impl<'context> Builder<'context> {
                 .delegate_call(Attribute::unit(self.context))
                 .library_call(Attribute::unit(self.context))
                 .callee_type(TypeAttribute::new(callee_type.into()))
-                .status(self.types.i1)
+                .status(
+                    crate::Type::signless(self.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
+                )
                 .outs(&return_types)
                 .build()
                 .into(),
@@ -1215,8 +1238,10 @@ impl<'context> Builder<'context> {
             .gas(gas)
             .val(value)
             .inp(input)
-            .status(self.types.i1)
-            .ret_data(self.types.sol_string_memory)
+            .status(crate::Type::signless(self.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir())
+            .ret_data(
+                crate::Type::string(self.context, solx_utils::DataLocation::Memory).into_mlir(),
+            )
             .build()
             .into();
         self.emit_sol_bare_call_results(operation, block)
@@ -1239,8 +1264,10 @@ impl<'context> Builder<'context> {
             .addr(address)
             .gas(gas)
             .inp(input)
-            .status(self.types.i1)
-            .ret_data(self.types.sol_string_memory)
+            .status(crate::Type::signless(self.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir())
+            .ret_data(
+                crate::Type::string(self.context, solx_utils::DataLocation::Memory).into_mlir(),
+            )
             .build()
             .into();
         self.emit_sol_bare_call_results(operation, block)
@@ -1263,8 +1290,10 @@ impl<'context> Builder<'context> {
             .addr(address)
             .gas(gas)
             .inp(input)
-            .status(self.types.i1)
-            .ret_data(self.types.sol_string_memory)
+            .status(crate::Type::signless(self.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir())
+            .ret_data(
+                crate::Type::string(self.context, solx_utils::DataLocation::Memory).into_mlir(),
+            )
             .build()
             .into();
         self.emit_sol_bare_call_results(operation, block)

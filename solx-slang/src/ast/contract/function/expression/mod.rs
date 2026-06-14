@@ -117,11 +117,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (mlir_name, parameter_types, return_types) = self.state.resolve_function(target_id)?;
-        let func_ref_type = self
-            .state
-            .builder
-            .types
-            .func_ref(parameter_types, return_types);
+        let func_ref_type =
+            crate::ast::Type::func_ref(self.state.builder.context, parameter_types, return_types)
+                .into_mlir();
         let mlir_name = mlir_name.to_owned();
         let value = sol_op!(
             &self.state.builder,
@@ -157,10 +155,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .resolve_function(function_definition.node_id())
             .ok()?;
         Some(
-            self.state
-                .builder
-                .types
-                .func_ref(parameter_types, return_types),
+            crate::ast::Type::func_ref(self.state.builder.context, parameter_types, return_types)
+                .into_mlir(),
         )
     }
 
@@ -253,7 +249,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         {
             element_type
         } else {
-            builder.types.pointer(element_type, base_location)
+            crate::ast::Type::pointer(builder.context, element_type, base_location).into_mlir()
         }
     }
 }

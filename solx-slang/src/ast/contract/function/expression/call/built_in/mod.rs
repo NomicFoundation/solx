@@ -107,7 +107,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     block,
                     BlockHashOperation
                         .block_number(block_number)
-                        .val(builder.types.fixed_bytes(32))
+                        .val(crate::ast::Type::fixed_bytes(builder.context, 32).into_mlir())
                 );
                 Ok((Some(value), block))
             }
@@ -124,7 +124,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     block,
                     Sha256Operation
                         .data(values[0])
-                        .result(builder.types.fixed_bytes(32))
+                        .result(crate::ast::Type::fixed_bytes(builder.context, 32).into_mlir())
                 );
                 Ok((Some(value), block))
             }
@@ -136,7 +136,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     block,
                     Ripemd160Operation
                         .data(values[0])
-                        .result(builder.types.fixed_bytes(20))
+                        .result(crate::ast::Type::fixed_bytes(builder.context, 20).into_mlir())
                 );
                 Ok((Some(value), block))
             }
@@ -147,7 +147,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // hash / r / s arguments keep their literal `uint256` type, but
                 // `sol.ecrecover` takes `fixedbytes<32>` for them and `ui8` for
                 // `v`. Coerce each to its signature type (matching solc).
-                let bytes32 = builder.types.fixed_bytes(32);
+                let bytes32 = crate::ast::Type::fixed_bytes(builder.context, 32).into_mlir();
                 let ui8 = Type::from(IntegerType::unsigned(builder.context, 8));
                 let hash = crate::ast::Value::from(values[0])
                     .coerce_to(bytes32, builder, &block)
@@ -169,7 +169,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         .v(v)
                         .r(r)
                         .s(s)
-                        .result(builder.types.sol_address)
+                        .result(crate::ast::Type::address(builder.context, false).into_mlir())
                 );
                 Ok((Some(value), block))
             }
@@ -421,7 +421,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let (values, block) = self.emit_argument_values(arguments, block)?;
         let builder = &self.state.builder;
-        let result_type = builder.types.string(solx_utils::DataLocation::Memory);
+        let result_type =
+            crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir();
         let value = sol_op!(
             builder,
             block,
@@ -463,14 +464,19 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
         let input = crate::ast::Value::from(buffer)
-            .coerce_to(builder.types.sol_string_memory, builder, block)
+            .coerce_to(
+                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
+                    .into_mlir(),
+                builder,
+                block,
+            )
             .into_mlir();
         sol_op!(
             builder,
             block,
             Keccak256Operation
                 .addr(input)
-                .result(builder.types.fixed_bytes(32))
+                .result(crate::ast::Type::fixed_bytes(builder.context, 32).into_mlir())
         )
     }
 

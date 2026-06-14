@@ -1,21 +1,23 @@
 //!
-//! A value produced during emission, and the conversions it undergoes.
+//! An MLIR value in the Sol dialect, and the conversions it undergoes.
 //!
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Type;
+use melior::ir::Type as MlirType;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::r#type::IntegerType;
-use solx_mlir::Builder;
-use solx_mlir::CmpPredicate;
-use solx_mlir::ods::sol::CmpOperation;
-use solx_mlir::ods::sol::ConvCastOperation;
 use solx_utils::BIT_LENGTH_X64;
 
-/// An MLIR value produced during emission.
+use crate::Builder;
+use crate::CmpPredicate;
+use crate::Type;
+use crate::ods::sol::CmpOperation;
+use crate::ods::sol::ConvCastOperation;
+
+/// An MLIR value in the Sol dialect.
 ///
 /// A newtype over the melior value — which already carries its own MLIR type, so
 /// the entity stays thin — that is the home for the conversions a value undergoes:
@@ -39,9 +41,9 @@ impl<'context, 'block> Value<'context, 'block> {
         self.inner
     }
 
-    /// The value's MLIR type.
+    /// The value's type.
     pub fn r#type(self) -> Type<'context> {
-        self.inner.r#type()
+        Type::new(self.inner.r#type())
     }
 
     /// Coerces to `target_type`, emitting the conversion (nothing when the types
@@ -51,16 +53,15 @@ impl<'context, 'block> Value<'context, 'block> {
     /// the target type ([`Self::cast`]).
     pub fn coerce_to(
         self,
-        target_type: Type<'context>,
+        target_type: MlirType<'context>,
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        if self.r#type() == target_type {
+        if self.r#type().into_mlir() == target_type {
             return self;
         }
         if target_type
-            == crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
-                .into_mlir()
+            == Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
         {
             return self.is_nonzero(builder, block);
         }
@@ -68,17 +69,17 @@ impl<'context, 'block> Value<'context, 'block> {
     }
 
     /// Casts to `target_type`, handing the value to the target type's cast router
-    /// ([`crate::ast::Type::cast`]) — the kind-dispatch that selects the dialect
-    /// cast op (`sol.cast` / `sol.bytes_cast` / `sol.address_cast` / …). Unlike
+    /// ([`Type::cast`]) — the kind-dispatch that selects the dialect cast op
+    /// (`sol.cast` / `sol.bytes_cast` / `sol.address_cast` / …). Unlike
     /// [`Self::coerce_to`], a cast to `i1` is a plain representation cast, not a
     /// `bool(x)` truthiness test.
     pub fn cast(
         self,
-        target_type: Type<'context>,
+        target_type: MlirType<'context>,
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        crate::ast::Type::new(target_type).cast(self, builder, block)
+        Type::new(target_type).cast(self, builder, block)
     }
 
     /// Reinterprets the value's representation as `target_type` via
@@ -89,11 +90,11 @@ impl<'context, 'block> Value<'context, 'block> {
     /// when it already has `target_type`.
     pub fn reinterpret(
         self,
-        target_type: Type<'context>,
+        target_type: MlirType<'context>,
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        if self.r#type() == target_type {
+        if self.r#type().into_mlir() == target_type {
             return self;
         }
         Self::new(sol_op!(
@@ -124,8 +125,7 @@ impl<'context, 'block> Value<'context, 'block> {
                 .lhs(self.inner)
                 .rhs(other.inner)
                 .result(
-                    crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
-                        .into_mlir()
+                    Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
                 )
         );
         Self::new(value)
@@ -139,13 +139,10 @@ impl<'context, 'block> Value<'context, 'block> {
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        if self.r#type()
-            == crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
-                .into_mlir()
-        {
+        if self.r#type() == Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN) {
             return self;
         }
-        let zero = builder.emit_sol_constant(0, self.r#type(), block);
+        let zero = builder.emit_sol_constant(0, self.r#type().into_mlir(), block);
         self.compare(Self::new(zero), CmpPredicate::Ne, builder, block)
     }
 }

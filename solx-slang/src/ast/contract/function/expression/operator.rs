@@ -240,12 +240,12 @@ impl Operator {
         let BlockAnd { value: rhs, block } = right.emit(context, block)?;
         let BlockAnd { value: lhs, block } = left.emit(context, block)?;
         let result_type = target_type.unwrap_or_else(|| {
-            let lhs_width = solx_mlir::TypeFactory::integer_bit_width(lhs.r#type());
-            let rhs_width = solx_mlir::TypeFactory::integer_bit_width(rhs.r#type());
+            let lhs_width = lhs.r#type().integer_bit_width();
+            let rhs_width = rhs.r#type().integer_bit_width();
             if lhs_width >= rhs_width {
-                lhs.r#type()
+                lhs.r#type().into_mlir()
             } else {
-                rhs.r#type()
+                rhs.r#type().into_mlir()
             }
         });
         let value = self.emit_value_binary(
@@ -285,7 +285,7 @@ impl Operator {
             );
 
         let (lhs, rhs, restore_type) = if is_bitwise
-            && let Some(width) = solx_mlir::TypeFactory::fixed_bytes_or_byte_width(result_type)
+            && let Some(width) = crate::ast::Type::new(result_type).fixed_bytes_or_byte_width()
         {
             let int_type = Type::from(IntegerType::unsigned(builder.context, 8 * width));
             let lhs = lhs
@@ -383,14 +383,14 @@ impl Operator {
             }
             Operator::BitwiseNot => {
                 let BlockAnd { value, block } = operand.emit(context, block)?;
-                let operand_type = target_type.unwrap_or_else(|| value.r#type());
+                let operand_type = target_type.unwrap_or_else(|| value.r#type().into_mlir());
                 let value = value.coerce_to(operand_type, &context.state.builder, &block);
                 // `sol.not` is integer-only; for a `bytesN` / `byte` operand
                 // bridge through the equivalent unsigned integer `ui(8*N)` and
                 // cast the result back to the fixed-bytes type.
                 let builder = &context.state.builder;
                 let (value, restore_type) =
-                    match solx_mlir::TypeFactory::fixed_bytes_or_byte_width(operand_type) {
+                    match crate::ast::Type::new(operand_type).fixed_bytes_or_byte_width() {
                         Some(width) => {
                             let int_type =
                                 Type::from(IntegerType::unsigned(builder.context, 8 * width));
@@ -413,10 +413,11 @@ impl Operator {
             }
             Operator::Not => {
                 let BlockAnd { value, block } = operand.emit(context, block)?;
-                let zero = context
-                    .state
-                    .builder
-                    .emit_sol_constant(0, value.r#type(), &block);
+                let zero =
+                    context
+                        .state
+                        .builder
+                        .emit_sol_constant(0, value.r#type().into_mlir(), &block);
                 let cmp = value.compare(
                     crate::ast::Value::from(zero),
                     CmpPredicate::Eq,
@@ -439,7 +440,7 @@ impl Operator {
                 // in checked mode) which needs a dedicated op — not sol.csub,
                 // since the operand may be in an unsigned literal type.
                 let BlockAnd { value, block } = operand.emit(context, block)?;
-                let operand_type = target_type.unwrap_or_else(|| value.r#type());
+                let operand_type = target_type.unwrap_or_else(|| value.r#type().into_mlir());
                 let value = value
                     .coerce_to(operand_type, &context.state.builder, &block)
                     .into_mlir();

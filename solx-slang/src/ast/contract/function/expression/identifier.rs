@@ -64,7 +64,7 @@ expression_emit!(Identifier; |node, context, block| {
                 &block,
                 LibAddrOperation
                     ._name(StringAttribute::new(builder.context, &library.link_symbol()))
-                    .val(builder.types.sol_address)
+                    .val(crate::ast::Type::address(builder.context, false).into_mlir())
             );
             Ok(BlockAnd {
                 block,

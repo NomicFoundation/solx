@@ -82,7 +82,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .expect("slang types type(T).min/max as the integer type");
         let integer_type =
             IntegerType::try_from(result_type).expect("type(T).min/max is an integer type");
-        let bits = solx_mlir::TypeFactory::integer_bit_width(result_type) as usize;
+        let bits = crate::ast::Type::new(result_type).integer_bit_width() as usize;
         let value = match (builtin, integer_type.is_signed()) {
             (BuiltIn::TypeMin, false) => BigInt::ZERO,
             (BuiltIn::TypeMin, true) => -(BigInt::from(1) << (bits - 1)),
@@ -132,7 +132,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let integer_type = Type::from(IntegerType::unsigned(builder.context, 32));
         let integer = builder.emit_constant(&BigInt::from(interface_id), integer_type, &block);
         let value = crate::ast::Value::from(integer)
-            .cast(builder.types.fixed_bytes(4), builder, &block)
+            .cast(
+                crate::ast::Type::fixed_bytes(builder.context, 4).into_mlir(),
+                builder,
+                &block,
+            )
             .into_mlir();
         Ok((value, block))
     }
@@ -178,7 +182,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         self.state.add_dependency(object_name.clone());
         let result_type =
             TypeConversion::resolve_optional_slang_type(access.get_type(), &self.state.builder)
-                .unwrap_or_else(|| self.state.builder.types.string(DataLocation::Memory));
+                .unwrap_or_else(|| {
+                    crate::ast::Type::string(self.state.builder.context, DataLocation::Memory)
+                        .into_mlir()
+                });
         let builder = &self.state.builder;
         let value = sol_op!(
             builder,
@@ -213,7 +220,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &block,
             StringLitOperation
                 .value(StringAttribute::new(self.state.builder.context, &type_name))
-                .addr(self.state.builder.types.sol_string_memory)
+                .addr(
+                    crate::ast::Type::string(
+                        self.state.builder.context,
+                        solx_utils::DataLocation::Memory
+                    )
+                    .into_mlir()
+                )
         );
         Ok((value, block))
     }

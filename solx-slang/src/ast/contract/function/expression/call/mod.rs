@@ -111,7 +111,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     );
                 }
                 Some(BuiltIn::CallOptionSalt) => {
-                    let bytes32 = self.state.builder.types.fixed_bytes(32);
+                    let bytes32 =
+                        crate::ast::Type::fixed_bytes(self.state.builder.context, 32).into_mlir();
                     let salt_expression = option.value();
                     let BlockAnd {
                         value: salt_bytes,
@@ -388,7 +389,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // reports the function type as externally visible — so an inline
         // `(cond ? g : h)(args)` over public functions yields an internal
         // `func_ref` value that an `ext_icall` would mis-cast to `ext_func_ref`.
-        let results = if solx_mlir::TypeFactory::is_sol_ext_function_ref(callee_value.r#type()) {
+        let results = if callee_value.r#type().is_ext_function_ref() {
             // `fp{value: v}(args)` forwards `v`; a plain `fp(args)` sends zero.
             let value = call_value.unwrap_or_else(|| {
                 builder.emit_sol_constant(

@@ -56,7 +56,10 @@ impl<'context> Builder<'context> {
             .append_operation(
                 yul::ConstantOperation::builder(self.context, self.unknown_location)
                     .value(value_attribute)
-                    .out(self.types.i256)
+                    .out(
+                        crate::Type::signless(self.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
+                    )
                     .build()
                     .into(),
             )
@@ -87,7 +90,10 @@ impl<'context> Builder<'context> {
                     .predicate(predicate_attribute.into())
                     .lhs(lhs)
                     .rhs(rhs)
-                    .out(self.types.i256)
+                    .out(
+                        crate::Type::signless(self.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
+                    )
                     .build()
                     .into(),
             )
@@ -109,11 +115,14 @@ impl<'context> Builder<'context> {
             .append_operation(llvm::alloca(
                 self.context,
                 count,
-                self.types.llvm_ptr,
+                crate::Type::llvm_ptr(self.context).into_mlir(),
                 self.unknown_location,
                 AllocaOptions::new()
                     .align(Some(self.word_alignment_attribute()))
-                    .elem_type(Some(TypeAttribute::new(self.types.i256))),
+                    .elem_type(Some(TypeAttribute::new(
+                        crate::Type::signless(self.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
+                    ))),
             ))
             .result(0)
             .expect("llvm.alloca always produces one result")
@@ -134,7 +143,7 @@ impl<'context> Builder<'context> {
             .append_operation(llvm::load(
                 self.context,
                 pointer,
-                self.types.i256,
+                crate::Type::signless(self.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
                 self.unknown_location,
                 LoadStoreOptions::new().align(Some(self.word_alignment_attribute())),
             ))
@@ -258,8 +267,12 @@ impl<'context> Builder<'context> {
             .iter()
             .map(|value| self.yul_word_attribute(value))
             .collect();
-        let cases_type =
-            RankedTensorType::new(&[case_values.len() as u64], self.types.i256, None).into();
+        let cases_type = RankedTensorType::new(
+            &[case_values.len() as u64],
+            crate::Type::signless(self.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+            None,
+        )
+        .into();
         let cases = DenseElementsAttribute::new(cases_type, &case_attributes)
             .expect("valid i256 switch-case elements");
 
@@ -353,7 +366,9 @@ impl<'context> Builder<'context> {
         // `i256` type and the borrowed little-endian word slice.
         unsafe {
             Attribute::from_raw(crate::ffi::solxCreateIntegerAttr(
-                self.types.i256.to_raw(),
+                crate::Type::signless(self.context, solx_utils::BIT_LENGTH_FIELD)
+                    .into_mlir()
+                    .to_raw(),
                 sign == num::bigint::Sign::Minus,
                 words.len(),
                 words.as_ptr(),

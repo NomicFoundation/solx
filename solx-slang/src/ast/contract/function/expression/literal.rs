@@ -90,7 +90,7 @@ expression_emit!(StringExpression; |node, context, block| {
         &block,
         StringLitOperation
             .value(StringAttribute::new(builder.context, literal))
-            .addr(builder.types.sol_string_memory)
+            .addr(crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir())
     );
     Ok(BlockAnd {
         block,
@@ -136,7 +136,7 @@ where
             let builder = &context.state.builder;
             // A string literal toward a single `byte` (an element of
             // `bytes`/`string`) materialises as a `!sol.byte` constant.
-            if solx_mlir::TypeFactory::is_sol_byte(self.target_type) {
+            if crate::ast::Type::new(self.target_type).is_byte() {
                 let byte = string_expression.value().first().copied().unwrap_or(0);
                 let ui8 = Type::from(IntegerType::unsigned(
                     builder.context,
@@ -147,7 +147,7 @@ where
                     crate::ast::Value::from(integer).cast(self.target_type, builder, &block);
                 return Ok(BlockAnd { block, value });
             }
-            if let Some(width) = solx_mlir::TypeFactory::fixed_bytes_or_byte_width(self.target_type)
+            if let Some(width) = crate::ast::Type::new(self.target_type).fixed_bytes_or_byte_width()
             {
                 let mut buffer = vec![0u8; width as usize];
                 for (slot, byte) in buffer.iter_mut().zip(string_expression.value().iter()) {
@@ -160,7 +160,7 @@ where
                 ));
                 let integer = builder.emit_constant(&integer_value, integer_type, &block);
                 let value = crate::ast::Value::from(integer).cast(
-                    builder.types.fixed_bytes(width),
+                    crate::ast::Type::fixed_bytes(builder.context, width).into_mlir(),
                     builder,
                     &block,
                 );

@@ -145,7 +145,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let address_type = if declared_type.is_reference_type() {
             element_type
         } else {
-            builder.types.pointer(element_type, location)
+            crate::ast::Type::pointer(builder.context, element_type, location).into_mlir()
         };
         let entry = builder.emit_sol_func(
             signature,
@@ -316,7 +316,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     let level_type = if value_slang.is_reference_type() {
                         resolved_value
                     } else {
-                        builder.types.pointer(resolved_value, location)
+                        crate::ast::Type::pointer(builder.context, resolved_value, location)
+                            .into_mlir()
                     };
                     // A reference-typed key (`string`/`bytes`) is an ABI input
                     // decoded into memory; `sol.map` hashes the key bytes for the
@@ -324,7 +325,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     // location, so build the memory type directly rather than
                     // resolving it (which would yield a storage string).
                     let key_type = if key_slang.is_reference_type() {
-                        builder.types.string(DataLocation::Memory)
+                        crate::ast::Type::string(builder.context, DataLocation::Memory).into_mlir()
                     } else {
                         TypeConversion::resolve_slang_type(
                             &key_slang,
@@ -658,7 +659,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             // not yet expose; such a struct is vanishingly rare and absent
             // from the test corpus — left to the solx-mlir Sol-type-predicate fill.
             let result_member_type = if is_string_or_bytes {
-                builder.types.string(DataLocation::Memory)
+                crate::ast::Type::string(builder.context, DataLocation::Memory).into_mlir()
             } else {
                 member_type
             };

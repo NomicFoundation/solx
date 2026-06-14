@@ -82,9 +82,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         self.emit_unary_member_intrinsic(access, block, |address_value| {
             sol_op_build!(
                 builder,
-                CodeOperation
-                    .cont_addr(address_value)
-                    .out(builder.types.sol_string_memory)
+                CodeOperation.cont_addr(address_value).out(
+                    crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
+                        .into_mlir()
+                )
             )
         })
     }
@@ -180,7 +181,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         let operation = match resolved {
             Some(BuiltIn::TxOrigin) => {
-                sol_op_build!(builder, OriginOperation.addr(builder.types.sol_address))
+                sol_op_build!(
+                    builder,
+                    OriginOperation
+                        .addr(crate::ast::Type::address(builder.context, false).into_mlir())
+                )
             }
             Some(BuiltIn::TxGasPrice) => {
                 sol_op_build!(
@@ -192,7 +197,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 )
             }
             Some(BuiltIn::MsgSender) => {
-                sol_op_build!(builder, CallerOperation.addr(builder.types.sol_address))
+                sol_op_build!(
+                    builder,
+                    CallerOperation
+                        .addr(crate::ast::Type::address(builder.context, false).into_mlir())
+                )
             }
             Some(BuiltIn::MsgValue) => {
                 sol_op_build!(
@@ -222,7 +231,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 )
             }
             Some(BuiltIn::BlockCoinbase) => {
-                sol_op_build!(builder, CoinbaseOperation.addr(builder.types.sol_address))
+                sol_op_build!(
+                    builder,
+                    CoinbaseOperation
+                        .addr(crate::ast::Type::address(builder.context, false).into_mlir())
+                )
             }
             Some(BuiltIn::BlockChainid) => {
                 sol_op_build!(
@@ -279,13 +292,21 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 )
             }
             Some(BuiltIn::MsgSig) => {
-                sol_op_build!(builder, SigOperation.val(builder.types.fixed_bytes(4)))
+                sol_op_build!(
+                    builder,
+                    SigOperation.val(crate::ast::Type::fixed_bytes(builder.context, 4).into_mlir())
+                )
             }
             Some(BuiltIn::MsgData) => {
                 sol_op_build!(
                     builder,
-                    GetCallDataOperation
-                        .addr(builder.types.string(solx_utils::DataLocation::CallData))
+                    GetCallDataOperation.addr(
+                        crate::ast::Type::string(
+                            builder.context,
+                            solx_utils::DataLocation::CallData
+                        )
+                        .into_mlir()
+                    )
                 )
             }
             // TODO: split this catch-all so non-built-in member accesses (struct fields, etc.) and unimplemented built-ins surface distinct errors.

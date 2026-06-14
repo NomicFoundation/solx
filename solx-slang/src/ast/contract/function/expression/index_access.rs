@@ -58,7 +58,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // it, and slang can mis-type the *result* of indexing an array literal
         // whose element is a calldata reference (`[b[i:j]][0]`) as `calldata`
         // while the loaded value is the correct memory reference.
-        if solx_mlir::TypeFactory::is_sol_reference(value.r#type()) {
+        if crate::ast::Type::new(value.r#type()).is_reference() {
             return Ok((value.into(), block));
         }
         let result_type = index_access
@@ -216,7 +216,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // is ignored for non-struct base types.
                 let element_type = unsafe {
                     Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
-                        base_value.r#type().to_raw(),
+                        base_value.r#type().into_mlir().to_raw(),
                         0,
                     ))
                 };

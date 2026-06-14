@@ -93,7 +93,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // `sol::getEltType` on the C++ side.
         let element_type = unsafe {
             Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
-                base_value.r#type().to_raw(),
+                base_value.r#type().into_mlir().to_raw(),
                 field_index as u64,
             ))
         };

@@ -115,7 +115,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             block,
         } = access.operand().emit(self, block)?;
         assert!(
-            solx_mlir::TypeFactory::is_sol_ext_function_ref(operand_value.r#type()),
+            operand_value.r#type().is_ext_function_ref(),
             "function `.selector` resolves to a named function, a public getter, or an external function-pointer value"
         );
         let selector = sol_op!(
@@ -123,7 +123,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &block,
             ExtFuncSelectorOperation
                 .func(operand_value.into_mlir())
-                .result(self.state.builder.types.fixed_bytes(4))
+                .result(crate::ast::Type::fixed_bytes(self.state.builder.context, 4).into_mlir())
         );
         Ok((Some(selector), block))
     }
@@ -142,7 +142,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             block,
         } = access.operand().emit(self, block)?;
         assert!(
-            solx_mlir::TypeFactory::is_sol_ext_function_ref(operand_value.r#type()),
+            operand_value.r#type().is_ext_function_ref(),
             "function `.address` requires an external function-pointer value"
         );
         let address = sol_op!(
@@ -150,7 +150,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &block,
             ExtFuncAddrOperation
                 .func(operand_value.into_mlir())
-                .result(self.state.builder.types.sol_address)
+                .result(crate::ast::Type::address(self.state.builder.context, false).into_mlir())
         );
         Ok((Some(address), block))
     }
@@ -252,7 +252,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         ));
         let integer = builder.emit_constant(value, integer_type, block);
         crate::ast::Value::from(integer)
-            .cast(builder.types.fixed_bytes(width_bytes), builder, block)
+            .cast(
+                crate::ast::Type::fixed_bytes(builder.context, width_bytes).into_mlir(),
+                builder,
+                block,
+            )
             .into_mlir()
     }
 

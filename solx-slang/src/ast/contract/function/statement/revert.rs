@@ -127,7 +127,9 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     block,
                 } = expression.emit(&emitter, block)?;
                 let builder = &self.state.builder;
-                let string_memory_type = builder.types.string(solx_utils::DataLocation::Memory);
+                let string_memory_type =
+                    crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
+                        .into_mlir();
                 let message_value = message_value
                     .coerce_to(string_memory_type, builder, &block)
                     .into_mlir();

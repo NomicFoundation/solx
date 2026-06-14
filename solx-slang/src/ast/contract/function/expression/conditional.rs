@@ -349,10 +349,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         }
         let element_type = match element_values.first() {
             Some(&first)
-                if solx_mlir::TypeFactory::is_sol_function_ref(first.r#type())
-                    && first.r#type() != declared_element_type =>
+                if first.r#type().is_function_ref()
+                    && first.r#type().into_mlir() != declared_element_type =>
             {
-                first.r#type()
+                first.r#type().into_mlir()
             }
             _ => declared_element_type,
         };
@@ -360,11 +360,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             SlangType::FixedSizeArray(fixed_array_type)
                 if element_type != declared_element_type =>
             {
-                builder.types.array(
+                crate::ast::Type::array(
+                    builder.context,
                     solx_mlir::ArraySize::Fixed(fixed_array_type.size() as u64),
                     element_type,
                     solx_utils::DataLocation::Memory,
                 )
+                .into_mlir()
             }
             _ => TypeConversion::resolve_slang_type(
                 &result_slang_type,

@@ -61,7 +61,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let (mut values, block) = self.emit_argument_values(arguments, block)?;
         let builder = &self.state.builder;
         let selector = crate::ast::Value::from(values.remove(0))
-            .cast(builder.types.fixed_bytes(4), builder, &block)
+            .cast(
+                crate::ast::Type::fixed_bytes(builder.context, 4).into_mlir(),
+                builder,
+                &block,
+            )
             .into_mlir();
         let result = self.emit_sol_encode(&values, Some(selector), EncodeMode::Standard, &block);
         Ok((Some(result), block))
@@ -102,7 +106,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let hash = self.emit_keccak256(signature_value.into_mlir(), &current);
                 let builder = &self.state.builder;
                 let selector_value = crate::ast::Value::from(hash)
-                    .coerce_to(builder.types.fixed_bytes(4), builder, &current)
+                    .coerce_to(
+                        crate::ast::Type::fixed_bytes(builder.context, 4).into_mlir(),
+                        builder,
+                        &current,
+                    )
                     .into_mlir();
                 (selector_value, current)
             }
@@ -183,7 +191,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     block: current,
                 } = function_expression.emit(self, block)?;
                 assert!(
-                    solx_mlir::TypeFactory::is_sol_ext_function_ref(function_value.r#type()),
+                    function_value.r#type().is_ext_function_ref(),
                     "abi.encodeCall's runtime callee resolves to an external function pointer"
                 );
                 let selector_value = sol_op!(
@@ -191,7 +199,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     &current,
                     ExtFuncSelectorOperation
                         .func(function_value.into_mlir())
-                        .result(builder.types.fixed_bytes(4))
+                        .result(crate::ast::Type::fixed_bytes(builder.context, 4).into_mlir())
                 );
                 let SlangType::Function(function_type) = function_expression
                     .get_type()
@@ -257,7 +265,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         let mut op_builder = EncodeOperation::builder(builder.context, builder.unknown_location)
             .ins(ins)
-            .res(builder.types.sol_string_memory);
+            .res(
+                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
+                    .into_mlir(),
+            );
         if let Some(selector_value) = selector {
             op_builder = op_builder.selector(selector_value);
         }
@@ -312,7 +323,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .and_then(|payload_type| payload_type.data_location()),
             Some(SlangDataLocation::Storage)
         ) {
-            payload_value.coerce_to(builder.types.sol_string_memory, builder, &block)
+            payload_value.coerce_to(
+                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
+                    .into_mlir(),
+                builder,
+                &block,
+            )
         } else {
             payload_value
         };

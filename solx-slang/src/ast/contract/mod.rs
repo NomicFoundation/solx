@@ -163,11 +163,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         let storage_layout = Self::compute_storage_layout(contract);
 
-        let contract_type = self
-            .state
-            .builder
-            .types
-            .contract(&contract_name, Self::is_contract_payable(contract));
+        let contract_type = crate::ast::Type::contract(
+            self.state.builder.context,
+            &contract_name,
+            Self::is_contract_payable(contract),
+        )
+        .into_mlir();
 
         // Emit sol.contract and functions.
         let module_body = self.state.module.body();
@@ -351,7 +352,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         // A library has no state, so the storage layout is empty.
         let storage_layout: HashMap<NodeId, StorageSlot> = HashMap::new();
-        let library_type = self.state.builder.types.contract(&library_name, false);
+        let library_type =
+            crate::ast::Type::contract(self.state.builder.context, &library_name, false)
+                .into_mlir();
         let module_body = self.state.module.body();
         let contract_body = self.state.builder.emit_sol_contract(
             &library_name,

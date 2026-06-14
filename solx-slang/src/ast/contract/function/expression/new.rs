@@ -62,7 +62,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     if matches!(new_expression.type_name(), SlangTypeName::ElementaryType(_))
             ) =>
             {
-                Some(self.state.builder.types.string(DataLocation::Memory))
+                Some(
+                    crate::ast::Type::string(self.state.builder.context, DataLocation::Memory)
+                        .into_mlir(),
+                )
             }
             _ => None,
         };
@@ -133,7 +136,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .unwrap_or_default();
         let (ctor_args, block) = self.emit_coerced_arguments(arguments, &parameter_types, block)?;
         let builder = &self.state.builder;
-        let result_type = builder.types.contract(&contract_name, payable);
+        let result_type =
+            crate::ast::Type::contract(builder.context, &contract_name, payable).into_mlir();
         let val = value.unwrap_or_else(|| {
             builder.emit_sol_constant(
                 0,

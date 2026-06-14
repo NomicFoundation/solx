@@ -42,14 +42,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // that type. With neither (or both) a string literal, both emit naturally.
         let left_is_string = matches!(left, Expression::StringExpression(_));
         let right_is_string = matches!(right, Expression::StringExpression(_));
-        let is_bytes_like =
-            |r#type| solx_mlir::TypeFactory::fixed_bytes_or_byte_width(r#type).is_some();
+        let is_bytes_like = |r#type: crate::ast::Type| r#type.fixed_bytes_or_byte_width().is_some();
         let (lhs, rhs, block) = if right_is_string && !left_is_string {
             let BlockAnd { value: lhs, block } = left.emit(self, block)?;
             let BlockAnd { value: rhs, block } = if is_bytes_like(lhs.r#type()) {
                 (Toward {
                     expression: right,
-                    target_type: lhs.r#type(),
+                    target_type: lhs.r#type().into_mlir(),
                 })
                 .emit(self, block)?
             } else {
@@ -61,7 +60,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let BlockAnd { value: lhs, block } = if is_bytes_like(rhs.r#type()) {
                 (Toward {
                     expression: left,
-                    target_type: rhs.r#type(),
+                    target_type: rhs.r#type().into_mlir(),
                 })
                 .emit(self, block)?
             } else {
@@ -88,12 +87,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // — `bytes3("abc")` as `ui24` (0x616263) differs from `bytes4("abc")` as
         // `ui32` (0x61626300) — yielding the wrong result.
         if let (Some(lhs_width), Some(rhs_width)) = (
-            solx_mlir::TypeFactory::fixed_bytes_or_byte_width(lhs.r#type()),
-            solx_mlir::TypeFactory::fixed_bytes_or_byte_width(rhs.r#type()),
+            lhs.r#type().fixed_bytes_or_byte_width(),
+            rhs.r#type().fixed_bytes_or_byte_width(),
         ) {
             let builder = &self.state.builder;
             let common_width = lhs_width.max(rhs_width);
-            let common = builder.types.fixed_bytes(common_width);
+            let common = crate::ast::Type::fixed_bytes(builder.context, common_width).into_mlir();
             let lhs_common = if lhs_width == common_width {
                 lhs
             } else {
@@ -116,10 +115,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // the common type: signed if either operand is signed, mirroring solc's
         // promoted comparison type; a plain `ui256` default would make
         // `(-10) < 10` an unsigned comparison (false), skipping the loop.
-        let signed_lhs =
-            IntegerType::try_from(lhs.r#type()).is_ok_and(|integer| integer.is_signed());
-        let signed_rhs =
-            IntegerType::try_from(rhs.r#type()).is_ok_and(|integer| integer.is_signed());
+        let signed_lhs = IntegerType::try_from(lhs.r#type().into_mlir())
+            .is_ok_and(|integer| integer.is_signed());
+        let signed_rhs = IntegerType::try_from(rhs.r#type().into_mlir())
+            .is_ok_and(|integer| integer.is_signed());
         let context = self.state.builder.context;
         let signed_256 = Type::from(IntegerType::signed(context, 256));
         let unsigned_256 =
@@ -136,12 +135,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         } else {
             unsigned_256
         };
-        let lhs_common = if lhs_wide.r#type() == common {
+        let lhs_common = if lhs_wide.r#type().into_mlir() == common {
             lhs_wide
         } else {
             lhs_wide.cast(common, &self.state.builder, &block)
         };
-        let rhs_common = if rhs_wide.r#type() == common {
+        let rhs_common = if rhs_wide.r#type().into_mlir() == common {
             rhs_wide
         } else {
             rhs_wide.cast(common, &self.state.builder, &block)

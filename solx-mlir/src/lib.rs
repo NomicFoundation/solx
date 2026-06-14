@@ -7,6 +7,9 @@
 //! details, analogous to how `solx-yul` uses `solx-codegen-evm`.
 //!
 
+#[macro_use]
+mod macros;
+
 pub mod attributes;
 pub mod context;
 pub mod dialect;
@@ -24,9 +27,10 @@ pub use self::context::Context;
 pub use self::context::UserDefinedOperator;
 pub use self::context::builder::Builder;
 pub use self::context::builder::try_fallback_kind::TryFallbackKind;
-pub use self::context::builder::type_factory::TypeFactory;
-pub use self::context::builder::type_factory::array_size::ArraySize;
 pub use self::context::environment::Environment;
+pub use self::context::r#type::Type;
+pub use self::context::r#type::array_size::ArraySize;
+pub use self::context::value::Value;
 pub use self::context::variable_binding::VariableBinding;
 pub use self::dialect::Dialect;
 pub use self::output::MlirOutput;
