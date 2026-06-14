@@ -104,11 +104,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             )
         };
 
-        self.environment.define_variable(
-            declaration.declaration().node_id(),
-            pointer,
-            declared_type,
-        );
+        self.environment
+            .define_variable(declaration.declaration().node_id(), pointer);
         Ok(Some(block))
     }
 
@@ -195,7 +192,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             .into_mlir();
             sol_op_void!(builder, &current, StoreOperation.val(cast).addr(pointer));
             self.environment
-                .define_variable(declaration.node_id(), pointer, declared_type);
+                .define_variable(declaration.node_id(), pointer);
         }
 
         Ok(Some(current))

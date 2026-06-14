@@ -8,7 +8,6 @@ use melior::ir::Value;
 use melior::ir::attribute::StringAttribute;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Identifier;
-use solx_mlir::VariableBinding;
 use solx_mlir::ods::sol::LibAddrOperation;
 
 use crate::ast::BlockAnd;
@@ -30,15 +29,9 @@ expression_emit!(Identifier; |node, context, block| {
                 value: value.into(),
             }),
         Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
-            let VariableBinding {
-                pointer,
-                element_type,
-            } = context.environment.variable_with_type(definition.node_id());
-            let value = crate::ast::Pointer::new(pointer).load(
-                crate::ast::Type::new(element_type),
-                &context.state.builder,
-                &block,
-            );
+            let pointer =
+                crate::ast::Pointer::new(context.environment.variable(definition.node_id()));
+            let value = pointer.load(pointer.pointee(), &context.state.builder, &block);
             Ok(BlockAnd { block, value })
         }
         Some(Definition::Constant(constant)) => {

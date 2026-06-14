@@ -14,7 +14,6 @@ use slang_solidity_v2::ast::AssignmentExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
-use solx_mlir::VariableBinding;
 use solx_mlir::ods::sol::AddrOfOperation;
 use solx_mlir::ods::sol::CopyOperation;
 use solx_mlir::ods::sol::DeleteOperation;
@@ -61,11 +60,13 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                     Self::from_state_variable(context, &state_variable, block)
                 }
                 Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
-                    let VariableBinding {
-                        pointer,
-                        element_type,
-                    } = context.environment.variable_with_type(definition.node_id());
-                    Ok((Self::Pointer(pointer, element_type), block))
+                    let pointer = crate::ast::Pointer::new(
+                        context.environment.variable(definition.node_id()),
+                    );
+                    Ok((
+                        Self::Pointer(pointer.into_mlir(), pointer.pointee().into_mlir()),
+                        block,
+                    ))
                 }
                 None => unreachable!("slang resolves every identifier reference"),
                 Some(other) => unimplemented!(

@@ -351,7 +351,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 entry_block,
                 StoreOperation.val(parameter_value).addr(pointer)
             );
-            environment.define_variable(parameter.node_id(), pointer, parameter_type);
+            environment.define_variable(parameter.node_id(), pointer);
         }
         Ok(())
     }
@@ -392,7 +392,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         StoreOperation.val(incoming).addr(pointer)
                     );
                     if parameter.name().is_some() {
-                        environment.define_variable(parameter.node_id(), pointer, return_type);
+                        environment.define_variable(parameter.node_id(), pointer);
                     }
                     return_slots.push(Some(pointer));
                 }
@@ -413,7 +413,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     &self.state.builder,
                     entry_block,
                 );
-                environment.define_variable(parameter.node_id(), pointer, return_type);
+                environment.define_variable(parameter.node_id(), pointer);
                 return_slots.push(Some(pointer));
             }
         }
@@ -531,7 +531,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     &entry,
                     StoreOperation.val(parameter_value).addr(pointer)
                 );
-                root_environment.define_variable(parameter.node_id(), pointer, parameter_type);
+                root_environment.define_variable(parameter.node_id(), pointer);
             }
         }
 

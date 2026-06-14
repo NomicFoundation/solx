@@ -186,7 +186,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             StoreOperation.val(cast).addr(pointer)
         );
         self.environment
-            .define_variable(parameter.node_id(), pointer, parameter_type);
+            .define_variable(parameter.node_id(), pointer);
     }
 
     /// Emits a typed `catch Error(string memory r)` / `catch Panic(uint c)`
@@ -300,7 +300,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 StoreOperation.val(cast).addr(pointer)
             );
             self.environment
-                .define_variable(parameter.node_id(), pointer, parameter_type);
+                .define_variable(parameter.node_id(), pointer);
         }
 
         self.emit_block(try_statement.body().statements(), current_block)

@@ -13,7 +13,6 @@ use melior::ir::r#type::IntegerType;
 use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
 use solx_mlir::UserDefinedOperator;
-use solx_mlir::VariableBinding;
 use solx_mlir::ods::sol::AddOperation;
 use solx_mlir::ods::sol::AndOperation;
 use solx_mlir::ods::sol::CAddOperation;
@@ -508,22 +507,17 @@ impl Operator {
                 Ok((old, new_value))
             }
             Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
-                let VariableBinding {
-                    pointer,
-                    element_type,
-                } = context.environment.variable_with_type(definition.node_id());
-                let old = crate::ast::Pointer::new(pointer)
-                    .load(
-                        crate::ast::Type::new(element_type),
-                        &context.state.builder,
-                        block,
-                    )
+                let pointer =
+                    crate::ast::Pointer::new(context.environment.variable(definition.node_id()));
+                let element_type = pointer.pointee();
+                let old = pointer
+                    .load(element_type, &context.state.builder, block)
                     .into_mlir();
-                let new_value = self.emit_step(context, old, element_type, block);
-                sol_op_void!(
+                let new_value = self.emit_step(context, old, element_type.into_mlir(), block);
+                pointer.store(
+                    crate::ast::Value::new(new_value),
                     &context.state.builder,
                     block,
-                    StoreOperation.val(new_value).addr(pointer)
                 );
                 Ok((old, new_value))
             }

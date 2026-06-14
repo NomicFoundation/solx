@@ -85,12 +85,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                         builder.emit_yul_constant(&BigInt::from(0u32), &current)
                     });
                     builder.emit_yul_local_store(stored, pointer, &current);
-                    self.environment.define_variable(
-                        identifier.node_id(),
-                        pointer,
-                        crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir(),
-                    );
+                    self.environment
+                        .define_variable(identifier.node_id(), pointer);
                 }
                 Ok(current)
             }
@@ -432,7 +428,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                             .resolve_to_definition()
                             .expect("yul path head resolves to a declaration")
                             .node_id();
-                        let pointer = self.environment.variable_with_type(declaration).pointer;
+                        let pointer = self.environment.variable(declaration);
                         let llvm_pointer = self.yul_local_pointer(pointer, &block);
                         let value = builder.emit_yul_local_load(llvm_pointer, &block);
                         return Ok((value, block));
@@ -452,7 +448,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             .resolve_to_definition()
             .expect("yul variable reference resolves to a declaration")
             .node_id();
-        let pointer = self.environment.variable_with_type(declaration).pointer;
+        let pointer = self.environment.variable(declaration);
         let llvm_pointer = self.yul_local_pointer(pointer, &block);
         let value = builder.emit_yul_local_load(llvm_pointer, &block);
         Ok((value, block))
@@ -538,23 +534,15 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         for (parameter, argument) in parameters.iter().zip(arguments.iter()) {
             let pointer = builder.emit_yul_local_alloca(&block);
             builder.emit_yul_local_store(*argument, pointer, &block);
-            self.environment.define_variable(
-                parameter.node_id(),
-                pointer,
-                crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                    .into_mlir(),
-            );
+            self.environment
+                .define_variable(parameter.node_id(), pointer);
         }
         for return_identifier in &returns {
             let pointer = builder.emit_yul_local_alloca(&block);
             let zero = builder.emit_yul_constant(&BigInt::from(0u32), &block);
             builder.emit_yul_local_store(zero, pointer, &block);
-            self.environment.define_variable(
-                return_identifier.node_id(),
-                pointer,
-                crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                    .into_mlir(),
-            );
+            self.environment
+                .define_variable(return_identifier.node_id(), pointer);
         }
 
         // Yul hoists nested functions: register them for the duration of this
@@ -590,10 +578,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
 
         let mut return_values = Vec::with_capacity(returns.len());
         for return_identifier in &returns {
-            let pointer = self
-                .environment
-                .variable_with_type(return_identifier.node_id())
-                .pointer;
+            let pointer = self.environment.variable(return_identifier.node_id());
             let loaded = self.state.builder.emit_yul_local_load(pointer, &current);
             return_values.push(loaded);
         }
@@ -634,7 +619,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             .resolve_to_definition()
             .expect("yul lvalue resolves to a declaration")
             .node_id();
-        let pointer = self.environment.variable_with_type(declaration).pointer;
+        let pointer = self.environment.variable(declaration);
         let llvm_pointer = self.yul_local_pointer(pointer, &block);
         self.state
             .builder

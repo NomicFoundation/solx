@@ -282,7 +282,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 &entry,
                 StoreOperation.val(value).addr(pointer)
             );
-            environment.define_variable(binding.declaration, pointer, binding.element_type);
+            environment.define_variable(binding.declaration, pointer);
         }
 
         // Downstream values (later modifiers' arguments ++ `f`'s parameters) are
@@ -486,11 +486,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         // Bind by the parameter's node id (the recut keys variables
                         // by declaration id, so an unnamed parameter binds harmlessly
                         // and a reference resolves through `resolve_to_definition`).
-                        base_environment.define_variable(
-                            parameter.node_id(),
-                            pointer,
-                            parameter_type,
-                        );
+                        base_environment.define_variable(parameter.node_id(), pointer);
                     }
                     evaluated.push((base_id, base_environment));
                 }

@@ -187,11 +187,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         self.set_modifier_stage_index(stage + 1);
         self.environment.enter_scope();
         for binding in params {
-            self.environment.define_variable(
-                binding.declaration,
-                binding.pointer,
-                binding.element_type,
-            );
+            self.environment
+                .define_variable(binding.declaration, binding.pointer);
         }
         let result = self.emit_block(statements, block);
         self.environment.exit_scope();
