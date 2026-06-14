@@ -22,7 +22,6 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::DefaultFuncConstantOperation;
 use solx_mlir::ods::sol::MallocOperation;
-use solx_mlir::ods::sol::StoreOperation;
 
 /// Solidity type resolution and default-initialisation.
 ///
@@ -185,8 +184,7 @@ impl TypeConversion {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let pointer =
-            crate::ast::Pointer::stack_slot(crate::ast::Type::new(mlir_type), builder, block)
-                .into_mlir();
+            crate::ast::Pointer::stack_slot(crate::ast::Type::new(mlir_type), builder, block);
         // A memory aggregate is malloc-backed; a `storage` reference (e.g.
         // `returns (S storage)`) is a slot pointer assigned in the body, so the
         // `Memory` guard keeps it a bare slot.
@@ -207,10 +205,10 @@ impl TypeConversion {
                     .addr(mlir_type)
                     .zero_init(Attribute::unit(builder.context))
             );
-            sol_op_void!(builder, block, StoreOperation.val(zero).addr(pointer));
+            pointer.store(crate::ast::Value::new(zero), builder, block);
         } else if matches!(slang_type, Some(SlangType::String(_) | SlangType::Bytes(_))) {
             let zero = sol_op!(builder, block, MallocOperation.addr(mlir_type));
-            sol_op_void!(builder, block, StoreOperation.val(zero).addr(pointer));
+            pointer.store(crate::ast::Value::new(zero), builder, block);
         } else if let Some(
             scalar_value_type @ (SlangType::Address(_)
             | SlangType::ByteArray(_)
@@ -222,14 +220,13 @@ impl TypeConversion {
         ) = slang_type
         {
             let zero = Self::emit_scalar_zero(scalar_value_type, mlir_type, builder, block);
-            sol_op_void!(builder, block, StoreOperation.val(zero).addr(pointer));
+            pointer.store(crate::ast::Value::new(zero), builder, block);
         } else if IntegerType::try_from(mlir_type).is_ok() {
             let zero =
-                crate::ast::Value::constant(0, crate::ast::Type::new(mlir_type), builder, block)
-                    .into_mlir();
-            sol_op_void!(builder, block, StoreOperation.val(zero).addr(pointer));
+                crate::ast::Value::constant(0, crate::ast::Type::new(mlir_type), builder, block);
+            pointer.store(zero, builder, block);
         }
-        pointer
+        pointer.into_mlir()
     }
 
     // TODO: Remove when nomicFoundation/slang#1793 is merged and we can instead

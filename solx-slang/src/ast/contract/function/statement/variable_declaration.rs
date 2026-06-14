@@ -1,6 +1,5 @@
 //! Variable declaration statement lowering.
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 
 use slang_solidity_v2::ast::Expression;
@@ -8,7 +7,6 @@ use slang_solidity_v2::ast::MultiTypedDeclaration;
 use slang_solidity_v2::ast::SingleTypedDeclaration;
 use slang_solidity_v2::ast::VariableDeclarationStatement;
 use slang_solidity_v2::ast::VariableDeclarationTarget;
-use solx_mlir::ods::sol::StoreOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -83,14 +81,9 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 crate::ast::Type::new(declared_type),
                 &self.state.builder,
                 &block,
-            )
-            .into_mlir();
-            sol_op_void!(
-                &self.state.builder,
-                &block,
-                StoreOperation.val(value).addr(pointer)
             );
-            pointer
+            pointer.store(crate::ast::Value::new(value), &self.state.builder, &block);
+            pointer.into_mlir()
         } else {
             // No initializer: default-initialise the slot to the type's zero
             // through the shared primitive (memory aggregates malloc'd, empty
