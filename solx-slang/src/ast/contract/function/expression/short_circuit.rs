@@ -12,26 +12,24 @@ use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::logical_operator::LogicalOperator;
 
-/// Bridges a slang short-circuit node to the [`LogicalOperator`] it applies.
-trait LogicalOperatorExt {
-    /// The [`LogicalOperator`] this node applies.
-    fn bridged_operator(&self) -> LogicalOperator;
-}
+// Each slang short-circuit node projects to the [`LogicalOperator`] it applies,
+// homed on `LogicalOperator` (a slang-local enum) via `From`, the conversion's
+// concept, rather than a bespoke extension trait.
 
-impl LogicalOperatorExt for AndExpression {
-    fn bridged_operator(&self) -> LogicalOperator {
-        LogicalOperator::And
+impl From<&AndExpression> for LogicalOperator {
+    fn from(_node: &AndExpression) -> Self {
+        Self::And
     }
 }
 
-impl LogicalOperatorExt for OrExpression {
-    fn bridged_operator(&self) -> LogicalOperator {
-        LogicalOperator::Or
+impl From<&OrExpression> for LogicalOperator {
+    fn from(_node: &OrExpression) -> Self {
+        Self::Or
     }
 }
 
 expression_emit!(AndExpression, OrExpression; |node, context, block| {
-    let (value, block) = node.bridged_operator().emit(
+    let (value, block) = LogicalOperator::from(node).emit(
         context,
         &node.left_operand(),
         &node.right_operand(),

@@ -22,63 +22,61 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::type_conversion::TypeConversion;
 
-/// Bridges a slang binary-expression node to the [`Operator`] it applies, so the
-/// shared binary lowering body handles all of them uniformly. Each node maps its
-/// typed slang operator enum (or its single fixed operator) — never source text.
-trait BinaryOperatorExt {
-    /// The [`Operator`] this binary expression applies.
-    fn bridged_operator(&self) -> Operator;
-}
+// Each slang binary-expression node projects to the [`Operator`] it applies —
+// from its typed slang operator enum (or its single fixed operator), never
+// source text — so the shared binary lowering body handles them uniformly. The
+// projection is homed on `Operator` (a slang-local enum) via `From`, the
+// conversion's concept, rather than a bespoke extension trait.
 
-impl BinaryOperatorExt for AdditiveExpression {
-    fn bridged_operator(&self) -> Operator {
-        match self.operator() {
-            AdditiveExpressionOperator::Plus(_) => Operator::Add,
-            AdditiveExpressionOperator::Minus(_) => Operator::Subtract,
+impl From<&AdditiveExpression> for Operator {
+    fn from(node: &AdditiveExpression) -> Self {
+        match node.operator() {
+            AdditiveExpressionOperator::Plus(_) => Self::Add,
+            AdditiveExpressionOperator::Minus(_) => Self::Subtract,
         }
     }
 }
 
-impl BinaryOperatorExt for MultiplicativeExpression {
-    fn bridged_operator(&self) -> Operator {
-        match self.operator() {
-            MultiplicativeExpressionOperator::Asterisk(_) => Operator::Multiply,
-            MultiplicativeExpressionOperator::Percent(_) => Operator::Remainder,
-            MultiplicativeExpressionOperator::Slash(_) => Operator::Divide,
+impl From<&MultiplicativeExpression> for Operator {
+    fn from(node: &MultiplicativeExpression) -> Self {
+        match node.operator() {
+            MultiplicativeExpressionOperator::Asterisk(_) => Self::Multiply,
+            MultiplicativeExpressionOperator::Percent(_) => Self::Remainder,
+            MultiplicativeExpressionOperator::Slash(_) => Self::Divide,
         }
     }
 }
 
-impl BinaryOperatorExt for ExponentiationExpression {
-    fn bridged_operator(&self) -> Operator {
-        Operator::Exponentiation
+impl From<&ExponentiationExpression> for Operator {
+    fn from(_node: &ExponentiationExpression) -> Self {
+        Self::Exponentiation
     }
 }
 
-impl BinaryOperatorExt for BitwiseAndExpression {
-    fn bridged_operator(&self) -> Operator {
-        Operator::BitwiseAnd
+impl From<&BitwiseAndExpression> for Operator {
+    fn from(_node: &BitwiseAndExpression) -> Self {
+        Self::BitwiseAnd
     }
 }
 
-impl BinaryOperatorExt for BitwiseOrExpression {
-    fn bridged_operator(&self) -> Operator {
-        Operator::BitwiseOr
+impl From<&BitwiseOrExpression> for Operator {
+    fn from(_node: &BitwiseOrExpression) -> Self {
+        Self::BitwiseOr
     }
 }
 
-impl BinaryOperatorExt for BitwiseXorExpression {
-    fn bridged_operator(&self) -> Operator {
-        Operator::BitwiseXor
+impl From<&BitwiseXorExpression> for Operator {
+    fn from(_node: &BitwiseXorExpression) -> Self {
+        Self::BitwiseXor
     }
 }
 
-impl BinaryOperatorExt for ShiftExpression {
-    fn bridged_operator(&self) -> Operator {
-        match self.operator() {
-            ShiftExpressionOperator::GreaterThanGreaterThan(_) => Operator::ShiftRight,
-            ShiftExpressionOperator::GreaterThanGreaterThanGreaterThan(_) => Operator::ShiftRight,
-            ShiftExpressionOperator::LessThanLessThan(_) => Operator::ShiftLeft,
+impl From<&ShiftExpression> for Operator {
+    fn from(node: &ShiftExpression) -> Self {
+        match node.operator() {
+            ShiftExpressionOperator::GreaterThanGreaterThan(_) => Self::ShiftRight,
+            ShiftExpressionOperator::GreaterThanGreaterThanGreaterThan(_) => Self::ShiftRight,
+            ShiftExpressionOperator::LessThanLessThan(_) => Self::ShiftLeft,
         }
     }
 }
@@ -96,7 +94,7 @@ expression_emit!(
         // result (matching solc); a `None` lets `emit_binary` pick the wider one.
         let result_type =
             TypeConversion::resolve_optional_slang_type(node.get_type(), &context.state.builder);
-        let (value, block) = node.bridged_operator().emit_binary(
+        let (value, block) = Operator::from(node).emit_binary(
             context,
             &node.left_operand(),
             &node.right_operand(),
