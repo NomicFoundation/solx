@@ -1,5 +1,5 @@
 //!
-//! Index access expression lowering: `a[i]`, `m[k]`, `s[i]`.
+//! Index access expression emission: `a[i]`, `m[k]`, `s[i]`.
 //!
 
 use melior::ir::BlockLike;
@@ -22,139 +22,11 @@ use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Lowers `a[i]` / `m[k]` for arrays, dynamic `bytes`, mappings, and
-    /// strings to `sol.gep` (sequential containers) or `sol.map` (mappings),
-    /// followed by a `sol.load` of the addressed element. For dynamic
-    /// `bytes` the C++ element type is `!sol.byte`; a `sol.bytes_cast`
-    /// widens it to `!sol.fixedbytes<1>` to match Solidity's `bytes1`
-    /// typing. `sol.bytes_cast` is a no-op for matching types.
-    pub fn emit_index_access(
-        &self,
-        index_access: &IndexAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
-        crate::ast::Value<'context, 'block>,
-        BlockRef<'context, 'block>,
-    )> {
-        // A slice `a[start:end]` produces a sub-array VALUE (not an element
-        // address), lowered to `sol.slice`. `is_slice()` (the colon-presence
-        // flag) distinguishes every slice form — including the open-ended
-        // `a[i:]`, indistinguishable from the index `a[i]` by `end()` alone
-        // (both `None`) — from a plain index access.
-        if index_access.is_slice() {
-            return self.emit_slice(index_access, block);
-        }
-        let (address, element_type, block) = self.emit_index_access_address(index_access, block)?;
-        let value = crate::ast::Pointer::new(address).load(
-            crate::ast::Type::new(element_type),
-            &self.state.builder,
-            &block,
-        );
-        // A scalar element loaded from a packed slot may need a fixed-bytes
-        // re-alignment toward its declared element type (`sol.bytes_cast`). A
-        // reference-typed element (a nested array / struct) is loaded as its
-        // canonical reference and is authoritative: bytes_cast is undefined on
-        // it, and slang can mis-type the *result* of indexing an array literal
-        // whose element is a calldata reference (`[b[i:j]][0]`) as `calldata`
-        // while the loaded value is the correct memory reference.
-        if value.r#type().is_reference() {
-            return Ok((value, block));
-        }
-        let result_type = index_access
-            .get_type()
-            .expect("slang types every index-access expression");
-        let slang_expected =
-            result_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder);
-        let value = value.cast(
-            crate::ast::Type::new(slang_expected),
-            &self.state.builder,
-            &block,
-        );
-        Ok((value, block))
-    }
-
-    /// Emits a bounded calldata slice `a[start:end]` as a `sol.slice` value.
-    /// `start` defaults to `0` when omitted (`a[:end]`); both indices are
-    /// widened to `ui256`. Dispatched only when `end()` is `Some` (see
-    /// [`Self::emit_index_access`]), so the upper bound is always explicit.
-    fn emit_slice(
-        &self,
-        index_access: &IndexAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
-        crate::ast::Value<'context, 'block>,
-        BlockRef<'context, 'block>,
-    )> {
-        let base = index_access.operand();
-        let BlockAnd {
-            value: base_value,
-            block,
-        } = base.emit(self, block)?;
-        let ui256 =
-            crate::ast::Type::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
-                .into_mlir();
-        let (start_value, block) = match index_access.start() {
-            Some(start_expression) => {
-                let BlockAnd { value, block } = start_expression.emit(self, block)?;
-                let value = value
-                    .coerce_to(crate::ast::Type::new(ui256), &self.state.builder, &block)
-                    .into_mlir();
-                (value, block)
-            }
-            None => {
-                let zero = crate::ast::Value::constant(
-                    0,
-                    crate::ast::Type::new(ui256),
-                    &self.state.builder,
-                    &block,
-                )
-                .into_mlir();
-                (zero, block)
-            }
-        };
-        let (end_value, block) = match index_access.end() {
-            Some(end_expression) => {
-                let BlockAnd { value, block } = end_expression.emit(self, block)?;
-                let value = value
-                    .coerce_to(crate::ast::Type::new(ui256), &self.state.builder, &block)
-                    .into_mlir();
-                (value, block)
-            }
-            None => {
-                // Open-ended slice `a[start:]` runs to the end of the array; its
-                // upper bound is the operand's length.
-                let builder = &self.state.builder;
-                let length = sol_op!(
-                    builder,
-                    block,
-                    LengthOperation.inp(base_value.into_mlir()).len(ui256)
-                );
-                (length, block)
-            }
-        };
-        let result_type = index_access
-            .get_type()
-            .expect("slang types every slice expression")
-            .resolve_type(LocationPolicy::Declared(None), &self.state.builder);
-        let builder = &self.state.builder;
-        let value: Value<'context, 'block> = sol_op!(
-            builder,
-            block,
-            SliceOperation
-                .arr(base_value.into_mlir())
-                .start(start_value)
-                .end(end_value)
-                .res(result_type)
-        );
-        Ok((value.into(), block))
-    }
-
     /// Emits the address yielded by `a[i]` / `m[k]` together with the element
     /// MLIR type, without the trailing `sol.load`.
     ///
-    /// Shared between the value-producing read path
-    /// ([`Self::emit_index_access`]) and the lvalue write path in
-    /// `emit_assignment`.
+    /// Shared between the value-producing read path (the `IndexAccessExpression`
+    /// emission) and the lvalue write path in `emit_assignment`.
     pub fn emit_index_access_address(
         &self,
         index_access: &IndexAccessExpression,
@@ -251,7 +123,107 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     }
 }
 
+// `a[i]` / `m[k]` for arrays, dynamic `bytes`, mappings, and strings address the
+// element (`sol.gep` for sequential containers, `sol.map` for mappings) and
+// `sol.load` it. For dynamic `bytes` the C++ element type is `!sol.byte`; a
+// `sol.bytes_cast` widens it to `!sol.fixedbytes<1>` to match `bytes1` typing
+// (a no-op for matching types). A slice `a[start:end]` instead produces a
+// sub-array VALUE via `sol.slice`.
 expression_emit!(IndexAccessExpression; |node, context, block| {
-    let (value, block) = context.emit_index_access(node, block)?;
+    // A slice `a[start:end]` produces a sub-array VALUE (not an element
+    // address), emitted as `sol.slice`. `is_slice()` (the colon-presence flag)
+    // distinguishes every slice form — including the open-ended `a[i:]`,
+    // indistinguishable from the index `a[i]` by `end()` alone (both `None`) —
+    // from a plain index access. `start` defaults to `0` when omitted
+    // (`a[:end]`); both indices widen to `ui256`. The upper bound of an
+    // open-ended `a[start:]` is the operand's length.
+    if node.is_slice() {
+        let base = node.operand();
+        let BlockAnd {
+            value: base_value,
+            block,
+        } = base.emit(context, block)?;
+        let ui256 =
+            crate::ast::Type::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
+                .into_mlir();
+        let (start_value, block) = match node.start() {
+            Some(start_expression) => {
+                let BlockAnd { value, block } = start_expression.emit(context, block)?;
+                let value = value
+                    .coerce_to(crate::ast::Type::new(ui256), &context.state.builder, &block)
+                    .into_mlir();
+                (value, block)
+            }
+            None => {
+                let zero = crate::ast::Value::constant(
+                    0,
+                    crate::ast::Type::new(ui256),
+                    &context.state.builder,
+                    &block,
+                )
+                .into_mlir();
+                (zero, block)
+            }
+        };
+        let (end_value, block) = match node.end() {
+            Some(end_expression) => {
+                let BlockAnd { value, block } = end_expression.emit(context, block)?;
+                let value = value
+                    .coerce_to(crate::ast::Type::new(ui256), &context.state.builder, &block)
+                    .into_mlir();
+                (value, block)
+            }
+            None => {
+                let builder = &context.state.builder;
+                let length = sol_op!(
+                    builder,
+                    block,
+                    LengthOperation.inp(base_value.into_mlir()).len(ui256)
+                );
+                (length, block)
+            }
+        };
+        let result_type = node
+            .get_type()
+            .expect("slang types every slice expression")
+            .resolve_type(LocationPolicy::Declared(None), &context.state.builder);
+        let builder = &context.state.builder;
+        let value: Value<'context, 'block> = sol_op!(
+            builder,
+            block,
+            SliceOperation
+                .arr(base_value.into_mlir())
+                .start(start_value)
+                .end(end_value)
+                .res(result_type)
+        );
+        return Ok(BlockAnd { block, value: value.into() });
+    }
+    let (address, element_type, block) = context.emit_index_access_address(node, block)?;
+    let value = crate::ast::Pointer::new(address).load(
+        crate::ast::Type::new(element_type),
+        &context.state.builder,
+        &block,
+    );
+    // A scalar element loaded from a packed slot may need a fixed-bytes
+    // re-alignment toward its declared element type (`sol.bytes_cast`). A
+    // reference-typed element (a nested array / struct) is loaded as its
+    // canonical reference and is authoritative: bytes_cast is undefined on it,
+    // and slang can mis-type the *result* of indexing an array literal whose
+    // element is a calldata reference (`[b[i:j]][0]`) as `calldata` while the
+    // loaded value is the correct memory reference.
+    if value.r#type().is_reference() {
+        return Ok(BlockAnd { block, value });
+    }
+    let result_type = node
+        .get_type()
+        .expect("slang types every index-access expression");
+    let slang_expected =
+        result_type.resolve_type(LocationPolicy::Declared(None), &context.state.builder);
+    let value = value.cast(
+        crate::ast::Type::new(slang_expected),
+        &context.state.builder,
+        &block,
+    );
     Ok(BlockAnd { block, value })
 });

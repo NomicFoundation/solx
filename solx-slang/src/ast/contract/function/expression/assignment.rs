@@ -1,5 +1,5 @@
 //!
-//! Assignment expression lowering.
+//! Assignment expression emission.
 //!
 
 use melior::ir::Attribute;
@@ -226,100 +226,6 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
 }
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits an assignment expression (`=`, `+=`, `-=`, `*=`).
-    pub fn emit_assignment(
-        &self,
-        assign: &slang_solidity_v2::ast::AssignmentExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        // `(x) = v` is the scalar `x = v`; a multi-element (or blank-bearing)
-        // tuple on the left is a destructuring assignment.
-        let left = assign.left_operand().unwrap_parentheses();
-        let right = assign.right_operand();
-        if let Expression::TupleExpression(tuple) = &left {
-            return self.emit_tuple_assignment(tuple, &right, block);
-        }
-
-        let (target, block) = AssignmentTarget::new(self, &left, block)?;
-        let (value, block) = if matches!(
-            assign.operator(),
-            ast::AssignmentExpressionOperator::Equal(_)
-        ) {
-            // A string literal assigned to a `bytesN` / `byte` value lvalue is a
-            // fixed-bytes constant; emit it toward the target's element type so
-            // it does not become a runtime `sol.string` the store would reject.
-            match &target {
-                AssignmentTarget::Pointer(_, element_type)
-                | AssignmentTarget::Storage(_, element_type) => {
-                    let BlockAnd { value, block } = (Toward {
-                        expression: &right,
-                        target_type: *element_type,
-                    })
-                    .emit(self, block)?;
-                    (value, block)
-                }
-                AssignmentTarget::ReferenceCopy(_) => {
-                    let BlockAnd { value, block } = right.emit(self, block)?;
-                    (value, block)
-                }
-            }
-        } else {
-            let operator = match assign.operator() {
-                ast::AssignmentExpressionOperator::AmpersandEqual(_) => Operator::BitwiseAnd,
-                ast::AssignmentExpressionOperator::AsteriskEqual(_) => Operator::Multiply,
-                ast::AssignmentExpressionOperator::BarEqual(_) => Operator::BitwiseOr,
-                ast::AssignmentExpressionOperator::CaretEqual(_) => Operator::BitwiseXor,
-                ast::AssignmentExpressionOperator::Equal(_) => {
-                    unreachable!("should already be handled")
-                }
-                ast::AssignmentExpressionOperator::GreaterThanGreaterThanEqual(_) => {
-                    Operator::ShiftRight
-                }
-                ast::AssignmentExpressionOperator::GreaterThanGreaterThanGreaterThanEqual(_) => {
-                    Operator::ShiftRight
-                }
-                ast::AssignmentExpressionOperator::LessThanLessThanEqual(_) => Operator::ShiftLeft,
-                ast::AssignmentExpressionOperator::MinusEqual(_) => Operator::Subtract,
-                ast::AssignmentExpressionOperator::PercentEqual(_) => Operator::Remainder,
-                ast::AssignmentExpressionOperator::PlusEqual(_) => Operator::Add,
-                ast::AssignmentExpressionOperator::SlashEqual(_) => Operator::Divide,
-            };
-            let (old, target_type) = match &target {
-                AssignmentTarget::Pointer(pointer, element_type) => {
-                    let old = crate::ast::Pointer::new(*pointer).load(
-                        crate::ast::Type::new(*element_type),
-                        &self.state.builder,
-                        &block,
-                    );
-                    (old, *element_type)
-                }
-                AssignmentTarget::Storage(slot, element_type) => {
-                    let old = slot.load(&self.state.builder, *element_type, &block)?;
-                    (crate::ast::Value::from(old), *element_type)
-                }
-                AssignmentTarget::ReferenceCopy(_) => unreachable!(
-                    "a compound assignment to a reference-typed lvalue is rejected by the type checker"
-                ),
-            };
-            let BlockAnd { value: rhs, block } = right.emit(self, block)?;
-            // Shares the binary-operation emitter with `a op b` so a compound
-            // bitwise assignment (`a ^= b`, `a <<= b`) on a `bytesN` / `byte`
-            // lvalue gets the same fixed-bytes bridge.
-            let result = operator.emit_value_binary(
-                self.arithmetic_mode,
-                &self.state.builder,
-                old,
-                rhs,
-                target_type,
-                &block,
-            );
-            (result, block)
-        };
-
-        let result = target.store(self, value.into_mlir(), &block);
-        Ok((result, block))
-    }
-
     /// Emits `delete x` — resets the lvalue to its zero value. A reference-typed
     /// storage aggregate (array / `string` / `bytes` / struct) is deep-cleared
     /// via `sol.delete`; a value-typed lvalue (scalar state variable, `a[i]`,
@@ -523,7 +429,90 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     }
 }
 
+// An assignment expression (`=`, `+=`, `-=`, `*=`, …).
 expression_emit!(AssignmentExpression; |node, context, block| {
-    let (value, block) = context.emit_assignment(node, block)?;
-    Ok(BlockAnd { block, value: value.into() })
+    // `(x) = v` is the scalar `x = v`; a multi-element (or blank-bearing) tuple
+    // on the left is a destructuring assignment.
+    let left = node.left_operand().unwrap_parentheses();
+    let right = node.right_operand();
+    if let Expression::TupleExpression(tuple) = &left {
+        let (value, block) = context.emit_tuple_assignment(tuple, &right, block)?;
+        return Ok(BlockAnd { block, value: value.into() });
+    }
+
+    let (target, block) = AssignmentTarget::new(context, &left, block)?;
+    let (value, block) = if matches!(node.operator(), ast::AssignmentExpressionOperator::Equal(_)) {
+        // A string literal assigned to a `bytesN` / `byte` value lvalue is a
+        // fixed-bytes constant; emit it toward the target's element type so it
+        // does not become a runtime `sol.string` the store would reject.
+        match &target {
+            AssignmentTarget::Pointer(_, element_type)
+            | AssignmentTarget::Storage(_, element_type) => {
+                let BlockAnd { value, block } = (Toward {
+                    expression: &right,
+                    target_type: *element_type,
+                })
+                .emit(context, block)?;
+                (value, block)
+            }
+            AssignmentTarget::ReferenceCopy(_) => {
+                let BlockAnd { value, block } = right.emit(context, block)?;
+                (value, block)
+            }
+        }
+    } else {
+        let operator = match node.operator() {
+            ast::AssignmentExpressionOperator::AmpersandEqual(_) => Operator::BitwiseAnd,
+            ast::AssignmentExpressionOperator::AsteriskEqual(_) => Operator::Multiply,
+            ast::AssignmentExpressionOperator::BarEqual(_) => Operator::BitwiseOr,
+            ast::AssignmentExpressionOperator::CaretEqual(_) => Operator::BitwiseXor,
+            ast::AssignmentExpressionOperator::Equal(_) => {
+                unreachable!("should already be handled")
+            }
+            ast::AssignmentExpressionOperator::GreaterThanGreaterThanEqual(_) => {
+                Operator::ShiftRight
+            }
+            ast::AssignmentExpressionOperator::GreaterThanGreaterThanGreaterThanEqual(_) => {
+                Operator::ShiftRight
+            }
+            ast::AssignmentExpressionOperator::LessThanLessThanEqual(_) => Operator::ShiftLeft,
+            ast::AssignmentExpressionOperator::MinusEqual(_) => Operator::Subtract,
+            ast::AssignmentExpressionOperator::PercentEqual(_) => Operator::Remainder,
+            ast::AssignmentExpressionOperator::PlusEqual(_) => Operator::Add,
+            ast::AssignmentExpressionOperator::SlashEqual(_) => Operator::Divide,
+        };
+        let (old, target_type) = match &target {
+            AssignmentTarget::Pointer(pointer, element_type) => {
+                let old = crate::ast::Pointer::new(*pointer).load(
+                    crate::ast::Type::new(*element_type),
+                    &context.state.builder,
+                    &block,
+                );
+                (old, *element_type)
+            }
+            AssignmentTarget::Storage(slot, element_type) => {
+                let old = slot.load(&context.state.builder, *element_type, &block)?;
+                (crate::ast::Value::from(old), *element_type)
+            }
+            AssignmentTarget::ReferenceCopy(_) => unreachable!(
+                "a compound assignment to a reference-typed lvalue is rejected by the type checker"
+            ),
+        };
+        let BlockAnd { value: rhs, block } = right.emit(context, block)?;
+        // Shares the binary-operation emitter with `a op b` so a compound
+        // bitwise assignment (`a ^= b`, `a <<= b`) on a `bytesN` / `byte`
+        // lvalue gets the same fixed-bytes bridge.
+        let result = operator.emit_value_binary(
+            context.arithmetic_mode,
+            &context.state.builder,
+            old,
+            rhs,
+            target_type,
+            &block,
+        );
+        (result, block)
+    };
+
+    let result = target.store(context, value.into_mlir(), &block);
+    Ok(BlockAnd { block, value: result.into() })
 });

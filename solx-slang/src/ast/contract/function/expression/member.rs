@@ -1,5 +1,5 @@
 //!
-//! Member access expression lowering: `base.member`. Routes a namespace-
+//! Member access expression emission: `base.member`. Routes a namespace-
 //! qualified state-variable / constant read, a struct field read, and a
 //! built-in member access; the struct-field address helper is shared with the
 //! lvalue write path.
@@ -19,34 +19,11 @@ use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Lowers `s.field` for a struct base to `sol.gep`, followed by a
-    /// `sol.load` of the addressed field unless the field already IS the
-    /// value (non-ptr-ref-in-storage rule).
-    ///
-    /// The caller is responsible for routing only struct-base member accesses
-    /// here; non-struct bases (e.g. `msg.sender`) go to built-in member access
-    /// lowering.
-    pub fn emit_struct_field(
-        &self,
-        access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (address, element_type, block) = self.emit_struct_field_address(access, block)?;
-        let value = crate::ast::Pointer::new(address)
-            .load(
-                crate::ast::Type::new(element_type),
-                &self.state.builder,
-                &block,
-            )
-            .into_mlir();
-        Ok((value, block))
-    }
-
     /// Emits the address yielded by `s.field` together with the field's
     /// element MLIR type, without the trailing `sol.load`.
     ///
-    /// Shared between the value-producing read path
-    /// ([`Self::emit_struct_field`]) and the lvalue write path in
+    /// Shared between the value-producing read path (the struct branch of the
+    /// `MemberAccessExpression` emission) and the lvalue write path in
     /// `emit_assignment`. Only called for a struct base.
     pub fn emit_struct_field_address(
         &self,
@@ -152,12 +129,14 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
     // A struct-typed base is a field read (`s.field`); anything else
     // (e.g. `msg.sender`, `addr.balance`) is a built-in member access.
     if matches!(node.operand().get_type(), Some(SlangType::Struct(_))) {
-        context
-            .emit_struct_field(node, block)
-            .map(|(value, block)| BlockAnd {
-                block,
-                value: value.into(),
-            })
+        // Address the field (`sol.gep`) and `sol.load` it.
+        let (address, element_type, block) = context.emit_struct_field_address(node, block)?;
+        let value = crate::ast::Pointer::new(address).load(
+            crate::ast::Type::new(element_type),
+            &context.state.builder,
+            &block,
+        );
+        Ok(BlockAnd { block, value })
     } else {
         // `msg.sender`, `addr.balance`, `arr.length`: a built-in member access,
         // which in value position always yields a value.
