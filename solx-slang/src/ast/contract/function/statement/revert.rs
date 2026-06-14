@@ -1,4 +1,4 @@
-//! Revert statement lowering.
+//! Revert statement emission.
 
 use melior::ir::BlockRef;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
@@ -16,60 +16,6 @@ use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
-    /// Emits a `sol.revert` for a `revert ErrorName(args);` statement.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the error path resolves to a non-Error definition,
-    /// the canonical signature cannot be computed, named arguments cannot be
-    /// matched to error parameters, or any argument expression cannot be
-    /// lowered.
-    ///
-    /// # Returns
-    ///
-    /// Returns `None`: `sol.revert` is a block terminator, so the current block
-    /// is complete and codegen does not continue in it (no epilogue or enclosing
-    /// yield is appended after the revert).
-    pub fn emit_revert(
-        &self,
-        revert: &RevertStatement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let error = match revert.error().resolve_to_definition() {
-            None => {
-                self.state.builder.emit_sol_revert("", &[], false, &block);
-                return Ok(None);
-            }
-            Some(Definition::Error(error)) => error,
-            Some(_) => unreachable!("slang resolves a revert target to an error definition"),
-        };
-        let signature = error
-            .compute_canonical_signature()
-            .expect("slang computes a canonical signature for an error");
-        let parameters = error.parameters();
-        let parameter_ids = parameters
-            .iter()
-            .map(|parameter| parameter.node_id())
-            .collect::<Vec<_>>();
-        let ordered = revert.arguments().ordered_by(&parameter_ids);
-        let parameter_types: Vec<_> = parameters
-            .iter()
-            .map(|parameter| {
-                parameter
-                    .get_type()
-                    .expect("parameter type resolved by semantic analysis")
-                    .resolve_type(LocationPolicy::Declared(None), &self.state.builder)
-            })
-            .collect();
-        let emitter = ExpressionContext::from(self);
-        let (values, block) =
-            emitter.emit_coerced_argument_expressions(&ordered, &parameter_types, block)?;
-        self.state
-            .builder
-            .emit_sol_revert(&signature, &values, true, &block);
-        Ok(None)
-    }
-
     /// Emits a `sol.revert` for the call form `revert()` or `revert("message")`.
     ///
     /// # Errors
@@ -137,4 +83,42 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     }
 }
 
-statement_emit!(RevertStatement; |node, context, block| { context.emit_revert(node, block) });
+// `sol.revert` is a block terminator, so the current block is complete and
+// emission does not continue in it: the result is `None` (no epilogue or
+// enclosing yield is appended after the revert).
+statement_emit!(RevertStatement; |node, context, block| {
+    let error = match node.error().resolve_to_definition() {
+        None => {
+            context.state.builder.emit_sol_revert("", &[], false, &block);
+            return Ok(None);
+        }
+        Some(Definition::Error(error)) => error,
+        Some(_) => unreachable!("slang resolves a revert target to an error definition"),
+    };
+    let signature = error
+        .compute_canonical_signature()
+        .expect("slang computes a canonical signature for an error");
+    let parameters = error.parameters();
+    let parameter_ids = parameters
+        .iter()
+        .map(|parameter| parameter.node_id())
+        .collect::<Vec<_>>();
+    let ordered = node.arguments().ordered_by(&parameter_ids);
+    let parameter_types: Vec<_> = parameters
+        .iter()
+        .map(|parameter| {
+            parameter
+                .get_type()
+                .expect("parameter type resolved by semantic analysis")
+                .resolve_type(LocationPolicy::Declared(None), &context.state.builder)
+        })
+        .collect();
+    let emitter = ExpressionContext::from(&*context);
+    let (values, block) =
+        emitter.emit_coerced_argument_expressions(&ordered, &parameter_types, block)?;
+    context
+        .state
+        .builder
+        .emit_sol_revert(&signature, &values, true, &block);
+    Ok(None)
+});
