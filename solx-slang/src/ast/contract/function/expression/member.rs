@@ -1,19 +1,24 @@
 //!
-//! Member access expression lowering for struct fields: `s.field`.
+//! Member access expression lowering: `base.member`. Routes a namespace-
+//! qualified state-variable / constant read, a struct field read, and a
+//! built-in member access; the struct-field address helper is shared with the
+//! lvalue write path.
 //!
 
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::ValueLike;
 use melior::ir::r#type::TypeLike;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::contract::function::expression::ExpressionContext;
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Lowers `s.field` for a struct base to `sol.gep`, followed by a
     /// `sol.load` of the addressed field unless the field already IS the
     /// value (non-ptr-ref-in-storage rule).
@@ -73,7 +78,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .position(|member| member.node_id() == member_id)
             .expect("slang validates the accessed field is a struct member");
 
-        let (base_value, block) = self.emit_value(&base, block)?;
+        let BlockAnd {
+            value: base_value,
+            block,
+        } = base.emit(self, block)?;
         let builder = &self.state.builder;
 
         let index_value = builder.emit_sol_constant(field_index as i64, builder.types.ui64, &block);
@@ -85,7 +93,63 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 field_index as u64,
             ))
         };
-        let address = builder.emit_sol_gep(base_value, index_value, element_type, &block);
+        let address =
+            builder.emit_sol_gep(base_value.into_mlir(), index_value, element_type, &block);
         Ok((address, element_type, block))
     }
 }
+
+expression_emit!(MemberAccessExpression; |node, context, block| {
+    // A namespace-qualified state-variable / constant read — `C.x`, `L.CONST`,
+    // `M.a` — reads the named member exactly like the bare identifier would,
+    // disambiguating from a shadowing local. The operand must be a namespace name
+    // (a contract / library / import alias); `this.x` keeps the external-getter
+    // path since its operand is the `this` keyword, not an identifier.
+    if let Expression::Identifier(operand) = node.operand()
+        && matches!(
+            operand.resolve_to_definition(),
+            Some(
+                Definition::Contract(_)
+                    | Definition::Library(_)
+                    | Definition::Import(_)
+                    | Definition::ImportedSymbol(_)
+            )
+        )
+    {
+        match node.member().resolve_to_definition() {
+            Some(Definition::StateVariable(state_variable)) => {
+                return context
+                    .emit_state_variable_read(&state_variable, block)
+                    .map(|(value, block)| BlockAnd {
+                        block,
+                        value: value.into(),
+                    });
+            }
+            Some(Definition::Constant(constant)) => {
+                let initializer = constant
+                    .value()
+                    .expect("a Solidity constant has an initializer");
+                return initializer.emit(context, block);
+            }
+            _ => {}
+        }
+    }
+    // A struct-typed base is a field read (`s.field`); anything else
+    // (e.g. `msg.sender`, `addr.balance`) is a built-in member access.
+    if matches!(node.operand().get_type(), Some(SlangType::Struct(_))) {
+        context
+            .emit_struct_field(node, block)
+            .map(|(value, block)| BlockAnd {
+                block,
+                value: value.into(),
+            })
+    } else {
+        // `msg.sender`, `addr.balance`, `arr.length`: a built-in member access,
+        // which in value position always yields a value.
+        let (value, block) = context.emit_built_in_member_access(node, None, block)?;
+        Ok(BlockAnd {
+            block,
+            value: value.expect("a bare member access yields a value").into(),
+        })
+    }
+});

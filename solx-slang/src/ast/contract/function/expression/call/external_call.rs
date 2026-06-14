@@ -5,25 +5,24 @@
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
-use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_utils::DataLocation;
 
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
 use crate::ast::contract::ContractEmitter;
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::static_mode::StaticMode;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// The SOLE `ext_icall` sink for `SelfExternal` + `ExternalInstance`.
     ///
     /// The call's inputs are passed flat — a single bundle struct would be a
@@ -44,7 +43,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     ) -> anyhow::Result<Vec<Value<'context, 'block>>> {
         let callee =
             self.emit_external_callee(receiver, selector, parameter_types, return_types, block);
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         // The call value defaults to zero wei.
         let value =
             call_value.unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, block));
@@ -71,19 +70,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         return_types: &[Type<'context>],
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         let address = builder.emit_sol_address_cast(receiver, builder.types.sol_address, block);
         let ext_func_ref_type = builder.types.ext_func_ref(parameter_types, return_types);
         builder.emit_sol_ext_func_constant(address, selector, ext_func_ref_type, block)
-    }
-
-    /// Maps the callee's state mutability to its external-call mode: a `view` or
-    /// `pure` function lowers to a `STATICCALL`; anything else a normal `CALL`.
-    fn static_mode(function_definition: &FunctionDefinition) -> StaticMode {
-        match function_definition.mutability() {
-            FunctionMutability::View | FunctionMutability::Pure => StaticMode::Static,
-            _ => StaticMode::Call,
-        }
     }
 
     /// The ABI signature of a `public` state variable's synthesised getter:
@@ -100,7 +90,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         state_variable: &StateVariableDefinition,
     ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)> {
         let declared_type = state_variable.get_type()?;
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         match &declared_type {
             SlangType::Mapping(mapping_type) => {
                 let key = mapping_type.key_type();
@@ -109,8 +99,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     return None;
                 }
                 Some((
-                    vec![TypeConversion::resolve_slang_type(&key, None, builder)],
-                    vec![TypeConversion::resolve_slang_type(&value, None, builder)],
+                    vec![TypeConversion::resolve_slang_type(
+                        &key,
+                        LocationPolicy::Declared(None),
+                        builder,
+                    )],
+                    vec![TypeConversion::resolve_slang_type(
+                        &value,
+                        LocationPolicy::Declared(None),
+                        builder,
+                    )],
                 ))
             }
             SlangType::Array(array_type) => {
@@ -120,7 +118,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 }
                 Some((
                     vec![builder.types.ui256],
-                    vec![TypeConversion::resolve_slang_type(&element, None, builder)],
+                    vec![TypeConversion::resolve_slang_type(
+                        &element,
+                        LocationPolicy::Declared(None),
+                        builder,
+                    )],
                 ))
             }
             SlangType::FixedSizeArray(array_type) => {
@@ -130,7 +132,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 }
                 Some((
                     vec![builder.types.ui256],
-                    vec![TypeConversion::resolve_slang_type(&element, None, builder)],
+                    vec![TypeConversion::resolve_slang_type(
+                        &element,
+                        LocationPolicy::Declared(None),
+                        builder,
+                    )],
                 ))
             }
             SlangType::Struct(struct_type) => {
@@ -139,7 +145,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 };
                 let struct_mlir_type = TypeConversion::resolve_slang_type(
                     &declared_type,
-                    Some(DataLocation::Storage),
+                    LocationPolicy::Declared(Some(DataLocation::Storage)),
                     builder,
                 );
                 let plan = ContractEmitter::struct_getter_layout(
@@ -155,7 +161,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             other if !other.is_reference_type() => Some((
                 Vec::new(),
-                vec![TypeConversion::resolve_slang_type(other, None, builder)],
+                vec![TypeConversion::resolve_slang_type(
+                    other,
+                    LocationPolicy::Declared(None),
+                    builder,
+                )],
             )),
             _ => None,
         }
@@ -182,11 +192,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         };
         let (argument_values, current_block) =
             self.emit_coerced_arguments(arguments, &parameter_types, block)?;
-        let (receiver, current_block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), current_block)?;
+        let BlockAnd {
+            value: receiver,
+            block: current_block,
+        } = access.operand().emit(self, current_block)?;
         let results = self.emit_external_call(
-            receiver,
+            receiver.into_mlir(),
             selector,
             &parameter_types,
             &return_types,
@@ -221,11 +232,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 "external getter of a nested or reference-typed state variable is not yet supported"
             );
         };
-        let (receiver, current_block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
+        let BlockAnd {
+            value: receiver,
+            block: current_block,
+        } = access.operand().emit(self, block)?;
         let results = self.emit_external_call(
-            receiver,
+            receiver.into_mlir(),
             selector,
             &parameter_types,
             &return_types,
@@ -252,19 +264,26 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         Value<'context, 'block>,
         BlockRef<'context, 'block>,
     )> {
-        let (address, block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
+        let BlockAnd {
+            value: address,
+            block,
+        } = access.operand().emit(self, block)?;
         let argument = arguments
             .iter()
             .next()
             .expect("a bare call takes one bytes argument");
-        let (input, block) = self.expression_emitter.emit_value(&argument, block)?;
+        let BlockAnd {
+            value: input,
+            block,
+        } = argument.emit(self, block)?;
 
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         // `sol.bare_call`'s input rejects a non-memory operand, so an argument
         // sourced from storage / calldata is copied into memory first.
-        let input = TypeConversion::coerce(input, builder.types.sol_string_memory, builder, &block);
+        let input = input
+            .coerce_to(builder.types.sol_string_memory, builder, &block)
+            .into_mlir();
+        let address = address.into_mlir();
         let (status, ret_data) = match kind {
             BuiltIn::AddressCall => {
                 let value = call_value
@@ -314,105 +333,29 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // External calls cross the ABI boundary, so a `calldata` reference
         // parameter is encoded from / decoded to memory — the callee type and
         // argument coercions use the EXTERNAL (memory) representation.
-        let (parameter_types, return_types) = TypeConversion::resolve_external_function_types(
+        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
             function_definition,
-            &self.expression_emitter.state.builder,
+            LocationPolicy::ForceMemory,
+            &self.state.builder,
         );
         // The receiver is the member operand: `this` for a self call, the
         // instance value for an external one — both evaluate to an address.
-        let (receiver, current_block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
+        let BlockAnd {
+            value: receiver,
+            block: current_block,
+        } = access.operand().emit(self, block)?;
         let (argument_values, current_block) =
             self.emit_coerced_arguments(arguments, &parameter_types, current_block)?;
         let results = self.emit_external_call(
-            receiver,
+            receiver.into_mlir(),
             selector,
             &parameter_types,
             &return_types,
             &argument_values,
             call_value,
-            Self::static_mode(function_definition),
+            StaticMode::from_function(function_definition),
             &current_block,
         )?;
         Ok((results, current_block))
-    }
-
-    /// Recognises and emits an external call in `try` position; `None` = "not a
-    /// try-lowerable external-call shape" (a normal outcome).
-    pub fn emit_external_call_try(
-        &self,
-        call: &FunctionCallExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<
-        Option<(
-            Value<'context, 'block>,
-            Vec<Value<'context, 'block>>,
-            BlockRef<'context, 'block>,
-        )>,
-    > {
-        // The try-able callee is a member access (`recv.f(args)`), optionally
-        // wrapped in a `{value: v}` / `{gas: g}` call-options layer
-        // (`recv.f{gas: g}(args)`). Unwrap the options — capturing the forwarded
-        // `value` (gas/salt follow the same drop/forward rule as a normal call) —
-        // to the inner member access. Anything else is "not try-lowerable"
-        // (`None`), and the caller runs the success body only.
-        let mut current_block = block;
-        let mut call_value = None;
-        let access = match call.operand() {
-            Expression::MemberAccessExpression(access) => access,
-            Expression::CallOptionsExpression(call_options) => {
-                let (value, _salt, next_block) =
-                    self.capture_call_options(&call_options, current_block)?;
-                current_block = next_block;
-                call_value = value;
-                let Expression::MemberAccessExpression(access) = call_options.operand() else {
-                    return Ok(None);
-                };
-                access
-            }
-            _ => return Ok(None),
-        };
-        let Some(Definition::Function(function_definition)) =
-            access.member().resolve_to_definition()
-        else {
-            return Ok(None);
-        };
-        let Some(selector) = function_definition.compute_selector() else {
-            return Ok(None);
-        };
-        let ArgumentsDeclaration::PositionalArguments(positional_arguments) = call.arguments()
-        else {
-            return Ok(None);
-        };
-        // External (ABI) signature: `calldata` reference parameters cross the
-        // call boundary as memory (see `resolve_external_function_types`).
-        let (parameter_types, return_types) = TypeConversion::resolve_external_function_types(
-            &function_definition,
-            &self.expression_emitter.state.builder,
-        );
-        let (receiver, current_block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), current_block)?;
-        let (argument_values, current_block) =
-            self.emit_coerced_arguments(&positional_arguments, &parameter_types, current_block)?;
-        let callee = self.emit_external_callee(
-            receiver,
-            selector,
-            &parameter_types,
-            &return_types,
-            &current_block,
-        );
-        let builder = &self.expression_emitter.state.builder;
-        let value = call_value
-            .unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &current_block));
-        let (status, results) = builder.emit_sol_ext_icall_try(
-            callee,
-            &argument_values,
-            &return_types,
-            value,
-            &current_block,
-        )?;
-        Ok(Some((status, results, current_block)))
     }
 }

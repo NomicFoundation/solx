@@ -2,20 +2,26 @@
 //! Internal / external library call lowering.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use melior::ir::attribute::StringAttribute;
 use melior::ir::r#type::FunctionType;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
+use solx_mlir::ods::sol::LibAddrOperation;
 
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
 use crate::ast::contract::function::FunctionEmitter;
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::expression_ext::ExpressionExt;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits an internal (`Library { external: false }`) library call — inlined
     /// like an ordinary internal function.
     pub fn emit_library_call(
@@ -25,10 +31,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         positional_arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (mlir_name, parameter_types, return_types) = self
-            .expression_emitter
-            .state
-            .resolve_function(library_function.node_id())?;
+        let (mlir_name, parameter_types, return_types) =
+            self.state.resolve_function(library_function.node_id())?;
         // A `using for` receiver (`x.f(args)`) is a value and becomes the
         // implicit `self` — the function's first parameter; a namespace qualifier
         // — a library (`L.f`) or import alias (`M.f`) — is not a value, so only
@@ -36,11 +40,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         if access.operand().is_namespace_qualifier() {
             let (argument_values, current_block) =
                 self.emit_coerced_arguments(positional_arguments, parameter_types, block)?;
-            let results = self
-                .expression_emitter
-                .state
-                .builder
-                .emit_sol_call_results(mlir_name, &argument_values, return_types, &current_block)?;
+            let results = self.state.builder.emit_sol_call_results(
+                mlir_name,
+                &argument_values,
+                return_types,
+                &current_block,
+            )?;
             return Ok((results, current_block));
         }
 
@@ -50,20 +55,23 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let (parameter_self, parameter_rest) = parameter_types
             .split_first()
             .expect("a using-for library function has a self parameter");
-        let (self_value, current_block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
-        let builder = &self.expression_emitter.state.builder;
-        let self_value =
-            TypeConversion::coerce(self_value, *parameter_self, builder, &current_block);
+        let BlockAnd {
+            value: self_value,
+            block: current_block,
+        } = access.operand().emit(self, block)?;
+        let builder = &self.state.builder;
+        let self_value = self_value
+            .coerce_to(*parameter_self, builder, &current_block)
+            .into_mlir();
         let (mut argument_values, current_block) =
             self.emit_coerced_arguments(positional_arguments, parameter_rest, current_block)?;
         argument_values.insert(0, self_value);
-        let results = self
-            .expression_emitter
-            .state
-            .builder
-            .emit_sol_call_results(mlir_name, &argument_values, return_types, &current_block)?;
+        let results = self.state.builder.emit_sol_call_results(
+            mlir_name,
+            &argument_values,
+            return_types,
+            &current_block,
+        )?;
         Ok((results, current_block))
     }
 
@@ -83,7 +91,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let (parameter_types, return_types) = TypeConversion::resolve_function_types(
             function,
-            &self.expression_emitter.state.builder,
+            LocationPolicy::Declared(None),
+            &self.state.builder,
         );
         let selector = function
             .compute_selector()
@@ -95,10 +104,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 let (parameter_self, parameter_rest) = parameter_types
                     .split_first()
                     .expect("a using-for library function has a self parameter");
-                let (self_value, block) = self.expression_emitter.emit_value(receiver, block)?;
-                let builder = &self.expression_emitter.state.builder;
-                let self_value =
-                    TypeConversion::coerce(self_value, *parameter_self, builder, &block);
+                let BlockAnd {
+                    value: self_value,
+                    block,
+                } = receiver.emit(self, block)?;
+                let builder = &self.state.builder;
+                let self_value = self_value
+                    .coerce_to(*parameter_self, builder, &block)
+                    .into_mlir();
                 let (mut rest_values, block) =
                     self.emit_coerced_argument_expressions(arguments, parameter_rest, block)?;
                 rest_values.insert(0, self_value);
@@ -107,8 +120,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             None => self.emit_coerced_argument_expressions(arguments, &parameter_types, block)?,
         };
 
-        let builder = &self.expression_emitter.state.builder;
-        let address = builder.emit_sol_lib_addr(library_name, &current_block);
+        let builder = &self.state.builder;
+        let address = sol_op!(
+            builder,
+            &current_block,
+            LibAddrOperation
+                ._name(StringAttribute::new(builder.context, library_name))
+                .val(builder.types.sol_address)
+        );
         let callee_type = FunctionType::new(builder.context, &parameter_types, &return_types);
         let results = builder.emit_sol_ext_call_library(
             &mlir_name,
@@ -119,12 +138,5 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             &current_block,
         );
         Ok((results, current_block))
-    }
-
-    /// Re-raises a bubbled revert (`returndatacopy` + `revert`). An inherent
-    /// method per Rule-5 (no free functions).
-    pub fn emit_bubble_revert(&self, block: &BlockRef<'context, 'block>) {
-        let _ = block;
-        unimplemented!("bubble revert")
     }
 }

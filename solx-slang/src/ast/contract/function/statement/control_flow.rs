@@ -2,17 +2,27 @@
 //! Control flow statement lowering: if/else, for, while, do-while.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::RegionLike;
+use slang_solidity_v2::ast::DoWhileStatement;
+use slang_solidity_v2::ast::ForStatement;
 use slang_solidity_v2::ast::ForStatementCondition;
 use slang_solidity_v2::ast::ForStatementInitialization;
+use slang_solidity_v2::ast::IfStatement;
 use slang_solidity_v2::ast::Statement;
+use slang_solidity_v2::ast::WhileStatement;
+use solx_mlir::ods::sol::ConditionOperation;
+use solx_mlir::ods::sol::YieldOperation;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use super::discarded::Discarded;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
-use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::contract::function::statement::StatementContext;
 
-impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
+impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Emits an if/else statement using `sol.if`.
     ///
     /// # Errors
@@ -24,9 +34,14 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let condition_expression = if_statement.condition();
-        let emitter = self.expression_emitter();
-        let (condition_value, block) = emitter.emit_value(&condition_expression, block)?;
-        let condition_boolean = emitter.emit_is_nonzero(condition_value, &block);
+        let emitter = ExpressionContext::from(&*self);
+        let BlockAnd {
+            value: condition_value,
+            block,
+        } = condition_expression.emit(&emitter, block)?;
+        let condition_boolean = condition_value
+            .is_nonzero(&self.state.builder, &block)
+            .into_mlir();
 
         let (then_block, else_block) = self.state.builder.emit_sol_if(condition_boolean, &block);
 
@@ -37,9 +52,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         // Emit then body.
         let saved_region = self.region_pointer;
         self.set_region(&then_region);
-        let then_end = self.emit(&if_statement.body(), then_block)?;
+        let then_end = if_statement.body().emit(self, then_block)?;
         if let Some(then_end) = then_end {
-            self.state.builder.emit_sol_yield(&then_end);
+            sol_op_void!(&self.state.builder, &then_end, YieldOperation.ins(&[]));
         } else {
             self.emit_dead_yield(&then_region);
         }
@@ -47,15 +62,15 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         // Emit else body (or empty yield).
         if let Some(ref else_statement) = if_statement.else_branch() {
             self.set_region(&else_region);
-            let else_end = self.emit(else_statement, else_block)?;
+            let else_end = else_statement.emit(self, else_block)?;
             if let Some(else_end) = else_end {
-                self.state.builder.emit_sol_yield(&else_end);
+                sol_op_void!(&self.state.builder, &else_end, YieldOperation.ins(&[]));
             } else {
                 self.emit_dead_yield(&else_region);
             }
             self.region_pointer = saved_region;
         } else {
-            self.state.builder.emit_sol_yield(&else_block);
+            sol_op_void!(&self.state.builder, &else_block, YieldOperation.ins(&[]));
             self.region_pointer = saved_region;
         }
 
@@ -77,28 +92,26 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         // Emit initialization in the current block.
         let block = match for_statement.initialization() {
-            ForStatementInitialization::VariableDeclarationStatement(declaration) => match self
-                .emit(
-                    &Statement::VariableDeclarationStatement(declaration.clone()),
-                    block,
-                )? {
-                Some(block) => block,
-                None => {
-                    self.environment.exit_scope();
-                    return Ok(None);
+            ForStatementInitialization::VariableDeclarationStatement(declaration) => {
+                let statement = Statement::VariableDeclarationStatement(declaration.clone());
+                match statement.emit(self, block)? {
+                    Some(block) => block,
+                    None => {
+                        self.environment.exit_scope();
+                        return Ok(None);
+                    }
                 }
-            },
-            ForStatementInitialization::ExpressionStatement(expression_statement) => match self
-                .emit(
-                    &Statement::ExpressionStatement(expression_statement.clone()),
-                    block,
-                )? {
-                Some(block) => block,
-                None => {
-                    self.environment.exit_scope();
-                    return Ok(None);
+            }
+            ForStatementInitialization::ExpressionStatement(expression_statement) => {
+                let statement = Statement::ExpressionStatement(expression_statement.clone());
+                match statement.emit(self, block)? {
+                    Some(block) => block,
+                    None => {
+                        self.environment.exit_scope();
+                        return Ok(None);
+                    }
                 }
-            },
+            }
             ForStatementInitialization::Semicolon(_) => block,
         };
 
@@ -113,32 +126,36 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
             ForStatementCondition::Semicolon(_) => {
                 let true_value = self.state.builder.emit_bool(true, &condition_block);
-                self.state
-                    .builder
-                    .emit_sol_condition(true_value, &condition_block);
+                sol_op_void!(
+                    &self.state.builder,
+                    &condition_block,
+                    ConditionOperation.condition(true_value)
+                );
             }
         }
 
         // Body region.
         self.set_region(&body_region);
-        let body_end = self.emit(&for_statement.body(), body_block)?;
+        let body_end = for_statement.body().emit(self, body_block)?;
         if let Some(body_end) = body_end {
-            self.state.builder.emit_sol_yield(&body_end);
+            sol_op_void!(&self.state.builder, &body_end, YieldOperation.ins(&[]));
         }
 
         // Step region — always unchecked (matches solc: loop step i++ uses sol.add).
         if let Some(ref iterator_expression) = for_statement.iterator() {
-            let emitter = ExpressionEmitter::new(
+            let emitter = ExpressionContext::new(
                 self.state,
                 self.environment,
                 self.storage_layout,
                 // The loop step is always unchecked; solc emits `sol.add` for `i++`.
                 ArithmeticMode::Unchecked,
             );
-            let (_, step_end) = emitter.emit(iterator_expression, step_block)?;
-            self.state.builder.emit_sol_yield(&step_end);
+            // The step is in statement position: its value is discarded and it
+            // may be a value-less producer (a void call or `delete`).
+            let step_end = Discarded(iterator_expression).emit(&emitter, step_block)?;
+            sol_op_void!(&self.state.builder, &step_end, YieldOperation.ins(&[]));
         } else {
-            self.state.builder.emit_sol_yield(&step_block);
+            sol_op_void!(&self.state.builder, &step_block, YieldOperation.ins(&[]));
         }
 
         self.region_pointer = saved_region;
@@ -165,9 +182,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         // Body region.
         self.set_region(&body_region);
-        let body_end = self.emit(&while_statement.body(), body_block)?;
+        let body_end = while_statement.body().emit(self, body_block)?;
         if let Some(body_end) = body_end {
-            self.state.builder.emit_sol_yield(&body_end);
+            sol_op_void!(&self.state.builder, &body_end, YieldOperation.ins(&[]));
         }
 
         self.region_pointer = saved_region;
@@ -190,9 +207,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         // Body region (executes first).
         self.set_region(&body_region);
-        let body_end = self.emit(&do_while.body(), body_block)?;
+        let body_end = do_while.body().emit(self, body_block)?;
         if let Some(body_end) = body_end {
-            self.state.builder.emit_sol_yield(&body_end);
+            sol_op_void!(&self.state.builder, &body_end, YieldOperation.ins(&[]));
         }
 
         // Condition region.
@@ -207,7 +224,17 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     /// where each `sol.if` region always ends with a `sol.yield` block.
     fn emit_dead_yield(&self, region: &melior::ir::Region<'context>) {
         let dead_block = melior::ir::Block::new(&[]);
-        self.state.builder.emit_sol_yield(&dead_block);
+        sol_op_void!(&self.state.builder, &dead_block, YieldOperation.ins(&[]));
         region.append_block(dead_block);
     }
 }
+
+statement_emit!(IfStatement; |node, context, block| { context.emit_if(node, block) });
+
+statement_emit!(ForStatement; |node, context, block| { context.emit_for(node, block) });
+
+statement_emit!(WhileStatement; |node, context, block| { context.emit_while(node, block) });
+
+statement_emit!(DoWhileStatement; |node, context, block| {
+    context.emit_do_while(node, block)
+});

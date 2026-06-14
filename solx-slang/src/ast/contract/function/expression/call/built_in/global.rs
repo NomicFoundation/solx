@@ -31,16 +31,18 @@ use solx_mlir::ods::sol::SigOperation;
 use solx_mlir::ods::sol::TimestampOperation;
 use solx_mlir::ods::sol::TransferOperation;
 
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::contract::function::expression::ExpressionContext;
 
-impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits `address.balance` as `sol.balance`.
     pub fn emit_address_balance(
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         self.emit_unary_member_intrinsic(access, block, |address_value| {
             sol_op_build!(
                 builder,
@@ -57,7 +59,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         self.emit_unary_member_intrinsic(access, block, |address_value| {
             sol_op_build!(
                 builder,
@@ -74,7 +76,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         self.emit_unary_member_intrinsic(access, block, |address_value| {
             sol_op_build!(
                 builder,
@@ -91,7 +93,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         self.emit_unary_member_intrinsic(access, block, |operand| {
             sol_op_build!(
                 builder,
@@ -107,10 +109,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let builder = &self.expression_emitter.state.builder;
-        let (addr, block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
+        let builder = &self.state.builder;
+        let BlockAnd { value: addr, block } = access.operand().emit(self, block)?;
         let (values, block) = self.emit_argument_values(arguments, block)?;
         // `sol.send` takes a `ui256` amount; a narrow literal (`r.send(0)` → ui8)
         // must be widened first, like `address.transfer`.
@@ -119,7 +119,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             builder,
             block,
             SendOperation
-                .addr(addr)
+                .addr(addr.into_mlir())
                 .val(amount)
                 .status(builder.types.i1)
         );
@@ -133,15 +133,17 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let builder = &self.expression_emitter.state.builder;
-        let (addr, block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
+        let builder = &self.state.builder;
+        let BlockAnd { value: addr, block } = access.operand().emit(self, block)?;
         let (values, block) = self.emit_argument_values(arguments, block)?;
         // `sol.transfer` takes a `ui256` amount; a narrow literal (`x.transfer(1)`
         // → ui8) must be widened first.
         let amount = builder.emit_sol_cast(values[0], builder.types.ui256, &block);
-        sol_op_void!(builder, block, TransferOperation.addr(addr).val(amount));
+        sol_op_void!(
+            builder,
+            block,
+            TransferOperation.addr(addr.into_mlir()).val(amount)
+        );
         Ok((None, block))
     }
 
@@ -156,7 +158,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         let operation = match resolved {
             Some(BuiltIn::TxOrigin) => {
                 sol_op_build!(builder, OriginOperation.addr(builder.types.sol_address))

@@ -247,7 +247,7 @@ impl Visitor for SuperDispatch {
     fn enter_member_access_expression(&mut self, node: &MemberAccessExpression) -> bool {
         // Peel parenthesisation: `(super).f` / `(Base).f` are the same internal
         // calls as `super.f` / `Base.f`.
-        let operand = node.operand().unwrap_parens();
+        let operand = node.operand().unwrap_parentheses();
         if matches!(operand, Expression::SuperKeyword(_)) {
             if let Some(Definition::Function(function)) = node.member().resolve_to_definition() {
                 self.super_calls.push((node.node_id(), function));

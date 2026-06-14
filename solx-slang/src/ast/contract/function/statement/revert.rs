@@ -1,26 +1,21 @@
 //! Revert statement lowering.
 
 use melior::ir::BlockRef;
-use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::RevertStatement;
 
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
 use crate::ast::arguments_declaration_ext::ArgumentsDeclarationExt;
-use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-/// Revert arguments evaluated in ABI order.
-struct EvaluatedRevertArguments<'context, 'block> {
-    /// Evaluated argument values.
-    values: Vec<Value<'context, 'block>>,
-    /// Current block after evaluating all arguments.
-    block: BlockRef<'context, 'block>,
-}
-
-impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
+impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Emits a `sol.revert` for a `revert ErrorName(args);` statement.
     ///
     /// # Errors
@@ -57,25 +52,24 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .map(|parameter| parameter.node_id())
             .collect::<Vec<_>>();
         let ordered = revert.arguments().ordered_by(&parameter_ids);
-        let mut evaluated = self.emit_revert_argument_values(ordered, block)?;
-        for (value, parameter) in evaluated.values.iter_mut().zip(parameters.iter()) {
-            let parameter_type = TypeConversion::resolve_slang_type(
-                &parameter
-                    .get_type()
-                    .expect("parameter type resolved by semantic analysis"),
-                None,
-                &self.state.builder,
-            );
-            *value = TypeConversion::coerce(
-                *value,
-                parameter_type,
-                &self.state.builder,
-                &evaluated.block,
-            );
-        }
+        let parameter_types: Vec<_> = parameters
+            .iter()
+            .map(|parameter| {
+                TypeConversion::resolve_slang_type(
+                    &parameter
+                        .get_type()
+                        .expect("parameter type resolved by semantic analysis"),
+                    LocationPolicy::Declared(None),
+                    &self.state.builder,
+                )
+            })
+            .collect();
+        let emitter = ExpressionContext::from(self);
+        let (values, block) =
+            emitter.emit_coerced_argument_expressions(&ordered, &parameter_types, block)?;
         self.state
             .builder
-            .emit_sol_revert(&signature, &evaluated.values, true, &evaluated.block);
+            .emit_sol_revert(&signature, &values, true, &block);
         Ok(None)
     }
 
@@ -127,44 +121,21 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             // NOT a no-data revert) is evaluated at runtime and ABI-encoded under
             // the `Error(string)` selector, exactly like `require(cond, expr)`.
             Some(expression) => {
-                let emitter = self.expression_emitter();
-                let (message_value, block) = emitter.emit_value(&expression, block)?;
+                let emitter = ExpressionContext::from(self);
+                let BlockAnd {
+                    value: message_value,
+                    block,
+                } = expression.emit(&emitter, block)?;
                 let builder = &self.state.builder;
                 let string_memory_type = builder.types.string(solx_utils::DataLocation::Memory);
-                let message_value =
-                    TypeConversion::coerce(message_value, string_memory_type, builder, &block);
+                let message_value = message_value
+                    .coerce_to(string_memory_type, builder, &block)
+                    .into_mlir();
                 builder.emit_sol_revert("Error(string)", &[message_value], true, &block);
             }
         }
         Ok(None)
     }
-
-    /// Evaluates revert argument expressions left-to-right, threading the
-    /// current MLIR block through each evaluation.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any argument expression cannot be lowered.
-    fn emit_revert_argument_values<Arguments>(
-        &self,
-        arguments: Arguments,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<EvaluatedRevertArguments<'context, 'block>>
-    where
-        Arguments: IntoIterator<Item = Expression>,
-    {
-        let emitter = self.expression_emitter();
-        let mut values = Vec::new();
-        let mut current_block = block;
-        for argument in arguments {
-            let (value, next_block) = emitter.emit_value(&argument, current_block)?;
-            values.push(value);
-            current_block = next_block;
-        }
-
-        Ok(EvaluatedRevertArguments {
-            values,
-            block: current_block,
-        })
-    }
 }
+
+statement_emit!(RevertStatement; |node, context, block| { context.emit_revert(node, block) });

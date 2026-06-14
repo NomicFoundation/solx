@@ -2,28 +2,37 @@
 //! Conditional, tuple, and array-literal expression lowering.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::ValueLike;
 use slang_solidity_v2::ast::ArrayExpression;
 use slang_solidity_v2::ast::ConditionalExpression;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
 use slang_solidity_v2::ast::Type as SlangType;
+use solx_mlir::ods::sol::ArrayLitOperation;
+use solx_mlir::ods::sol::StoreOperation;
+use solx_mlir::ods::sol::YieldOperation;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::Toward;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits a parenthesised single-element tuple expression `(e)` by lowering
     /// its inner expression.
     pub fn emit_tuple(
         &self,
         tuple: &TupleExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> anyhow::Result<(
+        crate::ast::Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    )> {
         let items = tuple.items();
         // TODO: support multi-value tuples (e.g. tuple deconstruction)
         assert!(items.len() == 1, "multi-value tuples not yet supported");
@@ -31,7 +40,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let inner = item
             .expression()
             .expect("a single-element tuple has an inner expression");
-        self.emit(&inner, block)
+        let BlockAnd { block, value } = inner.emit(self, block)?;
+        Ok((value, block))
     }
 
     /// Emits a ternary conditional `cond ? a : b` using `sol.if` with an alloca
@@ -72,31 +82,54 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             })
             .expect("a conditional resolves its type from itself or one of its branches");
         let condition = conditional.operand();
-        let (condition_value, block) = self.emit_value(&condition, block)?;
-        let condition_boolean = self.emit_is_nonzero(condition_value, &block);
+        let BlockAnd {
+            value: condition_value,
+            block,
+        } = condition.emit(self, block)?;
+        let condition_boolean = condition_value
+            .is_nonzero(&self.state.builder, &block)
+            .into_mlir();
 
         let result_slot = self.state.builder.emit_sol_alloca(result_type, &block);
         let (then_block, else_block) = self.state.builder.emit_sol_if(condition_boolean, &block);
 
         let true_expression = conditional.true_expression();
-        let (then_value, then_end) =
-            self.emit_value_for_target(&true_expression, result_type, then_block)?;
-        let then_cast =
-            TypeConversion::coerce(then_value, result_type, &self.state.builder, &then_end);
-        self.state
-            .builder
-            .emit_sol_store(then_cast, result_slot, &then_end);
-        self.state.builder.emit_sol_yield(&then_end);
+        let BlockAnd {
+            value: then_value,
+            block: then_end,
+        } = (Toward {
+            expression: &true_expression,
+            target_type: result_type,
+        })
+        .emit(self, then_block)?;
+        let then_cast = then_value
+            .coerce_to(result_type, &self.state.builder, &then_end)
+            .into_mlir();
+        sol_op_void!(
+            &self.state.builder,
+            &then_end,
+            StoreOperation.val(then_cast).addr(result_slot)
+        );
+        sol_op_void!(&self.state.builder, &then_end, YieldOperation.ins(&[]));
 
         let false_expression = conditional.false_expression();
-        let (else_value, else_end) =
-            self.emit_value_for_target(&false_expression, result_type, else_block)?;
-        let else_cast =
-            TypeConversion::coerce(else_value, result_type, &self.state.builder, &else_end);
-        self.state
-            .builder
-            .emit_sol_store(else_cast, result_slot, &else_end);
-        self.state.builder.emit_sol_yield(&else_end);
+        let BlockAnd {
+            value: else_value,
+            block: else_end,
+        } = (Toward {
+            expression: &false_expression,
+            target_type: result_type,
+        })
+        .emit(self, else_block)?;
+        let else_cast = else_value
+            .coerce_to(result_type, &self.state.builder, &else_end)
+            .into_mlir();
+        sol_op_void!(
+            &self.state.builder,
+            &else_end,
+            StoreOperation.val(else_cast).addr(result_slot)
+        );
+        sol_op_void!(&self.state.builder, &else_end, YieldOperation.ins(&[]));
 
         let result = self
             .state
@@ -179,8 +212,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         };
 
         let builder = &self.state.builder;
-        let (condition_value, block) = self.emit_value(&conditional.operand(), block)?;
-        let condition_boolean = self.emit_is_nonzero(condition_value, &block);
+        let BlockAnd {
+            value: condition_value,
+            block,
+        } = conditional.operand().emit(self, block)?;
+        let condition_boolean = condition_value.is_nonzero(builder, &block).into_mlir();
         let slots: Vec<Value<'context, 'block>> = result_types
             .iter()
             .map(|&result_type| builder.emit_sol_alloca(result_type, &block))
@@ -198,10 +234,16 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 "a conditional branch yields one value per result slot"
             );
             for (index, value) in values.into_iter().enumerate() {
-                let cast = TypeConversion::coerce(value, result_types[index], builder, &current);
-                builder.emit_sol_store(cast, slots[index], &current);
+                let cast = value
+                    .coerce_to(result_types[index], builder, &current)
+                    .into_mlir();
+                sol_op_void!(
+                    builder,
+                    &current,
+                    StoreOperation.val(cast).addr(slots[index])
+                );
             }
-            builder.emit_sol_yield(&current);
+            sol_op_void!(builder, &current, YieldOperation.ins(&[]));
         }
 
         let mut values = Vec::with_capacity(slots.len());
@@ -219,7 +261,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         &self,
         branch: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> anyhow::Result<(
+        Vec<crate::ast::Value<'context, 'block>>,
+        BlockRef<'context, 'block>,
+    )> {
         match branch {
             Expression::TupleExpression(tuple) => {
                 let mut values = Vec::new();
@@ -228,17 +273,25 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     let inner = item
                         .expression()
                         .expect("a multi-value conditional tuple element has an inner expression");
-                    let (value, next) = self.emit_value(&inner, current)?;
+                    let BlockAnd { value, block: next } = inner.emit(self, current)?;
                     values.push(value);
                     current = next;
                 }
                 Ok((values, current))
             }
             Expression::FunctionCallExpression(call) => {
-                CallEmitter::new(self).emit_function_call_results(call, block)
+                let (values, block) = self.emit_function_call_results(call, block)?;
+                Ok((
+                    values.into_iter().map(crate::ast::Value::from).collect(),
+                    block,
+                ))
             }
             Expression::ConditionalExpression(nested) => {
-                self.emit_conditional_tuple_values(nested, block)
+                let (values, block) = self.emit_conditional_tuple_values(nested, block)?;
+                Ok((
+                    values.into_iter().map(crate::ast::Value::from).collect(),
+                    block,
+                ))
             }
             other => unimplemented!(
                 "multi-value conditional branch of this expression kind is not supported: {:?}",
@@ -273,8 +326,11 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         // coercion below is a `data_loc_cast` into memory (matching solc),
         // rather than leaving a calldata element inside a memory `sol.array_lit`
         // that the backend cannot lower.
-        let declared_element_type =
-            TypeConversion::resolve_slang_type_in_memory(&element_slang_type, builder);
+        let declared_element_type = TypeConversion::resolve_slang_type(
+            &element_slang_type,
+            LocationPolicy::ForceMemory,
+            builder,
+        );
         // Emit the element values before fixing the element type: for a
         // function-pointer array literal the emitted values are authoritative.
         // A bare function name lowers to an internal `func_ref`, but slang types
@@ -287,7 +343,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let mut element_values = Vec::new();
         let mut current = block;
         for item in array_expression.items().iter() {
-            let (value, next) = self.emit_value(&item, current)?;
+            let BlockAnd { value, block: next } = item.emit(self, current)?;
             element_values.push(value);
             current = next;
         }
@@ -310,13 +366,36 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     solx_utils::DataLocation::Memory,
                 )
             }
-            _ => TypeConversion::resolve_slang_type_in_memory(&result_slang_type, builder),
+            _ => TypeConversion::resolve_slang_type(
+                &result_slang_type,
+                LocationPolicy::ForceMemory,
+                builder,
+            ),
         };
         let element_values: Vec<_> = element_values
             .into_iter()
-            .map(|value| TypeConversion::coerce(value, element_type, builder, &current))
+            .map(|value| value.coerce_to(element_type, builder, &current).into_mlir())
             .collect();
-        let value = builder.emit_sol_array_lit(&element_values, array_type, &current);
+        let value = sol_op!(
+            builder,
+            &current,
+            ArrayLitOperation.ins(&element_values).addr(array_type)
+        );
         Ok((value, current))
     }
 }
+
+expression_emit!(TupleExpression; |node, context, block| {
+    let (value, block) = context.emit_tuple(node, block)?;
+    Ok(BlockAnd { block, value })
+});
+
+expression_emit!(ConditionalExpression; |node, context, block| {
+    let (value, block) = context.emit_conditional(node, block)?;
+    Ok(BlockAnd { block, value: value.into() })
+});
+
+expression_emit!(ArrayExpression; |node, context, block| {
+    let (value, block) = context.emit_array_literal(node, block)?;
+    Ok(BlockAnd { block, value: value.into() })
+});

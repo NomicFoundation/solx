@@ -8,7 +8,6 @@ use melior::ir::BlockRef;
 use melior::ir::Operation;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::ValueLike;
 use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::operation::OperationMutLike;
 use num_bigint::BigInt;
@@ -20,12 +19,16 @@ use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::EncodeOperation;
+use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::built_in::EncodeMode;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits `abi.encode(args)` as a standard `sol.encode`.
     pub fn emit_abi_encode(
         &self,
@@ -56,7 +59,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let (mut values, block) = self.emit_argument_values(arguments, block)?;
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         let selector =
             builder.emit_sol_cast(values.remove(0), builder.types.fixed_bytes(4), &block);
         let result = self.emit_sol_encode(&values, Some(selector), EncodeMode::Standard, &block);
@@ -89,13 +92,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 (selector_value, block)
             }
             _ => {
-                let (signature_value, current) = self
-                    .expression_emitter
-                    .emit_value(&signature_expression, block)?;
+                let BlockAnd {
+                    value: signature_value,
+                    block: current,
+                } = signature_expression.emit(self, block)?;
                 // The runtime signature is hashed by `keccak256` and truncated to
                 // its leading four bytes.
-                let hash = self.emit_keccak256(signature_value, &current);
-                let builder = &self.expression_emitter.state.builder;
+                let hash = self.emit_keccak256(signature_value.into_mlir(), &current);
+                let builder = &self.state.builder;
                 let selector_value =
                     TypeConversion::coerce(hash, builder.types.fixed_bytes(4), builder, &current);
                 (selector_value, current)
@@ -103,8 +107,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         };
         let mut values = Vec::with_capacity(arguments.len() - 1);
         for argument in iter {
-            let (value, next) = self.expression_emitter.emit_value(&argument, current)?;
-            values.push(value);
+            let BlockAnd { value, block: next } = argument.emit(self, current)?;
+            values.push(value.into_mlir());
             current = next;
         }
         let result = self.emit_sol_encode(
@@ -144,7 +148,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             Expression::Identifier(identifier) => identifier.resolve_to_definition(),
             _ => None,
         };
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         // The selector and the parameter types the arguments are coerced to come
         // from either a static function reference — selector folded to a
         // compile-time constant, parameter types from the function definition —
@@ -164,19 +168,29 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 // cross the call boundary). Use the external (memory) signature
                 // so a memory struct/array argument needs no data-location cast
                 // (solc encodes the same).
-                let (parameter_types, _) =
-                    TypeConversion::resolve_external_function_types(&function, builder);
+                let (parameter_types, _) = TypeConversion::resolve_function_types(
+                    &function,
+                    LocationPolicy::ForceMemory,
+                    builder,
+                );
                 (selector_value, parameter_types, block)
             }
             _ => {
-                let (function_value, current) = self
-                    .expression_emitter
-                    .emit_value(&function_expression, block)?;
+                let BlockAnd {
+                    value: function_value,
+                    block: current,
+                } = function_expression.emit(self, block)?;
                 assert!(
                     solx_mlir::TypeFactory::is_sol_ext_function_ref(function_value.r#type()),
                     "abi.encodeCall's runtime callee resolves to an external function pointer"
                 );
-                let selector_value = builder.emit_sol_ext_func_selector(function_value, &current);
+                let selector_value = sol_op!(
+                    builder,
+                    &current,
+                    ExtFuncSelectorOperation
+                        .func(function_value.into_mlir())
+                        .result(builder.types.fixed_bytes(4))
+                );
                 let SlangType::Function(function_type) = function_expression
                     .get_type()
                     .expect("slang types every function-pointer expression")
@@ -187,7 +201,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                     .parameter_types()
                     .iter()
                     .map(|parameter_type| {
-                        TypeConversion::resolve_slang_type_in_memory(parameter_type, builder)
+                        TypeConversion::resolve_slang_type(
+                            parameter_type,
+                            LocationPolicy::ForceMemory,
+                            builder,
+                        )
                     })
                     .collect();
                 (selector_value, parameter_types, current)
@@ -234,7 +252,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         mode: EncodeMode,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         let mut op_builder = EncodeOperation::builder(builder.context, builder.unknown_location)
             .ins(ins)
             .res(builder.types.sol_string_memory);
@@ -276,11 +294,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .iter()
             .next()
             .expect("slang validates the payload argument");
-        let (payload_value, block) = self
-            .expression_emitter
-            .emit_value(&payload_expression, block)?;
+        let BlockAnd {
+            value: payload_value,
+            block,
+        } = payload_expression.emit(self, block)?;
         let result_types = self.abi_decode_result_types(call);
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         // `sol.decode` requires a memory or calldata byte buffer; a storage
         // `bytes` / `string` is a reference, so copy it to memory first (solc
         // emits a Storage->Memory `sol.data_loc_cast` here). Memory and calldata
@@ -291,18 +310,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 .and_then(|payload_type| payload_type.data_location()),
             Some(SlangDataLocation::Storage)
         ) {
-            TypeConversion::coerce(
-                payload_value,
-                builder.types.sol_string_memory,
-                builder,
-                &block,
-            )
+            payload_value.coerce_to(builder.types.sol_string_memory, builder, &block)
         } else {
             payload_value
         };
         let operation = block.append_operation(
             DecodeOperation::builder(builder.context, builder.unknown_location)
-                .addr(payload_value)
+                .addr(payload_value.into_mlir())
                 .outs(&result_types)
                 .build()
                 .into(),
@@ -322,7 +336,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     /// `abi.decode(data, T)` yields one; `abi.decode(data, (A, B, …))` yields
     /// one per tuple element. Resolved from the call's binder-assigned type.
     fn abi_decode_result_types(&self, call: &FunctionCallExpression) -> Vec<Type<'context>> {
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         let return_slang_type = call
             .get_type()
             .expect("abi.decode call is typed by the binder");
@@ -330,9 +344,19 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             SlangType::Tuple(tuple) => tuple
                 .types()
                 .iter()
-                .map(|slang_type| TypeConversion::resolve_slang_type(slang_type, None, builder))
+                .map(|slang_type| {
+                    TypeConversion::resolve_slang_type(
+                        slang_type,
+                        LocationPolicy::Declared(None),
+                        builder,
+                    )
+                })
                 .collect(),
-            other => vec![TypeConversion::resolve_slang_type(&other, None, builder)],
+            other => vec![TypeConversion::resolve_slang_type(
+                &other,
+                LocationPolicy::Declared(None),
+                builder,
+            )],
         }
     }
 }

@@ -29,7 +29,9 @@ use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
 use solx_mlir::ods::sol::Sha256Operation;
 
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::type_conversion::TypeConversion;
 
 /// ABI encoding mode for `abi.encode` / `abi.encodePacked`.
@@ -42,13 +44,13 @@ pub enum EncodeMode {
     Packed,
 }
 
-impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits an identifier-callee built-in (`assert`, `require`, `keccak256`,
     /// `sha256`, `ripemd160`, `ecrecover`, `addmod`, `mulmod`, `gasleft`).
     ///
     /// The returned value is `Some(...)` for value-producing built-ins and
     /// `None` for statement-style ones (`assert`, `require`). The caller
-    /// ([`CallEmitter::classify_call`]) routes only handled built-ins with a
+    /// ([`ExpressionContext::classify_call`]) routes only handled built-ins with a
     /// matching argument count here, so the argument-count expectations always
     /// hold and unhandled variants are unreachable.
     ///
@@ -77,13 +79,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 ))
             }
             BuiltIn::Gasleft => {
-                let builder = &self.expression_emitter.state.builder;
+                let builder = &self.state.builder;
                 let value = sol_op!(builder, block, GasLeftOperation.val(builder.types.ui256));
                 Ok((Some(value), block))
             }
             BuiltIn::Blockhash => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
+                let builder = &self.state.builder;
                 // `sol.blockhash` takes a `ui256` block number; coerce a narrower
                 // argument type up first.
                 let block_number =
@@ -104,7 +106,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             BuiltIn::Sha256 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
+                let builder = &self.state.builder;
                 let value = sol_op!(
                     builder,
                     block,
@@ -116,7 +118,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             BuiltIn::Ripemd160 => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
+                let builder = &self.state.builder;
                 let value = sol_op!(
                     builder,
                     block,
@@ -128,7 +130,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             BuiltIn::Ecrecover => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
+                let builder = &self.state.builder;
                 // `ecrecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s)`: the
                 // hash / r / s arguments keep their literal `uint256` type, but
                 // `sol.ecrecover` takes `fixedbytes<32>` for them and `ui8` for
@@ -153,7 +155,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             BuiltIn::Addmod => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
+                let builder = &self.state.builder;
                 // `addmod` operates on `uint256`, but a literal operand keeps its
                 // narrow type (`addmod(1, 2, d)` → ui8, ui8, ui256); `sol.addmod`
                 // requires identical operand/result types, so widen all to ui256.
@@ -166,7 +168,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             BuiltIn::Mulmod => {
                 let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.expression_emitter.state.builder;
+                let builder = &self.state.builder;
                 // `mulmod` operates on `uint256`; widen narrow literal operands so
                 // all operands/result share the type `sol.mulmod` requires.
                 let ui256 = builder.types.ui256;
@@ -226,10 +228,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 )
             )
         {
-            let (_operand, block) = self
-                .expression_emitter
-                .emit_value(&access.operand(), block)?;
-            let builder = &self.expression_emitter.state.builder;
+            let BlockAnd {
+                value: _operand,
+                block,
+            } = access.operand().emit(self, block)?;
+            let builder = &self.state.builder;
             let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
             return Ok((Some(placeholder), block));
         }
@@ -251,7 +254,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 )
             )
         {
-            let builder = &self.expression_emitter.state.builder;
+            let builder = &self.state.builder;
             let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
             return Ok((Some(placeholder), block));
         }
@@ -327,7 +330,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             // lower in the call dispatch (`CallKind::UdvtWrapUnwrap`); a bare
             // reference is a no-op, so yield a placeholder.
             Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
-                let builder = &self.expression_emitter.state.builder;
+                let builder = &self.state.builder;
                 let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
                 Ok((Some(placeholder), block))
             }
@@ -346,8 +349,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                         // The literal target lowers (no virtual redirect): an
                         // explicit `Base.f` names Base's own implementation, not
                         // the most-derived override a bare `f` would bind.
-                        self.expression_emitter
-                            .emit_function_constant(function_definition.node_id(), block)
+                        self.emit_function_constant(function_definition.node_id(), block)
                             .map(|(value, block)| (Some(value), block))
                     }
                 } else {
@@ -367,7 +369,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let (values, block) = self.emit_argument_values(arguments, block)?;
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         let result_type = builder.types.string(solx_utils::DataLocation::Memory);
         let value = sol_op!(
             builder,
@@ -379,7 +381,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
 
     /// Emits each positional argument and returns the resulting values
     /// alongside the current block. The shared evaluation primitive that
-    /// [`CallEmitter::emit_coerced_arguments`] builds on; `pub` so call sites in
+    /// [`ExpressionContext::emit_coerced_arguments`] builds on; `pub` so call sites in
     /// sibling modules (external/library/struct-constructor calls) reuse it
     /// rather than re-implementing the evaluation loop.
     pub fn emit_argument_values(
@@ -390,8 +392,8 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let mut values = Vec::with_capacity(arguments.len());
         let mut current = block;
         for argument in arguments.iter() {
-            let (value, next) = self.expression_emitter.emit_value(&argument, current)?;
-            values.push(value);
+            let BlockAnd { value, block: next } = argument.emit(self, current)?;
+            values.push(value.into_mlir());
             current = next;
         }
         Ok((values, current))
@@ -408,7 +410,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         buffer: Value<'context, 'block>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         let input = TypeConversion::coerce(buffer, builder.types.sol_string_memory, builder, block);
         sol_op!(
             builder,
@@ -434,11 +436,12 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
     where
         F: FnOnce(Value<'context, 'block>) -> Operation<'context>,
     {
-        let (address_value, block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
+        let BlockAnd {
+            value: address_value,
+            block,
+        } = access.operand().emit(self, block)?;
         let value = block
-            .append_operation(build_op(address_value))
+            .append_operation(build_op(address_value.into_mlir()))
             .result(0)
             .expect("unary member intrinsic always produces one result")
             .into();

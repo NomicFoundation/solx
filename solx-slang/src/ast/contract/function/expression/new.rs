@@ -2,11 +2,12 @@
 //! `new` expression lowering: dynamic-aggregate allocation (`new T[](n)`,
 //! `new bytes(n)`, `new string(n)`) and contract creation (`new C(args)`).
 //!
-//! An [`ExpressionEmitter`] method: `new.rs` lives in the expression module
+//! An [`ExpressionContext`] method: `new.rs` lives in the expression module
 //! subtree, so it lowers through the expression emitter directly rather than
 //! the call emitter.
 //!
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Operation;
@@ -21,15 +22,16 @@ use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
 
+use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::NewOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::ContractEmitter;
-use crate::ast::contract::function::expression::ExpressionEmitter;
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits a `new` expression: dynamic-aggregate allocation (`new T[](n)`,
     /// `new bytes(n)`) or contract creation (`new C(args)`).
     pub fn emit_new(
@@ -50,7 +52,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Some(inner @ (SlangType::Array(_) | SlangType::Bytes(_) | SlangType::String(_))) => {
                 Some(TypeConversion::resolve_slang_type(
                     inner,
-                    Some(DataLocation::Memory),
+                    LocationPolicy::Declared(Some(DataLocation::Memory)),
                     &self.state.builder,
                 ))
             }
@@ -65,8 +67,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             _ => None,
         };
         if let Some(result_type) = dynamic_result_type {
-            let (values, current_block) =
-                CallEmitter::new(self).emit_argument_values(arguments, block)?;
+            let (values, current_block) = self.emit_argument_values(arguments, block)?;
             let builder = &self.state.builder;
             let address = match values.first() {
                 Some(&size_value) => {
@@ -76,9 +77,22 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         builder,
                         &current_block,
                     );
-                    builder.emit_sol_malloc_sized_zeroed(result_type, size, &current_block)
+                    sol_op!(
+                        builder,
+                        &current_block,
+                        MallocOperation
+                            .addr(result_type)
+                            .size(size)
+                            .zero_init(Attribute::unit(builder.context))
+                    )
                 }
-                None => builder.emit_sol_malloc_zeroed(result_type, &current_block),
+                None => sol_op!(
+                    builder,
+                    &current_block,
+                    MallocOperation
+                        .addr(result_type)
+                        .zero_init(Attribute::unit(builder.context))
+                ),
             };
             return Ok((Some(address), current_block));
         }
@@ -104,11 +118,15 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         let parameter_types = contract_definition
             .constructor()
             .map(|constructor| {
-                TypeConversion::resolve_function_types(&constructor, &self.state.builder).0
+                TypeConversion::resolve_function_types(
+                    &constructor,
+                    LocationPolicy::Declared(None),
+                    &self.state.builder,
+                )
+                .0
             })
             .unwrap_or_default();
-        let (ctor_args, block) =
-            CallEmitter::new(self).emit_coerced_arguments(arguments, &parameter_types, block)?;
+        let (ctor_args, block) = self.emit_coerced_arguments(arguments, &parameter_types, block)?;
         let builder = &self.state.builder;
         let result_type = builder.types.contract(&contract_name, payable);
         let val =

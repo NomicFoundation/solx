@@ -20,6 +20,7 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::visitor::Visitor;
 use slang_solidity_v2::ast::visitor::accept_function_definition;
 
+use crate::ast::contract::body_origin::BodyOrigin;
 use crate::ast::contract::reachability::ReachabilityWalk;
 
 /// Visitor that records library functions reached from a walked function body.
@@ -34,8 +35,9 @@ pub struct LibraryCallCollector {
     bare_functions: Vec<FunctionDefinition>,
     /// Every function reached by a bare-identifier reference.
     reached: Vec<FunctionDefinition>,
-    /// Whether the function being walked is itself a library function.
-    inside_library: bool,
+    /// Where the function being walked originates (a library body enables
+    /// bare-identifier sibling-call collection).
+    origin: BodyOrigin,
 }
 
 impl LibraryCallCollector {
@@ -67,7 +69,11 @@ impl LibraryCallCollector {
 
         while let Some(function) = walk.next_body() {
             let mut collector = LibraryCallCollector {
-                inside_library: library_ids.contains(&function.node_id()),
+                origin: if library_ids.contains(&function.node_id()) {
+                    BodyOrigin::Library
+                } else {
+                    BodyOrigin::Contract
+                },
                 ..LibraryCallCollector::default()
             };
             accept_function_definition(&function, &mut collector);
@@ -114,7 +120,7 @@ impl Visitor for LibraryCallCollector {
         if let Expression::Identifier(identifier) = node
             && let Some(Definition::Function(function)) = identifier.resolve_to_definition()
         {
-            if self.inside_library && function.compute_selector().is_none() {
+            if matches!(self.origin, BodyOrigin::Library) && function.compute_selector().is_none() {
                 self.bare_functions.push(function.clone());
             }
             self.reached.push(function);

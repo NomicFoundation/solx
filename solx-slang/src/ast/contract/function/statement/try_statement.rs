@@ -4,20 +4,24 @@
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::CatchClause;
-use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::TryStatement;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::TryFallbackKind;
+use solx_mlir::ods::sol::StoreOperation;
+use solx_mlir::ods::sol::YieldOperation;
 
-use crate::ast::contract::function::expression::call::CallEmitter;
-use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::try_external_call::TryExternalCall;
+use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
+impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Emits a `try` statement as a `sol.try`: an external call with try
     /// semantics produces the success `status`, and the op carries four regions
     /// — success, panic, error, fallback. The success region binds the declared
@@ -33,31 +37,14 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let expression = try_statement.expression();
 
-        // Only external calls (`recv.f(args)` / `recv.f{value: v}(args)`) carry a
-        // real catch path; any other `try` expression runs only the success body.
-        let is_external_call = matches!(&expression, Expression::FunctionCallExpression(call)
-        if matches!(
-            call.operand(),
-            Expression::MemberAccessExpression(_) | Expression::CallOptionsExpression(_)
-        ));
-        if !is_external_call {
-            return self.emit_try_success_only(try_statement, block);
-        }
-        let Expression::FunctionCallExpression(call) = &expression else {
+        // Only a lowerable external call (`recv.f(args)` / `recv.f{value: v}(args)`)
+        // carries a real catch path; any other `try` expression runs only the
+        // success body.
+        let Some(try_call) = TryExternalCall::classify(&expression) else {
             return self.emit_try_success_only(try_statement, block);
         };
-
-        // Emit the external call with try semantics → (status, results). A
-        // non-try-lowerable shape (`None`) falls back to the success body.
-        let lowered = {
-            let emitter = self.expression_emitter();
-            let call_emitter = CallEmitter::new(&emitter);
-            call_emitter.emit_external_call_try(call, block)?
-        };
-        let (status, results, current_block) = match lowered {
-            Some(triple) => triple,
-            None => return self.emit_try_success_only(try_statement, block),
-        };
+        let (status, results, current_block) =
+            try_call.emit(&ExpressionContext::from(&*self), block)?;
 
         // Classify the catch clauses into the `sol.try` regions, all structurally
         // (Rule-7): a parameter-less `catch {}` has no error group; a low-level
@@ -118,7 +105,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         self.bind_try_returns(try_statement, &results, &success_block);
         let success_end = self.emit_block(try_statement.body().statements(), success_block)?;
         if let Some(end) = success_end {
-            self.state.builder.emit_sol_yield(&end);
+            sol_op_void!(&self.state.builder, &end, YieldOperation.ins(&[]));
         }
 
         // Typed `catch Panic(uint)` / `catch Error(string)`: the decoded value
@@ -174,28 +161,22 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         let parameter_type = parameter
             .get_type()
             .map(|slang_type| {
-                TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
+                TypeConversion::resolve_slang_type(
+                    &slang_type,
+                    LocationPolicy::Declared(None),
+                    &self.state.builder,
+                )
             })
             .unwrap_or_else(|| self.state.builder.types.ui256);
         let cast = TypeConversion::coerce(value, parameter_type, &self.state.builder, block);
         let pointer = self.state.builder.emit_sol_alloca(parameter_type, block);
-        self.state.builder.emit_sol_store(cast, pointer, block);
+        sol_op_void!(
+            &self.state.builder,
+            block,
+            StoreOperation.val(cast).addr(pointer)
+        );
         self.environment
             .define_variable(parameter.node_id(), pointer, parameter_type);
-    }
-
-    /// Decodes the returndata from `start` into `result_types`
-    /// (`GetReturnData` + `Decode`). The `sol.try` lowering owns returndata
-    /// decoding for the catch clauses (the decoded values arrive as region block
-    /// arguments), so this skeleton method is currently unused.
-    pub fn emit_returndata_decode(
-        &self,
-        start: i64,
-        result_types: &[Type<'context>],
-        block: &BlockRef<'context, 'block>,
-    ) -> Vec<Value<'context, 'block>> {
-        let _ = (start, result_types, block);
-        unimplemented!("returndata decode")
     }
 
     /// Emits a typed `catch Error(string memory r)` / `catch Panic(uint c)`
@@ -221,7 +202,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         self.bind_catch_parameter(&parameter, decoded, &block);
         let end = self.emit_block(clause.body().statements(), block)?;
         if let Some(end) = end {
-            self.state.builder.emit_sol_yield(&end);
+            sol_op_void!(&self.state.builder, &end, YieldOperation.ins(&[]));
         }
         Ok(())
     }
@@ -253,7 +234,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         }
         let end = self.emit_block(clause.body().statements(), block)?;
         if let Some(end) = end {
-            self.state.builder.emit_sol_yield(&end);
+            sol_op_void!(&self.state.builder, &end, YieldOperation.ins(&[]));
         }
         Ok(())
     }
@@ -266,31 +247,40 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
         let expression = try_statement.expression();
-        let (value, current_block) = {
-            let emitter = self.expression_emitter();
-            emitter.emit(&expression, block)?
+        let BlockAnd {
+            value,
+            block: current_block,
+        } = {
+            let emitter = ExpressionContext::from(&*self);
+            expression.emit(&emitter, block)?
         };
 
         if let Some(parameters) = try_statement.returns()
-            && let Some(value) = value
             && let Some(parameter) = parameters.iter().next()
             && parameter.name().is_some()
         {
             let parameter_type = parameter
                 .get_type()
                 .map(|slang_type| {
-                    TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
+                    TypeConversion::resolve_slang_type(
+                        &slang_type,
+                        LocationPolicy::Declared(None),
+                        &self.state.builder,
+                    )
                 })
                 .unwrap_or_else(|| self.state.builder.types.ui256);
-            let cast =
-                TypeConversion::coerce(value, parameter_type, &self.state.builder, &current_block);
+            let cast = value
+                .coerce_to(parameter_type, &self.state.builder, &current_block)
+                .into_mlir();
             let pointer = self
                 .state
                 .builder
                 .emit_sol_alloca(parameter_type, &current_block);
-            self.state
-                .builder
-                .emit_sol_store(cast, pointer, &current_block);
+            sol_op_void!(
+                &self.state.builder,
+                &current_block,
+                StoreOperation.val(cast).addr(pointer)
+            );
             self.environment
                 .define_variable(parameter.node_id(), pointer, parameter_type);
         }
@@ -298,3 +288,5 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         self.emit_block(try_statement.body().statements(), current_block)
     }
 }
+
+statement_emit!(TryStatement; |node, context, block| { context.emit_try(node, block) });

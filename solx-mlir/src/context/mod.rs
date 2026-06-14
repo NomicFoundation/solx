@@ -10,6 +10,7 @@ pub mod builder;
 pub mod environment;
 pub mod function;
 pub mod user_defined_operator;
+pub mod variable_binding;
 
 pub use self::user_defined_operator::UserDefinedOperator;
 

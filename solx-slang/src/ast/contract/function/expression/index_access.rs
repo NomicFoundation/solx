@@ -13,13 +13,17 @@ use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::ods::sol::LengthOperation;
+use solx_mlir::ods::sol::MapOperation;
 use solx_mlir::ods::sol::SliceOperation;
 use solx_utils::DataLocation;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Lowers `a[i]` / `m[k]` for arrays, dynamic `bytes`, mappings, and
     /// strings to `sol.gep` (sequential containers) or `sol.map` (mappings),
     /// followed by a `sol.load` of the addressed element. For dynamic
@@ -30,16 +34,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         &self,
         index_access: &IndexAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> anyhow::Result<(
+        crate::ast::Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    )> {
         // A slice `a[start:end]` produces a sub-array VALUE (not an element
         // address), lowered to `sol.slice`. `is_slice()` (the colon-presence
         // flag) distinguishes every slice form — including the open-ended
         // `a[i:]`, indistinguishable from the index `a[i]` by `end()` alone
         // (both `None`) — from a plain index access.
         if index_access.is_slice() {
-            return self
-                .emit_slice(index_access, block)
-                .map(|(value, block)| (Some(value), block));
+            return self.emit_slice(index_access, block);
         }
         let (address, element_type, block) = self.emit_index_access_address(index_access, block)?;
         let value = self
@@ -54,18 +59,21 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         // whose element is a calldata reference (`[b[i:j]][0]`) as `calldata`
         // while the loaded value is the correct memory reference.
         if solx_mlir::TypeFactory::is_sol_reference(value.r#type()) {
-            return Ok((Some(value), block));
+            return Ok((value.into(), block));
         }
         let result_type = index_access
             .get_type()
             .expect("slang types every index-access expression");
-        let slang_expected =
-            TypeConversion::resolve_slang_type(&result_type, None, &self.state.builder);
+        let slang_expected = TypeConversion::resolve_slang_type(
+            &result_type,
+            LocationPolicy::Declared(None),
+            &self.state.builder,
+        );
         let value = self
             .state
             .builder
             .emit_sol_bytes_cast(value, slang_expected, &block);
-        Ok((Some(value), block))
+        Ok((value.into(), block))
     }
 
     /// Emits a bounded calldata slice `a[start:end]` as a `sol.slice` value.
@@ -76,14 +84,22 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         &self,
         index_access: &IndexAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> anyhow::Result<(
+        crate::ast::Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    )> {
         let base = index_access.operand();
-        let (base_value, block) = self.emit_value(&base, block)?;
+        let BlockAnd {
+            value: base_value,
+            block,
+        } = base.emit(self, block)?;
         let ui256 = self.state.builder.types.ui256;
         let (start_value, block) = match index_access.start() {
             Some(start_expression) => {
-                let (value, block) = self.emit_value(&start_expression, block)?;
-                let value = TypeConversion::coerce(value, ui256, &self.state.builder, &block);
+                let BlockAnd { value, block } = start_expression.emit(self, block)?;
+                let value = value
+                    .coerce_to(ui256, &self.state.builder, &block)
+                    .into_mlir();
                 (value, block)
             }
             None => {
@@ -93,15 +109,21 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         };
         let (end_value, block) = match index_access.end() {
             Some(end_expression) => {
-                let (value, block) = self.emit_value(&end_expression, block)?;
-                let value = TypeConversion::coerce(value, ui256, &self.state.builder, &block);
+                let BlockAnd { value, block } = end_expression.emit(self, block)?;
+                let value = value
+                    .coerce_to(ui256, &self.state.builder, &block)
+                    .into_mlir();
                 (value, block)
             }
             None => {
                 // Open-ended slice `a[start:]` runs to the end of the array; its
                 // upper bound is the operand's length.
                 let builder = &self.state.builder;
-                let length = sol_op!(builder, block, LengthOperation.inp(base_value).len(ui256));
+                let length = sol_op!(
+                    builder,
+                    block,
+                    LengthOperation.inp(base_value.into_mlir()).len(ui256)
+                );
                 (length, block)
             }
         };
@@ -109,20 +131,20 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             &index_access
                 .get_type()
                 .expect("slang types every slice expression"),
-            None,
+            LocationPolicy::Declared(None),
             &self.state.builder,
         );
         let builder = &self.state.builder;
-        let value = sol_op!(
+        let value: Value<'context, 'block> = sol_op!(
             builder,
             block,
             SliceOperation
-                .arr(base_value)
+                .arr(base_value.into_mlir())
                 .start(start_value)
                 .end(end_value)
                 .res(result_type)
         );
-        Ok((value, block))
+        Ok((value.into(), block))
     }
 
     /// Emits the address yielded by `a[i]` / `m[k]` together with the element
@@ -155,13 +177,22 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .get_type()
             .expect("slang types every index-access expression");
 
-        let (base_value, block) = self.emit_value(&base, block)?;
-        let (index_value, block) = self.emit_value(&index_expression, block)?;
+        let BlockAnd {
+            value: base_value,
+            block,
+        } = base.emit(self, block)?;
+        let BlockAnd {
+            value: index_value,
+            block,
+        } = index_expression.emit(self, block)?;
 
         let (address, element_type) = match &base_type {
             SlangType::Mapping(_) => {
-                let element_type =
-                    TypeConversion::resolve_slang_type(&result_type, None, &self.state.builder);
+                let element_type = TypeConversion::resolve_slang_type(
+                    &result_type,
+                    LocationPolicy::Declared(None),
+                    &self.state.builder,
+                );
                 let base_location = Self::resolve_base_location(&base_type);
                 let address_type = Self::address_type(
                     &self.state.builder,
@@ -169,10 +200,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                     base_location,
                     &result_type,
                 );
-                let address =
-                    self.state
-                        .builder
-                        .emit_sol_map(base_value, index_value, address_type, &block);
+                let address = sol_op!(
+                    &self.state.builder,
+                    &block,
+                    MapOperation
+                        .mapping(base_value.into_mlir())
+                        .key(index_value.into_mlir())
+                        .addr(address_type)
+                );
                 (address, element_type)
             }
             _ => {
@@ -185,10 +220,12 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         0,
                     ))
                 };
-                let address =
-                    self.state
-                        .builder
-                        .emit_sol_gep(base_value, index_value, element_type, &block);
+                let address = self.state.builder.emit_sol_gep(
+                    base_value.into_mlir(),
+                    index_value.into_mlir(),
+                    element_type,
+                    &block,
+                );
                 (address, element_type)
             }
         };
@@ -210,3 +247,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         }
     }
 }
+
+expression_emit!(IndexAccessExpression; |node, context, block| {
+    let (value, block) = context.emit_index_access(node, block)?;
+    Ok(BlockAnd { block, value })
+});

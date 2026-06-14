@@ -3,7 +3,7 @@
 //!
 //! Contains the [`Builder`] type with cached MLIR types and emission methods
 //! for Sol dialect operations: contracts, functions, constants, control flow,
-//! memory, comparisons, calls, state variables, and EVM context intrinsics.
+//! memory, calls, state variables, and EVM context intrinsics.
 //!
 
 pub mod try_fallback_kind;
@@ -32,63 +32,41 @@ use melior::ir::r#type::TypeLike;
 use num::BigInt;
 use ruint::aliases::U256;
 
-use crate::CmpPredicate;
 use crate::StateMutability;
 use crate::context::builder::type_factory::TypeFactory;
-use crate::ods::sol::AddrOfOperation;
 use crate::ods::sol::AddressCastOperation;
 use crate::ods::sol::AllocaOperation;
-use crate::ods::sol::ArrayLitOperation;
-use crate::ods::sol::AssertOperation;
 use crate::ods::sol::BareCallOperation;
 use crate::ods::sol::BareDelegateCallOperation;
 use crate::ods::sol::BareStaticCallOperation;
-use crate::ods::sol::BreakOperation;
 use crate::ods::sol::BytesCastOperation;
 use crate::ods::sol::CallOperation;
 use crate::ods::sol::CastOperation;
-use crate::ods::sol::CmpOperation;
-use crate::ods::sol::ConditionOperation;
 use crate::ods::sol::ConstantOperation;
-use crate::ods::sol::ContinueOperation;
 use crate::ods::sol::ContractCastOperation;
 use crate::ods::sol::ContractOperation;
 use crate::ods::sol::ConvCastOperation;
-use crate::ods::sol::CopyOperation;
 use crate::ods::sol::DataLocCastOperation;
-use crate::ods::sol::DefaultFuncConstantOperation;
-use crate::ods::sol::DeleteOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::EnumCastOperation;
 use crate::ods::sol::ExtCallOperation;
-use crate::ods::sol::ExtFuncAddrOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
-use crate::ods::sol::ExtFuncSelectorOperation;
 use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::ForOperation;
-use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::FuncOperation;
 use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::GepOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::IfOperation;
-use crate::ods::sol::LibAddrOperation;
 use crate::ods::sol::LoadOperation;
-use crate::ods::sol::MallocOperation;
-use crate::ods::sol::MapOperation;
-use crate::ods::sol::PopOperation;
-use crate::ods::sol::PushOperation;
-use crate::ods::sol::PushStringOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
 use crate::ods::sol::StateVarOperation;
 use crate::ods::sol::StoreOperation;
-use crate::ods::sol::StringLitOperation;
 use crate::ods::sol::TryOperation;
 use crate::ods::sol::WhileOperation;
-use crate::ods::sol::YieldOperation;
 
 use crate::context::builder::try_fallback_kind::TryFallbackKind;
 
@@ -331,65 +309,6 @@ impl<'context> Builder<'context> {
 
     // ==== String literals ====
 
-    /// Emits a `sol.string_lit` constant with a `!sol.string<Memory>` result.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    pub fn emit_sol_string_lit<'block, B>(&self, value: &str, block: &B) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                StringLitOperation::builder(self.context, self.unknown_location)
-                    .value(StringAttribute::new(self.context, value))
-                    .addr(self.types.sol_string_memory)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.string_lit always produces one result")
-            .into()
-    }
-
-    /// Emits a `sol.string_lit` from raw `bytes` that need not be valid UTF-8 (a
-    /// `hex"..."` literal, an escaped `"\xff"`). The `value` attribute is built
-    /// from the bytes via the C API (melior's `StringAttribute::new` takes a
-    /// UTF-8 `&str`), and the op via the raw `OperationBuilder` because the
-    /// generated `.value()` setter requires a `StringAttribute`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_string_lit_bytes<'block, B>(
-        &self,
-        bytes: &[u8],
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        // SAFETY: the `&str` is only consumed by `StringAttribute::new`, which
-        // hands it to `StringRef::new` — that reads `.as_ptr()` and `.len()` and
-        // never assumes UTF-8 validity. No other code observes it as a Rust
-        // string, so non-UTF-8 bytes are sound here.
-        let value = unsafe { std::str::from_utf8_unchecked(bytes) };
-        block
-            .append_operation(
-                StringLitOperation::builder(self.context, self.unknown_location)
-                    .value(StringAttribute::new(self.context, value))
-                    .addr(self.types.sol_string_memory)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.string_lit always produces one result")
-            .into()
-    }
-
     /// Emits a `sol.revert` carrying an optional payload.
     ///
     /// `signature` doubles as the payload string: for custom errors
@@ -427,24 +346,6 @@ impl<'context> Builder<'context> {
         block.append_operation(builder.build().into());
     }
 
-    /// Emits a `sol.assert` panic if the condition is false.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    pub fn emit_sol_assert<'block, B>(&self, condition: Value<'context, 'block>, block: &B)
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block.append_operation(
-            AssertOperation::builder(self.context, self.unknown_location)
-                .cond(condition)
-                .build()
-                .into(),
-        );
-    }
-
     /// Emits a `sol.require` conditional revert with an optional message.
     ///
     /// Reverts if `condition` is false. When `msg` is `Some`, the revert
@@ -475,24 +376,6 @@ impl<'context> Builder<'context> {
             builder = builder.call(Attribute::unit(self.context));
         }
         block.append_operation(builder.build().into());
-    }
-
-    /// Emits a `sol.return` terminator.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    pub fn emit_sol_return<'block, B>(&self, operands: &[Value<'context, 'block>], block: &B)
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block.append_operation(
-            ReturnOperation::builder(self.context, self.unknown_location)
-                .operands(operands)
-                .build()
-                .into(),
-        );
     }
 
     // ==== Control flow ====
@@ -786,76 +669,6 @@ impl<'context> Builder<'context> {
         (cond_ref, body_ref, step_ref)
     }
 
-    /// Emits a `sol.yield` region terminator.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_yield<'block, B>(&self, block: &B)
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block.append_operation(
-            YieldOperation::builder(self.context, self.unknown_location)
-                .ins(&[])
-                .build()
-                .into(),
-        );
-    }
-
-    /// Emits a `sol.condition` loop condition terminator.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_condition<'block, B>(&self, condition: Value<'context, 'block>, block: &B)
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block.append_operation(
-            ConditionOperation::builder(self.context, self.unknown_location)
-                .condition(condition)
-                .build()
-                .into(),
-        );
-    }
-
-    /// Emits a `sol.break` terminator.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_break<'block, B>(&self, block: &B)
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block.append_operation(
-            BreakOperation::builder(self.context, self.unknown_location)
-                .build()
-                .into(),
-        );
-    }
-
-    /// Emits a `sol.continue` terminator.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_continue<'block, B>(&self, block: &B)
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block.append_operation(
-            ContinueOperation::builder(self.context, self.unknown_location)
-                .build()
-                .into(),
-        );
-    }
-
     // ==== Memory ====
 
     /// Emits a `sol.alloca` for a local variable, returning the pointer.
@@ -915,7 +728,13 @@ impl<'context> Builder<'context> {
         let pointer = self.emit_sol_alloca(element_type, block);
         if IntegerType::try_from(element_type).is_ok() {
             let zero = self.emit_sol_constant(0, element_type, block);
-            self.emit_sol_store(zero, pointer, block);
+            block.append_operation(
+                StoreOperation::builder(self.context, self.unknown_location)
+                    .val(zero)
+                    .addr(pointer)
+                    .build()
+                    .into(),
+            );
         } else {
             unimplemented!("zero-initialization for non-integer type {element_type}");
         }
@@ -945,110 +764,9 @@ impl<'context> Builder<'context> {
             };
             values.push(value);
         }
-        self.emit_sol_return(&values, block);
-    }
-
-    /// Emits a `sol.malloc` for an aggregate type, returning the address.
-    ///
-    /// Use for memory-located structs, arrays, bytes, and strings constructed
-    /// via literals (e.g. `S(a, b)` struct construction).
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_malloc<'block, B>(
-        &self,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                MallocOperation::builder(self.context, self.unknown_location)
-                    .addr(result_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.malloc always produces one result")
-            .into()
-    }
-
-    /// Emits a `sol.malloc` of a fixed aggregate, zero-initialising it — the
-    /// default value of a freshly-allocated aggregate.
-    pub fn emit_sol_malloc_zeroed<'block, B>(
-        &self,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                MallocOperation::builder(self.context, self.unknown_location)
-                    .addr(result_type)
-                    .zero_init(Attribute::unit(self.context))
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.malloc always produces one result")
-            .into()
-    }
-
-    /// Emits a `sol.malloc` of a dynamic aggregate of `size` elements/bytes,
-    /// zero-initialised — `new T[](n)` / `new bytes(n)` / `new string(n)`.
-    pub fn emit_sol_malloc_sized_zeroed<'block, B>(
-        &self,
-        result_type: Type<'context>,
-        size: Value<'context, 'block>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                MallocOperation::builder(self.context, self.unknown_location)
-                    .addr(result_type)
-                    .size(size)
-                    .zero_init(Attribute::unit(self.context))
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.malloc always produces one result")
-            .into()
-    }
-
-    /// Emits a `sol.copy` between two references.
-    ///
-    /// Use for source-level assignments that cross data locations (e.g. a
-    /// state-variable initializer copying a memory string literal into the
-    /// declared storage slot).
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_copy<'block, B>(
-        &self,
-        src: Value<'context, 'block>,
-        dst: Value<'context, 'block>,
-        block: &B,
-    ) where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
         block.append_operation(
-            CopyOperation::builder(self.context, self.unknown_location)
-                .src(src)
-                .dst(dst)
+            ReturnOperation::builder(self.context, self.unknown_location)
+                .operands(&values)
                 .build()
                 .into(),
         );
@@ -1088,30 +806,6 @@ impl<'context> Builder<'context> {
             .into())
     }
 
-    /// Emits a `sol.store` to a pointer.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug
-    /// in the builder.
-    pub fn emit_sol_store<'block, B>(
-        &self,
-        value: Value<'context, 'block>,
-        pointer: Value<'context, 'block>,
-        block: &B,
-    ) where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block.append_operation(
-            StoreOperation::builder(self.context, self.unknown_location)
-                .val(value)
-                .addr(pointer)
-                .build()
-                .into(),
-        );
-    }
-
     /// Emits a `sol.gep` for array / `bytes` / `string` / struct field
     /// access. `element_type` is the pointee the caller wants to address.
     /// The gep's result type is derived from `(base_address.r#type(),
@@ -1146,139 +840,6 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.gep always produces one result")
-            .into()
-    }
-
-    /// Emits a `sol.map` for mapping value access by key.
-    ///
-    /// `address_type` is the result address type the caller has computed
-    /// (typically `!sol.ptr<value, Storage>` for primitive value types).
-    pub fn emit_sol_map<'block, B>(
-        &self,
-        mapping: Value<'context, 'block>,
-        key: Value<'context, 'block>,
-        address_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                MapOperation::builder(self.context, self.unknown_location)
-                    .mapping(mapping)
-                    .key(key)
-                    .addr(address_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.map always produces one result")
-            .into()
-    }
-
-    /// Emits a `sol.push` returning a reference to the newly appended slot.
-    ///
-    /// `address_type` is the result reference type the caller has computed
-    /// (typically `!sol.ptr<element, Storage>` for primitive element types).
-    pub fn emit_sol_push<'block, B>(
-        &self,
-        array: Value<'context, 'block>,
-        address_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                PushOperation::builder(self.context, self.unknown_location)
-                    .inp(array)
-                    .addr(address_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.push always produces one result")
-            .into()
-    }
-
-    /// Emits a `sol.push_string` appending the byte `value` to the `bytes`
-    /// reference `address` in place. Unlike `sol.push`, the value is passed
-    /// directly and the op yields no slot reference (it has no result), since a
-    /// packed `bytes` element is not separately addressable.
-    pub fn emit_sol_push_string<'block, B>(
-        &self,
-        address: Value<'context, 'block>,
-        value: Value<'context, 'block>,
-        block: &B,
-    ) where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block.append_operation(
-            PushStringOperation::builder(self.context, self.unknown_location)
-                .addr(address)
-                .value(value)
-                .build()
-                .into(),
-        );
-    }
-
-    /// Emits a `sol.delete` recursively clearing the reference-typed storage
-    /// aggregate at `reference` to its zero value (`delete x` for arrays,
-    /// strings/bytes, and structs). The op's lowering performs the deep clear.
-    pub fn emit_sol_delete<'block, B>(&self, reference: Value<'context, 'block>, block: &B)
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block.append_operation(
-            DeleteOperation::builder(self.context, self.unknown_location)
-                .reference(reference)
-                .build()
-                .into(),
-        );
-    }
-
-    /// Emits a `sol.pop` removing the last element from the array.
-    pub fn emit_sol_pop<'block, B>(&self, array: Value<'context, 'block>, block: &B)
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block.append_operation(
-            PopOperation::builder(self.context, self.unknown_location)
-                .inp(array)
-                .build()
-                .into(),
-        );
-    }
-
-    /// Emits a `sol.array_lit` constructing an array from `elements` of the
-    /// caller-provided `array_type` (typically `!sol.array<N x T, Memory>`).
-    pub fn emit_sol_array_lit<'block, B>(
-        &self,
-        elements: &[Value<'context, 'block>],
-        array_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                ArrayLitOperation::builder(self.context, self.unknown_location)
-                    .ins(elements)
-                    .addr(array_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.array_lit always produces one result")
             .into()
     }
 
@@ -1349,42 +910,6 @@ impl<'context> Builder<'context> {
         Ok(results)
     }
 
-    // ==== Comparisons ====
-
-    /// Emits a `sol.cmp` comparison returning `i1`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    pub fn emit_sol_cmp<'block, B>(
-        &self,
-        lhs: Value<'context, 'block>,
-        rhs: Value<'context, 'block>,
-        predicate: CmpPredicate,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let predicate_attribute = IntegerAttribute::new(
-            IntegerType::new(self.context, solx_utils::BIT_LENGTH_X64 as u32).into(),
-            predicate as i64,
-        );
-        block
-            .append_operation(
-                CmpOperation::builder(self.context, self.unknown_location)
-                    .predicate(predicate_attribute.into())
-                    .lhs(lhs)
-                    .rhs(rhs)
-                    .result(self.types.i1)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.cmp always produces one result")
-            .into()
-    }
 
     /// Emits a `sol.cast` to an arbitrary target type.
     ///
@@ -1686,59 +1211,6 @@ impl<'context> Builder<'context> {
             .into()
     }
 
-    /// Emits a `sol.func_constant` producing an internal function pointer
-    /// (`!sol.func_ref<…>`) to the function named `name`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_func_constant<'block, B>(
-        &self,
-        name: &str,
-        func_ref_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                FuncConstantOperation::builder(self.context, self.unknown_location)
-                    .addr(func_ref_type)
-                    .sym(FlatSymbolRefAttribute::new(self.context, name))
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.func_constant always produces one result")
-            .into()
-    }
-
-    /// Emits a `sol.default_func_constant` — the zero value of an internal
-    /// function pointer (`!sol.func_ref<…>`), a default-initialised pointer that
-    /// reverts when called.
-    pub fn emit_sol_default_func_constant<'block, B>(
-        &self,
-        func_ref_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                DefaultFuncConstantOperation::builder(self.context, self.unknown_location)
-                    .addr(func_ref_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.default_func_constant always produces one result")
-            .into()
-    }
-
     /// Emits a `sol.icall` — an indirect call through an internal function
     /// pointer `callee` — and returns its result values.
     ///
@@ -1799,54 +1271,6 @@ impl<'context> Builder<'context> {
             )
             .result(0)
             .expect("sol.ext_func_constant always produces one result")
-            .into()
-    }
-
-    /// Emits a `sol.ext_func_selector` extracting the 4-byte selector
-    /// (`!sol.fixedbytes<4>`) from an external function-reference value.
-    pub fn emit_sol_ext_func_selector<'block, B>(
-        &self,
-        func: Value<'context, 'block>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                ExtFuncSelectorOperation::builder(self.context, self.unknown_location)
-                    .func(func)
-                    .result(self.types.fixed_bytes(4))
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.ext_func_selector always produces one result")
-            .into()
-    }
-
-    /// Emits a `sol.ext_func_addr` extracting the address (`!sol.address`) from
-    /// an external function-reference value.
-    pub fn emit_sol_ext_func_addr<'block, B>(
-        &self,
-        func: Value<'context, 'block>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                ExtFuncAddrOperation::builder(self.context, self.unknown_location)
-                    .func(func)
-                    .result(self.types.sol_address)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.ext_func_addr always produces one result")
             .into()
     }
 
@@ -1960,31 +1384,6 @@ impl<'context> Builder<'context> {
             results.push(operation.result(index + 1)?.into());
         }
         Ok((status, results))
-    }
-
-    /// Emits a `sol.lib_addr` yielding the deployed address of the library named
-    /// by the link-reference symbol `name` (`"<file>:<Library>"`) — a link-time
-    /// placeholder the linker resolves.
-    pub fn emit_sol_lib_addr<'block, B>(&self, name: &str, block: &B) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        // melior renames the reserved attribute name `name` to `_name` (its
-        // `dialect!` macro prefixes `name`/`operation`/`builder` with `_` to
-        // avoid clashing with the builder's own methods), so the generated
-        // setter is `_name` — the typed builder does expose it.
-        block
-            .append_operation(
-                LibAddrOperation::builder(self.context, self.unknown_location)
-                    ._name(StringAttribute::new(self.context, name))
-                    .val(self.types.sol_address)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.lib_addr always produces one result")
-            .into()
     }
 
     /// Emits a `sol.ext_call` with the `delegate_call` + `library_call` flags — an
@@ -2190,34 +1589,6 @@ impl<'context> Builder<'context> {
             operation = operation.transient(Attribute::unit(self.context));
         }
         block.append_operation(operation.build().into());
-    }
-
-    /// Emits a `sol.addr_of` returning a `!sol.ptr<ui256, Storage>`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
-    pub fn emit_sol_addr_of<'block, B>(
-        &self,
-        name: &str,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                AddrOfOperation::builder(self.context, self.unknown_location)
-                    .var(FlatSymbolRefAttribute::new(self.context, name))
-                    .addr(result_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.addr_of always produces one result")
-            .into()
     }
 
     // ==== Shared helpers ====

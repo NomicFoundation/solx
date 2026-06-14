@@ -2,6 +2,7 @@
 //! Dynamic-array and `bytes` member built-ins: `push` and `pop`.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -9,24 +10,35 @@ use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
+use solx_mlir::ods::sol::CopyOperation;
+use solx_mlir::ods::sol::PopOperation;
+use solx_mlir::ods::sol::PushOperation;
+use solx_mlir::ods::sol::PushStringOperation;
+use solx_mlir::ods::sol::StoreOperation;
 
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::Toward;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits `arr.pop()` / `bytes.pop()` as `sol.pop`.
     pub fn emit_array_pop(
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (array_value, block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
-        self.expression_emitter
-            .state
-            .builder
-            .emit_sol_pop(array_value, &block);
+        let BlockAnd {
+            value: array_value,
+            block,
+        } = access.operand().emit(self, block)?;
+        sol_op_void!(
+            &self.state.builder,
+            &block,
+            PopOperation.inp(array_value.into_mlir())
+        );
         Ok((None, block))
     }
 
@@ -49,18 +61,27 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             // `bytes.push(x)` appends a single byte in place via `sol.push_string`;
             // the packed element is not separately addressable, so unlike an array
             // push there is no returned slot to store into.
-            let (bytes_reference, block) = self.expression_emitter.emit_value(&base, block)?;
+            let BlockAnd {
+                value: bytes_reference,
+                block,
+            } = base.emit(self, block)?;
             // `data.push("a")` appends a string-literal byte: materialise it as a
             // `byte` constant rather than a runtime `sol.string`.
-            let byte_target = self.expression_emitter.state.builder.types.fixed_bytes(1);
-            let (value, block) = self.expression_emitter.emit_value_for_target(
-                value_argument,
-                byte_target,
-                block,
-            )?;
-            let builder = &self.expression_emitter.state.builder;
-            let byte_value = TypeConversion::coerce(value, byte_target, builder, &block);
-            builder.emit_sol_push_string(bytes_reference, byte_value, &block);
+            let byte_target = self.state.builder.types.fixed_bytes(1);
+            let BlockAnd { value, block } = (Toward {
+                expression: value_argument,
+                target_type: byte_target,
+            })
+            .emit(self, block)?;
+            let builder = &self.state.builder;
+            let byte_value = value.coerce_to(byte_target, builder, &block).into_mlir();
+            sol_op_void!(
+                builder,
+                &block,
+                PushStringOperation
+                    .addr(bytes_reference.into_mlir())
+                    .value(byte_value)
+            );
             return Ok((None, block));
         }
         let (new_slot, element_type, block) = self.emit_push_slot(access, block)?;
@@ -70,7 +91,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             // reference element as its canonical storage reference (the same dual
             // behaviour as an index access `a[i]`; the raw slot pointer would
             // mis-cast in the consumer).
-            let builder = &self.expression_emitter.state.builder;
+            let builder = &self.state.builder;
             let loaded = builder.emit_sol_load(new_slot, element_type, &block)?;
             return Ok((Some(loaded), block));
         };
@@ -79,19 +100,26 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             // appended by copying the source (a memory aggregate) into the
             // storage slot `push` returns — the same memory→storage `sol.copy`
             // solc emits, and what the lvalue form `arr.push() = v` already does.
-            let (value, block) = self.expression_emitter.emit_value(&value_argument, block)?;
-            self.expression_emitter
-                .state
-                .builder
-                .emit_sol_copy(value, new_slot, &block);
+            let BlockAnd { value, block } = value_argument.emit(self, block)?;
+            sol_op_void!(
+                &self.state.builder,
+                &block,
+                CopyOperation.src(value.into_mlir()).dst(new_slot)
+            );
             return Ok((None, block));
         }
-        let (value, block) =
-            self.expression_emitter
-                .emit_value_for_target(&value_argument, element_type, block)?;
-        let builder = &self.expression_emitter.state.builder;
-        let cast_value = TypeConversion::coerce(value, element_type, builder, &block);
-        builder.emit_sol_store(cast_value, new_slot, &block);
+        let BlockAnd { value, block } = (Toward {
+            expression: &value_argument,
+            target_type: element_type,
+        })
+        .emit(self, block)?;
+        let builder = &self.state.builder;
+        let cast_value = value.coerce_to(element_type, builder, &block).into_mlir();
+        sol_op_void!(
+            builder,
+            &block,
+            StoreOperation.val(cast_value).addr(new_slot)
+        );
         Ok((None, block))
     }
 
@@ -112,10 +140,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let base_slang_type = base
             .get_type()
             .expect("slang types the base of an array push");
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         let (element_type, slang_location) = match &base_slang_type {
             SlangType::Array(array_type) => (
-                TypeConversion::resolve_slang_type(&array_type.element_type(), None, builder),
+                TypeConversion::resolve_slang_type(
+                    &array_type.element_type(),
+                    LocationPolicy::Declared(None),
+                    builder,
+                ),
                 array_type.location(),
             ),
             SlangType::Bytes(bytes_type) => (builder.types.fixed_bytes(1), bytes_type.location()),
@@ -130,7 +162,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             other => solx_utils::DataLocation::from_slang(other, None),
         };
-        let (array_value, block) = self.expression_emitter.emit_value(&base, block)?;
+        let BlockAnd {
+            value: array_value,
+            block,
+        } = base.emit(self, block)?;
         // solc's `sol.push` yields the new element's reference type directly when
         // the element is a reference type (nested array / struct / string) — the
         // slot is then copied into via `sol.copy` — and a `!sol.ptr` to the
@@ -142,7 +177,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         } else {
             builder.types.pointer(element_type, base_location)
         };
-        let new_slot = builder.emit_sol_push(array_value, push_result_type, &block);
+        let new_slot = sol_op!(
+            builder,
+            &block,
+            PushOperation
+                .inp(array_value.into_mlir())
+                .addr(push_result_type)
+        );
         Ok((new_slot, element_type, block))
     }
 }

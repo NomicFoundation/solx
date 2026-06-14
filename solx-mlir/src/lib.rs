@@ -27,5 +27,6 @@ pub use self::context::builder::try_fallback_kind::TryFallbackKind;
 pub use self::context::builder::type_factory::TypeFactory;
 pub use self::context::builder::type_factory::array_size::ArraySize;
 pub use self::context::environment::Environment;
+pub use self::context::variable_binding::VariableBinding;
 pub use self::dialect::Dialect;
 pub use self::output::MlirOutput;

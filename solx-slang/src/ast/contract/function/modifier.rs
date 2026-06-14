@@ -27,20 +27,26 @@ use slang_solidity_v2::ast::Statements;
 
 use solx_mlir::Environment;
 use solx_mlir::StateMutability;
+use solx_mlir::ods::sol::ReturnOperation;
+use solx_mlir::ods::sol::StoreOperation;
 
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
 use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::body_kind::BodyKind;
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::modifier_body_call::ModifierBodyCall;
-use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::contract::function::modifier_parameter_binding::ModifierParameterBinding;
+use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-/// The evaluated arguments of one modifier stage: `(declaration node id, value,
-/// type)` per bound modifier parameter — keyed by the parameter's `NodeId` so it
-/// binds into the [`NodeId`]-keyed environment. A private support alias (not a
-/// top-level type, so §2a is satisfied by the sole [`ModifiedBody`] struct).
-pub type ModifierStageParams<'context, 'env> = Vec<(NodeId, Value<'context, 'env>, Type<'context>)>;
+/// The evaluated arguments of one modifier stage: one
+/// [`ModifierParameterBinding`] per bound modifier parameter. A support alias
+/// (not a top-level type, so §2a is satisfied by the sole [`ModifiedBody`]
+/// struct).
+pub type ModifierStageParams<'context, 'env> = Vec<ModifierParameterBinding<'context, 'env>>;
 
 /// The frame threaded through the modifier-wrapped emission of one function.
 ///
@@ -166,12 +172,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .collect();
         let stage_argument_types: Vec<Vec<Type<'context>>> = modifier_stage_params
             .iter()
-            .map(|params| {
-                params
-                    .iter()
-                    .map(|(_, _, parameter_type)| *parameter_type)
-                    .collect()
-            })
+            .map(|params| params.iter().map(|binding| binding.element_type).collect())
             .collect();
         for index in 0..stage_count {
             let next_symbol = if index + 1 < stage_count {
@@ -203,10 +204,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // shared return slots, then fall through to `f`'s epilogue.
         let mut forward_params: Vec<Value<'context, 'block>> = Vec::new();
         for params in &modifier_stage_params {
-            for (_, pointer, parameter_type) in params {
+            for binding in params {
                 forward_params.push(self.state.builder.emit_sol_load(
-                    *pointer,
-                    *parameter_type,
+                    binding.pointer,
+                    binding.element_type,
                     &current_block,
                 )?);
             }
@@ -242,7 +243,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     ) -> anyhow::Result<()> {
         let parameter_types: Vec<Type<'context>> = modifier_params
             .iter()
-            .map(|(_, _, parameter_type)| *parameter_type)
+            .map(|binding| binding.element_type)
             .chain(downstream_types.iter().copied())
             .chain(result_types.iter().copied())
             .collect();
@@ -263,11 +264,18 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         // Bind this modifier's parameters from the leading arguments.
         let mut environment = Environment::new();
-        for (index, (declaration, _, parameter_type)) in modifier_params.iter().enumerate() {
+        for (index, binding) in modifier_params.iter().enumerate() {
             let value: Value<'context, '_> = entry.argument(index)?.into();
-            let pointer = self.state.builder.emit_sol_alloca(*parameter_type, &entry);
-            self.state.builder.emit_sol_store(value, pointer, &entry);
-            environment.define_variable(*declaration, pointer, *parameter_type);
+            let pointer = self
+                .state
+                .builder
+                .emit_sol_alloca(binding.element_type, &entry);
+            sol_op_void!(
+                &self.state.builder,
+                &entry,
+                StoreOperation.val(value).addr(pointer)
+            );
+            environment.define_variable(binding.declaration, pointer, binding.element_type);
         }
 
         // Downstream values (later modifiers' arguments ++ `f`'s parameters) are
@@ -284,11 +292,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         for (index, &return_type) in result_types.iter().enumerate() {
             let pointer = self.state.builder.emit_sol_alloca(return_type, &entry);
             let incoming: Value<'context, '_> = entry.argument(return_offset + index)?.into();
-            self.state.builder.emit_sol_store(incoming, pointer, &entry);
+            sol_op_void!(
+                &self.state.builder,
+                &entry,
+                StoreOperation.val(incoming).addr(pointer)
+            );
             return_slots.push(Some(pointer));
         }
 
-        let mut emitter = StatementEmitter::new(
+        let mut emitter = StatementContext::new(
             self.state,
             &mut environment,
             &region,
@@ -306,7 +318,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut current_block = entry;
         let mut terminated = false;
         for statement in modifier_body.iter() {
-            match emitter.emit(&statement, current_block)? {
+            match statement.emit(&mut emitter, current_block)? {
                 Some(next) => current_block = next,
                 None => {
                     terminated = true;
@@ -413,14 +425,17 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         // Evaluate the argument even when the parameter is unnamed
                         // (`constructor(uint)`) — the evaluation may have side
                         // effects that must still run, in base-linearisation order.
-                        let (value, next_block) = {
-                            let emitter = ExpressionEmitter::new(
+                        let BlockAnd {
+                            value,
+                            block: next_block,
+                        } = {
+                            let emitter = ExpressionContext::new(
                                 self.state,
                                 evaluating_scope,
                                 self.storage_layout,
                                 ArithmeticMode::Checked,
                             );
-                            emitter.emit_value(argument, current_block)?
+                            argument.emit(&emitter, current_block)?
                         };
                         current_block = next_block;
                         let parameter_type = parameter
@@ -428,24 +443,23 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                             .map(|slang_type| {
                                 TypeConversion::resolve_slang_type(
                                     &slang_type,
-                                    None,
+                                    LocationPolicy::Declared(None),
                                     &self.state.builder,
                                 )
                             })
                             .unwrap_or_else(|| self.state.builder.types.ui256);
-                        let cast = TypeConversion::coerce(
-                            value,
-                            parameter_type,
-                            &self.state.builder,
-                            &current_block,
-                        );
+                        let cast = value
+                            .coerce_to(parameter_type, &self.state.builder, &current_block)
+                            .into_mlir();
                         let pointer = self
                             .state
                             .builder
                             .emit_sol_alloca(parameter_type, &current_block);
-                        self.state
-                            .builder
-                            .emit_sol_store(cast, pointer, &current_block);
+                        sol_op_void!(
+                            &self.state.builder,
+                            &current_block,
+                            StoreOperation.val(cast).addr(pointer)
+                        );
                         // Bind by the parameter's node id (the recut keys variables
                         // by declaration id, so an unnamed parameter binds harmlessly
                         // and a reference resolves through `resolve_to_definition`).
@@ -510,7 +524,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
             if modifier_stages.is_empty() {
                 for statement in body.statements().iter() {
-                    let mut emitter = StatementEmitter::new(
+                    let mut emitter = StatementContext::new(
                         self.state,
                         environment,
                         &region,
@@ -518,7 +532,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         &return_types,
                         &[],
                     );
-                    match emitter.emit(&statement, current_block)? {
+                    match statement.emit(&mut emitter, current_block)? {
                         Some(next) => current_block = next,
                         None => {
                             terminated = true;
@@ -532,7 +546,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 // body need not be a separate `sol.func`.
                 modifier_stages.push(body.statements());
                 modifier_stage_params.push(Vec::new());
-                let mut emitter = StatementEmitter::new(
+                let mut emitter = StatementContext::new(
                     self.state,
                     environment,
                     &region,
@@ -554,7 +568,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         if !terminated {
-            self.state.builder.emit_sol_return(&[], &current_block);
+            sol_op_void!(
+                &self.state.builder,
+                &current_block,
+                ReturnOperation.operands(&[])
+            );
         }
         Ok(())
     }
@@ -621,14 +639,17 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 // Evaluate the argument even when the parameter is unnamed
                 // (`modifier m(uint) {...}`) — the evaluation may have side
                 // effects (`m(f(x))`) that must still run.
-                let (value, next_block) = {
-                    let emitter = ExpressionEmitter::new(
+                let BlockAnd {
+                    value,
+                    block: next_block,
+                } = {
+                    let emitter = ExpressionContext::new(
                         self.state,
                         environment,
                         self.storage_layout,
                         ArithmeticMode::Checked,
                     );
-                    emitter.emit_value(&argument, block)?
+                    argument.emit(&emitter, block)?
                 };
                 block = next_block;
                 // An unnamed modifier parameter is never referenced in the body,
@@ -640,14 +661,27 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 let parameter_type = parameter
                     .get_type()
                     .map(|slang_type| {
-                        TypeConversion::resolve_slang_type(&slang_type, None, &self.state.builder)
+                        TypeConversion::resolve_slang_type(
+                            &slang_type,
+                            LocationPolicy::Declared(None),
+                            &self.state.builder,
+                        )
                     })
                     .unwrap_or_else(|| self.state.builder.types.ui256);
-                let cast =
-                    TypeConversion::coerce(value, parameter_type, &self.state.builder, &block);
+                let cast = value
+                    .coerce_to(parameter_type, &self.state.builder, &block)
+                    .into_mlir();
                 let pointer = self.state.builder.emit_sol_alloca(parameter_type, &block);
-                self.state.builder.emit_sol_store(cast, pointer, &block);
-                stage_params.push((parameter.node_id(), pointer, parameter_type));
+                sol_op_void!(
+                    &self.state.builder,
+                    &block,
+                    StoreOperation.val(cast).addr(pointer)
+                );
+                stage_params.push(ModifierParameterBinding {
+                    declaration: parameter.node_id(),
+                    pointer,
+                    element_type: parameter_type,
+                });
             }
             modifier_stages.push(modifier_body.statements());
             modifier_params.push(stage_params);

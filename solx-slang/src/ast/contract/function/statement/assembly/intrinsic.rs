@@ -11,9 +11,9 @@ use slang_solidity_v2::ast::BuiltIn;
 use solx_mlir::YulCmpPredicate;
 use solx_mlir::ods::yul;
 
-use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::contract::function::statement::StatementContext;
 
-impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
+impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Emits a Yul EVM-opcode intrinsic, dispatching on the TYPED
     /// `BuiltIn::Yul*` variant (R8-9: resolved via `resolve_to_built_in()`, NOT
     /// `match name: &str` — a Rule-7 conversion, not a carve-out).

@@ -22,9 +22,12 @@ use slang_solidity_v2::ast::YulStatement;
 use slang_solidity_v2::ast::YulSwitchCase;
 use slang_solidity_v2::ast::YulValueCase;
 
-use crate::ast::contract::function::statement::StatementEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::statement::StatementContext;
 
-impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
+impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Emits an `assembly { … }` block — the top-level Yul block, emitted with
     /// function-definition hoisting ([`Self::emit_yul_statements_hoisted`]) while
     /// reusing the enclosing function scope (no nested lexical scope).
@@ -376,9 +379,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             && let Some(Definition::Constant(constant)) = identifier.resolve_to_definition()
         {
             let initializer = constant.value().expect("constant has no initializer");
-            let (value, block) = self.expression_emitter().emit(&initializer, block)?;
-            let value = value.expect("constant initializer produced no value");
-            let widened = builder.emit_sol_cast(value, i256, &block);
+            let emitter = ExpressionContext::from(self);
+            let BlockAnd { value, block } = initializer.emit(&emitter, block)?;
+            let widened = builder.emit_sol_cast(value.into_mlir(), i256, &block);
             return Ok((widened, block));
         }
 
@@ -426,7 +429,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                             .resolve_to_definition()
                             .expect("yul path head resolves to a declaration")
                             .node_id();
-                        let (pointer, _) = self.environment.variable_with_type(declaration);
+                        let pointer = self.environment.variable_with_type(declaration).pointer;
                         let llvm_pointer = self.yul_local_pointer(pointer, &block);
                         let value = builder.emit_yul_local_load(llvm_pointer, &block);
                         return Ok((value, block));
@@ -446,7 +449,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .resolve_to_definition()
             .expect("yul variable reference resolves to a declaration")
             .node_id();
-        let (pointer, _element_type) = self.environment.variable_with_type(declaration);
+        let pointer = self.environment.variable_with_type(declaration).pointer;
         let llvm_pointer = self.yul_local_pointer(pointer, &block);
         let value = builder.emit_yul_local_load(llvm_pointer, &block);
         Ok((value, block))
@@ -579,9 +582,10 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
 
         let mut return_values = Vec::with_capacity(returns.len());
         for return_identifier in &returns {
-            let (pointer, _slot_type) = self
+            let pointer = self
                 .environment
-                .variable_with_type(return_identifier.node_id());
+                .variable_with_type(return_identifier.node_id())
+                .pointer;
             let loaded = self.state.builder.emit_yul_local_load(pointer, &current);
             return_values.push(loaded);
         }
@@ -624,7 +628,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .resolve_to_definition()
             .expect("yul lvalue resolves to a declaration")
             .node_id();
-        let (pointer, _element_type) = self.environment.variable_with_type(declaration);
+        let pointer = self.environment.variable_with_type(declaration).pointer;
         let llvm_pointer = self.yul_local_pointer(pointer, &block);
         self.state
             .builder
@@ -681,3 +685,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         Ok((values, current))
     }
 }
+
+statement_emit!(AssemblyStatement; |node, context, block| {
+    context.emit_assembly(node, block)
+});

@@ -3,10 +3,10 @@
 //! intrinsic — currently enum variants (`E.Variant`).
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::ValueLike;
 use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
 use num_bigint::Sign;
@@ -15,11 +15,16 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
+use solx_mlir::ods::sol::ExtFuncAddrOperation;
+use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Classifies a member access as an enum-variant reference (`E.Variant` or
     /// qualified `C.E.Variant`), returning the variant's ordinal when it is one
     /// (and not a call). The ordinal is located by NodeId identity against the
@@ -55,12 +60,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         ordinal: usize,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
-        let result_type = TypeConversion::resolve_optional_slang_type(
-            access.get_type(),
-            &self.expression_emitter.state.builder,
-        )
-        .expect("slang types an enum-variant reference as the enum");
-        let builder = &self.expression_emitter.state.builder;
+        let result_type =
+            TypeConversion::resolve_optional_slang_type(access.get_type(), &self.state.builder)
+                .expect("slang types an enum-variant reference as the enum");
+        let builder = &self.state.builder;
         let raw = builder.emit_sol_constant(ordinal as i64, builder.types.ui256, &block);
         let value = builder.emit_sol_enum_cast(raw, result_type, &block);
         (value, block)
@@ -101,18 +104,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             let value = self.emit_selector_constant(&BigInt::from(selector), 4, &block);
             return Ok((Some(value), block));
         }
-        let (operand_value, block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
+        let BlockAnd {
+            value: operand_value,
+            block,
+        } = access.operand().emit(self, block)?;
         assert!(
             solx_mlir::TypeFactory::is_sol_ext_function_ref(operand_value.r#type()),
             "function `.selector` resolves to a named function, a public getter, or an external function-pointer value"
         );
-        let selector = self
-            .expression_emitter
-            .state
-            .builder
-            .emit_sol_ext_func_selector(operand_value, &block);
+        let selector = sol_op!(
+            &self.state.builder,
+            &block,
+            ExtFuncSelectorOperation
+                .func(operand_value.into_mlir())
+                .result(self.state.builder.types.fixed_bytes(4))
+        );
         Ok((Some(selector), block))
     }
 
@@ -125,18 +131,21 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (operand_value, block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
+        let BlockAnd {
+            value: operand_value,
+            block,
+        } = access.operand().emit(self, block)?;
         assert!(
             solx_mlir::TypeFactory::is_sol_ext_function_ref(operand_value.r#type()),
             "function `.address` requires an external function-pointer value"
         );
-        let address = self
-            .expression_emitter
-            .state
-            .builder
-            .emit_sol_ext_func_addr(operand_value, &block);
+        let address = sol_op!(
+            &self.state.builder,
+            &block,
+            ExtFuncAddrOperation
+                .func(operand_value.into_mlir())
+                .result(self.state.builder.types.sol_address)
+        );
         Ok((Some(address), block))
     }
 
@@ -160,15 +169,22 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // so assigning `this.g` (declared `string calldata`) to a
         // `function (string memory) external` pointer needs no cast: both are the
         // same `ext_func_ref<(string<Memory>) -> …>`.
-        let (parameter_types, return_types) = TypeConversion::resolve_external_function_types(
+        let (parameter_types, return_types) = TypeConversion::resolve_function_types(
             function_definition,
-            &self.expression_emitter.state.builder,
+            LocationPolicy::ForceMemory,
+            &self.state.builder,
         );
-        let (receiver, block) = self
-            .expression_emitter
-            .emit_value(&access.operand(), block)?;
-        let value =
-            self.emit_external_callee(receiver, selector, &parameter_types, &return_types, &block);
+        let BlockAnd {
+            value: receiver,
+            block,
+        } = access.operand().emit(self, block)?;
+        let value = self.emit_external_callee(
+            receiver.into_mlir(),
+            selector,
+            &parameter_types,
+            &return_types,
+            &block,
+        );
         Ok((Some(value), block))
     }
 
@@ -223,7 +239,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         width_bytes: u32,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         let integer_type = Type::from(IntegerType::unsigned(
             builder.context,
             width_bytes * solx_utils::BIT_LENGTH_BYTE as u32,
@@ -250,7 +266,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         if Self::is_namespace_or_type_operand(&receiver) {
             return Ok(block);
         }
-        let (_discarded, block) = self.expression_emitter.emit_value(&receiver, block)?;
+        let BlockAnd {
+            value: _discarded,
+            block,
+        } = receiver.emit(self, block)?;
         Ok(block)
     }
 

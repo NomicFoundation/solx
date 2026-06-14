@@ -2,20 +2,34 @@
 //! Assignment expression lowering.
 //!
 
+use melior::ir::Attribute;
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
+use melior::ir::attribute::FlatSymbolRefAttribute;
 use slang_solidity_v2::ast;
+use slang_solidity_v2::ast::AssignmentExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
+use solx_mlir::VariableBinding;
+use solx_mlir::ods::sol::AddrOfOperation;
+use solx_mlir::ods::sol::CopyOperation;
+use solx_mlir::ods::sol::DeleteOperation;
+use solx_mlir::ods::sol::MallocOperation;
+use solx_mlir::ods::sol::StoreOperation;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::Toward;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::expression_ext::ExpressionExt;
+use crate::ast::tuple_expression_ext::TupleExpressionExt;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
 /// Assignment target resolved from the Slang binder.
@@ -33,7 +47,180 @@ enum AssignmentTarget<'context, 'block> {
     ReferenceCopy(Value<'context, 'block>),
 }
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
+impl<'context, 'block> AssignmentTarget<'context, 'block> {
+    /// Resolves a single left-hand-side expression to its assignment target.
+    fn new<'state>(
+        context: &ExpressionContext<'state, 'context, 'block>,
+        target_expression: &Expression,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Self, BlockRef<'context, 'block>)> {
+        match target_expression {
+            Expression::Identifier(identifier) => match identifier.resolve_to_definition() {
+                Some(Definition::StateVariable(state_variable)) => {
+                    Self::from_state_variable(context, &state_variable, block)
+                }
+                Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
+                    let VariableBinding {
+                        pointer,
+                        element_type,
+                    } = context.environment.variable_with_type(definition.node_id());
+                    Ok((Self::Pointer(pointer, element_type), block))
+                }
+                None => unreachable!("slang resolves every identifier reference"),
+                Some(other) => unimplemented!(
+                    "assignment to non-variable definition {:?} is not yet supported",
+                    other.node_id()
+                ),
+            },
+            Expression::IndexAccessExpression(index_access) => {
+                let (address, element_type, block) =
+                    context.emit_index_access_address(index_access, block)?;
+                Ok((Self::from_address(address, element_type), block))
+            }
+            Expression::MemberAccessExpression(access) => {
+                // A namespace-qualified state-variable lvalue (`C.x = v`, notably
+                // a function-pointer state variable) is not a struct field;
+                // resolve it to its storage target exactly like the bare `x = v`.
+                // A genuine struct field resolves to a `StructMember`, so it falls
+                // through to the field-address path.
+                if let Some(Definition::StateVariable(state_variable)) =
+                    access.member().resolve_to_definition()
+                {
+                    return Self::from_state_variable(context, &state_variable, block);
+                }
+                let (address, element_type, block) =
+                    context.emit_struct_field_address(access, block)?;
+                Ok((Self::from_address(address, element_type), block))
+            }
+            Expression::FunctionCallExpression(call)
+                if matches!(
+                    &call.operand(),
+                    Expression::MemberAccessExpression(access)
+                        if matches!(
+                            access.member().resolve_to_built_in(),
+                            Some(ast::BuiltIn::ArrayPush)
+                        )
+                ) =>
+            {
+                // `arr.push() = v` — `push` appends a default element and returns a
+                // reference to it; resolve that reference as the lvalue so the RHS
+                // is stored into the freshly-appended slot (like `arr.push(v)`).
+                let Expression::MemberAccessExpression(access) = call.operand() else {
+                    unreachable!("guarded by the match arm");
+                };
+                let (new_slot, element_type, block) = context.emit_push_slot(&access, block)?;
+                Ok((Self::from_address(new_slot, element_type), block))
+            }
+            _ => unimplemented!(
+                "assignment target {:?} is not yet supported",
+                std::mem::discriminant(target_expression)
+            ),
+        }
+    }
+
+    /// Resolves a state-variable lvalue — bare `x` or namespace-qualified `C.x`
+    /// (e.g. a function-pointer state variable) — to its assignment target.
+    ///
+    /// Reference-typed storage (fixed/dynamic arrays, `string`, `bytes`,
+    /// structs) is assigned by copying the RHS reference's contents into the
+    /// slot via `sol.copy` (a [`Self::ReferenceCopy`]), just like a
+    /// reference-typed inline initializer; a whole mapping is not assignable.
+    /// Value-typed storage stores the coerced scalar directly.
+    fn from_state_variable<'state>(
+        context: &ExpressionContext<'state, 'context, 'block>,
+        state_variable: &ast::StateVariableDefinition,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<(Self, BlockRef<'context, 'block>)> {
+        let declared_type = state_variable
+            .get_type()
+            .expect("slang types every state variable");
+        let slot = context
+            .storage_layout
+            .get(&state_variable.node_id())
+            .unwrap_or_else(|| {
+                unimplemented!("unregistered state variable {:?}", state_variable.node_id())
+            })
+            .clone();
+        let element_type = TypeConversion::resolve_slang_type(
+            &declared_type,
+            LocationPolicy::Declared(None),
+            &context.state.builder,
+        );
+        if declared_type.is_reference_type() && !matches!(declared_type, ast::Type::Mapping(_)) {
+            let address_type = ExpressionContext::address_type(
+                &context.state.builder,
+                element_type,
+                slot.location,
+                &declared_type,
+            );
+            let storage_ref = sol_op!(
+                &context.state.builder,
+                &block,
+                AddrOfOperation
+                    .var(FlatSymbolRefAttribute::new(
+                        context.state.builder.context,
+                        &slot.name,
+                    ))
+                    .addr(address_type)
+            );
+            return Ok((Self::ReferenceCopy(storage_ref), block));
+        }
+        Ok((Self::Storage(slot, element_type), block))
+    }
+
+    /// Classifies a computed lvalue `address` (with its `element_type`) into its
+    /// assignment target: a reference-typed element is addressed BY reference —
+    /// the address value's type IS the element type — so it is copied into
+    /// ([`Self::ReferenceCopy`]); any other element is a pointer stored through
+    /// ([`Self::Pointer`]). Shared by the index, struct-field, and `push()`
+    /// lvalue paths.
+    fn from_address(address: Value<'context, 'block>, element_type: Type<'context>) -> Self {
+        if address.r#type() == element_type {
+            Self::ReferenceCopy(address)
+        } else {
+            Self::Pointer(address, element_type)
+        }
+    }
+
+    /// Stores a coerced value into this target.
+    fn store<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        value: Value<'context, 'block>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block> {
+        match self {
+            Self::Pointer(pointer, element_type) => {
+                let stored_value =
+                    TypeConversion::coerce(value, *element_type, &context.state.builder, block);
+                sol_op_void!(
+                    &context.state.builder,
+                    block,
+                    StoreOperation.val(stored_value).addr(*pointer)
+                );
+                stored_value
+            }
+            Self::Storage(slot, element_type) => {
+                let stored_value =
+                    TypeConversion::coerce(value, *element_type, &context.state.builder, block);
+                slot.store(&context.state.builder, stored_value, *element_type, block);
+                stored_value
+            }
+            Self::ReferenceCopy(address) => {
+                // The RHS is already a reference of the matching type; copy its
+                // contents into the destination reference (no scalar coercion).
+                sol_op_void!(
+                    &context.state.builder,
+                    block,
+                    CopyOperation.src(value).dst(*address)
+                );
+                value
+            }
+        }
+    }
+}
+
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits an assignment expression (`=`, `+=`, `-=`, `*=`).
     pub fn emit_assignment(
         &self,
@@ -42,13 +229,13 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         // `(x) = v` is the scalar `x = v`; a multi-element (or blank-bearing)
         // tuple on the left is a destructuring assignment.
-        let left = assign.left_operand().unwrap_parens();
+        let left = assign.left_operand().unwrap_parentheses();
         let right = assign.right_operand();
         if let Expression::TupleExpression(tuple) = &left {
             return self.emit_tuple_assignment(tuple, &right, block);
         }
 
-        let (target, block) = self.resolve_assignment_target(&left, block)?;
+        let (target, block) = AssignmentTarget::new(self, &left, block)?;
         let (value, block) = if matches!(
             assign.operator(),
             ast::AssignmentExpressionOperator::Equal(_)
@@ -59,9 +246,17 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             match &target {
                 AssignmentTarget::Pointer(_, element_type)
                 | AssignmentTarget::Storage(_, element_type) => {
-                    self.emit_value_for_target(&right, *element_type, block)?
+                    let BlockAnd { value, block } = (Toward {
+                        expression: &right,
+                        target_type: *element_type,
+                    })
+                    .emit(self, block)?;
+                    (value, block)
                 }
-                AssignmentTarget::ReferenceCopy(_) => self.emit_value(&right, block)?,
+                AssignmentTarget::ReferenceCopy(_) => {
+                    let BlockAnd { value, block } = right.emit(self, block)?;
+                    (value, block)
+                }
             }
         } else {
             let operator = match assign.operator() {
@@ -90,25 +285,32 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         .state
                         .builder
                         .emit_sol_load(*pointer, *element_type, &block)?;
-                    (old, *element_type)
+                    (crate::ast::Value::from(old), *element_type)
                 }
                 AssignmentTarget::Storage(slot, element_type) => {
-                    let old = self.emit_storage_load(slot, *element_type, &block)?;
-                    (old, *element_type)
+                    let old = slot.load(&self.state.builder, *element_type, &block)?;
+                    (crate::ast::Value::from(old), *element_type)
                 }
                 AssignmentTarget::ReferenceCopy(_) => unreachable!(
                     "a compound assignment to a reference-typed lvalue is rejected by the type checker"
                 ),
             };
-            let (rhs, block) = self.emit_value(&right, block)?;
+            let BlockAnd { value: rhs, block } = right.emit(self, block)?;
             // Shares the binary-operation emitter with `a op b` so a compound
             // bitwise assignment (`a ^= b`, `a <<= b`) on a `bytesN` / `byte`
             // lvalue gets the same fixed-bytes bridge.
-            let result = self.emit_value_binary_operation(operator, old, rhs, target_type, &block);
+            let result = operator.emit_value_binary(
+                self.arithmetic_mode,
+                &self.state.builder,
+                old,
+                rhs,
+                target_type,
+                &block,
+            );
             (result, block)
         };
 
-        let result = self.store_into_target(&target, value, &block);
+        let result = target.store(self, value.into_mlir(), &block);
         Ok((result, block))
     }
 
@@ -121,10 +323,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         operand: &Expression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        let (target, block) = self.resolve_assignment_target(operand, block)?;
+        let (target, block) = AssignmentTarget::new(self, operand, block)?;
         match &target {
             AssignmentTarget::ReferenceCopy(reference) => {
-                self.state.builder.emit_sol_delete(*reference, &block);
+                sol_op_void!(
+                    &self.state.builder,
+                    &block,
+                    DeleteOperation.reference(*reference)
+                );
             }
             AssignmentTarget::Pointer(_, element_type)
             | AssignmentTarget::Storage(_, element_type) => {
@@ -144,16 +350,22 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                                 self.state.builder.types.ui256,
                                 &block,
                             );
-                            self.state.builder.emit_sol_malloc_sized_zeroed(
-                                *element_type,
-                                size,
+                            sol_op!(
+                                &self.state.builder,
                                 &block,
+                                MallocOperation
+                                    .addr(*element_type)
+                                    .size(size)
+                                    .zero_init(Attribute::unit(self.state.builder.context))
                             )
                         }
-                        _ => self
-                            .state
-                            .builder
-                            .emit_sol_malloc_zeroed(*element_type, &block),
+                        _ => sol_op!(
+                            &self.state.builder,
+                            &block,
+                            MallocOperation
+                                .addr(*element_type)
+                                .zero_init(Attribute::unit(self.state.builder.context))
+                        ),
                     }
                 } else {
                     // The zero of a value lvalue is its type's own zero, not a raw
@@ -168,178 +380,10 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                         &block,
                     )
                 };
-                self.store_into_target(&target, zero, &block);
+                target.store(self, zero, &block);
             }
         }
         Ok(block)
-    }
-
-    /// Resolves a state-variable lvalue — bare `x` or namespace-qualified `C.x`
-    /// (e.g. a function-pointer state variable) — to its assignment target.
-    ///
-    /// Reference-typed storage (fixed/dynamic arrays, `string`, `bytes`,
-    /// structs) is assigned by copying the RHS reference's contents into the
-    /// slot via `sol.copy` (a [`ReferenceCopy`](AssignmentTarget::ReferenceCopy)),
-    /// just like a reference-typed inline initializer; a whole mapping is not
-    /// assignable. Value-typed storage stores the coerced scalar directly.
-    fn resolve_state_variable_target(
-        &self,
-        state_variable: &ast::StateVariableDefinition,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
-        AssignmentTarget<'context, 'block>,
-        BlockRef<'context, 'block>,
-    )> {
-        let declared_type = state_variable
-            .get_type()
-            .expect("slang types every state variable");
-        let slot = self
-            .storage_layout
-            .get(&state_variable.node_id())
-            .unwrap_or_else(|| {
-                unimplemented!("unregistered state variable {:?}", state_variable.node_id())
-            })
-            .clone();
-        let element_type =
-            TypeConversion::resolve_slang_type(&declared_type, None, &self.state.builder);
-        if declared_type.is_reference_type() && !matches!(declared_type, ast::Type::Mapping(_)) {
-            let address_type = Self::address_type(
-                &self.state.builder,
-                element_type,
-                slot.location,
-                &declared_type,
-            );
-            let storage_ref = self
-                .state
-                .builder
-                .emit_sol_addr_of(&slot.name, address_type, &block);
-            return Ok((AssignmentTarget::ReferenceCopy(storage_ref), block));
-        }
-        Ok((AssignmentTarget::Storage(slot, element_type), block))
-    }
-
-    /// Resolves a single left-hand-side expression to its assignment target.
-    fn resolve_assignment_target(
-        &self,
-        target_expression: &Expression,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
-        AssignmentTarget<'context, 'block>,
-        BlockRef<'context, 'block>,
-    )> {
-        let resolved = match target_expression {
-            Expression::Identifier(identifier) => {
-                let target = match identifier.resolve_to_definition() {
-                    Some(Definition::StateVariable(state_variable)) => {
-                        return self.resolve_state_variable_target(&state_variable, block);
-                    }
-                    Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
-                        let (pointer, element_type) =
-                            self.environment.variable_with_type(definition.node_id());
-                        AssignmentTarget::Pointer(pointer, element_type)
-                    }
-                    None => unreachable!("slang resolves every identifier reference"),
-                    Some(other) => unimplemented!(
-                        "assignment to non-variable definition {:?} is not yet supported",
-                        other.node_id()
-                    ),
-                };
-                (target, block)
-            }
-            Expression::IndexAccessExpression(index_access) => {
-                let (address, element_type, block) =
-                    self.emit_index_access_address(index_access, block)?;
-                (Self::address_target(address, element_type), block)
-            }
-            Expression::MemberAccessExpression(access) => {
-                // A namespace-qualified state-variable lvalue (`C.x = v`, notably
-                // a function-pointer state variable) is not a struct field;
-                // resolve it to its storage target exactly like the bare `x = v`.
-                // A genuine struct field resolves to a `StructMember`, so it falls
-                // through to the field-address path.
-                if let Some(Definition::StateVariable(state_variable)) =
-                    access.member().resolve_to_definition()
-                {
-                    return self.resolve_state_variable_target(&state_variable, block);
-                }
-                let (address, element_type, block) =
-                    self.emit_struct_field_address(access, block)?;
-                (Self::address_target(address, element_type), block)
-            }
-            Expression::FunctionCallExpression(call)
-                if matches!(
-                    &call.operand(),
-                    Expression::MemberAccessExpression(access)
-                        if matches!(
-                            access.member().resolve_to_built_in(),
-                            Some(ast::BuiltIn::ArrayPush)
-                        )
-                ) =>
-            {
-                // `arr.push() = v` — `push` appends a default element and returns a
-                // reference to it; resolve that reference as the lvalue so the RHS
-                // is stored into the freshly-appended slot (like `arr.push(v)`).
-                let Expression::MemberAccessExpression(access) = call.operand() else {
-                    unreachable!("guarded by the match arm");
-                };
-                let (new_slot, element_type, block) =
-                    CallEmitter::new(self).emit_push_slot(&access, block)?;
-                (Self::address_target(new_slot, element_type), block)
-            }
-            _ => unimplemented!(
-                "assignment target {:?} is not yet supported",
-                std::mem::discriminant(target_expression)
-            ),
-        };
-        Ok(resolved)
-    }
-
-    /// Classifies a computed lvalue `address` (with its `element_type`) into its
-    /// assignment target: a reference-typed element is addressed BY reference —
-    /// the address value's type IS the element type — so it is copied into
-    /// ([`AssignmentTarget::ReferenceCopy`]); any other element is a pointer
-    /// stored through ([`AssignmentTarget::Pointer`]). Shared by the index,
-    /// struct-field, and `push()` lvalue paths.
-    fn address_target(
-        address: Value<'context, 'block>,
-        element_type: Type<'context>,
-    ) -> AssignmentTarget<'context, 'block> {
-        if address.r#type() == element_type {
-            AssignmentTarget::ReferenceCopy(address)
-        } else {
-            AssignmentTarget::Pointer(address, element_type)
-        }
-    }
-
-    /// Stores a coerced value into a resolved assignment target.
-    fn store_into_target(
-        &self,
-        target: &AssignmentTarget<'context, 'block>,
-        value: Value<'context, 'block>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        match target {
-            AssignmentTarget::Pointer(pointer, element_type) => {
-                let stored_value =
-                    TypeConversion::coerce(value, *element_type, &self.state.builder, block);
-                self.state
-                    .builder
-                    .emit_sol_store(stored_value, *pointer, block);
-                stored_value
-            }
-            AssignmentTarget::Storage(slot, element_type) => {
-                let stored_value =
-                    TypeConversion::coerce(value, *element_type, &self.state.builder, block);
-                self.emit_storage_store(slot, stored_value, *element_type, block);
-                stored_value
-            }
-            AssignmentTarget::ReferenceCopy(address) => {
-                // The RHS is already a reference of the matching type; copy its
-                // contents into the destination reference (no scalar coercion).
-                self.state.builder.emit_sol_copy(value, *address, block);
-                value
-            }
-        }
     }
 
     /// Emits a destructuring assignment `(a, b, …) = rhs` to existing lvalues.
@@ -366,20 +410,24 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 // where BOTH sides are tuples — so a blank slot
                 // (`(a, ) = (4, (8, 16, 32))`) discards the whole nested tuple
                 // rather than spreading it across slots.
-                let pairs = Self::pair_tuple_assignment(tuple, rhs_tuple);
+                let pairs = tuple.pair_assignment(rhs_tuple);
                 let mut assignments = Vec::new();
                 let mut current = block;
                 for (lvalue, rhs_expression) in pairs {
                     match lvalue {
                         Some(lvalue) => {
-                            let (value, next) = self.emit_value(&rhs_expression, current)?;
+                            let BlockAnd { value, block: next } =
+                                rhs_expression.emit(self, current)?;
                             current = next;
-                            assignments.push((lvalue, value));
+                            assignments.push((lvalue, value.into_mlir()));
                         }
                         // A discarded scalar is still evaluated for its side
                         // effects; a discarded nested tuple is dropped wholesale.
                         None if !matches!(rhs_expression, Expression::TupleExpression(_)) => {
-                            let (_discarded, next) = self.emit_value(&rhs_expression, current)?;
+                            let BlockAnd {
+                                value: _discarded,
+                                block: next,
+                            } = rhs_expression.emit(self, current)?;
                             current = next;
                         }
                         None => {}
@@ -390,9 +438,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             // A call / conditional yields a flat value list, so the LHS pairs by
             // flattened leaf (no syntactic nesting can match these).
             Expression::FunctionCallExpression(call) => {
-                let lhs_leaves = Self::flatten_tuple_lvalues(tuple);
-                let (values, current) =
-                    CallEmitter::new(self).emit_function_call_results(call, block)?;
+                let lhs_leaves = tuple.flatten_lvalues();
+                let (values, current) = self.emit_function_call_results(call, block)?;
                 assert!(
                     values.len() == lhs_leaves.len(),
                     "tuple assignment arity mismatch: {} LHS slots vs {} call results",
@@ -404,7 +451,7 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             Expression::ConditionalExpression(conditional) => {
                 // `(a, b) = cond ? (x, y) : (z, w)` — the conditional yields one
                 // value per tuple element via the shared tuple-conditional path.
-                let lhs_leaves = Self::flatten_tuple_lvalues(tuple);
+                let lhs_leaves = tuple.flatten_lvalues();
                 let (values, current) = self.emit_conditional_tuple_values(conditional, block)?;
                 assert!(
                     values.len() == lhs_leaves.len(),
@@ -426,14 +473,14 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
         // aliased destination wins (`(y, y, y) = (1, 2, 3)` leaves `y == 1`).
         let mut targets = Vec::with_capacity(assignments.len());
         for (lvalue, value) in assignments {
-            let (target, next) = self.resolve_assignment_target(&lvalue, block)?;
+            let (target, next) = AssignmentTarget::new(self, &lvalue, block)?;
             block = next;
             targets.push((target, value));
         }
 
         let mut result = None;
         for (target, value) in targets.into_iter().rev() {
-            result = Some(self.store_into_target(&target, value, &block));
+            result = Some(target.store(self, value, &block));
         }
         // A fully blank LHS `(, ) = f()` binds nothing; the assignment still has
         // a value in expression position, so fall back to a zero sentinel.
@@ -443,57 +490,6 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .emit_sol_constant(0, self.state.builder.types.ui256, &block)
         });
         Ok((result, block))
-    }
-
-    /// Pairs a tuple LHS with a tuple RHS into `(lvalue, value-expression)`
-    /// pairs, recursing into nested tuples only where BOTH sides nest, so a
-    /// blank LHS slot opposite a nested RHS tuple discards it as a unit. A blank
-    /// slot yields `None` for its lvalue.
-    fn pair_tuple_assignment(
-        lhs: &TupleExpression,
-        rhs: &TupleExpression,
-    ) -> Vec<(Option<Expression>, Expression)> {
-        let lhs_items = lhs.items();
-        let rhs_items = rhs.items();
-        assert!(
-            lhs_items.len() == rhs_items.len(),
-            "tuple assignment arity mismatch: {} LHS slots vs {} RHS values",
-            lhs_items.len(),
-            rhs_items.len(),
-        );
-        let mut pairs = Vec::new();
-        for (lhs_item, rhs_item) in lhs_items.iter().zip(rhs_items.iter()) {
-            let lhs_expression = lhs_item.expression();
-            let rhs_expression = rhs_item
-                .expression()
-                .expect("a tuple assignment RHS element has an inner expression");
-            match (&lhs_expression, &rhs_expression) {
-                (
-                    Some(Expression::TupleExpression(lhs_nested)),
-                    Expression::TupleExpression(rhs_nested),
-                ) => {
-                    pairs.extend(Self::pair_tuple_assignment(lhs_nested, rhs_nested));
-                }
-                _ => pairs.push((lhs_expression, rhs_expression)),
-            }
-        }
-        pairs
-    }
-
-    /// Flattens a tuple's left-hand-side leaves, recursing into nested tuples
-    /// (`(a, (b, c))` -> `[a, b, c]`). A blank slot is `None` (discarded). Used
-    /// for call / conditional right-hand sides, whose values are already flat.
-    fn flatten_tuple_lvalues(tuple: &TupleExpression) -> Vec<Option<Expression>> {
-        let mut leaves = Vec::new();
-        for item in tuple.items().iter() {
-            match item.expression() {
-                Some(Expression::TupleExpression(nested)) => {
-                    leaves.extend(Self::flatten_tuple_lvalues(&nested));
-                }
-                other => leaves.push(other),
-            }
-        }
-        leaves
     }
 
     /// Zips flattened LHS leaves with their values, dropping blank slots.
@@ -508,3 +504,8 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
             .collect()
     }
 }
+
+expression_emit!(AssignmentExpression; |node, context, block| {
+    let (value, block) = context.emit_assignment(node, block)?;
+    Ok(BlockAnd { block, value: value.into() })
+});

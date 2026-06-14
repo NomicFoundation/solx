@@ -2,31 +2,40 @@
 //! `assert` and `require` built-in lowering.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
+use solx_mlir::ods::sol::AssertOperation;
 
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits an `assert(condition)` built-in via `sol.assert`.
     pub fn emit_assert(
         &self,
         condition: &Expression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        let (condition_value, block) = self.expression_emitter.emit_value(condition, block)?;
-        let condition_boolean = self
-            .expression_emitter
-            .emit_is_nonzero(condition_value, &block);
-        self.expression_emitter
-            .state
-            .builder
-            .emit_sol_assert(condition_boolean, &block);
+        let BlockAnd {
+            value: condition_value,
+            block,
+        } = condition.emit(self, block)?;
+        let condition_boolean = condition_value
+            .is_nonzero(&self.state.builder, &block)
+            .into_mlir();
+        sol_op_void!(
+            &self.state.builder,
+            &block,
+            AssertOperation.cond(condition_boolean)
+        );
         Ok(block)
     }
 
@@ -42,11 +51,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         message: Option<&Expression>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        let (condition_value, block) = self.expression_emitter.emit_value(condition, block)?;
-        let condition_boolean = self
-            .expression_emitter
-            .emit_is_nonzero(condition_value, &block);
-        let builder = &self.expression_emitter.state.builder;
+        let BlockAnd {
+            value: condition_value,
+            block,
+        } = condition.emit(self, block)?;
+        let condition_boolean = condition_value
+            .is_nonzero(&self.state.builder, &block)
+            .into_mlir();
+        let builder = &self.state.builder;
         match message {
             Some(Expression::StringExpression(string_expression)) => {
                 let bytes = string_expression.value();
@@ -60,11 +72,14 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
                 self.emit_require_custom_error(condition_boolean, error_call, block)
             }
             Some(expression) => {
-                let (message_value, block) =
-                    self.expression_emitter.emit_value(expression, block)?;
+                let BlockAnd {
+                    value: message_value,
+                    block,
+                } = expression.emit(self, block)?;
                 let string_memory_type = builder.types.string(solx_utils::DataLocation::Memory);
-                let message_value =
-                    TypeConversion::coerce(message_value, string_memory_type, builder, &block);
+                let message_value = message_value
+                    .coerce_to(string_memory_type, builder, &block)
+                    .into_mlir();
                 builder.emit_sol_require(
                     condition_boolean,
                     Some("Error(string)"),
@@ -104,23 +119,30 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         let mut current_block = block;
         let mut argument_values = Vec::new();
         for argument in positional.iter() {
-            let (value, next_block) = self
-                .expression_emitter
-                .emit_value(&argument, current_block)?;
+            let BlockAnd {
+                value,
+                block: next_block,
+            } = argument.emit(self, current_block)?;
             current_block = next_block;
             argument_values.push(value);
         }
-        let builder = &self.expression_emitter.state.builder;
-        for (value, parameter) in argument_values.iter_mut().zip(parameters.iter()) {
-            let parameter_type = TypeConversion::resolve_slang_type(
-                &parameter
-                    .get_type()
-                    .expect("error parameter type resolved by semantic analysis"),
-                None,
-                builder,
-            );
-            *value = TypeConversion::coerce(*value, parameter_type, builder, &current_block);
-        }
+        let builder = &self.state.builder;
+        let argument_values: Vec<_> = argument_values
+            .into_iter()
+            .zip(parameters.iter())
+            .map(|(value, parameter)| {
+                let parameter_type = TypeConversion::resolve_slang_type(
+                    &parameter
+                        .get_type()
+                        .expect("error parameter type resolved by semantic analysis"),
+                    LocationPolicy::Declared(None),
+                    builder,
+                );
+                value
+                    .coerce_to(parameter_type, builder, &current_block)
+                    .into_mlir()
+            })
+            .collect();
         builder.emit_sol_require(
             condition,
             Some(&signature),

@@ -12,6 +12,7 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::r#type::TypeLike;
 use num_bigint::BigInt;
 use slang_solidity_v2::abi::AbiEntry;
@@ -26,7 +27,10 @@ use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::CmpPredicate;
 use solx_mlir::StateMutability;
+use solx_mlir::ods::sol::AddrOfOperation;
 use solx_mlir::ods::sol::LengthOperation;
+use solx_mlir::ods::sol::MapOperation;
+use solx_mlir::ods::sol::ReturnOperation;
 use solx_utils::DataLocation;
 
 use std::collections::HashMap;
@@ -34,11 +38,15 @@ use std::collections::HashMap;
 use slang_solidity_v2::ast::NodeId;
 use solx_mlir::Environment;
 
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::Toward;
 use crate::ast::contract::ContractEmitter;
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::getter_level::GetterLevel;
 use crate::ast::contract::storage_layout::StorageSlot;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
 /// The per-getter emission frame: the state variable, its canonical ABI
@@ -149,13 +157,19 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             None,
             contract_body,
         );
-        let storage_ref = builder.emit_sol_addr_of(&slot.name, address_type, &entry);
+        let storage_ref = sol_op!(
+            builder,
+            &entry,
+            AddrOfOperation
+                .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
+                .addr(address_type)
+        );
         let value = if declared_type.is_reference_type() {
             storage_ref
         } else {
             builder.emit_sol_load(storage_ref, element_type, &entry)?
         };
-        builder.emit_sol_return(&[value], &entry);
+        sol_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
         Ok(())
     }
 
@@ -187,8 +201,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             return Ok(());
         }
         let container_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
-        let result_type =
-            TypeConversion::resolve_slang_type(&result_slang, Some(location), builder);
+        let result_type = TypeConversion::resolve_slang_type(
+            &result_slang,
+            LocationPolicy::Declared(Some(location)),
+            builder,
+        );
         // A struct result expands into its flattened returnable-member tuple;
         // other reference results aren't handled yet (left ungenerated).
         let struct_plan = match &result_slang {
@@ -221,7 +238,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             None,
             contract_body,
         );
-        let base = builder.emit_sol_addr_of(&slot.name, container_type, &entry);
+        let base = sol_op!(
+            builder,
+            &entry,
+            AddrOfOperation
+                .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
+                .addr(container_type)
+        );
         let base = self.emit_getter_access_chain(base, &levels, &entry)?;
         self.emit_indexed_getter_result(base, &struct_plan, result_type, &entry)
     }
@@ -252,11 +275,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         entry,
                     )?);
                 }
-                builder.emit_sol_return(&values, entry);
+                sol_op_void!(builder, entry, ReturnOperation.operands(&values));
             }
             None => {
                 let value = builder.emit_sol_load(base, result_type, entry)?;
-                builder.emit_sol_return(&[value], entry);
+                sol_op_void!(builder, entry, ReturnOperation.operands(&[value]));
             }
         }
         Ok(())
@@ -279,8 +302,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 SlangType::Mapping(mapping_type) => {
                     let key_slang = mapping_type.key_type();
                     let value_slang = mapping_type.value_type();
-                    let resolved_value =
-                        TypeConversion::resolve_slang_type(&value_slang, Some(location), builder);
+                    let resolved_value = TypeConversion::resolve_slang_type(
+                        &value_slang,
+                        LocationPolicy::Declared(Some(location)),
+                        builder,
+                    );
                     // Intermediate containers are addressed by their reference; a
                     // value terminal by a `!sol.ptr<V>`.
                     let level_type = if value_slang.is_reference_type() {
@@ -296,7 +322,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     let key_type = if key_slang.is_reference_type() {
                         builder.types.string(DataLocation::Memory)
                     } else {
-                        TypeConversion::resolve_slang_type(&key_slang, Some(location), builder)
+                        TypeConversion::resolve_slang_type(
+                            &key_slang,
+                            LocationPolicy::Declared(Some(location)),
+                            builder,
+                        )
                     };
                     input_types.push(key_type);
                     levels.push(GetterLevel::Mapping(level_type));
@@ -304,16 +334,22 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
                 SlangType::Array(array_type) => {
                     let element_slang = array_type.element_type();
-                    let element_type =
-                        TypeConversion::resolve_slang_type(&element_slang, Some(location), builder);
+                    let element_type = TypeConversion::resolve_slang_type(
+                        &element_slang,
+                        LocationPolicy::Declared(Some(location)),
+                        builder,
+                    );
                     input_types.push(builder.types.ui256);
                     levels.push(GetterLevel::Array(element_type, None));
                     current = element_slang;
                 }
                 SlangType::FixedSizeArray(array_type) => {
                     let element_slang = array_type.element_type();
-                    let element_type =
-                        TypeConversion::resolve_slang_type(&element_slang, Some(location), builder);
+                    let element_type = TypeConversion::resolve_slang_type(
+                        &element_slang,
+                        LocationPolicy::Declared(Some(location)),
+                        builder,
+                    );
                     input_types.push(builder.types.ui256);
                     levels.push(GetterLevel::Array(
                         element_type,
@@ -344,7 +380,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             let arg: Value<'context, 'block> = entry.argument(index)?.into();
             base = match level {
                 GetterLevel::Mapping(level_type) => {
-                    builder.emit_sol_map(base, arg, *level_type, entry)
+                    sol_op!(
+                        builder,
+                        entry,
+                        MapOperation.mapping(base).key(arg).addr(*level_type)
+                    )
                 }
                 GetterLevel::Array(element_type, fixed_size) => {
                     let length = match fixed_size {
@@ -359,7 +399,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                             )
                         }
                     };
-                    let in_bounds = builder.emit_sol_cmp(arg, length, CmpPredicate::Lt, entry);
+                    let in_bounds = crate::ast::Value::from(arg)
+                        .compare(crate::ast::Value::from(length), CmpPredicate::Lt, builder, entry)
+                        .into_mlir();
                     builder.emit_sol_require(in_bounds, None, &[], false, entry);
                     builder.emit_sol_gep(base, arg, *element_type, entry)
                 }
@@ -392,7 +434,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let slang_type = state_variable
             .get_type()
             .expect("slang types every state variable");
-        let element_type = TypeConversion::resolve_slang_type_in_memory(&slang_type, builder);
+        let element_type =
+            TypeConversion::resolve_slang_type(&slang_type, LocationPolicy::ForceMemory, builder);
         let entry = builder.emit_sol_func(
             &signature,
             &[],
@@ -405,7 +448,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         );
         if let Some(value) = Self::fold_constant_int(&initializer) {
             let constant = builder.emit_constant(&value, element_type, &entry);
-            builder.emit_sol_return(&[constant], &entry);
+            sol_op_void!(builder, &entry, ReturnOperation.operands(&[constant]));
             return Ok(());
         }
         // A non-integer constant — a `string` / `bytesN` literal — is not
@@ -415,15 +458,24 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // environment suffices). Matches solc: a `sol.string_lit`, or the
         // literal's value `bytes_cast` to `bytesN`.
         let environment = Environment::new();
-        let emitter = ExpressionEmitter::new(
+        let emitter = ExpressionContext::new(
             self.state,
             &environment,
             storage_layout,
             ArithmeticMode::Checked,
         );
-        let (value, entry) = emitter.emit_value_for_target(&initializer, element_type, entry)?;
-        let value = TypeConversion::coerce(value, element_type, &self.state.builder, &entry);
-        builder.emit_sol_return(&[value], &entry);
+        let BlockAnd {
+            value,
+            block: entry,
+        } = (Toward {
+            expression: &initializer,
+            target_type: element_type,
+        })
+        .emit(&emitter, entry)?;
+        let value = value
+            .coerce_to(element_type, &self.state.builder, &entry)
+            .into_mlir();
+        sol_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
         Ok(())
     }
 
@@ -505,8 +557,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         if let SlangType::Struct(struct_type) = declared_type
             && let Definition::Struct(struct_definition) = struct_type.definition()
         {
-            let struct_mlir_type =
-                TypeConversion::resolve_slang_type(declared_type, Some(location), builder);
+            let struct_mlir_type = TypeConversion::resolve_slang_type(
+                declared_type,
+                LocationPolicy::Declared(Some(location)),
+                builder,
+            );
             if let Some(plan) =
                 Self::struct_getter_layout(&struct_definition, struct_mlir_type, builder)
             {
@@ -526,7 +581,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     None,
                     contract_body,
                 );
-                let base = builder.emit_sol_addr_of(&slot.name, container_type, &entry);
+                let base = sol_op!(
+                    builder,
+                    &entry,
+                    AddrOfOperation
+                        .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
+                        .addr(container_type)
+                );
                 self.emit_indexed_getter_result(base, &Some(plan), struct_mlir_type, &entry)?;
                 return Ok(true);
             }

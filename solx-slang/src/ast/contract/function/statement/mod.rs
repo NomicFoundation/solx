@@ -4,41 +4,58 @@
 
 pub mod assembly;
 pub mod control_flow;
+pub mod discarded;
 pub mod event;
+pub mod expression_statement_kind;
+pub mod modifier_strategy;
 pub mod revert;
 pub mod try_statement;
 pub mod variable_declaration;
 
 use std::collections::HashMap;
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::Type;
 use melior::ir::Value;
-use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::Block;
+use slang_solidity_v2::ast::BreakStatement;
+use slang_solidity_v2::ast::ContinueStatement;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::ExpressionStatement;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::ReturnStatement;
 use slang_solidity_v2::ast::Statement;
 use slang_solidity_v2::ast::Statements;
-use slang_solidity_v2::ast::Type as SlangType;
+use slang_solidity_v2::ast::UncheckedBlock;
 use slang_solidity_v2::ast::YulFunctionDefinition;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::ods::sol::BreakOperation;
+use solx_mlir::ods::sol::ConditionOperation;
+use solx_mlir::ods::sol::ContinueOperation;
+use solx_mlir::ods::sol::ReturnOperation;
 
+use self::discarded::Discarded;
+use self::expression_statement_kind::ExpressionStatementKind;
+use self::modifier_strategy::ModifierStrategy;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
 use crate::ast::ExpressionExt;
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::Toward;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
-use crate::ast::contract::function::expression::call::CallEmitter;
 use crate::ast::contract::function::modifier_body_call::ModifierBodyCall;
+use crate::ast::contract::function::modifier_parameter_binding::ModifierParameterBinding;
 use crate::ast::contract::storage_layout::StorageSlot;
-use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers Solidity statements to MLIR operations with control flow.
 ///
 /// Returns `Some(block)` as the continuation block, or `None` when control
 /// flow has been terminated (by `return`, `break`, or `continue`).
-pub struct StatementEmitter<'state, 'context, 'block> {
+pub struct StatementContext<'state, 'context, 'block> {
     /// The shared MLIR context.
     state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
@@ -55,21 +72,9 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     /// unnamed return). A bare `return;` and the fall-through epilogue load these
     /// so the `sol.return` arity matches the declared returns.
     return_slots: &'state [Option<Value<'context, 'block>>],
-    /// Set while emitting a modifier stage: the hand-off the `_;` placeholder
-    /// lowers to (call the wrapped body / next stage, threading the shared return
-    /// values). `None` outside a modifier stage.
-    modifier_body_call: Option<ModifierBodyCall<'context, 'block>>,
-    /// Inline modifier-chain stages for a *constructor* body emission: each stage
-    /// is one modifier's body statements, with the constructor body pushed as the
-    /// final stage; a `_;` placeholder recurses to the next stage. Empty for a
-    /// regular (non-constructor) emission, whose modifiers are wrapped as separate
-    /// `sol.func`s reached through `modifier_body_call` instead. A constructor has
-    /// no return value, so it needs no separate body func.
-    modifier_stages: Vec<Statements>,
-    /// Per-stage modifier parameter bindings, parallel to `modifier_stages`.
-    modifier_stage_params: Vec<Vec<(NodeId, Value<'context, 'block>, Type<'context>)>>,
-    /// The stage [`Self::emit_inline_modifier_chain`] is currently emitting.
-    modifier_stage_index: usize,
+    /// How the `_;` placeholder lowers: a regular function's body-call hand-off,
+    /// a constructor's inline modifier chain, or nothing outside a modifier.
+    modifier_strategy: ModifierStrategy<'context, 'block>,
     /// Arithmetic overflow-checking mode for binary operations.
     ///
     /// [`ArithmeticMode::Checked`] by default; [`ArithmeticMode::Unchecked`]
@@ -86,7 +91,24 @@ pub struct StatementEmitter<'state, 'context, 'block> {
     yul_inline_depth: HashMap<String, usize>,
 }
 
-impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
+/// Builds an [`ExpressionContext`] for a statement context — the shared state,
+/// environment, storage layout, and arithmetic mode every expression emission
+/// needs. The unchecked loop-step is the one site that builds its context
+/// explicitly instead, with [`ArithmeticMode::Unchecked`].
+impl<'a, 'context, 'block> From<&'a StatementContext<'_, 'context, 'block>>
+    for ExpressionContext<'a, 'context, 'block>
+{
+    fn from(statement: &'a StatementContext<'_, 'context, 'block>) -> Self {
+        ExpressionContext::new(
+            statement.state,
+            statement.environment,
+            statement.storage_layout,
+            statement.arithmetic_mode,
+        )
+    }
+}
+
+impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Creates a new statement emitter.
     pub fn new(
         state: &'state Context<'context>,
@@ -103,10 +125,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             storage_layout,
             return_types,
             return_slots,
-            modifier_body_call: None,
-            modifier_stages: Vec::new(),
-            modifier_stage_params: Vec::new(),
-            modifier_stage_index: 0,
+            modifier_strategy: ModifierStrategy::None,
             arithmetic_mode: ArithmeticMode::Checked,
             yul_functions: HashMap::new(),
             yul_inline_depth: HashMap::new(),
@@ -119,7 +138,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     ///
     /// [`FunctionEmitter::emit_modifier_stage_func`]: crate::ast::contract::function::FunctionEmitter::emit_modifier_stage_func
     pub fn set_modifier_body_call(&mut self, call: ModifierBodyCall<'context, 'block>) {
-        self.modifier_body_call = Some(call);
+        self.modifier_strategy = ModifierStrategy::BodyCall(call);
     }
 
     /// Loads the inline modifier-chain stages for a constructor body emission
@@ -129,11 +148,13 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
     pub fn set_modifier_stages(
         &mut self,
         modifier_stages: Vec<Statements>,
-        modifier_stage_params: Vec<Vec<(NodeId, Value<'context, 'block>, Type<'context>)>>,
+        modifier_stage_params: Vec<Vec<ModifierParameterBinding<'context, 'block>>>,
     ) {
-        self.modifier_stages = modifier_stages;
-        self.modifier_stage_params = modifier_stage_params;
-        self.modifier_stage_index = 0;
+        self.modifier_strategy = ModifierStrategy::InlineChain {
+            stages: modifier_stages,
+            parameters: modifier_stage_params,
+            index: 0,
+        };
     }
 
     /// Emits the inline modifier chain for a constructor body from the current
@@ -148,25 +169,42 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         &mut self,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let stage = self.modifier_stage_index;
-        let Some(statements) = self.modifier_stages.get(stage).cloned() else {
+        let ModifierStrategy::InlineChain {
+            stages,
+            parameters,
+            index,
+        } = &self.modifier_strategy
+        else {
             return Ok(Some(block));
         };
-        self.modifier_stage_index = stage + 1;
-        let params = self
-            .modifier_stage_params
-            .get(stage)
-            .cloned()
-            .unwrap_or_default();
+        let stage = *index;
+        let Some(statements) = stages.get(stage).cloned() else {
+            return Ok(Some(block));
+        };
+        let params = parameters.get(stage).cloned().unwrap_or_default();
+        // Advance the cursor for the recursive `_;` (the borrow of the strategy
+        // ended once `statements` / `params` were cloned out), restore it after.
+        self.set_modifier_stage_index(stage + 1);
         self.environment.enter_scope();
-        for (node_id, pointer, element_type) in params {
-            self.environment
-                .define_variable(node_id, pointer, element_type);
+        for binding in params {
+            self.environment.define_variable(
+                binding.declaration,
+                binding.pointer,
+                binding.element_type,
+            );
         }
         let result = self.emit_block(statements, block);
         self.environment.exit_scope();
-        self.modifier_stage_index = stage;
+        self.set_modifier_stage_index(stage);
         result
+    }
+
+    /// Sets the inline modifier-chain cursor. A no-op unless an
+    /// [`ModifierStrategy::InlineChain`] is active.
+    fn set_modifier_stage_index(&mut self, stage: usize) {
+        if let ModifierStrategy::InlineChain { index, .. } = &mut self.modifier_strategy {
+            *index = stage;
+        }
     }
 
     /// Returns a reference to the current region.
@@ -185,20 +223,6 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         self.region_pointer = region as *const Region<'context>;
     }
 
-    /// Builds an [`ExpressionEmitter`] for the current statement context,
-    /// supplying the shared state, environment, storage layout, and arithmetic
-    /// mode — the four fields every expression emission needs — so call sites do
-    /// not repeat the construction. The unchecked loop-step is the one site that
-    /// builds its emitter explicitly, with [`ArithmeticMode::Unchecked`].
-    fn expression_emitter(&self) -> ExpressionEmitter<'_, 'context, 'block> {
-        ExpressionEmitter::new(
-            self.state,
-            self.environment,
-            self.storage_layout,
-            self.arithmetic_mode,
-        )
-    }
-
     /// Evaluates a loop `condition` in `condition_block` and emits the
     /// `sol.condition` terminator. Shared by `for`, `while`, and `do-while`.
     ///
@@ -211,129 +235,20 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         condition: &Expression,
         condition_block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<()> {
-        let emitter = self.expression_emitter();
-        let (condition_value, condition_end) = emitter.emit_value(condition, condition_block)?;
-        let condition_boolean = emitter.emit_is_nonzero(condition_value, &condition_end);
-        self.state
-            .builder
-            .emit_sol_condition(condition_boolean, &condition_end);
+        let emitter = ExpressionContext::from(self);
+        let BlockAnd {
+            value: condition_value,
+            block: condition_end,
+        } = condition.emit(&emitter, condition_block)?;
+        let condition_boolean = condition_value
+            .is_nonzero(&self.state.builder, &condition_end)
+            .into_mlir();
+        sol_op_void!(
+            &self.state.builder,
+            &condition_end,
+            ConditionOperation.condition(condition_boolean)
+        );
         Ok(())
-    }
-
-    /// Emits MLIR for a statement.
-    ///
-    /// Returns `Some(block)` as the continuation block for the next statement,
-    /// or `None` if control flow was terminated.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the statement contains unsupported constructs.
-    pub fn emit(
-        &mut self,
-        statement: &Statement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        match statement {
-            Statement::VariableDeclarationStatement(declaration) => {
-                self.emit_variable_declaration(declaration, block)
-            }
-            Statement::ExpressionStatement(expression_statement) => {
-                let expression = expression_statement.expression();
-                // A bare `_;` inside a modifier body is the placeholder for the
-                // wrapped body (or the next modifier stage). A constructor's
-                // modifiers run as an inline chain (`modifier_stages` set), where
-                // `_;` recurses to the next stage / the constructor body; a regular
-                // function's modifiers are separate `sol.func`s, where `_;` hands
-                // off through `modifier_body_call`.
-                if let Expression::Identifier(identifier) = &expression
-                    && matches!(
-                        identifier.resolve_to_built_in(),
-                        Some(BuiltIn::ModifierUnderscore)
-                    )
-                {
-                    if self.modifier_stages.is_empty() {
-                        return self.emit_modifier_body_call(block);
-                    }
-                    return self.emit_inline_modifier_chain(block);
-                }
-                if let Expression::FunctionCallExpression(call) = &expression
-                    && let Expression::Identifier(identifier) = call.operand()
-                    && matches!(identifier.resolve_to_built_in(), Some(BuiltIn::Revert))
-                {
-                    return self.emit_revert_call(call, block);
-                }
-                // A bare type-name or `super` reference used as a statement is
-                // only the type/keyword and has no value and no side effect —
-                // solc evaluates and discards it, so emit nothing. Besides
-                // `uint256;` / `super;`, an array-type expression `s[7][];`
-                // parses as an index access with neither an index/start nor slice
-                // bounds (`a[i]` always has a start, `a[i:j]`/`a[:j]` a bound), so
-                // a bound-less index access is the `T[]` type form, not a value.
-                let is_type_or_super_noop = match &expression {
-                    Expression::ElementaryType(_)
-                    | Expression::TypeExpression(_)
-                    | Expression::SuperKeyword(_) => true,
-                    Expression::IndexAccessExpression(index_access) => {
-                        index_access.start().is_none() && index_access.end().is_none()
-                    }
-                    _ => false,
-                };
-                if is_type_or_super_noop {
-                    return Ok(Some(block));
-                }
-                // A discarded statement whose value is a *type* reference — e.g.
-                // `(cond ? M : M).D;`, where `M` is an imported module and `D` a
-                // contract in it — has no runtime value (materialising a
-                // module/contract would have no `sol` representation), but its
-                // subexpressions may still have side effects (here the ternary
-                // condition's `flag = true`). solc evaluates those and discards the
-                // type, so emit only the side-effecting subexpressions.
-                if Self::is_type_reference(&expression) {
-                    return self.emit_type_reference_side_effects(
-                        expression_statement.expression(),
-                        block,
-                    );
-                }
-                let emitter = self.expression_emitter();
-                // A discarded tuple-valued conditional `(c ? (1, 2, 3) : (3, 2, 1));`
-                // has no single value to emit, but its condition and the selected
-                // branch may have side effects; route it through the tuple path
-                // and discard the results. The statement is usually parenthesised
-                // (a single-element tuple), so peel those first. A single-valued
-                // conditional resolves a scalar type and emits normally below.
-                let unwrapped = expression_statement.expression().unwrap_parens();
-                if let Expression::ConditionalExpression(conditional) = &unwrapped
-                    && matches!(conditional.get_type(), Some(SlangType::Tuple(_)))
-                {
-                    let (_values, block) =
-                        emitter.emit_conditional_tuple_values(conditional, block)?;
-                    return Ok(Some(block));
-                }
-                let (_, block) = emitter.emit(&expression, block)?;
-                Ok(Some(block))
-            }
-            Statement::ReturnStatement(return_statement) => {
-                self.emit_return(return_statement, block)
-            }
-            Statement::IfStatement(if_statement) => self.emit_if(if_statement, block),
-            Statement::ForStatement(for_statement) => self.emit_for(for_statement, block),
-            Statement::WhileStatement(while_statement) => self.emit_while(while_statement, block),
-            Statement::DoWhileStatement(do_while) => self.emit_do_while(do_while, block),
-            Statement::BreakStatement(_) => self.emit_break(block),
-            Statement::ContinueStatement(_) => self.emit_continue(block),
-            Statement::Block(inner) => self.emit_block(inner.statements(), block),
-            Statement::UncheckedBlock(inner) => {
-                let saved_mode = self.arithmetic_mode;
-                self.arithmetic_mode = ArithmeticMode::Unchecked;
-                let result = self.emit_block(inner.block().statements(), block);
-                self.arithmetic_mode = saved_mode;
-                result
-            }
-            Statement::RevertStatement(revert) => self.emit_revert(revert, block),
-            Statement::EmitStatement(emit_statement) => self.emit_event(emit_statement, block),
-            Statement::AssemblyStatement(assembly) => self.emit_assembly(assembly, block),
-            Statement::TryStatement(try_statement) => self.emit_try(try_statement, block),
-        }
     }
 
     /// Emits a sequence of statements inside a new lexical scope.
@@ -349,7 +264,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         self.environment.enter_scope();
         let mut current = block;
         for statement in statements.iter() {
-            match self.emit(&statement, current)? {
+            match statement.emit(self, current)? {
                 Some(next) => current = next,
                 None => {
                     self.environment.exit_scope();
@@ -361,16 +276,62 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         Ok(Some(current))
     }
 
-    /// Whether `expression` is a member access that is a compile-time type /
-    /// module reference (`M.D`, `(cond ? M : M).D`, `C.S`) rather than a runtime
-    /// value. slang gives a value-returning member access (a field, getter,
-    /// `.length`, a built-in like `block.timestamp`) a type; a member access onto
-    /// a module/contract namespace that names a type has none.
-    fn is_type_reference(expression: &Expression) -> bool {
-        matches!(
-            expression,
-            Expression::MemberAccessExpression(access) if access.get_type().is_none()
-        )
+    /// Emits a bare expression used as a statement, discarding its value but
+    /// keeping its side effects. The shape is classified once
+    /// ([`ExpressionStatementKind`]) and lowered by kind: the modifier `_;`
+    /// placeholder hands off to the wrapped body / next stage, a `revert(...)`
+    /// call diverges, a value-less type / `super` reference emits nothing, a
+    /// type reference runs only its subexpressions' side effects, a tuple-valued
+    /// conditional routes through the tuple path, and any other expression is
+    /// emitted and its value discarded.
+    fn emit_expression_statement(
+        &mut self,
+        expression_statement: &ExpressionStatement,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        match ExpressionStatementKind::classify(expression_statement) {
+            // A constructor's modifiers run as an inline chain, where `_;`
+            // recurses to the next stage / the constructor body; a regular
+            // function's modifiers are separate `sol.func`s, where `_;` hands off
+            // through the body call.
+            ExpressionStatementKind::ModifierPlaceholder => {
+                if matches!(self.modifier_strategy, ModifierStrategy::InlineChain { .. }) {
+                    self.emit_inline_modifier_chain(block)
+                } else {
+                    self.emit_modifier_body_call(block)
+                }
+            }
+            ExpressionStatementKind::RevertCall(call) => self.emit_revert_call(&call, block),
+            ExpressionStatementKind::TypeOrSuperNoop => Ok(Some(block)),
+            ExpressionStatementKind::TypeReference(expression) => {
+                self.emit_type_reference_side_effects(expression, block)
+            }
+            ExpressionStatementKind::TupleConditional(conditional) => {
+                let emitter = ExpressionContext::from(&*self);
+                let (_values, block) =
+                    emitter.emit_conditional_tuple_values(&conditional, block)?;
+                Ok(Some(block))
+            }
+            ExpressionStatementKind::Value(expression) => {
+                let emitter = ExpressionContext::from(&*self);
+                Ok(Some(Discarded(&expression).emit(&emitter, block)?))
+            }
+        }
+    }
+
+    /// Emits an `unchecked { … }` block: its body lowers with wraparound
+    /// (unchecked) arithmetic, after which the enclosing arithmetic mode is
+    /// restored.
+    fn emit_unchecked_block(
+        &mut self,
+        unchecked_block: &UncheckedBlock,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+        let saved_mode = self.arithmetic_mode;
+        self.arithmetic_mode = ArithmeticMode::Unchecked;
+        let result = self.emit_block(unchecked_block.block().statements(), block);
+        self.arithmetic_mode = saved_mode;
+        result
     }
 
     /// Emits only the side effects of a discarded type-reference expression: a
@@ -382,13 +343,14 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         expression: Expression,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        match expression.unwrap_parens() {
+        match expression.unwrap_parentheses() {
             Expression::MemberAccessExpression(access) => {
                 self.emit_type_reference_side_effects(access.operand(), block)
             }
             Expression::ConditionalExpression(conditional) => {
-                let emitter = self.expression_emitter();
-                let (_, block) = emitter.emit_value(&conditional.operand(), block)?;
+                let emitter = ExpressionContext::from(&*self);
+                let operand = conditional.operand();
+                let BlockAnd { block, .. } = operand.emit(&emitter, block)?;
                 Ok(Some(block))
             }
             _ => Ok(Some(block)),
@@ -400,7 +362,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         &self,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        self.state.builder.emit_sol_break(&block);
+        sol_op_void!(&self.state.builder, &block, BreakOperation);
         Ok(None)
     }
 
@@ -409,7 +371,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         &self,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        self.state.builder.emit_sol_continue(&block);
+        sol_op_void!(&self.state.builder, &block, ContinueOperation);
         Ok(None)
     }
 
@@ -437,7 +399,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             return Ok(None);
         };
 
-        let emitter = self.expression_emitter();
+        let emitter = ExpressionContext::from(&*self);
 
         let (values, block) = if let Expression::TupleExpression(tuple) = &expression
             && tuple.items().len() > 1
@@ -449,7 +411,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 let inner = item
                     .expression()
                     .expect("a return tuple element has an inner expression");
-                let (value, next) = emitter.emit_value(&inner, current)?;
+                let BlockAnd { value, block: next } = inner.emit(&emitter, current)?;
                 values.push(value);
                 current = next;
             }
@@ -460,9 +422,9 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             // `sol.call` with N results, or a conditional with tuple branches
             // (`return cond ? (1, 2) : (3, 4);`). Expand its full result list so
             // the `sol.return` arity matches rather than taking the first value.
-            match &expression {
+            let (values, block) = match &expression {
                 Expression::FunctionCallExpression(call) => {
-                    CallEmitter::new(&emitter).emit_function_call_results(call, block)?
+                    emitter.emit_function_call_results(call, block)?
                 }
                 Expression::ConditionalExpression(conditional) => {
                     emitter.emit_conditional_tuple_values(conditional, block)?
@@ -470,13 +432,21 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 _ => {
                     unimplemented!("multi-value return of a non-call expression is not supported")
                 }
-            }
+            };
+            (
+                values.into_iter().map(crate::ast::Value::from).collect(),
+                block,
+            )
         } else {
             // A single-value return materialises a string literal toward the
             // declared return type (a `bytesN`/`byte` constant), not a runtime
             // string the cast below would reject.
             let return_type = self.return_types[0];
-            let (value, block) = emitter.emit_value_for_target(&expression, return_type, block)?;
+            let BlockAnd { value, block } = (Toward {
+                expression: &expression,
+                target_type: return_type,
+            })
+            .emit(&emitter, block)?;
             (vec![value], block)
         };
 
@@ -484,11 +454,17 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             .into_iter()
             .zip(self.return_types.iter())
             .map(|(value, &return_type)| {
-                TypeConversion::coerce(value, return_type, &self.state.builder, &block)
+                value
+                    .coerce_to(return_type, &self.state.builder, &block)
+                    .into_mlir()
             })
             .collect();
 
-        self.state.builder.emit_sol_return(&cast_values, &block);
+        sol_op_void!(
+            &self.state.builder,
+            &block,
+            ReturnOperation.operands(&cast_values)
+        );
         Ok(None)
     }
 
@@ -504,9 +480,66 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         &self,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        if let Some(body_call) = &self.modifier_body_call {
+        if let ModifierStrategy::BodyCall(body_call) = &self.modifier_strategy {
             body_call.emit(&self.state.builder, &block)?;
         }
         Ok(Some(block))
+    }
+}
+
+statement_emit!(ReturnStatement; |node, context, block| {
+    context.emit_return(node, block)
+});
+
+statement_emit!(Block; |node, context, block| {
+    context.emit_block(node.statements(), block)
+});
+
+statement_emit!(BreakStatement; |context, block| { context.emit_break(block) });
+
+statement_emit!(ContinueStatement; |context, block| { context.emit_continue(block) });
+
+statement_emit!(ExpressionStatement; |node, context, block| {
+    context.emit_expression_statement(node, block)
+});
+
+statement_emit!(UncheckedBlock; |node, context, block| {
+    context.emit_unchecked_block(node, block)
+});
+
+impl<'state, 'context, 'block, 'scope> Emit<'context, 'block, 'state, 'scope> for Statement
+where
+    'context: 'block,
+    'context: 'state,
+    'block: 'state,
+    'state: 'scope,
+{
+    type Context = &'scope mut StatementContext<'state, 'context, 'block>;
+    type Output = Option<BlockRef<'context, 'block>>;
+
+    /// Dispatches a statement to its variant's lowering, threading the
+    /// continuation block (`None` when control diverged).
+    fn emit(
+        &self,
+        context: Self::Context,
+        block: BlockRef<'context, 'block>,
+    ) -> anyhow::Result<Self::Output> {
+        match self {
+            Statement::VariableDeclarationStatement(inner) => inner.emit(context, block),
+            Statement::ExpressionStatement(inner) => inner.emit(context, block),
+            Statement::ReturnStatement(inner) => inner.emit(context, block),
+            Statement::IfStatement(inner) => inner.emit(context, block),
+            Statement::ForStatement(inner) => inner.emit(context, block),
+            Statement::WhileStatement(inner) => inner.emit(context, block),
+            Statement::DoWhileStatement(inner) => inner.emit(context, block),
+            Statement::BreakStatement(inner) => inner.emit(context, block),
+            Statement::ContinueStatement(inner) => inner.emit(context, block),
+            Statement::Block(inner) => inner.emit(context, block),
+            Statement::UncheckedBlock(inner) => inner.emit(context, block),
+            Statement::RevertStatement(inner) => inner.emit(context, block),
+            Statement::EmitStatement(inner) => inner.emit(context, block),
+            Statement::AssemblyStatement(inner) => inner.emit(context, block),
+            Statement::TryStatement(inner) => inner.emit(context, block),
+        }
     }
 }

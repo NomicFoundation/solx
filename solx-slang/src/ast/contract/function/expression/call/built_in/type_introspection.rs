@@ -16,12 +16,13 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
 use solx_mlir::ods::sol::ObjectCodeOperation;
+use solx_mlir::ods::sol::StringLitOperation;
 use solx_utils::DataLocation;
 
-use crate::ast::contract::function::expression::call::CallEmitter;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::type_conversion::TypeConversion;
 
-impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context, 'block> {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits `type(E).min` / `type(E).max` for an enum — the lowest (`0`) or
     /// highest (`member_count - 1`) member ordinal, materialised as an integer
     /// constant and bridged to the enum type via `sol.enum_cast`.
@@ -44,18 +45,16 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         else {
             unreachable!("type(E).min/max resolves to an enum definition");
         };
-        let result_type = TypeConversion::resolve_optional_slang_type(
-            access.get_type(),
-            &self.expression_emitter.state.builder,
-        )
-        .expect("slang types type(E).min/max as the enum");
+        let result_type =
+            TypeConversion::resolve_optional_slang_type(access.get_type(), &self.state.builder)
+                .expect("slang types type(E).min/max as the enum");
         let member_count = enum_definition.members().iter().count();
         let ordinal = match builtin {
             BuiltIn::TypeEnumMin => 0,
             BuiltIn::TypeEnumMax => member_count.saturating_sub(1) as i64,
             _ => unreachable!("dispatched on TypeEnumMin / TypeEnumMax"),
         };
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         let int_value = builder.emit_sol_constant(ordinal, builder.types.ui256, &block);
         let enum_value = builder.emit_sol_enum_cast(int_value, result_type, &block);
         Ok((enum_value, block))
@@ -72,11 +71,9 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             .member()
             .resolve_to_built_in()
             .expect("type(T).min/max dispatches on its built-in member");
-        let result_type = TypeConversion::resolve_optional_slang_type(
-            access.get_type(),
-            &self.expression_emitter.state.builder,
-        )
-        .expect("slang types type(T).min/max as the integer type");
+        let result_type =
+            TypeConversion::resolve_optional_slang_type(access.get_type(), &self.state.builder)
+                .expect("slang types type(T).min/max as the integer type");
         let integer_type =
             IntegerType::try_from(result_type).expect("type(T).min/max is an integer type");
         let bits = solx_mlir::TypeFactory::integer_bit_width(result_type) as usize;
@@ -87,11 +84,10 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             (BuiltIn::TypeMax, true) => (BigInt::from(1) << (bits - 1)) - 1,
             _ => unreachable!("dispatched on TypeMin / TypeMax"),
         };
-        let value =
-            self.expression_emitter
-                .state
-                .builder
-                .emit_constant(&value, result_type, &block);
+        let value = self
+            .state
+            .builder
+            .emit_constant(&value, result_type, &block);
         Ok((value, block))
     }
 
@@ -126,7 +122,7 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
         // `!sol.fixedbytes<4>` rejects a bare integer attribute, so emit the
         // identifier as a `uint32` constant and bridge to `bytes4` via
         // `sol.bytes_cast` (the same pattern as `f.selector`).
-        let builder = &self.expression_emitter.state.builder;
+        let builder = &self.state.builder;
         let integer_type = Type::from(IntegerType::unsigned(builder.context, 32));
         let integer = builder.emit_constant(&BigInt::from(interface_id), integer_type, &block);
         let value = builder.emit_sol_bytes_cast(integer, builder.types.fixed_bytes(4), &block);
@@ -171,21 +167,11 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             }
             _ => contract_name,
         };
-        self.expression_emitter
-            .state
-            .add_dependency(object_name.clone());
-        let result_type = TypeConversion::resolve_optional_slang_type(
-            access.get_type(),
-            &self.expression_emitter.state.builder,
-        )
-        .unwrap_or_else(|| {
-            self.expression_emitter
-                .state
-                .builder
-                .types
-                .string(DataLocation::Memory)
-        });
-        let builder = &self.expression_emitter.state.builder;
+        self.state.add_dependency(object_name.clone());
+        let result_type =
+            TypeConversion::resolve_optional_slang_type(access.get_type(), &self.state.builder)
+                .unwrap_or_else(|| self.state.builder.types.string(DataLocation::Memory));
+        let builder = &self.state.builder;
         let value = sol_op!(
             builder,
             block,
@@ -214,11 +200,13 @@ impl<'emitter, 'state, 'context, 'block> CallEmitter<'emitter, 'state, 'context,
             Some(Definition::Interface(interface)) => interface.name().name(),
             _ => unreachable!("type(C).name resolves to a contract or interface"),
         };
-        let value = self
-            .expression_emitter
-            .state
-            .builder
-            .emit_sol_string_lit(&type_name, &block);
+        let value = sol_op!(
+            &self.state.builder,
+            &block,
+            StringLitOperation
+                .value(StringAttribute::new(self.state.builder.context, &type_name))
+                .addr(self.state.builder.types.sol_string_memory)
+        );
         Ok((value, block))
     }
 }

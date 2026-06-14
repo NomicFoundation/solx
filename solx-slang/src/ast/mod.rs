@@ -5,17 +5,26 @@
 pub mod arguments_declaration_ext;
 /// Contract definition lowering to Sol dialect MLIR.
 pub mod contract;
+pub mod emit;
 pub mod expression_ext;
 pub mod library_ext;
 pub mod named_arguments_ext;
 pub mod operator_binding;
+pub mod tuple_expression_ext;
 /// Solidity type conversion classification and dispatch.
 pub mod type_conversion;
+/// A value produced during emission, and the conversions it undergoes.
+pub mod value;
 
 pub use self::arguments_declaration_ext::ArgumentsDeclarationExt;
+pub use self::contract::function::expression::Toward;
+pub use self::emit::BlockAnd;
+pub use self::emit::Emit;
 pub use self::expression_ext::ExpressionExt;
 pub use self::library_ext::LibraryExt;
 pub use self::named_arguments_ext::NamedArgumentsExt;
+pub use self::tuple_expression_ext::TupleExpressionExt;
+pub use self::value::Value;
 
 use std::collections::BTreeMap;
 

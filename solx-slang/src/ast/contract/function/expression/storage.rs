@@ -2,42 +2,76 @@
 //! Storage load/store expression lowering via Sol dialect.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::attribute::FlatSymbolRefAttribute;
 
 use slang_solidity_v2::ast::ContractDefinition;
+use solx_mlir::Builder;
+use solx_mlir::ods::sol::AddrOfOperation;
+use solx_mlir::ods::sol::CopyOperation;
+use solx_mlir::ods::sol::StoreOperation;
 
-use crate::ast::contract::function::expression::ExpressionEmitter;
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
+use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::storage_layout::StorageSlot;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
-impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
-    /// Emits a storage load via `sol.addr_of` + `sol.load`.
-    pub fn emit_storage_load(
+impl StorageSlot {
+    /// Emits a load of this slot via `sol.addr_of` + `sol.load`.
+    pub fn load<'context, 'block>(
         &self,
-        slot: &StorageSlot,
+        builder: &Builder<'context>,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Value<'context, 'block>> {
-        let pointer = self.emit_storage_addr_of(slot, element_type, block);
-        self.state
-            .builder
-            .emit_sol_load(pointer, element_type, block)
+    ) -> anyhow::Result<Value<'context, 'block>>
+    where
+        'context: 'block,
+    {
+        let pointer = self.addr_of(builder, element_type, block);
+        builder.emit_sol_load(pointer, element_type, block)
     }
 
-    /// Emits a storage store via `sol.addr_of` + `sol.store`.
-    pub fn emit_storage_store(
+    /// Emits a store into this slot via `sol.addr_of` + `sol.store`.
+    pub fn store<'context, 'block>(
         &self,
-        slot: &StorageSlot,
+        builder: &Builder<'context>,
         value: Value<'context, 'block>,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
-    ) {
-        let pointer = self.emit_storage_addr_of(slot, element_type, block);
-        self.state.builder.emit_sol_store(value, pointer, block);
+    ) where
+        'context: 'block,
+    {
+        let pointer = self.addr_of(builder, element_type, block);
+        sol_op_void!(builder, block, StoreOperation.val(value).addr(pointer));
     }
 
+    /// Returns a `!sol.ptr<element_type, location>` pointer via `sol.addr_of`.
+    fn addr_of<'context, 'block>(
+        &self,
+        builder: &Builder<'context>,
+        element_type: Type<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block>
+    where
+        'context: 'block,
+    {
+        let pointer_type = builder.types.pointer(element_type, self.location);
+        sol_op!(
+            builder,
+            block,
+            AddrOfOperation
+                .var(FlatSymbolRefAttribute::new(builder.context, &self.name))
+                .addr(pointer_type)
+        )
+    }
+}
+
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits every state-variable inline initializer (`T x = <expr>;`)
     /// declared in `contract`, in source order.
     ///
@@ -69,36 +103,40 @@ impl<'state, 'context, 'block> ExpressionEmitter<'state, 'context, 'block> {
                 .get_type()
                 .expect("slang types every state variable");
             let builder = &self.state.builder;
-            let element_type = TypeConversion::resolve_slang_type(&declared_type, None, builder);
+            let element_type = TypeConversion::resolve_slang_type(
+                &declared_type,
+                LocationPolicy::Declared(None),
+                builder,
+            );
             let address_type =
                 Self::address_type(builder, element_type, slot.location, &declared_type);
-            let storage_ref = builder.emit_sol_addr_of(&slot.name, address_type, &block);
-            let (value, next_block) = self.emit_value(&initializer, block)?;
+            let storage_ref = sol_op!(
+                builder,
+                &block,
+                AddrOfOperation
+                    .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
+                    .addr(address_type)
+            );
+            let BlockAnd {
+                value,
+                block: next_block,
+            } = initializer.emit(self, block)?;
             block = next_block;
             if declared_type.is_reference_type() {
-                builder.emit_sol_copy(value, storage_ref, &block);
+                sol_op_void!(
+                    builder,
+                    &block,
+                    CopyOperation.src(value.into_mlir()).dst(storage_ref)
+                );
             } else {
-                let stored_value = TypeConversion::coerce(value, element_type, builder, &block);
-                builder.emit_sol_store(stored_value, storage_ref, &block);
+                let stored_value = value.coerce_to(element_type, builder, &block).into_mlir();
+                sol_op_void!(
+                    builder,
+                    &block,
+                    StoreOperation.val(stored_value).addr(storage_ref)
+                );
             }
         }
         Ok(block)
-    }
-
-    /// Returns a `!sol.ptr<element_type, Storage>` pointer via `sol.addr_of`.
-    fn emit_storage_addr_of(
-        &self,
-        slot: &StorageSlot,
-        element_type: Type<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        let pointer_type = self
-            .state
-            .builder
-            .types
-            .pointer(element_type, slot.location);
-        self.state
-            .builder
-            .emit_sol_addr_of(&slot.name, pointer_type, block)
     }
 }

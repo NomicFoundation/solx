@@ -6,12 +6,14 @@ pub mod body_kind;
 pub mod expression;
 pub mod modifier;
 pub mod modifier_body_call;
+pub mod modifier_parameter_binding;
 pub mod signature;
 pub mod statement;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
@@ -27,14 +29,19 @@ use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::StateMutability;
+use solx_mlir::ods::sol::MallocOperation;
+use solx_mlir::ods::sol::ReturnOperation;
+use solx_mlir::ods::sol::StoreOperation;
 
 use self::body_kind::BodyKind;
-use self::expression::ExpressionEmitter;
+use self::expression::ExpressionContext;
 use self::expression::arithmetic_mode::ArithmeticMode;
 use self::modifier::ModifiedBody;
 use self::signature::InnerSignature;
-use self::statement::StatementEmitter;
+use self::statement::StatementContext;
+use crate::ast::Emit;
 use crate::ast::contract::storage_layout::StorageSlot;
+use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
@@ -189,7 +196,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // before any user-written statements. The wrapping modified function
         // already runs them, so a `$body` emission must not run them again.
         if matches!(function.kind(), FunctionKind::Constructor) && body_kind == BodyKind::Function {
-            let emitter = ExpressionEmitter::new(
+            let emitter = ExpressionContext::new(
                 self.state,
                 &environment,
                 self.storage_layout,
@@ -218,7 +225,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut terminated = false;
         if modifier_stages.is_empty() {
             for statement in body.statements().iter() {
-                let mut emitter = StatementEmitter::new(
+                let mut emitter = StatementContext::new(
                     self.state,
                     &mut environment,
                     &region,
@@ -226,7 +233,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     &result_types,
                     &return_slots,
                 );
-                match emitter.emit(&statement, current_block)? {
+                match statement.emit(&mut emitter, current_block)? {
                     Some(next) => current_block = next,
                     None => {
                         terminated = true;
@@ -277,8 +284,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .map(str::to_owned)
             .unwrap_or_else(|| Self::mlir_function_name(function));
 
-        let (mut mlir_parameter_types, result_types) =
-            TypeConversion::resolve_function_types(function, &self.state.builder);
+        let (mut mlir_parameter_types, result_types) = TypeConversion::resolve_function_types(
+            function,
+            LocationPolicy::Declared(None),
+            &self.state.builder,
+        );
 
         // The function's own parameters, recorded before the modifier-body
         // extension below.
@@ -336,9 +346,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 .state
                 .builder
                 .emit_sol_alloca(parameter_type, entry_block);
-            self.state
-                .builder
-                .emit_sol_store(parameter_value, pointer, entry_block);
+            sol_op_void!(
+                &self.state.builder,
+                entry_block,
+                StoreOperation.val(parameter_value).addr(pointer)
+            );
             environment.define_variable(parameter.node_id(), pointer, parameter_type);
         }
         Ok(())
@@ -369,9 +381,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     let pointer = self.state.builder.emit_sol_alloca(return_type, entry_block);
                     let incoming: Value<'context, 'block> =
                         entry_block.argument(parameter_count + index)?.into();
-                    self.state
-                        .builder
-                        .emit_sol_store(incoming, pointer, entry_block);
+                    sol_op_void!(
+                        &self.state.builder,
+                        entry_block,
+                        StoreOperation.val(incoming).addr(pointer)
+                    );
                     if parameter.name().is_some() {
                         environment.define_variable(parameter.node_id(), pointer, return_type);
                     }
@@ -457,14 +471,14 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 contract_body,
             );
             let environment = Environment::new();
-            let emitter = ExpressionEmitter::new(
+            let emitter = ExpressionContext::new(
                 self.state,
                 &environment,
                 self.storage_layout,
                 ArithmeticMode::Checked,
             );
             let block = emitter.emit_state_var_initializers(contract, entry)?;
-            self.state.builder.emit_sol_return(&[], &block);
+            sol_op_void!(&self.state.builder, &block, ReturnOperation.operands(&[]));
             return Ok(());
         }
 
@@ -475,8 +489,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let derived_constructor = contract.constructor();
         let (parameter_types, mutability) = match &derived_constructor {
             Some(constructor) => {
-                let (parameter_types, _) =
-                    TypeConversion::resolve_function_types(constructor, &self.state.builder);
+                let (parameter_types, _) = TypeConversion::resolve_function_types(
+                    constructor,
+                    LocationPolicy::Declared(None),
+                    &self.state.builder,
+                );
                 (parameter_types, Self::map_state_mutability(constructor))
             }
             None => (Vec::new(), StateMutability::NonPayable),
@@ -502,9 +519,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 let parameter_type = parameter_types[index];
                 let parameter_value: Value<'context, '_> = entry.argument(index)?.into();
                 let pointer = self.state.builder.emit_sol_alloca(parameter_type, &entry);
-                self.state
-                    .builder
-                    .emit_sol_store(parameter_value, pointer, &entry);
+                sol_op_void!(
+                    &self.state.builder,
+                    &entry,
+                    StoreOperation.val(parameter_value).addr(pointer)
+                );
                 root_environment.define_variable(parameter.node_id(), pointer, parameter_type);
             }
         }
@@ -513,7 +532,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // reference constructor parameters, so the scope only matters for the
         // shared storage layout.
         let mut current_block = {
-            let emitter = ExpressionEmitter::new(
+            let emitter = ExpressionContext::new(
                 self.state,
                 &root_environment,
                 self.storage_layout,
@@ -623,7 +642,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 },
             )
             .collect();
-        builder.emit_sol_return(&values, block);
+        sol_op_void!(builder, block, ReturnOperation.operands(&values));
     }
 
     /// The default value of a return position reached without an explicit
@@ -643,18 +662,36 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let is_memory = |location| matches!(location, slang_solidity_v2::ast::DataLocation::Memory);
         match slang_type {
             Some(SlangType::FixedSizeArray(array)) if is_memory(array.location()) => {
-                builder.emit_sol_malloc_zeroed(return_type, block)
+                sol_op!(
+                    builder,
+                    block,
+                    MallocOperation
+                        .addr(return_type)
+                        .zero_init(Attribute::unit(builder.context))
+                )
             }
             Some(SlangType::Struct(structure)) if is_memory(structure.location()) => {
-                builder.emit_sol_malloc_zeroed(return_type, block)
+                sol_op!(
+                    builder,
+                    block,
+                    MallocOperation
+                        .addr(return_type)
+                        .zero_init(Attribute::unit(builder.context))
+                )
             }
             Some(SlangType::Array(array)) if is_memory(array.location()) => {
-                builder.emit_sol_malloc_zeroed(return_type, block)
+                sol_op!(
+                    builder,
+                    block,
+                    MallocOperation
+                        .addr(return_type)
+                        .zero_init(Attribute::unit(builder.context))
+                )
             }
             Some(SlangType::String(_) | SlangType::Bytes(_)) => {
                 // A fresh zero-length buffer (plain `sol.malloc`, matching solc),
                 // not a sized `new bytes(0)`.
-                builder.emit_sol_malloc(return_type, block)
+                sol_op!(builder, block, MallocOperation.addr(return_type))
             }
             Some(
                 scalar @ (SlangType::Address(_)
