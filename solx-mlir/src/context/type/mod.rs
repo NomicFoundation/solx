@@ -310,6 +310,39 @@ impl<'context> Type<'context> {
         unsafe { crate::ffi::solxIsExtFuncRefType(self.inner.to_raw()) }
     }
 
+    /// Whether this is a Sol pointer (`!sol.ptr<T, Loc>`) — a typed place.
+    pub fn is_pointer(self) -> bool {
+        // SAFETY: pure `isa<>` predicate on a valid type.
+        unsafe { crate::ffi::solxIsPointerType(self.inner.to_raw()) }
+    }
+
+    /// The pointee type `T` of a `!sol.ptr<T, Loc>` (the caller must ensure this
+    /// is a pointer type).
+    pub fn pointee(self) -> Self {
+        debug_assert!(self.is_pointer());
+        // SAFETY: guarded by `is_pointer`.
+        Self::new(unsafe {
+            MlirType::from_raw(crate::ffi::solxPointerTypePointeeType(self.inner.to_raw()))
+        })
+    }
+
+    /// The data location `Loc` of a `!sol.ptr<T, Loc>` (the caller must ensure
+    /// this is a pointer type). `Immutable` has no frontend `DataLocation` — it
+    /// never reaches the slang pointer surface, so it is a loud `unreachable!`.
+    pub fn data_location(self) -> solx_utils::DataLocation {
+        debug_assert!(self.is_pointer());
+        // SAFETY: guarded by `is_pointer`.
+        let ordinal = unsafe { crate::ffi::solxPointerTypeDataLocation(self.inner.to_raw()) };
+        match ordinal {
+            0 => solx_utils::DataLocation::Storage,
+            1 => solx_utils::DataLocation::CallData,
+            2 => solx_utils::DataLocation::Memory,
+            3 => solx_utils::DataLocation::Stack,
+            5 => solx_utils::DataLocation::Transient,
+            other => unreachable!("unexpected !sol.ptr data-location ordinal {other}"),
+        }
+    }
+
     /// The byte width of a fixed-bytes-like type: `N` for `!sol.fixedbytes<N>`,
     /// `1` for the single `!sol.byte`, and `None` for any other type.
     pub fn fixed_bytes_or_byte_width(self) -> Option<u32> {

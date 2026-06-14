@@ -241,6 +241,18 @@ unsafe extern "C" {
     pub fn solxIsExtFuncRefType(ty: mlir_sys::MlirType) -> bool;
     /// Whether `ty` is a `!sol.func_ref<…>` (internal function reference).
     pub fn solxIsFuncRefType(ty: mlir_sys::MlirType) -> bool;
+    /// Whether `ty` is a `!sol.ptr<…>` (a typed place / address).
+    pub fn solxIsPointerType(ty: mlir_sys::MlirType) -> bool;
+
+    // ---- Sol pointer accessors ----
+
+    /// The pointee type `T` of a `!sol.ptr<T, Loc>` (the caller must ensure `ty`
+    /// is a pointer type).
+    pub fn solxPointerTypePointeeType(ty: mlir_sys::MlirType) -> mlir_sys::MlirType;
+    /// The data location `Loc` of a `!sol.ptr<T, Loc>` as a `mlir::sol::DataLocation`
+    /// ordinal (0=Storage, 1=CallData, 2=Memory, 3=Stack, 4=Immutable, 5=Transient);
+    /// the caller must ensure `ty` is a pointer type.
+    pub fn solxPointerTypeDataLocation(ty: mlir_sys::MlirType) -> u32;
 
     // ---- MLIR core (not in mlir-sys) ----
 

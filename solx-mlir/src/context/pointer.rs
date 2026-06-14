@@ -1,0 +1,158 @@
+//!
+//! A `!sol.ptr<T, Loc>` place in the Sol dialect: a typed address, and the
+//! loads, stores, and steps it supports.
+//!
+
+use melior::ir::BlockLike;
+use melior::ir::Type as MlirType;
+use melior::ir::TypeLike;
+use melior::ir::Value as MlirValue;
+use melior::ir::ValueLike;
+use melior::ir::attribute::TypeAttribute;
+use solx_utils::DataLocation;
+
+use crate::Builder;
+use crate::Type;
+use crate::Value;
+use crate::ods::sol::AllocaOperation;
+use crate::ods::sol::GepOperation;
+use crate::ods::sol::LoadOperation;
+use crate::ods::sol::StoreOperation;
+
+/// A `!sol.ptr<T, Loc>` place: a typed address into stack / memory / storage /
+/// calldata, carrying its pointee type and data location in its own MLIR type.
+///
+/// A newtype over the melior value (whose type is the pointer type) that is the
+/// home for the place operations — load, store, and element stepping — mirroring
+/// how [`Value`] homes the conversions a value undergoes. A `!sol.ptr` is itself
+/// a first-class SSA value (a `storage` / `calldata` reference is the place, not
+/// a loaded copy), so it converts to and from [`Value`] freely. The operations
+/// take the [`Builder`] and the current block by parameter, exactly as a node's
+/// emission does.
+#[derive(Clone, Copy)]
+pub struct Pointer<'context, 'block> {
+    inner: MlirValue<'context, 'block>,
+}
+
+impl<'context, 'block> Pointer<'context, 'block> {
+    /// Wraps a melior value whose type is `!sol.ptr<…>`.
+    pub fn new(inner: MlirValue<'context, 'block>) -> Self {
+        debug_assert!(
+            Type::new(inner.r#type()).is_pointer(),
+            "Pointer wraps a !sol.ptr value"
+        );
+        Self { inner }
+    }
+
+    /// The inner melior value, for the op-construction boundary.
+    pub fn into_mlir(self) -> MlirValue<'context, 'block> {
+        self.inner
+    }
+
+    /// The pointer as a [`Value`] — a `!sol.ptr` is a first-class SSA value.
+    pub fn into_value(self) -> Value<'context, 'block> {
+        Value::new(self.inner)
+    }
+
+    /// The pointer type `!sol.ptr<T, Loc>`.
+    pub fn r#type(self) -> Type<'context> {
+        Type::new(self.inner.r#type())
+    }
+
+    /// The pointee type `T`.
+    pub fn pointee(self) -> Type<'context> {
+        self.r#type().pointee()
+    }
+
+    /// The data location `Loc`.
+    pub fn data_location(self) -> DataLocation {
+        self.r#type().data_location()
+    }
+
+    /// Allocates a stack slot for `pointee` and returns the place — a
+    /// `sol.alloca` yielding `!sol.ptr<pointee, Stack>`.
+    pub fn stack_slot<B>(pointee: Type<'context>, builder: &Builder<'context>, block: &B) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let address_type =
+            Type::pointer(builder.context, pointee.into_mlir(), DataLocation::Stack).into_mlir();
+        Self::new(sol_op!(
+            builder,
+            block,
+            AllocaOperation
+                .alloc_type(TypeAttribute::new(address_type))
+                .addr(address_type)
+        ))
+    }
+
+    /// Loads the value of type `result_type` from this place (`sol.load`).
+    /// Short-circuits when the place already *is* the value (the gep result for a
+    /// reference-typed element in `Storage` / `CallData`), returning it unchanged.
+    pub fn load<B>(
+        self,
+        result_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &B,
+    ) -> Value<'context, 'block>
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        if self.r#type() == result_type {
+            return self.into_value();
+        }
+        Value::new(sol_op!(
+            builder,
+            block,
+            LoadOperation.addr(self.inner).out(result_type.into_mlir())
+        ))
+    }
+
+    /// Stores `value` into this place (`sol.store`).
+    pub fn store<B>(self, value: Value<'context, 'block>, builder: &Builder<'context>, block: &B)
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        sol_op_void!(
+            builder,
+            block,
+            StoreOperation.val(value.into_mlir()).addr(self.inner)
+        );
+    }
+
+    /// Steps to the place of an element / field of type `element_type` at `index`
+    /// within this aggregate place (`sol.gep`). The result pointer type is derived
+    /// from `(this pointer type, element_type)` by `sol::GepOp::getResultType` on
+    /// the C++ side.
+    pub fn gep<B>(
+        self,
+        index: Value<'context, 'block>,
+        element_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        // SAFETY: `mlirSolGepGetResultType` returns a valid MlirType from
+        // `sol::GepOp::getResultType` on the C++ side.
+        let address_type = unsafe {
+            MlirType::from_raw(crate::ffi::mlirSolGepGetResultType(
+                self.inner.r#type().to_raw(),
+                element_type.into_mlir().to_raw(),
+            ))
+        };
+        Self::new(sol_op!(
+            builder,
+            block,
+            GepOperation
+                .base_addr(self.inner)
+                .idx(index.into_mlir())
+                .addr(address_type)
+        ))
+    }
+}

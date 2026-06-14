@@ -231,4 +231,25 @@ bool solxIsFuncRefType(MlirType ty) {
     return mlir::isa<mlir::sol::FuncRefType>(unwrap(ty));
 }
 
+bool solxIsPointerType(MlirType ty) {
+    return mlir::isa<mlir::sol::PointerType>(unwrap(ty));
+}
+
+/*
+ * Pointer type accessors.
+ *
+ * A `!sol.ptr<T, Loc>` carries its pointee type and data location; the Rust
+ * `Pointer` entity reads both from its own type instead of threading them
+ * alongside the value. The caller must ensure `ty` is a pointer type.
+ */
+
+MlirType solxPointerTypePointeeType(MlirType ty) {
+    return wrap(mlir::cast<mlir::sol::PointerType>(unwrap(ty)).getPointeeType());
+}
+
+uint32_t solxPointerTypeDataLocation(MlirType ty) {
+    return static_cast<uint32_t>(
+        mlir::cast<mlir::sol::PointerType>(unwrap(ty)).getDataLocation());
+}
+
 } /* extern "C" */
