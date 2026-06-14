@@ -206,11 +206,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut forward_params: Vec<Value<'context, 'block>> = Vec::new();
         for params in &modifier_stage_params {
             for binding in params {
-                forward_params.push(self.state.builder.emit_sol_load(
-                    binding.pointer,
-                    binding.element_type,
-                    &current_block,
-                )?);
+                forward_params.push(
+                    crate::ast::Pointer::new(binding.pointer)
+                        .load(
+                            crate::ast::Type::new(binding.element_type),
+                            &self.state.builder,
+                            &current_block,
+                        )
+                        .into_mlir(),
+                );
             }
         }
         forward_params.extend(function_parameters);

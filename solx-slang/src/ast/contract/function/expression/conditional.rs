@@ -145,10 +145,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         );
         sol_op_void!(&self.state.builder, &else_end, YieldOperation.ins(&[]));
 
-        let result = self
-            .state
-            .builder
-            .emit_sol_load(result_slot, result_type, &block)?;
+        let result = crate::ast::Pointer::new(result_slot)
+            .load(
+                crate::ast::Type::new(result_type),
+                &self.state.builder,
+                &block,
+            )
+            .into_mlir();
 
         Ok((result, block))
     }
@@ -269,7 +272,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
 
         let mut values = Vec::with_capacity(slots.len());
         for (index, &slot) in slots.iter().enumerate() {
-            values.push(builder.emit_sol_load(slot, result_types[index], &block)?);
+            values.push(
+                crate::ast::Pointer::new(slot)
+                    .load(crate::ast::Type::new(result_types[index]), builder, &block)
+                    .into_mlir(),
+            );
         }
         Ok((values, block))
     }

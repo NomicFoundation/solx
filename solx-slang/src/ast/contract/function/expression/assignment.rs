@@ -289,11 +289,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             };
             let (old, target_type) = match &target {
                 AssignmentTarget::Pointer(pointer, element_type) => {
-                    let old = self
-                        .state
-                        .builder
-                        .emit_sol_load(*pointer, *element_type, &block)?;
-                    (crate::ast::Value::from(old), *element_type)
+                    let old = crate::ast::Pointer::new(*pointer).load(
+                        crate::ast::Type::new(*element_type),
+                        &self.state.builder,
+                        &block,
+                    );
+                    (old, *element_type)
                 }
                 AssignmentTarget::Storage(slot, element_type) => {
                     let old = slot.load(&self.state.builder, *element_type, &block)?;

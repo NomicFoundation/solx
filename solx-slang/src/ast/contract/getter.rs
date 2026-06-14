@@ -168,7 +168,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let value = if declared_type.is_reference_type() {
             storage_ref
         } else {
-            builder.emit_sol_load(storage_ref, element_type, &entry)?
+            crate::ast::Pointer::new(storage_ref)
+                .load(crate::ast::Type::new(element_type), builder, &entry)
+                .into_mlir()
         };
         sol_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
         Ok(())
@@ -287,7 +289,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 sol_op_void!(builder, entry, ReturnOperation.operands(&values));
             }
             None => {
-                let value = builder.emit_sol_load(base, result_type, entry)?;
+                let value = crate::ast::Pointer::new(base)
+                    .load(crate::ast::Type::new(result_type), builder, entry)
+                    .into_mlir();
                 sol_op_void!(builder, entry, ReturnOperation.operands(&[value]));
             }
         }
@@ -688,7 +692,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         block: &BlockRef<'context, 'block>,
     ) -> anyhow::Result<Value<'context, 'block>> {
         if member_type == result_member_type {
-            builder.emit_sol_load(address, result_member_type, block)
+            Ok(crate::ast::Pointer::new(address)
+                .load(crate::ast::Type::new(result_member_type), builder, block)
+                .into_mlir())
         } else {
             Ok(crate::ast::Value::from(address)
                 .coerce_to(crate::ast::Type::new(result_member_type), builder, block)

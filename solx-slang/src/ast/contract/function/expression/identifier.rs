@@ -34,14 +34,12 @@ expression_emit!(Identifier; |node, context, block| {
                 pointer,
                 element_type,
             } = context.environment.variable_with_type(definition.node_id());
-            let value = context
-                .state
-                .builder
-                .emit_sol_load(pointer, element_type, &block)?;
-            Ok(BlockAnd {
-                block,
-                value: value.into(),
-            })
+            let value = crate::ast::Pointer::new(pointer).load(
+                crate::ast::Type::new(element_type),
+                &context.state.builder,
+                &block,
+            );
+            Ok(BlockAnd { block, value })
         }
         Some(Definition::Constant(constant)) => {
             let initializer = constant

@@ -95,7 +95,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             // behaviour as an index access `a[i]`; the raw slot pointer would
             // mis-cast in the consumer).
             let builder = &self.state.builder;
-            let loaded = builder.emit_sol_load(new_slot, element_type, &block)?;
+            let loaded = crate::ast::Pointer::new(new_slot)
+                .load(crate::ast::Type::new(element_type), builder, &block)
+                .into_mlir();
             return Ok((Some(loaded), block));
         };
         if crate::ast::Type::new(element_type).is_reference() {

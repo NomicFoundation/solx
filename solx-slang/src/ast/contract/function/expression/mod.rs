@@ -218,9 +218,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     ))
                     .addr(address_type)
             );
-            self.state
-                .builder
-                .emit_sol_load(address, element_type, &block)?
+            crate::ast::Pointer::new(address)
+                .load(
+                    crate::ast::Type::new(element_type),
+                    &self.state.builder,
+                    &block,
+                )
+                .into_mlir()
         } else {
             slot.load(&self.state.builder, element_type, &block)?
         };

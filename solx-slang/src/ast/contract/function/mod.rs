@@ -637,9 +637,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .enumerate()
             .map(
                 |(index, &return_type)| match return_slots.get(index).copied().flatten() {
-                    Some(pointer) => builder
-                        .emit_sol_load(pointer, return_type, block)
-                        .expect("a return slot loads with the declared type"),
+                    Some(pointer) => crate::ast::Pointer::new(pointer)
+                        .load(crate::ast::Type::new(return_type), builder, block)
+                        .into_mlir(),
                     None => {
                         let slang_type = returns
                             .get(index)

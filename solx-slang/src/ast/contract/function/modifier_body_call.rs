@@ -51,7 +51,11 @@ impl<'context, 'block> ModifierBodyCall<'context, 'block> {
         let mut operands = self.forward_params.clone();
         for (slot, result_type) in self.return_slots.iter().zip(self.result_types.iter()) {
             if let Some(pointer) = slot {
-                operands.push(builder.emit_sol_load(*pointer, *result_type, block)?);
+                operands.push(
+                    crate::ast::Pointer::new(*pointer)
+                        .load(crate::ast::Type::new(*result_type), builder, block)
+                        .into_mlir(),
+                );
             }
         }
         let results =

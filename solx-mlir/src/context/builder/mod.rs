@@ -19,7 +19,6 @@ use melior::ir::Region;
 use melior::ir::RegionLike;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::ValueLike;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
@@ -44,7 +43,6 @@ use crate::ods::sol::FuncOperation;
 use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::IfOperation;
-use crate::ods::sol::LoadOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
@@ -629,9 +627,9 @@ impl<'context> Builder<'context> {
         let mut values: Vec<Value<'context, 'block>> = Vec::with_capacity(result_types.len());
         for (index, result_type) in result_types.iter().enumerate() {
             let value = match return_slots.get(index).copied().flatten() {
-                Some(pointer) => self
-                    .emit_sol_load(pointer, *result_type, block)
-                    .expect("named return slot loads with the declared type"),
+                Some(pointer) => crate::Pointer::new(pointer)
+                    .load(crate::Type::new(*result_type), self, block)
+                    .into_mlir(),
                 None => crate::Value::constant(0, crate::Type::new(*result_type), self, block)
                     .into_mlir(),
             };
@@ -643,40 +641,6 @@ impl<'context> Builder<'context> {
                 .build()
                 .into(),
         );
-    }
-
-    /// Emits a `sol.load` from a pointer with an explicit result type.
-    ///
-    /// Short-circuits when `address` is already the element (the gep result
-    /// for reference-typed elements in `Storage`/`CallData`), returning it
-    /// unchanged.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the load operation result cannot be extracted.
-    pub fn emit_sol_load<'block, B>(
-        &self,
-        address: Value<'context, 'block>,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> anyhow::Result<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        if address.r#type() == result_type {
-            return Ok(address);
-        }
-        Ok(block
-            .append_operation(
-                LoadOperation::builder(self.context, self.unknown_location)
-                    .addr(address)
-                    .out(result_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)?
-            .into())
     }
 
     // ==== Calls ====

@@ -512,10 +512,13 @@ impl Operator {
                     pointer,
                     element_type,
                 } = context.environment.variable_with_type(definition.node_id());
-                let old = context
-                    .state
-                    .builder
-                    .emit_sol_load(pointer, element_type, block)?;
+                let old = crate::ast::Pointer::new(pointer)
+                    .load(
+                        crate::ast::Type::new(element_type),
+                        &context.state.builder,
+                        block,
+                    )
+                    .into_mlir();
                 let new_value = self.emit_step(context, old, element_type, block);
                 sol_op_void!(
                     &context.state.builder,
@@ -555,10 +558,13 @@ impl Operator {
             }
             _ => return Ok(None),
         };
-        let old = context
-            .state
-            .builder
-            .emit_sol_load(address, element_type, &block)?;
+        let old = crate::ast::Pointer::new(address)
+            .load(
+                crate::ast::Type::new(element_type),
+                &context.state.builder,
+                &block,
+            )
+            .into_mlir();
         let new_value = self.emit_step(context, old, element_type, &block);
         sol_op_void!(
             &context.state.builder,

@@ -96,10 +96,13 @@ impl LogicalOperator {
             YieldOperation.ins(&[])
         );
 
-        let result = emitter
-            .state
-            .builder
-            .emit_sol_load(result_ptr, i1_type, &block)?;
+        let result = crate::ast::Pointer::new(result_ptr)
+            .load(
+                crate::ast::Type::new(i1_type),
+                &emitter.state.builder,
+                &block,
+            )
+            .into_mlir();
         Ok((result, block))
     }
 }

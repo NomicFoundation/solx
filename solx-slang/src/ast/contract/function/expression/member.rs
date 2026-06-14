@@ -32,10 +32,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let (address, element_type, block) = self.emit_struct_field_address(access, block)?;
-        let value = self
-            .state
-            .builder
-            .emit_sol_load(address, element_type, &block)?;
+        let value = crate::ast::Pointer::new(address)
+            .load(
+                crate::ast::Type::new(element_type),
+                &self.state.builder,
+                &block,
+            )
+            .into_mlir();
         Ok((value, block))
     }
 

@@ -6,7 +6,6 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::ValueLike;
 use melior::ir::r#type::TypeLike;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
@@ -47,10 +46,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             return self.emit_slice(index_access, block);
         }
         let (address, element_type, block) = self.emit_index_access_address(index_access, block)?;
-        let value = self
-            .state
-            .builder
-            .emit_sol_load(address, element_type, &block)?;
+        let value = crate::ast::Pointer::new(address).load(
+            crate::ast::Type::new(element_type),
+            &self.state.builder,
+            &block,
+        );
         // A scalar element loaded from a packed slot may need a fixed-bytes
         // re-alignment toward its declared element type (`sol.bytes_cast`). A
         // reference-typed element (a nested array / struct) is loaded as its
@@ -58,15 +58,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // it, and slang can mis-type the *result* of indexing an array literal
         // whose element is a calldata reference (`[b[i:j]][0]`) as `calldata`
         // while the loaded value is the correct memory reference.
-        if crate::ast::Type::new(value.r#type()).is_reference() {
-            return Ok((value.into(), block));
+        if value.r#type().is_reference() {
+            return Ok((value, block));
         }
         let result_type = index_access
             .get_type()
             .expect("slang types every index-access expression");
         let slang_expected =
             result_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder);
-        let value = crate::ast::Value::from(value).cast(
+        let value = value.cast(
             crate::ast::Type::new(slang_expected),
             &self.state.builder,
             &block,
