@@ -102,8 +102,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                                 crate::ast::Type::unsigned(
                                     builder.context,
                                     solx_utils::BIT_LENGTH_FIELD,
-                                )
-                                .into_mlir(),
+                                ),
                                 builder,
                                 &current_block,
                             )
@@ -130,8 +129,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                                 crate::ast::Type::unsigned(
                                     builder.context,
                                     solx_utils::BIT_LENGTH_FIELD,
-                                )
-                                .into_mlir(),
+                                ),
                                 builder,
                                 &current_block,
                             )
@@ -196,7 +194,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             } = argument.emit(self, block)?;
             block = next_block;
             let stored = argument_value
-                .coerce_to(field_type, builder, &block)
+                .coerce_to(crate::ast::Type::new(field_type), builder, &block)
                 .into_mlir();
             sol_op_void!(
                 builder,
@@ -263,7 +261,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
             *value = crate::ast::Value::from(*value)
-                .coerce_to(parameter_type, builder, &block)
+                .coerce_to(crate::ast::Type::new(parameter_type), builder, &block)
                 .into_mlir();
         }
         Ok((argument_values, block))

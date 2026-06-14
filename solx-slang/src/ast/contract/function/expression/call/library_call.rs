@@ -61,7 +61,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         } = access.operand().emit(self, block)?;
         let builder = &self.state.builder;
         let self_value = self_value
-            .coerce_to(*parameter_self, builder, &current_block)
+            .coerce_to(
+                crate::ast::Type::new(*parameter_self),
+                builder,
+                &current_block,
+            )
             .into_mlir();
         let (mut argument_values, current_block) =
             self.emit_coerced_arguments(positional_arguments, parameter_rest, current_block)?;
@@ -110,7 +114,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 } = receiver.emit(self, block)?;
                 let builder = &self.state.builder;
                 let self_value = self_value
-                    .coerce_to(*parameter_self, builder, &block)
+                    .coerce_to(crate::ast::Type::new(*parameter_self), builder, &block)
                     .into_mlir();
                 let (mut rest_values, block) =
                     self.emit_coerced_argument_expressions(arguments, parameter_rest, block)?;

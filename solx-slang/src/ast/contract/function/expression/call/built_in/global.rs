@@ -122,8 +122,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // must be widened first, like `address.transfer`.
         let amount = crate::ast::Value::from(values[0])
             .cast(
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                    .into_mlir(),
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                 builder,
                 &block,
             )
@@ -153,8 +152,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // → ui8) must be widened first.
         let amount = crate::ast::Value::from(values[0])
             .cast(
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                    .into_mlir(),
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                 builder,
                 &block,
             )

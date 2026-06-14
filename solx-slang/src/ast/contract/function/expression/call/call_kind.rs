@@ -265,7 +265,11 @@ impl CallKind {
                         })
                         .emit(context, block)?;
                         let result = value
-                            .coerce_to(target_type, &context.state.builder, &block)
+                            .coerce_to(
+                                crate::ast::Type::new(target_type),
+                                &context.state.builder,
+                                &block,
+                            )
                             .into_mlir();
                         Ok((vec![result], block))
                     }
@@ -288,7 +292,11 @@ impl CallKind {
                             &context.state.builder,
                         ) {
                             Some(result_type) => value
-                                .coerce_to(result_type, &context.state.builder, &block)
+                                .coerce_to(
+                                    crate::ast::Type::new(result_type),
+                                    &context.state.builder,
+                                    &block,
+                                )
                                 .into_mlir(),
                             None => value.into_mlir(),
                         };

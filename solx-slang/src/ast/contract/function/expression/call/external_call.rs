@@ -79,7 +79,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         let address = crate::ast::Value::from(receiver)
             .cast(
-                crate::ast::Type::address(builder.context, false).into_mlir(),
+                crate::ast::Type::address(builder.context, false),
                 builder,
                 block,
             )
@@ -302,8 +302,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // sourced from storage / calldata is copied into memory first.
         let input = input
             .coerce_to(
-                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
-                    .into_mlir(),
+                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory),
                 builder,
                 &block,
             )

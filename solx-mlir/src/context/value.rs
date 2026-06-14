@@ -4,7 +4,6 @@
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Type as MlirType;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use melior::ir::attribute::IntegerAttribute;
@@ -53,16 +52,14 @@ impl<'context, 'block> Value<'context, 'block> {
     /// the target type ([`Self::cast`]).
     pub fn coerce_to(
         self,
-        target_type: MlirType<'context>,
+        target_type: Type<'context>,
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        if self.r#type().into_mlir() == target_type {
+        if self.r#type() == target_type {
             return self;
         }
-        if target_type
-            == Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
-        {
+        if target_type == Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN) {
             return self.is_nonzero(builder, block);
         }
         self.cast(target_type, builder, block)
@@ -75,11 +72,11 @@ impl<'context, 'block> Value<'context, 'block> {
     /// `bool(x)` truthiness test.
     pub fn cast(
         self,
-        target_type: MlirType<'context>,
+        target_type: Type<'context>,
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        Type::new(target_type).cast(self, builder, block)
+        target_type.cast(self, builder, block)
     }
 
     /// Reinterprets the value's representation as `target_type` via
@@ -90,17 +87,19 @@ impl<'context, 'block> Value<'context, 'block> {
     /// when it already has `target_type`.
     pub fn reinterpret(
         self,
-        target_type: MlirType<'context>,
+        target_type: Type<'context>,
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        if self.r#type().into_mlir() == target_type {
+        if self.r#type() == target_type {
             return self;
         }
         Self::new(sol_op!(
             builder,
             block,
-            ConvCastOperation.inp(self.inner).out(target_type)
+            ConvCastOperation
+                .inp(self.inner)
+                .out(target_type.into_mlir())
         ))
     }
 

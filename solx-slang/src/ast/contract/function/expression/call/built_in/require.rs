@@ -80,7 +80,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
                         .into_mlir();
                 let message_value = message_value
-                    .coerce_to(string_memory_type, builder, &block)
+                    .coerce_to(crate::ast::Type::new(string_memory_type), builder, &block)
                     .into_mlir();
                 builder.emit_sol_require(
                     condition_boolean,
@@ -141,7 +141,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     builder,
                 );
                 value
-                    .coerce_to(parameter_type, builder, &current_block)
+                    .coerce_to(
+                        crate::ast::Type::new(parameter_type),
+                        builder,
+                        &current_block,
+                    )
                     .into_mlir()
             })
             .collect();

@@ -61,7 +61,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &block,
         );
         let enum_value = crate::ast::Value::from(int_value)
-            .cast(result_type, builder, &block)
+            .cast(crate::ast::Type::new(result_type), builder, &block)
             .into_mlir();
         Ok((enum_value, block))
     }
@@ -133,7 +133,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let integer = builder.emit_constant(&BigInt::from(interface_id), integer_type, &block);
         let value = crate::ast::Value::from(integer)
             .cast(
-                crate::ast::Type::fixed_bytes(builder.context, 4).into_mlir(),
+                crate::ast::Type::fixed_bytes(builder.context, 4),
                 builder,
                 &block,
             )

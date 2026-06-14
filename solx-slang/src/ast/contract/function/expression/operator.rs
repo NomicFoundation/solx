@@ -130,7 +130,11 @@ impl Operator {
             .zip(parameter_types)
             .map(|(value, &parameter_type)| {
                 value
-                    .coerce_to(parameter_type, &context.state.builder, block)
+                    .coerce_to(
+                        crate::ast::Type::new(parameter_type),
+                        &context.state.builder,
+                        block,
+                    )
                     .into_mlir()
             })
             .collect();
@@ -289,19 +293,22 @@ impl Operator {
         {
             let int_type = Type::from(IntegerType::unsigned(builder.context, 8 * width));
             let lhs = lhs
-                .coerce_to(result_type, builder, block)
-                .cast(int_type, builder, block)
+                .coerce_to(crate::ast::Type::new(result_type), builder, block)
+                .cast(crate::ast::Type::new(int_type), builder, block)
                 .into_mlir();
             let rhs = if is_shift {
-                rhs.coerce_to(int_type, builder, block).into_mlir()
+                rhs.coerce_to(crate::ast::Type::new(int_type), builder, block)
+                    .into_mlir()
             } else {
-                rhs.coerce_to(result_type, builder, block)
-                    .cast(int_type, builder, block)
+                rhs.coerce_to(crate::ast::Type::new(result_type), builder, block)
+                    .cast(crate::ast::Type::new(int_type), builder, block)
                     .into_mlir()
             };
             (lhs, rhs, Some(result_type))
         } else {
-            let lhs = lhs.coerce_to(result_type, builder, block).into_mlir();
+            let lhs = lhs
+                .coerce_to(crate::ast::Type::new(result_type), builder, block)
+                .into_mlir();
             // `**` keeps its exponent its own (unsigned) type: `sol.exp`/`sol.cexp`
             // take an unsigned exponent of any width alongside a possibly-signed
             // base, so the exponent must NOT be coerced to the (signed) result
@@ -310,7 +317,8 @@ impl Operator {
             let rhs = if matches!(self, Operator::Exponentiation) {
                 rhs.into_mlir()
             } else {
-                rhs.coerce_to(result_type, builder, block).into_mlir()
+                rhs.coerce_to(crate::ast::Type::new(result_type), builder, block)
+                    .into_mlir()
             };
             (lhs, rhs, None)
         };
@@ -322,7 +330,9 @@ impl Operator {
             .into();
 
         match restore_type {
-            Some(fixed) => crate::ast::Value::from(result).cast(fixed, builder, block),
+            Some(fixed) => {
+                crate::ast::Value::from(result).cast(crate::ast::Type::new(fixed), builder, block)
+            }
             None => result.into(),
         }
     }
@@ -384,7 +394,11 @@ impl Operator {
             Operator::BitwiseNot => {
                 let BlockAnd { value, block } = operand.emit(context, block)?;
                 let operand_type = target_type.unwrap_or_else(|| value.r#type().into_mlir());
-                let value = value.coerce_to(operand_type, &context.state.builder, &block);
+                let value = value.coerce_to(
+                    crate::ast::Type::new(operand_type),
+                    &context.state.builder,
+                    &block,
+                );
                 // `sol.not` is integer-only; for a `bytesN` / `byte` operand
                 // bridge through the equivalent unsigned integer `ui(8*N)` and
                 // cast the result back to the fixed-bytes type.
@@ -395,7 +409,9 @@ impl Operator {
                             let int_type =
                                 Type::from(IntegerType::unsigned(builder.context, 8 * width));
                             (
-                                value.cast(int_type, builder, &block).into_mlir(),
+                                value
+                                    .cast(crate::ast::Type::new(int_type), builder, &block)
+                                    .into_mlir(),
                                 Some(operand_type),
                             )
                         }
@@ -405,7 +421,7 @@ impl Operator {
                     sol_op!(builder, block, NotOperation.value(value));
                 let result = match restore_type {
                     Some(fixed) => crate::ast::Value::from(result)
-                        .cast(fixed, builder, &block)
+                        .cast(crate::ast::Type::new(fixed), builder, &block)
                         .into_mlir(),
                     None => result,
                 };
@@ -431,7 +447,11 @@ impl Operator {
                     )
                     .into_mlir(),
                 );
-                let result = cmp.coerce_to(result_type, &context.state.builder, &block);
+                let result = cmp.coerce_to(
+                    crate::ast::Type::new(result_type),
+                    &context.state.builder,
+                    &block,
+                );
                 Ok((result, block))
             }
             Operator::Subtract => {
@@ -442,7 +462,11 @@ impl Operator {
                 let BlockAnd { value, block } = operand.emit(context, block)?;
                 let operand_type = target_type.unwrap_or_else(|| value.r#type().into_mlir());
                 let value = value
-                    .coerce_to(operand_type, &context.state.builder, &block)
+                    .coerce_to(
+                        crate::ast::Type::new(operand_type),
+                        &context.state.builder,
+                        &block,
+                    )
                     .into_mlir();
                 let zero = context
                     .state

@@ -172,7 +172,11 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     .into_mlir()
             });
         let cast = crate::ast::Value::from(value)
-            .coerce_to(parameter_type, &self.state.builder, block)
+            .coerce_to(
+                crate::ast::Type::new(parameter_type),
+                &self.state.builder,
+                block,
+            )
             .into_mlir();
         let pointer = self.state.builder.emit_sol_alloca(parameter_type, block);
         sol_op_void!(
@@ -281,7 +285,11 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     .into_mlir()
                 });
             let cast = value
-                .coerce_to(parameter_type, &self.state.builder, &current_block)
+                .coerce_to(
+                    crate::ast::Type::new(parameter_type),
+                    &self.state.builder,
+                    &current_block,
+                )
                 .into_mlir();
             let pointer = self
                 .state

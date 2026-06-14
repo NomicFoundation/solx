@@ -69,8 +69,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             LocationPolicy::Declared(None),
             &self.state.builder,
         );
-        let value =
-            crate::ast::Value::from(value).cast(slang_expected, &self.state.builder, &block);
+        let value = crate::ast::Value::from(value).cast(
+            crate::ast::Type::new(slang_expected),
+            &self.state.builder,
+            &block,
+        );
         Ok((value, block))
     }
 
@@ -98,7 +101,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(start_expression) => {
                 let BlockAnd { value, block } = start_expression.emit(self, block)?;
                 let value = value
-                    .coerce_to(ui256, &self.state.builder, &block)
+                    .coerce_to(crate::ast::Type::new(ui256), &self.state.builder, &block)
                     .into_mlir();
                 (value, block)
             }
@@ -111,7 +114,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(end_expression) => {
                 let BlockAnd { value, block } = end_expression.emit(self, block)?;
                 let value = value
-                    .coerce_to(ui256, &self.state.builder, &block)
+                    .coerce_to(crate::ast::Type::new(ui256), &self.state.builder, &block)
                     .into_mlir();
                 (value, block)
             }

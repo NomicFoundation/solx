@@ -455,7 +455,11 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             .zip(self.return_types.iter())
             .map(|(value, &return_type)| {
                 value
-                    .coerce_to(return_type, &self.state.builder, &block)
+                    .coerce_to(
+                        crate::ast::Type::new(return_type),
+                        &self.state.builder,
+                        &block,
+                    )
                     .into_mlir()
             })
             .collect();

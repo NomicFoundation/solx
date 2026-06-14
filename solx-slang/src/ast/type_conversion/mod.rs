@@ -317,7 +317,7 @@ impl TypeConversion {
                     block,
                 );
                 crate::ast::Value::from(zero)
-                    .cast(mlir_type, builder, block)
+                    .cast(crate::ast::Type::new(mlir_type), builder, block)
                     .into_mlir()
             }
             SlangType::ByteArray(byte_array_type) => {
@@ -327,7 +327,7 @@ impl TypeConversion {
                 let int_type = Type::from(IntegerType::unsigned(builder.context, bits));
                 let zero = builder.emit_sol_constant(0, int_type, block);
                 crate::ast::Value::from(zero)
-                    .cast(mlir_type, builder, block)
+                    .cast(crate::ast::Type::new(mlir_type), builder, block)
                     .into_mlir()
             }
             SlangType::Enum(_) => {
@@ -338,7 +338,7 @@ impl TypeConversion {
                     block,
                 );
                 crate::ast::Value::from(zero)
-                    .cast(mlir_type, builder, block)
+                    .cast(crate::ast::Type::new(mlir_type), builder, block)
                     .into_mlir()
             }
             SlangType::UserDefinedValue(udvt) => {
@@ -364,7 +364,7 @@ impl TypeConversion {
                     );
                     let address = crate::ast::Value::from(zero_address)
                         .cast(
-                            crate::ast::Type::address(builder.context, false).into_mlir(),
+                            crate::ast::Type::address(builder.context, false),
                             builder,
                             block,
                         )
@@ -386,13 +386,13 @@ impl TypeConversion {
                 );
                 let address = crate::ast::Value::from(zero)
                     .cast(
-                        crate::ast::Type::address(builder.context, false).into_mlir(),
+                        crate::ast::Type::address(builder.context, false),
                         builder,
                         block,
                     )
                     .into_mlir();
                 crate::ast::Value::from(address)
-                    .cast(mlir_type, builder, block)
+                    .cast(crate::ast::Type::new(mlir_type), builder, block)
                     .into_mlir()
             }
             _ => unreachable!(

@@ -143,8 +143,11 @@ where
                     BIT_LENGTH_BYTE as u32,
                 ));
                 let integer = builder.emit_constant(&BigInt::from(byte), ui8, &block);
-                let value =
-                    crate::ast::Value::from(integer).cast(self.target_type, builder, &block);
+                let value = crate::ast::Value::from(integer).cast(
+                    crate::ast::Type::new(self.target_type),
+                    builder,
+                    &block,
+                );
                 return Ok(BlockAnd { block, value });
             }
             if let Some(width) = crate::ast::Type::new(self.target_type).fixed_bytes_or_byte_width()
@@ -160,7 +163,7 @@ where
                 ));
                 let integer = builder.emit_constant(&integer_value, integer_type, &block);
                 let value = crate::ast::Value::from(integer).cast(
-                    crate::ast::Type::fixed_bytes(builder.context, width).into_mlir(),
+                    crate::ast::Type::fixed_bytes(builder.context, width),
                     builder,
                     &block,
                 );

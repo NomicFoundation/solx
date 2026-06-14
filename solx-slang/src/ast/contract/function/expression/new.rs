@@ -79,8 +79,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                             crate::ast::Type::unsigned(
                                 builder.context,
                                 solx_utils::BIT_LENGTH_FIELD,
-                            )
-                            .into_mlir(),
+                            ),
                             builder,
                             &current_block,
                         )

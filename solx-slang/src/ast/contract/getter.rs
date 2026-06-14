@@ -501,7 +501,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         })
         .emit(&emitter, entry)?;
         let value = value
-            .coerce_to(element_type, &self.state.builder, &entry)
+            .coerce_to(
+                crate::ast::Type::new(element_type),
+                &self.state.builder,
+                &entry,
+            )
             .into_mlir();
         sol_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
         Ok(())
@@ -685,7 +689,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             builder.emit_sol_load(address, result_member_type, block)
         } else {
             Ok(crate::ast::Value::from(address)
-                .coerce_to(result_member_type, builder, block)
+                .coerce_to(crate::ast::Type::new(result_member_type), builder, block)
                 .into_mlir())
         }
     }

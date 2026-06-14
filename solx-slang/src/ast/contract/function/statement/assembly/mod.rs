@@ -382,7 +382,9 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             let initializer = constant.value().expect("constant has no initializer");
             let emitter = ExpressionContext::from(self);
             let BlockAnd { value, block } = initializer.emit(&emitter, block)?;
-            let widened = value.cast(i256, builder, &block).into_mlir();
+            let widened = value
+                .cast(crate::ast::Type::new(i256), builder, &block)
+                .into_mlir();
             return Ok((widened, block));
         }
 
@@ -613,11 +615,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
         crate::ast::Value::from(pointer)
-            .reinterpret(
-                crate::ast::Type::llvm_ptr(builder.context).into_mlir(),
-                builder,
-                block,
-            )
+            .reinterpret(crate::ast::Type::llvm_ptr(builder.context), builder, block)
             .into_mlir()
     }
 

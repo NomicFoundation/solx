@@ -62,7 +62,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         let selector = crate::ast::Value::from(values.remove(0))
             .cast(
-                crate::ast::Type::fixed_bytes(builder.context, 4).into_mlir(),
+                crate::ast::Type::fixed_bytes(builder.context, 4),
                 builder,
                 &block,
             )
@@ -107,7 +107,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let builder = &self.state.builder;
                 let selector_value = crate::ast::Value::from(hash)
                     .coerce_to(
-                        crate::ast::Type::fixed_bytes(builder.context, 4).into_mlir(),
+                        crate::ast::Type::fixed_bytes(builder.context, 4),
                         builder,
                         &current,
                     )
@@ -324,8 +324,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(SlangDataLocation::Storage)
         ) {
             payload_value.coerce_to(
-                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
-                    .into_mlir(),
+                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory),
                 builder,
                 &block,
             )

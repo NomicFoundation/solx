@@ -75,7 +75,11 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 &self.state.builder,
             );
             let value = value
-                .coerce_to(parameter_type, &self.state.builder, &current_block)
+                .coerce_to(
+                    crate::ast::Type::new(parameter_type),
+                    &self.state.builder,
+                    &current_block,
+                )
                 .into_mlir();
             if indexed.is_some() {
                 // TODO: indexed reference-type parameters (string, bytes,

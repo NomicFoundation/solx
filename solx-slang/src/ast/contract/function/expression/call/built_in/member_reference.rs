@@ -70,7 +70,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &block,
         );
         let value = crate::ast::Value::from(raw)
-            .cast(result_type, builder, &block)
+            .cast(crate::ast::Type::new(result_type), builder, &block)
             .into_mlir();
         (value, block)
     }
@@ -253,7 +253,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let integer = builder.emit_constant(value, integer_type, block);
         crate::ast::Value::from(integer)
             .cast(
-                crate::ast::Type::fixed_bytes(builder.context, width_bytes).into_mlir(),
+                crate::ast::Type::fixed_bytes(builder.context, width_bytes),
                 builder,
                 block,
             )

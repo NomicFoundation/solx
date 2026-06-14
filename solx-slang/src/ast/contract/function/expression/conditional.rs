@@ -103,7 +103,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         })
         .emit(self, then_block)?;
         let then_cast = then_value
-            .coerce_to(result_type, &self.state.builder, &then_end)
+            .coerce_to(
+                crate::ast::Type::new(result_type),
+                &self.state.builder,
+                &then_end,
+            )
             .into_mlir();
         sol_op_void!(
             &self.state.builder,
@@ -122,7 +126,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         })
         .emit(self, else_block)?;
         let else_cast = else_value
-            .coerce_to(result_type, &self.state.builder, &else_end)
+            .coerce_to(
+                crate::ast::Type::new(result_type),
+                &self.state.builder,
+                &else_end,
+            )
             .into_mlir();
         sol_op_void!(
             &self.state.builder,
@@ -235,7 +243,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             );
             for (index, value) in values.into_iter().enumerate() {
                 let cast = value
-                    .coerce_to(result_types[index], builder, &current)
+                    .coerce_to(
+                        crate::ast::Type::new(result_types[index]),
+                        builder,
+                        &current,
+                    )
                     .into_mlir();
                 sol_op_void!(
                     builder,
@@ -376,7 +388,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         let element_values: Vec<_> = element_values
             .into_iter()
-            .map(|value| value.coerce_to(element_type, builder, &current).into_mlir())
+            .map(|value| {
+                value
+                    .coerce_to(crate::ast::Type::new(element_type), builder, &current)
+                    .into_mlir()
+            })
             .collect();
         let value = sol_op!(
             builder,

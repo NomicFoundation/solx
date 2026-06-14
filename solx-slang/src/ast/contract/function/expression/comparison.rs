@@ -96,12 +96,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let lhs_common = if lhs_width == common_width {
                 lhs
             } else {
-                lhs.cast(common, builder, &block)
+                lhs.cast(crate::ast::Type::new(common), builder, &block)
             };
             let rhs_common = if rhs_width == common_width {
                 rhs
             } else {
-                rhs.cast(common, builder, &block)
+                rhs.cast(crate::ast::Type::new(common), builder, &block)
             };
             let comparison = lhs_common
                 .compare(rhs_common, predicate, builder, &block)
@@ -126,8 +126,16 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .into_mlir();
         let lhs_wide_type = if signed_lhs { signed_256 } else { unsigned_256 };
         let rhs_wide_type = if signed_rhs { signed_256 } else { unsigned_256 };
-        let lhs_wide = lhs.coerce_to(lhs_wide_type, &self.state.builder, &block);
-        let rhs_wide = rhs.coerce_to(rhs_wide_type, &self.state.builder, &block);
+        let lhs_wide = lhs.coerce_to(
+            crate::ast::Type::new(lhs_wide_type),
+            &self.state.builder,
+            &block,
+        );
+        let rhs_wide = rhs.coerce_to(
+            crate::ast::Type::new(rhs_wide_type),
+            &self.state.builder,
+            &block,
+        );
         // Both are now 256 bits. Retype each to the common signedness with a
         // bit-preserving `sol.cast` (same width), then compare.
         let common = if signed_lhs || signed_rhs {
@@ -138,12 +146,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let lhs_common = if lhs_wide.r#type().into_mlir() == common {
             lhs_wide
         } else {
-            lhs_wide.cast(common, &self.state.builder, &block)
+            lhs_wide.cast(crate::ast::Type::new(common), &self.state.builder, &block)
         };
         let rhs_common = if rhs_wide.r#type().into_mlir() == common {
             rhs_wide
         } else {
-            rhs_wide.cast(common, &self.state.builder, &block)
+            rhs_wide.cast(crate::ast::Type::new(common), &self.state.builder, &block)
         };
         let comparison = lhs_common
             .compare(rhs_common, predicate, &self.state.builder, &block)
