@@ -6,7 +6,6 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::Expression;
-use solx_mlir::ods::sol::StoreOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
@@ -53,22 +52,11 @@ impl LogicalOperator {
         let i1_type = crate::ast::Type::signless(
             emitter.state.builder.context,
             solx_utils::BIT_LENGTH_BOOLEAN,
-        )
-        .into_mlir();
-        let result_ptr = crate::ast::Pointer::stack_slot(
-            crate::ast::Type::new(i1_type),
-            &emitter.state.builder,
-            &block,
-        )
-        .into_mlir();
-        let default_value =
-            crate::ast::Value::boolean(short_circuit_value, &emitter.state.builder, &block)
-                .into_mlir();
-        sol_op_void!(
-            &emitter.state.builder,
-            &block,
-            StoreOperation.val(default_value).addr(result_ptr)
         );
+        let result_ptr = crate::ast::Pointer::stack_slot(i1_type, &emitter.state.builder, &block);
+        let default_value =
+            crate::ast::Value::boolean(short_circuit_value, &emitter.state.builder, &block);
+        result_ptr.store(default_value, &emitter.state.builder, &block);
 
         let (then_block, else_block) = emitter.state.builder.emit_sol_if(lhs_bool, &block);
         let (rhs_block, short_circuit_block) = if short_circuit_value {
@@ -82,12 +70,8 @@ impl LogicalOperator {
             value: rhs,
             block: rhs_end,
         } = right.emit(emitter, rhs_block)?;
-        let rhs_bool = rhs.is_nonzero(&emitter.state.builder, &rhs_end).into_mlir();
-        sol_op_void!(
-            &emitter.state.builder,
-            &rhs_end,
-            StoreOperation.val(rhs_bool).addr(result_ptr)
-        );
+        let rhs_bool = rhs.is_nonzero(&emitter.state.builder, &rhs_end);
+        result_ptr.store(rhs_bool, &emitter.state.builder, &rhs_end);
         sol_op_void!(&emitter.state.builder, &rhs_end, YieldOperation.ins(&[]));
         // The short-circuiting branch keeps the default.
         sol_op_void!(
@@ -96,12 +80,8 @@ impl LogicalOperator {
             YieldOperation.ins(&[])
         );
 
-        let result = crate::ast::Pointer::new(result_ptr)
-            .load(
-                crate::ast::Type::new(i1_type),
-                &emitter.state.builder,
-                &block,
-            )
+        let result = result_ptr
+            .load(i1_type, &emitter.state.builder, &block)
             .into_mlir();
         Ok((result, block))
     }

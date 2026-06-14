@@ -14,7 +14,6 @@ use solx_mlir::ods::sol::CopyOperation;
 use solx_mlir::ods::sol::PopOperation;
 use solx_mlir::ods::sol::PushOperation;
 use solx_mlir::ods::sol::PushStringOperation;
-use solx_mlir::ods::sol::StoreOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -119,14 +118,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         })
         .emit(self, block)?;
         let builder = &self.state.builder;
-        let cast_value = value
-            .coerce_to(crate::ast::Type::new(element_type), builder, &block)
-            .into_mlir();
-        sol_op_void!(
-            builder,
-            &block,
-            StoreOperation.val(cast_value).addr(new_slot)
-        );
+        let cast_value = value.coerce_to(crate::ast::Type::new(element_type), builder, &block);
+        crate::ast::Pointer::new(new_slot).store(cast_value, builder, &block);
         Ok((None, block))
     }
 

@@ -31,7 +31,6 @@ use solx_mlir::Environment;
 use solx_mlir::StateMutability;
 use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::ReturnOperation;
-use solx_mlir::ods::sol::StoreOperation;
 
 use self::body_kind::BodyKind;
 use self::expression::ExpressionContext;
@@ -339,19 +338,14 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     ) -> anyhow::Result<()> {
         for (index, parameter) in function.parameters().iter().enumerate() {
             let parameter_type = parameter_types[index];
-            let parameter_value: Value<'context, 'block> = entry_block.argument(index)?.into();
+            let parameter_value = crate::ast::Value::new(entry_block.argument(index)?.into());
             let pointer = crate::ast::Pointer::stack_slot(
                 crate::ast::Type::new(parameter_type),
                 &self.state.builder,
                 entry_block,
-            )
-            .into_mlir();
-            sol_op_void!(
-                &self.state.builder,
-                entry_block,
-                StoreOperation.val(parameter_value).addr(pointer)
             );
-            environment.define_variable(parameter.node_id(), pointer);
+            pointer.store(parameter_value, &self.state.builder, entry_block);
+            environment.define_variable(parameter.node_id(), pointer.into_mlir());
         }
         Ok(())
     }
@@ -382,19 +376,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         crate::ast::Type::new(return_type),
                         &self.state.builder,
                         entry_block,
-                    )
-                    .into_mlir();
-                    let incoming: Value<'context, 'block> =
-                        entry_block.argument(parameter_count + index)?.into();
-                    sol_op_void!(
-                        &self.state.builder,
-                        entry_block,
-                        StoreOperation.val(incoming).addr(pointer)
                     );
+                    let incoming = crate::ast::Value::new(
+                        entry_block.argument(parameter_count + index)?.into(),
+                    );
+                    pointer.store(incoming, &self.state.builder, entry_block);
                     if parameter.name().is_some() {
-                        environment.define_variable(parameter.node_id(), pointer);
+                        environment.define_variable(parameter.node_id(), pointer.into_mlir());
                     }
-                    return_slots.push(Some(pointer));
+                    return_slots.push(Some(pointer.into_mlir()));
                 }
             }
             return Ok(return_slots);
@@ -519,19 +509,14 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         if let Some(constructor) = &derived_constructor {
             for (index, parameter) in constructor.parameters().iter().enumerate() {
                 let parameter_type = parameter_types[index];
-                let parameter_value: Value<'context, '_> = entry.argument(index)?.into();
+                let parameter_value = crate::ast::Value::new(entry.argument(index)?.into());
                 let pointer = crate::ast::Pointer::stack_slot(
                     crate::ast::Type::new(parameter_type),
                     &self.state.builder,
                     &entry,
-                )
-                .into_mlir();
-                sol_op_void!(
-                    &self.state.builder,
-                    &entry,
-                    StoreOperation.val(parameter_value).addr(pointer)
                 );
-                root_environment.define_variable(parameter.node_id(), pointer);
+                pointer.store(parameter_value, &self.state.builder, &entry);
+                root_environment.define_variable(parameter.node_id(), pointer.into_mlir());
             }
         }
 

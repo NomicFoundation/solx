@@ -181,18 +181,19 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                         .into_mlir()
                 });
-            let cast = crate::ast::Value::from(value)
-                .coerce_to(crate::ast::Type::new(declared_type), builder, &current)
-                .into_mlir();
+            let cast = crate::ast::Value::from(value).coerce_to(
+                crate::ast::Type::new(declared_type),
+                builder,
+                &current,
+            );
             let pointer = crate::ast::Pointer::stack_slot(
                 crate::ast::Type::new(declared_type),
                 builder,
                 &current,
-            )
-            .into_mlir();
-            sol_op_void!(builder, &current, StoreOperation.val(cast).addr(pointer));
+            );
+            pointer.store(cast, builder, &current);
             self.environment
-                .define_variable(declaration.node_id(), pointer);
+                .define_variable(declaration.node_id(), pointer.into_mlir());
         }
 
         Ok(Some(current))

@@ -12,7 +12,6 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::ArrayLitOperation;
-use solx_mlir::ods::sol::StoreOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
@@ -95,8 +94,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             crate::ast::Type::new(result_type),
             &self.state.builder,
             &block,
-        )
-        .into_mlir();
+        );
         let (then_block, else_block) = self.state.builder.emit_sol_if(condition_boolean, &block);
 
         let true_expression = conditional.true_expression();
@@ -108,18 +106,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             target_type: result_type,
         })
         .emit(self, then_block)?;
-        let then_cast = then_value
-            .coerce_to(
-                crate::ast::Type::new(result_type),
-                &self.state.builder,
-                &then_end,
-            )
-            .into_mlir();
-        sol_op_void!(
+        let then_cast = then_value.coerce_to(
+            crate::ast::Type::new(result_type),
             &self.state.builder,
             &then_end,
-            StoreOperation.val(then_cast).addr(result_slot)
         );
+        result_slot.store(then_cast, &self.state.builder, &then_end);
         sol_op_void!(&self.state.builder, &then_end, YieldOperation.ins(&[]));
 
         let false_expression = conditional.false_expression();
@@ -131,21 +123,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             target_type: result_type,
         })
         .emit(self, else_block)?;
-        let else_cast = else_value
-            .coerce_to(
-                crate::ast::Type::new(result_type),
-                &self.state.builder,
-                &else_end,
-            )
-            .into_mlir();
-        sol_op_void!(
+        let else_cast = else_value.coerce_to(
+            crate::ast::Type::new(result_type),
             &self.state.builder,
             &else_end,
-            StoreOperation.val(else_cast).addr(result_slot)
         );
+        result_slot.store(else_cast, &self.state.builder, &else_end);
         sol_op_void!(&self.state.builder, &else_end, YieldOperation.ins(&[]));
 
-        let result = crate::ast::Pointer::new(result_slot)
+        let result = result_slot
             .load(
                 crate::ast::Type::new(result_type),
                 &self.state.builder,
@@ -234,11 +220,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             block,
         } = conditional.operand().emit(self, block)?;
         let condition_boolean = condition_value.is_nonzero(builder, &block).into_mlir();
-        let slots: Vec<Value<'context, 'block>> = result_types
+        let slots: Vec<crate::ast::Pointer<'context, 'block>> = result_types
             .iter()
             .map(|&result_type| {
                 crate::ast::Pointer::stack_slot(crate::ast::Type::new(result_type), builder, &block)
-                    .into_mlir()
             })
             .collect();
         let (then_block, else_block) = builder.emit_sol_if(condition_boolean, &block);
@@ -254,18 +239,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 "a conditional branch yields one value per result slot"
             );
             for (index, value) in values.into_iter().enumerate() {
-                let cast = value
-                    .coerce_to(
-                        crate::ast::Type::new(result_types[index]),
-                        builder,
-                        &current,
-                    )
-                    .into_mlir();
-                sol_op_void!(
+                let cast = value.coerce_to(
+                    crate::ast::Type::new(result_types[index]),
                     builder,
                     &current,
-                    StoreOperation.val(cast).addr(slots[index])
                 );
+                slots[index].store(cast, builder, &current);
             }
             sol_op_void!(builder, &current, YieldOperation.ins(&[]));
         }
@@ -273,8 +252,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let mut values = Vec::with_capacity(slots.len());
         for (index, &slot) in slots.iter().enumerate() {
             values.push(
-                crate::ast::Pointer::new(slot)
-                    .load(crate::ast::Type::new(result_types[index]), builder, &block)
+                slot.load(crate::ast::Type::new(result_types[index]), builder, &block)
                     .into_mlir(),
             );
         }

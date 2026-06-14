@@ -28,7 +28,6 @@ use slang_solidity_v2::ast::Statements;
 use solx_mlir::Environment;
 use solx_mlir::StateMutability;
 use solx_mlir::ods::sol::ReturnOperation;
-use solx_mlir::ods::sol::StoreOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -270,19 +269,14 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // Bind this modifier's parameters from the leading arguments.
         let mut environment = Environment::new();
         for (index, binding) in modifier_params.iter().enumerate() {
-            let value: Value<'context, '_> = entry.argument(index)?.into();
+            let value = crate::ast::Value::new(entry.argument(index)?.into());
             let pointer = crate::ast::Pointer::stack_slot(
                 crate::ast::Type::new(binding.element_type),
                 &self.state.builder,
                 &entry,
-            )
-            .into_mlir();
-            sol_op_void!(
-                &self.state.builder,
-                &entry,
-                StoreOperation.val(value).addr(pointer)
             );
-            environment.define_variable(binding.declaration, pointer);
+            pointer.store(value, &self.state.builder, &entry);
+            environment.define_variable(binding.declaration, pointer.into_mlir());
         }
 
         // Downstream values (later modifiers' arguments ++ `f`'s parameters) are
@@ -301,15 +295,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 crate::ast::Type::new(return_type),
                 &self.state.builder,
                 &entry,
-            )
-            .into_mlir();
-            let incoming: Value<'context, '_> = entry.argument(return_offset + index)?.into();
-            sol_op_void!(
-                &self.state.builder,
-                &entry,
-                StoreOperation.val(incoming).addr(pointer)
             );
-            return_slots.push(Some(pointer));
+            let incoming = crate::ast::Value::new(entry.argument(return_offset + index)?.into());
+            pointer.store(incoming, &self.state.builder, &entry);
+            return_slots.push(Some(pointer.into_mlir()));
         }
 
         let mut emitter = StatementContext::new(
@@ -465,28 +454,21 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                                 )
                                 .into_mlir()
                             });
-                        let cast = value
-                            .coerce_to(
-                                crate::ast::Type::new(parameter_type),
-                                &self.state.builder,
-                                &current_block,
-                            )
-                            .into_mlir();
+                        let cast = value.coerce_to(
+                            crate::ast::Type::new(parameter_type),
+                            &self.state.builder,
+                            &current_block,
+                        );
                         let pointer = crate::ast::Pointer::stack_slot(
                             crate::ast::Type::new(parameter_type),
                             &self.state.builder,
                             &current_block,
-                        )
-                        .into_mlir();
-                        sol_op_void!(
-                            &self.state.builder,
-                            &current_block,
-                            StoreOperation.val(cast).addr(pointer)
                         );
+                        pointer.store(cast, &self.state.builder, &current_block);
                         // Bind by the parameter's node id (the recut keys variables
                         // by declaration id, so an unnamed parameter binds harmlessly
                         // and a reference resolves through `resolve_to_definition`).
-                        base_environment.define_variable(parameter.node_id(), pointer);
+                        base_environment.define_variable(parameter.node_id(), pointer.into_mlir());
                     }
                     evaluated.push((base_id, base_environment));
                 }
@@ -689,27 +671,20 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         )
                         .into_mlir()
                     });
-                let cast = value
-                    .coerce_to(
-                        crate::ast::Type::new(parameter_type),
-                        &self.state.builder,
-                        &block,
-                    )
-                    .into_mlir();
+                let cast = value.coerce_to(
+                    crate::ast::Type::new(parameter_type),
+                    &self.state.builder,
+                    &block,
+                );
                 let pointer = crate::ast::Pointer::stack_slot(
                     crate::ast::Type::new(parameter_type),
                     &self.state.builder,
                     &block,
-                )
-                .into_mlir();
-                sol_op_void!(
-                    &self.state.builder,
-                    &block,
-                    StoreOperation.val(cast).addr(pointer)
                 );
+                pointer.store(cast, &self.state.builder, &block);
                 stage_params.push(ModifierParameterBinding {
                     declaration: parameter.node_id(),
-                    pointer,
+                    pointer: pointer.into_mlir(),
                     element_type: parameter_type,
                 });
             }

@@ -7,7 +7,6 @@ use melior::ir::Type;
 use melior::ir::Value;
 
 use solx_mlir::Builder;
-use solx_mlir::ods::sol::StoreOperation;
 
 /// The hand-off from a modifier stage to the wrapped function body.
 ///
@@ -62,7 +61,11 @@ impl<'context, 'block> ModifierBodyCall<'context, 'block> {
             builder.emit_sol_call_results(&self.symbol, &operands, &self.result_types, block)?;
         for (slot, value) in self.return_slots.iter().zip(results) {
             if let Some(pointer) = slot {
-                sol_op_void!(builder, block, StoreOperation.val(value).addr(*pointer));
+                crate::ast::Pointer::new(*pointer).store(
+                    crate::ast::Value::new(value),
+                    builder,
+                    block,
+                );
             }
         }
         Ok(())

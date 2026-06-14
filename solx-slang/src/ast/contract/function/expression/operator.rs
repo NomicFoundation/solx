@@ -28,7 +28,6 @@ use solx_mlir::ods::sol::NotOperation;
 use solx_mlir::ods::sol::OrOperation;
 use solx_mlir::ods::sol::ShlOperation;
 use solx_mlir::ods::sol::ShrOperation;
-use solx_mlir::ods::sol::StoreOperation;
 use solx_mlir::ods::sol::SubOperation;
 use solx_mlir::ods::sol::XorOperation;
 
@@ -552,7 +551,8 @@ impl Operator {
             }
             _ => return Ok(None),
         };
-        let old = crate::ast::Pointer::new(address)
+        let pointer = crate::ast::Pointer::new(address);
+        let old = pointer
             .load(
                 crate::ast::Type::new(element_type),
                 &context.state.builder,
@@ -560,10 +560,10 @@ impl Operator {
             )
             .into_mlir();
         let new_value = self.emit_step(context, old, element_type, &block);
-        sol_op_void!(
+        pointer.store(
+            crate::ast::Value::new(new_value),
             &context.state.builder,
             &block,
-            StoreOperation.val(new_value).addr(address)
         );
         Ok(Some((old, new_value, block)))
     }

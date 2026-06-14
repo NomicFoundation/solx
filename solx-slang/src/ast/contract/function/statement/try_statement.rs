@@ -10,7 +10,6 @@ use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::TryStatement;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::TryFallbackKind;
-use solx_mlir::ods::sol::StoreOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
@@ -167,26 +166,19 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 crate::ast::Type::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
                     .into_mlir()
             });
-        let cast = crate::ast::Value::from(value)
-            .coerce_to(
-                crate::ast::Type::new(parameter_type),
-                &self.state.builder,
-                block,
-            )
-            .into_mlir();
+        let cast = crate::ast::Value::from(value).coerce_to(
+            crate::ast::Type::new(parameter_type),
+            &self.state.builder,
+            block,
+        );
         let pointer = crate::ast::Pointer::stack_slot(
             crate::ast::Type::new(parameter_type),
             &self.state.builder,
             block,
-        )
-        .into_mlir();
-        sol_op_void!(
-            &self.state.builder,
-            block,
-            StoreOperation.val(cast).addr(pointer)
         );
+        pointer.store(cast, &self.state.builder, block);
         self.environment
-            .define_variable(parameter.node_id(), pointer);
+            .define_variable(parameter.node_id(), pointer.into_mlir());
     }
 
     /// Emits a typed `catch Error(string memory r)` / `catch Panic(uint c)`
@@ -281,26 +273,19 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     )
                     .into_mlir()
                 });
-            let cast = value
-                .coerce_to(
-                    crate::ast::Type::new(parameter_type),
-                    &self.state.builder,
-                    &current_block,
-                )
-                .into_mlir();
+            let cast = value.coerce_to(
+                crate::ast::Type::new(parameter_type),
+                &self.state.builder,
+                &current_block,
+            );
             let pointer = crate::ast::Pointer::stack_slot(
                 crate::ast::Type::new(parameter_type),
                 &self.state.builder,
                 &current_block,
-            )
-            .into_mlir();
-            sol_op_void!(
-                &self.state.builder,
-                &current_block,
-                StoreOperation.val(cast).addr(pointer)
             );
+            pointer.store(cast, &self.state.builder, &current_block);
             self.environment
-                .define_variable(parameter.node_id(), pointer);
+                .define_variable(parameter.node_id(), pointer.into_mlir());
         }
 
         self.emit_block(try_statement.body().statements(), current_block)

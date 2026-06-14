@@ -12,7 +12,6 @@ use slang_solidity_v2::ast::ContractDefinition;
 use solx_mlir::Builder;
 use solx_mlir::ods::sol::AddrOfOperation;
 use solx_mlir::ods::sol::CopyOperation;
-use solx_mlir::ods::sol::StoreOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -128,14 +127,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     CopyOperation.src(value.into_mlir()).dst(storage_ref)
                 );
             } else {
-                let stored_value = value
-                    .coerce_to(crate::ast::Type::new(element_type), builder, &block)
-                    .into_mlir();
-                sol_op_void!(
-                    builder,
-                    &block,
-                    StoreOperation.val(stored_value).addr(storage_ref)
-                );
+                let stored_value =
+                    value.coerce_to(crate::ast::Type::new(element_type), builder, &block);
+                crate::ast::Pointer::new(storage_ref).store(stored_value, builder, &block);
             }
         }
         Ok(block)
