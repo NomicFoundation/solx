@@ -272,64 +272,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         Ok(Some(current))
     }
 
-    /// Emits a bare expression used as a statement, discarding its value but
-    /// keeping its side effects. The shape is classified once
-    /// ([`ExpressionStatementKind`]) and lowered by kind: the modifier `_;`
-    /// placeholder hands off to the wrapped body / next stage, a `revert(...)`
-    /// call diverges, a value-less type / `super` reference emits nothing, a
-    /// type reference runs only its subexpressions' side effects, a tuple-valued
-    /// conditional routes through the tuple path, and any other expression is
-    /// emitted and its value discarded.
-    fn emit_expression_statement(
-        &mut self,
-        expression_statement: &ExpressionStatement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        match ExpressionStatementKind::classify(expression_statement) {
-            // A constructor's modifiers run as an inline chain, where `_;`
-            // recurses to the next stage / the constructor body; a regular
-            // function's modifiers are separate `sol.func`s, where `_;` hands off
-            // through the body call.
-            ExpressionStatementKind::ModifierPlaceholder => {
-                if matches!(self.modifier_strategy, ModifierStrategy::InlineChain { .. }) {
-                    self.emit_inline_modifier_chain(block)
-                } else {
-                    self.emit_modifier_body_call(block)
-                }
-            }
-            ExpressionStatementKind::RevertCall(call) => self.emit_revert_call(&call, block),
-            ExpressionStatementKind::TypeOrSuperNoop => Ok(Some(block)),
-            ExpressionStatementKind::TypeReference(expression) => {
-                self.emit_type_reference_side_effects(expression, block)
-            }
-            ExpressionStatementKind::TupleConditional(conditional) => {
-                let emitter = ExpressionContext::from(&*self);
-                let (_values, block) =
-                    emitter.emit_conditional_tuple_values(&conditional, block)?;
-                Ok(Some(block))
-            }
-            ExpressionStatementKind::Value(expression) => {
-                let emitter = ExpressionContext::from(&*self);
-                Ok(Some(Discarded(&expression).emit(&emitter, block)?))
-            }
-        }
-    }
-
-    /// Emits an `unchecked { … }` block: its body lowers with wraparound
-    /// (unchecked) arithmetic, after which the enclosing arithmetic mode is
-    /// restored.
-    fn emit_unchecked_block(
-        &mut self,
-        unchecked_block: &UncheckedBlock,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let saved_mode = self.arithmetic_mode;
-        self.arithmetic_mode = ArithmeticMode::Unchecked;
-        let result = self.emit_block(unchecked_block.block().statements(), block);
-        self.arithmetic_mode = saved_mode;
-        result
-    }
-
     /// Emits only the side effects of a discarded type-reference expression: a
     /// member access recurses into its operand; a conditional whose branches are
     /// types runs only its condition (the type branches are compile-time, with no
@@ -353,121 +295,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         }
     }
 
-    /// Emits a `sol.break` terminator.
-    fn emit_break(
-        &self,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        sol_op_void!(&self.state.builder, &block, BreakOperation);
-        Ok(None)
-    }
-
-    /// Emits a `sol.continue` terminator.
-    fn emit_continue(
-        &self,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        sol_op_void!(&self.state.builder, &block, ContinueOperation);
-        Ok(None)
-    }
-
-    /// Emits a return statement.
-    ///
-    /// A multi-element tuple expression in the return position is unpacked
-    /// into one value per declared return slot; any other expression yields
-    /// a single value. Each value is cast to its corresponding declared
-    /// return type before being emitted as a `sol.return` operand.
-    fn emit_return(
-        &mut self,
-        return_statement: &slang_solidity_v2::ast::ReturnStatement,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
-        let Some(expression) = return_statement.expression() else {
-            // A bare `return;` returns the current values of the return slots
-            // (zero for an unnamed/unset slot), so its `sol.return` arity matches
-            // the enclosing function — like the fall-through epilogue. This
-            // matters for a `return;` in a modifier stage of a value-returning
-            // function, where a 0-operand return would fail verification; a void
-            // function has no slots and returns nothing.
-            self.state
-                .builder
-                .emit_return_from_slots(self.return_types, self.return_slots, &block);
-            return Ok(None);
-        };
-
-        let emitter = ExpressionContext::from(&*self);
-
-        let (values, block) = if let Expression::TupleExpression(tuple) = &expression
-            && tuple.items().len() > 1
-        {
-            let items = tuple.items();
-            let mut values = Vec::with_capacity(items.len());
-            let mut current = block;
-            for item in items.iter() {
-                let inner = item
-                    .expression()
-                    .expect("a return tuple element has an inner expression");
-                let BlockAnd { value, block: next } = inner.emit(&emitter, current)?;
-                values.push(value);
-                current = next;
-            }
-            (values, current)
-        } else if self.return_types.len() > 1 {
-            // A single expression that yields multiple values is either a
-            // tuple-returning call (`return f();`), where solc emits one
-            // `sol.call` with N results, or a conditional with tuple branches
-            // (`return cond ? (1, 2) : (3, 4);`). Expand its full result list so
-            // the `sol.return` arity matches rather than taking the first value.
-            let (values, block) = match &expression {
-                Expression::FunctionCallExpression(call) => {
-                    emitter.emit_function_call_results(call, block)?
-                }
-                Expression::ConditionalExpression(conditional) => {
-                    emitter.emit_conditional_tuple_values(conditional, block)?
-                }
-                _ => {
-                    unimplemented!("multi-value return of a non-call expression is not supported")
-                }
-            };
-            (
-                values.into_iter().map(crate::ast::Value::from).collect(),
-                block,
-            )
-        } else {
-            // A single-value return materialises a string literal toward the
-            // declared return type (a `bytesN`/`byte` constant), not a runtime
-            // string the cast below would reject.
-            let return_type = self.return_types[0];
-            let BlockAnd { value, block } = (Toward {
-                expression: &expression,
-                target_type: return_type,
-            })
-            .emit(&emitter, block)?;
-            (vec![value], block)
-        };
-
-        let cast_values: Vec<_> = values
-            .into_iter()
-            .zip(self.return_types.iter())
-            .map(|(value, &return_type)| {
-                value
-                    .coerce_to(
-                        crate::ast::Type::new(return_type),
-                        &self.state.builder,
-                        &block,
-                    )
-                    .into_mlir()
-            })
-            .collect();
-
-        sol_op_void!(
-            &self.state.builder,
-            &block,
-            ReturnOperation.operands(&cast_values)
-        );
-        Ok(None)
-    }
-
     /// Lowers a modifier stage's `_;` placeholder to the modifier-body hand-off
     /// (call the wrapped body / next stage, threading the shared return values),
     /// delegating to [`ModifierBodyCall::emit`]. Outside a modifier stage `_;`
@@ -487,24 +314,154 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     }
 }
 
+// A multi-element tuple expression in the return position is unpacked into one
+// value per declared return slot; any other expression yields a single value.
+// Each value is cast to its declared return type before the `sol.return`.
 statement_emit!(ReturnStatement; |node, context, block| {
-    context.emit_return(node, block)
+    let Some(expression) = node.expression() else {
+        // A bare `return;` returns the current values of the return slots
+        // (zero for an unnamed/unset slot), so its `sol.return` arity matches
+        // the enclosing function — like the fall-through epilogue. This
+        // matters for a `return;` in a modifier stage of a value-returning
+        // function, where a 0-operand return would fail verification; a void
+        // function has no slots and returns nothing.
+        context
+            .state
+            .builder
+            .emit_return_from_slots(context.return_types, context.return_slots, &block);
+        return Ok(None);
+    };
+
+    let emitter = ExpressionContext::from(&*context);
+
+    let (values, block) = if let Expression::TupleExpression(tuple) = &expression
+        && tuple.items().len() > 1
+    {
+        let items = tuple.items();
+        let mut values = Vec::with_capacity(items.len());
+        let mut current = block;
+        for item in items.iter() {
+            let inner = item
+                .expression()
+                .expect("a return tuple element has an inner expression");
+            let BlockAnd { value, block: next } = inner.emit(&emitter, current)?;
+            values.push(value);
+            current = next;
+        }
+        (values, current)
+    } else if context.return_types.len() > 1 {
+        // A single expression that yields multiple values is either a
+        // tuple-returning call (`return f();`), where solc emits one
+        // `sol.call` with N results, or a conditional with tuple branches
+        // (`return cond ? (1, 2) : (3, 4);`). Expand its full result list so
+        // the `sol.return` arity matches rather than taking the first value.
+        let (values, block) = match &expression {
+            Expression::FunctionCallExpression(call) => {
+                emitter.emit_function_call_results(call, block)?
+            }
+            Expression::ConditionalExpression(conditional) => {
+                emitter.emit_conditional_tuple_values(conditional, block)?
+            }
+            _ => {
+                unimplemented!("multi-value return of a non-call expression is not supported")
+            }
+        };
+        (
+            values.into_iter().map(crate::ast::Value::from).collect(),
+            block,
+        )
+    } else {
+        // A single-value return materialises a string literal toward the
+        // declared return type (a `bytesN`/`byte` constant), not a runtime
+        // string the cast below would reject.
+        let return_type = context.return_types[0];
+        let BlockAnd { value, block } = (Toward {
+            expression: &expression,
+            target_type: return_type,
+        })
+        .emit(&emitter, block)?;
+        (vec![value], block)
+    };
+
+    let cast_values: Vec<_> = values
+        .into_iter()
+        .zip(context.return_types.iter())
+        .map(|(value, &return_type)| {
+            value
+                .coerce_to(
+                    crate::ast::Type::new(return_type),
+                    &context.state.builder,
+                    &block,
+                )
+                .into_mlir()
+        })
+        .collect();
+
+    sol_op_void!(
+        &context.state.builder,
+        &block,
+        ReturnOperation.operands(&cast_values)
+    );
+    Ok(None)
 });
 
 statement_emit!(Block; |node, context, block| {
     context.emit_block(node.statements(), block)
 });
 
-statement_emit!(BreakStatement; |context, block| { context.emit_break(block) });
+statement_emit!(BreakStatement; |context, block| {
+    sol_op_void!(&context.state.builder, &block, BreakOperation);
+    Ok(None)
+});
 
-statement_emit!(ContinueStatement; |context, block| { context.emit_continue(block) });
+statement_emit!(ContinueStatement; |context, block| {
+    sol_op_void!(&context.state.builder, &block, ContinueOperation);
+    Ok(None)
+});
 
+// A bare expression statement discards its value but keeps its side effects.
+// The shape is classified once ([`ExpressionStatementKind`]) and emitted by
+// kind: the modifier `_;` placeholder hands off to the wrapped body / next
+// stage, a `revert(...)` call diverges, a value-less type / `super` reference
+// emits nothing, a type reference runs only its subexpressions' side effects, a
+// tuple-valued conditional routes through the tuple path, and any other
+// expression is emitted and its value discarded.
 statement_emit!(ExpressionStatement; |node, context, block| {
-    context.emit_expression_statement(node, block)
+    match ExpressionStatementKind::classify(node) {
+        // A constructor's modifiers run as an inline chain, where `_;`
+        // recurses to the next stage / the constructor body; a regular
+        // function's modifiers are separate `sol.func`s, where `_;` hands off
+        // through the body call.
+        ExpressionStatementKind::ModifierPlaceholder => {
+            if matches!(context.modifier_strategy, ModifierStrategy::InlineChain { .. }) {
+                context.emit_inline_modifier_chain(block)
+            } else {
+                context.emit_modifier_body_call(block)
+            }
+        }
+        ExpressionStatementKind::RevertCall(call) => context.emit_revert_call(&call, block),
+        ExpressionStatementKind::TypeOrSuperNoop => Ok(Some(block)),
+        ExpressionStatementKind::TypeReference(expression) => {
+            context.emit_type_reference_side_effects(expression, block)
+        }
+        ExpressionStatementKind::TupleConditional(conditional) => {
+            let emitter = ExpressionContext::from(&*context);
+            let (_values, block) = emitter.emit_conditional_tuple_values(&conditional, block)?;
+            Ok(Some(block))
+        }
+        ExpressionStatementKind::Value(expression) => {
+            let emitter = ExpressionContext::from(&*context);
+            Ok(Some(Discarded(&expression).emit(&emitter, block)?))
+        }
+    }
 });
 
 statement_emit!(UncheckedBlock; |node, context, block| {
-    context.emit_unchecked_block(node, block)
+    let saved_mode = context.arithmetic_mode;
+    context.arithmetic_mode = ArithmeticMode::Unchecked;
+    let result = context.emit_block(node.block().statements(), block);
+    context.arithmetic_mode = saved_mode;
+    result
 });
 
 impl<'state, 'context, 'block, 'scope> Emit<'context, 'block, 'state, 'scope> for Statement
