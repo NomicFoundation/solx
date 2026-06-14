@@ -18,7 +18,6 @@ use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
-use crate::ast::ExpressionExt;
 use crate::ast::Toward;
 use crate::ast::arguments_declaration_ext::ArgumentsDeclarationExt;
 use crate::ast::contract::function::expression::ExpressionContext;

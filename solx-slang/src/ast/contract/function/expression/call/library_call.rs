@@ -17,7 +17,6 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::expression_ext::ExpressionExt;
 use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveSignature;
 

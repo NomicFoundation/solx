@@ -9,8 +9,6 @@ use slang_solidity_v2::ast::ExpressionStatement;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use crate::ast::ExpressionExt;
-
 /// The lowering kind of a discarded expression statement, computed once ahead of
 /// emission so dispatch is a single `match` rather than a chain of guards.
 ///

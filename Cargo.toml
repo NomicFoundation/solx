@@ -101,4 +101,4 @@ features = [
 # branch (one branch per vendored repo), rebased linear on slang main and
 # pushed to the fork. Pinned to its tip rev for reproducibility.
 git = "https://github.com/NomicFoundation/slang.git"
-rev = "05e714736d61355a193a869ee2de0be3da4cecd7"
+rev = "89d258a944525831c058a0551c96296ebdeb8258"

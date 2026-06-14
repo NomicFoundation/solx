@@ -25,7 +25,6 @@ use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::contract::storage_layout::StorageSlot;
-use crate::ast::expression_ext::ExpressionExt;
 use crate::ast::tuple_expression_ext::TupleExpressionExt;
 use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveType;

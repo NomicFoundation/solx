@@ -48,7 +48,6 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::storage_layout::StorageSlot;
-use crate::ast::expression_ext::ExpressionExt;
 use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveType;
 use crate::ast::type_conversion::TypeConversion;
@@ -277,9 +276,22 @@ where
         context: Self::Context,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<Self::Output> {
-        // A compile-time-constant arithmetic/bitwise expression folds to its
-        // exact integer; emit that constant directly.
-        if let Some(folded) = self.folded_constant_value() {
+        // A COMPUTED constant expression (arithmetic / bitwise / shift / prefix)
+        // folds to its exact integer — slang records the value on its `Literal`
+        // type — and is emitted as that constant directly. A bare literal is
+        // excluded so it keeps its own emit arm.
+        let folds = matches!(
+            self,
+            Expression::AdditiveExpression(_)
+                | Expression::MultiplicativeExpression(_)
+                | Expression::ExponentiationExpression(_)
+                | Expression::ShiftExpression(_)
+                | Expression::BitwiseAndExpression(_)
+                | Expression::BitwiseOrExpression(_)
+                | Expression::BitwiseXorExpression(_)
+                | Expression::PrefixExpression(_)
+        );
+        if folds && let Some(folded) = self.integer_value() {
             let result_type = TypeConversion::resolve_optional_slang_type(
                 self.get_type(),
                 &context.state.builder,

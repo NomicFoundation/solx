@@ -43,7 +43,6 @@ use self::expression_statement_kind::ExpressionStatementKind;
 use self::modifier_strategy::ModifierStrategy;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
-use crate::ast::ExpressionExt;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;

@@ -11,7 +11,6 @@ use slang_solidity_v2::ast::PrefixExpressionOperator;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
-use crate::ast::ExpressionExt;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::type_conversion::TypeConversion;

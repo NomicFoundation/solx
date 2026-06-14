@@ -20,7 +20,6 @@ use slang_solidity_v2::ast::visitor::Visitor;
 use slang_solidity_v2::ast::visitor::accept_function_definition;
 use slang_solidity_v2::ast::visitor::accept_inheritance_type;
 
-use crate::ast::ExpressionExt;
 use crate::ast::contract::function::FunctionEmitter;
 
 /// The result of re-resolving a contract's `super` and virtual calls against
