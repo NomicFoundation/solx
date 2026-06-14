@@ -2,6 +2,9 @@
 //! Sol dialect comparison predicate values.
 //!
 
+use slang_solidity_v2::ast::EqualityExpressionOperator;
+use slang_solidity_v2::ast::InequalityExpressionOperator;
+
 /// Sol dialect `sol.cmp` predicate values.
 ///
 /// Signedness is carried by the operand type (`ui256` vs `si256`),
@@ -22,4 +25,24 @@ pub enum CmpPredicate {
     Gt = 4,
     /// Greater than or equal.
     Ge = 5,
+}
+
+impl From<EqualityExpressionOperator> for CmpPredicate {
+    fn from(operator: EqualityExpressionOperator) -> Self {
+        match operator {
+            EqualityExpressionOperator::EqualEqual(_) => Self::Eq,
+            EqualityExpressionOperator::BangEqual(_) => Self::Ne,
+        }
+    }
+}
+
+impl From<InequalityExpressionOperator> for CmpPredicate {
+    fn from(operator: InequalityExpressionOperator) -> Self {
+        match operator {
+            InequalityExpressionOperator::LessThan(_) => Self::Lt,
+            InequalityExpressionOperator::LessThanEqual(_) => Self::Le,
+            InequalityExpressionOperator::GreaterThan(_) => Self::Gt,
+            InequalityExpressionOperator::GreaterThanEqual(_) => Self::Ge,
+        }
+    }
 }

@@ -1,10 +1,8 @@
 //!
 //! Comparison expression lowering: equality and inequality (`sol.cmp`). Each
-//! node bridges to its [`CmpPredicate`] via [`ComparisonPredicateExt`]; the
-//! shared `sol.cmp` lowering stays on the emitter because `CmpPredicate` is a
-//! foreign type (cf. the owned [`Operator`] for arithmetic).
-//!
-//! [`Operator`]: crate::ast::contract::function::expression::operator::Operator
+//! node's `Emit` projects its typed slang operator enum to the [`CmpPredicate`]
+//! it applies — via `CmpPredicate::from`, homed on the predicate in solx-mlir —
+//! and hands it to the shared `sol.cmp` emission body.
 //!
 
 use melior::ir::BlockRef;
@@ -12,10 +10,8 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::EqualityExpression;
-use slang_solidity_v2::ast::EqualityExpressionOperator;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::InequalityExpression;
-use slang_solidity_v2::ast::InequalityExpressionOperator;
 use solx_mlir::CmpPredicate;
 
 use crate::ast::BlockAnd;
@@ -160,40 +156,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     }
 }
 
-/// Bridges a slang comparison node to the [`CmpPredicate`] it applies, so the
-/// shared comparison body lowers equality and inequality uniformly. Each node
-/// maps its typed slang operator enum — never source text.
-trait ComparisonPredicateExt {
-    /// The [`CmpPredicate`] this comparison applies.
-    fn bridged_predicate(&self) -> CmpPredicate;
-}
-
-impl ComparisonPredicateExt for EqualityExpression {
-    fn bridged_predicate(&self) -> CmpPredicate {
-        match self.operator() {
-            EqualityExpressionOperator::BangEqual(_) => CmpPredicate::Ne,
-            EqualityExpressionOperator::EqualEqual(_) => CmpPredicate::Eq,
-        }
-    }
-}
-
-impl ComparisonPredicateExt for InequalityExpression {
-    fn bridged_predicate(&self) -> CmpPredicate {
-        match self.operator() {
-            InequalityExpressionOperator::GreaterThan(_) => CmpPredicate::Gt,
-            InequalityExpressionOperator::GreaterThanEqual(_) => CmpPredicate::Ge,
-            InequalityExpressionOperator::LessThan(_) => CmpPredicate::Lt,
-            InequalityExpressionOperator::LessThanEqual(_) => CmpPredicate::Le,
-        }
-    }
-}
-
 expression_emit!(EqualityExpression, InequalityExpression; |node, context, block| {
-    let (value, block) = context.emit_comparison(
-        &node.left_operand(),
-        &node.right_operand(),
-        node.bridged_predicate(),
-        block,
-    )?;
+    let predicate = CmpPredicate::from(node.operator());
+    let (value, block) =
+        context.emit_comparison(&node.left_operand(), &node.right_operand(), predicate, block)?;
     Ok(BlockAnd { block, value: value.into() })
 });
