@@ -89,8 +89,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
             builder,
             &block,
-        )
-        .into_mlir();
+        );
         // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
         // `sol::getEltType` on the C++ side.
         let element_type = unsafe {
@@ -99,8 +98,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 field_index as u64,
             ))
         };
-        let address =
-            builder.emit_sol_gep(base_value.into_mlir(), index_value, element_type, &block);
+        let address = base_value
+            .into_pointer()
+            .gep(
+                index_value,
+                crate::ast::Type::new(element_type),
+                builder,
+                &block,
+            )
+            .into_mlir();
         Ok((address, element_type, block))
     }
 }

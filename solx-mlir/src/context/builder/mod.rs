@@ -27,7 +27,6 @@ use melior::ir::attribute::TypeAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
-use melior::ir::r#type::TypeLike;
 use ruint::aliases::U256;
 
 use crate::StateMutability;
@@ -44,7 +43,6 @@ use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::ForOperation;
 use crate::ods::sol::FuncOperation;
 use crate::ods::sol::GasLeftOperation;
-use crate::ods::sol::GepOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::IfOperation;
 use crate::ods::sol::LoadOperation;
@@ -713,43 +711,6 @@ impl<'context> Builder<'context> {
             )
             .result(0)?
             .into())
-    }
-
-    /// Emits a `sol.gep` for array / `bytes` / `string` / struct field
-    /// access. `element_type` is the pointee the caller wants to address.
-    /// The gep's result type is derived from `(base_address.r#type(),
-    /// element_type)` via `GepOp::getResultType` on the C++ side.
-    pub fn emit_sol_gep<'block, B>(
-        &self,
-        base_address: Value<'context, 'block>,
-        index: Value<'context, 'block>,
-        element_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        // SAFETY: `mlirSolGepGetResultType` returns a valid MlirType from
-        // `sol::GepOp::getResultType` on the C++ side.
-        let address_type = unsafe {
-            Type::from_raw(crate::ffi::mlirSolGepGetResultType(
-                base_address.r#type().to_raw(),
-                element_type.to_raw(),
-            ))
-        };
-        block
-            .append_operation(
-                GepOperation::builder(self.context, self.unknown_location)
-                    .base_addr(base_address)
-                    .idx(index)
-                    .addr(address_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.gep always produces one result")
-            .into()
     }
 
     // ==== Calls ====

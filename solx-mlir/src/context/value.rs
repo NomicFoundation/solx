@@ -44,6 +44,12 @@ impl<'context, 'block> Value<'context, 'block> {
         self.inner
     }
 
+    /// Views a `!sol.ptr`-typed value as a [`Pointer`] place — the inverse of
+    /// [`Pointer::into_value`]. The caller must ensure this value is a pointer.
+    pub fn into_pointer(self) -> crate::Pointer<'context, 'block> {
+        crate::Pointer::new(self.inner)
+    }
+
     /// The value's type.
     pub fn r#type(self) -> Type<'context> {
         Type::new(self.inner.r#type())

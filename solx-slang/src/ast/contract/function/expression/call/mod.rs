@@ -26,7 +26,6 @@ use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::MallocOperation;
-use solx_mlir::ods::sol::StoreOperation;
 use solx_utils::DataLocation;
 
 use self::call_kind::CallKind;
@@ -166,6 +165,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let builder = &self.state.builder;
         let struct_address = sol_op!(builder, &block, MallocOperation.addr(result_type));
+        let struct_pointer = crate::ast::Pointer::new(struct_address);
 
         let mut block = block;
         for (index, (member, argument)) in struct_definition
@@ -184,24 +184,22 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
                 builder,
                 &block,
-            )
-            .into_mlir();
-            let field_address =
-                builder.emit_sol_gep(struct_address, index_value, field_type, &block);
+            );
+            let field_address = struct_pointer.gep(
+                index_value,
+                crate::ast::Type::new(field_type),
+                builder,
+                &block,
+            );
 
             let BlockAnd {
                 value: argument_value,
                 block: next_block,
             } = argument.emit(self, block)?;
             block = next_block;
-            let stored = argument_value
-                .coerce_to(crate::ast::Type::new(field_type), builder, &block)
-                .into_mlir();
-            sol_op_void!(
-                builder,
-                &block,
-                StoreOperation.val(stored).addr(field_address)
-            );
+            let stored =
+                argument_value.coerce_to(crate::ast::Type::new(field_type), builder, &block);
+            field_address.store(stored, builder, &block);
         }
 
         Ok((struct_address, block))

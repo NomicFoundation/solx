@@ -33,7 +33,9 @@ impl StorageSlot {
         'context: 'block,
     {
         let pointer = self.addr_of(builder, element_type, block);
-        builder.emit_sol_load(pointer, element_type, block)
+        Ok(pointer
+            .load(crate::ast::Type::new(element_type), builder, block)
+            .into_mlir())
     }
 
     /// Emits a store into this slot via `sol.addr_of` + `sol.store`.
@@ -47,28 +49,28 @@ impl StorageSlot {
         'context: 'block,
     {
         let pointer = self.addr_of(builder, element_type, block);
-        sol_op_void!(builder, block, StoreOperation.val(value).addr(pointer));
+        pointer.store(crate::ast::Value::new(value), builder, block);
     }
 
-    /// Returns a `!sol.ptr<element_type, location>` pointer via `sol.addr_of`.
+    /// Returns the `!sol.ptr<element_type, location>` place via `sol.addr_of`.
     fn addr_of<'context, 'block>(
         &self,
         builder: &Builder<'context>,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block>
+    ) -> crate::ast::Pointer<'context, 'block>
     where
         'context: 'block,
     {
         let pointer_type =
             crate::ast::Type::pointer(builder.context, element_type, self.location).into_mlir();
-        sol_op!(
+        crate::ast::Pointer::new(sol_op!(
             builder,
             block,
             AddrOfOperation
                 .var(FlatSymbolRefAttribute::new(builder.context, &self.name))
                 .addr(pointer_type)
-        )
+        ))
     }
 }
 

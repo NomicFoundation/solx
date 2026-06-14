@@ -267,9 +267,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
                         builder,
                         entry,
-                    )
-                    .into_mlir();
-                    let address = builder.emit_sol_gep(base, index_value, *member_type, entry);
+                    );
+                    let address = crate::ast::Pointer::new(base)
+                        .gep(
+                            index_value,
+                            crate::ast::Type::new(*member_type),
+                            builder,
+                            entry,
+                        )
+                        .into_mlir();
                     values.push(Self::load_getter_member(
                         builder,
                         address,
@@ -418,7 +424,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         )
                         .into_mlir();
                     builder.emit_sol_require(in_bounds, None, &[], false, entry);
-                    builder.emit_sol_gep(base, arg, *element_type, entry)
+                    crate::ast::Pointer::new(base)
+                        .gep(
+                            crate::ast::Value::new(arg),
+                            crate::ast::Type::new(*element_type),
+                            builder,
+                            entry,
+                        )
+                        .into_mlir()
                 }
             };
         }

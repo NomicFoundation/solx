@@ -220,12 +220,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         0,
                     ))
                 };
-                let address = self.state.builder.emit_sol_gep(
-                    base_value.into_mlir(),
-                    index_value.into_mlir(),
-                    element_type,
-                    &block,
-                );
+                let address = base_value
+                    .into_pointer()
+                    .gep(
+                        index_value,
+                        crate::ast::Type::new(element_type),
+                        &self.state.builder,
+                        &block,
+                    )
+                    .into_mlir();
                 (address, element_type)
             }
         };
