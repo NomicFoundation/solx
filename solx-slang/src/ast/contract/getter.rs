@@ -262,12 +262,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             Some(plan) => {
                 let mut values = Vec::new();
                 for (member_index, member_type, result_member_type) in plan {
-                    let index_value = builder.emit_sol_constant(
+                    let index_value = crate::ast::Value::constant(
                         *member_index as i64,
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64)
-                            .into_mlir(),
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
+                        builder,
                         entry,
-                    );
+                    )
+                    .into_mlir();
                     let address = builder.emit_sol_gep(base, index_value, *member_type, entry);
                     values.push(Self::load_getter_member(
                         builder,
@@ -384,15 +385,16 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
                 GetterLevel::Array(element_type, fixed_size) => {
                     let length = match fixed_size {
-                        Some(size) => builder.emit_sol_constant(
+                        Some(size) => crate::ast::Value::constant(
                             *size as i64,
                             crate::ast::Type::unsigned(
                                 builder.context,
                                 solx_utils::BIT_LENGTH_FIELD,
-                            )
-                            .into_mlir(),
+                            ),
+                            builder,
                             entry,
-                        ),
+                        )
+                        .into_mlir(),
                         None => {
                             sol_op!(
                                 builder,
@@ -459,7 +461,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             contract_body,
         );
         if let Some(value) = Self::fold_constant_int(&initializer) {
-            let constant = builder.emit_constant(&value, element_type, &entry);
+            let constant = crate::ast::Value::constant_from_bigint(
+                &value,
+                crate::ast::Type::new(element_type),
+                builder,
+                &entry,
+            )
+            .into_mlir();
             sol_op_void!(builder, &entry, ReturnOperation.operands(&[constant]));
             return Ok(());
         }

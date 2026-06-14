@@ -13,6 +13,7 @@ use melior::ir::r#type::IntegerType;
 
 use crate::Builder;
 use crate::Value;
+use crate::ods::sol::AddressCastOperation;
 use crate::ods::sol::BytesCastOperation;
 use crate::ods::sol::CastOperation;
 use crate::ods::sol::ContractCastOperation;
@@ -371,34 +372,20 @@ impl<'context> Type<'context> {
         // address ↔ {integer, contract, fixedbytes<20>}. `sol.address_cast`
         // requires the integer side to be exactly `ui160`, so a wider/narrower
         // integer bridges through `ui160` (then a plain `sol.cast` resizes it).
-        // `sol.address_cast` itself stays a `Builder` primitive (`emit_constant`
-        // materialises `address` constants through it).
         if source.is_address() || self.is_address() {
             let ui160 = Self::unsigned(builder.context, solx_utils::BIT_LENGTH_ETH_ADDRESS);
             if source.is_address() {
                 if self.is_contract() || self.is_fixed_bytes() || self == ui160 {
-                    return Value::new(builder.emit_sol_address_cast(
-                        value.into_mlir(),
-                        self.inner,
-                        block,
-                    ));
+                    return self.address_cast(value, builder, block);
                 }
-                let as_160 = builder.emit_sol_address_cast(value.into_mlir(), ui160.inner, block);
-                return self.cast(Value::new(as_160), builder, block);
+                let as_160 = ui160.address_cast(value, builder, block);
+                return self.cast(as_160, builder, block);
             }
             if source.is_contract() || source.is_fixed_bytes() || source == ui160 {
-                return Value::new(builder.emit_sol_address_cast(
-                    value.into_mlir(),
-                    self.inner,
-                    block,
-                ));
+                return self.address_cast(value, builder, block);
             }
             let as_160 = ui160.cast(value, builder, block);
-            return Value::new(builder.emit_sol_address_cast(
-                as_160.into_mlir(),
-                self.inner,
-                block,
-            ));
+            return self.address_cast(as_160, builder, block);
         }
         // Dynamic `bytes`/`string` → `bytesN`: take the leading N bytes via the
         // dedicated op (`sol.bytes_cast` rejects a `!sol.string` operand).
@@ -474,6 +461,25 @@ impl<'context> Type<'context> {
             builder,
             block,
             BytesCastOperation.inp(value.into_mlir()).out(self.inner)
+        ))
+    }
+
+    /// The leaf `sol.address_cast` to this (address-side) type: the router's
+    /// address arm bridges every address↔{integer, contract, fixedbytes<20>} pair
+    /// through it, and a `BigInt` `address` constant casts up from `ui160` with it.
+    fn address_cast<'block>(
+        self,
+        value: Value<'context, 'block>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Value<'context, 'block>
+    where
+        'context: 'block,
+    {
+        Value::new(sol_op!(
+            builder,
+            block,
+            AddressCastOperation.inp(value.into_mlir()).out(self.inner)
         ))
     }
 

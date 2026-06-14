@@ -697,7 +697,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 | SlangType::Contract(_)
                 | SlangType::Interface(_)),
             ) => TypeConversion::emit_scalar_zero(scalar, return_type, builder, block),
-            _ => builder.emit_sol_constant(0, return_type, block),
+            _ => crate::ast::Value::constant(0, crate::ast::Type::new(return_type), builder, block)
+                .into_mlir(),
         }
     }
 

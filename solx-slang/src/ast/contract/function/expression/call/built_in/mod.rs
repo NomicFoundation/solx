@@ -268,12 +268,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 block,
             } = access.operand().emit(self, block)?;
             let builder = &self.state.builder;
-            let placeholder = builder.emit_sol_constant(
+            let placeholder = crate::ast::Value::constant(
                 0,
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                    .into_mlir(),
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                builder,
                 &block,
-            );
+            )
+            .into_mlir();
             return Ok((Some(placeholder), block));
         }
         // The `abi.*` builtins referenced WITHOUT a call — `abi.encode;`,
@@ -295,12 +296,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             )
         {
             let builder = &self.state.builder;
-            let placeholder = builder.emit_sol_constant(
+            let placeholder = crate::ast::Value::constant(
                 0,
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                    .into_mlir(),
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                builder,
                 &block,
-            );
+            )
+            .into_mlir();
             return Ok((Some(placeholder), block));
         }
         match access.member().resolve_to_built_in() {
@@ -376,12 +378,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             // reference is a no-op, so yield a placeholder.
             Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
                 let builder = &self.state.builder;
-                let placeholder = builder.emit_sol_constant(
+                let placeholder = crate::ast::Value::constant(
                     0,
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir(),
+                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                    builder,
                     &block,
-                );
+                )
+                .into_mlir();
                 Ok((Some(placeholder), block))
             }
             // A member that resolves to a function used as a value (not called) is

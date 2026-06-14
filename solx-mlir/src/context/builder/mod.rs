@@ -28,17 +28,14 @@ use melior::ir::operation::OperationLike;
 use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::TypeLike;
-use num::BigInt;
 use ruint::aliases::U256;
 
 use crate::StateMutability;
-use crate::ods::sol::AddressCastOperation;
 use crate::ods::sol::AllocaOperation;
 use crate::ods::sol::BareCallOperation;
 use crate::ods::sol::BareDelegateCallOperation;
 use crate::ods::sol::BareStaticCallOperation;
 use crate::ods::sol::CallOperation;
-use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ContractOperation;
 use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::ExtCallOperation;
@@ -212,97 +209,6 @@ impl<'context> Builder<'context> {
             .expect("func has one region")
             .first_block()
             .expect("func body has entry block")
-    }
-
-    // ==== Constants ====
-
-    /// Emits a `sol.constant` of the given type.
-    ///
-    /// Use this variant when the constant type is known at emission time.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    pub fn emit_sol_constant<'block, B>(
-        &self,
-        value: i64,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                ConstantOperation::builder(self.context, self.unknown_location)
-                    .value(IntegerAttribute::new(result_type, value).into())
-                    .result(result_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.constant always produces one result")
-            .into()
-    }
-
-    /// Emits a typed integer constant, selecting the dialect by target type.
-    ///
-    /// `i1` is the signless boolean type owned by the arith dialect; every
-    /// other integer type is signed or unsigned and belongs to the sol
-    /// dialect. This is the single entry point for MLIR integer constants
-    /// that carry a `BigInt`-sized value.
-    pub fn emit_constant<'block, B>(
-        &self,
-        value: &BigInt,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        if result_type == crate::Type::address(self.context, false).into_mlir() {
-            let integer = self.emit_constant(
-                value,
-                crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_ETH_ADDRESS).into_mlir(),
-                block,
-            );
-            return self.emit_sol_address_cast(integer, result_type, block);
-        }
-        if crate::Type::new(result_type).integer_bit_width()
-            == solx_utils::BIT_LENGTH_BOOLEAN as u32
-        {
-            let boolean_attribute =
-                IntegerAttribute::new(result_type, i64::from(*value != BigInt::ZERO)).into();
-            return self
-                .emit_constant_operation(boolean_attribute, result_type, block)
-                .expect("well-typed boolean constant never fails emission");
-        }
-        let (sign, words) = value.to_u64_digits();
-        let attribute = unsafe {
-            Attribute::from_raw(crate::ffi::solxCreateIntegerAttr(
-                result_type.to_raw(),
-                sign == num::bigint::Sign::Minus,
-                words.len(),
-                words.as_ptr(),
-            ))
-        };
-        self.emit_constant_operation(attribute, result_type, block)
-            .expect("well-typed BigInt constant never fails emission")
-    }
-
-    /// Emits an `i1` boolean constant.
-    pub fn emit_bool<'block, B>(&self, value: bool, block: &B) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        self.emit_constant(
-            &BigInt::from(u8::from(value)),
-            crate::Type::signless(self.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
-            block,
-        )
     }
 
     // ==== String literals ====
@@ -728,7 +634,8 @@ impl<'context> Builder<'context> {
     {
         let pointer = self.emit_sol_alloca(element_type, block);
         if IntegerType::try_from(element_type).is_ok() {
-            let zero = self.emit_sol_constant(0, element_type, block);
+            let zero =
+                crate::Value::constant(0, crate::Type::new(element_type), self, block).into_mlir();
             block.append_operation(
                 StoreOperation::builder(self.context, self.unknown_location)
                     .val(zero)
@@ -761,7 +668,8 @@ impl<'context> Builder<'context> {
                 Some(pointer) => self
                     .emit_sol_load(pointer, *result_type, block)
                     .expect("named return slot loads with the declared type"),
-                None => self.emit_sol_constant(0, *result_type, block),
+                None => crate::Value::constant(0, crate::Type::new(*result_type), self, block)
+                    .into_mlir(),
             };
             values.push(value);
         }
@@ -909,34 +817,6 @@ impl<'context> Builder<'context> {
             results.push(operation.result(index)?.into());
         }
         Ok(results)
-    }
-
-    /// Emits a `sol.address_cast` to convert between address and integer types.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
-    pub fn emit_sol_address_cast<'block, B>(
-        &self,
-        value: Value<'context, 'block>,
-        to_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                AddressCastOperation::builder(self.context, self.unknown_location)
-                    .inp(value)
-                    .out(to_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.address_cast always produces one result")
-            .into()
     }
 
     /// Emits a `sol.icall` — an indirect call through an internal function
@@ -1142,16 +1022,20 @@ impl<'context> Builder<'context> {
         'context: 'block,
     {
         let gas = self.emit_sol_gas_left(block);
-        let value = self.emit_sol_constant(
+        let value = crate::Value::constant(
             0,
-            crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+            crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_FIELD),
+            self,
             block,
-        );
-        let selector_value = self.emit_sol_constant(
+        )
+        .into_mlir();
+        let selector_value = crate::Value::constant(
             i64::from(selector),
-            crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+            crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_FIELD),
+            self,
             block,
-        );
+        )
+        .into_mlir();
         let return_types: Vec<Type<'context>> = (0..callee_type.result_count())
             .map(|index| {
                 callee_type
@@ -1338,34 +1222,5 @@ impl<'context> Builder<'context> {
             operation = operation.transient(Attribute::unit(self.context));
         }
         block.append_operation(operation.build().into());
-    }
-
-    // ==== Shared helpers ====
-
-    /// Shared helper for emitting a constant operation with an attribute.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the MLIR operation cannot be constructed.
-    fn emit_constant_operation<'block, B>(
-        &self,
-        attribute: Attribute<'context>,
-        result_type: Type<'context>,
-        block: &B,
-    ) -> anyhow::Result<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        Ok(block
-            .append_operation(
-                ConstantOperation::builder(self.context, self.unknown_location)
-                    .value(attribute)
-                    .result(result_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)?
-            .into())
     }
 }

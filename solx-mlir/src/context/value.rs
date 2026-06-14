@@ -2,18 +2,22 @@
 //! An MLIR value in the Sol dialect, and the conversions it undergoes.
 //!
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::r#type::IntegerType;
+use melior::ir::r#type::TypeLike;
+use num::BigInt;
 use solx_utils::BIT_LENGTH_X64;
 
 use crate::Builder;
 use crate::CmpPredicate;
 use crate::Type;
 use crate::ods::sol::CmpOperation;
+use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ConvCastOperation;
 
 /// An MLIR value in the Sol dialect.
@@ -43,6 +47,89 @@ impl<'context, 'block> Value<'context, 'block> {
     /// The value's type.
     pub fn r#type(self) -> Type<'context> {
         Type::new(self.inner.r#type())
+    }
+
+    /// Materialises a `sol.constant` of `result_type` from an `i64`-sized value —
+    /// the common path for sizes, indices, and selectors whose magnitude is known
+    /// to fit. Generic over the block because it is also emitted from inside the
+    /// `Builder`'s own composite primitives, which carry a generic block.
+    pub fn constant<B>(
+        value: i64,
+        result_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        let result_type = result_type.into_mlir();
+        Self::new(sol_op!(
+            builder,
+            block,
+            ConstantOperation
+                .value(IntegerAttribute::new(result_type, value).into())
+                .result(result_type)
+        ))
+    }
+
+    /// Materialises a `sol.constant` from an arbitrary-width [`BigInt`] — the path
+    /// for literals that overflow `i64`. An `address` constant is built at the
+    /// `ui160` address width and cast through the router; a boolean is an `i1`
+    /// attribute; every other integer width is carried by the FFI big-integer
+    /// attribute (the one primitive a `BigInt` constant cannot express through the
+    /// fixed-width `IntegerAttribute`).
+    pub fn constant_from_bigint(
+        value: &BigInt,
+        result_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        if result_type == Type::address(builder.context, false) {
+            let integer = Self::constant_from_bigint(
+                value,
+                Type::unsigned(builder.context, solx_utils::BIT_LENGTH_ETH_ADDRESS),
+                builder,
+                block,
+            );
+            return integer.cast(result_type, builder, block);
+        }
+        let attribute: Attribute<'context> = if result_type.integer_bit_width()
+            == solx_utils::BIT_LENGTH_BOOLEAN as u32
+        {
+            IntegerAttribute::new(result_type.into_mlir(), i64::from(*value != BigInt::ZERO)).into()
+        } else {
+            let (sign, words) = value.to_u64_digits();
+            unsafe {
+                Attribute::from_raw(crate::ffi::solxCreateIntegerAttr(
+                    result_type.into_mlir().to_raw(),
+                    sign == num::bigint::Sign::Minus,
+                    words.len(),
+                    words.as_ptr(),
+                ))
+            }
+        };
+        Self::new(sol_op!(
+            builder,
+            block,
+            ConstantOperation
+                .value(attribute)
+                .result(result_type.into_mlir())
+        ))
+    }
+
+    /// Materialises an `i1` boolean constant.
+    pub fn boolean(
+        value: bool,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::constant_from_bigint(
+            &BigInt::from(u8::from(value)),
+            Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN),
+            builder,
+            block,
+        )
     }
 
     /// Coerces to `target_type`, emitting the conversion (nothing when the types
@@ -141,8 +228,8 @@ impl<'context, 'block> Value<'context, 'block> {
         if self.r#type() == Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN) {
             return self;
         }
-        let zero = builder.emit_sol_constant(0, self.r#type().into_mlir(), block);
-        self.compare(Self::new(zero), CmpPredicate::Ne, builder, block)
+        let zero = Self::constant(0, self.r#type(), builder, block);
+        self.compare(zero, CmpPredicate::Ne, builder, block)
     }
 }
 

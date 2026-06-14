@@ -47,12 +47,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         // The call value defaults to zero wei.
         let value = call_value.unwrap_or_else(|| {
-            builder.emit_sol_constant(
+            crate::ast::Value::constant(
                 0,
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                    .into_mlir(),
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                builder,
                 block,
             )
+            .into_mlir()
         });
         builder.emit_sol_ext_icall(
             callee,
@@ -291,12 +292,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let (status, ret_data) = match kind {
             BuiltIn::AddressCall => {
                 let value = call_value.unwrap_or_else(|| {
-                    builder.emit_sol_constant(
+                    crate::ast::Value::constant(
                         0,
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir(),
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                        builder,
                         &block,
                     )
+                    .into_mlir()
                 });
                 builder.emit_sol_bare_call(address, value, input, &block)
             }

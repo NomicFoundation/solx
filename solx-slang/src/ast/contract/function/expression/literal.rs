@@ -37,30 +37,26 @@ expression_emit!(DecimalNumberExpression, HexNumberExpression; |node, context, b
     let result_type =
         TypeConversion::resolve_optional_slang_type(node.get_type(), &context.state.builder)
             .expect("the binder types every integer literal node");
-    let constant = context
-        .state
-        .builder
-        .emit_constant(&value, result_type, &block);
+    let constant = crate::ast::Value::constant_from_bigint(
+        &value,
+        crate::ast::Type::new(result_type),
+        &context.state.builder,
+        &block,
+    );
     Ok(BlockAnd {
         block,
-        value: constant.into(),
+        value: constant,
     })
 });
 
 expression_emit!(TrueKeyword; |context, block| {
-    let value = context.state.builder.emit_bool(true, &block);
-    Ok(BlockAnd {
-        block,
-        value: value.into(),
-    })
+    let value = crate::ast::Value::boolean(true, &context.state.builder, &block);
+    Ok(BlockAnd { block, value })
 });
 
 expression_emit!(FalseKeyword; |context, block| {
-    let value = context.state.builder.emit_bool(false, &block);
-    Ok(BlockAnd {
-        block,
-        value: value.into(),
-    })
+    let value = crate::ast::Value::boolean(false, &context.state.builder, &block);
+    Ok(BlockAnd { block, value })
 });
 
 expression_emit!(ThisKeyword; |context, block| {
@@ -142,12 +138,13 @@ where
                     builder.context,
                     BIT_LENGTH_BYTE as u32,
                 ));
-                let integer = builder.emit_constant(&BigInt::from(byte), ui8, &block);
-                let value = crate::ast::Value::from(integer).cast(
-                    crate::ast::Type::new(self.target_type),
+                let integer = crate::ast::Value::constant_from_bigint(
+                    &BigInt::from(byte),
+                    crate::ast::Type::new(ui8),
                     builder,
                     &block,
                 );
+                let value = integer.cast(crate::ast::Type::new(self.target_type), builder, &block);
                 return Ok(BlockAnd { block, value });
             }
             if let Some(width) = crate::ast::Type::new(self.target_type).fixed_bytes_or_byte_width()
@@ -161,8 +158,13 @@ where
                     builder.context,
                     width * BIT_LENGTH_BYTE as u32,
                 ));
-                let integer = builder.emit_constant(&integer_value, integer_type, &block);
-                let value = crate::ast::Value::from(integer).cast(
+                let integer = crate::ast::Value::constant_from_bigint(
+                    &integer_value,
+                    crate::ast::Type::new(integer_type),
+                    builder,
+                    &block,
+                );
+                let value = integer.cast(
                     crate::ast::Type::fixed_bytes(builder.context, width),
                     builder,
                     &block,

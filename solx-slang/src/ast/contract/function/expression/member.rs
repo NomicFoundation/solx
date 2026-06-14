@@ -84,11 +84,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         } = base.emit(self, block)?;
         let builder = &self.state.builder;
 
-        let index_value = builder.emit_sol_constant(
+        let index_value = crate::ast::Value::constant(
             field_index as i64,
-            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64).into_mlir(),
+            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
+            builder,
             &block,
-        );
+        )
+        .into_mlir();
         // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
         // `sol::getEltType` on the C++ side.
         let element_type = unsafe {

@@ -135,12 +135,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let result_type =
             crate::ast::Type::contract(builder.context, &contract_name, payable).into_mlir();
         let val = value.unwrap_or_else(|| {
-            builder.emit_sol_constant(
+            crate::ast::Value::constant(
                 0,
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                    .into_mlir(),
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                builder,
                 &block,
             )
+            .into_mlir()
         });
 
         // Append operands in the ODS declaration order (val, salt, ctorArgs) so

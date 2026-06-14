@@ -353,15 +353,16 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     // deep-cleared via the `ReferenceCopy` arm above.)
                     match &slang_type {
                         ast::Type::String(_) | ast::Type::Bytes(_) => {
-                            let size = self.state.builder.emit_sol_constant(
+                            let size = crate::ast::Value::constant(
                                 0,
                                 crate::ast::Type::unsigned(
                                     self.state.builder.context,
                                     solx_utils::BIT_LENGTH_FIELD,
-                                )
-                                .into_mlir(),
+                                ),
+                                &self.state.builder,
                                 &block,
-                            );
+                            )
+                            .into_mlir();
                             sol_op!(
                                 &self.state.builder,
                                 &block,
@@ -497,15 +498,16 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // A fully blank LHS `(, ) = f()` binds nothing; the assignment still has
         // a value in expression position, so fall back to a zero sentinel.
         let result = result.unwrap_or_else(|| {
-            self.state.builder.emit_sol_constant(
+            crate::ast::Value::constant(
                 0,
                 crate::ast::Type::unsigned(
                     self.state.builder.context,
                     solx_utils::BIT_LENGTH_FIELD,
-                )
-                .into_mlir(),
+                ),
+                &self.state.builder,
                 &block,
             )
+            .into_mlir()
         });
         Ok((result, block))
     }

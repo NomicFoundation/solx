@@ -430,16 +430,8 @@ impl Operator {
             Operator::Not => {
                 let BlockAnd { value, block } = operand.emit(context, block)?;
                 let zero =
-                    context
-                        .state
-                        .builder
-                        .emit_sol_constant(0, value.r#type().into_mlir(), &block);
-                let cmp = value.compare(
-                    crate::ast::Value::from(zero),
-                    CmpPredicate::Eq,
-                    &context.state.builder,
-                    &block,
-                );
+                    crate::ast::Value::constant(0, value.r#type(), &context.state.builder, &block);
+                let cmp = value.compare(zero, CmpPredicate::Eq, &context.state.builder, &block);
                 let result_type = target_type.unwrap_or(
                     crate::ast::Type::unsigned(
                         context.state.builder.context,
@@ -468,10 +460,13 @@ impl Operator {
                         &block,
                     )
                     .into_mlir();
-                let zero = context
-                    .state
-                    .builder
-                    .emit_sol_constant(0, operand_type, &block);
+                let zero = crate::ast::Value::constant(
+                    0,
+                    crate::ast::Type::new(operand_type),
+                    &context.state.builder,
+                    &block,
+                )
+                .into_mlir();
                 let result: Value<'context, 'block> = sol_op!(
                     &context.state.builder,
                     block,
@@ -583,10 +578,13 @@ impl Operator {
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let one = context
-            .state
-            .builder
-            .emit_sol_constant(1, element_type, block);
+        let one = crate::ast::Value::constant(
+            1,
+            crate::ast::Type::new(element_type),
+            &context.state.builder,
+            block,
+        )
+        .into_mlir();
         block
             .append_operation(self.emit_sol_binary_operation(
                 context.arithmetic_mode,

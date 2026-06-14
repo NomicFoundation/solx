@@ -114,12 +114,13 @@ impl TryExternalCall {
         );
         let builder = &context.state.builder;
         let value = call_value.unwrap_or_else(|| {
-            builder.emit_sol_constant(
+            crate::ast::Value::constant(
                 0,
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                    .into_mlir(),
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                builder,
                 &current_block,
             )
+            .into_mlir()
         });
         let (status, results) = builder.emit_sol_ext_icall_try(
             callee,

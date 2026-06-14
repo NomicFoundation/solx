@@ -56,7 +56,9 @@ impl LogicalOperator {
         )
         .into_mlir();
         let result_ptr = emitter.state.builder.emit_sol_alloca(i1_type, &block);
-        let default_value = emitter.state.builder.emit_bool(short_circuit_value, &block);
+        let default_value =
+            crate::ast::Value::boolean(short_circuit_value, &emitter.state.builder, &block)
+                .into_mlir();
         sol_op_void!(
             &emitter.state.builder,
             &block,

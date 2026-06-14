@@ -179,11 +179,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 LocationPolicy::Declared(Some(DataLocation::Memory)),
                 builder,
             );
-            let index_value = builder.emit_sol_constant(
+            let index_value = crate::ast::Value::constant(
                 index as i64,
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64).into_mlir(),
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
+                builder,
                 &block,
-            );
+            )
+            .into_mlir();
             let field_address =
                 builder.emit_sol_gep(struct_address, index_value, field_type, &block);
 
@@ -377,12 +379,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let results = if callee_value.r#type().is_ext_function_ref() {
             // `fp{value: v}(args)` forwards `v`; a plain `fp(args)` sends zero.
             let value = call_value.unwrap_or_else(|| {
-                builder.emit_sol_constant(
+                crate::ast::Value::constant(
                     0,
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir(),
+                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                    builder,
                     &current_block,
                 )
+                .into_mlir()
             });
             builder.emit_sol_ext_icall(
                 callee_value.into_mlir(),

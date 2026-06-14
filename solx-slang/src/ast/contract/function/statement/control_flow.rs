@@ -125,7 +125,9 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 self.emit_loop_condition(&expression_statement.expression(), condition_block)?;
             }
             ForStatementCondition::Semicolon(_) => {
-                let true_value = self.state.builder.emit_bool(true, &condition_block);
+                let true_value =
+                    crate::ast::Value::boolean(true, &self.state.builder, &condition_block)
+                        .into_mlir();
                 sol_op_void!(
                     &self.state.builder,
                     &condition_block,

@@ -281,14 +281,13 @@ where
                 &context.state.builder,
             )
             .expect("slang types every folded constant expression");
-            let value = context
-                .state
-                .builder
-                .emit_constant(&folded, result_type, &block);
-            return Ok(BlockAnd {
-                block,
-                value: value.into(),
-            });
+            let value = crate::ast::Value::constant_from_bigint(
+                &folded,
+                crate::ast::Type::new(result_type),
+                &context.state.builder,
+                &block,
+            );
+            return Ok(BlockAnd { block, value });
         }
         match self {
             Expression::DecimalNumberExpression(inner) => inner.emit(context, block),

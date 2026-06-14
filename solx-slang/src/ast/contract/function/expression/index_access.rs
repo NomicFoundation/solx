@@ -103,7 +103,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 (value, block)
             }
             None => {
-                let zero = self.state.builder.emit_sol_constant(0, ui256, &block);
+                let zero = crate::ast::Value::constant(
+                    0,
+                    crate::ast::Type::new(ui256),
+                    &self.state.builder,
+                    &block,
+                )
+                .into_mlir();
                 (zero, block)
             }
         };

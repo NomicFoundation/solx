@@ -55,12 +55,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             _ => unreachable!("dispatched on TypeEnumMin / TypeEnumMax"),
         };
         let builder = &self.state.builder;
-        let int_value = builder.emit_sol_constant(
+        let int_value = crate::ast::Value::constant(
             ordinal,
-            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+            builder,
             &block,
         );
-        let enum_value = crate::ast::Value::from(int_value)
+        let enum_value = int_value
             .cast(crate::ast::Type::new(result_type), builder, &block)
             .into_mlir();
         Ok((enum_value, block))
@@ -90,10 +91,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             (BuiltIn::TypeMax, true) => (BigInt::from(1) << (bits - 1)) - 1,
             _ => unreachable!("dispatched on TypeMin / TypeMax"),
         };
-        let value = self
-            .state
-            .builder
-            .emit_constant(&value, result_type, &block);
+        let value = crate::ast::Value::constant_from_bigint(
+            &value,
+            crate::ast::Type::new(result_type),
+            &self.state.builder,
+            &block,
+        )
+        .into_mlir();
         Ok((value, block))
     }
 
@@ -130,8 +134,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // `sol.bytes_cast` (the same pattern as `f.selector`).
         let builder = &self.state.builder;
         let integer_type = Type::from(IntegerType::unsigned(builder.context, 32));
-        let integer = builder.emit_constant(&BigInt::from(interface_id), integer_type, &block);
-        let value = crate::ast::Value::from(integer)
+        let integer = crate::ast::Value::constant_from_bigint(
+            &BigInt::from(interface_id),
+            crate::ast::Type::new(integer_type),
+            builder,
+            &block,
+        );
+        let value = integer
             .cast(
                 crate::ast::Type::fixed_bytes(builder.context, 4),
                 builder,

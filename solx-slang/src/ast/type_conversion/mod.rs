@@ -66,19 +66,19 @@ impl TypeConversion {
     ) -> Value<'context, 'block> {
         match slang_type {
             SlangType::Integer(_) | SlangType::Boolean(_) => {
-                builder.emit_sol_constant(0, mlir_type, block)
+                crate::ast::Value::constant(0, crate::ast::Type::new(mlir_type), builder, block)
+                    .into_mlir()
             }
             SlangType::Address(_) => {
                 // `sol.address_cast`'s operand is the 160-bit address width;
                 // emit the zero at that width directly (no constant narrowing).
-                let zero = builder.emit_sol_constant(
+                let zero = crate::ast::Value::constant(
                     0,
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_ETH_ADDRESS)
-                        .into_mlir(),
+                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_ETH_ADDRESS),
+                    builder,
                     block,
                 );
-                crate::ast::Value::from(zero)
-                    .cast(crate::ast::Type::new(mlir_type), builder, block)
+                zero.cast(crate::ast::Type::new(mlir_type), builder, block)
                     .into_mlir()
             }
             SlangType::ByteArray(byte_array_type) => {
@@ -86,20 +86,19 @@ impl TypeConversion {
                 // (`N * 8` bits), so emit the zero at that width directly.
                 let bits = byte_array_type.width() * 8;
                 let int_type = Type::from(IntegerType::unsigned(builder.context, bits));
-                let zero = builder.emit_sol_constant(0, int_type, block);
-                crate::ast::Value::from(zero)
-                    .cast(crate::ast::Type::new(mlir_type), builder, block)
+                let zero =
+                    crate::ast::Value::constant(0, crate::ast::Type::new(int_type), builder, block);
+                zero.cast(crate::ast::Type::new(mlir_type), builder, block)
                     .into_mlir()
             }
             SlangType::Enum(_) => {
-                let zero = builder.emit_sol_constant(
+                let zero = crate::ast::Value::constant(
                     0,
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir(),
+                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                    builder,
                     block,
                 );
-                crate::ast::Value::from(zero)
-                    .cast(crate::ast::Type::new(mlir_type), builder, block)
+                zero.cast(crate::ast::Type::new(mlir_type), builder, block)
                     .into_mlir()
             }
             SlangType::UserDefinedValue(udvt) => {
@@ -114,16 +113,16 @@ impl TypeConversion {
                 // an internal one, the dialect's `default_func_constant` (a
                 // pointer that reverts when called).
                 if function_type.is_externally_visible() {
-                    let zero_address = builder.emit_sol_constant(
+                    let zero_address = crate::ast::Value::constant(
                         0,
                         crate::ast::Type::unsigned(
                             builder.context,
                             solx_utils::BIT_LENGTH_ETH_ADDRESS,
-                        )
-                        .into_mlir(),
+                        ),
+                        builder,
                         block,
                     );
-                    let address = crate::ast::Value::from(zero_address)
+                    let address = zero_address
                         .cast(
                             crate::ast::Type::address(builder.context, false),
                             builder,
@@ -139,20 +138,18 @@ impl TypeConversion {
                 // A contract/interface reference's zero is `address(0)`
                 // reinterpreted as the contract type (solc: `ui160` zero ->
                 // `address` -> contract, two `sol.address_cast`s).
-                let zero = builder.emit_sol_constant(
+                let zero = crate::ast::Value::constant(
                     0,
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_ETH_ADDRESS)
-                        .into_mlir(),
+                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_ETH_ADDRESS),
+                    builder,
                     block,
                 );
-                let address = crate::ast::Value::from(zero)
-                    .cast(
-                        crate::ast::Type::address(builder.context, false),
-                        builder,
-                        block,
-                    )
-                    .into_mlir();
-                crate::ast::Value::from(address)
+                let address = zero.cast(
+                    crate::ast::Type::address(builder.context, false),
+                    builder,
+                    block,
+                );
+                address
                     .cast(crate::ast::Type::new(mlir_type), builder, block)
                     .into_mlir()
             }
@@ -225,7 +222,9 @@ impl TypeConversion {
             let zero = Self::emit_scalar_zero(scalar_value_type, mlir_type, builder, block);
             sol_op_void!(builder, block, StoreOperation.val(zero).addr(pointer));
         } else if IntegerType::try_from(mlir_type).is_ok() {
-            let zero = builder.emit_sol_constant(0, mlir_type, block);
+            let zero =
+                crate::ast::Value::constant(0, crate::ast::Type::new(mlir_type), builder, block)
+                    .into_mlir();
             sol_op_void!(builder, block, StoreOperation.val(zero).addr(pointer));
         }
         pointer
