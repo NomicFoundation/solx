@@ -42,7 +42,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // that type. With neither (or both) a string literal, both emit naturally.
         let left_is_string = matches!(left, Expression::StringExpression(_));
         let right_is_string = matches!(right, Expression::StringExpression(_));
-        let is_bytes_like = |ty| solx_mlir::TypeFactory::fixed_bytes_or_byte_width(ty).is_some();
+        let is_bytes_like =
+            |r#type| solx_mlir::TypeFactory::fixed_bytes_or_byte_width(r#type).is_some();
         let (lhs, rhs, block) = if right_is_string && !left_is_string {
             let BlockAnd { value: lhs, block } = left.emit(self, block)?;
             let BlockAnd { value: rhs, block } = if is_bytes_like(lhs.r#type()) {
@@ -121,7 +122,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             IntegerType::try_from(rhs.r#type()).is_ok_and(|integer| integer.is_signed());
         let context = self.state.builder.context;
         let signed_256 = Type::from(IntegerType::signed(context, 256));
-        let unsigned_256 = self.state.builder.types.ui256;
+        let unsigned_256 =
+            crate::ast::Type::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
+                .into_mlir();
         let lhs_wide_type = if signed_lhs { signed_256 } else { unsigned_256 };
         let rhs_wide_type = if signed_rhs { signed_256 } else { unsigned_256 };
         let lhs_wide = lhs.coerce_to(lhs_wide_type, &self.state.builder, &block);

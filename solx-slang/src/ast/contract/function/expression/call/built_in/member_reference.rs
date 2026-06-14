@@ -64,7 +64,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             TypeConversion::resolve_optional_slang_type(access.get_type(), &self.state.builder)
                 .expect("slang types an enum-variant reference as the enum");
         let builder = &self.state.builder;
-        let raw = builder.emit_sol_constant(ordinal as i64, builder.types.ui256, &block);
+        let raw = builder.emit_sol_constant(
+            ordinal as i64,
+            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+            &block,
+        );
         let value = crate::ast::Value::from(raw)
             .cast(result_type, builder, &block)
             .into_mlir();

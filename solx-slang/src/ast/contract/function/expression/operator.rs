@@ -423,7 +423,13 @@ impl Operator {
                     &context.state.builder,
                     &block,
                 );
-                let result_type = target_type.unwrap_or(context.state.builder.types.ui256);
+                let result_type = target_type.unwrap_or(
+                    crate::ast::Type::unsigned(
+                        context.state.builder.context,
+                        solx_utils::BIT_LENGTH_FIELD,
+                    )
+                    .into_mlir(),
+                );
                 let result = cmp.coerce_to(result_type, &context.state.builder, &block);
                 Ok((result, block))
             }

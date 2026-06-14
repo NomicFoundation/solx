@@ -98,7 +98,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     let builder = &self.state.builder;
                     value = Some(
                         option_value
-                            .coerce_to(builder.types.ui256, builder, &current_block)
+                            .coerce_to(
+                                crate::ast::Type::unsigned(
+                                    builder.context,
+                                    solx_utils::BIT_LENGTH_FIELD,
+                                )
+                                .into_mlir(),
+                                builder,
+                                &current_block,
+                            )
                             .into_mlir(),
                     );
                 }
@@ -117,7 +125,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     let builder = &self.state.builder;
                     salt = Some(
                         salt_bytes
-                            .cast(builder.types.ui256, builder, &current_block)
+                            .cast(
+                                crate::ast::Type::unsigned(
+                                    builder.context,
+                                    solx_utils::BIT_LENGTH_FIELD,
+                                )
+                                .into_mlir(),
+                                builder,
+                                &current_block,
+                            )
                             .into_mlir(),
                     );
                 }
@@ -165,7 +181,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 LocationPolicy::Declared(Some(DataLocation::Memory)),
                 builder,
             );
-            let index_value = builder.emit_sol_constant(index as i64, builder.types.ui64, &block);
+            let index_value = builder.emit_sol_constant(
+                index as i64,
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64).into_mlir(),
+                &block,
+            );
             let field_address =
                 builder.emit_sol_gep(struct_address, index_value, field_type, &block);
 
@@ -371,7 +391,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let results = if solx_mlir::TypeFactory::is_sol_ext_function_ref(callee_value.r#type()) {
             // `fp{value: v}(args)` forwards `v`; a plain `fp(args)` sends zero.
             let value = call_value.unwrap_or_else(|| {
-                builder.emit_sol_constant(0, builder.types.ui256, &current_block)
+                builder.emit_sol_constant(
+                    0,
+                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        .into_mlir(),
+                    &current_block,
+                )
             });
             builder.emit_sol_ext_icall(
                 callee_value.into_mlir(),

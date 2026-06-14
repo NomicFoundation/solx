@@ -50,7 +50,11 @@ impl LogicalOperator {
         let BlockAnd { value: lhs, block } = left.emit(emitter, block)?;
         let lhs_bool = lhs.is_nonzero(&emitter.state.builder, &block).into_mlir();
 
-        let i1_type = emitter.state.builder.types.i1;
+        let i1_type = crate::ast::Type::signless(
+            emitter.state.builder.context,
+            solx_utils::BIT_LENGTH_BOOLEAN,
+        )
+        .into_mlir();
         let result_ptr = emitter.state.builder.emit_sol_alloca(i1_type, &block);
         let default_value = emitter.state.builder.emit_bool(short_circuit_value, &block);
         sol_op_void!(

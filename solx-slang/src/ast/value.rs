@@ -58,7 +58,10 @@ impl<'context, 'block> Value<'context, 'block> {
         if self.r#type() == target_type {
             return self;
         }
-        if target_type == builder.types.i1 {
+        if target_type
+            == crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
+                .into_mlir()
+        {
             return self.is_nonzero(builder, block);
         }
         self.cast(target_type, builder, block)
@@ -120,7 +123,10 @@ impl<'context, 'block> Value<'context, 'block> {
                 .predicate(predicate_attribute.into())
                 .lhs(self.inner)
                 .rhs(other.inner)
-                .result(builder.types.i1)
+                .result(
+                    crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
+                        .into_mlir()
+                )
         );
         Self::new(value)
     }
@@ -133,7 +139,10 @@ impl<'context, 'block> Value<'context, 'block> {
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        if self.r#type() == builder.types.i1 {
+        if self.r#type()
+            == crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
+                .into_mlir()
+        {
             return self;
         }
         let zero = builder.emit_sol_constant(0, self.r#type(), block);

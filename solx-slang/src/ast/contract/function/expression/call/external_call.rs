@@ -45,8 +45,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             self.emit_external_callee(receiver, selector, parameter_types, return_types, block);
         let builder = &self.state.builder;
         // The call value defaults to zero wei.
-        let value =
-            call_value.unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, block));
+        let value = call_value.unwrap_or_else(|| {
+            builder.emit_sol_constant(
+                0,
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                    .into_mlir(),
+                block,
+            )
+        });
         builder.emit_sol_ext_icall(
             callee,
             argument_values,
@@ -119,7 +125,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     return None;
                 }
                 Some((
-                    vec![builder.types.ui256],
+                    vec![
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
+                    ],
                     vec![TypeConversion::resolve_slang_type(
                         &element,
                         LocationPolicy::Declared(None),
@@ -133,7 +142,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     return None;
                 }
                 Some((
-                    vec![builder.types.ui256],
+                    vec![
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
+                    ],
                     vec![TypeConversion::resolve_slang_type(
                         &element,
                         LocationPolicy::Declared(None),
@@ -288,8 +300,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let address = address.into_mlir();
         let (status, ret_data) = match kind {
             BuiltIn::AddressCall => {
-                let value = call_value
-                    .unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &block));
+                let value = call_value.unwrap_or_else(|| {
+                    builder.emit_sol_constant(
+                        0,
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
+                        &block,
+                    )
+                });
                 builder.emit_sol_bare_call(address, value, input, &block)
             }
             BuiltIn::AddressDelegatecall => {

@@ -167,7 +167,10 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     &self.state.builder,
                 )
             })
-            .unwrap_or_else(|| self.state.builder.types.ui256);
+            .unwrap_or_else(|| {
+                crate::ast::Type::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
+                    .into_mlir()
+            });
         let cast = crate::ast::Value::from(value)
             .coerce_to(parameter_type, &self.state.builder, block)
             .into_mlir();
@@ -270,7 +273,13 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                         &self.state.builder,
                     )
                 })
-                .unwrap_or_else(|| self.state.builder.types.ui256);
+                .unwrap_or_else(|| {
+                    crate::ast::Type::unsigned(
+                        self.state.builder.context,
+                        solx_utils::BIT_LENGTH_FIELD,
+                    )
+                    .into_mlir()
+                });
             let cast = value
                 .coerce_to(parameter_type, &self.state.builder, &current_block)
                 .into_mlir();

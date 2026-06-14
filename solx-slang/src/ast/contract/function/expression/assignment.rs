@@ -349,7 +349,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         ast::Type::String(_) | ast::Type::Bytes(_) => {
                             let size = self.state.builder.emit_sol_constant(
                                 0,
-                                self.state.builder.types.ui256,
+                                crate::ast::Type::unsigned(
+                                    self.state.builder.context,
+                                    solx_utils::BIT_LENGTH_FIELD,
+                                )
+                                .into_mlir(),
                                 &block,
                             );
                             sol_op!(
@@ -487,9 +491,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // A fully blank LHS `(, ) = f()` binds nothing; the assignment still has
         // a value in expression position, so fall back to a zero sentinel.
         let result = result.unwrap_or_else(|| {
-            self.state
-                .builder
-                .emit_sol_constant(0, self.state.builder.types.ui256, &block)
+            self.state.builder.emit_sol_constant(
+                0,
+                crate::ast::Type::unsigned(
+                    self.state.builder.context,
+                    solx_utils::BIT_LENGTH_FIELD,
+                )
+                .into_mlir(),
+                &block,
+            )
         });
         Ok((result, block))
     }

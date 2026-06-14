@@ -79,7 +79,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             }
             BuiltIn::Gasleft => {
                 let builder = &self.state.builder;
-                let value = sol_op!(builder, block, GasLeftOperation.val(builder.types.ui256));
+                let value = sol_op!(
+                    builder,
+                    block,
+                    GasLeftOperation.val(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir()
+                    )
+                );
                 Ok((Some(value), block))
             }
             BuiltIn::Blockhash => {
@@ -88,7 +95,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // `sol.blockhash` takes a `ui256` block number; coerce a narrower
                 // argument type up first.
                 let block_number = crate::ast::Value::from(values[0])
-                    .coerce_to(builder.types.ui256, builder, &block)
+                    .coerce_to(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
+                        builder,
+                        &block,
+                    )
                     .into_mlir();
                 let value = sol_op!(
                     builder,
@@ -167,7 +179,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // `addmod` operates on `uint256`, but a literal operand keeps its
                 // narrow type (`addmod(1, 2, d)` → ui8, ui8, ui256); `sol.addmod`
                 // requires identical operand/result types, so widen all to ui256.
-                let ui256 = builder.types.ui256;
+                let ui256 =
+                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        .into_mlir();
                 let x = crate::ast::Value::from(values[0])
                     .coerce_to(ui256, builder, &block)
                     .into_mlir();
@@ -185,7 +199,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let builder = &self.state.builder;
                 // `mulmod` operates on `uint256`; widen narrow literal operands so
                 // all operands/result share the type `sol.mulmod` requires.
-                let ui256 = builder.types.ui256;
+                let ui256 =
+                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        .into_mlir();
                 let x = crate::ast::Value::from(values[0])
                     .coerce_to(ui256, builder, &block)
                     .into_mlir();
@@ -253,7 +269,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 block,
             } = access.operand().emit(self, block)?;
             let builder = &self.state.builder;
-            let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            let placeholder = builder.emit_sol_constant(
+                0,
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                    .into_mlir(),
+                &block,
+            );
             return Ok((Some(placeholder), block));
         }
         // The `abi.*` builtins referenced WITHOUT a call — `abi.encode;`,
@@ -275,7 +296,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             )
         {
             let builder = &self.state.builder;
-            let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+            let placeholder = builder.emit_sol_constant(
+                0,
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                    .into_mlir(),
+                &block,
+            );
             return Ok((Some(placeholder), block));
         }
         match access.member().resolve_to_built_in() {
@@ -351,7 +377,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             // reference is a no-op, so yield a placeholder.
             Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
                 let builder = &self.state.builder;
-                let placeholder = builder.emit_sol_constant(0, builder.types.ui256, &block);
+                let placeholder = builder.emit_sol_constant(
+                    0,
+                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        .into_mlir(),
+                    &block,
+                );
                 Ok((Some(placeholder), block))
             }
             // A member that resolves to a function used as a value (not called) is

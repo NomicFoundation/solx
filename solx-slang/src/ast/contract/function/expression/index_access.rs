@@ -91,7 +91,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             value: base_value,
             block,
         } = base.emit(self, block)?;
-        let ui256 = self.state.builder.types.ui256;
+        let ui256 =
+            crate::ast::Type::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
+                .into_mlir();
         let (start_value, block) = match index_access.start() {
             Some(start_expression) => {
                 let BlockAnd { value, block } = start_expression.emit(self, block)?;

@@ -617,7 +617,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
         // Named returns load from their slot; an unnamed return (no slot) reached
         // on this fall-through path materialises its type's own default. The
-        // default must be type-correct, not `emit_sol_constant(0, ty)` — a string
+        // default must be type-correct, not `emit_sol_constant(0, r#type)` — a string
         // / bytes / aggregate / address / fixed-bytes type is not an integer, so
         // an integer-attribute zero of that type is an ill-typed op.
         let returns: Vec<_> = function

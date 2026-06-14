@@ -55,7 +55,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             _ => unreachable!("dispatched on TypeEnumMin / TypeEnumMax"),
         };
         let builder = &self.state.builder;
-        let int_value = builder.emit_sol_constant(ordinal, builder.types.ui256, &block);
+        let int_value = builder.emit_sol_constant(
+            ordinal,
+            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+            &block,
+        );
         let enum_value = crate::ast::Value::from(int_value)
             .cast(result_type, builder, &block)
             .into_mlir();

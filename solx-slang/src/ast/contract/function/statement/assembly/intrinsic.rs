@@ -38,16 +38,17 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let builder = &self.state.builder;
-        let ctx = builder.context;
+        let context = builder.context;
         let loc = builder.unknown_location;
-        let i256 = builder.types.i256;
+        let i256 =
+            crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
 
         // A Yul value op: build the op, set its single `i256` result, return it.
         macro_rules! yul_value {
-            ($op:ty $(, $setter:ident = $arg:expr)* $(,)?) => {{
+            ($operation:ty $(, $setter:ident = $argument:expr)* $(,)?) => {{
                 let value: Value<'context, 'block> = block
                     .append_operation(
-                        <$op>::builder(ctx, loc)$(.$setter($arg))*.out(i256).build().into(),
+                        <$operation>::builder(context, loc)$(.$setter($argument))*.out(i256).build().into(),
                     )
                     .result(0)
                     .expect("yul value op produces one result")
@@ -58,16 +59,16 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         // A Yul effect op (no result): build it, then yield the first operand as
         // the discarded statement value.
         macro_rules! yul_effect {
-            ($op:ty $(, $setter:ident = $arg:expr)* $(,)?) => {{
-                block.append_operation(<$op>::builder(ctx, loc)$(.$setter($arg))*.build().into());
+            ($operation:ty $(, $setter:ident = $argument:expr)* $(,)?) => {{
+                block.append_operation(<$operation>::builder(context, loc)$(.$setter($argument))*.build().into());
                 Ok((arguments[0], block))
             }};
         }
         // A no-operand Yul context op producing one `i256` word.
         macro_rules! yul_context {
-            ($op:ty) => {{
+            ($operation:ty) => {{
                 let value: Value<'context, 'block> = block
-                    .append_operation(<$op>::builder(ctx, loc).out(i256).build().into())
+                    .append_operation(<$operation>::builder(context, loc).out(i256).build().into())
                     .result(0)
                     .expect("yul context op produces one result")
                     .into();
@@ -292,7 +293,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             BuiltIn::YulCall => {
                 let status: Value<'context, 'block> = block
                     .append_operation(
-                        yul::CallOperation::builder(ctx, loc)
+                        yul::CallOperation::builder(context, loc)
                             .gas(arguments[0])
                             .address(arguments[1])
                             .value(arguments[2])
@@ -348,7 +349,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             // ---- Logging ----
             BuiltIn::YulLog => {
                 block.append_operation(
-                    yul::LogOperation::builder(ctx, loc)
+                    yul::LogOperation::builder(context, loc)
                         .addr(arguments[0])
                         .size(arguments[1])
                         .topics(&arguments[2..])
@@ -374,14 +375,14 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 )
             }
             BuiltIn::YulStop => {
-                block.append_operation(yul::StopOperation::builder(ctx, loc).build().into());
+                block.append_operation(yul::StopOperation::builder(context, loc).build().into());
                 Ok((
                     builder.emit_yul_constant(&BigInt::from(0u32), &block),
                     block,
                 ))
             }
             BuiltIn::YulInvalid => {
-                block.append_operation(yul::InvalidOperation::builder(ctx, loc).build().into());
+                block.append_operation(yul::InvalidOperation::builder(context, loc).build().into());
                 Ok((
                     builder.emit_yul_constant(&BigInt::from(0u32), &block),
                     block,

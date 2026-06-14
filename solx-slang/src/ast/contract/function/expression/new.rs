@@ -72,7 +72,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let address = match values.first() {
                 Some(&size_value) => {
                     let size = crate::ast::Value::from(size_value)
-                        .coerce_to(builder.types.ui256, builder, &current_block)
+                        .coerce_to(
+                            crate::ast::Type::unsigned(
+                                builder.context,
+                                solx_utils::BIT_LENGTH_FIELD,
+                            )
+                            .into_mlir(),
+                            builder,
+                            &current_block,
+                        )
                         .into_mlir();
                     sol_op!(
                         builder,
@@ -126,8 +134,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let (ctor_args, block) = self.emit_coerced_arguments(arguments, &parameter_types, block)?;
         let builder = &self.state.builder;
         let result_type = builder.types.contract(&contract_name, payable);
-        let val =
-            value.unwrap_or_else(|| builder.emit_sol_constant(0, builder.types.ui256, &block));
+        let val = value.unwrap_or_else(|| {
+            builder.emit_sol_constant(
+                0,
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                    .into_mlir(),
+                &block,
+            )
+        });
 
         // Append operands in the ODS declaration order (val, salt, ctorArgs) so
         // the flat operand list matches `operand_segment_sizes` below: melior's

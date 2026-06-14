@@ -88,7 +88,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     self.environment.define_variable(
                         identifier.node_id(),
                         pointer,
-                        builder.types.i256,
+                        crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
                     );
                 }
                 Ok(current)
@@ -370,7 +371,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
         let identifier = path.iter().next().expect("empty yul path");
         let builder = &self.state.builder;
-        let i256 = builder.types.i256;
+        let i256 =
+            crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
 
         // A Solidity constant referenced in assembly resolves to a definition,
         // not a Yul/local variable; emit its initializer widened to a word.
@@ -534,8 +536,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         for (parameter, argument) in parameters.iter().zip(arguments.iter()) {
             let pointer = builder.emit_yul_local_alloca(&block);
             builder.emit_yul_local_store(*argument, pointer, &block);
-            self.environment
-                .define_variable(parameter.node_id(), pointer, builder.types.i256);
+            self.environment.define_variable(
+                parameter.node_id(),
+                pointer,
+                crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                    .into_mlir(),
+            );
         }
         for return_identifier in &returns {
             let pointer = builder.emit_yul_local_alloca(&block);
@@ -544,7 +550,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             self.environment.define_variable(
                 return_identifier.node_id(),
                 pointer,
-                builder.types.i256,
+                crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                    .into_mlir(),
             );
         }
 
@@ -606,7 +613,11 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
         crate::ast::Value::from(pointer)
-            .reinterpret(builder.types.llvm_ptr, builder, block)
+            .reinterpret(
+                crate::ast::Type::llvm_ptr(builder.context).into_mlir(),
+                builder,
+                block,
+            )
             .into_mlir()
     }
 

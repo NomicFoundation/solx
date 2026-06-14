@@ -110,79 +110,79 @@ impl<'context> TypeFactory<'context> {
         })
     }
 
-    /// Whether `ty` is a Sol enum type (`!sol.enum<N>`).
-    pub fn is_sol_enum(ty: Type<'_>) -> bool {
+    /// Whether `r#type` is a Sol enum type (`!sol.enum<N>`).
+    pub fn is_sol_enum(r#type: Type<'_>) -> bool {
         // SAFETY: `solxIsEnumType` is a pure `isa<>` predicate on a valid type.
-        unsafe { crate::ffi::solxIsEnumType(ty.to_raw()) }
+        unsafe { crate::ffi::solxIsEnumType(r#type.to_raw()) }
     }
 
-    /// Whether `ty` is the Sol address type (`!sol.address`).
-    pub fn is_sol_address(ty: Type<'_>) -> bool {
+    /// Whether `r#type` is the Sol address type (`!sol.address`).
+    pub fn is_sol_address(r#type: Type<'_>) -> bool {
         // SAFETY: pure `isa<>` predicate on a valid type.
-        unsafe { crate::ffi::solxIsAddressType(ty.to_raw()) }
+        unsafe { crate::ffi::solxIsAddressType(r#type.to_raw()) }
     }
 
-    /// Whether `ty` is a Sol external function reference (`!sol.ext_func_ref<…>`)
+    /// Whether `r#type` is a Sol external function reference (`!sol.ext_func_ref<…>`)
     /// — the runtime address+selector value of a `function (...) external`.
-    pub fn is_sol_ext_function_ref(ty: Type<'_>) -> bool {
+    pub fn is_sol_ext_function_ref(r#type: Type<'_>) -> bool {
         // SAFETY: pure `isa<>` predicate on a valid type.
-        unsafe { crate::ffi::solxIsExtFuncRefType(ty.to_raw()) }
+        unsafe { crate::ffi::solxIsExtFuncRefType(r#type.to_raw()) }
     }
 
-    /// Whether `ty` is a Sol function reference of either kind — internal
+    /// Whether `r#type` is a Sol function reference of either kind — internal
     /// (`!sol.func_ref<…>`) or external (`!sol.ext_func_ref<…>`).
-    pub fn is_sol_function_ref(ty: Type<'_>) -> bool {
+    pub fn is_sol_function_ref(r#type: Type<'_>) -> bool {
         // SAFETY: pure `isa<>` predicates on a valid type.
         unsafe {
-            crate::ffi::solxIsFuncRefType(ty.to_raw())
-                || crate::ffi::solxIsExtFuncRefType(ty.to_raw())
+            crate::ffi::solxIsFuncRefType(r#type.to_raw())
+                || crate::ffi::solxIsExtFuncRefType(r#type.to_raw())
         }
     }
 
-    /// Whether `ty` is a Sol contract type (`!sol.contract<…>`).
-    pub fn is_sol_contract(ty: Type<'_>) -> bool {
+    /// Whether `r#type` is a Sol contract type (`!sol.contract<…>`).
+    pub fn is_sol_contract(r#type: Type<'_>) -> bool {
         // SAFETY: pure `isa<>` predicate on a valid type.
-        unsafe { crate::ffi::solxIsContractType(ty.to_raw()) }
+        unsafe { crate::ffi::solxIsContractType(r#type.to_raw()) }
     }
 
-    /// Whether `ty` is a Sol fixed-bytes type (`!sol.fixedbytes<N>`).
-    pub fn is_sol_fixed_bytes(ty: Type<'_>) -> bool {
+    /// Whether `r#type` is a Sol fixed-bytes type (`!sol.fixedbytes<N>`).
+    pub fn is_sol_fixed_bytes(r#type: Type<'_>) -> bool {
         // SAFETY: pure `isa<>` predicate on a valid type.
-        unsafe { crate::ffi::solxIsFixedBytesType(ty.to_raw()) }
+        unsafe { crate::ffi::solxIsFixedBytesType(r#type.to_raw()) }
     }
 
     /// The byte width `N` of a `!sol.fixedbytes<N>`. The caller must first check
     /// [`Self::is_sol_fixed_bytes`].
-    pub fn fixed_bytes_size(ty: Type<'_>) -> u32 {
-        // SAFETY: caller guarantees `ty` is a fixed-bytes type.
-        unsafe { crate::ffi::solxFixedBytesTypeSize(ty.to_raw()) }
+    pub fn fixed_bytes_size(r#type: Type<'_>) -> u32 {
+        // SAFETY: caller guarantees `r#type` is a fixed-bytes type.
+        unsafe { crate::ffi::solxFixedBytesTypeSize(r#type.to_raw()) }
     }
 
     /// The byte width of a fixed-bytes-like type: `N` for `!sol.fixedbytes<N>`,
     /// `1` for the single `!sol.byte`, and `None` for any other type. Used to
     /// bridge a `bytesN` / `byte` operand through `ui(8*N)` for the integer-only
     /// bitwise ops.
-    pub fn fixed_bytes_or_byte_width(ty: Type<'_>) -> Option<u32> {
-        if Self::is_sol_fixed_bytes(ty) {
-            Some(Self::fixed_bytes_size(ty))
-        } else if Self::is_sol_byte(ty) {
+    pub fn fixed_bytes_or_byte_width(r#type: Type<'_>) -> Option<u32> {
+        if Self::is_sol_fixed_bytes(r#type) {
+            Some(Self::fixed_bytes_size(r#type))
+        } else if Self::is_sol_byte(r#type) {
             Some(1)
         } else {
             None
         }
     }
 
-    /// Whether `ty` is the single-byte `!sol.byte` — the element type of
+    /// Whether `r#type` is the single-byte `!sol.byte` — the element type of
     /// `bytes`/`string`, distinct from `!sol.fixedbytes<1>`.
-    pub fn is_sol_byte(ty: Type<'_>) -> bool {
+    pub fn is_sol_byte(r#type: Type<'_>) -> bool {
         // SAFETY: pure `isa<>` predicate on a valid type.
-        unsafe { crate::ffi::solxIsByteType(ty.to_raw()) }
+        unsafe { crate::ffi::solxIsByteType(r#type.to_raw()) }
     }
 
-    /// Whether `ty` is a Sol reference type: array, struct, string/`bytes`, or
+    /// Whether `r#type` is a Sol reference type: array, struct, string/`bytes`, or
     /// mapping (`bytes` and `string` share `!sol.string`).
-    pub fn is_sol_reference(ty: Type<'_>) -> bool {
-        let raw = ty.to_raw();
+    pub fn is_sol_reference(r#type: Type<'_>) -> bool {
+        let raw = r#type.to_raw();
         // SAFETY: pure `isa<>` predicates on a valid type.
         unsafe {
             crate::ffi::solxIsStringType(raw)

@@ -46,9 +46,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         self.emit_unary_member_intrinsic(access, block, |address_value| {
             sol_op_build!(
                 builder,
-                BalanceOperation
-                    .cont_addr(address_value)
-                    .out(builder.types.ui256)
+                BalanceOperation.cont_addr(address_value).out(
+                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        .into_mlir()
+                )
             )
         })
     }
@@ -63,9 +64,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         self.emit_unary_member_intrinsic(access, block, |address_value| {
             sol_op_build!(
                 builder,
-                CodeHashOperation
-                    .cont_addr(address_value)
-                    .out(builder.types.ui256)
+                CodeHashOperation.cont_addr(address_value).out(
+                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        .into_mlir()
+                )
             )
         })
     }
@@ -97,7 +99,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         self.emit_unary_member_intrinsic(access, block, |operand| {
             sol_op_build!(
                 builder,
-                LengthOperation.inp(operand).len(builder.types.ui256)
+                LengthOperation.inp(operand).len(
+                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        .into_mlir()
+                )
             )
         })
     }
@@ -115,15 +120,20 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // `sol.send` takes a `ui256` amount; a narrow literal (`r.send(0)` → ui8)
         // must be widened first, like `address.transfer`.
         let amount = crate::ast::Value::from(values[0])
-            .cast(builder.types.ui256, builder, &block)
+            .cast(
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                    .into_mlir(),
+                builder,
+                &block,
+            )
             .into_mlir();
         let value = sol_op!(
             builder,
             block,
-            SendOperation
-                .addr(addr.into_mlir())
-                .val(amount)
-                .status(builder.types.i1)
+            SendOperation.addr(addr.into_mlir()).val(amount).status(
+                crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
+                    .into_mlir()
+            )
         );
         Ok((Some(value), block))
     }
@@ -141,7 +151,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // `sol.transfer` takes a `ui256` amount; a narrow literal (`x.transfer(1)`
         // → ui8) must be widened first.
         let amount = crate::ast::Value::from(values[0])
-            .cast(builder.types.ui256, builder, &block)
+            .cast(
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                    .into_mlir(),
+                builder,
+                &block,
+            )
             .into_mlir();
         sol_op_void!(
             builder,
@@ -168,40 +183,100 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 sol_op_build!(builder, OriginOperation.addr(builder.types.sol_address))
             }
             Some(BuiltIn::TxGasPrice) => {
-                sol_op_build!(builder, GasPriceOperation.val(builder.types.ui256))
+                sol_op_build!(
+                    builder,
+                    GasPriceOperation.val(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir()
+                    )
+                )
             }
             Some(BuiltIn::MsgSender) => {
                 sol_op_build!(builder, CallerOperation.addr(builder.types.sol_address))
             }
             Some(BuiltIn::MsgValue) => {
-                sol_op_build!(builder, CallValueOperation.val(builder.types.ui256))
+                sol_op_build!(
+                    builder,
+                    CallValueOperation.val(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir()
+                    )
+                )
             }
             Some(BuiltIn::BlockTimestamp) => {
-                sol_op_build!(builder, TimestampOperation.val(builder.types.ui256))
+                sol_op_build!(
+                    builder,
+                    TimestampOperation.val(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir()
+                    )
+                )
             }
             Some(BuiltIn::BlockNumber) => {
-                sol_op_build!(builder, BlockNumberOperation.val(builder.types.ui256))
+                sol_op_build!(
+                    builder,
+                    BlockNumberOperation.val(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir()
+                    )
+                )
             }
             Some(BuiltIn::BlockCoinbase) => {
                 sol_op_build!(builder, CoinbaseOperation.addr(builder.types.sol_address))
             }
             Some(BuiltIn::BlockChainid) => {
-                sol_op_build!(builder, ChainIdOperation.val(builder.types.ui256))
+                sol_op_build!(
+                    builder,
+                    ChainIdOperation.val(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir()
+                    )
+                )
             }
             Some(BuiltIn::BlockBasefee) => {
-                sol_op_build!(builder, BaseFeeOperation.val(builder.types.ui256))
+                sol_op_build!(
+                    builder,
+                    BaseFeeOperation.val(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir()
+                    )
+                )
             }
             Some(BuiltIn::BlockGaslimit) => {
-                sol_op_build!(builder, GasLimitOperation.val(builder.types.ui256))
+                sol_op_build!(
+                    builder,
+                    GasLimitOperation.val(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir()
+                    )
+                )
             }
             Some(BuiltIn::BlockBlobbasefee) => {
-                sol_op_build!(builder, BlobBaseFeeOperation.val(builder.types.ui256))
+                sol_op_build!(
+                    builder,
+                    BlobBaseFeeOperation.val(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir()
+                    )
+                )
             }
             Some(BuiltIn::BlockDifficulty) => {
-                sol_op_build!(builder, DifficultyOperation.val(builder.types.ui256))
+                sol_op_build!(
+                    builder,
+                    DifficultyOperation.val(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir()
+                    )
+                )
             }
             Some(BuiltIn::BlockPrevrandao) => {
-                sol_op_build!(builder, PrevRandaoOperation.val(builder.types.ui256))
+                sol_op_build!(
+                    builder,
+                    PrevRandaoOperation.val(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir()
+                    )
+                )
             }
             Some(BuiltIn::MsgSig) => {
                 sol_op_build!(builder, SigOperation.val(builder.types.fixed_bytes(4)))

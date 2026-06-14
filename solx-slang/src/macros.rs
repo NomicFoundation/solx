@@ -32,9 +32,9 @@
 /// The setter repetition is `*` (not `+`): a field-less op (`sol.break`,
 /// `sol.continue`) is written as the bare op name with no setters.
 macro_rules! sol_op_build {
-    ($builder:expr, $op:ident $(.$method:ident($($arg:expr),* $(,)?))*) => {
-        $op::builder($builder.context, $builder.unknown_location)
-            $(.$method($($arg),*))*
+    ($builder:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
+        $operation::builder($builder.context, $builder.unknown_location)
+            $(.$method($($argument),*))*
             .build()
             .into()
     };
@@ -43,11 +43,11 @@ macro_rules! sol_op_build {
 /// Builds an inlined dialect op ([`sol_op_build!`]), appends it to `$block`, and
 /// returns its single result value. The `expect` message is derived from the op.
 macro_rules! sol_op {
-    ($builder:expr, $block:expr, $op:ident $(.$method:ident($($arg:expr),* $(,)?))*) => {
+    ($builder:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
         $block
-            .append_operation(sol_op_build!($builder, $op $(.$method($($arg),*))*))
+            .append_operation(sol_op_build!($builder, $operation $(.$method($($argument),*))*))
             .result(0)
-            .expect(concat!(stringify!($op), " produces one result"))
+            .expect(concat!(stringify!($operation), " produces one result"))
             .into()
     };
 }
@@ -55,8 +55,8 @@ macro_rules! sol_op {
 /// [`sol_op!`] for a value-less op — a statement / effect such as `sol.transfer`
 /// or `sol.log`: appends the op ([`sol_op_build!`]) and yields `()`.
 macro_rules! sol_op_void {
-    ($builder:expr, $block:expr, $op:ident $(.$method:ident($($arg:expr),* $(,)?))*) => {
-        $block.append_operation(sol_op_build!($builder, $op $(.$method($($arg),*))*));
+    ($builder:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
+        $block.append_operation(sol_op_build!($builder, $operation $(.$method($($argument),*))*));
     };
 }
 

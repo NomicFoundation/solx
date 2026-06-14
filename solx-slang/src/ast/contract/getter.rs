@@ -264,8 +264,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             Some(plan) => {
                 let mut values = Vec::new();
                 for (member_index, member_type, result_member_type) in plan {
-                    let index_value =
-                        builder.emit_sol_constant(*member_index as i64, builder.types.ui64, entry);
+                    let index_value = builder.emit_sol_constant(
+                        *member_index as i64,
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64)
+                            .into_mlir(),
+                        entry,
+                    );
                     let address = builder.emit_sol_gep(base, index_value, *member_type, entry);
                     values.push(Self::load_getter_member(
                         builder,
@@ -339,7 +343,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         LocationPolicy::Declared(Some(location)),
                         builder,
                     );
-                    input_types.push(builder.types.ui256);
+                    input_types.push(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
+                    );
                     levels.push(GetterLevel::Array(element_type, None));
                     current = element_slang;
                 }
@@ -350,7 +357,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         LocationPolicy::Declared(Some(location)),
                         builder,
                     );
-                    input_types.push(builder.types.ui256);
+                    input_types.push(
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir(),
+                    );
                     levels.push(GetterLevel::Array(
                         element_type,
                         Some(array_type.size() as u64),
@@ -388,14 +398,26 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
                 GetterLevel::Array(element_type, fixed_size) => {
                     let length = match fixed_size {
-                        Some(size) => {
-                            builder.emit_sol_constant(*size as i64, builder.types.ui256, entry)
-                        }
+                        Some(size) => builder.emit_sol_constant(
+                            *size as i64,
+                            crate::ast::Type::unsigned(
+                                builder.context,
+                                solx_utils::BIT_LENGTH_FIELD,
+                            )
+                            .into_mlir(),
+                            entry,
+                        ),
                         None => {
                             sol_op!(
                                 builder,
                                 entry,
-                                LengthOperation.inp(base).len(builder.types.ui256)
+                                LengthOperation.inp(base).len(
+                                    crate::ast::Type::unsigned(
+                                        builder.context,
+                                        solx_utils::BIT_LENGTH_FIELD
+                                    )
+                                    .into_mlir()
+                                )
                             )
                         }
                     };

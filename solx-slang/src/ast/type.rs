@@ -42,6 +42,24 @@ impl<'context> Type<'context> {
         self.inner
     }
 
+    /// An unsigned integer type of `bits` width (`ui<bits>`) — `ui256` (the field
+    /// width), `ui160` (address), `ui64` (struct / array field-index).
+    pub fn unsigned(context: &'context melior::Context, bits: usize) -> Self {
+        Self::new(MlirType::from(IntegerType::unsigned(context, bits as u32)))
+    }
+
+    /// A signless integer type of `bits` width (`i<bits>`) — the boolean `i1` and
+    /// the Yul-dialect word `i256`.
+    pub fn signless(context: &'context melior::Context, bits: usize) -> Self {
+        Self::new(MlirType::from(IntegerType::new(context, bits as u32)))
+    }
+
+    /// The opaque LLVM pointer type (`!llvm.ptr`) — a Yul-local slot and the
+    /// target of a `sol.conv_cast` at the inline-assembly boundary.
+    pub fn llvm_ptr(context: &'context melior::Context) -> Self {
+        Self::new(melior::dialect::llvm::r#type::pointer(context, 0))
+    }
+
     /// Casts `value` to this (target) type, returning it unchanged when it
     /// already has this type.
     ///
@@ -89,7 +107,8 @@ impl<'context> Type<'context> {
         // materialises `address` constants through it); the constants stage will
         // lift that and dissolve the leaf in here with the others.
         if TypeFactory::is_sol_address(source) || TypeFactory::is_sol_address(target) {
-            let ui160 = builder.types.ui160;
+            let ui160 =
+                Self::unsigned(builder.context, solx_utils::BIT_LENGTH_ETH_ADDRESS).into_mlir();
             if TypeFactory::is_sol_address(source) {
                 if TypeFactory::is_sol_contract(target)
                     || TypeFactory::is_sol_fixed_bytes(target)
@@ -192,8 +211,9 @@ impl<'context> Type<'context> {
 
     /// The bit width of the integer a `sol.bytes_cast` pairs with a fixed-bytes
     /// type: `8 * N` for `!sol.fixedbytes<N>`, and 8 for the single `!sol.byte`.
-    fn partner_bits(ty: MlirType<'context>) -> u32 {
-        TypeFactory::fixed_bytes_or_byte_width(ty).expect("a fixed-bytes / byte type has a width")
+    fn partner_bits(r#type: MlirType<'context>) -> u32 {
+        TypeFactory::fixed_bytes_or_byte_width(r#type)
+            .expect("a fixed-bytes / byte type has a width")
             * 8
     }
 }
