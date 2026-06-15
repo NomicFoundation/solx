@@ -143,12 +143,9 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         let element_type =
             declared_type.resolve_type(LocationPolicy::Declared(None), &context.state.builder);
         if declared_type.is_reference_type() && !matches!(declared_type, ast::Type::Mapping(_)) {
-            let address_type = ExpressionContext::address_type(
-                &context.state.builder,
-                element_type,
-                slot.location,
-                &declared_type,
-            );
+            let address_type = crate::ast::Type::new(element_type)
+                .address_type(slot.location, context.state.builder.context)
+                .into_mlir();
             let storage_ref = sol_op!(
                 &context.state.builder,
                 &block,

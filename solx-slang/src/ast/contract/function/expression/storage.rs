@@ -101,8 +101,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .expect("slang types every state variable");
             let builder = &self.state.builder;
             let element_type = declared_type.resolve_type(LocationPolicy::Declared(None), builder);
-            let address_type =
-                Self::address_type(builder, element_type, slot.location, &declared_type);
+            let address_type = crate::ast::Type::new(element_type)
+                .address_type(slot.location, builder.context)
+                .into_mlir();
             let storage_ref = sol_op!(
                 builder,
                 &block,

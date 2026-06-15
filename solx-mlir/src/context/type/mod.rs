@@ -380,6 +380,28 @@ impl<'context> Type<'context> {
         })
     }
 
+    /// The place type addressing an element of `self` at `location` yields: a
+    /// reference element in `Storage` / `CallData` is the place itself (its own
+    /// type), every other element a `!sol.ptr<self, location>`. Mirrors
+    /// `Sol_GepOp::build`'s non-pointer-reference-in-storage rule, so a
+    /// `sol.gep` / `sol.map` / `sol.addr_of` result type is derived in one place.
+    pub fn address_type(
+        self,
+        location: solx_utils::DataLocation,
+        context: &'context melior::Context,
+    ) -> Self {
+        if self.is_reference()
+            && matches!(
+                location,
+                solx_utils::DataLocation::Storage | solx_utils::DataLocation::CallData
+            )
+        {
+            self
+        } else {
+            Self::pointer(context, self.inner, location)
+        }
+    }
+
     /// The byte width of a fixed-bytes-like type: `N` for `!sol.fixedbytes<N>`,
     /// `1` for the single `!sol.byte`, and `None` for any other type.
     pub fn fixed_bytes_or_byte_width(self) -> Option<u32> {

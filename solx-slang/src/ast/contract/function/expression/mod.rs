@@ -35,14 +35,11 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableMutability;
-use slang_solidity_v2::ast::Type as SlangType;
 
-use solx_mlir::Builder;
 use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::ods::sol::AddrOfOperation;
 use solx_mlir::ods::sol::FuncConstantOperation;
-use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -199,12 +196,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 unimplemented!("unregistered state variable {:?}", state_variable.node_id())
             });
         let value = if declared_type.is_reference_type() {
-            let address_type = Self::address_type(
-                &self.state.builder,
-                element_type,
-                slot.location,
-                &declared_type,
-            );
+            let address_type = crate::ast::Type::new(element_type)
+                .address_type(slot.location, self.state.builder.context)
+                .into_mlir();
             let address = sol_op!(
                 &self.state.builder,
                 &block,
@@ -226,30 +220,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             slot.load(&self.state.builder, element_type, &block)
         };
         (value, block)
-    }
-
-    /// Picks the MLIR type of the address yielded by `sol.gep` / `sol.map`.
-    ///
-    /// Mirrors `Sol_GepOp::build`'s non-ptr-ref-in-storage rule: when the
-    /// element is itself a reference type and lives in `Storage` or
-    /// `CallData`, the result address IS the element type rather than a
-    /// pointer to it.
-    fn address_type(
-        builder: &Builder<'context>,
-        element_type: Type<'context>,
-        base_location: DataLocation,
-        result_type: &SlangType,
-    ) -> Type<'context> {
-        if result_type.is_reference_type()
-            && matches!(
-                base_location,
-                DataLocation::Storage | DataLocation::CallData
-            )
-        {
-            element_type
-        } else {
-            crate::ast::Type::pointer(builder.context, element_type, base_location).into_mlir()
-        }
     }
 }
 

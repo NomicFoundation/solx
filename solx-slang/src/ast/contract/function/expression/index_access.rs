@@ -65,20 +65,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let element_type =
                     result_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder);
                 let base_location = Self::resolve_base_location(&base_type);
-                let address_type = Self::address_type(
-                    &self.state.builder,
-                    element_type,
-                    base_location,
-                    &result_type,
-                );
+                let address_type = crate::ast::Type::new(element_type)
+                    .address_type(base_location, self.state.builder.context);
                 let address = base_value
                     .into_pointer()
-                    .entry(
-                        index_value,
-                        crate::ast::Type::new(address_type),
-                        &self.state.builder,
-                        &block,
-                    )
+                    .entry(index_value, address_type, &self.state.builder, &block)
                     .into_mlir();
                 (address, element_type)
             }
