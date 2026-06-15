@@ -353,28 +353,8 @@ impl<'context> Builder<'context> {
         (success, panic, error, fallback)
     }
 
-    /// Emits a `sol.call` operation and returns its first result value, or
-    /// `None` if the callee is `void`. Use [`Self::emit_sol_call_results`]
-    /// when all results are needed.
-    pub fn emit_sol_call<'block, B>(
-        &self,
-        callee: &str,
-        operands: &[Value<'context, 'block>],
-        result_types: &[Type<'context>],
-        block: &B,
-    ) -> Option<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        self.emit_sol_call_results(callee, operands, result_types, block)
-            .into_iter()
-            .next()
-    }
-
     /// Emits a `sol.call` operation and returns all of its result values in
-    /// declaration order. Use [`Self::emit_sol_call`] when only the first
-    /// result is needed.
+    /// declaration order.
     pub fn emit_sol_call_results<'block, B>(
         &self,
         callee: &str,
