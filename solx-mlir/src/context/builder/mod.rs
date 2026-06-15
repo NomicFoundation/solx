@@ -33,7 +33,6 @@ use crate::ods::sol::ContractOperation;
 use crate::ods::sol::ExtCallOperation;
 use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::FuncOperation;
-use crate::ods::sol::ICallOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::RevertOperation;
 use crate::ods::sol::TryOperation;
@@ -376,39 +375,6 @@ impl<'context> Builder<'context> {
                 operation
                     .result(index)
                     .expect("sol.call produces its declared result count")
-                    .into(),
-            );
-        }
-        results
-    }
-
-    /// Emits a `sol.icall` — an indirect call through an internal function
-    /// pointer `callee` — and returns its result values.
-    pub fn emit_sol_icall<'block, B>(
-        &self,
-        callee: Value<'context, 'block>,
-        operands: &[Value<'context, 'block>],
-        result_types: &[Type<'context>],
-        block: &B,
-    ) -> Vec<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let operation = block.append_operation(
-            ICallOperation::builder(self.context, self.unknown_location)
-                .outs(result_types)
-                .callee(callee)
-                .callee_operands(operands)
-                .build()
-                .into(),
-        );
-        let mut results = Vec::with_capacity(result_types.len());
-        for index in 0..result_types.len() {
-            results.push(
-                operation
-                    .result(index)
-                    .expect("sol.icall produces its declared result count")
                     .into(),
             );
         }

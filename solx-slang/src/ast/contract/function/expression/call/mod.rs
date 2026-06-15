@@ -11,6 +11,7 @@ pub mod member_call_kind;
 pub mod static_mode;
 pub mod try_external_call;
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -23,6 +24,7 @@ use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
+use solx_mlir::ods::sol::ICallOperation;
 
 use self::call_kind::CallKind;
 use self::member_call_kind::MemberCallKind;
@@ -333,12 +335,21 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 &current_block,
             )
         } else {
-            builder.emit_sol_icall(
-                callee_value.into_mlir(),
-                &argument_values,
-                &result_types,
-                &current_block,
-            )
+            let operation = current_block.append_operation(sol_op_build!(
+                builder,
+                ICallOperation
+                    .outs(&result_types)
+                    .callee(callee_value.into_mlir())
+                    .callee_operands(&argument_values)
+            ));
+            (0..result_types.len())
+                .map(|index| {
+                    operation
+                        .result(index)
+                        .expect("sol.icall produces its declared result count")
+                        .into()
+                })
+                .collect()
         };
         (results, current_block)
     }
