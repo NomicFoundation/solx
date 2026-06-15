@@ -65,8 +65,6 @@ impl<'context> Builder<'context> {
         }
     }
 
-    // ==== Structure ====
-
     /// Emits a `sol.contract` operation with a body region.
     ///
     /// Returns the body block inside the contract region for appending
@@ -193,8 +191,6 @@ impl<'context> Builder<'context> {
             .expect("func body has entry block")
     }
 
-    // ==== String literals ====
-
     /// Emits a `sol.revert` carrying an optional payload.
     ///
     /// `signature` doubles as the payload string: for custom errors
@@ -255,8 +251,6 @@ impl<'context> Builder<'context> {
         }
         block.append_operation(builder.build().into());
     }
-
-    // ==== Control flow ====
 
     /// Emits a `sol.try` carrying the external call's success `status` and four
     /// regions — success, panic, error, fallback. A clause that is absent
@@ -363,8 +357,6 @@ impl<'context> Builder<'context> {
         (success, panic, error, fallback)
     }
 
-    // ==== Memory ====
-
     /// Emits a `sol.alloca` for a local variable, returning the pointer.
     ///
     /// Returns a `!sol.ptr<{element_type}, Stack>` pointer. Use this when
@@ -419,8 +411,6 @@ impl<'context> Builder<'context> {
                 .into(),
         );
     }
-
-    // ==== Calls ====
 
     /// Emits a `sol.call` operation and returns its first result value, or
     /// `None` if the callee is `void`. Use [`Self::emit_sol_call_results`]
@@ -735,8 +725,6 @@ impl<'context> Builder<'context> {
         results
     }
 
-    // ==== Bare low-level calls ====
-
     /// Appends a built bare-call operation and returns its `(status, ret_data)`
     /// results: a boolean success flag and the returned bytes in memory. Unlike
     /// `sol.ext_icall`, a bare call does not revert on failure — the caller
@@ -841,8 +829,6 @@ impl<'context> Builder<'context> {
             .into();
         self.emit_sol_bare_call_results(operation, block)
     }
-
-    // ==== State variables ====
 
     /// Emits a `sol.state_var` declaration inside a contract body.
     pub fn emit_sol_state_var<'block, B>(

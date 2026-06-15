@@ -83,7 +83,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         };
 
         match opcode {
-            // ---- Arithmetic / bitwise ----
             BuiltIn::YulAdd => {
                 yul_value!(yul::AddOperation, lhs = arguments[0], rhs = arguments[1])
             }
@@ -170,7 +169,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 )
             }
 
-            // ---- Comparisons ----
             BuiltIn::YulLt => cmp(YulCmpPredicate::Ult, arguments[0], arguments[1]),
             BuiltIn::YulGt => cmp(YulCmpPredicate::Ugt, arguments[0], arguments[1]),
             BuiltIn::YulEq => cmp(YulCmpPredicate::Eq, arguments[0], arguments[1]),
@@ -181,7 +179,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 cmp(YulCmpPredicate::Eq, arguments[0], zero)
             }
 
-            // ---- Block / transaction context ----
             BuiltIn::YulCaller => yul_context!(yul::CallerOperation),
             BuiltIn::YulOrigin => yul_context!(yul::OriginOperation),
             BuiltIn::YulCoinbase => yul_context!(yul::CoinBaseOperation),
@@ -200,14 +197,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             BuiltIn::YulGas => yul_context!(yul::GasOperation),
             BuiltIn::YulBlockhash => yul_value!(yul::BlockHashOperation, block = arguments[0]),
 
-            // ---- Account state ----
             BuiltIn::YulBalance => yul_value!(yul::BalanceOperation, addr = arguments[0]),
             BuiltIn::YulExtcodehash => yul_value!(yul::ExtCodeHashOperation, addr = arguments[0]),
             BuiltIn::YulExtcodesize => yul_value!(yul::ExtCodeSizeOperation, addr = arguments[0]),
             BuiltIn::YulAddress => yul_context!(yul::AddressOperation),
             BuiltIn::YulSelfbalance => yul_context!(yul::SelfBalanceOperation),
 
-            // ---- Memory / storage / transient ----
             BuiltIn::YulMload => yul_value!(yul::MLoadOperation, addr = arguments[0]),
             BuiltIn::YulMstore => {
                 yul_effect!(
@@ -248,7 +243,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 )
             }
 
-            // ---- Hashing (raw `(addr, size)` memory span) ----
             BuiltIn::YulKeccak256 => {
                 yul_value!(
                     yul::Keccak256Operation,
@@ -257,7 +251,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 )
             }
 
-            // ---- Calldata / code / return data ----
             BuiltIn::YulCalldataload => yul_value!(yul::CallDataLoadOperation, addr = arguments[0]),
             BuiltIn::YulCalldatasize => yul_context!(yul::CallDataSizeOperation),
             BuiltIn::YulCalldatacopy => {
@@ -287,7 +280,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 )
             }
 
-            // ---- External calls ----
             // `yul.call`'s single result is `$status`, not `$out`, so it cannot
             // use the `yul_value!` macro.
             BuiltIn::YulCall => {
@@ -329,7 +321,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 out_size = arguments[5],
             ),
 
-            // ---- Contract creation ----
             BuiltIn::YulCreate => {
                 yul_value!(
                     yul::CreateOperation,
@@ -346,7 +337,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 salt = arguments[3],
             ),
 
-            // ---- Logging ----
             BuiltIn::YulLog => {
                 block.append_operation(
                     yul::LogOperation::builder(context, loc)
@@ -359,7 +349,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 (arguments[0], block)
             }
 
-            // ---- Terminators / effects (raw memory spans) ----
             BuiltIn::YulReturn => {
                 yul_effect!(
                     yul::ReturnOperation,
@@ -389,7 +378,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 )
             }
 
-            // ---- `pop(x)`: evaluate-and-discard (the argument is already emitted) ----
+            // `pop(x)` evaluates and discards; the argument is already emitted.
             BuiltIn::YulPop => (arguments[0], block),
 
             _ => unimplemented!("unsupported yul intrinsic: {opcode:?}"),

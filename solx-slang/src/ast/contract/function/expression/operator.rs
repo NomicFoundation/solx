@@ -48,7 +48,6 @@ use crate::ast::type_conversion::TypeConversion;
 /// from source text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operator {
-    // ---- Arithmetic ----
     /// `+` (binary)
     Add,
     /// `-` (binary or unary negation)
@@ -62,7 +61,6 @@ pub enum Operator {
     /// `**`
     Exponentiation,
 
-    // ---- Bitwise ----
     /// `&`
     BitwiseAnd,
     /// `|`
@@ -76,11 +74,9 @@ pub enum Operator {
     /// `~`
     BitwiseNot,
 
-    // ---- Logical ----
     /// `!`
     Not,
 
-    // ---- Step ----
     /// `++`
     Increment,
     /// `--`

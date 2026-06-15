@@ -15,22 +15,15 @@ use mlir_sys::MlirPass;
 use mlir_sys::MlirRegion;
 
 unsafe extern "C" {
-    // ---- Sol dialect registration ----
 
     /// Returns the dialect handle for the Sol dialect.
     pub fn mlirGetDialectHandle__sol__() -> MlirDialectHandle;
 
-    // ---- Yul dialect registration ----
-
     /// Returns the dialect handle for the Yul dialect.
     pub fn mlirGetDialectHandle__yul__() -> MlirDialectHandle;
 
-    // ---- Sol dialect passes ----
-
     /// Registers all Sol dialect passes.
     pub fn mlirRegisterSolPasses();
-
-    // ---- Canonicalization ----
 
     /// Creates the `canonicalize` pass.
     pub fn mlirCreateTransformsCanonicalizer() -> MlirPass;
@@ -38,15 +31,11 @@ unsafe extern "C" {
     /// Creates the Sol modifier-op pass.
     pub fn mlirCreateSolModifierOpLoweringPass() -> MlirPass; // recut-lint-allow: nam02-ffi
 
-    // ---- Sol-to-Yul conversion ----
-
     /// Creates the `convert-sol-to-yul` pass.
     pub fn mlirCreateConversionConvertSolToYulPass() -> MlirPass;
 
     /// Creates the `convert-yul-to-std` pass.
     pub fn mlirCreateConversionConvertYulToStandardPass() -> MlirPass;
-
-    // ---- Standard-to-LLVM conversion passes ----
 
     /// Creates the `convert-func-to-llvm` pass.
     pub fn mlirCreateConversionConvertFuncToLLVMPass() -> MlirPass;
@@ -63,12 +52,8 @@ unsafe extern "C" {
     /// Creates the `reconcile-unrealized-casts` pass.
     pub fn mlirCreateConversionReconcileUnrealizedCastsPass() -> MlirPass;
 
-    // ---- Dialect loading ----
-
     /// Loads a dialect into the context by handle.
     pub fn mlirDialectHandleInsertDialect(handle: MlirDialectHandle, registry: MlirDialectRegistry);
-
-    // ---- Sol attribute constructors (from sol_attr_stubs.cpp) ----
 
     /// Creates a `ContractKindAttr` (0=Interface, 1=Contract, 2=Library).
     pub fn solxCreateContractKindAttr(context: MlirContext, kind: u32) -> mlir_sys::MlirAttribute;
@@ -103,8 +88,6 @@ unsafe extern "C" {
         data: *const u8,
         len: usize,
     ) -> mlir_sys::MlirAttribute;
-
-    // ---- Sol type constructors (from sol_attr_stubs.cpp) ----
 
     /// Creates a `sol::PointerType` with the given element type and data location.
     ///
@@ -186,8 +169,6 @@ unsafe extern "C" {
         result_count: usize,
     ) -> mlir_sys::MlirType;
 
-    // ---- Sol immutables ----
-
     /// Lowers each `llvm.setimmutable` op in `module` to heap stores at its
     /// immutable's reserved offsets, then erases it. The id -> offsets mapping is
     /// passed flattened: `imm_ids[i]` reserves offset `imm_offsets[i]` (one entry
@@ -201,8 +182,6 @@ unsafe extern "C" {
         imm_count: u64,
     );
 
-    // ---- Sol type inference ----
-
     /// Returns the element type of a non-mapping reference type. For
     /// struct types, `struct_field_idx` selects the member.
     pub fn mlirSolGetEltType(ty: mlir_sys::MlirType, struct_field_idx: u64) -> mlir_sys::MlirType;
@@ -213,8 +192,6 @@ unsafe extern "C" {
         base_addr_ty: mlir_sys::MlirType,
         element_type: mlir_sys::MlirType,
     ) -> mlir_sys::MlirType;
-
-    // ---- Sol type predicates ----
 
     /// Whether `ty` is a `!sol.enum<N>`.
     pub fn solxIsEnumType(ty: mlir_sys::MlirType) -> bool;
@@ -244,8 +221,6 @@ unsafe extern "C" {
     /// Whether `ty` is a `!sol.ptr<…>` (a typed place / address).
     pub fn solxIsPointerType(ty: mlir_sys::MlirType) -> bool;
 
-    // ---- Sol pointer accessors ----
-
     /// The pointee type `T` of a `!sol.ptr<T, Loc>` (the caller must ensure `ty`
     /// is a pointer type).
     pub fn solxPointerTypePointeeType(ty: mlir_sys::MlirType) -> mlir_sys::MlirType;
@@ -255,8 +230,6 @@ unsafe extern "C" {
     pub fn solxPointerTypeDataLocation(ty: mlir_sys::MlirType) -> u32;
     /// The data location ordinal of a `!sol.string` / `!sol.array` / `!sol.struct`.
     pub fn solxReferenceTypeDataLocation(ty: mlir_sys::MlirType) -> u32;
-
-    // ---- MLIR core (not in mlir-sys) ----
 
     /// Returns the region that owns the given block.
     pub fn mlirBlockGetParentRegion(block: MlirBlock) -> MlirRegion;

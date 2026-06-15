@@ -88,12 +88,8 @@ pub struct Context<'context> {
 }
 
 impl<'context> Context<'context> {
-    // ---- Private constants ----
-
     /// MLIR `builtin.module` operation name used to locate nested modules.
     const BUILTIN_MODULE: &'static str = "builtin.module";
-
-    // ==== Phase 1: Context creation ====
 
     /// Creates a fully-initialized `melior::Context` with all upstream
     /// dialects, Sol dialect, Yul dialect, and LLVM translation interfaces
@@ -137,8 +133,6 @@ impl<'context> Context<'context> {
 
         context
     }
-
-    // ==== Phase 2: Module construction ====
 
     /// Creates a new MLIR state with an empty module.
     ///
@@ -257,8 +251,6 @@ impl<'context> Context<'context> {
             &function.return_types,
         )
     }
-
-    // ==== Phase 3: Sol pass pipeline ====
 
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
     ///
@@ -387,8 +379,6 @@ impl<'context> Context<'context> {
         })
         .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))
     }
-
-    // ==== Phase 4: LLVM translation ====
 
     /// Translate MLIR source text (LLVM dialect) to raw LLVM pointers.
     ///
