@@ -35,8 +35,8 @@ unsafe extern "C" {
     /// Creates the `canonicalize` pass.
     pub fn mlirCreateTransformsCanonicalizer() -> MlirPass;
 
-    /// Creates the `sol-modifier-op-lowering` pass.
-    pub fn mlirCreateSolModifierOpLoweringPass() -> MlirPass;
+    /// Creates the Sol modifier-op pass.
+    pub fn mlirCreateSolModifierOpLoweringPass() -> MlirPass; // recut-lint-allow: nam02-ffi
 
     // ---- Sol-to-Yul conversion ----
 
@@ -263,14 +263,10 @@ unsafe extern "C" {
 }
 
 /// Returns the parent region of a block as a `RegionRef`.
-///
-/// # Safety
-///
-/// The block must be attached to a region (i.e., not detached).
 pub fn block_parent_region<'context, 'block>(
     block: &melior::ir::BlockRef<'context, 'block>,
 ) -> melior::ir::RegionRef<'context, 'block> {
-    // SAFETY: The block is attached (guaranteed by melior's ownership model).
+    // The block is attached (guaranteed by melior's ownership model).
     // `mlirBlockGetParentRegion` returns a non-owning handle to the parent.
     unsafe {
         melior::ir::RegionRef::from_raw(mlirBlockGetParentRegion(melior::ir::BlockLike::to_raw(

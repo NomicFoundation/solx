@@ -362,7 +362,7 @@ impl<'context> Builder<'context> {
     /// Builds the signless `i256` integer attribute for a Yul word `value`.
     fn yul_word_attribute(&self, value: &BigInt) -> Attribute<'context> {
         let (sign, words) = value.to_u64_digits();
-        // SAFETY: `solxCreateIntegerAttr` returns a valid MlirAttribute for the
+        // `solxCreateIntegerAttr` returns a valid MlirAttribute for the
         // `i256` type and the borrowed little-endian word slice.
         unsafe {
             Attribute::from_raw(crate::ffi::solxCreateIntegerAttr(

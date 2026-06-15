@@ -1,5 +1,5 @@
 //!
-//! External / bare-address call lowering.
+//! External / bare-address call emission.
 //!
 
 use melior::ir::BlockRef;
@@ -42,7 +42,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         call_value: Option<Value<'context, 'block>>,
         static_mode: StaticMode,
         block: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Vec<Value<'context, 'block>>> {
+    ) -> Vec<Value<'context, 'block>> {
         let callee =
             self.emit_external_callee(receiver, selector, parameter_types, return_types, block);
         let builder = &self.state.builder;
@@ -183,15 +183,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         arguments: &PositionalArguments,
         call_value: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
+    ) -> (
         Value<'context, 'block>,
         Value<'context, 'block>,
         BlockRef<'context, 'block>,
-    )> {
+    ) {
         let BlockAnd {
             value: address,
             block,
-        } = access.operand().emit(self, block)?;
+        } = access.operand().emit(self, block);
         let argument = arguments
             .iter()
             .next()
@@ -199,7 +199,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let BlockAnd {
             value: input,
             block,
-        } = argument.emit(self, block)?;
+        } = argument.emit(self, block);
 
         let builder = &self.state.builder;
         // `sol.bare_call`'s input rejects a non-memory operand, so an argument
@@ -231,7 +231,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             BuiltIn::AddressStaticcall => builder.emit_sol_bare_static_call(address, input, &block),
             _ => unreachable!("bare call kind must be Call, Delegatecall, or Staticcall"),
         };
-        Ok((status, ret_data, block))
+        (status, ret_data, block)
     }
 }
 
@@ -246,7 +246,7 @@ impl MemberCallKind {
         call_value: Option<Value<'context, 'block>>,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let selector = function_definition
             .compute_selector()
             .expect("an external call resolves to a function with a selector");
@@ -263,9 +263,9 @@ impl MemberCallKind {
         let BlockAnd {
             value: receiver,
             block: current_block,
-        } = access.operand().emit(context, block)?;
+        } = access.operand().emit(context, block);
         let (argument_values, current_block) =
-            context.emit_coerced_arguments(arguments, &parameter_types, current_block)?;
+            context.emit_coerced_arguments(arguments, &parameter_types, current_block);
         let results = context.emit_external_call(
             receiver.into_mlir(),
             selector,
@@ -275,8 +275,8 @@ impl MemberCallKind {
             call_value,
             StaticMode::from_function(function_definition),
             &current_block,
-        )?;
-        Ok((results, current_block))
+        );
+        (results, current_block)
     }
 
     /// Emits a self getter call (`this.x()` / `this.m(key)`); A4 (#H-M7):
@@ -289,7 +289,7 @@ impl MemberCallKind {
         arguments: &PositionalArguments,
         call_value: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let selector = state_variable
             .compute_selector()
             .expect("a public state variable has a getter selector");
@@ -299,11 +299,11 @@ impl MemberCallKind {
             );
         };
         let (argument_values, current_block) =
-            context.emit_coerced_arguments(arguments, &parameter_types, block)?;
+            context.emit_coerced_arguments(arguments, &parameter_types, block);
         let BlockAnd {
             value: receiver,
             block: current_block,
-        } = access.operand().emit(context, current_block)?;
+        } = access.operand().emit(context, current_block);
         let results = context.emit_external_call(
             receiver.into_mlir(),
             selector,
@@ -313,8 +313,8 @@ impl MemberCallKind {
             call_value,
             StaticMode::Call,
             &current_block,
-        )?;
-        Ok((results, current_block))
+        );
+        (results, current_block)
     }
 
     /// Emits an external getter call (`instance.value()` scalar); A4
@@ -326,7 +326,7 @@ impl MemberCallKind {
         state_variable: &StateVariableDefinition,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         // The external accessor lowered here is single-valued, so an arg-bearing
         // mapping / array getter on another instance is a LOUD residual
         // (#H-M10/M11); only the no-argument scalar / struct getter lowers here.
@@ -344,7 +344,7 @@ impl MemberCallKind {
         let BlockAnd {
             value: receiver,
             block: current_block,
-        } = access.operand().emit(context, block)?;
+        } = access.operand().emit(context, block);
         let results = context.emit_external_call(
             receiver.into_mlir(),
             selector,
@@ -354,7 +354,7 @@ impl MemberCallKind {
             None,
             StaticMode::Call,
             &current_block,
-        )?;
-        Ok((results.into_iter().next(), current_block))
+        );
+        (results.into_iter().next(), current_block)
     }
 }

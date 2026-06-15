@@ -1,5 +1,5 @@
 //!
-//! Short-circuit logical expression lowering: `&&` and `||`. Each node bridges
+//! Short-circuit logical expression emission: `&&` and `||`. Each node bridges
 //! to its [`LogicalOperator`], which lowers itself.
 //!
 
@@ -34,6 +34,6 @@ expression_emit!(AndExpression, OrExpression; |node, context, block| {
         &node.left_operand(),
         &node.right_operand(),
         block,
-    )?;
-    Ok(BlockAnd { block, value: value.into() })
+    );
+    BlockAnd { block, value: value.into() }
 });

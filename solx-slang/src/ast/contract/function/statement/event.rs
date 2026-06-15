@@ -48,7 +48,7 @@ statement_emit!(EmitStatement; |node, context, block| {
         let BlockAnd {
             value,
             block: next_block,
-        } = argument.emit(&emitter, current_block)?;
+        } = argument.emit(&emitter, current_block);
         current_block = next_block;
         let indexed = parameter.indexed();
         let parameter_type = parameter
@@ -66,7 +66,7 @@ statement_emit!(EmitStatement; |node, context, block| {
             // TODO: indexed reference-type parameters (string, bytes,
             // arrays, structs) must store the keccak256 hash of their
             // encoded value as the topic, not the value itself. That
-            // lowering is not supported by solc-MLIR yet.
+            // emission is not supported by solc-MLIR yet.
             indexed_arguments.push(value);
         } else {
             non_indexed_arguments.push(value);
@@ -104,5 +104,5 @@ statement_emit!(EmitStatement; |node, context, block| {
         emit_builder = emit_builder.signature(StringAttribute::new(builder.context, signature));
     }
     current_block.append_operation(emit_builder.build().into());
-    Ok(Some(current_block))
+    Some(current_block)
 });

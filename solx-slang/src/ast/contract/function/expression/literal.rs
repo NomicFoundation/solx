@@ -1,5 +1,5 @@
 //!
-//! Literal and primary-keyword expression lowering: number / boolean / string
+//! Literal and primary-keyword expression emission: number / boolean / string
 //! literals and the `this` keyword.
 //!
 
@@ -43,20 +43,20 @@ expression_emit!(DecimalNumberExpression, HexNumberExpression; |node, context, b
         &context.state.builder,
         &block,
     );
-    Ok(BlockAnd {
+    BlockAnd {
         block,
         value: constant,
-    })
+    }
 });
 
 expression_emit!(TrueKeyword; |context, block| {
     let value = crate::ast::Value::boolean(true, &context.state.builder, &block);
-    Ok(BlockAnd { block, value })
+    BlockAnd { block, value }
 });
 
 expression_emit!(FalseKeyword; |context, block| {
     let value = crate::ast::Value::boolean(false, &context.state.builder, &block);
-    Ok(BlockAnd { block, value })
+    BlockAnd { block, value }
 });
 
 expression_emit!(ThisKeyword; |context, block| {
@@ -66,10 +66,10 @@ expression_emit!(ThisKeyword; |context, block| {
         .expect("`this` only appears inside a contract method");
     let value: Value<'context, 'block> =
         sol_op!(&context.state.builder, block, ThisOperation.addr(contract_type));
-    Ok(BlockAnd {
+    BlockAnd {
         block,
         value: value.into(),
-    })
+    }
 });
 
 expression_emit!(StringExpression; |node, context, block| {
@@ -77,7 +77,7 @@ expression_emit!(StringExpression; |node, context, block| {
     // UTF-8 (`hex"..."`, `"\xff"`).
     let bytes = node.value();
     let builder = &context.state.builder;
-    // SAFETY: the `&str` is only consumed by `StringAttribute::new`, which hands it
+    // the `&str` is only consumed by `StringAttribute::new`, which hands it
     // to `StringRef::new` — that reads `.as_ptr()`/`.len()` and never assumes UTF-8
     // validity, so the non-UTF-8 literal bytes are sound here.
     let literal = unsafe { std::str::from_utf8_unchecked(&bytes) };
@@ -88,10 +88,10 @@ expression_emit!(StringExpression; |node, context, block| {
             .value(StringAttribute::new(builder.context, literal))
             .addr(crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir())
     );
-    Ok(BlockAnd {
+    BlockAnd {
         block,
         value: value.into(),
-    })
+    }
 });
 
 /// An expression emitted toward an expected MLIR type.
@@ -123,11 +123,7 @@ where
     type Context = &'scope ExpressionContext<'state, 'context, 'block>;
     type Output = BlockAnd<'context, 'block, crate::ast::Value<'context, 'block>>;
 
-    fn emit(
-        &self,
-        context: Self::Context,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Self::Output> {
+    fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) -> Self::Output {
         if let Expression::StringExpression(string_expression) = self.expression {
             let builder = &context.state.builder;
             // A string literal toward a single `byte` (an element of
@@ -145,7 +141,7 @@ where
                     &block,
                 );
                 let value = integer.cast(crate::ast::Type::new(self.target_type), builder, &block);
-                return Ok(BlockAnd { block, value });
+                return BlockAnd { block, value };
             }
             if let Some(width) = crate::ast::Type::new(self.target_type).fixed_bytes_or_byte_width()
             {
@@ -169,7 +165,7 @@ where
                     builder,
                     &block,
                 );
-                return Ok(BlockAnd { block, value });
+                return BlockAnd { block, value };
             }
         }
         self.expression.emit(context, block)

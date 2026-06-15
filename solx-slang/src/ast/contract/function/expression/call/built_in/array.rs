@@ -28,17 +28,17 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let BlockAnd {
             value: array_value,
             block,
-        } = access.operand().emit(self, block)?;
+        } = access.operand().emit(self, block);
         sol_op_void!(
             &self.state.builder,
             &block,
             PopOperation.inp(array_value.into_mlir())
         );
-        Ok((None, block))
+        (None, block)
     }
 
     /// Emits `arr.push(x)` / `arr.push()` / `bytes.push()` as `sol.push`,
@@ -50,7 +50,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         access: &MemberAccessExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let base = access.operand();
         let base_slang_type = base
             .get_type()
@@ -63,7 +63,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let BlockAnd {
                 value: bytes_reference,
                 block,
-            } = base.emit(self, block)?;
+            } = base.emit(self, block);
             // `data.push("a")` appends a string-literal byte: materialise it as a
             // `byte` constant rather than a runtime `sol.string`.
             let byte_target =
@@ -72,7 +72,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 expression: value_argument,
                 target_type: byte_target,
             })
-            .emit(self, block)?;
+            .emit(self, block);
             let builder = &self.state.builder;
             let byte_value = value
                 .coerce_to(crate::ast::Type::new(byte_target), builder, &block)
@@ -84,9 +84,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .addr(bytes_reference.into_mlir())
                     .value(byte_value)
             );
-            return Ok((None, block));
+            return (None, block);
         }
-        let (new_slot, element_type, block) = self.emit_push_slot(access, block)?;
+        let (new_slot, element_type, block) = self.emit_push_slot(access, block);
         let Some(value_argument) = value_argument else {
             // `arr.push()` in value position yields the freshly-appended element:
             // `sol.load` reads a value element as a fresh default and yields a
@@ -97,30 +97,30 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let loaded = crate::ast::Pointer::new(new_slot)
                 .load(crate::ast::Type::new(element_type), builder, &block)
                 .into_mlir();
-            return Ok((Some(loaded), block));
+            return (Some(loaded), block);
         };
         if crate::ast::Type::new(element_type).is_reference() {
             // A reference-typed element (nested array / struct / string) is
             // appended by copying the source (a memory aggregate) into the
             // storage slot `push` returns — the same memory→storage `sol.copy`
             // solc emits, and what the lvalue form `arr.push() = v` already does.
-            let BlockAnd { value, block } = value_argument.emit(self, block)?;
+            let BlockAnd { value, block } = value_argument.emit(self, block);
             sol_op_void!(
                 &self.state.builder,
                 &block,
                 CopyOperation.src(value.into_mlir()).dst(new_slot)
             );
-            return Ok((None, block));
+            return (None, block);
         }
         let BlockAnd { value, block } = (Toward {
             expression: &value_argument,
             target_type: element_type,
         })
-        .emit(self, block)?;
+        .emit(self, block);
         let builder = &self.state.builder;
         let cast_value = value.coerce_to(crate::ast::Type::new(element_type), builder, &block);
         crate::ast::Pointer::new(new_slot).store(cast_value, builder, &block);
-        Ok((None, block))
+        (None, block)
     }
 
     /// Appends a default element to a dynamic array (or `bytes`) and returns the
@@ -131,11 +131,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
+    ) -> (
         Value<'context, 'block>,
         Type<'context>,
         BlockRef<'context, 'block>,
-    )> {
+    ) {
         let base = access.operand();
         let base_slang_type = base
             .get_type()
@@ -166,7 +166,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let BlockAnd {
             value: array_value,
             block,
-        } = base.emit(self, block)?;
+        } = base.emit(self, block);
         // solc's `sol.push` yields the new element's reference type directly when
         // the element is a reference type (nested array / struct / string) — the
         // slot is then copied into via `sol.copy` — and a `!sol.ptr` to the
@@ -185,6 +185,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .inp(array_value.into_mlir())
                 .addr(push_result_type)
         );
-        Ok((new_slot, element_type, block))
+        (new_slot, element_type, block)
     }
 }

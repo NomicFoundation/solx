@@ -20,7 +20,8 @@
 /// always produces a value). Names resolve against the call site's imports
 /// (`Emit`, `BlockAnd`, `ExpressionContext`, `BlockRef`); the [`Value`] output
 /// type is referenced by absolute path, so a body may keep its own
-/// `melior::ir::Value` import for intermediate values.
+/// `melior::ir::Value` import for intermediate values. The body returns the
+/// bare [`BlockAnd`] output — emission never fails (slang validated the source).
 macro_rules! expression_emit {
     ($($node:ty),+ ; |$bound:ident, $context:ident, $block:ident| $body:block) => {
         $(
@@ -38,7 +39,7 @@ macro_rules! expression_emit {
                     &self,
                     $context: Self::Context,
                     $block: BlockRef<'context, 'block>,
-                ) -> anyhow::Result<Self::Output> {
+                ) -> Self::Output {
                     let $bound = self;
                     $body
                 }
@@ -61,7 +62,7 @@ macro_rules! expression_emit {
                     &self,
                     $context: Self::Context,
                     $block: BlockRef<'context, 'block>,
-                ) -> anyhow::Result<Self::Output> $body
+                ) -> Self::Output $body
             }
         )+
     };
@@ -90,7 +91,7 @@ macro_rules! statement_emit {
                     &self,
                     $context: Self::Context,
                     $block: BlockRef<'context, 'block>,
-                ) -> anyhow::Result<Self::Output> {
+                ) -> Self::Output {
                     let $bound = self;
                     $body
                 }
@@ -113,7 +114,7 @@ macro_rules! statement_emit {
                     &self,
                     $context: Self::Context,
                     $block: BlockRef<'context, 'block>,
-                ) -> anyhow::Result<Self::Output> $body
+                ) -> Self::Output $body
             }
         )+
     };

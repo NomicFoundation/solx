@@ -1,5 +1,5 @@
 //!
-//! `assert` and `require` built-in lowering.
+//! `assert` and `require` built-in emission.
 //!
 
 use melior::ir::BlockLike;
@@ -23,11 +23,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         condition: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+    ) -> BlockRef<'context, 'block> {
         let BlockAnd {
             value: condition_value,
             block,
-        } = condition.emit(self, block)?;
+        } = condition.emit(self, block);
         let condition_boolean = condition_value
             .is_nonzero(&self.state.builder, &block)
             .into_mlir();
@@ -36,7 +36,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &block,
             AssertOperation.cond(condition_boolean)
         );
-        Ok(block)
+        block
     }
 
     /// Emits a `require(condition)` or `require(condition, message)` built-in
@@ -50,11 +50,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         condition: &Expression,
         message: Option<&Expression>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+    ) -> BlockRef<'context, 'block> {
         let BlockAnd {
             value: condition_value,
             block,
-        } = condition.emit(self, block)?;
+        } = condition.emit(self, block);
         let condition_boolean = condition_value
             .is_nonzero(&self.state.builder, &block)
             .into_mlir();
@@ -64,7 +64,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let bytes = string_expression.value();
                 let literal = String::from_utf8(bytes).expect("require message is valid UTF-8");
                 builder.emit_sol_require(condition_boolean, Some(&literal), &[], false, &block);
-                Ok(block)
+                block
             }
             Some(Expression::FunctionCallExpression(error_call))
                 if Self::call_resolves_to_error(error_call) =>
@@ -75,7 +75,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let BlockAnd {
                     value: message_value,
                     block,
-                } = expression.emit(self, block)?;
+                } = expression.emit(self, block);
                 let string_memory_type =
                     crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
                         .into_mlir();
@@ -89,11 +89,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     true,
                     &block,
                 );
-                Ok(block)
+                block
             }
             None => {
                 builder.emit_sol_require(condition_boolean, None, &[], false, &block);
-                Ok(block)
+                block
             }
         }
     }
@@ -107,7 +107,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         condition: Value<'context, 'block>,
         error_call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+    ) -> BlockRef<'context, 'block> {
         let Some(Definition::Error(error_definition)) = Self::callee_definition(error_call) else {
             unreachable!("a require custom error resolves to an error definition");
         };
@@ -124,7 +124,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let BlockAnd {
                 value,
                 block: next_block,
-            } = argument.emit(self, current_block)?;
+            } = argument.emit(self, current_block);
             current_block = next_block;
             argument_values.push(value);
         }
@@ -153,7 +153,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             true,
             &current_block,
         );
-        Ok(current_block)
+        current_block
     }
 
     /// Whether `error_call`'s callee resolves to an error definition (a custom

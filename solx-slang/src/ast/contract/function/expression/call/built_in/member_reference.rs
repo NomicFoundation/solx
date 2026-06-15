@@ -101,21 +101,21 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let static_selector = match Self::resolve_member_access_operand(&access.operand()) {
             Some(Definition::Function(function)) => function.compute_selector(),
             Some(Definition::StateVariable(state_variable)) => state_variable.compute_selector(),
             _ => None,
         };
         if let Some(selector) = static_selector {
-            let block = self.eval_selector_receiver_side_effects(access, block)?;
+            let block = self.eval_selector_receiver_side_effects(access, block);
             let value = self.emit_selector_constant(&BigInt::from(selector), 4, &block);
-            return Ok((Some(value), block));
+            return (Some(value), block);
         }
         let BlockAnd {
             value: operand_value,
             block,
-        } = access.operand().emit(self, block)?;
+        } = access.operand().emit(self, block);
         assert!(
             operand_value.r#type().is_ext_function_ref(),
             "function `.selector` resolves to a named function, a public getter, or an external function-pointer value"
@@ -127,7 +127,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .func(operand_value.into_mlir())
                 .result(crate::ast::Type::fixed_bytes(self.state.builder.context, 4).into_mlir())
         );
-        Ok((Some(selector), block))
+        (Some(selector), block)
     }
 
     /// `f.address` — the address component of an external function-pointer VALUE,
@@ -138,11 +138,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let BlockAnd {
             value: operand_value,
             block,
-        } = access.operand().emit(self, block)?;
+        } = access.operand().emit(self, block);
         assert!(
             operand_value.r#type().is_ext_function_ref(),
             "function `.address` requires an external function-pointer value"
@@ -154,7 +154,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .func(operand_value.into_mlir())
                 .result(crate::ast::Type::address(self.state.builder.context, false).into_mlir())
         );
-        Ok((Some(address), block))
+        (Some(address), block)
     }
 
     /// `this.f` / `instance.f` used as a value (not called) is an external
@@ -166,7 +166,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         access: &MemberAccessExpression,
         function_definition: &FunctionDefinition,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let selector = function_definition
             .compute_selector()
             .expect("an external function pointer resolves to a function with a selector");
@@ -182,7 +182,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let BlockAnd {
             value: receiver,
             block,
-        } = access.operand().emit(self, block)?;
+        } = access.operand().emit(self, block);
         let value = self.emit_external_callee(
             receiver.into_mlir(),
             selector,
@@ -190,7 +190,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &return_types,
             &block,
         );
-        Ok((Some(value), block))
+        (Some(value), block)
     }
 
     /// `MyError.selector` — the error's 4-byte selector (`bytes4`) as a
@@ -199,7 +199,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let Some(Definition::Error(error)) = Self::resolve_member_access_operand(&access.operand())
         else {
             unreachable!("slang resolves an error `.selector` base to an error definition");
@@ -207,9 +207,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let selector = error
             .compute_selector()
             .expect("slang computes a 4-byte selector for an error");
-        let block = self.eval_selector_receiver_side_effects(access, block)?;
+        let block = self.eval_selector_receiver_side_effects(access, block);
         let value = self.emit_selector_constant(&BigInt::from(selector), 4, &block);
-        Ok((Some(value), block))
+        (Some(value), block)
     }
 
     /// `MyEvent.selector` — the event's 32-byte topic hash (`bytes32`), the
@@ -218,7 +218,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let Some(Definition::Event(event)) = Self::resolve_member_access_operand(&access.operand())
         else {
             unreachable!("slang resolves an event `.selector` base to an event definition");
@@ -228,9 +228,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .expect("slang computes a canonical signature for a non-anonymous event");
         let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
         let topic = BigInt::from_bytes_be(Sign::Plus, hash.as_bytes());
-        let block = self.eval_selector_receiver_side_effects(access, block)?;
+        let block = self.eval_selector_receiver_side_effects(access, block);
         let value = self.emit_selector_constant(&topic, 32, &block);
-        Ok((Some(value), block))
+        (Some(value), block)
     }
 
     /// Emits a compile-time selector value of `width_bytes`: an unsigned integer
@@ -274,19 +274,19 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+    ) -> BlockRef<'context, 'block> {
         let Expression::MemberAccessExpression(inner) = access.operand() else {
-            return Ok(block);
+            return block;
         };
         let receiver = inner.operand();
         if Self::is_namespace_or_type_operand(&receiver) {
-            return Ok(block);
+            return block;
         }
         let BlockAnd {
             value: _discarded,
             block,
-        } = receiver.emit(self, block)?;
-        Ok(block)
+        } = receiver.emit(self, block);
+        block
     }
 
     /// Whether `expression` is a namespace or type reference (a contract /

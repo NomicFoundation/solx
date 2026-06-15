@@ -39,12 +39,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         conditional: &ConditionalExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let true_expression = conditional.true_expression();
         let false_expression = conditional.false_expression();
         let result_types: Vec<Type<'context>> = match (&true_expression, &false_expression) {
             // Both branches are literal tuples: take the element types from
-            // the (equal-length) items, exactly as the original lowering did.
+            // the (equal-length) items, exactly as the original emission did.
             (Expression::TupleExpression(true_tuple), Expression::TupleExpression(false_tuple)) => {
                 let true_items: Vec<Expression> = true_tuple
                     .items()
@@ -99,7 +99,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let BlockAnd {
             value: condition_value,
             block,
-        } = conditional.operand().emit(self, block)?;
+        } = conditional.operand().emit(self, block);
         let condition_boolean = condition_value.is_nonzero(builder, &block).into_mlir();
         let slots: Vec<crate::ast::Pointer<'context, 'block>> = result_types
             .iter()
@@ -114,7 +114,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             (else_block, &false_expression),
         ] {
             let (values, current) =
-                self.emit_conditional_branch_values(branch_expression, branch_block)?;
+                self.emit_conditional_branch_values(branch_expression, branch_block);
             assert!(
                 values.len() == slots.len(),
                 "a conditional branch yields one value per result slot"
@@ -137,7 +137,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .into_mlir(),
             );
         }
-        Ok((values, block))
+        (values, block)
     }
 
     /// Emits one branch of a tuple-valued conditional, expanding it to one value
@@ -148,10 +148,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         branch: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
+    ) -> (
         Vec<crate::ast::Value<'context, 'block>>,
         BlockRef<'context, 'block>,
-    )> {
+    ) {
         match branch {
             Expression::TupleExpression(tuple) => {
                 let mut values = Vec::new();
@@ -160,25 +160,25 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     let inner = item
                         .expression()
                         .expect("a multi-value conditional tuple element has an inner expression");
-                    let BlockAnd { value, block: next } = inner.emit(self, current)?;
+                    let BlockAnd { value, block: next } = inner.emit(self, current);
                     values.push(value);
                     current = next;
                 }
-                Ok((values, current))
+                (values, current)
             }
             Expression::FunctionCallExpression(call) => {
-                let (values, block) = self.emit_function_call_results(call, block)?;
-                Ok((
+                let (values, block) = self.emit_function_call_results(call, block);
+                (
                     values.into_iter().map(crate::ast::Value::from).collect(),
                     block,
-                ))
+                )
             }
             Expression::ConditionalExpression(nested) => {
-                let (values, block) = self.emit_conditional_tuple_values(nested, block)?;
-                Ok((
+                let (values, block) = self.emit_conditional_tuple_values(nested, block);
+                (
                     values.into_iter().map(crate::ast::Value::from).collect(),
                     block,
-                ))
+                )
             }
             other => unimplemented!(
                 "multi-value conditional branch of this expression kind is not supported: {:?}",
@@ -231,7 +231,7 @@ expression_emit!(ConditionalExpression; |node, context, block| {
     let BlockAnd {
         value: condition_value,
         block,
-    } = condition.emit(context, block)?;
+    } = condition.emit(context, block);
     let condition_boolean = condition_value
         .is_nonzero(&context.state.builder, &block)
         .into_mlir();
@@ -251,7 +251,7 @@ expression_emit!(ConditionalExpression; |node, context, block| {
         expression: &true_expression,
         target_type: result_type,
     })
-    .emit(context, then_block)?;
+    .emit(context, then_block);
     let then_cast = then_value.coerce_to(
         crate::ast::Type::new(result_type),
         &context.state.builder,
@@ -268,7 +268,7 @@ expression_emit!(ConditionalExpression; |node, context, block| {
         expression: &false_expression,
         target_type: result_type,
     })
-    .emit(context, else_block)?;
+    .emit(context, else_block);
     let else_cast = else_value.coerce_to(
         crate::ast::Type::new(result_type),
         &context.state.builder,
@@ -283,7 +283,7 @@ expression_emit!(ConditionalExpression; |node, context, block| {
         &block,
     );
 
-    Ok(BlockAnd { block, value: result })
+    BlockAnd { block, value: result }
 });
 
 expression_emit!(ArrayExpression; |node, context, block| {
@@ -318,7 +318,7 @@ expression_emit!(ArrayExpression; |node, context, block| {
     let mut element_values = Vec::new();
     let mut current = block;
     for item in node.items().iter() {
-        let BlockAnd { value, block: next } = item.emit(context, current)?;
+        let BlockAnd { value, block: next } = item.emit(context, current);
         element_values.push(value);
         current = next;
     }
@@ -356,5 +356,5 @@ expression_emit!(ArrayExpression; |node, context, block| {
         &current,
         ArrayLitOperation.ins(&element_values).addr(array_type)
     );
-    Ok(BlockAnd { block: current, value: value.into() })
+    BlockAnd { block: current, value: value.into() }
 });

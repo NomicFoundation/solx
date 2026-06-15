@@ -48,11 +48,6 @@ impl Slang {
     /// Builds a Slang compilation unit from the given source files.
     ///
     /// Uses the `CompilationBuilder` to parse all sources and resolve imports.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the compilation builder fails to initialize or
-    /// if import resolution fails.
     pub fn compile(&self, sources: BTreeMap<String, String>) -> anyhow::Result<CompilationUnit> {
         let paths: Vec<String> = sources.keys().cloned().collect();
         let configuration = CompilationConfig::new(sources);
@@ -241,7 +236,7 @@ impl Frontend for Slang {
             // the contract emitter. A contract the recut cannot yet lower is
             // simply absent from the artifacts — exactly as when only the first
             // contract was emitted — so a sibling's gap (an `Err` or a `panic!`
-            // in lowering) never aborts the file or the other contracts; the
+            // in emission) never aborts the file or the other contracts; the
             // missing object instead surfaces as that contract's failing tests.
             for contract in source_unit.contracts().iter() {
                 // An `abstract contract` cannot be instantiated and is never
@@ -257,7 +252,7 @@ impl Frontend for Slang {
                         let mut context = solx_mlir::Context::new(&melior_context, evm_version);
                         let mut emitter = AstEmitter::new(&mut context);
                         let (contract_name, method_identifiers) =
-                            emitter.emit_contract(contract, &free_functions, &operator_bindings)?;
+                            emitter.emit_contract(contract, &free_functions, &operator_bindings);
                         Self::record_object(
                             context,
                             contract_name,
@@ -288,8 +283,7 @@ impl Frontend for Slang {
                 let evm_version = input_json.settings.evm_version.unwrap_or_default();
                 let mut context = solx_mlir::Context::new(&melior_context, evm_version);
                 let (library_name, method_identifiers) =
-                    crate::ast::contract::ContractEmitter::new(&mut context)
-                        .emit_library(&library)?;
+                    crate::ast::contract::ContractEmitter::new(&mut context).emit_library(&library);
                 Self::record_object(
                     context,
                     library_name,

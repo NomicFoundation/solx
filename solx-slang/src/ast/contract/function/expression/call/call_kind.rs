@@ -2,7 +2,6 @@
 //! The kind of a function-call expression, resolved ahead of emission.
 //!
 
-use anyhow::Context as _;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
@@ -175,14 +174,14 @@ impl CallKind {
         context: &ExpressionContext<'state, 'context, 'block>,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         // `recv.f{value: v}(args)` / `new C{value, salt}(args)`: evaluate the
         // option list (each for its side effects, in source order) before the
         // arguments, forwarding `value` as msg.value and `salt` as the CREATE2
         // salt. The inner callee drives the dispatch below.
         let (call_value, salt, block, callee) = match call.operand().unwrap_parentheses() {
             Expression::CallOptionsExpression(options) => {
-                let (value, salt, block) = context.capture_call_options(&options, block)?;
+                let (value, salt, block) = context.capture_call_options(&options, block);
                 (value, salt, block, options.operand().unwrap_parentheses())
             }
             other => (None, None, block, other),
@@ -193,26 +192,21 @@ impl CallKind {
             // A direct call passes its arguments by position or by name; ordering
             // them against the parameter ids collapses both into one path.
             Self::LocalFunction(function_definition) => {
-                let callee_name = function_definition
-                    .name()
-                    .map(|identifier| identifier.name())
-                    .unwrap_or_default();
                 let parameter_ids: Vec<NodeId> = function_definition
                     .parameters()
                     .iter()
                     .map(|parameter| parameter.node_id())
                     .collect();
                 let arguments = arguments.ordered_by(&parameter_ids);
-                let (mlir_name, argument_values, return_types, block) = context
-                    .emit_call_setup_expressions(function_definition, &arguments, block)
-                    .with_context(|| format!("resolving callee '{callee_name}'"))?;
+                let (mlir_name, argument_values, return_types, block) =
+                    context.emit_call_setup_expressions(function_definition, &arguments, block);
                 let results = context.state.builder.emit_sol_call_results(
                     mlir_name,
                     &argument_values,
                     return_types,
                     &block,
-                )?;
-                Ok((results, block))
+                );
+                (results, block)
             }
             // `S(a, b)` / `S({b: …, a: …})`: order the field initialisers by the
             // struct's member-declaration order, then store each.
@@ -259,7 +253,7 @@ impl CallKind {
                     let BlockAnd {
                         value: argument_value,
                         block: next_block,
-                    } = argument.emit(context, block)?;
+                    } = argument.emit(context, block);
                     block = next_block;
                     let stored = argument_value.coerce_to(
                         crate::ast::Type::new(field_type),
@@ -268,7 +262,7 @@ impl CallKind {
                     );
                     field_address.store(stored, builder, &block);
                 }
-                Ok((vec![struct_address], block))
+                (vec![struct_address], block)
             }
             // `x.f(...)` / `L.f(...)`: dispatched by the resolved member kind,
             // forwarding any `{value: …}` captured from the options.
@@ -303,7 +297,7 @@ impl CallKind {
                             expression: &first,
                             target_type,
                         })
-                        .emit(context, block)?;
+                        .emit(context, block);
                         let result = value
                             .coerce_to(
                                 crate::ast::Type::new(target_type),
@@ -311,12 +305,12 @@ impl CallKind {
                                 &block,
                             )
                             .into_mlir();
-                        Ok((vec![result], block))
+                        (vec![result], block)
                     }
                     Self::BuiltInIdentifier(built_in) => {
                         let (value, block) =
-                            self.emit_built_in_call(context, *built_in, arguments, block)?;
-                        Ok((value.into_iter().collect(), block))
+                            self.emit_built_in_call(context, *built_in, arguments, block);
+                        (value.into_iter().collect(), block)
                     }
                     Self::AbiDecode => self.emit_abi_decode(context, call, arguments, block),
                     Self::UdvtWrapUnwrap => {
@@ -324,7 +318,7 @@ impl CallKind {
                             .iter()
                             .next()
                             .expect("wrap/unwrap takes exactly one argument");
-                        let BlockAnd { value, block } = argument.emit(context, block)?;
+                        let BlockAnd { value, block } = argument.emit(context, block);
                         // A UDVT shares its underlying type's representation, so this
                         // is one conversion to the result type (none ⇒ already correct).
                         let result = match TypeConversion::resolve_optional_slang_type(
@@ -340,17 +334,17 @@ impl CallKind {
                                 .into_mlir(),
                             None => value.into_mlir(),
                         };
-                        Ok((vec![result], block))
+                        (vec![result], block)
                     }
                     Self::BuiltInMemberAccess(access) => {
                         let (value, block) =
-                            context.emit_built_in_member_access(access, Some(arguments), block)?;
-                        Ok((value.into_iter().collect(), block))
+                            context.emit_built_in_member_access(access, Some(arguments), block);
+                        (value.into_iter().collect(), block)
                     }
                     Self::New => {
                         let (value, block) =
-                            self.emit_new(context, call, arguments, call_value, salt, block)?;
-                        Ok((value.into_iter().collect(), block))
+                            self.emit_new(context, call, arguments, call_value, salt, block);
+                        (value.into_iter().collect(), block)
                     }
                     Self::IndirectPointer => {
                         let function_slang_type = callee
@@ -369,8 +363,8 @@ impl CallKind {
                             unreachable!("a bare low-level call has a member-access callee");
                         };
                         let (status, ret_data, block) =
-                            context.emit_bare_call(access, *kind, arguments, call_value, block)?;
-                        Ok((vec![status, ret_data], block))
+                            context.emit_bare_call(access, *kind, arguments, call_value, block);
+                        (vec![status, ret_data], block)
                     }
                     Self::LocalFunction(_) | Self::StructConstructor(_) | Self::Member(_) => {
                         unreachable!("handled in the outer match")

@@ -17,14 +17,6 @@ use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Emits a `sol.revert` for the call form `revert()` or `revert("message")`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the arguments are not positional, more than one
-    /// argument is supplied, the message argument is not a string literal, or
-    /// the message is empty (which would emit ambiguous bytecode under the
-    /// current Sol dialect; `revert()` is the no-data form).
-    ///
     /// # Returns
     ///
     /// Returns `Some(block)`: `sol.revert` is not a terminator, so the block
@@ -34,7 +26,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         &self,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+    ) -> Option<BlockRef<'context, 'block>> {
         let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
         else {
             unimplemented!("only positional arguments supported");
@@ -71,7 +63,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 let BlockAnd {
                     value: message_value,
                     block,
-                } = expression.emit(&emitter, block)?;
+                } = expression.emit(&emitter, block);
                 let builder = &self.state.builder;
                 let string_memory_type =
                     crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
@@ -83,7 +75,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 block
             }
         };
-        Ok(Some(block))
+        Some(block)
     }
 }
 
@@ -93,7 +85,7 @@ statement_emit!(RevertStatement; |node, context, block| {
     let error = match node.error().resolve_to_definition() {
         None => {
             context.state.builder.emit_sol_revert("", &[], false, &block);
-            return Ok(Some(block));
+            return Some(block);
         }
         Some(Definition::Error(error)) => error,
         Some(_) => unreachable!("slang resolves a revert target to an error definition"),
@@ -118,10 +110,10 @@ statement_emit!(RevertStatement; |node, context, block| {
         .collect();
     let emitter = ExpressionContext::from(&*context);
     let (values, block) =
-        emitter.emit_coerced_argument_expressions(&ordered, &parameter_types, block)?;
+        emitter.emit_coerced_argument_expressions(&ordered, &parameter_types, block);
     context
         .state
         .builder
         .emit_sol_revert(&signature, &values, true, &block);
-    Ok(Some(block))
+    Some(block)
 });

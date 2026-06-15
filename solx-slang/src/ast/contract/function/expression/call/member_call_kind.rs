@@ -109,6 +109,19 @@ impl MemberCallKind {
         }
     }
 
+    /// Whether a member-access operand `x` in `x.f(...)` is a namespace qualifier
+    /// — a library or import alias (`L.f` / `M.f`), which is not a value — rather
+    /// than a `using for` receiver, which becomes the implicit `self` argument.
+    pub fn is_namespace_qualifier(operand: &Expression) -> bool {
+        let Expression::Identifier(identifier) = operand else {
+            return false;
+        };
+        matches!(
+            identifier.resolve_to_definition(),
+            Some(Definition::Library(_) | Definition::Import(_) | Definition::ImportedSymbol(_))
+        )
+    }
+
     /// Lowers this kind to its result values (a getter / call may yield zero or more).
     pub fn emit<'state, 'context, 'block>(
         &self,
@@ -117,7 +130,7 @@ impl MemberCallKind {
         call_value: Option<Value<'context, 'block>>,
         arguments: &ArgumentsDeclaration,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         // `L.f(...)` / using-for `x.f(...)` onto an external library function is
         // the only member call that accepts named arguments; ordering against the
         // explicit parameters collapses the positional and named forms.
@@ -195,8 +208,8 @@ impl MemberCallKind {
                     &state_variable,
                     arguments,
                     block,
-                )?;
-                Ok((value.into_iter().collect(), block))
+                );
+                (value.into_iter().collect(), block)
             }
             Self::Library(LibraryVisibility::Internal) => {
                 let Some(Definition::Function(library_function)) =
@@ -217,19 +230,19 @@ impl MemberCallKind {
                     .expect("a super/base call has a recorded redirect target");
                 let argument_expressions: Vec<Expression> = arguments.iter().collect();
                 let (mlir_name, parameter_types, return_types) =
-                    context.state.resolve_function(target_id)?;
+                    context.state.resolve_function(target_id);
                 let (argument_values, current_block) = context.emit_coerced_argument_expressions(
                     &argument_expressions,
                     parameter_types,
                     block,
-                )?;
+                );
                 let results = context.state.builder.emit_sol_call_results(
                     mlir_name,
                     &argument_values,
                     return_types,
                     &current_block,
-                )?;
-                Ok((results, current_block))
+                );
+                (results, current_block)
             }
             Self::FunctionPointer => {
                 // `s.f` through a function-pointer field: the indirect-call path on

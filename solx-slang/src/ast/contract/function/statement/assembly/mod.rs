@@ -1,8 +1,8 @@
 //!
-//! Inline-assembly (Yul) statement lowering.
+//! Inline-assembly (Yul) statement emission.
 //!
 
-/// Yul EVM-opcode intrinsic lowering.
+/// Yul EVM-opcode intrinsic emission.
 pub mod intrinsic;
 
 use melior::ir::Block;
@@ -34,7 +34,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         &mut self,
         statement: &YulStatement,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+    ) -> BlockRef<'context, 'block> {
         match statement {
             YulStatement::YulVariableAssignmentStatement(assignment) => {
                 let expression = assignment.expression();
@@ -42,10 +42,10 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 if variables.len() != 1 {
                     return self.emit_yul_multi_assignment(&variables, &expression, block);
                 }
-                let (value, block) = self.emit_yul_expression(&expression, block)?;
+                let (value, block) = self.emit_yul_expression(&expression, block);
                 let path = variables.iter().next().expect("len checked to be 1 above");
                 self.emit_yul_store_to_path(&path, value, block);
-                Ok(block)
+                block
             }
             YulStatement::YulVariableDeclarationStatement(declaration) => {
                 let variables = declaration.variables();
@@ -55,11 +55,11 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                         let expression = value_node.expression();
                         if variables.len() > 1 {
                             let (values, next) =
-                                self.emit_yul_multi_call(&expression, variables.len(), current)?;
+                                self.emit_yul_multi_call(&expression, variables.len(), current);
                             current = next;
                             values.into_iter().map(Some).collect()
                         } else {
-                            let (value, next) = self.emit_yul_expression(&expression, current)?;
+                            let (value, next) = self.emit_yul_expression(&expression, current);
                             current = next;
                             vec![Some(value)]
                         }
@@ -76,18 +76,18 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     self.environment
                         .define_variable(identifier.node_id(), pointer);
                 }
-                Ok(current)
+                current
             }
             YulStatement::YulExpression(expression) => {
-                let (_value, block) = self.emit_yul_expression(expression, block)?;
-                Ok(block)
+                let (_value, block) = self.emit_yul_expression(expression, block);
+                block
             }
             YulStatement::YulIfStatement(if_statement) => {
                 let condition = if_statement.condition();
-                let (condition_value, block) = self.emit_yul_expression(&condition, block)?;
+                let (condition_value, block) = self.emit_yul_expression(&condition, block);
                 let then_block = self.state.builder.emit_yul_if(condition_value, &block);
-                self.emit_yul_body_in_region(then_block, &if_statement.body())?;
-                Ok(block)
+                self.emit_yul_body_in_region(then_block, &if_statement.body());
+                block
             }
             YulStatement::YulForStatement(for_statement) => {
                 self.environment.enter_scope();
@@ -96,7 +96,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 let mut current = block;
                 let mut init_terminated = false;
                 for inner in for_statement.initialization().statements().iter() {
-                    current = self.emit_yul_statement(&inner, current)?;
+                    current = self.emit_yul_statement(&inner, current);
                     if Self::is_terminating_yul_statement(&inner) {
                         init_terminated = true;
                         break;
@@ -104,7 +104,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 }
                 if init_terminated {
                     self.environment.exit_scope();
-                    return Ok(current);
+                    return current;
                 }
 
                 let (cond_block, body_block, step_block) =
@@ -116,44 +116,43 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
 
                 self.set_region(&cond_region);
                 let cond_expression = for_statement.condition();
-                let (cond_value, cond_end) =
-                    self.emit_yul_expression(&cond_expression, cond_block)?;
+                let (cond_value, cond_end) = self.emit_yul_expression(&cond_expression, cond_block);
                 self.state.builder.emit_yul_condition(cond_value, &cond_end);
                 self.region_pointer = saved_region;
 
-                self.emit_yul_body_in_region(body_block, &for_statement.body())?;
-                self.emit_yul_body_in_region(step_block, &for_statement.iterator())?;
+                self.emit_yul_body_in_region(body_block, &for_statement.body());
+                self.emit_yul_body_in_region(step_block, &for_statement.iterator());
 
                 self.environment.exit_scope();
-                Ok(current)
+                current
             }
             YulStatement::YulBlock(yul_block) => {
                 self.environment.enter_scope();
-                let current = self.emit_yul_statements_hoisted(yul_block, block)?;
+                let current = self.emit_yul_statements_hoisted(yul_block, block);
                 self.environment.exit_scope();
-                Ok(current)
+                current
             }
             YulStatement::YulFunctionDefinition(_) => {
                 // Pre-registered by the enclosing block's hoisting pre-pass.
-                Ok(block)
+                block
             }
             YulStatement::YulLeaveStatement(_) => {
                 // `leave` returns from the current Yul function. With the inline
                 // strategy there is no frame to pop; the inliner stops emitting
                 // a body at `leave`, so here it is a no-op.
-                Ok(block)
+                block
             }
             YulStatement::YulBreakStatement(_) => {
                 self.state.builder.emit_yul_break(&block);
-                Ok(block)
+                block
             }
             YulStatement::YulContinueStatement(_) => {
                 self.state.builder.emit_yul_continue(&block);
-                Ok(block)
+                block
             }
             YulStatement::YulSwitchStatement(switch_statement) => {
                 let expression = switch_statement.expression();
-                let (selector, current) = self.emit_yul_expression(&expression, block)?;
+                let (selector, current) = self.emit_yul_expression(&expression, block);
                 let mut value_cases = Vec::new();
                 let mut default_body = None;
                 for case in switch_statement.cases().iter() {
@@ -164,8 +163,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                         }
                     }
                 }
-                self.emit_yul_switch_chain(selector, &value_cases, default_body.as_ref(), current)?;
-                Ok(current)
+                self.emit_yul_switch_chain(selector, &value_cases, default_body.as_ref(), current);
+                current
             }
         }
     }
@@ -179,11 +178,11 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         &mut self,
         body: &YulBlock,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+    ) -> BlockRef<'context, 'block> {
         let mut current = block;
         let mut terminated = false;
         for inner in body.statements().iter() {
-            current = self.emit_yul_statement(&inner, current)?;
+            current = self.emit_yul_statement(&inner, current);
             if Self::is_terminating_yul_statement(&inner) {
                 terminated = true;
                 break;
@@ -198,7 +197,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         } else {
             self.state.builder.emit_yul_yield(&current);
         }
-        Ok(current)
+        current
     }
 
     /// Emits a Yul region body into the region owning `target_block` — an `if`
@@ -208,15 +207,14 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         &mut self,
         target_block: BlockRef<'context, 'block>,
         body: &YulBlock,
-    ) -> anyhow::Result<()> {
+    ) {
         let region = target_block
             .parent_region()
             .expect("block belongs to a region");
         let saved_region = self.region_pointer;
         self.set_region(&region);
-        self.emit_yul_region_statements(body, target_block)?;
+        self.emit_yul_region_statements(body, target_block);
         self.region_pointer = saved_region;
-        Ok(())
     }
 
     /// Emits a Yul block's statements with function-definition hoisting:
@@ -230,7 +228,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         &mut self,
         body: &YulBlock,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+    ) -> BlockRef<'context, 'block> {
         let saved_functions: Vec<String> = self.yul_functions.keys().cloned().collect();
         for statement in body.statements().iter() {
             if let YulStatement::YulFunctionDefinition(definition) = &statement {
@@ -243,7 +241,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             if matches!(statement, YulStatement::YulFunctionDefinition(_)) {
                 continue;
             }
-            current = self.emit_yul_statement(&statement, current)?;
+            current = self.emit_yul_statement(&statement, current);
             if Self::is_terminating_yul_statement(&statement) {
                 break;
             }
@@ -257,7 +255,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         for key in added {
             self.yul_functions.remove(&key);
         }
-        Ok(current)
+        current
     }
 
     /// Lowers a Yul `switch` to a single `yul.switch`: one region per value case
@@ -269,15 +267,15 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         value_cases: &[YulValueCase],
         default_body: Option<&YulBlock>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<()> {
+    ) {
         if value_cases.is_empty() {
             if let Some(default_body) = default_body {
                 let mut current = block;
                 for inner in default_body.statements().iter() {
-                    current = self.emit_yul_statement(&inner, current)?;
+                    current = self.emit_yul_statement(&inner, current);
                 }
             }
-            return Ok(());
+            return;
         }
 
         let case_values: Vec<BigInt> = value_cases
@@ -290,13 +288,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 .emit_yul_switch(selector, &case_values, &block);
 
         for (case, case_block) in value_cases.iter().zip(case_blocks) {
-            self.emit_yul_body_in_region(case_block, &case.body())?;
+            self.emit_yul_body_in_region(case_block, &case.body());
         }
         match default_body {
-            Some(default_body) => self.emit_yul_body_in_region(default_block, default_body)?,
+            Some(default_body) => self.emit_yul_body_in_region(default_block, default_body),
             None => self.state.builder.emit_yul_yield(&default_block),
         }
-        Ok(())
     }
 
     /// Emits one Yul expression — an exhaustive 3-arm `match` over
@@ -308,12 +305,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         &mut self,
         expression: &YulExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         match expression {
             YulExpression::YulLiteral(literal) => {
                 let word = literal.value();
                 let constant = self.state.builder.emit_yul_constant(&word, &block);
-                Ok((constant, block))
+                (constant, block)
             }
             YulExpression::YulPath(path) => self.emit_yul_path(path, block),
             YulExpression::YulFunctionCallExpression(call) => {
@@ -326,7 +323,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     vec![None; argument_nodes.len()];
                 let mut current = block;
                 for (index, argument) in argument_nodes.iter().enumerate().rev() {
-                    let (value, next) = self.emit_yul_expression(argument, current)?;
+                    let (value, next) = self.emit_yul_expression(argument, current);
                     arguments[index] = Some(value);
                     current = next;
                 }
@@ -352,7 +349,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         &self,
         path: &YulPath,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let identifier = path.iter().next().expect("empty yul path");
         let builder = &self.state.builder;
         let i256 =
@@ -365,11 +362,11 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         {
             let initializer = constant.value().expect("constant has no initializer");
             let emitter = ExpressionContext::from(self);
-            let BlockAnd { value, block } = initializer.emit(&emitter, block)?;
+            let BlockAnd { value, block } = initializer.emit(&emitter, block);
             let widened = value
                 .cast(crate::ast::Type::new(i256), builder, &block)
                 .into_mlir();
-            return Ok((widened, block));
+            return (widened, block);
         }
 
         // `stateVar.slot` / `stateVar.offset`: the slot index / in-slot byte
@@ -390,12 +387,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                             num_bigint::Sign::Plus,
                             &slot.slot.to_be_bytes_vec(),
                         );
-                        return Ok((builder.emit_yul_constant(&slot_word, &block), block));
+                        return (builder.emit_yul_constant(&slot_word, &block), block);
                     }
                     Some(BuiltIn::YulOffset) => {
                         let offset =
                             builder.emit_yul_constant(&BigInt::from(slot.byte_offset), &block);
-                        return Ok((offset, block));
+                        return (offset, block);
                     }
                     _ => {}
                 }
@@ -419,13 +416,13 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                         let pointer = self.environment.variable(declaration);
                         let llvm_pointer = self.yul_local_pointer(pointer, &block);
                         let value = builder.emit_yul_local_load(llvm_pointer, &block);
-                        return Ok((value, block));
+                        return (value, block);
                     }
                     Some(BuiltIn::YulOffset) => {
-                        return Ok((
+                        return (
                             builder.emit_yul_constant(&BigInt::from(0u32), &block),
                             block,
-                        ));
+                        );
                     }
                     _ => {}
                 }
@@ -439,7 +436,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         let pointer = self.environment.variable(declaration);
         let llvm_pointer = self.yul_local_pointer(pointer, &block);
         let value = builder.emit_yul_local_load(llvm_pointer, &block);
-        Ok((value, block))
+        (value, block)
     }
 
     /// Whether a Yul statement terminates its region (`break` / `continue`);
@@ -459,14 +456,14 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         name: &str,
         arguments: &[Value<'context, 'block>],
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (returns, body_block) = self.emit_yul_inline(name, arguments, block)?;
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
+        let (returns, body_block) = self.emit_yul_inline(name, arguments, block);
         let result = returns.into_iter().next().unwrap_or_else(|| {
             self.state
                 .builder
                 .emit_yul_constant(&BigInt::from(0u32), &body_block)
         });
-        Ok((result, body_block))
+        (result, body_block)
     }
 
     /// Emits a call of a user-defined Yul function returning every declared
@@ -476,7 +473,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         name: &str,
         arguments: &[Value<'context, 'block>],
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         self.emit_yul_inline(name, arguments, block)
     }
 
@@ -493,7 +490,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         name: &str,
         arguments: &[Value<'context, 'block>],
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let depth = self.yul_inline_depth.entry(name.to_string()).or_insert(0);
         if *depth >= 1 {
             unimplemented!("recursive yul function `{name}` cannot be inlined");
@@ -555,7 +552,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             if matches!(inner, YulStatement::YulLeaveStatement(_)) {
                 break;
             }
-            current = self.emit_yul_statement(&inner, current)?;
+            current = self.emit_yul_statement(&inner, current);
             if Self::is_terminating_yul_statement(&inner) {
                 break;
             }
@@ -574,7 +571,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         if let Some(depth) = self.yul_inline_depth.get_mut(name) {
             *depth = depth.saturating_sub(1);
         }
-        Ok((return_values, current))
+        (return_values, current)
     }
 
     /// Reinterprets a variable's slot pointer as the `!llvm.ptr` that Yul
@@ -621,12 +618,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         variables: &slang_solidity_v2::ast::YulPaths,
         expression: &YulExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        let (values, current) = self.emit_yul_multi_call(expression, variables.len(), block)?;
+    ) -> BlockRef<'context, 'block> {
+        let (values, current) = self.emit_yul_multi_call(expression, variables.len(), block);
         for (path, value) in variables.iter().zip(values) {
             self.emit_yul_store_to_path(&path, value, current);
         }
-        Ok(current)
+        current
     }
 
     /// Evaluates a multi-result Yul call (the RHS of a multi-target `let` or
@@ -637,7 +634,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         expression: &YulExpression,
         expected: usize,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let YulExpression::YulFunctionCallExpression(call) = expression else {
             unreachable!("multi-value yul binding requires a call RHS");
         };
@@ -651,17 +648,17 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         let mut arguments = Vec::new();
         let mut current = block;
         for argument in call.arguments().iter() {
-            let (value, next) = self.emit_yul_expression(&argument, current)?;
+            let (value, next) = self.emit_yul_expression(&argument, current);
             arguments.push(value);
             current = next;
         }
-        let (values, current) = self.emit_yul_user_call_multi(&callee, &arguments, current)?;
+        let (values, current) = self.emit_yul_user_call_multi(&callee, &arguments, current);
         assert!(
             values.len() == expected,
             "yul binding arity mismatch: {expected} targets vs {} results",
             values.len(),
         );
-        Ok((values, current))
+        (values, current)
     }
 }
 
@@ -669,6 +666,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
 // function-definition hoisting (emit_yul_statements_hoisted) while reusing the
 // enclosing function scope (no nested lexical scope).
 statement_emit!(AssemblyStatement; |node, context, block| {
-    let current_block = context.emit_yul_statements_hoisted(&node.body(), block)?;
-    Ok(Some(current_block))
+    let current_block = context.emit_yul_statements_hoisted(&node.body(), block);
+    Some(current_block)
 });

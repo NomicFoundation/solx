@@ -1,5 +1,5 @@
 //!
-//! Yul EVM-opcode intrinsic lowering.
+//! Yul EVM-opcode intrinsic emission.
 //!
 
 use melior::ir::BlockLike;
@@ -36,7 +36,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         opcode: BuiltIn,
         arguments: &[Value<'context, 'block>],
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let builder = &self.state.builder;
         let context = builder.context;
         let loc = builder.unknown_location;
@@ -53,7 +53,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     .result(0)
                     .expect("yul value op produces one result")
                     .into();
-                Ok((value, block))
+                (value, block)
             }};
         }
         // A Yul effect op (no result): build it, then yield the first operand as
@@ -61,7 +61,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         macro_rules! yul_effect {
             ($operation:ty $(, $setter:ident = $argument:expr)* $(,)?) => {{
                 block.append_operation(<$operation>::builder(context, loc)$(.$setter($argument))*.build().into());
-                Ok((arguments[0], block))
+                (arguments[0], block)
             }};
         }
         // A no-operand Yul context op producing one `i256` word.
@@ -72,14 +72,14 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     .result(0)
                     .expect("yul context op produces one result")
                     .into();
-                Ok((value, block))
+                (value, block)
             }};
         }
         // A comparison `yul.cmp <predicate>, lhs, rhs`.
         let cmp = |predicate: YulCmpPredicate,
                    lhs: Value<'context, 'block>,
                    rhs: Value<'context, 'block>| {
-            Ok((builder.emit_yul_cmp(predicate, lhs, rhs, &block), block))
+            (builder.emit_yul_cmp(predicate, lhs, rhs, &block), block)
         };
 
         match opcode {
@@ -308,7 +308,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     .result(0)
                     .expect("yul.call produces one result")
                     .into();
-                Ok((status, block))
+                (status, block)
             }
             BuiltIn::YulStaticcall => yul_value!(
                 yul::StaticCallOperation,
@@ -356,7 +356,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                         .build()
                         .into(),
                 );
-                Ok((arguments[0], block))
+                (arguments[0], block)
             }
 
             // ---- Terminators / effects (raw memory spans) ----
@@ -376,21 +376,21 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             }
             BuiltIn::YulStop => {
                 block.append_operation(yul::StopOperation::builder(context, loc).build().into());
-                Ok((
+                (
                     builder.emit_yul_constant(&BigInt::from(0u32), &block),
                     block,
-                ))
+                )
             }
             BuiltIn::YulInvalid => {
                 block.append_operation(yul::InvalidOperation::builder(context, loc).build().into());
-                Ok((
+                (
                     builder.emit_yul_constant(&BigInt::from(0u32), &block),
                     block,
-                ))
+                )
             }
 
             // ---- `pop(x)`: evaluate-and-discard (the argument is already emitted) ----
-            BuiltIn::YulPop => Ok((arguments[0], block)),
+            BuiltIn::YulPop => (arguments[0], block),
 
             _ => unimplemented!("unsupported yul intrinsic: {opcode:?}"),
         }

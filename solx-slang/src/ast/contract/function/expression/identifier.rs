@@ -1,5 +1,5 @@
 //!
-//! Identifier expression lowering: a bare name resolved to its definition.
+//! Identifier expression emission: a bare name resolved to its definition.
 //!
 
 use melior::ir::BlockLike;
@@ -22,17 +22,18 @@ expression_emit!(Identifier; |node, context, block| {
     // inlining its initializer, a function as an internal function pointer, and
     // a library name as its linked deploy address.
     match node.resolve_to_definition() {
-        Some(Definition::StateVariable(state_variable)) => context
-            .emit_state_variable_read(&state_variable, block)
-            .map(|(value, block)| BlockAnd {
+        Some(Definition::StateVariable(state_variable)) => {
+            let (value, block) = context.emit_state_variable_read(&state_variable, block);
+            BlockAnd {
                 block,
                 value: value.into(),
-            }),
+            }
+        }
         Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
             let pointer =
                 crate::ast::Pointer::new(context.environment.variable(definition.node_id()));
             let value = pointer.load(pointer.pointee(), &context.state.builder, &block);
-            Ok(BlockAnd { block, value })
+            BlockAnd { block, value }
         }
         Some(Definition::Constant(constant)) => {
             let initializer = constant
@@ -40,12 +41,13 @@ expression_emit!(Identifier; |node, context, block| {
                 .expect("a Solidity constant has an initializer");
             initializer.emit(context, block)
         }
-        Some(Definition::Function(function_definition)) => context
-            .emit_internal_function_pointer(&function_definition, block)
-            .map(|(value, block)| BlockAnd {
+        Some(Definition::Function(function_definition)) => {
+            let (value, block) = context.emit_internal_function_pointer(&function_definition, block);
+            BlockAnd {
                 block,
                 value: value.into(),
-            }),
+            }
+        }
         Some(Definition::Library(library)) => {
             // A library name used as a value (`address(L)`) is its linked deploy
             // address, placed by its link symbol.
@@ -57,10 +59,10 @@ expression_emit!(Identifier; |node, context, block| {
                     ._name(StringAttribute::new(builder.context, &library.link_symbol()))
                     .val(crate::ast::Type::address(builder.context, false).into_mlir())
             );
-            Ok(BlockAnd {
+            BlockAnd {
                 block,
                 value: value.into(),
-            })
+            }
         }
         None => unreachable!("slang resolves every identifier reference"),
         Some(other) => {

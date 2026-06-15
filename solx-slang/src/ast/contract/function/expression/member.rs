@@ -1,7 +1,7 @@
 //!
 //! Member access expression emission: `base.member`. Routes a namespace-
 //! qualified state-variable / constant read, a struct field read, and a
-//! built-in member access; the struct-field address helper is shared with the
+//! built-in member access; the struct-field address routine is shared with the
 //! lvalue write path.
 //!
 
@@ -29,11 +29,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
+    ) -> (
         Value<'context, 'block>,
         Type<'context>,
         BlockRef<'context, 'block>,
-    )> {
+    ) {
         let base = access.operand();
         let Some(SlangType::Struct(struct_type)) = base.get_type() else {
             unreachable!("emit_struct_field_address is only called for a struct base");
@@ -61,7 +61,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let BlockAnd {
             value: base_value,
             block,
-        } = base.emit(self, block)?;
+        } = base.emit(self, block);
         let builder = &self.state.builder;
 
         let index_value = crate::ast::Value::constant(
@@ -70,7 +70,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             builder,
             &block,
         );
-        // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
+        // `mlirSolGetEltType` returns a valid MlirType from
         // `sol::getEltType` on the C++ side.
         let element_type = unsafe {
             Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
@@ -87,7 +87,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 &block,
             )
             .into_mlir();
-        Ok((address, element_type, block))
+        (address, element_type, block)
     }
 }
 
@@ -110,12 +110,11 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
     {
         match node.member().resolve_to_definition() {
             Some(Definition::StateVariable(state_variable)) => {
-                return context
-                    .emit_state_variable_read(&state_variable, block)
-                    .map(|(value, block)| BlockAnd {
-                        block,
-                        value: value.into(),
-                    });
+                let (value, block) = context.emit_state_variable_read(&state_variable, block);
+                return BlockAnd {
+                    block,
+                    value: value.into(),
+                };
             }
             Some(Definition::Constant(constant)) => {
                 let initializer = constant
@@ -130,20 +129,20 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
     // (e.g. `msg.sender`, `addr.balance`) is a built-in member access.
     if matches!(node.operand().get_type(), Some(SlangType::Struct(_))) {
         // Address the field (`sol.gep`) and `sol.load` it.
-        let (address, element_type, block) = context.emit_struct_field_address(node, block)?;
+        let (address, element_type, block) = context.emit_struct_field_address(node, block);
         let value = crate::ast::Pointer::new(address).load(
             crate::ast::Type::new(element_type),
             &context.state.builder,
             &block,
         );
-        Ok(BlockAnd { block, value })
+        BlockAnd { block, value }
     } else {
         // `msg.sender`, `addr.balance`, `arr.length`: a built-in member access,
         // which in value position always yields a value.
-        let (value, block) = context.emit_built_in_member_access(node, None, block)?;
-        Ok(BlockAnd {
+        let (value, block) = context.emit_built_in_member_access(node, None, block);
+        BlockAnd {
             block,
             value: value.expect("a bare member access yields a value").into(),
-        })
+        }
     }
 });

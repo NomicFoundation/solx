@@ -120,9 +120,9 @@ impl Operator {
         function_id: NodeId,
         argument_values: Vec<crate::ast::Value<'context, 'block>>,
         block: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Value<'context, 'block>> {
+    ) -> Value<'context, 'block> {
         let (mlir_name, parameter_types, return_types) =
-            context.state.resolve_function(function_id)?;
+            context.state.resolve_function(function_id);
         let argument_values: Vec<_> = argument_values
             .into_iter()
             .zip(parameter_types)
@@ -141,11 +141,11 @@ impl Operator {
             &argument_values,
             return_types,
             block,
-        )?;
-        Ok(results
+        );
+        results
             .into_iter()
             .next()
-            .expect("a user-defined operator returns one value"))
+            .expect("a user-defined operator returns one value")
     }
 
     /// Builds a Sol dialect binary operation via ODS-generated builders.
@@ -154,11 +154,6 @@ impl Operator {
     /// `sol.csub`, `sol.cmul`, `sol.cdiv`, `sol.cexp`) for arithmetic operators.
     /// Modulo, bitwise, and shift operators are always unchecked. Result type is
     /// inferred from `lhs` (`SameOperandsAndResultType`).
-    ///
-    /// # Panics
-    ///
-    /// Panics if called on a unary-only operator (`Not` / `BitwiseNot`), which
-    /// the prefix emitter handles instead.
     pub fn emit_sol_binary_operation<'context>(
         self,
         mode: ArithmeticMode,
@@ -226,21 +221,21 @@ impl Operator {
         right: &Expression,
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
+    ) -> (
         crate::ast::Value<'context, 'block>,
         BlockRef<'context, 'block>,
-    )> {
+    ) {
         if let Some(function_id) = OperatorBindings::binary_operator(self)
             .and_then(|user_operator| Self::user_defined_operator(context, left, user_operator))
         {
-            let BlockAnd { value: lhs, block } = left.emit(context, block)?;
-            let BlockAnd { value: rhs, block } = right.emit(context, block)?;
-            let result = Self::emit_operator_call(context, function_id, vec![lhs, rhs], &block)?;
-            return Ok((result.into(), block));
+            let BlockAnd { value: lhs, block } = left.emit(context, block);
+            let BlockAnd { value: rhs, block } = right.emit(context, block);
+            let result = Self::emit_operator_call(context, function_id, vec![lhs, rhs], &block);
+            return (result.into(), block);
         }
 
-        let BlockAnd { value: rhs, block } = right.emit(context, block)?;
-        let BlockAnd { value: lhs, block } = left.emit(context, block)?;
+        let BlockAnd { value: rhs, block } = right.emit(context, block);
+        let BlockAnd { value: lhs, block } = left.emit(context, block);
         let result_type = target_type.unwrap_or_else(|| {
             let lhs_width = lhs.r#type().integer_bit_width();
             let rhs_width = rhs.r#type().integer_bit_width();
@@ -258,7 +253,7 @@ impl Operator {
             result_type,
             &block,
         );
-        Ok((value, block))
+        (value, block)
     }
 
     /// Combines already-materialised `lhs`/`rhs` into a value of `result_type`.
@@ -341,17 +336,17 @@ impl Operator {
         context: &ExpressionContext<'_, 'context, 'block>,
         operand: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
+    ) -> (
         crate::ast::Value<'context, 'block>,
         BlockRef<'context, 'block>,
-    )> {
+    ) {
         if let Some((old, _new, block)) =
-            self.emit_increment_decrement_indexed(context, operand, block)?
+            self.emit_increment_decrement_indexed(context, operand, block)
         {
-            return Ok((old.into(), block));
+            return (old.into(), block);
         }
-        let (old, _) = self.emit_increment_decrement(context, operand, &block)?;
-        Ok((old.into(), block))
+        let (old, _) = self.emit_increment_decrement(context, operand, &block);
+        (old.into(), block)
     }
 
     /// Emits prefix operators: `!`, `-`, `~`, `++`, `--`.
@@ -367,30 +362,30 @@ impl Operator {
         operand: &Expression,
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
+    ) -> (
         crate::ast::Value<'context, 'block>,
         BlockRef<'context, 'block>,
-    )> {
+    ) {
         if let Some(function_id) = OperatorBindings::unary_operator(self)
             .and_then(|user_operator| Self::user_defined_operator(context, operand, user_operator))
         {
-            let BlockAnd { value, block } = operand.emit(context, block)?;
-            let result = Self::emit_operator_call(context, function_id, vec![value], &block)?;
-            return Ok((result.into(), block));
+            let BlockAnd { value, block } = operand.emit(context, block);
+            let result = Self::emit_operator_call(context, function_id, vec![value], &block);
+            return (result.into(), block);
         }
 
         match self {
             Operator::Increment | Operator::Decrement => {
                 if let Some((_old, new_value, block)) =
-                    self.emit_increment_decrement_indexed(context, operand, block)?
+                    self.emit_increment_decrement_indexed(context, operand, block)
                 {
-                    return Ok((new_value.into(), block));
+                    return (new_value.into(), block);
                 }
-                let (_old, new_value) = self.emit_increment_decrement(context, operand, &block)?;
-                Ok((new_value.into(), block))
+                let (_old, new_value) = self.emit_increment_decrement(context, operand, &block);
+                (new_value.into(), block)
             }
             Operator::BitwiseNot => {
-                let BlockAnd { value, block } = operand.emit(context, block)?;
+                let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.unwrap_or_else(|| value.r#type().into_mlir());
                 let value = value.coerce_to(
                     crate::ast::Type::new(operand_type),
@@ -423,10 +418,10 @@ impl Operator {
                         .into_mlir(),
                     None => result,
                 };
-                Ok((result.into(), block))
+                (result.into(), block)
             }
             Operator::Not => {
-                let BlockAnd { value, block } = operand.emit(context, block)?;
+                let BlockAnd { value, block } = operand.emit(context, block);
                 let zero =
                     crate::ast::Value::constant(0, value.r#type(), &context.state.builder, &block);
                 let cmp = value.compare(zero, CmpPredicate::Eq, &context.state.builder, &block);
@@ -442,14 +437,14 @@ impl Operator {
                     &context.state.builder,
                     &block,
                 );
-                Ok((result, block))
+                (result, block)
             }
             Operator::Subtract => {
                 // Unary negation uses unchecked subtraction. Checked negation
                 // requires signed-type awareness (e.g. -INT_MIN should revert
                 // in checked mode) which needs a dedicated op — not sol.csub,
                 // since the operand may be in an unsigned literal type.
-                let BlockAnd { value, block } = operand.emit(context, block)?;
+                let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.unwrap_or_else(|| value.r#type().into_mlir());
                 let value = value
                     .coerce_to(
@@ -470,7 +465,7 @@ impl Operator {
                     block,
                     SubOperation.lhs(zero).rhs(value)
                 );
-                Ok((result.into(), block))
+                (result.into(), block)
             }
             _ => unimplemented!("unsupported prefix operator: {self:?}"),
         }
@@ -483,7 +478,7 @@ impl Operator {
         context: &ExpressionContext<'_, 'context, 'block>,
         operand: &Expression,
         block: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, Value<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, Value<'context, 'block>) {
         let Expression::Identifier(identifier) = operand else {
             unimplemented!("unsupported operand for {self:?}");
         };
@@ -499,11 +494,11 @@ impl Operator {
                 let element_type = TypeConversion::resolve_state_variable_type(
                     &state_variable,
                     &context.state.builder,
-                )?;
-                let old = slot.load(&context.state.builder, element_type, block)?;
+                );
+                let old = slot.load(&context.state.builder, element_type, block);
                 let new_value = self.emit_step(context, old, element_type, block);
                 slot.store(&context.state.builder, new_value, element_type, block);
-                Ok((old, new_value))
+                (old, new_value)
             }
             Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
                 let pointer =
@@ -518,7 +513,7 @@ impl Operator {
                     &context.state.builder,
                     block,
                 );
-                Ok((old, new_value))
+                (old, new_value)
             }
             None => unreachable!("slang resolves every identifier reference"),
             Some(other) => {
@@ -535,21 +530,19 @@ impl Operator {
         context: &ExpressionContext<'_, 'context, 'block>,
         operand: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<
-        Option<(
-            Value<'context, 'block>,
-            Value<'context, 'block>,
-            BlockRef<'context, 'block>,
-        )>,
-    > {
+    ) -> Option<(
+        Value<'context, 'block>,
+        Value<'context, 'block>,
+        BlockRef<'context, 'block>,
+    )> {
         let (address, element_type, block) = match operand {
             Expression::IndexAccessExpression(index_access) => {
-                context.emit_index_access_address(index_access, block)?
+                context.emit_index_access_address(index_access, block)
             }
             Expression::MemberAccessExpression(access) => {
-                context.emit_struct_field_address(access, block)?
+                context.emit_struct_field_address(access, block)
             }
-            _ => return Ok(None),
+            _ => return None,
         };
         let pointer = crate::ast::Pointer::new(address);
         let old = pointer
@@ -565,7 +558,7 @@ impl Operator {
             &context.state.builder,
             &block,
         );
-        Ok(Some((old, new_value, block)))
+        Some((old, new_value, block))
     }
 
     /// Applies the `++` / `--` step to a loaded value: adds or subtracts a typed

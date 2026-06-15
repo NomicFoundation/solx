@@ -71,26 +71,21 @@ impl TryExternalCall {
 
     /// Emits this external call with `try` semantics, returning the success
     /// status flag, the decoded results, and the continuation block.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if a subexpression or the call op cannot be emitted.
     pub fn emit<'state, 'context, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
+    ) -> (
         Value<'context, 'block>,
         Vec<Value<'context, 'block>>,
         BlockRef<'context, 'block>,
-    )> {
+    ) {
         // A `recv.f{value: v}(args)` forwards `v` as msg.value; gas/salt follow the
         // same drop/forward rule as a normal call.
         let mut current_block = block;
         let mut call_value = None;
         if let Some(options) = &self.options {
-            let (value, _salt, next_block) =
-                context.capture_call_options(options, current_block)?;
+            let (value, _salt, next_block) = context.capture_call_options(options, current_block);
             current_block = next_block;
             call_value = value;
         }
@@ -102,9 +97,9 @@ impl TryExternalCall {
         let BlockAnd {
             value: receiver,
             block: current_block,
-        } = self.access.operand().emit(context, current_block)?;
+        } = self.access.operand().emit(context, current_block);
         let (argument_values, current_block) =
-            context.emit_coerced_arguments(&self.arguments, &parameter_types, current_block)?;
+            context.emit_coerced_arguments(&self.arguments, &parameter_types, current_block);
         let callee = context.emit_external_callee(
             receiver.into_mlir(),
             self.selector,
@@ -128,7 +123,7 @@ impl TryExternalCall {
             &return_types,
             value,
             &current_block,
-        )?;
-        Ok((status, results, current_block))
+        );
+        (status, results, current_block)
     }
 }

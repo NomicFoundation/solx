@@ -31,23 +31,23 @@ impl MemberCallKind {
         library_function: &FunctionDefinition,
         positional_arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let (mlir_name, parameter_types, return_types) =
-            context.state.resolve_function(library_function.node_id())?;
+            context.state.resolve_function(library_function.node_id());
         // A `using for` receiver (`x.f(args)`) is a value and becomes the
         // implicit `self` — the function's first parameter; a namespace qualifier
         // — a library (`L.f`) or import alias (`M.f`) — is not a value, so only
         // the explicit arguments pass.
-        if access.operand().is_namespace_qualifier() {
+        if MemberCallKind::is_namespace_qualifier(&access.operand()) {
             let (argument_values, current_block) =
-                context.emit_coerced_arguments(positional_arguments, parameter_types, block)?;
+                context.emit_coerced_arguments(positional_arguments, parameter_types, block);
             let results = context.state.builder.emit_sol_call_results(
                 mlir_name,
                 &argument_values,
                 return_types,
                 &current_block,
-            )?;
-            return Ok((results, current_block));
+            );
+            return (results, current_block);
         }
 
         // Using-for: evaluate the receiver as the leading `self` argument, coerce
@@ -59,7 +59,7 @@ impl MemberCallKind {
         let BlockAnd {
             value: self_value,
             block: current_block,
-        } = access.operand().emit(context, block)?;
+        } = access.operand().emit(context, block);
         let builder = &context.state.builder;
         let self_value = self_value
             .coerce_to(
@@ -69,20 +69,20 @@ impl MemberCallKind {
             )
             .into_mlir();
         let (mut argument_values, current_block) =
-            context.emit_coerced_arguments(positional_arguments, parameter_rest, current_block)?;
+            context.emit_coerced_arguments(positional_arguments, parameter_rest, current_block);
         argument_values.insert(0, self_value);
         let results = context.state.builder.emit_sol_call_results(
             mlir_name,
             &argument_values,
             return_types,
             &current_block,
-        )?;
-        Ok((results, current_block))
+        );
+        (results, current_block)
     }
 
     /// Emits an external (`Library { external: true }`) library call — a
     /// `delegatecall` to the deployed library via the native `sol.ext_call`
-    /// (with `delegate_call` + `library_call` flags), whose lowering owns the ABI
+    /// (with `delegate_call` + `library_call` flags), whose conversion owns the ABI
     /// encode, the delegatecall, the revert-bubble, and the result decode. The
     /// library address is a `sol.lib_addr` link placeholder; a `using for`
     /// receiver becomes the implicit leading `self` argument.
@@ -94,7 +94,7 @@ impl MemberCallKind {
         arguments: &[Expression],
         self_receiver: Option<&Expression>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let (parameter_types, return_types) = function
             .resolve_signature_types(LocationPolicy::Declared(None), &context.state.builder);
         let selector = function
@@ -110,19 +110,17 @@ impl MemberCallKind {
                 let BlockAnd {
                     value: self_value,
                     block,
-                } = receiver.emit(context, block)?;
+                } = receiver.emit(context, block);
                 let builder = &context.state.builder;
                 let self_value = self_value
                     .coerce_to(crate::ast::Type::new(*parameter_self), builder, &block)
                     .into_mlir();
                 let (mut rest_values, block) =
-                    context.emit_coerced_argument_expressions(arguments, parameter_rest, block)?;
+                    context.emit_coerced_argument_expressions(arguments, parameter_rest, block);
                 rest_values.insert(0, self_value);
                 (rest_values, block)
             }
-            None => {
-                context.emit_coerced_argument_expressions(arguments, &parameter_types, block)?
-            }
+            None => context.emit_coerced_argument_expressions(arguments, &parameter_types, block),
         };
 
         let builder = &context.state.builder;
@@ -142,6 +140,6 @@ impl MemberCallKind {
             callee_type,
             &current_block,
         );
-        Ok((results, current_block))
+        (results, current_block)
     }
 }

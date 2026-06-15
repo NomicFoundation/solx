@@ -42,7 +42,7 @@ impl CallKind {
         value: Option<Value<'context, 'block>>,
         salt: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let slang_type = call.get_type();
         // `new T[](n)` / `new bytes(n)` / `new string(n)` allocate a dynamic
         // memory aggregate of `n` elements/bytes via a zeroed `sol.malloc`, the
@@ -70,7 +70,7 @@ impl CallKind {
             _ => None,
         };
         if let Some(result_type) = dynamic_result_type {
-            let (values, current_block) = context.emit_argument_values(arguments, block)?;
+            let (values, current_block) = context.emit_argument_values(arguments, block);
             let builder = &context.state.builder;
             let address = match values.first() {
                 Some(&size_value) => {
@@ -101,7 +101,7 @@ impl CallKind {
                         .zero_init(Attribute::unit(builder.context))
                 ),
             };
-            return Ok((Some(address), current_block));
+            return (Some(address), current_block);
         }
 
         // Contract creation: `new C(args)` lowers to `sol.new`, which embeds
@@ -130,8 +130,7 @@ impl CallKind {
                     .0
             })
             .unwrap_or_default();
-        let (ctor_args, block) =
-            context.emit_coerced_arguments(arguments, &parameter_types, block)?;
+        let (ctor_args, block) = context.emit_coerced_arguments(arguments, &parameter_types, block);
         let builder = &context.state.builder;
         let result_type =
             crate::ast::Type::contract(builder.context, &contract_name, payable).into_mlir();
@@ -175,6 +174,6 @@ impl CallKind {
             .result(0)
             .expect("sol.new always produces one result")
             .into();
-        Ok((Some(value), block))
+        (Some(value), block)
     }
 }

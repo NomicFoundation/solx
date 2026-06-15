@@ -73,7 +73,7 @@ impl<'context> Type<'context> {
 
     /// A `sol::AddressType` with the given payability.
     pub fn address(context: &'context melior::Context, payable: bool) -> Self {
-        // SAFETY: `solxCreateAddressType` returns a valid MlirType from the
+        // `solxCreateAddressType` returns a valid MlirType from the
         // C++ Sol dialect. The context pointer is valid.
         Self::new(unsafe {
             MlirType::from_raw(crate::ffi::solxCreateAddressType(context.to_raw(), payable))
@@ -86,7 +86,7 @@ impl<'context> Type<'context> {
         element_type: MlirType<'context>,
         location: solx_utils::DataLocation,
     ) -> Self {
-        // SAFETY: `solxCreatePointerType` returns a valid MlirType from the
+        // `solxCreatePointerType` returns a valid MlirType from the
         // C++ Sol dialect. The context and element type pointers are valid.
         Self::new(unsafe {
             MlirType::from_raw(crate::ffi::solxCreatePointerType(
@@ -100,7 +100,7 @@ impl<'context> Type<'context> {
     /// A `sol::ContractType` for the named contract with the given payability.
     pub fn contract(context: &'context melior::Context, name: &str, payable: bool) -> Self {
         let name_bytes = name.as_bytes();
-        // SAFETY: `solxCreateContractType` returns a valid MlirType from the
+        // `solxCreateContractType` returns a valid MlirType from the
         // C++ Sol dialect. The context pointer and the name byte range are
         // valid for the duration of the call.
         Self::new(unsafe {
@@ -116,7 +116,7 @@ impl<'context> Type<'context> {
     /// A `sol::StringType` at the given data location (`bytes` and `string`
     /// share `!sol.string`).
     pub fn string(context: &'context melior::Context, location: solx_utils::DataLocation) -> Self {
-        // SAFETY: `solxCreateStringType` returns a valid MlirType from the
+        // `solxCreateStringType` returns a valid MlirType from the
         // C++ Sol dialect. The context pointer is valid.
         Self::new(unsafe {
             MlirType::from_raw(crate::ffi::solxCreateStringType(
@@ -128,7 +128,7 @@ impl<'context> Type<'context> {
 
     /// A `sol::FixedBytesType` of the given byte width.
     pub fn fixed_bytes(context: &'context melior::Context, width: u32) -> Self {
-        // SAFETY: `solxCreateFixedBytesType` returns a valid MlirType from
+        // `solxCreateFixedBytesType` returns a valid MlirType from
         // the C++ Sol dialect. The context pointer is valid.
         Self::new(unsafe {
             MlirType::from_raw(crate::ffi::solxCreateFixedBytesType(
@@ -145,7 +145,7 @@ impl<'context> Type<'context> {
         element_type: MlirType<'context>,
         location: solx_utils::DataLocation,
     ) -> Self {
-        // SAFETY: `solxCreateArrayType` returns a valid MlirType from the
+        // `solxCreateArrayType` returns a valid MlirType from the
         // C++ Sol dialect. The context and element type pointers are valid.
         Self::new(unsafe {
             MlirType::from_raw(crate::ffi::solxCreateArrayType(
@@ -163,7 +163,7 @@ impl<'context> Type<'context> {
         key_type: MlirType<'context>,
         value_type: MlirType<'context>,
     ) -> Self {
-        // SAFETY: `solxCreateMappingType` returns a valid MlirType from the
+        // `solxCreateMappingType` returns a valid MlirType from the
         // C++ Sol dialect. The context, key, and value type pointers are valid.
         Self::new(unsafe {
             MlirType::from_raw(crate::ffi::solxCreateMappingType(
@@ -181,7 +181,7 @@ impl<'context> Type<'context> {
         location: solx_utils::DataLocation,
     ) -> Self {
         let raw_types: Vec<mlir_sys::MlirType> = member_types.iter().map(|t| t.to_raw()).collect();
-        // SAFETY: `solxCreateStructType` returns a valid MlirType from the
+        // `solxCreateStructType` returns a valid MlirType from the
         // C++ Sol dialect. The context pointer is valid; the member type
         // slice is borrowed for the duration of the call.
         Self::new(unsafe {
@@ -197,7 +197,7 @@ impl<'context> Type<'context> {
     /// A `sol::EnumType` whose maximum valid value is `max` (one less than the
     /// number of enum members).
     pub fn enumeration(context: &'context melior::Context, max: u32) -> Self {
-        // SAFETY: `solxCreateEnumType` returns a valid MlirType from the
+        // `solxCreateEnumType` returns a valid MlirType from the
         // C++ Sol dialect. The context pointer is valid.
         Self::new(unsafe {
             MlirType::from_raw(crate::ffi::solxCreateEnumType(context.to_raw(), max))
@@ -213,7 +213,7 @@ impl<'context> Type<'context> {
     ) -> Self {
         let parameters: Vec<_> = parameter_types.iter().map(|t| t.to_raw()).collect();
         let results: Vec<_> = result_types.iter().map(|t| t.to_raw()).collect();
-        // SAFETY: `solxCreateFuncRefType` returns a valid MlirType from the
+        // `solxCreateFuncRefType` returns a valid MlirType from the
         // C++ Sol dialect. The pointers reference local vectors valid for the
         // duration of the call.
         Self::new(unsafe {
@@ -237,7 +237,7 @@ impl<'context> Type<'context> {
     ) -> Self {
         let parameters: Vec<_> = parameter_types.iter().map(|t| t.to_raw()).collect();
         let results: Vec<_> = result_types.iter().map(|t| t.to_raw()).collect();
-        // SAFETY: `solxCreateExtFuncRefType` returns a valid MlirType from the
+        // `solxCreateExtFuncRefType` returns a valid MlirType from the
         // C++ Sol dialect. The pointers reference local vectors valid for the
         // duration of the call.
         Self::new(unsafe {
@@ -253,57 +253,57 @@ impl<'context> Type<'context> {
 
     /// Whether this is a Sol enum type (`!sol.enum<N>`).
     pub fn is_enum(self) -> bool {
-        // SAFETY: `solxIsEnumType` is a pure `isa<>` predicate on a valid type.
+        // `solxIsEnumType` is a pure `isa<>` predicate on a valid type.
         unsafe { crate::ffi::solxIsEnumType(self.inner.to_raw()) }
     }
 
     /// Whether this is the Sol address type (`!sol.address`).
     pub fn is_address(self) -> bool {
-        // SAFETY: pure `isa<>` predicate on a valid type.
+        // pure `isa<>` predicate on a valid type.
         unsafe { crate::ffi::solxIsAddressType(self.inner.to_raw()) }
     }
 
     /// Whether this is a Sol contract type (`!sol.contract<…>`).
     pub fn is_contract(self) -> bool {
-        // SAFETY: pure `isa<>` predicate on a valid type.
+        // pure `isa<>` predicate on a valid type.
         unsafe { crate::ffi::solxIsContractType(self.inner.to_raw()) }
     }
 
     /// Whether this is a Sol fixed-bytes type (`!sol.fixedbytes<N>`).
     pub fn is_fixed_bytes(self) -> bool {
-        // SAFETY: pure `isa<>` predicate on a valid type.
+        // pure `isa<>` predicate on a valid type.
         unsafe { crate::ffi::solxIsFixedBytesType(self.inner.to_raw()) }
     }
 
     /// Whether this is the single-byte `!sol.byte` — the element type of
     /// `bytes`/`string`, distinct from `!sol.fixedbytes<1>`.
     pub fn is_byte(self) -> bool {
-        // SAFETY: pure `isa<>` predicate on a valid type.
+        // pure `isa<>` predicate on a valid type.
         unsafe { crate::ffi::solxIsByteType(self.inner.to_raw()) }
     }
 
     /// Whether this is the dynamic-bytes type `!sol.string`, shared by `string`
     /// and `bytes`.
     pub fn is_string(self) -> bool {
-        // SAFETY: pure `isa<>` predicate on a valid type.
+        // pure `isa<>` predicate on a valid type.
         unsafe { crate::ffi::solxIsStringType(self.inner.to_raw()) }
     }
 
     /// Whether this is a Sol array type (`!sol.array<…>`).
     pub fn is_array(self) -> bool {
-        // SAFETY: pure `isa<>` predicate on a valid type.
+        // pure `isa<>` predicate on a valid type.
         unsafe { crate::ffi::solxIsArrayType(self.inner.to_raw()) }
     }
 
     /// Whether this is a Sol struct type (`!sol.struct<…>`).
     pub fn is_struct(self) -> bool {
-        // SAFETY: pure `isa<>` predicate on a valid type.
+        // pure `isa<>` predicate on a valid type.
         unsafe { crate::ffi::solxIsStructType(self.inner.to_raw()) }
     }
 
     /// Whether this is a Sol mapping type (`!sol.mapping<…>`).
     pub fn is_mapping(self) -> bool {
-        // SAFETY: pure `isa<>` predicate on a valid type.
+        // pure `isa<>` predicate on a valid type.
         unsafe { crate::ffi::solxIsMappingType(self.inner.to_raw()) }
     }
 
@@ -317,20 +317,20 @@ impl<'context> Type<'context> {
     /// (`!sol.func_ref<…>`) or external (`!sol.ext_func_ref<…>`).
     pub fn is_function_ref(self) -> bool {
         let raw = self.inner.to_raw();
-        // SAFETY: pure `isa<>` predicates on a valid type.
+        // pure `isa<>` predicates on a valid type.
         unsafe { crate::ffi::solxIsFuncRefType(raw) || crate::ffi::solxIsExtFuncRefType(raw) }
     }
 
     /// Whether this is a Sol external function reference (`!sol.ext_func_ref<…>`)
     /// — the runtime address+selector value of a `function (...) external`.
     pub fn is_ext_function_ref(self) -> bool {
-        // SAFETY: pure `isa<>` predicate on a valid type.
+        // pure `isa<>` predicate on a valid type.
         unsafe { crate::ffi::solxIsExtFuncRefType(self.inner.to_raw()) }
     }
 
     /// Whether this is a Sol pointer (`!sol.ptr<T, Loc>`) — a typed place.
     pub fn is_pointer(self) -> bool {
-        // SAFETY: pure `isa<>` predicate on a valid type.
+        // pure `isa<>` predicate on a valid type.
         unsafe { crate::ffi::solxIsPointerType(self.inner.to_raw()) }
     }
 
@@ -338,7 +338,7 @@ impl<'context> Type<'context> {
     /// is a pointer type).
     pub fn pointee(self) -> Self {
         debug_assert!(self.is_pointer());
-        // SAFETY: guarded by `is_pointer`.
+        // guarded by `is_pointer`.
         Self::new(unsafe {
             MlirType::from_raw(crate::ffi::solxPointerTypePointeeType(self.inner.to_raw()))
         })
@@ -348,7 +348,7 @@ impl<'context> Type<'context> {
     /// location.
     pub fn data_location(self) -> solx_utils::DataLocation {
         let raw = self.inner.to_raw();
-        // SAFETY: pure accessors, dispatched on the type kind.
+        // pure accessors, dispatched on the type kind.
         let ordinal = if self.is_pointer() {
             unsafe { crate::ffi::solxPointerTypeDataLocation(raw) }
         } else {
@@ -369,7 +369,7 @@ impl<'context> Type<'context> {
     /// `1` for the single `!sol.byte`, and `None` for any other type.
     pub fn fixed_bytes_or_byte_width(self) -> Option<u32> {
         if self.is_fixed_bytes() {
-            // SAFETY: guarded by `is_fixed_bytes`.
+            // guarded by `is_fixed_bytes`.
             Some(unsafe { crate::ffi::solxFixedBytesTypeSize(self.inner.to_raw()) })
         } else if self.is_byte() {
             Some(1)

@@ -1,5 +1,5 @@
 //!
-//! Call-options expression lowering in value position: `f{value: v}` decorated
+//! Call-options expression emission in value position: `f{value: v}` decorated
 //! but not immediately called.
 //!
 
@@ -16,7 +16,7 @@ expression_emit!(CallOptionsExpression; |node, context, block| {
     // the wrapped operand.
     let mut current_block = block;
     for option in node.options().iter() {
-        let BlockAnd { value: _value, block: next } = option.value().emit(context, current_block)?;
+        let BlockAnd { value: _value, block: next } = option.value().emit(context, current_block);
         current_block = next;
     }
     node.operand().emit(context, current_block)

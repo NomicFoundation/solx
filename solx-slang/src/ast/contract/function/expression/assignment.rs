@@ -50,7 +50,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         context: &ExpressionContext<'state, 'context, 'block>,
         target_expression: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Self, BlockRef<'context, 'block>)> {
+    ) -> (Self, BlockRef<'context, 'block>) {
         match target_expression {
             Expression::Identifier(identifier) => match identifier.resolve_to_definition() {
                 Some(Definition::StateVariable(state_variable)) => {
@@ -60,10 +60,10 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                     let pointer = crate::ast::Pointer::new(
                         context.environment.variable(definition.node_id()),
                     );
-                    Ok((
+                    (
                         Self::Pointer(pointer.into_mlir(), pointer.pointee().into_mlir()),
                         block,
-                    ))
+                    )
                 }
                 None => unreachable!("slang resolves every identifier reference"),
                 Some(other) => unimplemented!(
@@ -73,8 +73,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             },
             Expression::IndexAccessExpression(index_access) => {
                 let (address, element_type, block) =
-                    context.emit_index_access_address(index_access, block)?;
-                Ok((Self::from_address(address, element_type), block))
+                    context.emit_index_access_address(index_access, block);
+                (Self::from_address(address, element_type), block)
             }
             Expression::MemberAccessExpression(access) => {
                 // A namespace-qualified state-variable lvalue (`C.x = v`, notably
@@ -88,8 +88,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                     return Self::from_state_variable(context, &state_variable, block);
                 }
                 let (address, element_type, block) =
-                    context.emit_struct_field_address(access, block)?;
-                Ok((Self::from_address(address, element_type), block))
+                    context.emit_struct_field_address(access, block);
+                (Self::from_address(address, element_type), block)
             }
             Expression::FunctionCallExpression(call)
                 if matches!(
@@ -107,8 +107,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 let Expression::MemberAccessExpression(access) = call.operand() else {
                     unreachable!("guarded by the match arm");
                 };
-                let (new_slot, element_type, block) = context.emit_push_slot(&access, block)?;
-                Ok((Self::from_address(new_slot, element_type), block))
+                let (new_slot, element_type, block) = context.emit_push_slot(&access, block);
+                (Self::from_address(new_slot, element_type), block)
             }
             _ => unimplemented!(
                 "assignment target {:?} is not yet supported",
@@ -129,7 +129,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         context: &ExpressionContext<'state, 'context, 'block>,
         state_variable: &ast::StateVariableDefinition,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Self, BlockRef<'context, 'block>)> {
+    ) -> (Self, BlockRef<'context, 'block>) {
         let declared_type = state_variable
             .get_type()
             .expect("slang types every state variable");
@@ -159,9 +159,9 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                     ))
                     .addr(address_type)
             );
-            return Ok((Self::ReferenceCopy(storage_ref), block));
+            return (Self::ReferenceCopy(storage_ref), block);
         }
-        Ok((Self::Storage(slot, element_type), block))
+        (Self::Storage(slot, element_type), block)
     }
 
     /// Classifies a computed lvalue `address` (with its `element_type`) into its
@@ -233,8 +233,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         operand: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
-        let (target, block) = AssignmentTarget::new(self, operand, block)?;
+    ) -> BlockRef<'context, 'block> {
+        let (target, block) = AssignmentTarget::new(self, operand, block);
         match &target {
             AssignmentTarget::ReferenceCopy(reference) => {
                 sol_op_void!(
@@ -299,7 +299,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 target.store(self, zero, &block);
             }
         }
-        Ok(block)
+        block
     }
 
     /// Emits a destructuring assignment `(a, b, …) = rhs` to existing lvalues.
@@ -316,7 +316,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         tuple: &TupleExpression,
         right: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         // Materialise the assignment as `(lvalue, value)` pairs, evaluating
         // every value before any store (Solidity's `(a, b) = (b, a)` swap).
         let (assignments, mut block): (Vec<(Expression, Value<'context, 'block>)>, _) = match right
@@ -333,7 +333,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     match lvalue {
                         Some(lvalue) => {
                             let BlockAnd { value, block: next } =
-                                rhs_expression.emit(self, current)?;
+                                rhs_expression.emit(self, current);
                             current = next;
                             assignments.push((lvalue, value.into_mlir()));
                         }
@@ -343,7 +343,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                             let BlockAnd {
                                 value: _discarded,
                                 block: next,
-                            } = rhs_expression.emit(self, current)?;
+                            } = rhs_expression.emit(self, current);
                             current = next;
                         }
                         None => {}
@@ -355,7 +355,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             // flattened leaf (no syntactic nesting can match these).
             Expression::FunctionCallExpression(call) => {
                 let lhs_leaves = tuple.flatten_lvalues();
-                let (values, current) = self.emit_function_call_results(call, block)?;
+                let (values, current) = self.emit_function_call_results(call, block);
                 assert!(
                     values.len() == lhs_leaves.len(),
                     "tuple assignment arity mismatch: {} LHS slots vs {} call results",
@@ -368,7 +368,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // `(a, b) = cond ? (x, y) : (z, w)` — the conditional yields one
                 // value per tuple element via the shared tuple-conditional path.
                 let lhs_leaves = tuple.flatten_lvalues();
-                let (values, current) = self.emit_conditional_tuple_values(conditional, block)?;
+                let (values, current) = self.emit_conditional_tuple_values(conditional, block);
                 assert!(
                     values.len() == lhs_leaves.len(),
                     "tuple assignment arity mismatch: {} LHS slots vs {} conditional values",
@@ -389,7 +389,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // aliased destination wins (`(y, y, y) = (1, 2, 3)` leaves `y == 1`).
         let mut targets = Vec::with_capacity(assignments.len());
         for (lvalue, value) in assignments {
-            let (target, next) = AssignmentTarget::new(self, &lvalue, block)?;
+            let (target, next) = AssignmentTarget::new(self, &lvalue, block);
             block = next;
             targets.push((target, value));
         }
@@ -412,7 +412,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             )
             .into_mlir()
         });
-        Ok((result, block))
+        (result, block)
     }
 
     /// Zips flattened LHS leaves with their values, dropping blank slots.
@@ -435,11 +435,11 @@ expression_emit!(AssignmentExpression; |node, context, block| {
     let left = node.left_operand().unwrap_parentheses();
     let right = node.right_operand();
     if let Expression::TupleExpression(tuple) = &left {
-        let (value, block) = context.emit_tuple_assignment(tuple, &right, block)?;
-        return Ok(BlockAnd { block, value: value.into() });
+        let (value, block) = context.emit_tuple_assignment(tuple, &right, block);
+        return BlockAnd { block, value: value.into() };
     }
 
-    let (target, block) = AssignmentTarget::new(context, &left, block)?;
+    let (target, block) = AssignmentTarget::new(context, &left, block);
     let (value, block) = if matches!(node.operator(), ast::AssignmentExpressionOperator::Equal(_)) {
         // A string literal assigned to a `bytesN` / `byte` value lvalue is a
         // fixed-bytes constant; emit it toward the target's element type so it
@@ -451,11 +451,11 @@ expression_emit!(AssignmentExpression; |node, context, block| {
                     expression: &right,
                     target_type: *element_type,
                 })
-                .emit(context, block)?;
+                .emit(context, block);
                 (value, block)
             }
             AssignmentTarget::ReferenceCopy(_) => {
-                let BlockAnd { value, block } = right.emit(context, block)?;
+                let BlockAnd { value, block } = right.emit(context, block);
                 (value, block)
             }
         }
@@ -490,14 +490,14 @@ expression_emit!(AssignmentExpression; |node, context, block| {
                 (old, *element_type)
             }
             AssignmentTarget::Storage(slot, element_type) => {
-                let old = slot.load(&context.state.builder, *element_type, &block)?;
+                let old = slot.load(&context.state.builder, *element_type, &block);
                 (crate::ast::Value::from(old), *element_type)
             }
             AssignmentTarget::ReferenceCopy(_) => unreachable!(
                 "a compound assignment to a reference-typed lvalue is rejected by the type checker"
             ),
         };
-        let BlockAnd { value: rhs, block } = right.emit(context, block)?;
+        let BlockAnd { value: rhs, block } = right.emit(context, block);
         // Shares the binary-operation emitter with `a op b` so a compound
         // bitwise assignment (`a ^= b`, `a <<= b`) on a `bytesN` / `byte`
         // lvalue gets the same fixed-bytes bridge.
@@ -513,5 +513,5 @@ expression_emit!(AssignmentExpression; |node, context, block| {
     };
 
     let result = target.store(context, value.into_mlir(), &block);
-    Ok(BlockAnd { block, value: result.into() })
+    BlockAnd { block, value: result.into() }
 });

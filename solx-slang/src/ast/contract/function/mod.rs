@@ -1,5 +1,5 @@
 //!
-//! Function definition lowering to Sol dialect MLIR.
+//! Function definition emission to Sol dialect MLIR.
 //!
 
 pub mod body_kind;
@@ -73,20 +73,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
     /// Emits a `sol.func` for the given function definition into the given
     /// contract body block, under its canonical (dispatchable) symbol.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the function body contains unsupported statements.
-    ///
-    /// # Panics
-    ///
-    /// Panics if an entry block is not attached to a region, which is
-    /// unreachable because `emit_sol_func` always creates a region.
     pub fn emit_sol(
         &self,
         function: &FunctionDefinition,
         contract_body: &BlockRef<'context, '_>,
-    ) -> anyhow::Result<String> {
+    ) -> String {
         self.emit_sol_inner(function, None, contract_body, BodyKind::Function)
     }
 
@@ -96,16 +87,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// they are never dispatched by selector, only resolved by node id, so each
     /// is given a node-id-qualified symbol that cannot collide with a same-named
     /// function reached together.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the function body contains unsupported statements.
     pub fn emit_sol_with_symbol(
         &self,
         function: &FunctionDefinition,
         symbol: &str,
         contract_body: &BlockRef<'context, '_>,
-    ) -> anyhow::Result<String> {
+    ) -> String {
         self.emit_sol_inner(function, Some(symbol), contract_body, BodyKind::Function)
     }
 
@@ -115,27 +102,18 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// free/library function) and suppresses the public selector and special
     /// kind; otherwise the canonical [`Self::mlir_function_name`] and computed
     /// selector are used.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the function body contains unsupported statements.
-    ///
-    /// # Panics
-    ///
-    /// Panics if an entry block is not attached to a region, which is
-    /// unreachable because `emit_sol_func` always creates a region.
     fn emit_sol_inner(
         &self,
         function: &FunctionDefinition,
         symbol_override: Option<&str>,
         contract_body: &BlockRef<'context, '_>,
         body_kind: BodyKind,
-    ) -> anyhow::Result<String> {
+    ) -> String {
         let Some(ref body) = function.body() else {
             // Abstract or interface function — no codegen needed.
-            return Ok(symbol_override
+            return symbol_override
                 .map(str::to_owned)
-                .unwrap_or_else(|| Self::mlir_function_name(function)));
+                .unwrap_or_else(|| Self::mlir_function_name(function));
         };
 
         let InnerSignature {
@@ -173,7 +151,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             &mlir_parameter_types,
             &function_entry_block,
             &mut environment,
-        )?;
+        );
 
         let mut return_slots = self.init_return_slots(
             function,
@@ -182,7 +160,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             body_kind,
             &function_entry_block,
             &mut environment,
-        )?;
+        );
 
         let region = function_entry_block
             .parent_region()
@@ -203,7 +181,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 self.contract
                     .expect("a constructor is emitted only within a contract"),
                 current_block,
-            )?;
+            );
         }
 
         // Collect the modifier bodies that wrap this function
@@ -214,7 +192,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             (Vec::new(), Vec::new())
         } else {
             let (stages, params, next_block) =
-                self.build_modifier_stages(function, &environment, current_block)?;
+                self.build_modifier_stages(function, &environment, current_block);
             current_block = next_block;
             (stages, params)
         };
@@ -230,7 +208,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     &result_types,
                     &return_slots,
                 );
-                match statement.emit(&mut emitter, current_block)? {
+                match statement.emit(&mut emitter, current_block) {
                     Some(next) => current_block = next,
                     None => {
                         terminated = true;
@@ -254,7 +232,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 modifier_stages,
                 modifier_stage_params,
                 current_block,
-            )? {
+            ) {
                 Some(next) => current_block = next,
                 None => terminated = true,
             }
@@ -264,7 +242,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             self.emit_default_return(function, &result_types, &return_slots, &current_block);
         }
 
-        Ok(mlir_name)
+        mlir_name
     }
 
     /// Resolves the MLIR signature for `function` — symbol, parameter and result
@@ -332,10 +310,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         parameter_types: &[Type<'context>],
         entry_block: &BlockRef<'context, 'block>,
         environment: &mut Environment<'context, 'block>,
-    ) -> anyhow::Result<()> {
+    ) {
         for (index, parameter) in function.parameters().iter().enumerate() {
             let parameter_type = parameter_types[index];
-            let parameter_value = crate::ast::Value::new(entry_block.argument(index)?.into());
+            let parameter_value = crate::ast::Value::new(
+                entry_block
+                    .argument(index)
+                    .expect("argument index is within the block signature")
+                    .into(),
+            );
             let pointer = crate::ast::Pointer::stack_slot(
                 crate::ast::Type::new(parameter_type),
                 &self.state.builder,
@@ -344,7 +327,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             pointer.store(parameter_value, &self.state.builder, entry_block);
             environment.define_variable(parameter.node_id(), pointer.into_mlir());
         }
-        Ok(())
     }
 
     /// Allocates and binds a stack slot for each named return value (integers
@@ -358,7 +340,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         body_kind: BodyKind,
         entry_block: &BlockRef<'context, 'block>,
         environment: &mut Environment<'context, 'block>,
-    ) -> anyhow::Result<Vec<Option<Value<'context, 'block>>>> {
+    ) -> Vec<Option<Value<'context, 'block>>> {
         // A modifier body seeds every return slot (named or not) from the values
         // threaded in as trailing block arguments at the `parameter_count`
         // offset, rather than zero-initialising only the named ones, so the
@@ -375,7 +357,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         entry_block,
                     );
                     let incoming = crate::ast::Value::new(
-                        entry_block.argument(parameter_count + index)?.into(),
+                        entry_block
+                            .argument(parameter_count + index)
+                            .expect("argument index is within the block signature")
+                            .into(),
                     );
                     pointer.store(incoming, &self.state.builder, entry_block);
                     if parameter.name().is_some() {
@@ -384,7 +369,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     return_slots.push(Some(pointer.into_mlir()));
                 }
             }
-            return Ok(return_slots);
+            return return_slots;
         }
         let mut return_slots: Vec<Option<Value<'context, 'block>>> = Vec::new();
         if let Some(returns) = function.returns() {
@@ -404,7 +389,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 return_slots.push(Some(pointer));
             }
         }
-        Ok(return_slots)
+        return_slots
     }
 
     /// Emits the contract's constructor as a `sol.func`.
@@ -412,18 +397,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Dispatches to [`Self::emit_sol`] when the contract declares one,
     /// otherwise emits a `constructor()` running just the state-variable
     /// initializers.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if a state-variable initializer has an unresolved
-    /// type or contains unsupported constructs, or if the explicit
-    /// constructor body contains unsupported statements.
-    ///
-    /// # Panics
-    ///
-    /// Panics if an entry block is not attached to a region, which is
-    /// unreachable because `emit_sol_func` always creates a region.
-    pub fn emit_constructor(&self, contract_body: &BlockRef<'context, '_>) -> anyhow::Result<()> {
+    pub fn emit_constructor(&self, contract_body: &BlockRef<'context, '_>) {
         let contract = self
             .contract
             .expect("the constructor emitter requires a contract");
@@ -449,8 +423,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let has_base_constructor = mro.iter().skip(1).any(|base| base.constructor().is_some());
         if !has_base_constructor {
             if let Some(constructor) = contract.constructor() {
-                self.emit_sol(&constructor, contract_body)?;
-                return Ok(());
+                self.emit_sol(&constructor, contract_body);
+                return;
             }
             let entry = self.state.builder.emit_sol_func(
                 "constructor()",
@@ -469,9 +443,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 self.storage_layout,
                 ArithmeticMode::Checked,
             );
-            let block = emitter.emit_state_var_initializers(contract, entry)?;
+            let block = emitter.emit_state_var_initializers(contract, entry);
             sol_op_void!(&self.state.builder, &block, ReturnOperation.operands(&[]));
-            return Ok(());
+            return;
         }
 
         // Inheritance chain: one `constructor()` runs every base constructor
@@ -506,7 +480,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         if let Some(constructor) = &derived_constructor {
             for (index, parameter) in constructor.parameters().iter().enumerate() {
                 let parameter_type = parameter_types[index];
-                let parameter_value = crate::ast::Value::new(entry.argument(index)?.into());
+                let parameter_value = crate::ast::Value::new(
+                    entry
+                        .argument(index)
+                        .expect("argument index is within the block signature")
+                        .into(),
+                );
                 let pointer = crate::ast::Pointer::stack_slot(
                     crate::ast::Type::new(parameter_type),
                     &self.state.builder,
@@ -527,7 +506,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 self.storage_layout,
                 ArithmeticMode::Checked,
             );
-            emitter.emit_state_var_initializers(contract, entry)?
+            emitter.emit_state_var_initializers(contract, entry)
         };
 
         let mut scopes: HashMap<NodeId, Environment<'context, '_>> = HashMap::new();
@@ -542,7 +521,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             &mut scopes,
             &mut bound_scopes,
             current_block,
-        )?;
+        );
         self.emit_constructor_bodies(&mro, &mut scopes, &bound_scopes, &entry, current_block)
     }
 

@@ -1,5 +1,5 @@
 //!
-//! Function call and member access expression lowering.
+//! Function call and member access expression emission.
 //!
 
 pub mod built_in;
@@ -25,6 +25,7 @@ use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use self::call_kind::CallKind;
+use self::member_call_kind::MemberCallKind;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::Toward;
@@ -33,7 +34,7 @@ use crate::ast::library_ext::LibraryExt;
 use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveType;
 
-/// Call-expression entry points and the shared lowering primitives the call
+/// Call-expression entry points and the shared emission primitives the call
 /// kinds dispatch through (argument coercion, call-options capture, indirect
 /// calls, struct construction, external-library link resolution).
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -43,9 +44,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (results, block) = CallKind::new(self, call).emit(self, call, block)?;
-        Ok((results.into_iter().next(), block))
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let (results, block) = CallKind::new(self, call).emit(self, call, block);
+        (results.into_iter().next(), block)
     }
 
     /// Emits a function-call expression, returning all of its result values in
@@ -54,7 +55,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         CallKind::new(self, call).emit(self, call, block)
     }
 
@@ -69,11 +70,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         call_options: &CallOptionsExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
+    ) -> (
         Option<Value<'context, 'block>>,
         Option<Value<'context, 'block>>,
         BlockRef<'context, 'block>,
-    )> {
+    ) {
         let mut value = None;
         let mut salt = None;
         let mut current_block = block;
@@ -87,7 +88,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     let BlockAnd {
                         value: option_value,
                         block: next_block,
-                    } = option.value().emit(self, current_block)?;
+                    } = option.value().emit(self, current_block);
                     current_block = next_block;
                     let builder = &self.state.builder;
                     value = Some(
@@ -114,7 +115,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         expression: &salt_expression,
                         target_type: bytes32,
                     })
-                    .emit(self, current_block)?;
+                    .emit(self, current_block);
                     current_block = next_block;
                     let builder = &self.state.builder;
                     salt = Some(
@@ -138,13 +139,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     let BlockAnd {
                         value: _gas,
                         block: next_block,
-                    } = option.value().emit(self, current_block)?;
+                    } = option.value().emit(self, current_block);
                     current_block = next_block;
                 }
                 _ => unreachable!("a call option resolves to a value, gas, or salt built-in"),
             }
         }
-        Ok((value, salt, current_block))
+        (value, salt, current_block)
     }
 
     /// Evaluates `arguments` left-to-right (via
@@ -161,7 +162,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         arguments: &PositionalArguments,
         parameter_types: &[melior::ir::Type<'context>],
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let arguments: Vec<Expression> = arguments.iter().collect();
         self.emit_coerced_argument_expressions(&arguments, parameter_types, block)
     }
@@ -175,7 +176,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         arguments: &[Expression],
         parameter_types: &[melior::ir::Type<'context>],
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let mut argument_values = Vec::with_capacity(arguments.len());
         let mut block = block;
         for (index, argument) in arguments.iter().enumerate() {
@@ -188,11 +189,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         expression: argument,
                         target_type: parameter_type,
                     })
-                    .emit(self, block)?;
+                    .emit(self, block);
                     (value, block)
                 }
                 None => {
-                    let BlockAnd { value, block } = argument.emit(self, block)?;
+                    let BlockAnd { value, block } = argument.emit(self, block);
                     (value, block)
                 }
             };
@@ -205,7 +206,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .coerce_to(crate::ast::Type::new(parameter_type), builder, &block)
                 .into_mlir();
         }
-        Ok((argument_values, block))
+        (argument_values, block)
     }
 
     /// Resolves the callee's MLIR signature and evaluates/coerces its arguments,
@@ -216,12 +217,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         function_definition: &FunctionDefinition,
         arguments: &[Expression],
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
+    ) -> (
         &'a str,
         Vec<Value<'context, 'block>>,
         &'a [melior::ir::Type<'context>],
         BlockRef<'context, 'block>,
-    )> {
+    ) {
         // Virtual dispatch: a bare internal call resolving (lexically) to an
         // overridden base function is routed to the most-derived override of its
         // signature, so a base-body `g()` reaches the derived `g`. The redirect
@@ -235,12 +236,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .get(&node_id)
             .copied()
             .unwrap_or(node_id);
-        let (mlir_name, parameter_types, return_types) = self.state.resolve_function(call_id)?;
+        let (mlir_name, parameter_types, return_types) = self.state.resolve_function(call_id);
 
         let (argument_values, current_block) =
-            self.emit_coerced_argument_expressions(arguments, parameter_types, block)?;
+            self.emit_coerced_argument_expressions(arguments, parameter_types, block);
 
-        Ok((mlir_name, argument_values, return_types, current_block))
+        (mlir_name, argument_values, return_types, current_block)
     }
 
     /// Resolves an external library call's link target from its member-access
@@ -258,7 +259,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             unreachable!("an external library call's target is a library member");
         };
         let operand = access.operand();
-        let self_receiver = (!operand.is_namespace_qualifier()).then_some(operand);
+        let self_receiver = (!MemberCallKind::is_namespace_qualifier(&operand)).then_some(operand);
         (library.link_symbol(), library_function, self_receiver)
     }
 
@@ -268,10 +269,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// return expands per element). Internal pointers dispatch through
     /// `sol.icall`; external ones through `sol.ext_icall`, forwarding
     /// `call_value` (or zero) as `msg.value`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if a subexpression or the call op cannot be emitted.
     fn emit_indirect_call_results(
         &self,
         callee: &Expression,
@@ -279,11 +276,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         positional_arguments: &PositionalArguments,
         call_value: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let BlockAnd {
             value: callee_value,
             block,
-        } = callee.emit(self, block)?;
+        } = callee.emit(self, block);
         let SlangType::Function(function_type) = function_slang_type else {
             unreachable!("an indirect-call callee is always a function type");
         };
@@ -307,7 +304,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             other => vec![other.resolve_type(LocationPolicy::Declared(None), builder)],
         };
         let (argument_values, current_block) =
-            self.emit_coerced_arguments(positional_arguments, &parameter_types, block)?;
+            self.emit_coerced_arguments(positional_arguments, &parameter_types, block);
         let builder = &self.state.builder;
         // Dispatch internal (`sol.icall`) vs external (`sol.ext_icall`) on the
         // callee value's actual reference kind, not slang's
@@ -334,16 +331,16 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 value,
                 false,
                 &current_block,
-            )?
+            )
         } else {
             builder.emit_sol_icall(
                 callee_value.into_mlir(),
                 &argument_values,
                 &result_types,
                 &current_block,
-            )?
+            )
         };
-        Ok((results, current_block))
+        (results, current_block)
     }
 }
 
@@ -351,7 +348,7 @@ expression_emit!(FunctionCallExpression; |node, context, block| {
     // Value position: a void callee is impossible here (Solidity forbids using a
     // void call as a value); the void case is reached only at a statement-position
     // discard site, which emits the call without `Emit`.
-    let (value, block) = context.emit_function_call(node, block)?;
+    let (value, block) = context.emit_function_call(node, block);
     let value = value.expect("a function call in value position returns a value");
-    Ok(BlockAnd { block, value: value.into() })
+    BlockAnd { block, value: value.into() }
 });

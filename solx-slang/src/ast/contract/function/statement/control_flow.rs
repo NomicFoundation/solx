@@ -39,7 +39,7 @@ statement_emit!(IfStatement; |node, context, block| {
     let BlockAnd {
         value: condition_value,
         block,
-    } = condition_expression.emit(&emitter, block)?;
+    } = condition_expression.emit(&emitter, block);
     let condition_boolean = condition_value
         .is_nonzero(&context.state.builder, &block)
         .into_mlir();
@@ -53,7 +53,7 @@ statement_emit!(IfStatement; |node, context, block| {
     // Emit then body.
     let saved_region = context.region_pointer;
     context.set_region(&then_region);
-    let then_end = node.body().emit(context, then_block)?;
+    let then_end = node.body().emit(context, then_block);
     if let Some(then_end) = then_end {
         sol_op_void!(&context.state.builder, &then_end, YieldOperation.ins(&[]));
     } else {
@@ -63,7 +63,7 @@ statement_emit!(IfStatement; |node, context, block| {
     // Emit else body (or empty yield).
     if let Some(ref else_statement) = node.else_branch() {
         context.set_region(&else_region);
-        let else_end = else_statement.emit(context, else_block)?;
+        let else_end = else_statement.emit(context, else_block);
         if let Some(else_end) = else_end {
             sol_op_void!(&context.state.builder, &else_end, YieldOperation.ins(&[]));
         } else {
@@ -75,7 +75,7 @@ statement_emit!(IfStatement; |node, context, block| {
         context.region_pointer = saved_region;
     }
 
-    Ok(Some(block))
+    Some(block)
 });
 
 statement_emit!(ForStatement; |node, context, block| {
@@ -85,21 +85,21 @@ statement_emit!(ForStatement; |node, context, block| {
     let block = match node.initialization() {
         ForStatementInitialization::VariableDeclarationStatement(declaration) => {
             let statement = Statement::VariableDeclarationStatement(declaration.clone());
-            match statement.emit(context, block)? {
+            match statement.emit(context, block) {
                 Some(block) => block,
                 None => {
                     context.environment.exit_scope();
-                    return Ok(None);
+                    return None;
                 }
             }
         }
         ForStatementInitialization::ExpressionStatement(expression_statement) => {
             let statement = Statement::ExpressionStatement(expression_statement.clone());
-            match statement.emit(context, block)? {
+            match statement.emit(context, block) {
                 Some(block) => block,
                 None => {
                     context.environment.exit_scope();
-                    return Ok(None);
+                    return None;
                 }
             }
         }
@@ -113,7 +113,7 @@ statement_emit!(ForStatement; |node, context, block| {
     // Condition region.
     match node.condition() {
         ForStatementCondition::ExpressionStatement(expression_statement) => {
-            context.emit_loop_condition(&expression_statement.expression(), condition_block)?;
+            context.emit_loop_condition(&expression_statement.expression(), condition_block);
         }
         ForStatementCondition::Semicolon(_) => {
             let true_value =
@@ -129,7 +129,7 @@ statement_emit!(ForStatement; |node, context, block| {
 
     // Body region.
     context.set_region(&body_region);
-    let body_end = node.body().emit(context, body_block)?;
+    let body_end = node.body().emit(context, body_block);
     if let Some(body_end) = body_end {
         sol_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
     }
@@ -145,7 +145,7 @@ statement_emit!(ForStatement; |node, context, block| {
         );
         // The step is in statement position: its value is discarded and it
         // may be a value-less producer (a void call or `delete`).
-        let step_end = Discarded(iterator_expression).emit(&emitter, step_block)?;
+        let step_end = Discarded(iterator_expression).emit(&emitter, step_block);
         sol_op_void!(&context.state.builder, &step_end, YieldOperation.ins(&[]));
     } else {
         sol_op_void!(&context.state.builder, &step_block, YieldOperation.ins(&[]));
@@ -153,7 +153,7 @@ statement_emit!(ForStatement; |node, context, block| {
 
     context.region_pointer = saved_region;
     context.environment.exit_scope();
-    Ok(Some(block))
+    Some(block)
 });
 
 statement_emit!(WhileStatement; |node, context, block| {
@@ -162,17 +162,17 @@ statement_emit!(WhileStatement; |node, context, block| {
     let saved_region = context.region_pointer;
 
     // Condition region.
-    context.emit_loop_condition(&node.condition(), condition_block)?;
+    context.emit_loop_condition(&node.condition(), condition_block);
 
     // Body region.
     context.set_region(&body_region);
-    let body_end = node.body().emit(context, body_block)?;
+    let body_end = node.body().emit(context, body_block);
     if let Some(body_end) = body_end {
         sol_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
     }
 
     context.region_pointer = saved_region;
-    Ok(Some(block))
+    Some(block)
 });
 
 statement_emit!(DoWhileStatement; |node, context, block| {
@@ -182,14 +182,14 @@ statement_emit!(DoWhileStatement; |node, context, block| {
 
     // Body region (executes first).
     context.set_region(&body_region);
-    let body_end = node.body().emit(context, body_block)?;
+    let body_end = node.body().emit(context, body_block);
     if let Some(body_end) = body_end {
         sol_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
     }
 
     // Condition region.
-    context.emit_loop_condition(&node.condition(), condition_block)?;
+    context.emit_loop_condition(&node.condition(), condition_block);
 
     context.region_pointer = saved_region;
-    Ok(Some(block))
+    Some(block)
 });

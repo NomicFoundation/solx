@@ -50,10 +50,6 @@ impl<'context, 'block> Environment<'context, 'block> {
     }
 
     /// Pops the innermost lexical scope.
-    ///
-    /// # Panics
-    ///
-    /// Panics if called when only the root scope remains.
     pub fn exit_scope(&mut self) {
         assert!(self.scopes.len() > 1, "cannot exit the root scope");
         self.scopes.pop();
@@ -72,12 +68,6 @@ impl<'context, 'block> Environment<'context, 'block> {
     /// `resolve_to_definition().node_id()`).
     ///
     /// Searches from the innermost scope outward.
-    ///
-    /// # Panics
-    ///
-    /// Panics if no binding exists. Slang's semantic pass guarantees every
-    /// emitted identifier reference resolves, so a miss here is a solx-internal
-    /// invariant failure rather than a user error.
     pub fn variable(&self, declaration: NodeId) -> Value<'context, 'block> {
         for scope in self.scopes.iter().rev() {
             if let Some(pointer) = scope.get(&declaration) {

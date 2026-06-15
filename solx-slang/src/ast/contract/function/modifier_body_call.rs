@@ -37,12 +37,7 @@ impl<'context, 'block> ModifierBodyCall<'context, 'block> {
     ///
     /// [`StatementContext`]: crate::ast::contract::function::statement::StatementContext
     /// [`FunctionEmitter::emit_modified_body`]: crate::ast::contract::function::FunctionEmitter::emit_modified_body
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if a return-slot load or the downstream call cannot be
-    /// lowered.
-    pub fn emit<Block>(&self, builder: &Builder<'context>, block: &Block) -> anyhow::Result<()>
+    pub fn emit<Block>(&self, builder: &Builder<'context>, block: &Block)
     where
         Block: BlockLike<'context, 'block>,
         'context: 'block,
@@ -58,7 +53,7 @@ impl<'context, 'block> ModifierBodyCall<'context, 'block> {
             }
         }
         let results =
-            builder.emit_sol_call_results(&self.symbol, &operands, &self.result_types, block)?;
+            builder.emit_sol_call_results(&self.symbol, &operands, &self.result_types, block);
         for (slot, value) in self.return_slots.iter().zip(results) {
             if let Some(pointer) = slot {
                 crate::ast::Pointer::new(*pointer).store(
@@ -68,6 +63,5 @@ impl<'context, 'block> ModifierBodyCall<'context, 'block> {
                 );
             }
         }
-        Ok(())
     }
 }

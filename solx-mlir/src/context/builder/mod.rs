@@ -75,10 +75,6 @@ impl<'context> Builder<'context> {
     ///
     /// Returns the body block inside the contract region for appending
     /// function definitions.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
     pub fn emit_sol_contract<'block>(
         &self,
         name: &str,
@@ -89,7 +85,7 @@ impl<'context> Builder<'context> {
         let body_block = Block::new(&[]);
         body_region.append_block(body_block);
 
-        // SAFETY: `solxCreateContractKindAttr` returns a valid MlirAttribute.
+        // `solxCreateContractKindAttr` returns a valid MlirAttribute.
         let kind_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateContractKindAttr(
                 self.context.to_raw(),
@@ -116,10 +112,6 @@ impl<'context> Builder<'context> {
     /// result types, selector, state mutability, and optional function kind.
     ///
     /// Returns the entry block of the function body for appending operations.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
     pub fn emit_sol_func<'block>(
         &self,
         name: &str,
@@ -141,7 +133,7 @@ impl<'context> Builder<'context> {
         );
         body_region.append_block(entry_block);
 
-        // SAFETY: `solxCreateStateMutabilityAttr` returns a valid MlirAttribute.
+        // `solxCreateStateMutabilityAttr` returns a valid MlirAttribute.
         let mutability_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateStateMutabilityAttr(
                 self.context.to_raw(),
@@ -156,7 +148,7 @@ impl<'context> Builder<'context> {
             .body(body_region);
 
         if let Some(function_kind) = kind {
-            // SAFETY: `solxCreateFunctionKindAttr` returns a valid MlirAttribute.
+            // `solxCreateFunctionKindAttr` returns a valid MlirAttribute.
             let kind_attribute = unsafe {
                 Attribute::from_raw(crate::ffi::solxCreateFunctionKindAttr(
                     self.context.to_raw(),
@@ -185,7 +177,7 @@ impl<'context> Builder<'context> {
         }
 
         // The fallback dispatcher in SolToYul reads `orig_fn_type` to recover the
-        // pre-lowering Sol signature, so a fallback (like a selector-bearing
+        // pre-conversion Sol signature, so a fallback (like a selector-bearing
         // function or the constructor) must carry it; without it the pass
         // dereferences a null type.
         if selector.is_some()
@@ -221,10 +213,6 @@ impl<'context> Builder<'context> {
     /// ensure the enclosing block reaches a structural terminator through the
     /// normal codegen path (a following statement, a region yield, or the
     /// function-epilogue default return).
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
     pub fn emit_sol_revert<'block, B>(
         &self,
         signature: &str,
@@ -249,10 +237,6 @@ impl<'context> Builder<'context> {
     /// Reverts if `condition` is false. When `msg` is `Some`, the revert
     /// includes the string as a revert reason. Not a terminator — execution
     /// continues after this op when the condition is true.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
     pub fn emit_sol_require<'block, B>(
         &self,
         condition: Value<'context, 'block>,
@@ -282,10 +266,6 @@ impl<'context> Builder<'context> {
     ///
     /// Returns `(then_block, else_block)`. The caller emits into each region
     /// and terminates them with `sol.yield`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
     pub fn emit_sol_if<'block>(
         &self,
         condition: Value<'context, 'block>,
@@ -326,7 +306,7 @@ impl<'context> Builder<'context> {
 
     /// Emits a `sol.try` carrying the external call's success `status` and four
     /// regions — success, panic, error, fallback. A clause that is absent
-    /// produces an empty region; the op's lowering performs the returndata-size
+    /// produces an empty region; the op's conversion performs the returndata-size
     /// guard, the selector switch over `Error(string)` / `Panic(uint256)`, the
     /// payload decode (delivered as each region's block argument), and the raw
     /// re-revert when no clause matches, so the frontend emits no returndata or
@@ -339,10 +319,6 @@ impl<'context> Builder<'context> {
     /// [`TryFallbackKind::Bytes`] fallback block the raw returndata
     /// (`string<Memory>`), each as block argument 0. The caller binds those,
     /// emits each body, and terminates every region with `sol.yield`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
     pub fn emit_sol_try<'block>(
         &self,
         status: Value<'context, 'block>,
@@ -437,10 +413,6 @@ impl<'context> Builder<'context> {
     ///
     /// Returns `(cond_block, body_block)`. The condition region must be
     /// terminated with `sol.condition`. The body region with `sol.yield`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
     pub fn emit_sol_while<'block>(
         &self,
         block: &BlockRef<'context, 'block>,
@@ -478,10 +450,6 @@ impl<'context> Builder<'context> {
     ///
     /// Returns `(body_block, cond_block)`. The body executes first.
     /// Body terminates with `sol.yield`, condition with `sol.condition`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
     pub fn emit_sol_do_while<'block>(
         &self,
         block: &BlockRef<'context, 'block>,
@@ -519,10 +487,6 @@ impl<'context> Builder<'context> {
     ///
     /// Returns `(cond_block, body_block, step_block)`. Condition terminates
     /// with `sol.condition`, body and step with `sol.yield`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
     pub fn emit_sol_for<'block>(
         &self,
         block: &BlockRef<'context, 'block>,
@@ -576,22 +540,6 @@ impl<'context> Builder<'context> {
     ///
     /// Returns a `!sol.ptr<{element_type}, Stack>` pointer. Use this when
     /// the declared Solidity type is known (e.g. `uint64` → `ui64`).
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR type or operation cannot be constructed, indicating
-    /// a bug in the builder.
-    /// Allocates a stack slot for `element_type` and zero-initialises it,
-    /// returning the slot address.
-    ///
-    /// An integer type is initialised with a typed `0`. A non-integer type is a
-    /// LOUD `unimplemented!`: silently leaving the slot uninitialised would be a
-    /// bug-masking fallback.
-    ///
-    /// # Panics
-    ///
-    /// Panics on a non-integer `element_type` — zero-initialisation of address,
-    /// fixed-bytes, and memory-resident types is not yet supported.
     pub fn emit_zero_initialized_alloca<'block, B>(
         &self,
         element_type: Type<'context>,
@@ -648,49 +596,32 @@ impl<'context> Builder<'context> {
     /// Emits a `sol.call` operation and returns its first result value, or
     /// `None` if the callee is `void`. Use [`Self::emit_sol_call_results`]
     /// when all results are needed.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the call operation result cannot be extracted.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a bug in the builder.
     pub fn emit_sol_call<'block, B>(
         &self,
         callee: &str,
         operands: &[Value<'context, 'block>],
         result_types: &[Type<'context>],
         block: &B,
-    ) -> anyhow::Result<Option<Value<'context, 'block>>>
+    ) -> Option<Value<'context, 'block>>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let results = self.emit_sol_call_results(callee, operands, result_types, block)?;
-        Ok(results.into_iter().next())
+        self.emit_sol_call_results(callee, operands, result_types, block)
+            .into_iter()
+            .next()
     }
 
     /// Emits a `sol.call` operation and returns all of its result values in
     /// declaration order. Use [`Self::emit_sol_call`] when only the first
     /// result is needed.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any of the call operation results cannot be
-    /// extracted.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed, indicating a
-    /// bug in the builder.
     pub fn emit_sol_call_results<'block, B>(
         &self,
         callee: &str,
         operands: &[Value<'context, 'block>],
         result_types: &[Type<'context>],
         block: &B,
-    ) -> anyhow::Result<Vec<Value<'context, 'block>>>
+    ) -> Vec<Value<'context, 'block>>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
@@ -705,24 +636,25 @@ impl<'context> Builder<'context> {
         );
         let mut results = Vec::with_capacity(result_types.len());
         for index in 0..result_types.len() {
-            results.push(operation.result(index)?.into());
+            results.push(
+                operation
+                    .result(index)
+                    .expect("sol.call produces its declared result count")
+                    .into(),
+            );
         }
-        Ok(results)
+        results
     }
 
     /// Emits a `sol.icall` — an indirect call through an internal function
     /// pointer `callee` — and returns its result values.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if a result cannot be retrieved.
     pub fn emit_sol_icall<'block, B>(
         &self,
         callee: Value<'context, 'block>,
         operands: &[Value<'context, 'block>],
         result_types: &[Type<'context>],
         block: &B,
-    ) -> anyhow::Result<Vec<Value<'context, 'block>>>
+    ) -> Vec<Value<'context, 'block>>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
@@ -737,9 +669,14 @@ impl<'context> Builder<'context> {
         );
         let mut results = Vec::with_capacity(result_types.len());
         for index in 0..result_types.len() {
-            results.push(operation.result(index)?.into());
+            results.push(
+                operation
+                    .result(index)
+                    .expect("sol.icall produces its declared result count")
+                    .into(),
+            );
         }
-        Ok(results)
+        results
     }
 
     /// Emits a `sol.ext_func_constant` packing a callee `address` and a 4-byte
@@ -799,12 +736,8 @@ impl<'context> Builder<'context> {
     /// Emits a `sol.ext_icall` (external call through an external function
     /// reference), forwarding all remaining gas and the given `value`. ABI
     /// encoding of `operands` and decoding of the results are implicit in the
-    /// op's lowering (driven by the callee's `ext_func_ref` signature). Returns
+    /// op's conversion (driven by the callee's `ext_func_ref` signature). Returns
     /// the decoded result values.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if a result cannot be retrieved.
     pub fn emit_sol_ext_icall<'block, B>(
         &self,
         callee: Value<'context, 'block>,
@@ -813,7 +746,7 @@ impl<'context> Builder<'context> {
         value: Value<'context, 'block>,
         static_call: bool,
         block: &B,
-    ) -> anyhow::Result<Vec<Value<'context, 'block>>>
+    ) -> Vec<Value<'context, 'block>>
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
@@ -842,9 +775,14 @@ impl<'context> Builder<'context> {
         let operation = block.append_operation(operation_builder.build().into());
         let mut results = Vec::with_capacity(result_types.len());
         for index in 0..result_types.len() {
-            results.push(operation.result(index + 1)?.into());
+            results.push(
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_icall produces a status plus its declared results")
+                    .into(),
+            );
         }
-        Ok(results)
+        results
     }
 
     /// Emits a `sol.ext_icall` with `try_call` set — the `try` form. Unlike the
@@ -858,7 +796,7 @@ impl<'context> Builder<'context> {
         result_types: &[Type<'context>],
         value: Value<'context, 'block>,
         block: &B,
-    ) -> anyhow::Result<(Value<'context, 'block>, Vec<Value<'context, 'block>>)>
+    ) -> (Value<'context, 'block>, Vec<Value<'context, 'block>>)
     where
         B: BlockLike<'context, 'block>,
         'context: 'block,
@@ -885,9 +823,14 @@ impl<'context> Builder<'context> {
             .into();
         let mut results = Vec::with_capacity(result_types.len());
         for index in 0..result_types.len() {
-            results.push(operation.result(index + 1)?.into());
+            results.push(
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_icall try produces a status plus its declared results")
+                    .into(),
+            );
         }
-        Ok((status, results))
+        (status, results)
     }
 
     /// Emits a `sol.ext_call` with the `delegate_call` + `library_call` flags — an
@@ -895,10 +838,6 @@ impl<'context> Builder<'context> {
     /// owns the ABI encode, the delegatecall, the revert-bubble on failure, and
     /// the result decode, so the frontend supplies only the typed arguments, the
     /// selector, and the callee's function type; returns the decoded results.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
     pub fn emit_sol_ext_call_library<'block, B>(
         &self,
         callee: &str,
@@ -935,7 +874,7 @@ impl<'context> Builder<'context> {
             })
             .collect();
         // `sol.ext_call` has two result groups: the `i1` success `status` and the
-        // variadic decoded `outs`. The op's lowering reverts internally on
+        // variadic decoded `outs`. The op's conversion reverts internally on
         // failure, so the status is dropped and only the decoded results return.
         let operation = block.append_operation(
             ExtCallOperation::builder(self.context, self.unknown_location)
@@ -1077,10 +1016,6 @@ impl<'context> Builder<'context> {
     // ==== State variables ====
 
     /// Emits a `sol.state_var` declaration inside a contract body.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the MLIR operation cannot be constructed.
     pub fn emit_sol_state_var<'block, B>(
         &self,
         name: &str,

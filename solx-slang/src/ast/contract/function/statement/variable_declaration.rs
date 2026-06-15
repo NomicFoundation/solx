@@ -52,7 +52,7 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
             expression: initializer_expression,
             target_type: declared_type,
         })
-        .emit(&emitter, block)?;
+        .emit(&emitter, block);
         let cast_value = initial_value
             .coerce_to(
                 crate::ast::Type::new(declared_type),
@@ -89,7 +89,7 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
     context
         .environment
         .define_variable(node.declaration().node_id(), pointer);
-    Ok(Some(block))
+    Some(block)
 });
 
 statement_emit!(MultiTypedDeclaration; |node, context, block| {
@@ -113,14 +113,14 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
                 let inner = item
                     .expression()
                     .expect("a deconstruction RHS tuple element has an inner expression");
-                let BlockAnd { value, block: next } = inner.emit(&emitter, current)?;
+                let BlockAnd { value, block: next } = inner.emit(&emitter, current);
                 values.push(value.into_mlir());
                 current = next;
             }
             (values, current)
         }
         Expression::FunctionCallExpression(call) => {
-            let (values, current) = emitter.emit_function_call_results(call, block)?;
+            let (values, current) = emitter.emit_function_call_results(call, block);
             assert!(
                 values.len() == elements.len(),
                 "tuple deconstruction arity mismatch: {} LHS slots vs {} call results",
@@ -132,7 +132,7 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
         Expression::ConditionalExpression(conditional) => {
             // `(a, b) = cond ? (x, y) : (z, w)` — the conditional yields one
             // value per tuple element via the shared tuple-conditional path.
-            let (values, current) = emitter.emit_conditional_tuple_values(conditional, block)?;
+            let (values, current) = emitter.emit_conditional_tuple_values(conditional, block);
             assert!(
                 values.len() == elements.len(),
                 "tuple deconstruction arity mismatch: {} LHS slots vs {} conditional values",
@@ -171,5 +171,5 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
             .define_variable(declaration.node_id(), pointer.into_mlir());
     }
 
-    Ok(Some(current))
+    Some(current)
 });

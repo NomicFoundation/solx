@@ -32,11 +32,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         index_access: &IndexAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(
+    ) -> (
         Value<'context, 'block>,
         Type<'context>,
         BlockRef<'context, 'block>,
-    )> {
+    ) {
         if index_access.end().is_some() {
             unimplemented!("range index (a[i:j]) is not yet supported");
         }
@@ -55,11 +55,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let BlockAnd {
             value: base_value,
             block,
-        } = base.emit(self, block)?;
+        } = base.emit(self, block);
         let BlockAnd {
             value: index_value,
             block,
-        } = index_expression.emit(self, block)?;
+        } = index_expression.emit(self, block);
 
         let (address, element_type) = match &base_type {
             SlangType::Mapping(_) => {
@@ -84,7 +84,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 (address, element_type)
             }
             _ => {
-                // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
+                // `mlirSolGetEltType` returns a valid MlirType from
                 // `sol::getEltType` on the C++ side; the struct-field index
                 // is ignored for non-struct base types.
                 let element_type = unsafe {
@@ -105,7 +105,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 (address, element_type)
             }
         };
-        Ok((address, element_type, block))
+        (address, element_type, block)
     }
 
     /// Maps a slang container type's data location to the dialect-side
@@ -142,13 +142,13 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
         let BlockAnd {
             value: base_value,
             block,
-        } = base.emit(context, block)?;
+        } = base.emit(context, block);
         let ui256 =
             crate::ast::Type::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
                 .into_mlir();
         let (start_value, block) = match node.start() {
             Some(start_expression) => {
-                let BlockAnd { value, block } = start_expression.emit(context, block)?;
+                let BlockAnd { value, block } = start_expression.emit(context, block);
                 let value = value
                     .coerce_to(crate::ast::Type::new(ui256), &context.state.builder, &block)
                     .into_mlir();
@@ -167,7 +167,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
         };
         let (end_value, block) = match node.end() {
             Some(end_expression) => {
-                let BlockAnd { value, block } = end_expression.emit(context, block)?;
+                let BlockAnd { value, block } = end_expression.emit(context, block);
                 let value = value
                     .coerce_to(crate::ast::Type::new(ui256), &context.state.builder, &block)
                     .into_mlir();
@@ -197,9 +197,9 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
                 .end(end_value)
                 .res(result_type)
         );
-        return Ok(BlockAnd { block, value: value.into() });
+        return BlockAnd { block, value: value.into() };
     }
-    let (address, element_type, block) = context.emit_index_access_address(node, block)?;
+    let (address, element_type, block) = context.emit_index_access_address(node, block);
     let value = crate::ast::Pointer::new(address).load(
         crate::ast::Type::new(element_type),
         &context.state.builder,
@@ -213,7 +213,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
     // element is a calldata reference (`[b[i:j]][0]`) as `calldata` while the
     // loaded value is the correct memory reference.
     if value.r#type().is_reference() {
-        return Ok(BlockAnd { block, value });
+        return BlockAnd { block, value };
     }
     let result_type = node
         .get_type()
@@ -225,5 +225,5 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
         &context.state.builder,
         &block,
     );
-    Ok(BlockAnd { block, value })
+    BlockAnd { block, value }
 });

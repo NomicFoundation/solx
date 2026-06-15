@@ -9,13 +9,13 @@ use std::str::FromStr;
 /// via `--emit-mlir`.
 ///
 /// Variants are listed in pipeline order: [`Dialect::Sol`] is captured
-/// before lowering, [`Dialect::Llvm`] after the pass pipeline.
+/// before conversion, [`Dialect::Llvm`] after the pass pipeline.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, clap::ValueEnum,
 )]
 #[serde(rename_all = "lowercase")]
 pub enum Dialect {
-    /// Sol dialect, captured before lowering passes run.
+    /// Sol dialect, captured before the conversion passes run.
     Sol,
     /// LLVM dialect, captured after the pass pipeline.
     Llvm,

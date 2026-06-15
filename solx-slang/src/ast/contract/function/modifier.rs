@@ -1,5 +1,5 @@
 //!
-//! Function-modifier lowering (modifier-stage `sol.func` chain).
+//! Function-modifier emission (modifier-stage `sol.func` chain).
 //!
 //! A modified function `f` is lowered as a chain of internal `sol.func`s —
 //! `$mod0 … $modN` (one per modifier invocation, in order) and `$body` (the
@@ -109,7 +109,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         modifier_stages: Vec<Statements>,
         modifier_stage_params: Vec<ModifierStageParams<'context, 'block>>,
         current_block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+    ) -> Option<BlockRef<'context, 'block>> {
         let _ = environment;
         let function = frame.function;
         let mlir_name = frame.mlir_name;
@@ -127,7 +127,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             Some(body_symbol.as_str()),
             contract_body,
             BodyKind::ModifierBody,
-        )?;
+        );
 
         // Every return needs a slot so the chain's results can be captured and
         // read back by the epilogue; an unnamed return gets a default-initialised
@@ -147,8 +147,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         // `f`'s own parameters, forwarded unchanged down the chain to the body.
         let function_parameters: Vec<Value<'context, 'block>> = (0..mlir_parameter_types.len())
-            .map(|index| function_entry_block.argument(index).map(Into::into))
-            .collect::<Result<_, _>>()?;
+            .map(|index| {
+                function_entry_block
+                    .argument(index)
+                    .expect("argument index is within the block signature")
+                    .into()
+            })
+            .collect();
 
         // Emit each stage as its own `sol.func`. Stage `i`'s `_;` calls stage
         // `i + 1` (or `$body` for the last). Stage `i`'s "downstream" parameters
@@ -183,7 +188,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 result_types,
                 next_symbol,
                 contract_body,
-            )?;
+            );
         }
 
         // `f`'s body: call the outermost stage with [all modifier arguments ++
@@ -211,8 +216,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             forward_params,
             return_slots: return_slots.clone(),
         };
-        body_call.emit(&self.state.builder, &current_block)?;
-        Ok(Some(current_block))
+        body_call.emit(&self.state.builder, &current_block);
+        Some(current_block)
     }
 
     /// Emits one modifier stage as an internal `sol.func`, parameterised by
@@ -232,7 +237,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         result_types: &[Type<'context>],
         next_symbol: &str,
         contract_body: &BlockRef<'context, '_>,
-    ) -> anyhow::Result<()> {
+    ) {
         let parameter_types: Vec<Type<'context>> = modifier_params
             .iter()
             .map(|binding| binding.element_type)
@@ -257,7 +262,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // Bind this modifier's parameters from the leading arguments.
         let mut environment = Environment::new();
         for (index, binding) in modifier_params.iter().enumerate() {
-            let value = crate::ast::Value::new(entry.argument(index)?.into());
+            let value = crate::ast::Value::new(
+                entry
+                    .argument(index)
+                    .expect("argument index is within the block signature")
+                    .into(),
+            );
             let pointer = crate::ast::Pointer::stack_slot(
                 crate::ast::Type::new(binding.element_type),
                 &self.state.builder,
@@ -271,8 +281,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // forwarded verbatim to the next stage at `_;`.
         let downstream_offset = modifier_params.len();
         let forward_params: Vec<Value<'context, '_>> = (0..downstream_types.len())
-            .map(|index| entry.argument(downstream_offset + index).map(Into::into))
-            .collect::<Result<_, _>>()?;
+            .map(|index| {
+                entry
+                    .argument(downstream_offset + index)
+                    .expect("argument index is within the block signature")
+                    .into()
+            })
+            .collect();
 
         // Return slots, initialised from the threaded-in trailing arguments.
         let return_offset = modifier_params.len() + downstream_types.len();
@@ -284,7 +299,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 &self.state.builder,
                 &entry,
             );
-            let incoming = crate::ast::Value::new(entry.argument(return_offset + index)?.into());
+            let incoming = crate::ast::Value::new(
+                entry
+                    .argument(return_offset + index)
+                    .expect("argument index is within the block signature")
+                    .into(),
+            );
             pointer.store(incoming, &self.state.builder, &entry);
             return_slots.push(Some(pointer.into_mlir()));
         }
@@ -307,7 +327,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut current_block = entry;
         let mut terminated = false;
         for statement in modifier_body.iter() {
-            match statement.emit(&mut emitter, current_block)? {
+            match statement.emit(&mut emitter, current_block) {
                 Some(next) => current_block = next,
                 None => {
                     terminated = true;
@@ -323,7 +343,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 &current_block,
             );
         }
-        Ok(())
     }
 
     /// Binds each base constructor's parameters into its own scope, in C3 order,
@@ -346,7 +365,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         scopes: &mut HashMap<NodeId, Environment<'context, 'block>>,
         bound_scopes: &mut HashSet<NodeId>,
         mut current_block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+    ) -> BlockRef<'context, 'block> {
         for contract in mro.iter() {
             // A contract whose constructor takes no externally-supplied
             // parameters evaluates its own base-argument expressions in a fresh
@@ -424,7 +443,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                                 self.storage_layout,
                                 ArithmeticMode::Checked,
                             );
-                            argument.emit(&emitter, current_block)?
+                            argument.emit(&emitter, current_block)
                         };
                         current_block = next_block;
                         let parameter_type = parameter
@@ -467,7 +486,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 scopes.entry(base_id).or_insert(base_environment);
             }
         }
-        Ok(current_block)
+        current_block
     }
 
     /// Emits each base constructor's body, base-first (reversed MRO), each in its
@@ -482,7 +501,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         bound_scopes: &HashSet<NodeId>,
         entry: &BlockRef<'context, 'block>,
         mut current_block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<()> {
+    ) {
         let region = entry.parent_region().expect("entry block has a region");
         let return_types: [Type<'context>; 0] = [];
         let mut terminated = false;
@@ -508,7 +527,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             // invocations in the same list (`Base(args)`) resolve to no modifier
             // and are skipped — their arguments were already bound above.
             let (mut modifier_stages, mut modifier_stage_params, next_block) =
-                self.build_modifier_stages(&base_constructor, environment, current_block)?;
+                self.build_modifier_stages(&base_constructor, environment, current_block);
             current_block = next_block;
 
             if modifier_stages.is_empty() {
@@ -521,7 +540,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         &return_types,
                         &[],
                     );
-                    match statement.emit(&mut emitter, current_block)? {
+                    match statement.emit(&mut emitter, current_block) {
                         Some(next) => current_block = next,
                         None => {
                             terminated = true;
@@ -544,7 +563,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     &[],
                 );
                 emitter.set_modifier_stages(modifier_stages, modifier_stage_params);
-                match emitter.emit_inline_modifier_chain(current_block)? {
+                match emitter.emit_inline_modifier_chain(current_block) {
                     Some(next) => current_block = next,
                     None => terminated = true,
                 }
@@ -563,7 +582,6 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 ReturnOperation.operands(&[])
             );
         }
-        Ok(())
     }
 
     /// Resolves the modifier invocations on `function` to their modifier bodies,
@@ -581,20 +599,16 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// and namespace-qualified paths are inheritance-only (the C3 cluster), and
     /// an invocation that does not resolve to a modifier (a base-constructor call
     /// `Base(args)`) is skipped here and emitted by the constructor path.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if a modifier-argument expression cannot be lowered.
     pub fn build_modifier_stages<'env>(
         &self,
         function: &FunctionDefinition,
         environment: &Environment<'context, 'env>,
         mut block: BlockRef<'context, 'env>,
-    ) -> anyhow::Result<(
+    ) -> (
         Vec<Statements>,
         Vec<ModifierStageParams<'context, 'env>>,
         BlockRef<'context, 'env>,
-    )> {
+    ) {
         let mut modifier_stages: Vec<Statements> = Vec::new();
         let mut modifier_params: Vec<ModifierStageParams<'context, 'env>> = Vec::new();
         for invocation in function.modifier_invocations().iter() {
@@ -638,7 +652,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         self.storage_layout,
                         ArithmeticMode::Checked,
                     );
-                    argument.emit(&emitter, block)?
+                    argument.emit(&emitter, block)
                 };
                 block = next_block;
                 // An unnamed modifier parameter is never referenced in the body,
@@ -679,7 +693,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             modifier_stages.push(modifier_body.statements());
             modifier_params.push(stage_params);
         }
-        Ok((modifier_stages, modifier_params, block))
+        (modifier_stages, modifier_params, block)
     }
 
     /// Re-dispatches a virtual modifier invocation to its most-derived

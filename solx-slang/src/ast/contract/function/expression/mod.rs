@@ -1,5 +1,5 @@
 //!
-//! Expression lowering to MLIR SSA values.
+//! Expression emission to MLIR SSA values.
 //!
 
 pub mod arithmetic;
@@ -95,7 +95,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         function_definition: &FunctionDefinition,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let node_id = function_definition.node_id();
         let target_id = self
             .state
@@ -115,8 +115,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         target_id: NodeId,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let (mlir_name, parameter_types, return_types) = self.state.resolve_function(target_id)?;
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
+        let (mlir_name, parameter_types, return_types) = self.state.resolve_function(target_id);
         let func_ref_type =
             crate::ast::Type::func_ref(self.state.builder.context, parameter_types, return_types)
                 .into_mlir();
@@ -131,7 +131,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     &mlir_name,
                 ))
         );
-        Ok((value, block))
+        (value, block)
     }
 
     /// If `expression` is a bare function name — always an *internal* function
@@ -150,10 +150,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         else {
             return None;
         };
-        let (_, parameter_types, return_types) = self
-            .state
-            .resolve_function(function_definition.node_id())
-            .ok()?;
+        let (_, parameter_types, return_types) =
+            self.state.resolve_function(function_definition.node_id());
         Some(
             crate::ast::Type::func_ref(self.state.builder.context, parameter_types, return_types)
                 .into_mlir(),
@@ -163,7 +161,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Reads a contract state variable's value: a `constant` inlines its
     /// compile-time initializer (exactly as a file-level `constant`), otherwise
     /// the storage slot is loaded. A value-typed slot reads through the shared
-    /// storage-load helper; a reference-typed one evaluates to its storage
+    /// storage-load path; a reference-typed one evaluates to its storage
     /// reference, whose address type is the reference itself (the single
     /// `address_type` rule). Shared by a bare identifier reference and a
     /// namespace-qualified `C.stateVar` / `L.CONST` access (the latter
@@ -172,7 +170,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         state_variable: &ast::StateVariableDefinition,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let declared_type = state_variable
             .get_type()
             .expect("slang types every state variable");
@@ -191,8 +189,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 expression: &initializer,
                 target_type: element_type,
             })
-            .emit(self, block)?;
-            return Ok((value.into_mlir(), block));
+            .emit(self, block);
+            return (value.into_mlir(), block);
         }
         let slot = self
             .storage_layout
@@ -225,9 +223,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 )
                 .into_mlir()
         } else {
-            slot.load(&self.state.builder, element_type, &block)?
+            slot.load(&self.state.builder, element_type, &block)
         };
-        Ok((value, block))
+        (value, block)
     }
 
     /// Picks the MLIR type of the address yielded by `sol.gep` / `sol.map`.
@@ -265,17 +263,13 @@ where
     type Context = &'scope ExpressionContext<'state, 'context, 'block>;
     type Output = BlockAnd<'context, 'block, crate::ast::Value<'context, 'block>>;
 
-    /// Dispatches an expression to its variant's lowering, first folding a
+    /// Dispatches an expression to its variant's emission, first folding a
     /// compile-time-constant arithmetic/bitwise expression straight to a constant:
     /// slang assigns it a `Literal` type carrying the exact computed value, which
     /// matches solc's exact rational arithmetic (`1/2*2 == 1`, `2**256-1` without
     /// 256-bit wraparound) and is the only way to lower a rational intermediate,
     /// which has no runtime type.
-    fn emit(
-        &self,
-        context: Self::Context,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Self::Output> {
+    fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) -> Self::Output {
         // A COMPUTED constant expression (arithmetic / bitwise / shift / prefix)
         // folds to its exact integer — slang records the value on its `Literal`
         // type — and is emitted as that constant directly. A bare literal is
@@ -303,7 +297,7 @@ where
                 &context.state.builder,
                 &block,
             );
-            return Ok(BlockAnd { block, value });
+            return BlockAnd { block, value };
         }
         match self {
             Expression::DecimalNumberExpression(inner) => inner.emit(context, block),
@@ -339,7 +333,7 @@ where
             | Expression::ElementaryType(_)
             | Expression::PayableKeyword(_)
             | Expression::SuperKeyword(_) => {
-                unimplemented!("expression lowering: bare type/keyword")
+                unimplemented!("expression emission: bare type/keyword")
             }
         }
     }

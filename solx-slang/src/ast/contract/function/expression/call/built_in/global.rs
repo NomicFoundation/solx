@@ -41,7 +41,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let builder = &self.state.builder;
         self.emit_unary_member_intrinsic(access, block, |address_value| {
             sol_op_build!(
@@ -59,7 +59,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let builder = &self.state.builder;
         self.emit_unary_member_intrinsic(access, block, |address_value| {
             sol_op_build!(
@@ -77,7 +77,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let builder = &self.state.builder;
         self.emit_unary_member_intrinsic(access, block, |address_value| {
             sol_op_build!(
@@ -95,7 +95,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let builder = &self.state.builder;
         self.emit_unary_member_intrinsic(access, block, |operand| {
             sol_op_build!(
@@ -114,10 +114,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         access: &MemberAccessExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let builder = &self.state.builder;
-        let BlockAnd { value: addr, block } = access.operand().emit(self, block)?;
-        let (values, block) = self.emit_argument_values(arguments, block)?;
+        let BlockAnd { value: addr, block } = access.operand().emit(self, block);
+        let (values, block) = self.emit_argument_values(arguments, block);
         // `sol.send` takes a `ui256` amount; a narrow literal (`r.send(0)` → ui8)
         // must be widened first, like `address.transfer`.
         let amount = crate::ast::Value::from(values[0])
@@ -135,7 +135,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .into_mlir()
             )
         );
-        Ok((Some(value), block))
+        (Some(value), block)
     }
 
     /// Emits `address.transfer(value)` as `sol.transfer` (no result value).
@@ -144,10 +144,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         access: &MemberAccessExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let builder = &self.state.builder;
-        let BlockAnd { value: addr, block } = access.operand().emit(self, block)?;
-        let (values, block) = self.emit_argument_values(arguments, block)?;
+        let BlockAnd { value: addr, block } = access.operand().emit(self, block);
+        let (values, block) = self.emit_argument_values(arguments, block);
         // `sol.transfer` takes a `ui256` amount; a narrow literal (`x.transfer(1)`
         // → ui8) must be widened first.
         let amount = crate::ast::Value::from(values[0])
@@ -162,7 +162,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             block,
             TransferOperation.addr(addr.into_mlir()).val(amount)
         );
-        Ok((None, block))
+        (None, block)
     }
 
     /// Emits a nullary EVM environment global (`tx.origin`, `msg.sender`,
@@ -175,7 +175,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         resolved: Option<BuiltIn>,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let builder = &self.state.builder;
         let operation = match resolved {
             Some(BuiltIn::TxOrigin) => {
@@ -315,6 +315,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .result(0)
             .expect("intrinsic always produces one result")
             .into();
-        Ok((Some(value), block))
+        (Some(value), block)
     }
 }

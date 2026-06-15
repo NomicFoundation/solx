@@ -1,5 +1,5 @@
 //!
-//! Storage load/store expression lowering via Sol dialect.
+//! Storage load/store expression emission via Sol dialect.
 //!
 
 use melior::ir::BlockLike;
@@ -27,14 +27,14 @@ impl StorageSlot {
         builder: &Builder<'context>,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Value<'context, 'block>>
+    ) -> Value<'context, 'block>
     where
         'context: 'block,
     {
         let pointer = self.addr_of(builder, element_type, block);
-        Ok(pointer
+        pointer
             .load(crate::ast::Type::new(element_type), builder, block)
-            .into_mlir())
+            .into_mlir()
     }
 
     /// Emits a store into this slot via `sol.addr_of` + `sol.store`.
@@ -80,16 +80,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Reference-typed slots are written via `sol.copy` from the evaluated
     /// value into the storage reference. Value-typed slots cast to the
     /// declared element type and store via `sol.store`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any initializer expression has an unresolved type
-    /// or contains unsupported constructs.
     pub fn emit_state_var_initializers(
         &self,
         contract: &ContractDefinition,
         mut block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<BlockRef<'context, 'block>> {
+    ) -> BlockRef<'context, 'block> {
         // Run initializers for the whole C3-linearised hierarchy (inherited +
         // own) in linearisation order, so a derived contract's construction
         // executes its base contracts' state-variable initializers — including
@@ -118,7 +113,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let BlockAnd {
                 value,
                 block: next_block,
-            } = initializer.emit(self, block)?;
+            } = initializer.emit(self, block);
             block = next_block;
             if declared_type.is_reference_type() {
                 sol_op_void!(
@@ -132,6 +127,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 crate::ast::Pointer::new(storage_ref).store(stored_value, builder, &block);
             }
         }
-        Ok(block)
+        block
     }
 }

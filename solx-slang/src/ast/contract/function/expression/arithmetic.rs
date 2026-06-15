@@ -1,5 +1,5 @@
 //!
-//! Arithmetic expression lowering: binary additive, multiplicative,
+//! Arithmetic expression emission: binary additive, multiplicative,
 //! exponentiation, bitwise, and shift operations. Each node bridges to the
 //! [`Operator`] it applies, which lowers itself.
 //!
@@ -24,7 +24,7 @@ use crate::ast::type_conversion::TypeConversion;
 
 // Each slang binary-expression node projects to the [`Operator`] it applies —
 // from its typed slang operator enum (or its single fixed operator), never
-// source text — so the shared binary lowering body handles them uniformly. The
+// source text — so the shared binary emission body handles them uniformly. The
 // projection is homed on `Operator` (a slang-local enum) via `From`, the
 // conversion's concept, rather than a bespoke extension trait.
 
@@ -100,7 +100,7 @@ expression_emit!(
             &node.right_operand(),
             result_type,
             block,
-        )?;
-        Ok(BlockAnd { block, value })
+        );
+        BlockAnd { block, value }
     }
 );

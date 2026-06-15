@@ -35,7 +35,7 @@ impl TypeConversion {
     // operand for shifts), so `1 << 100` gets typed as ui8 (the type of `1`)
     // and constant subexpressions overflow at that width. solc folds via
     // `RationalNumberType::binaryOperatorResult`, sizing the result to fit the
-    // folded value. Either teach slang to fold, or fold here before lowering.
+    // folded value. Either teach slang to fold, or fold here before emission.
     pub fn resolve_optional_slang_type<'context>(
         slang_type: Option<SlangType>,
         builder: &solx_mlir::Builder<'context>,
@@ -62,10 +62,10 @@ impl TypeConversion {
     pub fn resolve_state_variable_type<'context>(
         state_variable: &StateVariableDefinition,
         builder: &solx_mlir::Builder<'context>,
-    ) -> anyhow::Result<Type<'context>> {
+    ) -> Type<'context> {
         let slang_type = state_variable
             .get_type()
             .expect("slang types every state variable");
-        Ok(slang_type.resolve_type(LocationPolicy::Declared(None), builder))
+        slang_type.resolve_type(LocationPolicy::Declared(None), builder)
     }
 }

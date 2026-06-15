@@ -29,15 +29,9 @@ where
     type Context = &'scope ExpressionContext<'state, 'context, 'block>;
     type Output = BlockRef<'context, 'block>;
 
-    fn emit(
-        &self,
-        context: Self::Context,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Self::Output> {
+    fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) -> Self::Output {
         match self.0 {
-            Expression::FunctionCallExpression(call) => {
-                Ok(context.emit_function_call(call, block)?.1)
-            }
+            Expression::FunctionCallExpression(call) => context.emit_function_call(call, block).1,
             Expression::PrefixExpression(prefix)
                 if matches!(
                     prefix.operator(),
@@ -46,7 +40,7 @@ where
             {
                 context.emit_delete(&prefix.operand(), block)
             }
-            _ => Ok(self.0.emit(context, block)?.block),
+            _ => self.0.emit(context, block).block,
         }
     }
 }

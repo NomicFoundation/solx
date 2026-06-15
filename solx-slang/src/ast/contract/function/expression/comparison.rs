@@ -30,37 +30,37 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     let right_is_string = matches!(right, Expression::StringExpression(_));
     let is_bytes_like = |r#type: crate::ast::Type| r#type.fixed_bytes_or_byte_width().is_some();
     let (lhs, rhs, block) = if right_is_string && !left_is_string {
-        let BlockAnd { value: lhs, block } = left.emit(context, block)?;
+        let BlockAnd { value: lhs, block } = left.emit(context, block);
         let BlockAnd { value: rhs, block } = if is_bytes_like(lhs.r#type()) {
             (Toward {
                 expression: &right,
                 target_type: lhs.r#type().into_mlir(),
             })
-            .emit(context, block)?
+            .emit(context, block)
         } else {
-            right.emit(context, block)?
+            right.emit(context, block)
         };
         (lhs, rhs, block)
     } else if left_is_string && !right_is_string {
-        let BlockAnd { value: rhs, block } = right.emit(context, block)?;
+        let BlockAnd { value: rhs, block } = right.emit(context, block);
         let BlockAnd { value: lhs, block } = if is_bytes_like(rhs.r#type()) {
             (Toward {
                 expression: &left,
                 target_type: rhs.r#type().into_mlir(),
             })
-            .emit(context, block)?
+            .emit(context, block)
         } else {
-            left.emit(context, block)?
+            left.emit(context, block)
         };
         (lhs, rhs, block)
     } else {
-        let BlockAnd { value: lhs, block } = left.emit(context, block)?;
-        let BlockAnd { value: rhs, block } = right.emit(context, block)?;
+        let BlockAnd { value: lhs, block } = left.emit(context, block);
+        let BlockAnd { value: rhs, block } = right.emit(context, block);
         (lhs, rhs, block)
     };
     if lhs.r#type() == rhs.r#type() {
         let comparison = lhs.compare(rhs, predicate, &context.state.builder, &block);
-        return Ok(BlockAnd { block, value: comparison });
+        return BlockAnd { block, value: comparison };
     }
     // Two fixed-bytes operands of different widths (`bytes3("abc") ==
     // bytes4("abc")`): `bytesN` are LEFT-aligned, so the operands share a
@@ -88,7 +88,7 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
             rhs.cast(crate::ast::Type::new(common), builder, &block)
         };
         let comparison = lhs_common.compare(rhs_common, predicate, builder, &block);
-        return Ok(BlockAnd { block, value: comparison });
+        return BlockAnd { block, value: comparison };
     }
     // Mixed-type comparison (`i < 10` with `i : int8`, `10 : uint8`): widen
     // each operand to 256 bits preserving ITS OWN signedness — a signed
@@ -135,5 +135,5 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         rhs_wide.cast(crate::ast::Type::new(common), &context.state.builder, &block)
     };
     let comparison = lhs_common.compare(rhs_common, predicate, &context.state.builder, &block);
-    Ok(BlockAnd { block, value: comparison })
+    BlockAnd { block, value: comparison }
 });

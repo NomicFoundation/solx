@@ -1,5 +1,5 @@
 //!
-//! Statement lowering to MLIR operations.
+//! Statement emission to MLIR operations.
 //!
 
 pub mod assembly;
@@ -167,18 +167,18 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     pub fn emit_inline_modifier_chain(
         &mut self,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+    ) -> Option<BlockRef<'context, 'block>> {
         let ModifierStrategy::InlineChain {
             stages,
             parameters,
             index,
         } = &self.modifier_strategy
         else {
-            return Ok(Some(block));
+            return Some(block);
         };
         let stage = *index;
         let Some(statements) = stages.get(stage).cloned() else {
-            return Ok(Some(block));
+            return Some(block);
         };
         let params = parameters.get(stage).cloned().unwrap_or_default();
         // Advance the cursor for the recursive `_;` (the borrow of the strategy
@@ -204,13 +204,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     }
 
     /// Returns a reference to the current region.
-    ///
-    /// # Safety
-    ///
-    /// The region pointer is valid as long as the MLIR module exists,
-    /// which outlives all emitters.
     pub fn region(&self) -> &Region<'context> {
-        // SAFETY: The region is owned by the MLIR module and outlives this emitter.
+        // The region is owned by the MLIR module and outlives this emitter.
         unsafe { &*self.region_pointer }
     }
 
@@ -221,21 +216,16 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
 
     /// Evaluates a loop `condition` in `condition_block` and emits the
     /// `sol.condition` terminator. Shared by `for`, `while`, and `do-while`.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the condition expression contains unsupported
-    /// constructs.
     fn emit_loop_condition(
         &self,
         condition: &Expression,
         condition_block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<()> {
+    ) {
         let emitter = ExpressionContext::from(self);
         let BlockAnd {
             value: condition_value,
             block: condition_end,
-        } = condition.emit(&emitter, condition_block)?;
+        } = condition.emit(&emitter, condition_block);
         let condition_boolean = condition_value
             .is_nonzero(&self.state.builder, &condition_end)
             .into_mlir();
@@ -244,32 +234,27 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             &condition_end,
             ConditionOperation.condition(condition_boolean)
         );
-        Ok(())
     }
 
     /// Emits a sequence of statements inside a new lexical scope.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any statement contains unsupported constructs.
     pub fn emit_block(
         &mut self,
         statements: Statements,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+    ) -> Option<BlockRef<'context, 'block>> {
         self.environment.enter_scope();
         let mut current = block;
         for statement in statements.iter() {
-            match statement.emit(self, current)? {
+            match statement.emit(self, current) {
                 Some(next) => current = next,
                 None => {
                     self.environment.exit_scope();
-                    return Ok(None);
+                    return None;
                 }
             }
         }
         self.environment.exit_scope();
-        Ok(Some(current))
+        Some(current)
     }
 
     /// Emits only the side effects of a discarded type-reference expression: a
@@ -280,7 +265,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         &mut self,
         expression: Expression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+    ) -> Option<BlockRef<'context, 'block>> {
         match expression.unwrap_parentheses() {
             Expression::MemberAccessExpression(access) => {
                 self.emit_type_reference_side_effects(access.operand(), block)
@@ -288,10 +273,10 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             Expression::ConditionalExpression(conditional) => {
                 let emitter = ExpressionContext::from(&*self);
                 let operand = conditional.operand();
-                let BlockAnd { block, .. } = operand.emit(&emitter, block)?;
-                Ok(Some(block))
+                let BlockAnd { block, .. } = operand.emit(&emitter, block);
+                Some(block)
             }
-            _ => Ok(Some(block)),
+            _ => Some(block),
         }
     }
 
@@ -299,18 +284,14 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// (call the wrapped body / next stage, threading the shared return values),
     /// delegating to [`ModifierBodyCall::emit`]. Outside a modifier stage `_;`
     /// has no hand-off set and emits nothing.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the hand-off call cannot be lowered.
     fn emit_modifier_body_call(
         &self,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Option<BlockRef<'context, 'block>>> {
+    ) -> Option<BlockRef<'context, 'block>> {
         if let ModifierStrategy::BodyCall(body_call) = &self.modifier_strategy {
-            body_call.emit(&self.state.builder, &block)?;
+            body_call.emit(&self.state.builder, &block);
         }
-        Ok(Some(block))
+        Some(block)
     }
 }
 
@@ -329,7 +310,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
             .state
             .builder
             .emit_return_from_slots(context.return_types, context.return_slots, &block);
-        return Ok(None);
+        return None;
     };
 
     let emitter = ExpressionContext::from(&*context);
@@ -344,7 +325,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
             let inner = item
                 .expression()
                 .expect("a return tuple element has an inner expression");
-            let BlockAnd { value, block: next } = inner.emit(&emitter, current)?;
+            let BlockAnd { value, block: next } = inner.emit(&emitter, current);
             values.push(value);
             current = next;
         }
@@ -357,10 +338,10 @@ statement_emit!(ReturnStatement; |node, context, block| {
         // the `sol.return` arity matches rather than taking the first value.
         let (values, block) = match &expression {
             Expression::FunctionCallExpression(call) => {
-                emitter.emit_function_call_results(call, block)?
+                emitter.emit_function_call_results(call, block)
             }
             Expression::ConditionalExpression(conditional) => {
-                emitter.emit_conditional_tuple_values(conditional, block)?
+                emitter.emit_conditional_tuple_values(conditional, block)
             }
             _ => {
                 unimplemented!("multi-value return of a non-call expression is not supported")
@@ -379,7 +360,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
             expression: &expression,
             target_type: return_type,
         })
-        .emit(&emitter, block)?;
+        .emit(&emitter, block);
         (vec![value], block)
     };
 
@@ -402,7 +383,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
         &block,
         ReturnOperation.operands(&cast_values)
     );
-    Ok(None)
+    None
 });
 
 statement_emit!(Block; |node, context, block| {
@@ -411,12 +392,12 @@ statement_emit!(Block; |node, context, block| {
 
 statement_emit!(BreakStatement; |context, block| {
     sol_op_void!(&context.state.builder, &block, BreakOperation);
-    Ok(None)
+    None
 });
 
 statement_emit!(ContinueStatement; |context, block| {
     sol_op_void!(&context.state.builder, &block, ContinueOperation);
-    Ok(None)
+    None
 });
 
 // A bare expression statement discards its value but keeps its side effects.
@@ -440,18 +421,18 @@ statement_emit!(ExpressionStatement; |node, context, block| {
             }
         }
         ExpressionStatementKind::RevertCall(call) => context.emit_revert_call(&call, block),
-        ExpressionStatementKind::TypeOrSuperNoop => Ok(Some(block)),
+        ExpressionStatementKind::TypeOrSuperNoop => Some(block),
         ExpressionStatementKind::TypeReference(expression) => {
             context.emit_type_reference_side_effects(expression, block)
         }
         ExpressionStatementKind::TupleConditional(conditional) => {
             let emitter = ExpressionContext::from(&*context);
-            let (_values, block) = emitter.emit_conditional_tuple_values(&conditional, block)?;
-            Ok(Some(block))
+            let (_values, block) = emitter.emit_conditional_tuple_values(&conditional, block);
+            Some(block)
         }
         ExpressionStatementKind::Value(expression) => {
             let emitter = ExpressionContext::from(&*context);
-            Ok(Some(Discarded(&expression).emit(&emitter, block)?))
+            Some(Discarded(&expression).emit(&emitter, block))
         }
     }
 });
@@ -474,13 +455,9 @@ where
     type Context = &'scope mut StatementContext<'state, 'context, 'block>;
     type Output = Option<BlockRef<'context, 'block>>;
 
-    /// Dispatches a statement to its variant's lowering, threading the
+    /// Dispatches a statement to its variant's emission, threading the
     /// continuation block (`None` when control diverged).
-    fn emit(
-        &self,
-        context: Self::Context,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Self::Output> {
+    fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) -> Self::Output {
         match self {
             Statement::VariableDeclarationStatement(inner) => inner.emit(context, block),
             Statement::ExpressionStatement(inner) => inner.emit(context, block),

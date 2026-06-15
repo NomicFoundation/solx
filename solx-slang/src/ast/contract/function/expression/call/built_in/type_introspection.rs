@@ -1,5 +1,5 @@
 //!
-//! `type(T).min`/`max`/`interfaceId`/`code`/`name` lowering.
+//! `type(T).min`/`max`/`interfaceId`/`code`/`name` emission.
 //!
 
 use melior::ir::BlockLike;
@@ -30,7 +30,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let builtin = access
             .member()
             .resolve_to_built_in()
@@ -64,7 +64,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let enum_value = int_value
             .cast(crate::ast::Type::new(result_type), builder, &block)
             .into_mlir();
-        Ok((enum_value, block))
+        (enum_value, block)
     }
 
     /// Emits `type(T).min` / `type(T).max` for an integer type — a compile-time
@@ -73,7 +73,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let builtin = access
             .member()
             .resolve_to_built_in()
@@ -98,7 +98,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &block,
         )
         .into_mlir();
-        Ok((value, block))
+        (value, block)
     }
 
     /// Emits `type(I).interfaceId` (EIP-165): a compile-time `bytes4` constant,
@@ -109,7 +109,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let Expression::TypeExpression(type_expression) = access.operand() else {
             unreachable!("type(I).interfaceId operand is a type expression");
         };
@@ -147,7 +147,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 &block,
             )
             .into_mlir();
-        Ok((value, block))
+        (value, block)
     }
 
     /// Emits `type(C).creationCode` / `type(C).runtimeCode` as the contract's
@@ -162,7 +162,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let builtin = access
             .member()
             .resolve_to_built_in()
@@ -203,7 +203,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .obj_name(StringAttribute::new(builder.context, &object_name))
                 .out(result_type)
         );
-        Ok((value, block))
+        (value, block)
     }
 
     /// Emits `type(C).name` — the contract / interface name as a `string memory`
@@ -212,7 +212,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let Expression::TypeExpression(type_expression) = access.operand() else {
             unreachable!("type(C).name operand is a type expression");
         };
@@ -237,6 +237,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .into_mlir()
                 )
         );
-        Ok((value, block))
+        (value, block)
     }
 }

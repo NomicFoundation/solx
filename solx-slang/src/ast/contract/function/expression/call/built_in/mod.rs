@@ -1,5 +1,5 @@
 //!
-//! Solidity built-in function and EVM intrinsic lowering.
+//! Solidity built-in function and EVM intrinsic emission.
 //!
 
 pub mod abi;
@@ -53,31 +53,26 @@ impl CallKind {
     /// built-ins with a matching argument count reach here, so the
     /// argument-count expectations always hold and unhandled variants are
     /// unreachable.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the built-in's arguments are malformed (e.g. a
-    /// non-string `require` message).
     pub fn emit_built_in_call<'state, 'context, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         built_in: BuiltIn,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         match built_in {
             BuiltIn::Assert => {
                 let condition = arguments.iter().next().expect("assert has one argument");
-                Ok((None, context.emit_assert(&condition, block)?))
+                (None, context.emit_assert(&condition, block))
             }
             BuiltIn::Require => {
                 let mut iter = arguments.iter();
                 let condition = iter.next().expect("require has a condition argument");
                 let message = iter.next();
-                Ok((
+                (
                     None,
-                    context.emit_require(&condition, message.as_ref(), block)?,
-                ))
+                    context.emit_require(&condition, message.as_ref(), block),
+                )
             }
             BuiltIn::Gasleft => {
                 let builder = &context.state.builder;
@@ -89,10 +84,10 @@ impl CallKind {
                             .into_mlir()
                     )
                 );
-                Ok((Some(value), block))
+                (Some(value), block)
             }
             BuiltIn::Blockhash => {
-                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let (values, block) = context.emit_argument_values(arguments, block);
                 let builder = &context.state.builder;
                 // `sol.blockhash` takes a `ui256` block number; coerce a narrower
                 // argument type up first.
@@ -110,15 +105,15 @@ impl CallKind {
                         .block_number(block_number)
                         .val(crate::ast::Type::fixed_bytes(builder.context, 32).into_mlir())
                 );
-                Ok((Some(value), block))
+                (Some(value), block)
             }
             BuiltIn::Keccak256 => {
-                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let (values, block) = context.emit_argument_values(arguments, block);
                 let value = context.emit_keccak256(values[0], &block);
-                Ok((Some(value), block))
+                (Some(value), block)
             }
             BuiltIn::Sha256 => {
-                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let (values, block) = context.emit_argument_values(arguments, block);
                 let builder = &context.state.builder;
                 let value = sol_op!(
                     builder,
@@ -127,10 +122,10 @@ impl CallKind {
                         .data(values[0])
                         .result(crate::ast::Type::fixed_bytes(builder.context, 32).into_mlir())
                 );
-                Ok((Some(value), block))
+                (Some(value), block)
             }
             BuiltIn::Ripemd160 => {
-                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let (values, block) = context.emit_argument_values(arguments, block);
                 let builder = &context.state.builder;
                 let value = sol_op!(
                     builder,
@@ -139,10 +134,10 @@ impl CallKind {
                         .data(values[0])
                         .result(crate::ast::Type::fixed_bytes(builder.context, 20).into_mlir())
                 );
-                Ok((Some(value), block))
+                (Some(value), block)
             }
             BuiltIn::Ecrecover => {
-                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let (values, block) = context.emit_argument_values(arguments, block);
                 let builder = &context.state.builder;
                 // `ecrecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s)`: the
                 // hash / r / s arguments keep their literal `uint256` type, but
@@ -172,10 +167,10 @@ impl CallKind {
                         .s(s)
                         .result(crate::ast::Type::address(builder.context, false).into_mlir())
                 );
-                Ok((Some(value), block))
+                (Some(value), block)
             }
             BuiltIn::Addmod => {
-                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let (values, block) = context.emit_argument_values(arguments, block);
                 let builder = &context.state.builder;
                 // `addmod` operates on `uint256`, but a literal operand keeps its
                 // narrow type (`addmod(1, 2, d)` → ui8, ui8, ui256); `sol.addmod`
@@ -193,10 +188,10 @@ impl CallKind {
                     .coerce_to(crate::ast::Type::new(ui256), builder, &block)
                     .into_mlir();
                 let value = sol_op!(builder, block, AddModOperation.x(x).y(y).r#mod(modulus));
-                Ok((Some(value), block))
+                (Some(value), block)
             }
             BuiltIn::Mulmod => {
-                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let (values, block) = context.emit_argument_values(arguments, block);
                 let builder = &context.state.builder;
                 // `mulmod` operates on `uint256`; widen narrow literal operands so
                 // all operands/result share the type `sol.mulmod` requires.
@@ -213,7 +208,7 @@ impl CallKind {
                     .coerce_to(crate::ast::Type::new(ui256), builder, &block)
                     .into_mlir();
                 let value = sol_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus));
-                Ok((Some(value), block))
+                (Some(value), block)
             }
             _ => unreachable!("only emittable identifier built-ins are routed here"),
         }
@@ -226,22 +221,17 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ///
     /// Dispatches the resolved member built-in to its family handler; an
     /// unrecognized member is reported by [`Self::emit_environment_global`].
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the member access does not resolve to a recognized
-    /// EVM intrinsic.
     pub fn emit_built_in_member_access(
         &self,
         access: &MemberAccessExpression,
         arguments: Option<&PositionalArguments>,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         // An enum-variant reference (`E.Variant`) resolves to a value, not a
         // built-in or intrinsic; handle it before the built-in dispatch.
         if let Some(ordinal) = self.enum_variant_ordinal(access, arguments) {
             let (value, block) = self.emit_enum_variant(access, ordinal, block);
-            return Ok((Some(value), block));
+            return (Some(value), block);
         }
         // A function-like built-in member over a value operand referenced
         // WITHOUT a call — `addr.transfer` / `addr.send` / `addr.call` /
@@ -270,7 +260,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let BlockAnd {
                 value: _operand,
                 block,
-            } = access.operand().emit(self, block)?;
+            } = access.operand().emit(self, block);
             let builder = &self.state.builder;
             let placeholder = crate::ast::Value::constant(
                 0,
@@ -279,7 +269,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 &block,
             )
             .into_mlir();
-            return Ok((Some(placeholder), block));
+            return (Some(placeholder), block);
         }
         // The `abi.*` builtins referenced WITHOUT a call — `abi.encode;`,
         // `abi.encodePacked;`, `abi.decode;` and friends, e.g. a discarded
@@ -307,7 +297,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 &block,
             )
             .into_mlir();
-            return Ok((Some(placeholder), block));
+            return (Some(placeholder), block);
         }
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressBalance) => self.emit_address_balance(access, block),
@@ -348,24 +338,24 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 self.emit_array_push(access, arguments, block)
             }
             Some(BuiltIn::TypeMin | BuiltIn::TypeMax) => {
-                let (value, block) = self.emit_type_min_max(access, block)?;
-                Ok((Some(value), block))
+                let (value, block) = self.emit_type_min_max(access, block);
+                (Some(value), block)
             }
             Some(BuiltIn::TypeEnumMin | BuiltIn::TypeEnumMax) => {
-                let (value, block) = self.emit_type_enum_min_max(access, block)?;
-                Ok((Some(value), block))
+                let (value, block) = self.emit_type_enum_min_max(access, block);
+                (Some(value), block)
             }
             Some(BuiltIn::TypeInterfaceId) => {
-                let (value, block) = self.emit_type_interface_id(access, block)?;
-                Ok((Some(value), block))
+                let (value, block) = self.emit_type_interface_id(access, block);
+                (Some(value), block)
             }
             Some(BuiltIn::TypeName) => {
-                let (value, block) = self.emit_type_name(access, block)?;
-                Ok((Some(value), block))
+                let (value, block) = self.emit_type_name(access, block);
+                (Some(value), block)
             }
             Some(BuiltIn::TypeCreationCode | BuiltIn::TypeRuntimeCode) => {
-                let (value, block) = self.emit_type_code(access, block)?;
-                Ok((Some(value), block))
+                let (value, block) = self.emit_type_code(access, block);
+                (Some(value), block)
             }
             Some(BuiltIn::StringConcat | BuiltIn::BytesConcat) => {
                 let arguments = arguments.expect("concat is a member-access call");
@@ -389,7 +379,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     &block,
                 )
                 .into_mlir();
-                Ok((Some(placeholder), block))
+                (Some(placeholder), block)
             }
             // A member that resolves to a function used as a value (not called) is
             // a function pointer: an externally-visible function with a selector
@@ -406,8 +396,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         // The literal target lowers (no virtual redirect): an
                         // explicit `Base.f` names Base's own implementation, not
                         // the most-derived override a bare `f` would bind.
-                        self.emit_function_constant(function_definition.node_id(), block)
-                            .map(|(value, block)| (Some(value), block))
+                        let (value, block) =
+                            self.emit_function_constant(function_definition.node_id(), block);
+                        (Some(value), block)
                     }
                 } else {
                     self.emit_environment_global(resolved, access, block)
@@ -424,8 +415,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (values, block) = self.emit_argument_values(arguments, block)?;
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let (values, block) = self.emit_argument_values(arguments, block);
         let builder = &self.state.builder;
         let result_type =
             crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir();
@@ -434,7 +425,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             block,
             ConcatOperation.args(&values).result(result_type)
         );
-        Ok((Some(value), block))
+        (Some(value), block)
     }
 
     /// Emits each positional argument and returns the resulting values
@@ -446,15 +437,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let mut values = Vec::with_capacity(arguments.len());
         let mut current = block;
         for argument in arguments.iter() {
-            let BlockAnd { value, block: next } = argument.emit(self, current)?;
+            let BlockAnd { value, block: next } = argument.emit(self, current);
             values.push(value.into_mlir());
             current = next;
         }
-        Ok((values, current))
+        (values, current)
     }
 
     /// Emits `keccak256` over a byte buffer, returning the 32-byte hash. The
@@ -496,19 +487,19 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         access: &MemberAccessExpression,
         block: BlockRef<'context, 'block>,
         build_op: F,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)>
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>)
     where
         F: FnOnce(Value<'context, 'block>) -> Operation<'context>,
     {
         let BlockAnd {
             value: address_value,
             block,
-        } = access.operand().emit(self, block)?;
+        } = access.operand().emit(self, block);
         let value = block
             .append_operation(build_op(address_value.into_mlir()))
             .result(0)
             .expect("unary member intrinsic always produces one result")
             .into();
-        Ok((Some(value), block))
+        (Some(value), block)
     }
 }

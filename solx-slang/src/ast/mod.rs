@@ -1,9 +1,9 @@
 //!
-//! Slang AST lowering to MLIR.
+//! Slang AST emission to MLIR.
 //!
 
 pub mod arguments_declaration_ext;
-/// Contract definition lowering to Sol dialect MLIR.
+/// Contract definition emission to Sol dialect MLIR.
 pub mod contract;
 pub mod emit;
 pub mod library_ext;
@@ -62,20 +62,15 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
     /// contract reaches. `operator_bindings` is the unit's set of user-defined
     /// operator bindings (`using {f as op} for T global;`), shared across every
     /// contract.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if code generation encounters unsupported constructs.
-    /// Returns the contract's name and its public-method selector table.
     pub fn emit_contract(
         &mut self,
         contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],
         operator_bindings: &OperatorBindings,
-    ) -> anyhow::Result<(String, BTreeMap<String, String>)> {
+    ) -> (String, BTreeMap<String, String>) {
         let name = contract.name().name();
         let mut emitter = ContractEmitter::new(self.state);
-        emitter.emit(contract, free_functions, operator_bindings)?;
+        emitter.emit(contract, free_functions, operator_bindings);
 
         let mut method_identifiers = BTreeMap::new();
         // Walk the C3-linearised function list (inherited + own) so a derived
@@ -105,6 +100,6 @@ impl<'state, 'context> AstEmitter<'state, 'context> {
             method_identifiers.insert(signature, format!("{selector:08x}"));
         }
 
-        Ok((name, method_identifiers))
+        (name, method_identifiers)
     }
 }

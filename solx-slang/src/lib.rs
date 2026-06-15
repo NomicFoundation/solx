@@ -10,7 +10,7 @@ extern crate solx_mlir;
 #[macro_use]
 mod macros;
 
-/// Slang AST lowering to MLIR.
+/// Slang AST emission to MLIR.
 pub mod ast;
 /// Slang Solidity frontend implementation.
 pub mod slang;

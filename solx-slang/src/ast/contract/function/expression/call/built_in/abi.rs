@@ -1,5 +1,5 @@
 //!
-//! `abi.encode*` and `abi.decode` built-in lowering.
+//! `abi.encode*` and `abi.decode` built-in emission.
 //!
 
 use melior::ir::Attribute;
@@ -36,10 +36,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (values, block) = self.emit_argument_values(arguments, block)?;
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let (values, block) = self.emit_argument_values(arguments, block);
         let result = self.emit_sol_encode(&values, None, EncodeMode::Standard, &block);
-        Ok((Some(result), block))
+        (Some(result), block)
     }
 
     /// Emits `abi.encodePacked(args)` as a packed `sol.encode`.
@@ -47,10 +47,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (values, block) = self.emit_argument_values(arguments, block)?;
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let (values, block) = self.emit_argument_values(arguments, block);
         let result = self.emit_sol_encode(&values, None, EncodeMode::Packed, &block);
-        Ok((Some(result), block))
+        (Some(result), block)
     }
 
     /// Emits `abi.encodeWithSelector(selector, args)`, casting the first
@@ -59,8 +59,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (mut values, block) = self.emit_argument_values(arguments, block)?;
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let (mut values, block) = self.emit_argument_values(arguments, block);
         let builder = &self.state.builder;
         let selector = crate::ast::Value::from(values.remove(0))
             .cast(
@@ -70,7 +70,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             )
             .into_mlir();
         let result = self.emit_sol_encode(&values, Some(selector), EncodeMode::Standard, &block);
-        Ok((Some(result), block))
+        (Some(result), block)
     }
 
     /// Emits `abi.encodeWithSignature(sig, args)`, hashing the signature to a
@@ -80,7 +80,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let mut iter = arguments.iter();
         let signature_expression = iter.next().expect("slang validates non-empty arguments");
         // A literal signature hashes at compile time to a constant selector; a
@@ -102,7 +102,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let BlockAnd {
                     value: signature_value,
                     block: current,
-                } = signature_expression.emit(self, block)?;
+                } = signature_expression.emit(self, block);
                 // The runtime signature is hashed by `keccak256` and truncated to
                 // its leading four bytes.
                 let hash = self.emit_keccak256(signature_value.into_mlir(), &current);
@@ -119,7 +119,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         let mut values = Vec::with_capacity(arguments.len() - 1);
         for argument in iter {
-            let BlockAnd { value, block: next } = argument.emit(self, current)?;
+            let BlockAnd { value, block: next } = argument.emit(self, current);
             values.push(value.into_mlir());
             current = next;
         }
@@ -129,7 +129,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             EncodeMode::Standard,
             &current,
         );
-        Ok((Some(result), current))
+        (Some(result), current)
     }
 
     /// Emits `abi.encodeCall(callee, args)`: the callee's 4-byte selector
@@ -147,7 +147,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Option<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let mut iter = arguments.iter();
         let function_expression = iter
             .next()
@@ -188,7 +188,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let BlockAnd {
                     value: function_value,
                     block: current,
-                } = function_expression.emit(self, block)?;
+                } = function_expression.emit(self, block);
                 assert!(
                     function_value.r#type().is_ext_function_ref(),
                     "abi.encodeCall's runtime callee resolves to an external function pointer"
@@ -230,14 +230,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &argument_expressions,
             &parameter_types,
             current,
-        )?;
+        );
         let result = self.emit_sol_encode(
             &values,
             Some(selector_value),
             EncodeMode::Standard,
             &current,
         );
-        Ok((Some(result), current))
+        (Some(result), current)
     }
 
     /// Emits a `sol.encode` operation producing a `bytes memory` payload.
@@ -315,7 +315,7 @@ impl CallKind {
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let payload_expression = arguments
             .iter()
             .next()
@@ -323,7 +323,7 @@ impl CallKind {
         let BlockAnd {
             value: payload_value,
             block,
-        } = payload_expression.emit(context, block)?;
+        } = payload_expression.emit(context, block);
         let result_types = context.abi_decode_result_types(call);
         let builder = &context.state.builder;
         // `sol.decode` requires a memory or calldata byte buffer; a storage
@@ -359,6 +359,6 @@ impl CallKind {
                     .into()
             })
             .collect();
-        Ok((values, block))
+        (values, block)
     }
 }

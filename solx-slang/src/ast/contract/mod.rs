@@ -1,10 +1,10 @@
 //!
-//! Contract definition lowering to Sol dialect MLIR.
+//! Contract definition emission to Sol dialect MLIR.
 //!
 
 pub mod body_origin;
 pub mod free_function;
-/// Function definition lowering to Sol dialect MLIR.
+/// Function definition emission to Sol dialect MLIR.
 pub mod function;
 pub mod getter;
 pub mod getter_level;
@@ -63,7 +63,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// resolving `SlangType::Contract` to a `Sol_ContractType`.
     // TODO: walk the inheritance tree like solc does (`receiveFunction` /
     // `fallbackFunction` on `ContractDefinition`, `ContractType::isPayable`)
-    // and move this helper into Slang.
+    // and move this into Slang.
     pub fn is_contract_payable(contract: &ContractDefinition) -> bool {
         contract.functions().iter().any(|function| {
             matches!(function.kind(), FunctionKind::Receive)
@@ -73,17 +73,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     }
 
     /// Emits a `sol.contract` containing all function definitions.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any function body or constructor initializer
-    /// contains unsupported constructs.
     pub fn emit(
         &mut self,
         contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],
         operator_bindings: &OperatorBindings,
-    ) -> anyhow::Result<()> {
+    ) {
         let contract_name = contract.name().name();
         self.state.operator_bindings = operator_bindings.map.clone();
 
@@ -181,7 +176,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // + own), not just this contract's own members: a derived contract owns
         // the FULL storage layout, and an inherited getter / inherited function
         // body emits `sol.addr_of @var` against an inherited slot, which the
-        // backend's `AddrOfOpLowering` resolves by `lookupSymbol` in this
+        // backend resolves by `lookupSymbol` in this
         // contract's module (asserts if the `sol.state_var` declaration is
         // absent).
         for state_variable in contract.linearised_state_variables() {
@@ -189,7 +184,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 continue;
             };
             let element_type =
-                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder)?;
+                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder);
             self.state.builder.emit_sol_state_var(
                 &slot.name,
                 slot.slot,
@@ -202,7 +197,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         self.state.current_contract_type = Some(contract_type);
         FunctionEmitter::new(self.state, Some(contract), &storage_layout)
-            .emit_constructor(&contract_body)?;
+            .emit_constructor(&contract_body);
         self.state.current_contract_type = None;
 
         // An overridden public function whose signature matches an inherited
@@ -245,7 +240,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             }
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, Some(contract), &storage_layout)
-                .emit_sol(&function, &contract_body)?;
+                .emit_sol(&function, &contract_body);
             self.state.current_contract_type = None;
         }
 
@@ -253,8 +248,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // contract-qualified symbols (internal-only, no selector).
         for (symbol, function) in &super_dispatch.shadowed {
             self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, Some(contract), &storage_layout)
-                .emit_sol_with_symbol(function, symbol, &contract_body)?;
+            FunctionEmitter::new(self.state, Some(contract), &storage_layout).emit_sol_with_symbol(
+                function,
+                symbol,
+                &contract_body,
+            );
             self.state.current_contract_type = None;
         }
 
@@ -263,18 +261,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // functions of the same name and signature do not collide on one symbol.
         for free in &reached_free_functions {
             self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, Some(contract), &storage_layout)
-                .emit_sol_with_symbol(
-                    free,
-                    &Self::node_id_qualified_symbol(free),
-                    &contract_body,
-                )?;
+            FunctionEmitter::new(self.state, Some(contract), &storage_layout).emit_sol_with_symbol(
+                free,
+                &Self::node_id_qualified_symbol(free),
+                &contract_body,
+            );
             self.state.current_contract_type = None;
         }
 
-        self.emit_state_variable_getters(contract, &storage_layout, &contract_body)?;
-
-        Ok(())
+        self.emit_state_variable_getters(contract, &storage_layout, &contract_body);
     }
 
     /// Emits a deployable library object — its externally-dispatchable functions
@@ -285,18 +280,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// inlined into their callers, so they are not part of the library's own
     /// object. A library with no externally-visible function is therefore
     /// emitted as an empty, call-protected stub — matching solc, and avoiding
-    /// standalone emission of inlined-only helpers that assume a caller context
+    /// standalone emission of inlined-only functions that assume a caller context
     /// (e.g. a storage-parameter modifier), which would otherwise panic. The
     /// stub still exists in the build artifacts so the harness's `// library:`
     /// directive can deploy and link it.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any function body contains unsupported constructs.
     pub fn emit_library(
         &mut self,
         library: &LibraryDefinition,
-    ) -> anyhow::Result<(String, BTreeMap<String, String>)> {
+    ) -> (String, BTreeMap<String, String>) {
         let library_name = library.name().name();
 
         let has_deployable_function = library.members().iter().any(|member| {
@@ -366,7 +357,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         for function in &functions {
             self.state.current_contract_type = Some(library_type);
             FunctionEmitter::new(self.state, None, &storage_layout)
-                .emit_sol(function, &contract_body)?;
+                .emit_sol(function, &contract_body);
             self.state.current_contract_type = None;
         }
 
@@ -381,7 +372,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             method_identifiers.insert(signature, format!("{selector:08x}"));
         }
 
-        Ok((library_name, method_identifiers))
+        (library_name, method_identifiers)
     }
 
     /// Synthesises the auto-generated external accessor for each `public` state
@@ -395,23 +386,22 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         contract: &ContractDefinition,
         storage_layout: &HashMap<NodeId, StorageSlot>,
         contract_body: &BlockRef<'context, '_>,
-    ) -> anyhow::Result<()> {
+    ) {
         for state_variable in contract.linearised_state_variables() {
             if matches!(
                 state_variable.mutability(),
                 StateVariableMutability::Constant
             ) {
-                self.emit_constant_getter(&state_variable, storage_layout, contract_body)?;
+                self.emit_constant_getter(&state_variable, storage_layout, contract_body);
             } else if let Some(slot) = storage_layout.get(&state_variable.node_id()) {
                 self.emit_state_variable_getter(
                     &state_variable,
                     slot,
                     slot.location,
                     contract_body,
-                )?;
+                );
             }
         }
-        Ok(())
     }
 
     /// Pre-registers all function signatures for call resolution before bodies

@@ -101,9 +101,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         slot: &StorageSlot,
         location: DataLocation,
         contract_body: &BlockRef<'context, '_>,
-    ) -> anyhow::Result<()> {
+    ) {
         let Some((abi, signature, selector)) = Self::getter_abi_prologue(state_variable) else {
-            return Ok(());
+            return;
         };
         let declared_type = state_variable
             .get_type()
@@ -120,15 +120,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         if !abi.inputs().is_empty() {
             return self.emit_indexed_getter(&frame, abi.inputs().len());
         }
-        if self.emit_struct_getter(&frame)? {
-            return Ok(());
+        if self.emit_struct_getter(&frame) {
+            return;
         }
         self.emit_scalar_getter(&frame)
     }
 
     /// Emits a scalar / reference getter: `T public name` becomes `function
     /// name() view returns (T)` reading the variable's slot.
-    fn emit_scalar_getter(&self, abi: &GetterAbi<'_, 'context, '_>) -> anyhow::Result<()> {
+    fn emit_scalar_getter(&self, abi: &GetterAbi<'_, 'context, '_>) {
         let GetterAbi {
             state_variable,
             signature,
@@ -139,7 +139,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             contract_body,
         } = *abi;
         let builder = &self.state.builder;
-        let element_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
+        let element_type = TypeConversion::resolve_state_variable_type(state_variable, builder);
         // A reference-typed variable (`string`/`bytes`/array) is addressed by the
         // reference type itself in storage; value types by a `!sol.ptr<T, _>`.
         let address_type = if declared_type.is_reference_type() {
@@ -172,7 +172,6 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .into_mlir()
         };
         sol_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
-        Ok(())
     }
 
     /// Emits an indexed getter for a mapping / array state variable: `m(k)`,
@@ -182,11 +181,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ///
     /// Struct and other reference results are emitted by a later fill (the
     /// getter is left ungenerated meanwhile rather than emitted incorrectly).
-    fn emit_indexed_getter(
-        &self,
-        abi: &GetterAbi<'_, 'context, '_>,
-        abi_input_count: usize,
-    ) -> anyhow::Result<()> {
+    fn emit_indexed_getter(&self, abi: &GetterAbi<'_, 'context, '_>, abi_input_count: usize) {
         let GetterAbi {
             state_variable,
             signature,
@@ -200,9 +195,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let (input_types, levels, result_slang) =
             self.plan_indexed_getter_levels(declared_type, location);
         if input_types.is_empty() || input_types.len() != abi_input_count {
-            return Ok(());
+            return;
         }
-        let container_type = TypeConversion::resolve_state_variable_type(state_variable, builder)?;
+        let container_type = TypeConversion::resolve_state_variable_type(state_variable, builder);
         let result_type =
             result_slang.resolve_type(LocationPolicy::Declared(Some(location)), builder);
         // A struct result expands into its flattened returnable-member tuple;
@@ -210,14 +205,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let struct_plan = match &result_slang {
             SlangType::Struct(struct_type) => {
                 let Definition::Struct(struct_definition) = struct_type.definition() else {
-                    return Ok(());
+                    return;
                 };
                 match Self::struct_getter_layout(&struct_definition, result_type, builder) {
                     Some(plan) => Some(plan),
-                    None => return Ok(()),
+                    None => return,
                 }
             }
-            _ if result_slang.is_reference_type() => return Ok(()),
+            _ if result_slang.is_reference_type() => return,
             _ => None,
         };
         let result_types: Vec<Type<'context>> = match &struct_plan {
@@ -244,7 +239,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
                 .addr(container_type)
         );
-        let base = self.emit_getter_access_chain(base, &levels, &entry)?;
+        let base = self.emit_getter_access_chain(base, &levels, &entry);
         self.emit_indexed_getter_result(base, &struct_plan, result_type, &entry)
     }
 
@@ -257,7 +252,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         struct_plan: &Option<Vec<(u64, Type<'context>, Type<'context>)>>,
         result_type: Type<'context>,
         entry: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<()> {
+    ) {
         let builder = &self.state.builder;
         match struct_plan {
             Some(plan) => {
@@ -283,7 +278,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         *member_type,
                         *result_member_type,
                         entry,
-                    )?);
+                    ));
                 }
                 sol_op_void!(builder, entry, ReturnOperation.operands(&values));
             }
@@ -294,7 +289,6 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 sol_op_void!(builder, entry, ReturnOperation.operands(&[value]));
             }
         }
-        Ok(())
     }
 
     /// Walks the mapping/array nesting of an indexed getter's declared type,
@@ -380,10 +374,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         mut base: Value<'context, 'block>,
         levels: &[GetterLevel<'context>],
         entry: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Value<'context, 'block>> {
+    ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
         for (index, level) in levels.iter().enumerate() {
-            let arg: Value<'context, 'block> = entry.argument(index)?.into();
+            let arg: Value<'context, 'block> = entry
+                .argument(index)
+                .expect("argument index is within the block signature")
+                .into();
             base = match level {
                 GetterLevel::Mapping(level_type) => crate::ast::Pointer::new(base)
                     .entry(
@@ -439,7 +436,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
             };
         }
-        Ok(base)
+        base
     }
 
     /// Emits a `constant` state variable's getter (a folded compile-time value).
@@ -448,15 +445,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         state_variable: &StateVariableDefinition,
         storage_layout: &HashMap<NodeId, StorageSlot>,
         contract_body: &BlockRef<'context, '_>,
-    ) -> anyhow::Result<()> {
+    ) {
         let Some((abi, signature, selector)) = Self::getter_abi_prologue(state_variable) else {
-            return Ok(());
+            return;
         };
         if !abi.inputs().is_empty() {
-            return Ok(());
+            return;
         }
         let Some(initializer) = state_variable.value() else {
-            return Ok(());
+            return;
         };
 
         let builder = &self.state.builder;
@@ -486,7 +483,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             )
             .into_mlir();
             sol_op_void!(builder, &entry, ReturnOperation.operands(&[constant]));
-            return Ok(());
+            return;
         }
         // A non-integer constant — a `string` / `bytesN` literal — is not
         // integer-foldable; materialise its initializer toward the return type
@@ -508,7 +505,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             expression: &initializer,
             target_type: element_type,
         })
-        .emit(&emitter, entry)?;
+        .emit(&emitter, entry);
         let value = value
             .coerce_to(
                 crate::ast::Type::new(element_type),
@@ -517,7 +514,6 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             )
             .into_mlir();
         sol_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
-        Ok(())
     }
 
     /// Folds a constant integer expression to a [`BigInt`], when it is one of the
@@ -584,7 +580,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
     /// Emits a no-argument getter for a `public` struct state variable (its
     /// returnable members as a flattened tuple). Emitted by a later fill.
-    pub fn emit_struct_getter(&self, abi: &GetterAbi<'_, 'context, '_>) -> anyhow::Result<bool> {
+    pub fn emit_struct_getter(&self, abi: &GetterAbi<'_, 'context, '_>) -> bool {
         let GetterAbi {
             state_variable,
             signature,
@@ -608,7 +604,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     .map(|(_, _, result_type)| *result_type)
                     .collect();
                 let container_type =
-                    TypeConversion::resolve_state_variable_type(state_variable, builder)?;
+                    TypeConversion::resolve_state_variable_type(state_variable, builder);
                 let entry = builder.emit_sol_func(
                     signature,
                     &[],
@@ -626,11 +622,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
                         .addr(container_type)
                 );
-                self.emit_indexed_getter_result(base, &Some(plan), struct_mlir_type, &entry)?;
-                return Ok(true);
+                self.emit_indexed_getter_result(base, &Some(plan), struct_mlir_type, &entry);
+                return true;
             }
         }
-        Ok(false)
+        false
     }
 
     /// Plans a struct getter's destructured member layout (offset, member type,
@@ -653,7 +649,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 Some(_) => false,
                 None => return None,
             };
-            // SAFETY: `mlirSolGetEltType` returns a valid MlirType from
+            // `mlirSolGetEltType` returns a valid MlirType from
             // `sol::getEltType` for the struct field at `member_index` (mirroring
             // the AST member index, including skipped members).
             let member_type = unsafe {
@@ -690,15 +686,15 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         member_type: Type<'context>,
         result_member_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
-    ) -> anyhow::Result<Value<'context, 'block>> {
+    ) -> Value<'context, 'block> {
         if member_type == result_member_type {
-            Ok(crate::ast::Pointer::new(address)
+            crate::ast::Pointer::new(address)
                 .load(crate::ast::Type::new(result_member_type), builder, block)
-                .into_mlir())
+                .into_mlir()
         } else {
-            Ok(crate::ast::Value::from(address)
+            crate::ast::Value::from(address)
                 .coerce_to(crate::ast::Type::new(result_member_type), builder, block)
-                .into_mlir())
+                .into_mlir()
         }
     }
 }

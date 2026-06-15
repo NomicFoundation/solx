@@ -9,19 +9,19 @@ use slang_solidity_v2::ast::ExpressionStatement;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 
-/// The lowering kind of a discarded expression statement, computed once ahead of
+/// The emission kind of a discarded expression statement, computed once ahead of
 /// emission so dispatch is a single `match` rather than a chain of guards.
 ///
 /// Solidity evaluates an expression statement for its side effects and discards
 /// its value, but several shapes need bespoke handling rather than a plain
 /// value-discard. The variants are mutually exclusive and tested in order — an
 /// earlier match wins (a `revert(...)` is a revert, not a generic value). Each
-/// variant owns the slang node its lowering needs (slang `Expression` is not
+/// variant owns the slang node its emission needs (slang `Expression` is not
 /// `Clone`; the handles are cheap and obtained from the statement).
 pub enum ExpressionStatementKind {
     /// The modifier `_;` placeholder: hands off to the wrapped body / next stage.
     ModifierPlaceholder,
-    /// A `revert(...)` / `revert("reason")` call, with bespoke revert lowering.
+    /// A `revert(...)` / `revert("reason")` call, with bespoke revert emission.
     RevertCall(FunctionCallExpression),
     /// A bare type-name or `super` reference (`uint256;`, `super;`, the array-type
     /// form `s[7][];`): compile-time only, with no value and no side effect.
@@ -52,7 +52,7 @@ impl ExpressionStatementKind {
         {
             return Self::ModifierPlaceholder;
         }
-        // A `revert(...)` / `revert("reason")` call has bespoke revert lowering.
+        // A `revert(...)` / `revert("reason")` call has bespoke revert emission.
         if let Expression::FunctionCallExpression(call) = expression_statement.expression()
             && let Expression::Identifier(identifier) = call.operand()
             && matches!(identifier.resolve_to_built_in(), Some(BuiltIn::Revert))
