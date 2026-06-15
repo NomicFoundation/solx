@@ -2,14 +2,19 @@
 //! `try` statement emission.
 //!
 
+use melior::ir::Block;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Region;
+use melior::ir::RegionLike;
 use melior::ir::Value;
+use melior::ir::operation::OperationLike;
 use slang_solidity_v2::ast::CatchClause;
 use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::TryStatement;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::TryFallbackKind;
+use solx_mlir::ods::sol::TryOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
@@ -86,14 +91,83 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         }
 
         let saved_region = self.region_pointer;
-        let (success_block, panic_block, error_block, fallback_block) =
-            self.state.builder.emit_sol_try(
-                status,
-                panic_clause.is_some(),
-                error_clause.is_some(),
-                fallback_kind,
-                &current_block,
-            );
+        let builder = &self.state.builder;
+        let has_panic = panic_clause.is_some();
+        let has_error = error_clause.is_some();
+        // sol.try carries four regions — success, panic, error, fallback. An
+        // absent clause leaves an empty region; the op's conversion performs the
+        // returndata-size guard, the Error(string)/Panic(uint256) selector switch,
+        // the payload decode (delivered as each region's block argument), and the
+        // raw re-revert when no clause matches. A present catch region carries its
+        // decoded payload (panic code `ui256`, error reason / bytes `string`) as
+        // block argument 0.
+        let success_region = Region::new();
+        success_region.append_block(Block::new(&[]));
+        let panic_region = Region::new();
+        if has_panic {
+            panic_region.append_block(Block::new(&[(
+                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                    .into_mlir(),
+                builder.unknown_location,
+            )]));
+        }
+        let error_region = Region::new();
+        if has_error {
+            error_region.append_block(Block::new(&[(
+                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
+                    .into_mlir(),
+                builder.unknown_location,
+            )]));
+        }
+        let fallback_region = Region::new();
+        match fallback_kind {
+            TryFallbackKind::None => {}
+            TryFallbackKind::Parameterless => {
+                fallback_region.append_block(Block::new(&[]));
+            }
+            TryFallbackKind::Bytes => {
+                fallback_region.append_block(Block::new(&[(
+                    crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
+                        .into_mlir(),
+                    builder.unknown_location,
+                )]));
+            }
+        }
+        let operation = current_block.append_operation(sol_op_build!(
+            builder,
+            TryOperation
+                .status(status)
+                .success_region(success_region)
+                .panic_region(panic_region)
+                .error_region(error_region)
+                .fallback_region(fallback_region)
+        ));
+        let success_block = operation
+            .region(0)
+            .expect("sol.try has a success region")
+            .first_block()
+            .expect("success region has a block");
+        let panic_block = has_panic.then(|| {
+            operation
+                .region(1)
+                .expect("sol.try has a panic region")
+                .first_block()
+                .expect("panic region has a block")
+        });
+        let error_block = has_error.then(|| {
+            operation
+                .region(2)
+                .expect("sol.try has an error region")
+                .first_block()
+                .expect("error region has a block")
+        });
+        let fallback_block = (!matches!(fallback_kind, TryFallbackKind::None)).then(|| {
+            operation
+                .region(3)
+                .expect("sol.try has a fallback region")
+                .first_block()
+                .expect("fallback region has a block")
+        });
 
         // Success region: bind the declared returns from the call results, then
         // run the body.
