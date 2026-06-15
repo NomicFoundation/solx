@@ -1,11 +1,16 @@
 //! Revert statement emission.
 
+use melior::ir::Attribute;
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Value;
+use melior::ir::attribute::StringAttribute;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::RevertStatement;
+use solx_mlir::ods::sol::RevertOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -39,7 +44,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         );
         let block = match message_argument {
             None => {
-                self.state.builder.emit_sol_revert("", &[], false, &block);
+                self.emit_revert("", &[], false, &block);
                 block
             }
             // A non-empty string literal bakes the message into the op as the
@@ -49,9 +54,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             {
                 let message = String::from_utf8(string_expression.value())
                     .expect("revert message is valid UTF-8");
-                self.state
-                    .builder
-                    .emit_sol_revert(&message, &[], false, &block);
+                self.emit_revert(&message, &[], false, &block);
                 block
             }
             // A non-literal message (`revert(expr)`) or an empty literal
@@ -71,11 +74,34 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 let message_value = message_value
                     .coerce_to(crate::ast::Type::new(string_memory_type), builder, &block)
                     .into_mlir();
-                builder.emit_sol_revert("Error(string)", &[message_value], true, &block);
+                self.emit_revert("Error(string)", &[message_value], true, &block);
                 block
             }
         };
         Some(block)
+    }
+
+    /// Emits a `sol.revert` carrying an optional payload: `signature` is the
+    /// payload string (a custom error's canonical signature, `Error(string)`, a
+    /// literal message, or empty for `revert()`), `args` the evaluated operands,
+    /// and `is_custom_error` selects the call-encoded form. Not a terminator — the
+    /// block stays live for the caller to terminate.
+    fn emit_revert(
+        &self,
+        signature: &str,
+        args: &[Value<'context, 'block>],
+        is_custom_error: bool,
+        block: &BlockRef<'context, 'block>,
+    ) {
+        let builder = &self.state.builder;
+        let mut operation_builder =
+            RevertOperation::builder(builder.context, builder.unknown_location)
+                .signature(StringAttribute::new(builder.context, signature))
+                .args(args);
+        if is_custom_error {
+            operation_builder = operation_builder.call(Attribute::unit(builder.context));
+        }
+        block.append_operation(operation_builder.build().into());
     }
 }
 
@@ -84,7 +110,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
 statement_emit!(RevertStatement; |node, context, block| {
     let error = match node.error().resolve_to_definition() {
         None => {
-            context.state.builder.emit_sol_revert("", &[], false, &block);
+            context.emit_revert("", &[], false, &block);
             return Some(block);
         }
         Some(Definition::Error(error)) => error,
@@ -111,9 +137,6 @@ statement_emit!(RevertStatement; |node, context, block| {
     let emitter = ExpressionContext::from(&*context);
     let (values, block) =
         emitter.emit_coerced_argument_expressions(&ordered, &parameter_types, block);
-    context
-        .state
-        .builder
-        .emit_sol_revert(&signature, &values, true, &block);
+    context.emit_revert(&signature, &values, true, &block);
     Some(block)
 });
