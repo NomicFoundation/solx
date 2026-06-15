@@ -2,6 +2,8 @@
 //! An external call in `try` position, classified ahead of emission.
 //!
 
+use melior::ir::Attribute;
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
@@ -11,6 +13,7 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
+use solx_mlir::ods::sol::ExtICallOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -117,13 +120,36 @@ impl TryExternalCall {
             )
             .into_mlir()
         });
-        let (status, results) = builder.emit_sol_ext_icall_try(
-            callee,
-            &argument_values,
-            &return_types,
-            value,
-            &current_block,
+        // `sol.ext_icall` results are `(i1 status, decoded-returns...)`; the `try`
+        // form yields the status instead of reverting on failure, so the caller
+        // can run a `catch` handler.
+        let mut out_types = Vec::with_capacity(return_types.len() + 1);
+        out_types.push(
+            crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
         );
+        out_types.extend_from_slice(&return_types);
+        let operation = current_block.append_operation(sol_op_build!(
+            builder,
+            ExtICallOperation
+                .outs(&out_types)
+                .callee(callee)
+                .callee_operands(&argument_values)
+                .gas(crate::ast::Value::gas_left(builder, &current_block).into_mlir())
+                .value(value)
+                .try_call(Attribute::unit(builder.context))
+        ));
+        let status = operation
+            .result(0)
+            .expect("sol.ext_icall try produces a status result")
+            .into();
+        let results = (0..return_types.len())
+            .map(|index| {
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_icall try produces a status plus its declared results")
+                    .into()
+            })
+            .collect();
         (status, results, current_block)
     }
 }
