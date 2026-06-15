@@ -5,9 +5,7 @@
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
 use num_bigint::Sign;
 use slang_solidity_v2::ast::Definition;
@@ -109,7 +107,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         if let Some(selector) = static_selector {
             let block = self.eval_selector_receiver_side_effects(access, block);
-            let value = self.emit_selector_constant(&BigInt::from(selector), 4, &block);
+            let value = crate::ast::Value::selector_constant(
+                &BigInt::from(selector),
+                4,
+                &self.state.builder,
+                &block,
+            )
+            .into_mlir();
             return (Some(value), block);
         }
         let BlockAnd {
@@ -208,7 +212,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .compute_selector()
             .expect("slang computes a 4-byte selector for an error");
         let block = self.eval_selector_receiver_side_effects(access, block);
-        let value = self.emit_selector_constant(&BigInt::from(selector), 4, &block);
+        let value = crate::ast::Value::selector_constant(
+            &BigInt::from(selector),
+            4,
+            &self.state.builder,
+            &block,
+        )
+        .into_mlir();
         (Some(value), block)
     }
 
@@ -229,39 +239,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
         let topic = BigInt::from_bytes_be(Sign::Plus, hash.as_bytes());
         let block = self.eval_selector_receiver_side_effects(access, block);
-        let value = self.emit_selector_constant(&topic, 32, &block);
+        let value = crate::ast::Value::selector_constant(&topic, 32, &self.state.builder, &block)
+            .into_mlir();
         (Some(value), block)
-    }
-
-    /// Emits a compile-time selector value of `width_bytes`: an unsigned integer
-    /// constant of the matching width bridged to `!sol.fixedbytes<width_bytes>`
-    /// via `sol.bytes_cast` (the fixed-bytes type rejects a bare integer
-    /// attribute). Shared with `abi.encodeWithSignature` / `abi.encodeCall`,
-    /// which prepend the same 4-byte selector constant to their payload.
-    pub fn emit_selector_constant(
-        &self,
-        value: &BigInt,
-        width_bytes: u32,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        let builder = &self.state.builder;
-        let integer_type = Type::from(IntegerType::unsigned(
-            builder.context,
-            width_bytes * solx_utils::BIT_LENGTH_BYTE as u32,
-        ));
-        let integer = crate::ast::Value::constant_from_bigint(
-            value,
-            crate::ast::Type::new(integer_type),
-            builder,
-            block,
-        );
-        integer
-            .cast(
-                crate::ast::Type::fixed_bytes(builder.context, width_bytes),
-                builder,
-                block,
-            )
-            .into_mlir()
     }
 
     /// Evaluates the receiver of a `<receiver>.member.selector` for its side

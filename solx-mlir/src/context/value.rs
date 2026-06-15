@@ -261,6 +261,31 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
+    /// A function/error selector or event topic as a `bytesN` value: the integer
+    /// `value` at `width_bytes` width cast to `fixedbytes<width_bytes>` (4 bytes
+    /// for a selector, 32 for an event topic).
+    pub fn selector_constant(
+        value: &BigInt,
+        width_bytes: u32,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let integer = Self::constant_from_bigint(
+            value,
+            Type::unsigned(
+                builder.context,
+                width_bytes as usize * solx_utils::BIT_LENGTH_BYTE,
+            ),
+            builder,
+            block,
+        );
+        integer.cast(
+            Type::fixed_bytes(builder.context, width_bytes),
+            builder,
+            block,
+        )
+    }
+
     /// Coerces to `target_type`, emitting the conversion (nothing when the types
     /// already match). The single path every implicit widening and explicit
     /// `bool(x)` / `address(x)` / `uint(x)` takes: `bool(x)` is a truthiness

@@ -94,8 +94,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .try_into()
                     .expect("keccak256 always yields 32 bytes");
                 let selector_word = u32::from_be_bytes(selector_bytes);
-                let selector_value =
-                    self.emit_selector_constant(&BigInt::from(selector_word), 4, &block);
+                let selector_value = crate::ast::Value::selector_constant(
+                    &BigInt::from(selector_word),
+                    4,
+                    &self.state.builder,
+                    &block,
+                )
+                .into_mlir();
                 (selector_value, block)
             }
             _ => {
@@ -172,8 +177,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let selector = function
                     .compute_selector()
                     .expect("abi.encodeCall's callee is an external function with an ABI selector");
-                let selector_value =
-                    self.emit_selector_constant(&BigInt::from(selector), 4, &block);
+                let selector_value = crate::ast::Value::selector_constant(
+                    &BigInt::from(selector),
+                    4,
+                    &self.state.builder,
+                    &block,
+                )
+                .into_mlir();
                 // `abi.encodeCall` ABI-encodes the arguments as an external call
                 // would: reference parameters are encoded from `Memory`, not
                 // their declared `calldata`/`storage` location (which cannot
