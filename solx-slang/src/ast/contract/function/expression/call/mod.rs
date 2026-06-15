@@ -11,7 +11,6 @@ pub mod member_call_kind;
 pub mod static_mode;
 pub mod try_external_call;
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -23,10 +22,7 @@ use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
-use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
-use solx_mlir::ods::sol::MallocOperation;
-use solx_utils::DataLocation;
 
 use self::call_kind::CallKind;
 use crate::ast::BlockAnd;
@@ -149,59 +145,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             }
         }
         Ok((value, salt, current_block))
-    }
-
-    /// Emits a struct-literal constructor from its field initializers already in
-    /// member-declaration order, storing each into the malloc'd struct. Shared by
-    /// positional `S(a, b)` and named `S({b: …, a: …})` construction (the latter
-    /// reorders its arguments to member order first).
-    fn emit_struct_constructor_expressions(
-        &self,
-        struct_definition: &StructDefinition,
-        result_type: Type<'context>,
-        arguments: &[Expression],
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Value<'context, 'block>, BlockRef<'context, 'block>)> {
-        let builder = &self.state.builder;
-        let struct_address = sol_op!(builder, &block, MallocOperation.addr(result_type));
-        let struct_pointer = crate::ast::Pointer::new(struct_address);
-
-        let mut block = block;
-        for (index, (member, argument)) in struct_definition
-            .members()
-            .iter()
-            .zip(arguments.iter())
-            .enumerate()
-        {
-            let field_slang_type = member.get_type().expect("slang types every struct member");
-            let field_type = field_slang_type.resolve_type(
-                LocationPolicy::Declared(Some(DataLocation::Memory)),
-                builder,
-            );
-            let index_value = crate::ast::Value::constant(
-                index as i64,
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
-                builder,
-                &block,
-            );
-            let field_address = struct_pointer.gep(
-                index_value,
-                crate::ast::Type::new(field_type),
-                builder,
-                &block,
-            );
-
-            let BlockAnd {
-                value: argument_value,
-                block: next_block,
-            } = argument.emit(self, block)?;
-            block = next_block;
-            let stored =
-                argument_value.coerce_to(crate::ast::Type::new(field_type), builder, &block);
-            field_address.store(stored, builder, &block);
-        }
-
-        Ok((struct_address, block))
     }
 
     /// Evaluates `arguments` left-to-right (via

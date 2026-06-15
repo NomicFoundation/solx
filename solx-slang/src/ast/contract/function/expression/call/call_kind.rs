@@ -3,6 +3,7 @@
 //!
 
 use anyhow::Context as _;
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
@@ -16,12 +17,17 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::ods::sol::MallocOperation;
+use solx_utils::DataLocation;
+
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::Toward;
 use crate::ast::arguments_declaration_ext::ArgumentsDeclarationExt;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
+use crate::ast::type_conversion::LocationPolicy;
+use crate::ast::type_conversion::ResolveType;
 use crate::ast::type_conversion::TypeConversion;
 
 /// The resolved kind of a `FunctionCallExpression`, computed once so dispatch is
@@ -221,13 +227,47 @@ impl CallKind {
                     .map(|member| member.node_id())
                     .collect();
                 let arguments = arguments.ordered_by(&member_ids);
-                let (value, block) = context.emit_struct_constructor_expressions(
-                    &struct_definition,
-                    result_type,
-                    &arguments,
-                    block,
-                )?;
-                Ok((vec![value], block))
+                let builder = &context.state.builder;
+                let struct_address = sol_op!(builder, &block, MallocOperation.addr(result_type));
+                let struct_pointer = crate::ast::Pointer::new(struct_address);
+                let mut block = block;
+                for (index, (member, argument)) in struct_definition
+                    .members()
+                    .iter()
+                    .zip(arguments.iter())
+                    .enumerate()
+                {
+                    let field_slang_type =
+                        member.get_type().expect("slang types every struct member");
+                    let field_type = field_slang_type.resolve_type(
+                        LocationPolicy::Declared(Some(DataLocation::Memory)),
+                        builder,
+                    );
+                    let index_value = crate::ast::Value::constant(
+                        index as i64,
+                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
+                        builder,
+                        &block,
+                    );
+                    let field_address = struct_pointer.gep(
+                        index_value,
+                        crate::ast::Type::new(field_type),
+                        builder,
+                        &block,
+                    );
+                    let BlockAnd {
+                        value: argument_value,
+                        block: next_block,
+                    } = argument.emit(context, block)?;
+                    block = next_block;
+                    let stored = argument_value.coerce_to(
+                        crate::ast::Type::new(field_type),
+                        builder,
+                        &block,
+                    );
+                    field_address.store(stored, builder, &block);
+                }
+                Ok((vec![struct_address], block))
             }
             // `x.f(...)` / `L.f(...)`: dispatched by the resolved member kind,
             // forwarding any `{value: …}` captured from the options.
