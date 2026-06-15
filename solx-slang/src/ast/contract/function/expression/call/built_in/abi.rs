@@ -25,6 +25,7 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::built_in::EncodeMode;
+use crate::ast::contract::function::expression::call::call_kind::CallKind;
 use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveSignature;
 use crate::ast::type_conversion::ResolveType;
@@ -286,13 +287,31 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .into()
     }
 
-    /// Emits `abi.decode(payload, (T))` as a `sol.decode` operation.
-    ///
-    /// The result type comes from the call's slang type (`call.get_type()`);
-    /// multi-result decode requires the multi-result-call dispatch and is
-    /// not yet supported.
-    pub fn emit_abi_decode(
+    /// The MLIR result types of an `abi.decode` call — one per requested type.
+    /// `abi.decode(data, T)` yields one; `abi.decode(data, (A, B, …))` yields
+    /// one per tuple element. Resolved from the call's binder-assigned type.
+    fn abi_decode_result_types(&self, call: &FunctionCallExpression) -> Vec<Type<'context>> {
+        let builder = &self.state.builder;
+        let return_slang_type = call
+            .get_type()
+            .expect("abi.decode call is typed by the binder");
+        match return_slang_type {
+            SlangType::Tuple(tuple) => tuple
+                .types()
+                .iter()
+                .map(|slang_type| slang_type.resolve_type(LocationPolicy::Declared(None), builder))
+                .collect(),
+            other => vec![other.resolve_type(LocationPolicy::Declared(None), builder)],
+        }
+    }
+}
+
+impl CallKind {
+    /// Emits `abi.decode(payload, (T))` as a `sol.decode`. The result type comes
+    /// from the call's slang type; multi-result decode is not yet supported.
+    pub fn emit_abi_decode<'state, 'context, 'block>(
         &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
@@ -304,9 +323,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let BlockAnd {
             value: payload_value,
             block,
-        } = payload_expression.emit(self, block)?;
-        let result_types = self.abi_decode_result_types(call);
-        let builder = &self.state.builder;
+        } = payload_expression.emit(context, block)?;
+        let result_types = context.abi_decode_result_types(call);
+        let builder = &context.state.builder;
         // `sol.decode` requires a memory or calldata byte buffer; a storage
         // `bytes` / `string` is a reference, so copy it to memory first (solc
         // emits a Storage->Memory `sol.data_loc_cast` here). Memory and calldata
@@ -341,23 +360,5 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             })
             .collect();
         Ok((values, block))
-    }
-
-    /// The MLIR result types of an `abi.decode` call — one per requested type.
-    /// `abi.decode(data, T)` yields one; `abi.decode(data, (A, B, …))` yields
-    /// one per tuple element. Resolved from the call's binder-assigned type.
-    fn abi_decode_result_types(&self, call: &FunctionCallExpression) -> Vec<Type<'context>> {
-        let builder = &self.state.builder;
-        let return_slang_type = call
-            .get_type()
-            .expect("abi.decode call is typed by the binder");
-        match return_slang_type {
-            SlangType::Tuple(tuple) => tuple
-                .types()
-                .iter()
-                .map(|slang_type| slang_type.resolve_type(LocationPolicy::Declared(None), builder))
-                .collect(),
-            other => vec![other.resolve_type(LocationPolicy::Declared(None), builder)],
-        }
     }
 }

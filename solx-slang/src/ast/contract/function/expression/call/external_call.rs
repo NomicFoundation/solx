@@ -311,21 +311,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         Ok((status, ret_data, block))
     }
 
-    /// Emits a bare address call in result-binding position
-    /// (`(ok, data) = addr.call{..}(data)`).
-    pub fn emit_bare_call_results(
-        &self,
-        access: &MemberAccessExpression,
-        kind: BuiltIn,
-        call_value: Option<Value<'context, 'block>>,
-        arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (status, ret_data, block) =
-            self.emit_bare_call(access, kind, arguments, call_value, block)?;
-        Ok((vec![status, ret_data], block))
-    }
-
     /// Emits a multi-result external call (`(a, b) = recv.f(args)`); always a
     /// `sol.ext_icall`.
     pub fn emit_external_call_results(

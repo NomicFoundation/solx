@@ -317,7 +317,7 @@ impl CallKind {
                             context.emit_built_in_call(*built_in, arguments, block)?;
                         Ok((value.into_iter().collect(), block))
                     }
-                    Self::AbiDecode => context.emit_abi_decode(call, arguments, block),
+                    Self::AbiDecode => self.emit_abi_decode(context, call, arguments, block),
                     Self::UdvtWrapUnwrap => {
                         let argument = arguments
                             .iter()
@@ -367,7 +367,9 @@ impl CallKind {
                         let Expression::MemberAccessExpression(access) = &callee else {
                             unreachable!("a bare low-level call has a member-access callee");
                         };
-                        context.emit_bare_call_results(access, *kind, call_value, arguments, block)
+                        let (status, ret_data, block) =
+                            context.emit_bare_call(access, *kind, arguments, call_value, block)?;
+                        Ok((vec![status, ret_data], block))
                     }
                     Self::LocalFunction(_) | Self::StructConstructor(_) | Self::Member(_) => {
                         unreachable!("handled in the outer match")
