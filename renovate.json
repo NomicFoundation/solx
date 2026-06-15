@@ -84,6 +84,11 @@
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["hardhat"],
       "allowedVersions": "<3"
+    },
+    {
+      "description": "custom.regex deps only feed the integration harness; label so the gated suite runs.",
+      "matchManagers": ["custom.regex"],
+      "addLabels": ["ci:integration"]
     }
   ],
   "labels": ["dependencies"],
