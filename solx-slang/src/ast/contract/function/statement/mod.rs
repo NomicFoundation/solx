@@ -306,10 +306,24 @@ statement_emit!(ReturnStatement; |node, context, block| {
         // matters for a `return;` in a modifier stage of a value-returning
         // function, where a 0-operand return would fail verification; a void
         // function has no slots and returns nothing.
-        context
-            .state
-            .builder
-            .emit_return_from_slots(context.return_types, context.return_slots, &block);
+        let builder = &context.state.builder;
+        let mut values = Vec::with_capacity(context.return_types.len());
+        for (index, &return_type) in context.return_types.iter().enumerate() {
+            let value = match context.return_slots.get(index).copied().flatten() {
+                Some(pointer) => crate::ast::Pointer::new(pointer)
+                    .load(crate::ast::Type::new(return_type), builder, &block)
+                    .into_mlir(),
+                None => crate::ast::Value::constant(
+                    0,
+                    crate::ast::Type::new(return_type),
+                    builder,
+                    &block,
+                )
+                .into_mlir(),
+            };
+            values.push(value);
+        }
+        sol_op_void!(builder, &block, ReturnOperation.operands(&values));
         return None;
     };
 

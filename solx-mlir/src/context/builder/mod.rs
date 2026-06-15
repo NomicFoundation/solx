@@ -39,7 +39,6 @@ use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::FuncOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::RequireOperation;
-use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
 use crate::ods::sol::StateVarOperation;
 use crate::ods::sol::TryOperation;
@@ -353,38 +352,6 @@ impl<'context> Builder<'context> {
         });
 
         (success, panic, error, fallback)
-    }
-
-    /// Emits a `sol.return` whose operands are loaded from the per-return slots:
-    /// each named-return slot is loaded, and a typed zero is materialised where
-    /// no slot was allocated (an unnamed return). Shared by the implicit
-    /// end-of-body return and an explicit bare `return;`.
-    pub fn emit_return_from_slots<'block, B>(
-        &self,
-        result_types: &[Type<'context>],
-        return_slots: &[Option<Value<'context, 'block>>],
-        block: &B,
-    ) where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let mut values: Vec<Value<'context, 'block>> = Vec::with_capacity(result_types.len());
-        for (index, result_type) in result_types.iter().enumerate() {
-            let value = match return_slots.get(index).copied().flatten() {
-                Some(pointer) => crate::Pointer::new(pointer)
-                    .load(crate::Type::new(*result_type), self, block)
-                    .into_mlir(),
-                None => crate::Value::constant(0, crate::Type::new(*result_type), self, block)
-                    .into_mlir(),
-            };
-            values.push(value);
-        }
-        block.append_operation(
-            ReturnOperation::builder(self.context, self.unknown_location)
-                .operands(&values)
-                .build()
-                .into(),
-        );
     }
 
     /// Emits a `sol.call` operation and returns its first result value, or
