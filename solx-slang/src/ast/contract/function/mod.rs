@@ -42,7 +42,6 @@ use crate::ast::Emit;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveSignature;
-use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub struct FunctionEmitter<'state, 'context> {
@@ -397,12 +396,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     continue;
                 }
                 let return_type = result_types[index];
-                let pointer = TypeConversion::emit_default_initialized_slot(
-                    parameter.get_type().as_ref(),
-                    return_type,
+                let pointer = crate::ast::Pointer::default_initialized(
+                    crate::ast::Type::new(return_type),
                     &self.state.builder,
                     entry_block,
-                );
+                )
+                .into_mlir();
                 environment.define_variable(parameter.node_id(), pointer);
                 return_slots.push(Some(pointer));
             }

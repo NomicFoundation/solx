@@ -40,7 +40,6 @@ use crate::ast::contract::function::modifier_parameter_binding::ModifierParamete
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveType;
-use crate::ast::type_conversion::TypeConversion;
 
 /// The evaluated arguments of one modifier stage: one
 /// [`ModifierParameterBinding`] per bound modifier parameter. A support alias
@@ -132,28 +131,17 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         // Every return needs a slot so the chain's results can be captured and
         // read back by the epilogue; an unnamed return gets a default-initialised
-        // one (a never-reached `_;` then yields the zero default — for a memory
-        // aggregate that default must be a fresh zero-filled allocation, not a
-        // dangling pointer).
-        let return_slang_types: Vec<_> = function
-            .returns()
-            .map(|returns| {
-                returns
-                    .iter()
-                    .map(|parameter| parameter.get_type())
-                    .collect()
-            })
-            .unwrap_or_default();
+        // one (a never-reached `_;` then yields the zero default).
         for (index, slot) in return_slots.iter_mut().enumerate() {
             if slot.is_none() {
-                let return_type = result_types[index];
-                let slang_type = return_slang_types.get(index).and_then(|t| t.as_ref());
-                *slot = Some(TypeConversion::emit_default_initialized_slot(
-                    slang_type,
-                    return_type,
-                    &self.state.builder,
-                    function_entry_block,
-                ));
+                *slot = Some(
+                    crate::ast::Pointer::default_initialized(
+                        crate::ast::Type::new(result_types[index]),
+                        &self.state.builder,
+                        function_entry_block,
+                    )
+                    .into_mlir(),
+                );
             }
         }
 

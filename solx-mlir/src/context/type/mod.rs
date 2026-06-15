@@ -282,17 +282,35 @@ impl<'context> Type<'context> {
         unsafe { crate::ffi::solxIsByteType(self.inner.to_raw()) }
     }
 
+    /// Whether this is the dynamic-bytes type `!sol.string`, shared by `string`
+    /// and `bytes`.
+    pub fn is_string(self) -> bool {
+        // SAFETY: pure `isa<>` predicate on a valid type.
+        unsafe { crate::ffi::solxIsStringType(self.inner.to_raw()) }
+    }
+
+    /// Whether this is a Sol array type (`!sol.array<…>`).
+    pub fn is_array(self) -> bool {
+        // SAFETY: pure `isa<>` predicate on a valid type.
+        unsafe { crate::ffi::solxIsArrayType(self.inner.to_raw()) }
+    }
+
+    /// Whether this is a Sol struct type (`!sol.struct<…>`).
+    pub fn is_struct(self) -> bool {
+        // SAFETY: pure `isa<>` predicate on a valid type.
+        unsafe { crate::ffi::solxIsStructType(self.inner.to_raw()) }
+    }
+
+    /// Whether this is a Sol mapping type (`!sol.mapping<…>`).
+    pub fn is_mapping(self) -> bool {
+        // SAFETY: pure `isa<>` predicate on a valid type.
+        unsafe { crate::ffi::solxIsMappingType(self.inner.to_raw()) }
+    }
+
     /// Whether this is a Sol reference type: array, struct, string/`bytes`, or
     /// mapping (`bytes` and `string` share `!sol.string`).
     pub fn is_reference(self) -> bool {
-        let raw = self.inner.to_raw();
-        // SAFETY: pure `isa<>` predicates on a valid type.
-        unsafe {
-            crate::ffi::solxIsStringType(raw)
-                || crate::ffi::solxIsArrayType(raw)
-                || crate::ffi::solxIsStructType(raw)
-                || crate::ffi::solxIsMappingType(raw)
-        }
+        self.is_string() || self.is_array() || self.is_struct() || self.is_mapping()
     }
 
     /// Whether this is a Sol function reference of either kind — internal
@@ -326,13 +344,17 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// The data location `Loc` of a `!sol.ptr<T, Loc>` (the caller must ensure
-    /// this is a pointer type). `Immutable` has no frontend `DataLocation` — it
-    /// never reaches the slang pointer surface, so it is a loud `unreachable!`.
+    /// The data location of a pointer's `Loc` or a string/array/struct's own
+    /// location.
     pub fn data_location(self) -> solx_utils::DataLocation {
-        debug_assert!(self.is_pointer());
-        // SAFETY: guarded by `is_pointer`.
-        let ordinal = unsafe { crate::ffi::solxPointerTypeDataLocation(self.inner.to_raw()) };
+        let raw = self.inner.to_raw();
+        // SAFETY: pure accessors, dispatched on the type kind.
+        let ordinal = if self.is_pointer() {
+            unsafe { crate::ffi::solxPointerTypeDataLocation(raw) }
+        } else {
+            debug_assert!(self.is_string() || self.is_array() || self.is_struct());
+            unsafe { crate::ffi::solxReferenceTypeDataLocation(raw) }
+        };
         match ordinal {
             0 => solx_utils::DataLocation::Storage,
             1 => solx_utils::DataLocation::CallData,

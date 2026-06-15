@@ -252,4 +252,16 @@ uint32_t solxPointerTypeDataLocation(MlirType ty) {
         mlir::cast<mlir::sol::PointerType>(unwrap(ty)).getDataLocation());
 }
 
+// A string/array/struct carries its own data location; a mapping carries none.
+uint32_t solxReferenceTypeDataLocation(MlirType ty) {
+    auto type = unwrap(ty);
+    if (auto string = mlir::dyn_cast<mlir::sol::StringType>(type))
+        return static_cast<uint32_t>(string.getDataLocation());
+    if (auto array = mlir::dyn_cast<mlir::sol::ArrayType>(type))
+        return static_cast<uint32_t>(array.getDataLocation());
+    if (auto structure = mlir::dyn_cast<mlir::sol::StructType>(type))
+        return static_cast<uint32_t>(structure.getDataLocation());
+    abort();
+}
+
 } /* extern "C" */

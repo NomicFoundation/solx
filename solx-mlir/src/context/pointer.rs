@@ -3,7 +3,9 @@
 //! loads, stores, and steps it supports.
 //!
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
+use melior::ir::BlockRef;
 use melior::ir::Type as MlirType;
 use melior::ir::TypeLike;
 use melior::ir::Value as MlirValue;
@@ -17,6 +19,7 @@ use crate::Value;
 use crate::ods::sol::AllocaOperation;
 use crate::ods::sol::GepOperation;
 use crate::ods::sol::LoadOperation;
+use crate::ods::sol::MallocOperation;
 use crate::ods::sol::MapOperation;
 use crate::ods::sol::StoreOperation;
 
@@ -86,6 +89,36 @@ impl<'context, 'block> Pointer<'context, 'block> {
                 .alloc_type(TypeAttribute::new(address_type))
                 .addr(address_type)
         ))
+    }
+
+    /// A stack slot default-initialised to the zero of `pointee`: a fresh
+    /// zero-filled buffer for a memory aggregate, an empty buffer for `string` /
+    /// `bytes`, the scalar/integer zero otherwise, and a bare slot for a
+    /// reference the body binds before reading.
+    pub fn default_initialized(
+        pointee: Type<'context>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let slot = Self::stack_slot(pointee, builder, block);
+        if pointee.is_string() {
+            let buffer = sol_op!(builder, block, MallocOperation.addr(pointee.into_mlir()));
+            slot.store(Value::new(buffer), builder, block);
+        } else if (pointee.is_array() || pointee.is_struct())
+            && matches!(pointee.data_location(), DataLocation::Memory)
+        {
+            let buffer = sol_op!(
+                builder,
+                block,
+                MallocOperation
+                    .addr(pointee.into_mlir())
+                    .zero_init(Attribute::unit(builder.context))
+            );
+            slot.store(Value::new(buffer), builder, block);
+        } else if !pointee.is_reference() {
+            slot.store(Value::zero(pointee, builder, block), builder, block);
+        }
+        slot
     }
 
     /// Loads the value of type `result_type` from this place (`sol.load`).

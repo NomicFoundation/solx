@@ -253,6 +253,8 @@ unsafe extern "C" {
     /// ordinal (0=Storage, 1=CallData, 2=Memory, 3=Stack, 4=Immutable, 5=Transient);
     /// the caller must ensure `ty` is a pointer type.
     pub fn solxPointerTypeDataLocation(ty: mlir_sys::MlirType) -> u32;
+    /// The data location ordinal of a `!sol.string` / `!sol.array` / `!sol.struct`.
+    pub fn solxReferenceTypeDataLocation(ty: mlir_sys::MlirType) -> u32;
 
     // ---- MLIR core (not in mlir-sys) ----
 

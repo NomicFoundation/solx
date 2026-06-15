@@ -15,7 +15,6 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveType;
-use crate::ast::type_conversion::TypeConversion;
 
 statement_emit!(VariableDeclarationStatement; |node, context, block| {
     match node.target() {
@@ -79,12 +78,12 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
         // through the shared primitive (memory aggregates malloc'd, empty
         // `string`/`bytes` a plain malloc, scalar value types their own
         // zero, integers a zeroed slot, references a bare slot).
-        TypeConversion::emit_default_initialized_slot(
-            slang_declared_type.as_ref(),
-            declared_type,
+        crate::ast::Pointer::default_initialized(
+            crate::ast::Type::new(declared_type),
             &context.state.builder,
             &block,
         )
+        .into_mlir()
     };
 
     context
