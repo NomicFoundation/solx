@@ -2,6 +2,7 @@
 //! External / bare-address call emission.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
@@ -12,6 +13,9 @@ use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
+use solx_mlir::ods::sol::BareCallOperation;
+use solx_mlir::ods::sol::BareDelegateCallOperation;
+use solx_mlir::ods::sol::BareStaticCallOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
@@ -210,7 +214,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             )
             .into_mlir();
         let address = address.into_mlir();
-        let (status, ret_data) = match kind {
+        let status_type =
+            crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir();
+        let ret_data_type =
+            crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir();
+        let operation = match kind {
             BuiltIn::AddressCall => {
                 let value = call_value.unwrap_or_else(|| {
                     crate::ast::Value::constant(
@@ -221,14 +229,46 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     )
                     .into_mlir()
                 });
-                builder.emit_sol_bare_call(address, value, input, &block)
+                sol_op_build!(
+                    builder,
+                    BareCallOperation
+                        .addr(address)
+                        .gas(crate::ast::Value::gas_left(builder, &block).into_mlir())
+                        .val(value)
+                        .inp(input)
+                        .status(status_type)
+                        .ret_data(ret_data_type)
+                )
             }
-            BuiltIn::AddressDelegatecall => {
-                builder.emit_sol_bare_delegate_call(address, input, &block)
-            }
-            BuiltIn::AddressStaticcall => builder.emit_sol_bare_static_call(address, input, &block),
+            BuiltIn::AddressDelegatecall => sol_op_build!(
+                builder,
+                BareDelegateCallOperation
+                    .addr(address)
+                    .gas(crate::ast::Value::gas_left(builder, &block).into_mlir())
+                    .inp(input)
+                    .status(status_type)
+                    .ret_data(ret_data_type)
+            ),
+            BuiltIn::AddressStaticcall => sol_op_build!(
+                builder,
+                BareStaticCallOperation
+                    .addr(address)
+                    .gas(crate::ast::Value::gas_left(builder, &block).into_mlir())
+                    .inp(input)
+                    .status(status_type)
+                    .ret_data(ret_data_type)
+            ),
             _ => unreachable!("bare call kind must be Call, Delegatecall, or Staticcall"),
         };
+        let operation = block.append_operation(operation);
+        let status = operation
+            .result(0)
+            .expect("a bare call always produces a status")
+            .into();
+        let ret_data = operation
+            .result(1)
+            .expect("a bare call always produces return data")
+            .into();
         (status, ret_data, block)
     }
 }
