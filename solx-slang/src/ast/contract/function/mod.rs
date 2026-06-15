@@ -686,14 +686,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 sol_op!(builder, block, MallocOperation.addr(return_type))
             }
             Some(
-                scalar @ (SlangType::Address(_)
+                SlangType::Address(_)
                 | SlangType::ByteArray(_)
                 | SlangType::Enum(_)
                 | SlangType::UserDefinedValue(_)
                 | SlangType::Function(_)
                 | SlangType::Contract(_)
-                | SlangType::Interface(_)),
-            ) => TypeConversion::emit_scalar_zero(scalar, return_type, builder, block),
+                | SlangType::Interface(_),
+            ) => crate::ast::Value::zero(crate::ast::Type::new(return_type), builder, block)
+                .into_mlir(),
             _ => crate::ast::Value::constant(0, crate::ast::Type::new(return_type), builder, block)
                 .into_mlir(),
         }

@@ -19,6 +19,7 @@ use crate::Type;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ConvCastOperation;
+use crate::ods::sol::DefaultFuncConstantOperation;
 
 /// An MLIR value in the Sol dialect.
 ///
@@ -136,6 +137,66 @@ impl<'context, 'block> Value<'context, 'block> {
             builder,
             block,
         )
+    }
+
+    /// The zero of a scalar value type, built at its own representation width and
+    /// bridged through the type's cast — never a narrowed wider constant (the
+    /// `sol.cast` fold mishandles that). A UDVT arrives as its underlying type; a
+    /// reference type is default-initialised through [`crate::Pointer`] instead.
+    pub fn zero(
+        r#type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        if r#type.is_address() {
+            let bits = Self::constant(
+                0,
+                Type::unsigned(builder.context, solx_utils::BIT_LENGTH_ETH_ADDRESS),
+                builder,
+                block,
+            );
+            bits.cast(r#type, builder, block)
+        } else if r#type.is_contract() {
+            // address(0) reinterpreted as the contract (solc: ui160 -> address -> contract).
+            let address = Self::zero(Type::address(builder.context, false), builder, block);
+            address.cast(r#type, builder, block)
+        } else if let Some(width) = r#type.fixed_bytes_or_byte_width() {
+            let bits = Self::constant(
+                0,
+                Type::unsigned(builder.context, (width * 8) as usize),
+                builder,
+                block,
+            );
+            bits.cast(r#type, builder, block)
+        } else if r#type.is_enum() {
+            let bits = Self::constant(
+                0,
+                Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                builder,
+                block,
+            );
+            bits.cast(r#type, builder, block)
+        } else if r#type.is_ext_function_ref() {
+            // A zero address + zero selector packed into the ext func ref.
+            let address = Self::zero(Type::address(builder.context, false), builder, block);
+            Self::new(builder.emit_sol_ext_func_constant(
+                address.into_mlir(),
+                0,
+                r#type.into_mlir(),
+                block,
+            ))
+        } else if r#type.is_function_ref() {
+            // An internal pointer's zero reverts when called.
+            Self::new(sol_op!(
+                builder,
+                block,
+                DefaultFuncConstantOperation.addr(r#type.into_mlir())
+            ))
+        } else if IntegerType::try_from(r#type.into_mlir()).is_ok() {
+            Self::constant(0, r#type, builder, block)
+        } else {
+            unreachable!("Value::zero handles only scalar value types")
+        }
     }
 
     /// Coerces to `target_type`, emitting the conversion (nothing when the types

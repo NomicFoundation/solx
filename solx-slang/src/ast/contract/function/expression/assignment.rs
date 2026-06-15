@@ -28,7 +28,6 @@ use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::tuple_expression_ext::TupleExpressionExt;
 use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveType;
-use crate::ast::type_conversion::TypeConversion;
 
 /// Assignment target resolved from the Slang binder.
 enum AssignmentTarget<'context, 'block> {
@@ -290,12 +289,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     // an address to `address(0)`, a `bytesN`/enum to its typed zero.
                     // Emitting a `ui256` 0 and letting the store coerce it would
                     // `sol.cast` it to e.g. a `func_ref` (an ill-typed integer cast).
-                    TypeConversion::emit_scalar_zero(
-                        &slang_type,
-                        *element_type,
+                    crate::ast::Value::zero(
+                        crate::ast::Type::new(*element_type),
                         &self.state.builder,
                         &block,
                     )
+                    .into_mlir()
                 };
                 target.store(self, zero, &block);
             }
