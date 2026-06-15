@@ -23,6 +23,11 @@ use slang_solidity_v2::ast::Type as SlangType;
 /// [`crate::ast::Type`]. What remains here — Slang→MLIR type resolution and
 /// zero / default-initialisation — moves onto `Type` and `Value` / `Pointer` in
 /// the resolution and constants stages.
+// TODO: relocate `resolve_type` / `ResolveType` / `LocationPolicy` onto `Type`
+// (solx-mlir, which already deps slang), per SPEC §3.1. `resolve_type`'s only
+// solx-slang dependency is `ContractEmitter::is_contract_payable` (a pure
+// slang-API derivation over `functions()` kind/mutability); it moves alongside.
+// The §3.5 ideal is for slang to expose `is_payable()` so it isn't derived here.
 pub struct TypeConversion;
 
 impl TypeConversion {
