@@ -19,7 +19,6 @@ use melior::ir::Region;
 use melior::ir::RegionLike;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
@@ -28,7 +27,6 @@ use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
 
 use crate::StateMutability;
-use crate::ods::sol::CallOperation;
 use crate::ods::sol::FuncOperation;
 use crate::ods::sol::RequireOperation;
 
@@ -164,38 +162,5 @@ impl<'context> Builder<'context> {
             builder = builder.call(Attribute::unit(self.context));
         }
         block.append_operation(builder.build().into());
-    }
-
-    /// Emits a `sol.call` operation and returns all of its result values in
-    /// declaration order.
-    pub fn emit_sol_call_results<'block, B>(
-        &self,
-        callee: &str,
-        operands: &[Value<'context, 'block>],
-        result_types: &[Type<'context>],
-        block: &B,
-    ) -> Vec<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let operation = block.append_operation(
-            CallOperation::builder(self.context, self.unknown_location)
-                .callee(FlatSymbolRefAttribute::new(self.context, callee))
-                .outs(result_types)
-                .operands(operands)
-                .build()
-                .into(),
-        );
-        let mut results = Vec::with_capacity(result_types.len());
-        for index in 0..result_types.len() {
-            results.push(
-                operation
-                    .result(index)
-                    .expect("sol.call produces its declared result count")
-                    .into(),
-            );
-        }
-        results
     }
 }

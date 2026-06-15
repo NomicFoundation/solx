@@ -5,8 +5,10 @@
 use melior::ir::BlockLike;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::attribute::FlatSymbolRefAttribute;
 
 use solx_mlir::Builder;
+use solx_mlir::ods::sol::CallOperation;
 
 /// The hand-off from a modifier stage to the wrapped function body.
 ///
@@ -52,12 +54,24 @@ impl<'context, 'block> ModifierBodyCall<'context, 'block> {
                 );
             }
         }
-        let results =
-            builder.emit_sol_call_results(&self.symbol, &operands, &self.result_types, block);
+        // The synthetic `$body` / next-stage `sol.func` is not a registered
+        // function, so its call is built here rather than through `Function::call`.
+        let operation = block.append_operation(sol_op_build!(
+            builder,
+            CallOperation
+                .callee(FlatSymbolRefAttribute::new(builder.context, &self.symbol))
+                .outs(&self.result_types)
+                .operands(&operands)
+        ));
+        let results = (0..self.result_types.len()).map(|index| {
+            operation
+                .result(index)
+                .expect("sol.call produces its declared result count")
+        });
         for (slot, value) in self.return_slots.iter().zip(results) {
             if let Some(pointer) = slot {
                 crate::ast::Pointer::new(*pointer).store(
-                    crate::ast::Value::new(value),
+                    crate::ast::Value::new(value.into()),
                     builder,
                     block,
                 );

@@ -117,11 +117,10 @@ impl Operator {
         argument_values: Vec<crate::ast::Value<'context, 'block>>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let (mlir_name, parameter_types, return_types) =
-            context.state.resolve_function(function_id);
+        let function = context.state.resolve_function(function_id);
         let argument_values: Vec<_> = argument_values
             .into_iter()
-            .zip(parameter_types)
+            .zip(&function.parameter_types)
             .map(|(value, &parameter_type)| {
                 value
                     .coerce_to(
@@ -132,12 +131,7 @@ impl Operator {
                     .into_mlir()
             })
             .collect();
-        let results = context.state.builder.emit_sol_call_results(
-            mlir_name,
-            &argument_values,
-            return_types,
-            block,
-        );
+        let results = function.call(&argument_values, &context.state.builder, block);
         results
             .into_iter()
             .next()

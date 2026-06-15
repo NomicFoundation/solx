@@ -229,19 +229,14 @@ impl MemberCallKind {
                     .copied()
                     .expect("a super/base call has a recorded redirect target");
                 let argument_expressions: Vec<Expression> = arguments.iter().collect();
-                let (mlir_name, parameter_types, return_types) =
-                    context.state.resolve_function(target_id);
+                let function = context.state.resolve_function(target_id);
                 let (argument_values, current_block) = context.emit_coerced_argument_expressions(
                     &argument_expressions,
-                    parameter_types,
+                    &function.parameter_types,
                     block,
                 );
-                let results = context.state.builder.emit_sol_call_results(
-                    mlir_name,
-                    &argument_values,
-                    return_types,
-                    &current_block,
-                );
+                let results =
+                    function.call(&argument_values, &context.state.builder, &current_block);
                 (results, current_block)
             }
             Self::FunctionPointer => {

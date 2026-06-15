@@ -198,14 +198,9 @@ impl CallKind {
                     .map(|parameter| parameter.node_id())
                     .collect();
                 let arguments = arguments.ordered_by(&parameter_ids);
-                let (mlir_name, argument_values, return_types, block) =
+                let (function, argument_values, block) =
                     context.emit_call_setup_expressions(function_definition, &arguments, block);
-                let results = context.state.builder.emit_sol_call_results(
-                    mlir_name,
-                    &argument_values,
-                    return_types,
-                    &block,
-                );
+                let results = function.call(&argument_values, &context.state.builder, &block);
                 (results, block)
             }
             // `S(a, b)` / `S({b: …, a: …})`: order the field initialisers by the

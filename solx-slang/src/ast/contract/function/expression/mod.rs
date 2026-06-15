@@ -112,11 +112,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         target_id: NodeId,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
-        let (mlir_name, parameter_types, return_types) = self.state.resolve_function(target_id);
-        let func_ref_type =
-            crate::ast::Type::func_ref(self.state.builder.context, parameter_types, return_types);
+        let function = self.state.resolve_function(target_id);
+        let func_ref_type = crate::ast::Type::func_ref(
+            self.state.builder.context,
+            &function.parameter_types,
+            &function.return_types,
+        );
         let value = crate::ast::Value::function_constant(
-            mlir_name,
+            &function.mlir_name,
             func_ref_type,
             &self.state.builder,
             &block,
@@ -141,11 +144,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         else {
             return None;
         };
-        let (_, parameter_types, return_types) =
-            self.state.resolve_function(function_definition.node_id());
+        let function = self.state.resolve_function(function_definition.node_id());
         Some(
-            crate::ast::Type::func_ref(self.state.builder.context, parameter_types, return_types)
-                .into_mlir(),
+            crate::ast::Type::func_ref(
+                self.state.builder.context,
+                &function.parameter_types,
+                &function.return_types,
+            )
+            .into_mlir(),
         )
     }
 

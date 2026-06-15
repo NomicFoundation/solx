@@ -35,28 +35,26 @@ impl MemberCallKind {
         positional_arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let (mlir_name, parameter_types, return_types) =
-            context.state.resolve_function(library_function.node_id());
+        let function = context.state.resolve_function(library_function.node_id());
         // A `using for` receiver (`x.f(args)`) is a value and becomes the
         // implicit `self` — the function's first parameter; a namespace qualifier
         // — a library (`L.f`) or import alias (`M.f`) — is not a value, so only
         // the explicit arguments pass.
         if MemberCallKind::is_namespace_qualifier(&access.operand()) {
-            let (argument_values, current_block) =
-                context.emit_coerced_arguments(positional_arguments, parameter_types, block);
-            let results = context.state.builder.emit_sol_call_results(
-                mlir_name,
-                &argument_values,
-                return_types,
-                &current_block,
+            let (argument_values, current_block) = context.emit_coerced_arguments(
+                positional_arguments,
+                &function.parameter_types,
+                block,
             );
+            let results = function.call(&argument_values, &context.state.builder, &current_block);
             return (results, current_block);
         }
 
         // Using-for: evaluate the receiver as the leading `self` argument, coerce
         // it to the first parameter, and coerce the explicit arguments to the
         // rest.
-        let (parameter_self, parameter_rest) = parameter_types
+        let (parameter_self, parameter_rest) = function
+            .parameter_types
             .split_first()
             .expect("a using-for library function has a self parameter");
         let BlockAnd {
@@ -74,12 +72,7 @@ impl MemberCallKind {
         let (mut argument_values, current_block) =
             context.emit_coerced_arguments(positional_arguments, parameter_rest, current_block);
         argument_values.insert(0, self_value);
-        let results = context.state.builder.emit_sol_call_results(
-            mlir_name,
-            &argument_values,
-            return_types,
-            &current_block,
-        );
+        let results = function.call(&argument_values, &context.state.builder, &current_block);
         (results, current_block)
     }
 

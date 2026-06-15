@@ -237,19 +237,10 @@ impl<'context> Context<'context> {
     /// Resolves a registered function to its mangled MLIR name and declared
     /// parameter / return types. A miss is a solx-internal invariant failure:
     /// every reachable function is registered before any body is emitted.
-    pub fn resolve_function(
-        &self,
-        definition_id: NodeId,
-    ) -> (&str, &[Type<'context>], &[Type<'context>]) {
-        let function = self
-            .function_signatures
+    pub fn resolve_function(&self, definition_id: NodeId) -> &Function<'context> {
+        self.function_signatures
             .get(&definition_id)
-            .unwrap_or_else(|| panic!("undefined function for definition {definition_id:?}"));
-        (
-            function.mlir_name.as_str(),
-            &function.parameter_types,
-            &function.return_types,
-        )
+            .unwrap_or_else(|| panic!("undefined function for definition {definition_id:?}"))
     }
 
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.

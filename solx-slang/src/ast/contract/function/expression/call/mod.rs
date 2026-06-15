@@ -25,6 +25,7 @@ use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
+use solx_mlir::Function;
 use solx_mlir::ods::sol::ExtICallOperation;
 use solx_mlir::ods::sol::ICallOperation;
 
@@ -223,9 +224,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         arguments: &[Expression],
         block: BlockRef<'context, 'block>,
     ) -> (
-        &'a str,
+        &'a Function<'context>,
         Vec<Value<'context, 'block>>,
-        &'a [melior::ir::Type<'context>],
         BlockRef<'context, 'block>,
     ) {
         // Virtual dispatch: a bare internal call resolving (lexically) to an
@@ -241,12 +241,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .get(&node_id)
             .copied()
             .unwrap_or(node_id);
-        let (mlir_name, parameter_types, return_types) = self.state.resolve_function(call_id);
-
+        let function = self.state.resolve_function(call_id);
         let (argument_values, current_block) =
-            self.emit_coerced_argument_expressions(arguments, parameter_types, block);
-
-        (mlir_name, argument_values, return_types, current_block)
+            self.emit_coerced_argument_expressions(arguments, &function.parameter_types, block);
+        (function, argument_values, current_block)
     }
 
     /// Resolves an external library call's link target from its member-access
