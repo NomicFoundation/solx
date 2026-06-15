@@ -1,5 +1,5 @@
 //!
-//! Internal / external library call lowering.
+//! Internal / external library call emission.
 //!
 
 use melior::ir::BlockLike;
@@ -17,29 +17,31 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
 use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveSignature;
 
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
+impl MemberCallKind {
     /// Emits an internal (`Library { external: false }`) library call — inlined
     /// like an ordinary internal function.
-    pub fn emit_library_call(
+    pub fn emit_library_call<'state, 'context, 'block>(
         &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
         access: &MemberAccessExpression,
         library_function: &FunctionDefinition,
         positional_arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
         let (mlir_name, parameter_types, return_types) =
-            self.state.resolve_function(library_function.node_id())?;
+            context.state.resolve_function(library_function.node_id())?;
         // A `using for` receiver (`x.f(args)`) is a value and becomes the
         // implicit `self` — the function's first parameter; a namespace qualifier
         // — a library (`L.f`) or import alias (`M.f`) — is not a value, so only
         // the explicit arguments pass.
         if access.operand().is_namespace_qualifier() {
             let (argument_values, current_block) =
-                self.emit_coerced_arguments(positional_arguments, parameter_types, block)?;
-            let results = self.state.builder.emit_sol_call_results(
+                context.emit_coerced_arguments(positional_arguments, parameter_types, block)?;
+            let results = context.state.builder.emit_sol_call_results(
                 mlir_name,
                 &argument_values,
                 return_types,
@@ -57,8 +59,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let BlockAnd {
             value: self_value,
             block: current_block,
-        } = access.operand().emit(self, block)?;
-        let builder = &self.state.builder;
+        } = access.operand().emit(context, block)?;
+        let builder = &context.state.builder;
         let self_value = self_value
             .coerce_to(
                 crate::ast::Type::new(*parameter_self),
@@ -67,9 +69,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             )
             .into_mlir();
         let (mut argument_values, current_block) =
-            self.emit_coerced_arguments(positional_arguments, parameter_rest, current_block)?;
+            context.emit_coerced_arguments(positional_arguments, parameter_rest, current_block)?;
         argument_values.insert(0, self_value);
-        let results = self.state.builder.emit_sol_call_results(
+        let results = context.state.builder.emit_sol_call_results(
             mlir_name,
             &argument_values,
             return_types,
@@ -84,16 +86,17 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// encode, the delegatecall, the revert-bubble, and the result decode. The
     /// library address is a `sol.lib_addr` link placeholder; a `using for`
     /// receiver becomes the implicit leading `self` argument.
-    pub fn emit_library_external_call(
+    pub fn emit_library_external_call<'state, 'context, 'block>(
         &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
         library_name: &str,
         function: &FunctionDefinition,
         arguments: &[Expression],
         self_receiver: Option<&Expression>,
         block: BlockRef<'context, 'block>,
     ) -> anyhow::Result<(Vec<Value<'context, 'block>>, BlockRef<'context, 'block>)> {
-        let (parameter_types, return_types) =
-            function.resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder);
+        let (parameter_types, return_types) = function
+            .resolve_signature_types(LocationPolicy::Declared(None), &context.state.builder);
         let selector = function
             .compute_selector()
             .expect("an external library function has a selector");
@@ -107,20 +110,22 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let BlockAnd {
                     value: self_value,
                     block,
-                } = receiver.emit(self, block)?;
-                let builder = &self.state.builder;
+                } = receiver.emit(context, block)?;
+                let builder = &context.state.builder;
                 let self_value = self_value
                     .coerce_to(crate::ast::Type::new(*parameter_self), builder, &block)
                     .into_mlir();
                 let (mut rest_values, block) =
-                    self.emit_coerced_argument_expressions(arguments, parameter_rest, block)?;
+                    context.emit_coerced_argument_expressions(arguments, parameter_rest, block)?;
                 rest_values.insert(0, self_value);
                 (rest_values, block)
             }
-            None => self.emit_coerced_argument_expressions(arguments, &parameter_types, block)?,
+            None => {
+                context.emit_coerced_argument_expressions(arguments, &parameter_types, block)?
+            }
         };
 
-        let builder = &self.state.builder;
+        let builder = &context.state.builder;
         let address = sol_op!(
             builder,
             &current_block,

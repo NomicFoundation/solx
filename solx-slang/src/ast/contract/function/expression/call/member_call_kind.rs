@@ -137,7 +137,8 @@ impl MemberCallKind {
                 &parameter_ids[..]
             };
             let argument_expressions = arguments.ordered_by(explicit_parameter_ids);
-            return context.emit_library_external_call(
+            return self.emit_library_external_call(
+                context,
                 &library_name,
                 &library_function,
                 &argument_expressions,
@@ -203,7 +204,7 @@ impl MemberCallKind {
                 else {
                     unreachable!("a library call resolves to a function");
                 };
-                context.emit_library_call(access, &library_function, arguments, block)
+                self.emit_library_call(context, access, &library_function, arguments, block)
             }
             Self::Super => {
                 // `super.f` / `Base.f`: call the C3-resolved redirect target as an
