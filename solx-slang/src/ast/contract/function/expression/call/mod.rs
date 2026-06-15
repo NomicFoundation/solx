@@ -11,6 +11,7 @@ pub mod member_call_kind;
 pub mod static_mode;
 pub mod try_external_call;
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
@@ -24,10 +25,12 @@ use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
+use solx_mlir::ods::sol::ExtICallOperation;
 use solx_mlir::ods::sol::ICallOperation;
 
 use self::call_kind::CallKind;
 use self::member_call_kind::MemberCallKind;
+use self::static_mode::StaticMode;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::Toward;
@@ -326,12 +329,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 )
                 .into_mlir()
             });
-            builder.emit_sol_ext_icall(
+            self.emit_ext_icall(
                 callee_value.into_mlir(),
                 &argument_values,
                 &result_types,
                 value,
-                false,
+                StaticMode::Call,
                 &current_block,
             )
         } else {
@@ -352,6 +355,51 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .collect()
         };
         (results, current_block)
+    }
+
+    /// Emits a `sol.ext_icall` through the external-function-pointer `callee`,
+    /// forwarding all remaining gas and `value` as msg.value, and returns the
+    /// decoded results. The `i1` status is the first result and is dropped — a
+    /// non-`try` call reverts internally on failure. `static_mode` selects a
+    /// STATICCALL for a `view`/`pure` callee (which reverts on a state change,
+    /// matching solc). The shared `ext_icall` sink for the direct external call
+    /// (`emit_external_call`) and the external-function-pointer call above.
+    fn emit_ext_icall(
+        &self,
+        callee: Value<'context, 'block>,
+        operands: &[Value<'context, 'block>],
+        result_types: &[Type<'context>],
+        value: Value<'context, 'block>,
+        static_mode: StaticMode,
+        block: &BlockRef<'context, 'block>,
+    ) -> Vec<Value<'context, 'block>> {
+        let builder = &self.state.builder;
+        // `sol.ext_icall` results are `(i1 status, decoded-returns...)`; the status
+        // is prepended here and dropped from the values handed back.
+        let mut out_types = Vec::with_capacity(result_types.len() + 1);
+        out_types.push(
+            crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
+        );
+        out_types.extend_from_slice(result_types);
+        let mut operation_builder =
+            ExtICallOperation::builder(builder.context, builder.unknown_location)
+                .outs(&out_types)
+                .callee(callee)
+                .callee_operands(operands)
+                .gas(crate::ast::Value::gas_left(builder, block).into_mlir())
+                .value(value);
+        if matches!(static_mode, StaticMode::Static) {
+            operation_builder = operation_builder.static_call(Attribute::unit(builder.context));
+        }
+        let operation = block.append_operation(operation_builder.build().into());
+        (0..result_types.len())
+            .map(|index| {
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_icall produces a status plus its declared results")
+                    .into()
+            })
+            .collect()
     }
 }
 

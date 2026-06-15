@@ -30,7 +30,6 @@ use melior::ir::r#type::IntegerType;
 use crate::StateMutability;
 use crate::ods::sol::CallOperation;
 use crate::ods::sol::ContractOperation;
-use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::FuncOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::RevertOperation;
@@ -374,58 +373,6 @@ impl<'context> Builder<'context> {
                 operation
                     .result(index)
                     .expect("sol.call produces its declared result count")
-                    .into(),
-            );
-        }
-        results
-    }
-
-    /// Emits a `sol.ext_icall` (external call through an external function
-    /// reference), forwarding all remaining gas and the given `value`. ABI
-    /// encoding of `operands` and decoding of the results are implicit in the
-    /// op's conversion (driven by the callee's `ext_func_ref` signature). Returns
-    /// the decoded result values.
-    pub fn emit_sol_ext_icall<'block, B>(
-        &self,
-        callee: Value<'context, 'block>,
-        operands: &[Value<'context, 'block>],
-        result_types: &[Type<'context>],
-        value: Value<'context, 'block>,
-        static_call: bool,
-        block: &B,
-    ) -> Vec<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        // Forward all remaining gas (`gasleft()`), the default for an external
-        // call without an explicit `{gas: ...}` option.
-        let gas: Value<'context, 'block> = crate::Value::gas_left(self, block).into_mlir();
-        // `sol.ext_icall` results are `(i1 status, decoded-returns...)`. Prepend
-        // the status type and drop it from the values handed back — a non-try
-        // call reverts internally on failure, so the status is always true here.
-        let mut out_types = Vec::with_capacity(result_types.len() + 1);
-        out_types
-            .push(crate::Type::signless(self.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
-        out_types.extend_from_slice(result_types);
-        // A call to a `view`/`pure` function lowers to `STATICCALL`, which
-        // reverts if the callee attempts a state change (matching solc).
-        let mut operation_builder = ExtICallOperation::builder(self.context, self.unknown_location)
-            .outs(&out_types)
-            .callee(callee)
-            .callee_operands(operands)
-            .gas(gas)
-            .value(value);
-        if static_call {
-            operation_builder = operation_builder.static_call(Attribute::unit(self.context));
-        }
-        let operation = block.append_operation(operation_builder.build().into());
-        let mut results = Vec::with_capacity(result_types.len());
-        for index in 0..result_types.len() {
-            results.push(
-                operation
-                    .result(index + 1)
-                    .expect("sol.ext_icall produces a status plus its declared results")
                     .into(),
             );
         }

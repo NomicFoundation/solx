@@ -60,12 +60,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             )
             .into_mlir()
         });
-        builder.emit_sol_ext_icall(
+        self.emit_ext_icall(
             callee,
             argument_values,
             return_types,
             value,
-            matches!(static_mode, StaticMode::Static),
+            static_mode,
             block,
         )
     }
