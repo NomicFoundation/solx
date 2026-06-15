@@ -158,7 +158,8 @@ impl MemberCallKind {
                 else {
                     unreachable!("an external member call resolves to a function");
                 };
-                context.emit_external_call_results(
+                self.emit_external_call_results(
+                    context,
                     access,
                     &function_definition,
                     call_value,
@@ -172,7 +173,14 @@ impl MemberCallKind {
                 else {
                     unreachable!("a self getter call resolves to a state variable");
                 };
-                context.emit_self_getter_call(access, &state_variable, arguments, call_value, block)
+                self.emit_self_getter_call(
+                    context,
+                    access,
+                    &state_variable,
+                    arguments,
+                    call_value,
+                    block,
+                )
             }
             Self::ExternalGetter => {
                 let Some(Definition::StateVariable(state_variable)) =
@@ -180,8 +188,13 @@ impl MemberCallKind {
                 else {
                     unreachable!("an external getter call resolves to a state variable");
                 };
-                let (value, block) =
-                    context.emit_external_getter_call(access, &state_variable, arguments, block)?;
+                let (value, block) = self.emit_external_getter_call(
+                    context,
+                    access,
+                    &state_variable,
+                    arguments,
+                    block,
+                )?;
                 Ok((value.into_iter().collect(), block))
             }
             Self::Library(LibraryVisibility::Internal) => {
