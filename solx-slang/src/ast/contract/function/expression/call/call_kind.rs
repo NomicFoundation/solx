@@ -170,7 +170,7 @@ impl CallKind {
     /// Lowers this kind to its result values — zero for a void callee, more than
     /// one for a multi-return call. A single-result position takes the first.
     pub fn emit<'state, 'context, 'block>(
-        self,
+        &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         call: &FunctionCallExpression,
         block: BlockRef<'context, 'block>,
@@ -203,7 +203,7 @@ impl CallKind {
                     .collect();
                 let arguments = arguments.ordered_by(&parameter_ids);
                 let (mlir_name, argument_values, return_types, block) = context
-                    .emit_call_setup_expressions(&function_definition, &arguments, block)
+                    .emit_call_setup_expressions(function_definition, &arguments, block)
                     .with_context(|| format!("resolving callee '{callee_name}'"))?;
                 let results = context.state.builder.emit_sol_call_results(
                     mlir_name,
@@ -314,7 +314,7 @@ impl CallKind {
                     }
                     Self::BuiltInIdentifier(built_in) => {
                         let (value, block) =
-                            context.emit_built_in_call(built_in, arguments, block)?;
+                            context.emit_built_in_call(*built_in, arguments, block)?;
                         Ok((value.into_iter().collect(), block))
                     }
                     Self::AbiDecode => context.emit_abi_decode(call, arguments, block),
@@ -343,12 +343,12 @@ impl CallKind {
                     }
                     Self::BuiltInMemberAccess(access) => {
                         let (value, block) =
-                            context.emit_built_in_member_access(&access, Some(arguments), block)?;
+                            context.emit_built_in_member_access(access, Some(arguments), block)?;
                         Ok((value.into_iter().collect(), block))
                     }
                     Self::New => {
                         let (value, block) =
-                            context.emit_new(call, arguments, call_value, salt, block)?;
+                            self.emit_new(context, call, arguments, call_value, salt, block)?;
                         Ok((value.into_iter().collect(), block))
                     }
                     Self::IndirectPointer => {
@@ -367,7 +367,7 @@ impl CallKind {
                         let Expression::MemberAccessExpression(access) = &callee else {
                             unreachable!("a bare low-level call has a member-access callee");
                         };
-                        context.emit_bare_call_results(access, kind, call_value, arguments, block)
+                        context.emit_bare_call_results(access, *kind, call_value, arguments, block)
                     }
                     Self::LocalFunction(_) | Self::StructConstructor(_) | Self::Member(_) => {
                         unreachable!("handled in the outer match")

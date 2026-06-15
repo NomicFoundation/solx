@@ -111,7 +111,7 @@ impl MemberCallKind {
 
     /// Lowers this kind to its result values (a getter / call may yield zero or more).
     pub fn emit<'state, 'context, 'block>(
-        self,
+        &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         access: &MemberAccessExpression,
         call_value: Option<Value<'context, 'block>>,

@@ -1,10 +1,8 @@
 //!
-//! `new` expression lowering: dynamic-aggregate allocation (`new T[](n)`,
+//! `new` expression emission: dynamic-aggregate allocation (`new T[](n)`,
 //! `new bytes(n)`, `new string(n)`) and contract creation (`new C(args)`).
 //!
-//! An [`ExpressionContext`] method: `new.rs` lives in the expression module
-//! subtree, so it lowers through the expression emitter directly rather than
-//! the call emitter.
+//! The `New` arm of [`CallKind`] — `new C()` is a `FunctionCallExpression`.
 //!
 
 use melior::ir::Attribute;
@@ -28,15 +26,17 @@ use solx_utils::DataLocation;
 
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::call_kind::CallKind;
 use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveSignature;
 use crate::ast::type_conversion::ResolveType;
 
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
+impl CallKind {
     /// Emits a `new` expression: dynamic-aggregate allocation (`new T[](n)`,
     /// `new bytes(n)`) or contract creation (`new C(args)`).
-    pub fn emit_new(
+    pub fn emit_new<'state, 'context, 'block>(
         &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         value: Option<Value<'context, 'block>>,
@@ -53,7 +53,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(inner @ (SlangType::Array(_) | SlangType::Bytes(_) | SlangType::String(_))) => {
                 Some(inner.resolve_type(
                     LocationPolicy::Declared(Some(DataLocation::Memory)),
-                    &self.state.builder,
+                    &context.state.builder,
                 ))
             }
             None if matches!(
@@ -63,15 +63,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             ) =>
             {
                 Some(
-                    crate::ast::Type::string(self.state.builder.context, DataLocation::Memory)
+                    crate::ast::Type::string(context.state.builder.context, DataLocation::Memory)
                         .into_mlir(),
                 )
             }
             _ => None,
         };
         if let Some(result_type) = dynamic_result_type {
-            let (values, current_block) = self.emit_argument_values(arguments, block)?;
-            let builder = &self.state.builder;
+            let (values, current_block) = context.emit_argument_values(arguments, block)?;
+            let builder = &context.state.builder;
             let address = match values.first() {
                 Some(&size_value) => {
                     let size = crate::ast::Value::from(size_value)
@@ -116,7 +116,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         let contract_name = contract_definition.name().name();
         let payable = ContractEmitter::is_contract_payable(&contract_definition);
-        self.state.add_dependency(contract_name.clone());
+        context.state.add_dependency(contract_name.clone());
 
         // Coerce each constructor argument to its declared parameter type so a
         // literal materialises in the parameter's representation (e.g. "abc" as
@@ -126,12 +126,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .constructor()
             .map(|constructor| {
                 constructor
-                    .resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder)
+                    .resolve_signature_types(LocationPolicy::Declared(None), &context.state.builder)
                     .0
             })
             .unwrap_or_default();
-        let (ctor_args, block) = self.emit_coerced_arguments(arguments, &parameter_types, block)?;
-        let builder = &self.state.builder;
+        let (ctor_args, block) =
+            context.emit_coerced_arguments(arguments, &parameter_types, block)?;
+        let builder = &context.state.builder;
         let result_type =
             crate::ast::Type::contract(builder.context, &contract_name, payable).into_mlir();
         let val = value.unwrap_or_else(|| {
