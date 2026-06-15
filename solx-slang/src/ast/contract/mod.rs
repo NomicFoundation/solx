@@ -36,6 +36,7 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableMutability;
 
 use solx_mlir::Context;
+use solx_mlir::ods::sol::ContractOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 use solx_utils::DataLocation;
 
@@ -172,7 +173,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         // Emit sol.contract and functions.
         let module_body = self.state.module.body();
-        let contract_body = self.state.builder.emit_sol_contract(
+        let contract_body = self.emit_contract(
             &contract_name,
             // TODO: investigate how other contract kinds (e.g. interface, library) should be represented in MLIR
             solx_mlir::ContractKind::Contract,
@@ -363,7 +364,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             crate::ast::Type::contract(self.state.builder.context, &library_name, false)
                 .into_mlir();
         let module_body = self.state.module.body();
-        let contract_body = self.state.builder.emit_sol_contract(
+        let contract_body = self.emit_contract(
             &library_name,
             // A library is `ContractKind::Library`: the backend dispatcher passes
             // a `storage` reference parameter as its slot (instead of ABI-decoding
@@ -394,6 +395,26 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
 
         (library_name, method_identifiers)
+    }
+
+    /// Emits a `sol.contract` with an empty body region, returning that body
+    /// block for appending function definitions. The kind builds its own dialect
+    /// attribute ([`solx_mlir::ContractKind::attribute`]).
+    fn emit_contract<'block>(
+        &self,
+        name: &str,
+        kind: solx_mlir::ContractKind,
+        block: &BlockRef<'context, 'block>,
+    ) -> BlockRef<'context, 'block> {
+        let builder = &self.state.builder;
+        sol_region_op!(
+            builder,
+            block,
+            ContractOperation
+                .sym_name(StringAttribute::new(builder.context, name))
+                .kind(kind.attribute(builder.context))
+            ; body_region
+        )
     }
 
     /// Synthesises the auto-generated external accessor for each `public` state

@@ -29,7 +29,6 @@ use melior::ir::r#type::IntegerType;
 
 use crate::StateMutability;
 use crate::ods::sol::CallOperation;
-use crate::ods::sol::ContractOperation;
 use crate::ods::sol::FuncOperation;
 use crate::ods::sol::RequireOperation;
 
@@ -48,43 +47,6 @@ impl<'context> Builder<'context> {
             context,
             unknown_location: Location::unknown(context),
         }
-    }
-
-    /// Emits a `sol.contract` operation with a body region.
-    ///
-    /// Returns the body block inside the contract region for appending
-    /// function definitions.
-    pub fn emit_sol_contract<'block>(
-        &self,
-        name: &str,
-        kind: crate::ContractKind,
-        block: &BlockRef<'context, 'block>,
-    ) -> BlockRef<'context, 'block> {
-        let body_region = Region::new();
-        let body_block = Block::new(&[]);
-        body_region.append_block(body_block);
-
-        // `solxCreateContractKindAttr` returns a valid MlirAttribute.
-        let kind_attribute = unsafe {
-            Attribute::from_raw(crate::ffi::solxCreateContractKindAttr(
-                self.context.to_raw(),
-                kind as u32,
-            ))
-        };
-
-        block
-            .append_operation(
-                ContractOperation::builder(self.context, self.unknown_location)
-                    .sym_name(StringAttribute::new(self.context, name))
-                    .kind(kind_attribute)
-                    .body_region(body_region)
-                    .build()
-                    .into(),
-            )
-            .region(0)
-            .expect("contract has one region")
-            .first_block()
-            .expect("contract body has one block")
     }
 
     /// Emits a `sol.func` operation with the given name, parameter types,
