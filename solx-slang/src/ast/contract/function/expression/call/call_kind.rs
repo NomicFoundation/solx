@@ -314,7 +314,7 @@ impl CallKind {
                     }
                     Self::BuiltInIdentifier(built_in) => {
                         let (value, block) =
-                            context.emit_built_in_call(*built_in, arguments, block)?;
+                            self.emit_built_in_call(context, *built_in, arguments, block)?;
                         Ok((value.into_iter().collect(), block))
                     }
                     Self::AbiDecode => self.emit_abi_decode(context, call, arguments, block),

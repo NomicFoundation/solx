@@ -32,6 +32,7 @@ use solx_mlir::ods::sol::Sha256Operation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::call_kind::CallKind;
 
 /// ABI encoding mode for `abi.encode` / `abi.encodePacked`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,22 +44,23 @@ pub enum EncodeMode {
     Packed,
 }
 
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
+impl CallKind {
     /// Emits an identifier-callee built-in (`assert`, `require`, `keccak256`,
     /// `sha256`, `ripemd160`, `ecrecover`, `addmod`, `mulmod`, `gasleft`).
     ///
     /// The returned value is `Some(...)` for value-producing built-ins and
-    /// `None` for statement-style ones (`assert`, `require`). The caller
-    /// ([`ExpressionContext::classify_call`]) routes only handled built-ins with a
-    /// matching argument count here, so the argument-count expectations always
-    /// hold and unhandled variants are unreachable.
+    /// `None` for statement-style ones (`assert`, `require`). Only handled
+    /// built-ins with a matching argument count reach here, so the
+    /// argument-count expectations always hold and unhandled variants are
+    /// unreachable.
     ///
     /// # Errors
     ///
     /// Returns an error if the built-in's arguments are malformed (e.g. a
     /// non-string `require` message).
-    pub fn emit_built_in_call(
+    pub fn emit_built_in_call<'state, 'context, 'block>(
         &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
         built_in: BuiltIn,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
@@ -66,7 +68,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         match built_in {
             BuiltIn::Assert => {
                 let condition = arguments.iter().next().expect("assert has one argument");
-                Ok((None, self.emit_assert(&condition, block)?))
+                Ok((None, context.emit_assert(&condition, block)?))
             }
             BuiltIn::Require => {
                 let mut iter = arguments.iter();
@@ -74,11 +76,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let message = iter.next();
                 Ok((
                     None,
-                    self.emit_require(&condition, message.as_ref(), block)?,
+                    context.emit_require(&condition, message.as_ref(), block)?,
                 ))
             }
             BuiltIn::Gasleft => {
-                let builder = &self.state.builder;
+                let builder = &context.state.builder;
                 let value = sol_op!(
                     builder,
                     block,
@@ -90,8 +92,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 Ok((Some(value), block))
             }
             BuiltIn::Blockhash => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.state.builder;
+                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let builder = &context.state.builder;
                 // `sol.blockhash` takes a `ui256` block number; coerce a narrower
                 // argument type up first.
                 let block_number = crate::ast::Value::from(values[0])
@@ -111,13 +113,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 Ok((Some(value), block))
             }
             BuiltIn::Keccak256 => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let value = self.emit_keccak256(values[0], &block);
+                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let value = context.emit_keccak256(values[0], &block);
                 Ok((Some(value), block))
             }
             BuiltIn::Sha256 => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.state.builder;
+                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let builder = &context.state.builder;
                 let value = sol_op!(
                     builder,
                     block,
@@ -128,8 +130,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 Ok((Some(value), block))
             }
             BuiltIn::Ripemd160 => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.state.builder;
+                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let builder = &context.state.builder;
                 let value = sol_op!(
                     builder,
                     block,
@@ -140,8 +142,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 Ok((Some(value), block))
             }
             BuiltIn::Ecrecover => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.state.builder;
+                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let builder = &context.state.builder;
                 // `ecrecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s)`: the
                 // hash / r / s arguments keep their literal `uint256` type, but
                 // `sol.ecrecover` takes `fixedbytes<32>` for them and `ui8` for
@@ -173,8 +175,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 Ok((Some(value), block))
             }
             BuiltIn::Addmod => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.state.builder;
+                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let builder = &context.state.builder;
                 // `addmod` operates on `uint256`, but a literal operand keeps its
                 // narrow type (`addmod(1, 2, d)` → ui8, ui8, ui256); `sol.addmod`
                 // requires identical operand/result types, so widen all to ui256.
@@ -194,8 +196,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 Ok((Some(value), block))
             }
             BuiltIn::Mulmod => {
-                let (values, block) = self.emit_argument_values(arguments, block)?;
-                let builder = &self.state.builder;
+                let (values, block) = context.emit_argument_values(arguments, block)?;
+                let builder = &context.state.builder;
                 // `mulmod` operates on `uint256`; widen narrow literal operands so
                 // all operands/result share the type `sol.mulmod` requires.
                 let ui256 =
@@ -213,10 +215,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let value = sol_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus));
                 Ok((Some(value), block))
             }
-            _ => unreachable!("classify_call only routes emittable identifier built-ins here"),
+            _ => unreachable!("only emittable identifier built-ins are routed here"),
         }
     }
+}
 
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits a member-access built-in (e.g. `tx.origin`, `msg.sender`,
     /// `address.balance`, `abi.encode(...)`, `arr.push(...)`).
     ///
