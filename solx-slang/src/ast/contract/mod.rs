@@ -18,7 +18,13 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use melior::ir::Attribute;
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::attribute::IntegerAttribute;
+use melior::ir::attribute::StringAttribute;
+use melior::ir::attribute::TypeAttribute;
+use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionDefinition;
@@ -30,6 +36,7 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableMutability;
 
 use solx_mlir::Context;
+use solx_mlir::ods::sol::StateVarOperation;
 use solx_utils::DataLocation;
 
 use self::free_function::FreeCallCollector;
@@ -185,14 +192,28 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             };
             let element_type =
                 TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder);
-            self.state.builder.emit_sol_state_var(
-                &slot.name,
-                slot.slot,
-                slot.byte_offset,
-                element_type,
-                matches!(slot.location, DataLocation::Transient),
-                &contract_body,
+            let builder = &self.state.builder;
+            let slot_attribute: IntegerAttribute =
+                Attribute::parse(builder.context, &format!("{} : i256", slot.slot))
+                    .expect("valid slot literal")
+                    .try_into()
+                    .expect("slot literal is an integer attribute");
+            let byte_offset_attribute = IntegerAttribute::new(
+                IntegerType::new(builder.context, solx_utils::BIT_LENGTH_X32 as u32).into(),
+                slot.byte_offset.into(),
             );
+            let mut operation =
+                StateVarOperation::builder(builder.context, builder.unknown_location)
+                    .sym_name(StringAttribute::new(builder.context, &slot.name))
+                    .r#type(TypeAttribute::new(element_type))
+                    .slot(slot_attribute)
+                    .byte_offset(byte_offset_attribute);
+            // A `transient` variable (EIP-1153) lives in the separate transient slot
+            // space; the attribute makes its accesses lower to TLOAD/TSTORE.
+            if matches!(slot.location, DataLocation::Transient) {
+                operation = operation.transient(Attribute::unit(builder.context));
+            }
+            contract_body.append_operation(operation.build().into());
         }
 
         self.state.current_contract_type = Some(contract_type);

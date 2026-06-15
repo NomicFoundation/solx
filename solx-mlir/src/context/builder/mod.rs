@@ -1,9 +1,10 @@
 //!
-//! MLIR builder for Sol dialect emission.
+//! The Sol-dialect construction handle, and the emission methods still homed
+//! on it.
 //!
-//! Contains the [`Builder`] type with cached MLIR types and emission methods
-//! for Sol dialect operations: contracts, functions, constants, control flow,
-//! memory, calls, state variables, and EVM context intrinsics.
+//! [`Builder`] carries the `{context, location}` the `sol_op!` macros read. The
+//! methods on it (contracts, functions, reverts, requires, try, and the call
+//! family) are the ops not yet dissolved onto their owning nodes.
 //!
 
 pub mod try_fallback_kind;
@@ -26,7 +27,6 @@ use melior::ir::attribute::TypeAttribute;
 use melior::ir::operation::OperationLike;
 use melior::ir::r#type::FunctionType;
 use melior::ir::r#type::IntegerType;
-use ruint::aliases::U256;
 
 use crate::StateMutability;
 use crate::ods::sol::BareCallOperation;
@@ -40,7 +40,6 @@ use crate::ods::sol::FuncOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::RevertOperation;
-use crate::ods::sol::StateVarOperation;
 use crate::ods::sol::TryOperation;
 
 use crate::context::builder::try_fallback_kind::TryFallbackKind;
@@ -716,40 +715,5 @@ impl<'context> Builder<'context> {
             .build()
             .into();
         self.emit_sol_bare_call_results(operation, block)
-    }
-
-    /// Emits a `sol.state_var` declaration inside a contract body.
-    pub fn emit_sol_state_var<'block, B>(
-        &self,
-        name: &str,
-        slot: U256,
-        byte_offset: u32,
-        element_type: Type<'context>,
-        transient: bool,
-        block: &B,
-    ) where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let slot_attribute: IntegerAttribute =
-            Attribute::parse(self.context, &format!("{slot} : i256"))
-                .expect("valid slot literal")
-                .try_into()
-                .expect("slot literal is an integer attribute");
-        let byte_offset_attribute = IntegerAttribute::new(
-            IntegerType::new(self.context, solx_utils::BIT_LENGTH_X32 as u32).into(),
-            byte_offset.into(),
-        );
-        let mut operation = StateVarOperation::builder(self.context, self.unknown_location)
-            .sym_name(StringAttribute::new(self.context, name))
-            .r#type(TypeAttribute::new(element_type))
-            .slot(slot_attribute)
-            .byte_offset(byte_offset_attribute);
-        // A `transient` variable (EIP-1153) lives in the separate transient
-        // slot space; the attribute makes its accesses lower to TLOAD/TSTORE.
-        if transient {
-            operation = operation.transient(Attribute::unit(self.context));
-        }
-        block.append_operation(operation.build().into());
     }
 }
