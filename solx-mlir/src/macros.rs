@@ -13,11 +13,18 @@
 //! the builder chain is written exactly once:
 //! - [`sol_op_build`] — yield the `Operation`, do not append;
 //! - [`sol_op`] — append to a block and return the single result value;
-//! - [`sol_op_void`] — append a value-less effect op.
+//! - [`sol_op_void`] — append a value-less effect op;
+//! - [`sol_region_op`] — append a region-bearing control-flow op (`sol.if` /
+//!   `sol.for` / `sol.while` / `sol.do`), each region a fresh empty single
+//!   block, and yield those entry blocks for the caller to emit into. This is
+//!   the one home of the region-and-block plumbing the three `sol.if` sites
+//!   (`if`, `&&`/`||`, `?:`) and the loops would otherwise each repeat.
 //!
 //! Ops with `operand_segment_sizes` (`Encode`, `New`, `Emit`) or multiple
 //! results (`Decode`) are built by hand — their construction is not a fixed
-//! method chain.
+//! method chain. `sol.try` likewise: its catch regions are conditionally
+//! present and carry typed block arguments, so it is built by hand in its one
+//! owning node rather than through [`sol_region_op`].
 //!
 //! [`Value`]: crate::Value
 //! [`Type`]: crate::Type
@@ -57,4 +64,50 @@ macro_rules! sol_op_void {
     ($builder:expr, $block:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
         $block.append_operation(sol_op_build!($builder, $operation $(.$method($($argument),*))*));
     };
+}
+
+/// Appends a region-bearing control-flow op and yields its region entry blocks
+/// in declaration order. Each region named after the `;` is created as a fresh
+/// single empty block and fed to the op's like-named region setter; the value
+/// setters before the `;` (e.g. `sol.if`'s `.cond(...)`) are written as for
+/// [`sol_op!`]. The yielded tuple is the entry block per region — the caller
+/// emits each branch body into it and terminates it (`sol.yield` /
+/// `sol.condition`).
+///
+/// Every covered op (`sol.if`/`for`/`while`/`do`) has empty, unconditional
+/// regions, so the plumbing is uniform; `sol.try`'s arg-bearing conditional
+/// catch regions are the exception built by hand (see the module doc).
+#[macro_export]
+macro_rules! sol_region_op {
+    (
+        $builder:expr, $block:expr, $operation:ident
+        $(.$method:ident($($argument:expr),* $(,)?))*
+        ; $($region:ident),+ $(,)?
+    ) => {{
+        $(
+            let $region = {
+                let region = melior::ir::Region::new();
+                melior::ir::RegionLike::append_block(&region, melior::ir::Block::new(&[]));
+                region
+            };
+        )+
+        let operation = melior::ir::BlockLike::append_operation(
+            $block,
+            $operation::builder($builder.context, $builder.unknown_location)
+                $(.$method($($argument),*))*
+                $(.$region($region))+
+                .build()
+                .into(),
+        );
+        let mut regions = (0usize..).map(|index| {
+            melior::ir::RegionLike::first_block(
+                &melior::ir::operation::OperationLike::region(&operation, index)
+                    .expect(concat!(stringify!($operation), " region index in range")),
+            )
+            .expect(concat!(stringify!($operation), " region has an entry block"))
+        });
+        ($(
+            regions.next().expect(concat!("missing ", stringify!($region)))
+        ),+)
+    }};
 }

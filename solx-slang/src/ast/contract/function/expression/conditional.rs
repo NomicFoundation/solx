@@ -12,6 +12,7 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::ArrayLitOperation;
+use solx_mlir::ods::sol::IfOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
@@ -107,7 +108,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 crate::ast::Pointer::stack_slot(crate::ast::Type::new(result_type), builder, &block)
             })
             .collect();
-        let (then_block, else_block) = builder.emit_sol_if(condition_boolean, &block);
+        let (then_block, else_block) = sol_region_op!(builder, &block, IfOperation.cond(condition_boolean); then_region, else_region);
 
         for (branch_block, branch_expression) in [
             (then_block, &true_expression),
@@ -241,7 +242,10 @@ expression_emit!(ConditionalExpression; |node, context, block| {
         &context.state.builder,
         &block,
     );
-    let (then_block, else_block) = context.state.builder.emit_sol_if(condition_boolean, &block);
+    let (then_block, else_block) = sol_region_op!(
+        &context.state.builder, &block,
+        IfOperation.cond(condition_boolean); then_region, else_region
+    );
 
     let true_expression = node.true_expression();
     let BlockAnd {

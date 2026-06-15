@@ -34,21 +34,17 @@ use crate::ods::sol::BareDelegateCallOperation;
 use crate::ods::sol::BareStaticCallOperation;
 use crate::ods::sol::CallOperation;
 use crate::ods::sol::ContractOperation;
-use crate::ods::sol::DoWhileOperation;
 use crate::ods::sol::ExtCallOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::ExtICallOperation;
-use crate::ods::sol::ForOperation;
 use crate::ods::sol::FuncOperation;
 use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::ICallOperation;
-use crate::ods::sol::IfOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
 use crate::ods::sol::RevertOperation;
 use crate::ods::sol::StateVarOperation;
 use crate::ods::sol::TryOperation;
-use crate::ods::sol::WhileOperation;
 
 use crate::context::builder::try_fallback_kind::TryFallbackKind;
 
@@ -262,48 +258,6 @@ impl<'context> Builder<'context> {
 
     // ==== Control flow ====
 
-    /// Emits a `sol.if` with then and else regions.
-    ///
-    /// Returns `(then_block, else_block)`. The caller emits into each region
-    /// and terminates them with `sol.yield`.
-    pub fn emit_sol_if<'block>(
-        &self,
-        condition: Value<'context, 'block>,
-        block: &BlockRef<'context, 'block>,
-    ) -> (BlockRef<'context, 'block>, BlockRef<'context, 'block>)
-    where
-        'context: 'block,
-    {
-        let then_region = Region::new();
-        let then_block = Block::new(&[]);
-        then_region.append_block(then_block);
-
-        let else_region = Region::new();
-        let else_block = Block::new(&[]);
-        else_region.append_block(else_block);
-
-        let operation = block.append_operation(
-            IfOperation::builder(self.context, self.unknown_location)
-                .cond(condition)
-                .then_region(then_region)
-                .else_region(else_region)
-                .build()
-                .into(),
-        );
-
-        let then_ref = operation
-            .region(0)
-            .expect("sol.if has then region")
-            .first_block()
-            .expect("then region has a block");
-        let else_ref = operation
-            .region(1)
-            .expect("sol.if has else region")
-            .first_block()
-            .expect("else region has a block");
-        (then_ref, else_ref)
-    }
-
     /// Emits a `sol.try` carrying the external call's success `status` and four
     /// regions — success, panic, error, fallback. A clause that is absent
     /// produces an empty region; the op's conversion performs the returndata-size
@@ -407,131 +361,6 @@ impl<'context> Builder<'context> {
         });
 
         (success, panic, error, fallback)
-    }
-
-    /// Emits a `sol.while` with condition and body regions.
-    ///
-    /// Returns `(cond_block, body_block)`. The condition region must be
-    /// terminated with `sol.condition`. The body region with `sol.yield`.
-    pub fn emit_sol_while<'block>(
-        &self,
-        block: &BlockRef<'context, 'block>,
-    ) -> (BlockRef<'context, 'block>, BlockRef<'context, 'block>) {
-        let cond_region = Region::new();
-        let cond_block = Block::new(&[]);
-        cond_region.append_block(cond_block);
-
-        let body_region = Region::new();
-        let body_block = Block::new(&[]);
-        body_region.append_block(body_block);
-
-        let operation = block.append_operation(
-            WhileOperation::builder(self.context, self.unknown_location)
-                .cond(cond_region)
-                .body(body_region)
-                .build()
-                .into(),
-        );
-
-        let cond_ref = operation
-            .region(0)
-            .expect("sol.while has cond region")
-            .first_block()
-            .expect("cond region has a block");
-        let body_ref = operation
-            .region(1)
-            .expect("sol.while has body region")
-            .first_block()
-            .expect("body region has a block");
-        (cond_ref, body_ref)
-    }
-
-    /// Emits a `sol.do` (do-while) with body and condition regions.
-    ///
-    /// Returns `(body_block, cond_block)`. The body executes first.
-    /// Body terminates with `sol.yield`, condition with `sol.condition`.
-    pub fn emit_sol_do_while<'block>(
-        &self,
-        block: &BlockRef<'context, 'block>,
-    ) -> (BlockRef<'context, 'block>, BlockRef<'context, 'block>) {
-        let body_region = Region::new();
-        let body_block = Block::new(&[]);
-        body_region.append_block(body_block);
-
-        let cond_region = Region::new();
-        let cond_block = Block::new(&[]);
-        cond_region.append_block(cond_block);
-
-        let operation = block.append_operation(
-            DoWhileOperation::builder(self.context, self.unknown_location)
-                .body(body_region)
-                .cond(cond_region)
-                .build()
-                .into(),
-        );
-
-        let body_ref = operation
-            .region(0)
-            .expect("sol.do has body region")
-            .first_block()
-            .expect("body region has a block");
-        let cond_ref = operation
-            .region(1)
-            .expect("sol.do has cond region")
-            .first_block()
-            .expect("cond region has a block");
-        (body_ref, cond_ref)
-    }
-
-    /// Emits a `sol.for` with condition, body, and step regions.
-    ///
-    /// Returns `(cond_block, body_block, step_block)`. Condition terminates
-    /// with `sol.condition`, body and step with `sol.yield`.
-    pub fn emit_sol_for<'block>(
-        &self,
-        block: &BlockRef<'context, 'block>,
-    ) -> (
-        BlockRef<'context, 'block>,
-        BlockRef<'context, 'block>,
-        BlockRef<'context, 'block>,
-    ) {
-        let cond_region = Region::new();
-        let cond_block = Block::new(&[]);
-        cond_region.append_block(cond_block);
-
-        let body_region = Region::new();
-        let body_block = Block::new(&[]);
-        body_region.append_block(body_block);
-
-        let step_region = Region::new();
-        let step_block = Block::new(&[]);
-        step_region.append_block(step_block);
-
-        let operation = block.append_operation(
-            ForOperation::builder(self.context, self.unknown_location)
-                .cond(cond_region)
-                .body(body_region)
-                .step(step_region)
-                .build()
-                .into(),
-        );
-
-        let cond_ref = operation
-            .region(0)
-            .expect("sol.for has cond region")
-            .first_block()
-            .expect("cond region has a block");
-        let body_ref = operation
-            .region(1)
-            .expect("sol.for has body region")
-            .first_block()
-            .expect("body region has a block");
-        let step_ref = operation
-            .region(2)
-            .expect("sol.for has step region")
-            .first_block()
-            .expect("step region has a block");
-        (cond_ref, body_ref, step_ref)
     }
 
     // ==== Memory ====

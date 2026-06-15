@@ -6,6 +6,7 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::Expression;
+use solx_mlir::ods::sol::IfOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
@@ -54,7 +55,10 @@ impl LogicalOperator {
             crate::ast::Value::boolean(short_circuit_value, &emitter.state.builder, &block);
         result_ptr.store(default_value, &emitter.state.builder, &block);
 
-        let (then_block, else_block) = emitter.state.builder.emit_sol_if(lhs_bool, &block);
+        let (then_block, else_block) = sol_region_op!(
+            &emitter.state.builder, &block,
+            IfOperation.cond(lhs_bool); then_region, else_region
+        );
         let (rhs_block, short_circuit_block) = if short_circuit_value {
             (else_block, then_block)
         } else {

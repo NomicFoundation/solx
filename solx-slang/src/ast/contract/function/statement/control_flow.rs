@@ -13,6 +13,10 @@ use slang_solidity_v2::ast::IfStatement;
 use slang_solidity_v2::ast::Statement;
 use slang_solidity_v2::ast::WhileStatement;
 use solx_mlir::ods::sol::ConditionOperation;
+use solx_mlir::ods::sol::DoWhileOperation;
+use solx_mlir::ods::sol::ForOperation;
+use solx_mlir::ods::sol::IfOperation;
+use solx_mlir::ods::sol::WhileOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
 use super::discarded::Discarded;
@@ -44,7 +48,10 @@ statement_emit!(IfStatement; |node, context, block| {
         .is_nonzero(&context.state.builder, &block)
         .into_mlir();
 
-    let (then_block, else_block) = context.state.builder.emit_sol_if(condition_boolean, &block);
+    let (then_block, else_block) = sol_region_op!(
+        &context.state.builder, &block,
+        IfOperation.cond(condition_boolean); then_region, else_region
+    );
 
     // Get the inner regions for creating blocks in the right scope.
     let then_region = solx_mlir::ffi::block_parent_region(&then_block);
@@ -106,7 +113,8 @@ statement_emit!(ForStatement; |node, context, block| {
         ForStatementInitialization::Semicolon(_) => block,
     };
 
-    let (condition_block, body_block, step_block) = context.state.builder.emit_sol_for(&block);
+    let (condition_block, body_block, step_block) =
+        sol_region_op!(&context.state.builder, &block, ForOperation; cond, body, step);
     let body_region = solx_mlir::ffi::block_parent_region(&body_block);
     let saved_region = context.region_pointer;
 
@@ -157,7 +165,8 @@ statement_emit!(ForStatement; |node, context, block| {
 });
 
 statement_emit!(WhileStatement; |node, context, block| {
-    let (condition_block, body_block) = context.state.builder.emit_sol_while(&block);
+    let (condition_block, body_block) =
+        sol_region_op!(&context.state.builder, &block, WhileOperation; cond, body);
     let body_region = solx_mlir::ffi::block_parent_region(&body_block);
     let saved_region = context.region_pointer;
 
@@ -176,7 +185,8 @@ statement_emit!(WhileStatement; |node, context, block| {
 });
 
 statement_emit!(DoWhileStatement; |node, context, block| {
-    let (body_block, condition_block) = context.state.builder.emit_sol_do_while(&block);
+    let (body_block, condition_block) =
+        sol_region_op!(&context.state.builder, &block, DoWhileOperation; body, cond);
     let body_region = solx_mlir::ffi::block_parent_region(&body_block);
     let saved_region = context.region_pointer;
 
