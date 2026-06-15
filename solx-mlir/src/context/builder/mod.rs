@@ -355,29 +355,6 @@ impl<'context> Builder<'context> {
         (success, panic, error, fallback)
     }
 
-    /// Emits a `sol.alloca` for a local variable, returning the pointer.
-    ///
-    /// Returns a `!sol.ptr<{element_type}, Stack>` pointer. Use this when
-    /// the declared Solidity type is known (e.g. `uint64` → `ui64`).
-    pub fn emit_zero_initialized_alloca<'block, B>(
-        &self,
-        element_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let pointer = crate::Pointer::stack_slot(crate::Type::new(element_type), self, block);
-        if IntegerType::try_from(element_type).is_ok() {
-            let zero = crate::Value::constant(0, crate::Type::new(element_type), self, block);
-            pointer.store(zero, self, block);
-        } else {
-            unimplemented!("zero-initialization for non-integer type {element_type}");
-        }
-        pointer.into_mlir()
-    }
-
     /// Emits a `sol.return` whose operands are loaded from the per-return slots:
     /// each named-return slot is loaded, and a typed zero is materialised where
     /// no slot was allocated (an unnamed return). Shared by the implicit
