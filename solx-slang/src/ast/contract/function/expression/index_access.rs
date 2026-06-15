@@ -9,6 +9,7 @@ use melior::ir::Value;
 use melior::ir::r#type::TypeLike;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
+use slang_solidity_v2::ast::IndexAccessKind;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::ods::sol::LengthOperation;
@@ -131,13 +132,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
 // sub-array VALUE via `sol.slice`.
 expression_emit!(IndexAccessExpression; |node, context, block| {
     // A slice `a[start:end]` produces a sub-array VALUE (not an element
-    // address), emitted as `sol.slice`. `is_slice()` (the colon-presence flag)
-    // distinguishes every slice form — including the open-ended `a[i:]`,
-    // indistinguishable from the index `a[i]` by `end()` alone (both `None`) —
-    // from a plain index access. `start` defaults to `0` when omitted
-    // (`a[:end]`); both indices widen to `ui256`. The upper bound of an
-    // open-ended `a[start:]` is the operand's length.
-    if node.is_slice() {
+    // address), emitted as `sol.slice`. `kind()` distinguishes every slice form
+    // — including the open-ended `a[i:]`, indistinguishable from the index `a[i]`
+    // by `end()` alone (both `None`) — from a plain index access. `start`
+    // defaults to `0` when omitted (`a[:end]`); both indices widen to `ui256`.
+    // The upper bound of an open-ended `a[start:]` is the operand's length.
+    if matches!(node.kind(), IndexAccessKind::Slice) {
         let base = node.operand();
         let BlockAnd {
             value: base_value,

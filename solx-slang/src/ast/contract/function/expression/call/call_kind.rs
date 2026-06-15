@@ -12,6 +12,7 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::IndexAccessKind;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StructDefinition;
@@ -140,7 +141,7 @@ impl CallKind {
             if let Expression::IndexAccessExpression(array_type) = &callee
                 && array_type.start().is_none()
                 && array_type.end().is_none()
-                && !array_type.is_slice()
+                && !matches!(array_type.kind(), IndexAccessKind::Slice)
             {
                 return Self::ArrayTypeConversion;
             }
