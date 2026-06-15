@@ -35,7 +35,6 @@ use crate::ods::sol::BareStaticCallOperation;
 use crate::ods::sol::CallOperation;
 use crate::ods::sol::ContractOperation;
 use crate::ods::sol::ExtCallOperation;
-use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::FuncOperation;
 use crate::ods::sol::ICallOperation;
@@ -495,37 +494,6 @@ impl<'context> Builder<'context> {
             );
         }
         results
-    }
-
-    /// Emits a `sol.ext_func_constant` packing a callee `address` and a 4-byte
-    /// `selector` into an `!sol.ext_func_ref<…>` external function reference —
-    /// the callee value of an external call.
-    pub fn emit_sol_ext_func_constant<'block, B>(
-        &self,
-        address: Value<'context, 'block>,
-        selector: u32,
-        ext_func_ref_type: Type<'context>,
-        block: &B,
-    ) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                ExtFuncConstantOperation::builder(self.context, self.unknown_location)
-                    .addr(address)
-                    .selector(IntegerAttribute::new(
-                        IntegerType::new(self.context, crate::Type::SELECTOR_BIT_WIDTH).into(),
-                        selector as i64,
-                    ))
-                    .result(ext_func_ref_type)
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.ext_func_constant always produces one result")
-            .into()
     }
 
     /// Emits a `sol.ext_icall` (external call through an external function

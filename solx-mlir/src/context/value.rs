@@ -20,6 +20,7 @@ use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
+use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
 
 /// An MLIR value in the Sol dialect.
@@ -180,12 +181,7 @@ impl<'context, 'block> Value<'context, 'block> {
         } else if r#type.is_ext_function_ref() {
             // A zero address + zero selector packed into the ext func ref.
             let address = Self::zero(Type::address(builder.context, false), builder, block);
-            Self::new(builder.emit_sol_ext_func_constant(
-                address.into_mlir(),
-                0,
-                r#type.into_mlir(),
-                block,
-            ))
+            Self::ext_func_constant(address, 0, r#type, builder, block)
         } else if r#type.is_function_ref() {
             // An internal pointer's zero reverts when called.
             Self::new(sol_op!(
@@ -215,6 +211,33 @@ impl<'context, 'block> Value<'context, 'block> {
             block,
             GasLeftOperation
                 .val(Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
+        ))
+    }
+
+    /// `sol.ext_func_constant` packing a callee `address` and a 4-byte
+    /// `selector` into an `!sol.ext_func_ref<…>` of `result_type` — the callee
+    /// value of an external call, and the zero of an external function type.
+    pub fn ext_func_constant<B>(
+        address: Self,
+        selector: u32,
+        result_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Self::new(sol_op!(
+            builder,
+            block,
+            ExtFuncConstantOperation
+                .addr(address.inner)
+                .selector(IntegerAttribute::new(
+                    IntegerType::new(builder.context, Type::SELECTOR_BIT_WIDTH).into(),
+                    selector as i64,
+                ))
+                .result(result_type.into_mlir())
         ))
     }
 

@@ -80,17 +80,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
-        let address = crate::ast::Value::from(receiver)
-            .cast(
-                crate::ast::Type::address(builder.context, false),
-                builder,
-                block,
-            )
-            .into_mlir();
+        let address = crate::ast::Value::from(receiver).cast(
+            crate::ast::Type::address(builder.context, false),
+            builder,
+            block,
+        );
         let ext_func_ref_type =
-            crate::ast::Type::ext_func_ref(builder.context, parameter_types, return_types)
-                .into_mlir();
-        builder.emit_sol_ext_func_constant(address, selector, ext_func_ref_type, block)
+            crate::ast::Type::ext_func_ref(builder.context, parameter_types, return_types);
+        crate::ast::Value::ext_func_constant(address, selector, ext_func_ref_type, builder, block)
+            .into_mlir()
     }
 
     /// The ABI signature of a `public` state variable's synthesised getter:
