@@ -7,6 +7,7 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
+use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::TypeLike;
@@ -21,6 +22,7 @@ use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
+use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
 
 /// An MLIR value in the Sol dialect.
@@ -238,6 +240,24 @@ impl<'context, 'block> Value<'context, 'block> {
                     selector as i64,
                 ))
                 .result(result_type.into_mlir())
+        ))
+    }
+
+    /// `sol.func_constant` — an internal function pointer (`!sol.func_ref<…>`)
+    /// to the symbol `name`, the value a bare internal-function reference lowers
+    /// to. The null-pointer sibling is [`Self::zero`]'s function-ref arm.
+    pub fn function_constant(
+        name: &str,
+        result_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(sol_op!(
+            builder,
+            block,
+            FuncConstantOperation
+                .addr(result_type.into_mlir())
+                .sym(FlatSymbolRefAttribute::new(builder.context, name))
         ))
     }
 

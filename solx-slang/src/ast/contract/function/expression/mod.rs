@@ -39,7 +39,6 @@ use slang_solidity_v2::ast::StateVariableMutability;
 use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::ods::sol::AddrOfOperation;
-use solx_mlir::ods::sol::FuncConstantOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -115,19 +114,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let (mlir_name, parameter_types, return_types) = self.state.resolve_function(target_id);
         let func_ref_type =
-            crate::ast::Type::func_ref(self.state.builder.context, parameter_types, return_types)
-                .into_mlir();
-        let mlir_name = mlir_name.to_owned();
-        let value = sol_op!(
+            crate::ast::Type::func_ref(self.state.builder.context, parameter_types, return_types);
+        let value = crate::ast::Value::function_constant(
+            mlir_name,
+            func_ref_type,
             &self.state.builder,
             &block,
-            FuncConstantOperation
-                .addr(func_ref_type)
-                .sym(FlatSymbolRefAttribute::new(
-                    self.state.builder.context,
-                    &mlir_name,
-                ))
-        );
+        )
+        .into_mlir();
         (value, block)
     }
 
