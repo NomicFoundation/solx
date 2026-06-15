@@ -16,6 +16,7 @@ pub mod value;
 
 pub use self::user_defined_operator::UserDefinedOperator;
 
+use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Once;
@@ -79,6 +80,11 @@ pub struct Context<'context> {
     /// → `sol.new`) and drained into the MLIR output for the linker. Empty
     /// unless the contract deploys another.
     pub dependencies: RefCell<Vec<String>>,
+    /// Monotonic source of internal-function-pointer dispatch tags: the `id` a
+    /// referenceable `sol.func` carries, materialised by `sol.func_constant` and
+    /// switched over by `sol.icall`. Starts at 1 — 0 is the null pointer
+    /// (`sol.default_func_constant`).
+    function_id_counter: Cell<i64>,
 }
 
 impl<'context> Context<'context> {
@@ -194,7 +200,16 @@ impl<'context> Context<'context> {
             super_redirect: HashMap::new(),
             virtual_redirect: HashMap::new(),
             dependencies: RefCell::new(Vec::new()),
+            function_id_counter: Cell::new(1),
         }
+    }
+
+    /// Allocates the next internal-function-pointer dispatch tag (see
+    /// [`Self::function_id_counter`]); each referenceable function takes one.
+    pub fn next_function_id(&self) -> i64 {
+        let id = self.function_id_counter.get();
+        self.function_id_counter.set(id + 1);
+        id
     }
 
     /// Records a cross-contract reference (e.g. the object name passed to
