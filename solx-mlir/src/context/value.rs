@@ -20,6 +20,7 @@ use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
+use crate::ods::sol::GasLeftOperation;
 
 /// An MLIR value in the Sol dialect.
 ///
@@ -197,6 +198,24 @@ impl<'context, 'block> Value<'context, 'block> {
         } else {
             unreachable!("Value::zero handles only scalar value types")
         }
+    }
+
+    /// `sol.gasleft` — all remaining gas as a `ui256`. The default gas an
+    /// external call forwards without an explicit `{gas: …}`, the gas of a bare
+    /// low-level call, and the value of the `gasleft()` built-in: one home for
+    /// the op rather than a Builder method and a built-in arm. Generic over the
+    /// block because the call ops emit it from inside composite primitives.
+    pub fn gas_left<B>(builder: &Builder<'context>, block: &B) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Self::new(sol_op!(
+            builder,
+            block,
+            GasLeftOperation
+                .val(Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
+        ))
     }
 
     /// Coerces to `target_type`, emitting the conversion (nothing when the types

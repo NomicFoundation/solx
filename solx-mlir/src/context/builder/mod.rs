@@ -38,7 +38,6 @@ use crate::ods::sol::ExtCallOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::FuncOperation;
-use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::RequireOperation;
 use crate::ods::sol::ReturnOperation;
@@ -529,29 +528,6 @@ impl<'context> Builder<'context> {
             .into()
     }
 
-    /// Emits `sol.gasleft` yielding all remaining gas as a `ui256` — the default
-    /// gas forwarded by an external call without an explicit `{gas: ...}`, and
-    /// the gas of a bare low-level call.
-    pub fn emit_sol_gas_left<'block, B>(&self, block: &B) -> Value<'context, 'block>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        block
-            .append_operation(
-                GasLeftOperation::builder(self.context, self.unknown_location)
-                    .val(
-                        crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir(),
-                    )
-                    .build()
-                    .into(),
-            )
-            .result(0)
-            .expect("sol.gasleft always produces one result")
-            .into()
-    }
-
     /// Emits a `sol.ext_icall` (external call through an external function
     /// reference), forwarding all remaining gas and the given `value`. ABI
     /// encoding of `operands` and decoding of the results are implicit in the
@@ -572,7 +548,7 @@ impl<'context> Builder<'context> {
     {
         // Forward all remaining gas (`gasleft()`), the default for an external
         // call without an explicit `{gas: ...}` option.
-        let gas: Value<'context, 'block> = self.emit_sol_gas_left(block);
+        let gas: Value<'context, 'block> = crate::Value::gas_left(self, block).into_mlir();
         // `sol.ext_icall` results are `(i1 status, decoded-returns...)`. Prepend
         // the status type and drop it from the values handed back — a non-try
         // call reverts internally on failure, so the status is always true here.
@@ -620,7 +596,7 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let gas: Value<'context, 'block> = self.emit_sol_gas_left(block);
+        let gas: Value<'context, 'block> = crate::Value::gas_left(self, block).into_mlir();
         let mut out_types = Vec::with_capacity(result_types.len() + 1);
         out_types
             .push(crate::Type::signless(self.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
@@ -670,7 +646,7 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let gas = self.emit_sol_gas_left(block);
+        let gas = crate::Value::gas_left(self, block).into_mlir();
         let value = crate::Value::constant(
             0,
             crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_FIELD),
@@ -763,7 +739,7 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let gas = self.emit_sol_gas_left(block);
+        let gas = crate::Value::gas_left(self, block).into_mlir();
         let operation = BareCallOperation::builder(self.context, self.unknown_location)
             .addr(address)
             .gas(gas)
@@ -790,7 +766,7 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let gas = self.emit_sol_gas_left(block);
+        let gas = crate::Value::gas_left(self, block).into_mlir();
         let operation = BareDelegateCallOperation::builder(self.context, self.unknown_location)
             .addr(address)
             .gas(gas)
@@ -816,7 +792,7 @@ impl<'context> Builder<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let gas = self.emit_sol_gas_left(block);
+        let gas = crate::Value::gas_left(self, block).into_mlir();
         let operation = BareStaticCallOperation::builder(self.context, self.unknown_location)
             .addr(address)
             .gas(gas)

@@ -23,7 +23,6 @@ use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
-use solx_mlir::ods::sol::GasLeftOperation;
 use solx_mlir::ods::sol::Keccak256Operation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
@@ -74,18 +73,10 @@ impl CallKind {
                     context.emit_require(&condition, message.as_ref(), block),
                 )
             }
-            BuiltIn::Gasleft => {
-                let builder = &context.state.builder;
-                let value = sol_op!(
-                    builder,
-                    block,
-                    GasLeftOperation.val(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir()
-                    )
-                );
-                (Some(value), block)
-            }
+            BuiltIn::Gasleft => (
+                Some(crate::ast::Value::gas_left(&context.state.builder, &block).into_mlir()),
+                block,
+            ),
             BuiltIn::Blockhash => {
                 let (values, block) = context.emit_argument_values(arguments, block);
                 let builder = &context.state.builder;
