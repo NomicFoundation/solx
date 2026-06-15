@@ -27,8 +27,9 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     ///
     /// # Returns
     ///
-    /// Returns `None`: `sol.revert` is a block terminator, so the current block
-    /// is complete and codegen does not continue in it.
+    /// Returns `Some(block)`: `sol.revert` is not a terminator, so the block
+    /// stays live for the caller to terminate (an enclosing yield or the
+    /// function epilogue's default return).
     pub fn emit_revert_call(
         &self,
         call: &FunctionCallExpression,
@@ -44,9 +45,10 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             arguments.next().is_none(),
             "revert accepts at most one argument"
         );
-        match message_argument {
+        let block = match message_argument {
             None => {
                 self.state.builder.emit_sol_revert("", &[], false, &block);
+                block
             }
             // A non-empty string literal bakes the message into the op as the
             // `Error(string)` payload (no runtime encoding).
@@ -58,6 +60,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 self.state
                     .builder
                     .emit_sol_revert(&message, &[], false, &block);
+                block
             }
             // A non-literal message (`revert(expr)`) or an empty literal
             // (`revert("")`, which is `Error("")` — selector + an empty string,
@@ -77,20 +80,20 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     .coerce_to(crate::ast::Type::new(string_memory_type), builder, &block)
                     .into_mlir();
                 builder.emit_sol_revert("Error(string)", &[message_value], true, &block);
+                block
             }
-        }
-        Ok(None)
+        };
+        Ok(Some(block))
     }
 }
 
-// `sol.revert` is a block terminator, so the current block is complete and
-// emission does not continue in it: the result is `None` (no epilogue or
-// enclosing yield is appended after the revert).
+// `sol.revert` is not a terminator: the block stays live and the caller appends
+// its terminator (an enclosing `sol.yield` or the epilogue default return).
 statement_emit!(RevertStatement; |node, context, block| {
     let error = match node.error().resolve_to_definition() {
         None => {
             context.state.builder.emit_sol_revert("", &[], false, &block);
-            return Ok(None);
+            return Ok(Some(block));
         }
         Some(Definition::Error(error)) => error,
         Some(_) => unreachable!("slang resolves a revert target to an error definition"),
@@ -120,5 +123,5 @@ statement_emit!(RevertStatement; |node, context, block| {
         .state
         .builder
         .emit_sol_revert(&signature, &values, true, &block);
-    Ok(None)
+    Ok(Some(block))
 });
