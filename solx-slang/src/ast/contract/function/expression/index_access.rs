@@ -6,7 +6,6 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::r#type::TypeLike;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::IndexAccessKind;
@@ -84,15 +83,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 (address, element_type)
             }
             _ => {
-                // `mlirSolGetEltType` returns a valid MlirType from
-                // `sol::getEltType` on the C++ side; the struct-field index
-                // is ignored for non-struct base types.
-                let element_type = unsafe {
-                    Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
-                        base_value.r#type().into_mlir().to_raw(),
-                        0,
-                    ))
-                };
+                let element_type = base_value.r#type().element_type(0).into_mlir();
                 let address = base_value
                     .into_pointer()
                     .gep(

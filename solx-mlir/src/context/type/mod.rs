@@ -365,6 +365,21 @@ impl<'context> Type<'context> {
         }
     }
 
+    /// The element / field type reached by stepping into this aggregate: a
+    /// struct's field at `field_index`, or an array / `bytes` / `string`'s
+    /// element (the index is ignored for a non-struct aggregate). The single
+    /// home for `sol::getEltType` — every `sol.gep` element-type query routes
+    /// here rather than re-spelling the FFI at each access site.
+    pub fn element_type(self, field_index: usize) -> Self {
+        // `mlirSolGetEltType` returns a valid MlirType from `sol::getEltType`.
+        Self::new(unsafe {
+            MlirType::from_raw(crate::ffi::mlirSolGetEltType(
+                self.inner.to_raw(),
+                field_index as u64,
+            ))
+        })
+    }
+
     /// The byte width of a fixed-bytes-like type: `N` for `!sol.fixedbytes<N>`,
     /// `1` for the single `!sol.byte`, and `None` for any other type.
     pub fn fixed_bytes_or_byte_width(self) -> Option<u32> {

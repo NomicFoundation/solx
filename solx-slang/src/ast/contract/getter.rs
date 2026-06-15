@@ -13,7 +13,6 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::attribute::FlatSymbolRefAttribute;
-use melior::ir::r#type::TypeLike;
 use num_bigint::BigInt;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::abi::AbiFunction;
@@ -649,15 +648,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 Some(_) => false,
                 None => return None,
             };
-            // `mlirSolGetEltType` returns a valid MlirType from
-            // `sol::getEltType` for the struct field at `member_index` (mirroring
-            // the AST member index, including skipped members).
-            let member_type = unsafe {
-                Type::from_raw(solx_mlir::ffi::mlirSolGetEltType(
-                    struct_mlir_type.to_raw(),
-                    member_index as u64,
-                ))
-            };
+            let member_type = crate::ast::Type::new(struct_mlir_type)
+                .element_type(member_index)
+                .into_mlir();
             // A `string`/`bytes` member returns a memory copy; every other member
             // reaching here is a value type (mapping/array/struct/string/bytes are
             // skipped above). A function-pointer member would need a func-ref
