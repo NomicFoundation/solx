@@ -30,7 +30,6 @@ use melior::ir::r#type::IntegerType;
 use crate::StateMutability;
 use crate::ods::sol::CallOperation;
 use crate::ods::sol::ContractOperation;
-use crate::ods::sol::ExtCallOperation;
 use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::FuncOperation;
 use crate::ods::sol::RequireOperation;
@@ -479,78 +478,5 @@ impl<'context> Builder<'context> {
             );
         }
         (status, results)
-    }
-
-    /// Emits a `sol.ext_call` with the `delegate_call` + `library_call` flags — an
-    /// external library `delegatecall` to `address` (a `sol.lib_addr`). The op
-    /// owns the ABI encode, the delegatecall, the revert-bubble on failure, and
-    /// the result decode, so the frontend supplies only the typed arguments, the
-    /// selector, and the callee's function type; returns the decoded results.
-    pub fn emit_sol_ext_call_library<'block, B>(
-        &self,
-        callee: &str,
-        arguments: &[Value<'context, 'block>],
-        address: Value<'context, 'block>,
-        selector: u32,
-        callee_type: FunctionType<'context>,
-        block: &B,
-    ) -> Vec<Value<'context, 'block>>
-    where
-        B: BlockLike<'context, 'block>,
-        'context: 'block,
-    {
-        let gas = crate::Value::gas_left(self, block).into_mlir();
-        let value = crate::Value::constant(
-            0,
-            crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_FIELD),
-            self,
-            block,
-        )
-        .into_mlir();
-        let selector_value = crate::Value::constant(
-            i64::from(selector),
-            crate::Type::unsigned(self.context, solx_utils::BIT_LENGTH_FIELD),
-            self,
-            block,
-        )
-        .into_mlir();
-        let return_types: Vec<Type<'context>> = (0..callee_type.result_count())
-            .map(|index| {
-                callee_type
-                    .result(index)
-                    .expect("function-type result index in range")
-            })
-            .collect();
-        // `sol.ext_call` has two result groups: the `i1` success `status` and the
-        // variadic decoded `outs`. The op's conversion reverts internally on
-        // failure, so the status is dropped and only the decoded results return.
-        let operation = block.append_operation(
-            ExtCallOperation::builder(self.context, self.unknown_location)
-                .callee(StringAttribute::new(self.context, callee))
-                .ins(arguments)
-                .addr(address)
-                .gas(gas)
-                .val(value)
-                .selector(selector_value)
-                .delegate_call(Attribute::unit(self.context))
-                .library_call(Attribute::unit(self.context))
-                .callee_type(TypeAttribute::new(callee_type.into()))
-                .status(
-                    crate::Type::signless(self.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
-                )
-                .outs(&return_types)
-                .build()
-                .into(),
-        );
-        let mut results = Vec::with_capacity(return_types.len());
-        for index in 0..return_types.len() {
-            results.push(
-                operation
-                    .result(index + 1)
-                    .expect("sol.ext_call produces the declared results")
-                    .into(),
-            );
-        }
-        results
     }
 }

@@ -2,15 +2,18 @@
 //! Internal / external library call emission.
 //!
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use melior::ir::attribute::StringAttribute;
+use melior::ir::attribute::TypeAttribute;
 use melior::ir::r#type::FunctionType;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
+use solx_mlir::ods::sol::ExtCallOperation;
 use solx_mlir::ods::sol::LibAddrOperation;
 
 use crate::ast::BlockAnd;
@@ -132,14 +135,50 @@ impl MemberCallKind {
                 .val(crate::ast::Type::address(builder.context, false).into_mlir())
         );
         let callee_type = FunctionType::new(builder.context, &parameter_types, &return_types);
-        let results = builder.emit_sol_ext_call_library(
-            &mlir_name,
-            &argument_values,
-            address,
-            selector,
-            callee_type,
+        let gas = crate::ast::Value::gas_left(builder, &current_block).into_mlir();
+        let value = crate::ast::Value::constant(
+            0,
+            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+            builder,
             &current_block,
-        );
+        )
+        .into_mlir();
+        let selector_value = crate::ast::Value::constant(
+            i64::from(selector),
+            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+            builder,
+            &current_block,
+        )
+        .into_mlir();
+        // `sol.ext_call` yields the `i1` success status (result 0) then the
+        // decoded outs; its conversion reverts internally on failure, so the
+        // status is dropped and only the decoded results return.
+        let operation = current_block.append_operation(sol_op_build!(
+            builder,
+            ExtCallOperation
+                .callee(StringAttribute::new(builder.context, &mlir_name))
+                .ins(&argument_values)
+                .addr(address)
+                .gas(gas)
+                .val(value)
+                .selector(selector_value)
+                .delegate_call(Attribute::unit(builder.context))
+                .library_call(Attribute::unit(builder.context))
+                .callee_type(TypeAttribute::new(callee_type.into()))
+                .status(
+                    crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
+                        .into_mlir()
+                )
+                .outs(&return_types)
+        ));
+        let results = (0..return_types.len())
+            .map(|index| {
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_call produces the declared results")
+                    .into()
+            })
+            .collect();
         (results, current_block)
     }
 }
