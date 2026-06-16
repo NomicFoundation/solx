@@ -74,7 +74,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
         for (parameter, argument) in parameters.iter().zip(ordered_arguments) {
             let (value, next_block) = emitter.emit_value(&argument, current_block)?;
             current_block = next_block;
-            let indexed = parameter.indexed();
+            let indexed = parameter.is_indexed();
             let parameter_type = TypeConversion::resolve_slang_type(
                 &parameter
                     .get_type()
@@ -87,7 +87,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
                 &self.state.builder,
                 &current_block,
             );
-            if indexed.is_some() {
+            if indexed {
                 // TODO: indexed reference-type parameters (string, bytes,
                 // arrays, structs) must store the keccak256 hash of their
                 // encoded value as the topic, not the value itself. That
@@ -98,7 +98,7 @@ impl<'state, 'context, 'block> StatementEmitter<'state, 'context, 'block> {
             }
         }
 
-        let signature = if event_definition.anonymous_keyword().is_some() {
+        let signature = if event_definition.is_anonymous() {
             None
         } else {
             Some(

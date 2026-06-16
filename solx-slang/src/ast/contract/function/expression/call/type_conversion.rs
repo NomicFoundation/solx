@@ -44,7 +44,7 @@ impl<'context> TypeConversion<'context> {
         match slang_type {
             SlangType::Integer(integer_type) => {
                 let bits = integer_type.bits();
-                if integer_type.signed() {
+                if integer_type.is_signed() {
                     Type::from(IntegerType::signed(builder.context, bits))
                 } else {
                     Type::from(IntegerType::unsigned(builder.context, bits))
