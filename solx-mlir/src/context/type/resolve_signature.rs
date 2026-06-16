@@ -2,14 +2,14 @@
 //! Slang function-signature → MLIR type resolution: a function resolves its own
 //! parameter and return types, the signature-level companion to [`ResolveType`].
 //!
-//! [`ResolveType`]: super::ResolveType
+//! [`ResolveType`]: crate::ResolveType
 
-use melior::ir::Type;
+use melior::ir::Type as MlirType;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::Parameter;
 
-use super::LocationPolicy;
-use super::ResolveType;
+use crate::LocationPolicy;
+use crate::ResolveType;
 
 /// Resolves a function's parameter and return types from Slang to MLIR.
 pub trait ResolveSignature {
@@ -23,16 +23,16 @@ pub trait ResolveSignature {
     fn resolve_signature_types<'context>(
         &self,
         policy: LocationPolicy,
-        builder: &solx_mlir::Builder<'context>,
-    ) -> (Vec<Type<'context>>, Vec<Type<'context>>);
+        builder: &crate::Builder<'context>,
+    ) -> (Vec<MlirType<'context>>, Vec<MlirType<'context>>);
 }
 
 impl ResolveSignature for FunctionDefinition {
     fn resolve_signature_types<'context>(
         &self,
         policy: LocationPolicy,
-        builder: &solx_mlir::Builder<'context>,
-    ) -> (Vec<Type<'context>>, Vec<Type<'context>>) {
+        builder: &crate::Builder<'context>,
+    ) -> (Vec<MlirType<'context>>, Vec<MlirType<'context>>) {
         let resolve = |parameter: Parameter| {
             parameter
                 .get_type()

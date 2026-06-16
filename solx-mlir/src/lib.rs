@@ -34,6 +34,7 @@ pub use self::context::r#type::Type;
 pub use self::context::r#type::array_size::ArraySize;
 pub use self::context::r#type::contract_payable::ContractPayable;
 pub use self::context::r#type::location_policy::LocationPolicy;
+pub use self::context::r#type::resolve_signature::ResolveSignature;
 pub use self::context::r#type::resolve_type::ResolveType;
 pub use self::context::value::Value;
 pub use self::dialect::Dialect;

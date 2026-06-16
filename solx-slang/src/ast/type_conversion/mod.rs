@@ -2,10 +2,8 @@
 //! Solidity type conversion classification and dispatch.
 //!
 
-pub mod resolve_signature;
-
-pub use self::resolve_signature::ResolveSignature;
 pub use solx_mlir::LocationPolicy;
+pub use solx_mlir::ResolveSignature;
 pub use solx_mlir::ResolveType;
 
 use melior::ir::Type;

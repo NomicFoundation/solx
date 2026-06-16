@@ -6,6 +6,7 @@
 pub mod array_size;
 pub mod contract_payable;
 pub mod location_policy;
+pub mod resolve_signature;
 pub mod resolve_type;
 
 use melior::ir::BlockLike;
