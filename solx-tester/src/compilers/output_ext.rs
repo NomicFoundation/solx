@@ -62,42 +62,39 @@ pub fn get_last_contract(
                     continue;
                 };
                 match last_contract_name(source) {
-                    Ok(name) => return Ok(format!("{path}:{name}")),
+                    Ok(name) => {
+                        return Ok(
+                            solx_utils::ContractName::new(path.clone(), Some(name)).full_path,
+                        );
+                    }
                     Err(_error) => continue,
                 }
             }
 
-            // The Slang frontend produces a CST, not the solc AST, so
-            // `last_contract_name` cannot read the contract order off the AST
-            // `nodes` array, and the Slang output is a name-sorted map. solc
-            // selects the main contract by SOURCE order (the last contract
-            // definition), so recover that order from the source text directly:
-            // the source-last non-library contract that has an emitted object.
-            // Picking the name-sorted last would mis-deploy an alphabetically
-            // later contract / library (e.g. `contract X` after the real main
-            // `contract B`).
             #[cfg(feature = "slang-ast")]
             {
-                let library_names = collect_library_names(sources);
-                for (path, source) in sources.iter().rev() {
+                for (path, _source) in sources.iter().rev() {
                     if let Some(contracts) = output.contracts.get(path)
-                        && let Some(name) = contract_names_in_source_order(source)
+                        && let Some(ast) =
+                            output.sources.get(path).and_then(|source| source.ast.as_ref())
+                        && let Some(name) = slang_contract_names_in_source_order(ast)
                             .into_iter()
                             .rev()
-                            .find(|name| {
-                                !library_names.contains(name.as_str())
-                                    && contracts.contains_key(name.as_str())
-                            })
+                            .find(|name| contracts.contains_key(name.as_str()))
                     {
-                        return Ok(format!("{path}:{name}"));
+                        return Ok(
+                            solx_utils::ContractName::new(path.clone(), Some(name)).full_path,
+                        );
                     }
                 }
-                // Library-only sources: fall back to any object.
                 for (path, _source) in sources.iter().rev() {
-                    if let Some(contracts) = output.contracts.get(path) {
-                        if let Some((name, _)) = contracts.last_key_value() {
-                            return Ok(format!("{path}:{name}"));
-                        }
+                    if let Some(contracts) = output.contracts.get(path)
+                        && let Some((name, _)) = contracts.last_key_value()
+                    {
+                        return Ok(
+                            solx_utils::ContractName::new(path.clone(), Some(name.clone()))
+                                .full_path,
+                        );
                     }
                 }
             }
@@ -114,7 +111,10 @@ pub fn get_last_contract(
                 .and_then(|(path, contracts)| {
                     contracts
                         .first_key_value()
-                        .map(|(name, _contract)| format!("{path}:{name}"))
+                        .map(|(name, _contract)| {
+                            solx_utils::ContractName::new(path.clone(), Some(name.clone()))
+                                .full_path
+                        })
                 })
                 .ok_or_else(|| {
                     anyhow::anyhow!("The sources are empty. Found errors: {:?}", output.errors)
@@ -201,63 +201,13 @@ fn last_contract_name(
         .ok_or_else(|| anyhow::anyhow!("The last contract not found in the AST"))
 }
 
-///
-/// Collects the names of all top-level `library` definitions across `sources`.
-///
-/// The main contract is never a library, but the Slang frontend emits each
-/// library as its own object and the Slang output is a name-sorted map — so the
-/// fallback main-contract heuristic would otherwise mis-pick an alphabetically
-/// later library. This lightweight scan strips `//` line comments and matches
-/// `library <identifier>` adjacency, which covers the Solidity semantic-test
-/// corpus (the Slang frontend lacks a solc AST to consult instead).
-///
-///
-/// Collects top-level `contract` definition names in SOURCE-declaration order
-/// from one source's text, so the main-contract heuristic can pick the
-/// source-last contract the way solc does (the Slang output map is name-sorted
-/// and carries no order). Matches `contract <identifier>` adjacency — covering
-/// `contract C`, `abstract contract C`, and `contract C is B` — after stripping
-/// `//` line comments, mirroring [`collect_library_names`]. Libraries and
-/// interfaces are not `contract` declarations and are excluded by the keyword.
-///
 #[cfg(feature = "slang-ast")]
-fn contract_names_in_source_order(source: &str) -> Vec<String> {
-    let mut names = Vec::new();
-    for line in source.lines() {
-        let code = line.split("//").next().unwrap_or("");
-        let tokens: Vec<&str> = code
-            .split(|character: char| {
-                !(character.is_alphanumeric() || character == '_' || character == '$')
-            })
-            .filter(|token| !token.is_empty())
-            .collect();
-        for window in tokens.windows(2) {
-            if window[0] == "contract" {
-                names.push(window[1].to_owned());
-            }
-        }
-    }
-    names
-}
-
-#[cfg(feature = "slang-ast")]
-fn collect_library_names(sources: &[(String, String)]) -> std::collections::HashSet<String> {
-    let mut names = std::collections::HashSet::new();
-    for (_path, source) in sources.iter() {
-        for line in source.lines() {
-            let code = line.split("//").next().unwrap_or("");
-            let tokens: Vec<&str> = code
-                .split(|character: char| {
-                    !(character.is_alphanumeric() || character == '_' || character == '$')
-                })
-                .filter(|token| !token.is_empty())
-                .collect();
-            for window in tokens.windows(2) {
-                if window[0] == "library" {
-                    names.insert(window[1].to_owned());
-                }
-            }
-        }
-    }
-    names
+fn slang_contract_names_in_source_order(ast: &serde_json::Value) -> Vec<String> {
+    ast["members"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|member| member["type"] == "ContractDefinition")
+        .filter_map(|member| member["name"]["text"].as_str().map(str::to_owned))
+        .collect()
 }
