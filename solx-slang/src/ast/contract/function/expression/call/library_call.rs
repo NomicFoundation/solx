@@ -23,25 +23,24 @@ use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
 
-impl MemberCallKind {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits an internal (`Library { external: false }`) library call — inlined
     /// like an ordinary internal function.
-    pub fn emit_library_call<'state, 'context, 'block>(
+    pub fn emit_library_call(
         &self,
-        context: &ExpressionContext<'state, 'context, 'block>,
         access: &MemberAccessExpression,
         library_function: &FunctionDefinition,
         positional_arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let context = self;
         let function = context.state.resolve_function(library_function.node_id());
         // A `using for` receiver (`x.f(args)`) is a value and becomes the
         // implicit `self` — the function's first parameter; a namespace qualifier
         // — a library (`L.f`) or import alias (`M.f`) — is not a value, so only
         // the explicit arguments pass.
-        if MemberCallKind::is_namespace_qualifier(&access.operand()) {
+        if Self::is_namespace_qualifier(&access.operand()) {
             let arguments: Vec<Expression> = positional_arguments.iter().collect();
             let BlockAnd {
                 value: argument_values,
@@ -82,15 +81,15 @@ impl MemberCallKind {
     /// encode, the delegatecall, the revert-bubble, and the result decode. The
     /// library address is a `sol.lib_addr` link placeholder; a `using for`
     /// receiver becomes the implicit leading `self` argument.
-    pub fn emit_library_external_call<'state, 'context, 'block>(
+    pub fn emit_library_external_call(
         &self,
-        context: &ExpressionContext<'state, 'context, 'block>,
         library_name: &solx_utils::ContractName,
         function: &FunctionDefinition,
         arguments: &[Expression],
         self_receiver: Option<&Expression>,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let context = self;
         let (parameter_types, return_types) = AstType::resolve_signature(
             function,
             LocationPolicy::Declared(None),

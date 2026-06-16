@@ -31,7 +31,6 @@ use solx_mlir::ods::sol::Sha256Operation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::call_kind::CallKind;
 
 /// ABI encoding mode for `abi.encode` / `abi.encodePacked`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,20 +42,20 @@ pub enum EncodeMode {
     Packed,
 }
 
-impl CallKind {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits an identifier-callee built-in (`assert`, `require`, `keccak256`,
     /// `sha256`, `ripemd160`, `ecrecover`, `addmod`, `mulmod`, `gasleft`).
     ///
     /// `Some(...)` for value-producing built-ins, `None` for statement-style
     /// ones (`assert`, `require`). Only handled built-ins with a matching
     /// argument count reach here, so the expectations hold.
-    pub fn emit_built_in_call<'state, 'context, 'block>(
+    pub fn emit_built_in_call(
         &self,
-        context: &ExpressionContext<'state, 'context, 'block>,
         built_in: BuiltIn,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let context = self;
         match built_in {
             BuiltIn::Assert => {
                 let condition = arguments.iter().next().expect("assert has one argument");

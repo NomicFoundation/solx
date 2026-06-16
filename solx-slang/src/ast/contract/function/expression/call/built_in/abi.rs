@@ -29,7 +29,6 @@ use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::built_in::EncodeMode;
-use crate::ast::contract::function::expression::call::call_kind::CallKind;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits `abi.encode(args)` as a standard `sol.encode`.
@@ -307,16 +306,16 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     }
 }
 
-impl CallKind {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits `abi.decode(payload, (T))` as a `sol.decode`. The result type comes
     /// from the call's slang type; multi-result decode is not yet supported.
-    pub fn emit_abi_decode<'state, 'context, 'block>(
+    pub fn emit_abi_decode(
         &self,
-        context: &ExpressionContext<'state, 'context, 'block>,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let context = self;
         let payload_expression = arguments.iter().next().expect("slang validated");
         let BlockAnd {
             value: payload_value,

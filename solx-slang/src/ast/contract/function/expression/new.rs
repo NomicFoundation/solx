@@ -2,7 +2,7 @@
 //! `new` expression emission: dynamic-aggregate allocation (`new T[](n)`,
 //! `new bytes(n)`, `new string(n)`) and contract creation (`new C(args)`).
 //!
-//! The `New` arm of [`CallKind`] — `new C()` is a `FunctionCallExpression`.
+//! The `new` arm of a function-call expression — `new C()` parses as a call.
 //!
 
 use melior::ir::Attribute;
@@ -31,20 +31,19 @@ use crate::ast::Materialize;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::call_kind::CallKind;
 
-impl CallKind {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits a `new` expression: dynamic-aggregate allocation (`new T[](n)`,
     /// `new bytes(n)`) or contract creation (`new C(args)`).
-    pub fn emit_new<'state, 'context, 'block>(
+    pub fn emit_new(
         &self,
-        context: &ExpressionContext<'state, 'context, 'block>,
         call: &FunctionCallExpression,
         arguments: &PositionalArguments,
         value: Option<Value<'context, 'block>>,
         salt: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let context = self;
         let slang_type = call.get_type();
         // `new T[](n)` / `new bytes(n)` / `new string(n)` allocate a dynamic
         // memory aggregate of `n` elements/bytes via a zeroed `sol.malloc`, the

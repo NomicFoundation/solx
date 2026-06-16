@@ -5,11 +5,8 @@
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 pub mod built_in;
-pub mod call_kind;
 pub mod external_call;
 pub mod library_call;
-pub mod library_visibility;
-pub mod member_call_kind;
 pub mod positional_arguments;
 pub mod try_external_call;
 
@@ -17,25 +14,30 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::CallOptionsExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::IndexAccessKind;
 use slang_solidity_v2::ast::MemberAccessExpression;
+use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::PositionalArguments;
+use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::Function;
 use solx_mlir::ods::sol::ExtICallOperation;
 use solx_mlir::ods::sol::ICallOperation;
+use solx_mlir::ods::sol::MallocOperation;
+use solx_utils::DataLocation;
 
-use self::call_kind::CallKind;
-use self::member_call_kind::MemberCallKind;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
 use crate::ast::Materialize;
+use crate::ast::Pointer;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 /// The shared call-emission primitives the call kinds dispatch through
@@ -178,7 +180,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             unreachable!("an external library call's target is a library member");
         };
         let operand = access.operand();
-        let self_receiver = (!MemberCallKind::is_namespace_qualifier(&operand)).then_some(operand);
+        let self_receiver = (!Self::is_namespace_qualifier(&operand)).then_some(operand);
         let name = solx_utils::ContractName::new(
             library.get_file_id().to_owned(),
             Some(library.name().name()),
@@ -299,6 +301,72 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         (results, current_block)
     }
+
+    /// Whether a member-access operand `x` in `x.f(...)` is a namespace qualifier
+    /// — a library or import alias (`L.f` / `M.f`), which is not a value — rather
+    /// than a `using for` receiver, which becomes the implicit `self` argument.
+    fn is_namespace_qualifier(operand: &Expression) -> bool {
+        let Expression::Identifier(identifier) = operand else {
+            return false;
+        };
+        matches!(
+            identifier.resolve_to_definition(),
+            Some(Definition::Library(_) | Definition::Import(_) | Definition::ImportedSymbol(_))
+        )
+    }
+
+    /// Emits a struct constructor `S(a, b)` / `S({b: …, a: …})` / `Lib.S(...)`:
+    /// allocate the struct in memory, order the field initialisers by member
+    /// declaration, and store each coerced to its field type.
+    fn emit_struct_constructor(
+        &self,
+        call: &FunctionCallExpression,
+        struct_definition: &StructDefinition,
+        arguments: &ArgumentsDeclaration,
+        block: BlockRef<'context, 'block>,
+    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let result_type = AstType::resolve_optional(call.get_type(), &self.state.builder)
+            .expect("slang validated");
+        let member_ids: Vec<NodeId> = struct_definition
+            .members()
+            .iter()
+            .map(|member| member.node_id())
+            .collect();
+        let arguments = arguments.ordered_by(&member_ids);
+        let builder = &self.state.builder;
+        let struct_address = sol_op!(builder, &block, MallocOperation.addr(result_type));
+        let struct_pointer = Pointer::new(struct_address);
+        let mut block = block;
+        for (index, (member, argument)) in struct_definition
+            .members()
+            .iter()
+            .zip(arguments.iter())
+            .enumerate()
+        {
+            let field_slang_type = member.get_type().expect("slang validated");
+            let field_type = AstType::resolve(
+                &field_slang_type,
+                LocationPolicy::Declared(Some(DataLocation::Memory)),
+                builder,
+            );
+            let index_value = AstValue::constant(
+                index as i64,
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
+                builder,
+                &block,
+            );
+            let field_address =
+                struct_pointer.gep(index_value, AstType::new(field_type), builder, &block);
+            let BlockAnd {
+                value: argument_value,
+                block: next_block,
+            } = argument.emit(self, block);
+            block = next_block;
+            let stored = argument_value.cast(AstType::new(field_type), builder, &block);
+            field_address.store(stored, builder, &block);
+        }
+        (vec![struct_address], block)
+    }
 }
 
 impl<'state, 'context, 'block, 'scope> Emit<'context, 'block, 'state, 'scope>
@@ -314,10 +382,324 @@ where
 
     /// Emits a function call, yielding its result values in declaration order —
     /// none for a void callee, one for the common case, several for a
-    /// tuple-returning call (`(a, b) = f(...)`). In value position the sole result
-    /// is taken through [`Expression`]'s emit; a statement-position discard keeps
-    /// only the continuation block.
+    /// tuple-returning call. The callee, resolved through slang's binder, selects
+    /// the shape directly: a single match over the callee expression and its
+    /// resolved definition, no intermediate kind enum.
     fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) -> Self::Output {
-        CallKind::new(context, self).emit(context, self, block)
+        // `recv.f{value: v}(args)` / `new C{value, salt}(args)`: evaluate the
+        // option list (each for its side effects, in source order) before the
+        // arguments, forwarding `value` as msg.value and `salt` as the CREATE2
+        // salt. The inner callee drives the dispatch below.
+        let (call_value, salt, block, callee) = match self.operand().unwrap_parentheses() {
+            Expression::CallOptionsExpression(options) => {
+                let (value, salt, block) = context.capture_call_options(&options, block);
+                (value, salt, block, options.operand().unwrap_parentheses())
+            }
+            other => (None, None, block, other),
+        };
+        let arguments = self.arguments();
+
+        // `S(x)` builds a struct, `T(x)` converts — both type as a 1-argument
+        // conversion; a struct callee resolves to a `Definition::Struct`.
+        if self.is_type_conversion()
+            && let ArgumentsDeclaration::PositionalArguments(positional) = &arguments
+            && positional.len() == 1
+        {
+            let struct_callee = match &callee {
+                Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+                Expression::MemberAccessExpression(access) => {
+                    access.member().resolve_to_definition()
+                }
+                _ => None,
+            };
+            if let Some(Definition::Struct(definition)) = struct_callee {
+                return context.emit_struct_constructor(self, &definition, &arguments, block);
+            }
+            // `T(x)` / `bytesN("…")`: coerce the single argument to the call's type.
+            let first = positional.iter().next().expect("slang validated");
+            let target_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
+                .expect("slang validated");
+            let BlockAnd { value, block } = first.materialize(target_type, context, block);
+            return (vec![value.into_mlir()], block);
+        }
+
+        // An identifier-callee built-in (`keccak256`, `require`, …).
+        if let Expression::Identifier(identifier) = &callee
+            && let Some(built_in) = identifier.resolve_to_built_in()
+            && matches!(
+                built_in,
+                BuiltIn::Assert
+                    | BuiltIn::Require
+                    | BuiltIn::Gasleft
+                    | BuiltIn::Blockhash
+                    | BuiltIn::Keccak256
+                    | BuiltIn::Sha256
+                    | BuiltIn::Ripemd160
+                    | BuiltIn::Ecrecover
+                    | BuiltIn::Addmod
+                    | BuiltIn::Mulmod
+            )
+        {
+            let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                unimplemented!("a built-in takes positional arguments only");
+            };
+            let (value, block) = context.emit_built_in_call(built_in, positional, block);
+            return (value.into_iter().collect(), block);
+        }
+
+        // A member-access callee: a call-position built-in, a namespace-qualified
+        // struct constructor, or a member call `x.f(...)`.
+        if let Expression::MemberAccessExpression(access) = &callee {
+            match access.member().resolve_to_built_in() {
+                // `addr.call/delegatecall/staticcall(data)` → (success, returndata).
+                Some(
+                    kind @ (BuiltIn::AddressCall
+                    | BuiltIn::AddressDelegatecall
+                    | BuiltIn::AddressStaticcall),
+                ) => {
+                    let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                        unimplemented!("a bare low-level call takes positional arguments only");
+                    };
+                    let (status, ret_data, block) =
+                        context.emit_bare_call(access, kind, positional, call_value, block);
+                    return (vec![status, ret_data], block);
+                }
+                // `abi.decode(payload, (T))` — result type from the call.
+                Some(BuiltIn::AbiDecode) => {
+                    let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                        unimplemented!("abi.decode takes positional arguments only");
+                    };
+                    return context.emit_abi_decode(self, positional, block);
+                }
+                // `T.wrap(x)` / `T.unwrap(x)`: a single conversion to the result type.
+                Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
+                    let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                        unimplemented!("a UDVT wrap/unwrap takes one positional argument");
+                    };
+                    let argument = positional.iter().next().expect("slang validated");
+                    let BlockAnd { value, block } = argument.emit(context, block);
+                    let result =
+                        match AstType::resolve_optional(self.get_type(), &context.state.builder) {
+                            Some(result_type) => value
+                                .cast(AstType::new(result_type), &context.state.builder, &block)
+                                .into_mlir(),
+                            None => value.into_mlir(),
+                        };
+                    return (vec![result], block);
+                }
+                // Any other member built-in in call position (`abi.encode`, `arr.push`, …).
+                Some(_) => {
+                    let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                        unimplemented!("a built-in member takes positional arguments only");
+                    };
+                    let (value, block) =
+                        context.emit_built_in_member_access(access, Some(positional), block);
+                    return (value.into_iter().collect(), block);
+                }
+                None => {}
+            }
+
+            // `Lib.S(...)` builds the struct, like a bare `S(...)`.
+            if let Some(Definition::Struct(definition)) = access.member().resolve_to_definition() {
+                return context.emit_struct_constructor(self, &definition, &arguments, block);
+            }
+
+            // A member call `x.f(...)`, classified by operand and member resolution.
+            let operand = access.operand();
+            // `super.f` / a recorded base redirect: an internal call up the C3 chain.
+            if matches!(operand, Expression::SuperKeyword(_))
+                || context.state.super_redirect.contains_key(&access.node_id())
+            {
+                let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                    unimplemented!("named arguments on a super call are not supported");
+                };
+                let target_id = context
+                    .state
+                    .super_redirect
+                    .get(&access.node_id())
+                    .copied()
+                    .expect("a super/base call has a recorded redirect target");
+                let argument_expressions: Vec<Expression> = positional.iter().collect();
+                let function = context.state.resolve_function(target_id);
+                let BlockAnd {
+                    value: argument_values,
+                    block,
+                } = argument_expressions.materialize(&function.parameter_types, context, block);
+                let results = function.call(&argument_values, &context.state.builder, &block);
+                return (results, block);
+            }
+
+            let member_definition = access.member().resolve_to_definition();
+            // An external library call (`L.f` namespace or `using for` onto a
+            // selector-bearing library function) delegatecalls — the only member
+            // call that accepts named arguments.
+            if let Some(Definition::Function(function)) = &member_definition
+                && function.compute_selector().is_some()
+                && (matches!(&operand, Expression::Identifier(identifier)
+                        if matches!(identifier.resolve_to_definition(), Some(Definition::Library(_))))
+                    || matches!(
+                        function.enclosing_definition(),
+                        Some(Definition::Library(_))
+                    ))
+            {
+                let (library_name, library_function, self_receiver) =
+                    ExpressionContext::resolve_external_library(access);
+                let parameter_ids: Vec<NodeId> = library_function
+                    .parameters()
+                    .iter()
+                    .map(|parameter| parameter.node_id())
+                    .collect();
+                let explicit_parameter_ids = if self_receiver.is_some() {
+                    &parameter_ids[1..]
+                } else {
+                    &parameter_ids[..]
+                };
+                let argument_expressions = arguments.ordered_by(explicit_parameter_ids);
+                return context.emit_library_external_call(
+                    &library_name,
+                    &library_function,
+                    &argument_expressions,
+                    self_receiver.as_ref(),
+                    block,
+                );
+            }
+
+            // Every other member call is positional.
+            let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                unimplemented!("named arguments on this member call are not supported");
+            };
+            return match member_definition {
+                Some(Definition::Function(function)) => {
+                    if function.compute_selector().is_none() {
+                        // `using for` / `L.f` onto an internal (no-selector) library fn.
+                        context.emit_library_call(access, &function, positional, block)
+                    } else {
+                        // `this.f` / `instance.f`: an external call.
+                        context.emit_external(access, call_value, positional, block)
+                    }
+                }
+                // `C.x(args)`: a function-pointer state variable read then called;
+                // `this.x` / `instance.x`: a getter (an external call).
+                Some(Definition::StateVariable(_)) => {
+                    if matches!(&operand, Expression::Identifier(identifier)
+                        if matches!(identifier.resolve_to_definition(), Some(Definition::Contract(_))))
+                        && matches!(access.get_type(), Some(SlangType::Function(_)))
+                    {
+                        let callee = Expression::MemberAccessExpression(access.clone());
+                        let function_slang_type = access.get_type().expect("slang validated");
+                        context.emit_indirect_call_results(
+                            &callee,
+                            &function_slang_type,
+                            positional,
+                            call_value,
+                            block,
+                        )
+                    } else {
+                        context.emit_external(access, call_value, positional, block)
+                    }
+                }
+                // `s.f(...)` through a function-pointer struct field.
+                Some(Definition::StructMember(_))
+                    if matches!(access.get_type(), Some(SlangType::Function(_))) =>
+                {
+                    let callee = Expression::MemberAccessExpression(access.clone());
+                    let function_slang_type = access.get_type().expect("slang validated");
+                    context.emit_indirect_call_results(
+                        &callee,
+                        &function_slang_type,
+                        positional,
+                        call_value,
+                        block,
+                    )
+                }
+                other => unimplemented!(
+                    "unsupported member call: {:?}",
+                    other.map(|definition| definition.node_id())
+                ),
+            };
+        }
+
+        // `new T[](n)` / `new bytes(n)` / `new C(args)`.
+        if let Expression::NewExpression(_) = &callee {
+            let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                unimplemented!("named arguments on a new expression are not supported");
+            };
+            let (value, block) = context.emit_new(self, positional, call_value, salt, block);
+            return (value.into_iter().collect(), block);
+        }
+
+        let Expression::Identifier(identifier) = &callee else {
+            // `T[](x)`: an empty-bracket array type used as a data-location cast.
+            if let Expression::IndexAccessExpression(array_type) = &callee
+                && array_type.start().is_none()
+                && array_type.end().is_none()
+                && !matches!(array_type.kind(), IndexAccessKind::Slice)
+            {
+                let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                    unimplemented!("named arguments on an array-type cast are not supported");
+                };
+                let first = positional.iter().next().expect("slang validated");
+                let target_type =
+                    AstType::resolve_optional(self.get_type(), &context.state.builder)
+                        .expect("slang validated");
+                let BlockAnd { value, block } = first.materialize(target_type, context, block);
+                return (vec![value.into_mlir()], block);
+            }
+            // `arr[i](args)` / `(cond ? f : g)(args)`: a call through a pointer value.
+            if matches!(callee.get_type(), Some(SlangType::Function(_))) {
+                let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                    unimplemented!("named arguments on an indirect call are not supported");
+                };
+                let function_slang_type = callee.get_type().expect("slang validated");
+                return context.emit_indirect_call_results(
+                    &callee,
+                    &function_slang_type,
+                    positional,
+                    call_value,
+                    block,
+                );
+            }
+            unimplemented!("unsupported callee expression");
+        };
+        match identifier.resolve_to_definition() {
+            // A direct call passes its arguments by position or by name; ordering
+            // them against the parameter ids collapses both into one path.
+            Some(Definition::Function(function_definition)) => {
+                let parameter_ids: Vec<NodeId> = function_definition
+                    .parameters()
+                    .iter()
+                    .map(|parameter| parameter.node_id())
+                    .collect();
+                let ordered = arguments.ordered_by(&parameter_ids);
+                let (function, argument_values, block) =
+                    context.emit_call_setup_expressions(&function_definition, &ordered, block);
+                let results = function.call(&argument_values, &context.state.builder, &block);
+                (results, block)
+            }
+            Some(Definition::Struct(definition)) => {
+                context.emit_struct_constructor(self, &definition, &arguments, block)
+            }
+            // A function-typed variable / parameter / state variable calls through
+            // its stored pointer.
+            Some(
+                Definition::Variable(_) | Definition::Parameter(_) | Definition::StateVariable(_),
+            ) if matches!(identifier.get_type(), Some(SlangType::Function(_))) => {
+                let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
+                    unimplemented!("named arguments on an indirect call are not supported");
+                };
+                let function_slang_type = callee.get_type().expect("slang validated");
+                context.emit_indirect_call_results(
+                    &callee,
+                    &function_slang_type,
+                    positional,
+                    call_value,
+                    block,
+                )
+            }
+            _ => unimplemented!(
+                "callee '{}' does not resolve to a function",
+                identifier.name()
+            ),
+        }
     }
 }

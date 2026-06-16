@@ -29,7 +29,6 @@ use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// The ABI signature of a `public` state variable's synthesised getter:
@@ -228,21 +227,21 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     }
 }
 
-impl MemberCallKind {
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// A call to a function and a call to a state-variable getter converge on one
     /// `sol.ext_icall`: they differ only in the selector and signature source — a
     /// function's `compute_selector` + external (memory) ABI signature with its
     /// own `static`-ness, versus a getter's `compute_selector` + synthesised
     /// `getter_signature`, never `static`. A nested / reference-typed getter, or
     /// an arg-bearing getter on another instance, is a LOUD residual (#H-M7/M10/M11).
-    pub fn emit_external<'state, 'context, 'block>(
+    pub fn emit_external(
         &self,
-        context: &ExpressionContext<'state, 'context, 'block>,
         access: &MemberAccessExpression,
         call_value: Option<Value<'context, 'block>>,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let context = self;
         // A `view`/`pure` callee lowers to a STATICCALL (reverting on a state
         // change, matching solc); a getter is never `static`.
         let (selector, parameter_types, return_types, is_static) = match access
