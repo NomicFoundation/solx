@@ -352,7 +352,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
                 emitter.emit_function_call_results(call, block)
             }
             Expression::ConditionalExpression(conditional) => {
-                emitter.emit_conditional_tuple_values(conditional, block)
+                conditional.emit(&emitter, block)
             }
             _ => {
                 unimplemented!("multi-value return of a non-call expression is not supported")
@@ -439,7 +439,7 @@ statement_emit!(ExpressionStatement; |node, context, block| {
         }
         ExpressionStatementKind::TupleConditional(conditional) => {
             let emitter = ExpressionContext::from(&*context);
-            let (_values, block) = emitter.emit_conditional_tuple_values(&conditional, block);
+            let (_values, block) = conditional.emit(&emitter, block);
             Some(block)
         }
         ExpressionStatementKind::Value(expression) => {

@@ -409,9 +409,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             }
             Expression::ConditionalExpression(conditional) => {
                 // `(a, b) = cond ? (x, y) : (z, w)` — the conditional yields one
-                // value per tuple element via the shared tuple-conditional path.
+                // value per tuple element through its own Emit.
                 let lhs_leaves = flatten_lvalues(tuple);
-                let (values, current) = self.emit_conditional_tuple_values(conditional, block);
+                let (values, current) = conditional.emit(self, block);
                 assert!(
                     values.len() == lhs_leaves.len(),
                     "tuple assignment arity mismatch: {} LHS slots vs {} conditional values",

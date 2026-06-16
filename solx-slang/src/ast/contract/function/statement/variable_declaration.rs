@@ -133,8 +133,8 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
         }
         Expression::ConditionalExpression(conditional) => {
             // `(a, b) = cond ? (x, y) : (z, w)` — the conditional yields one
-            // value per tuple element via the shared tuple-conditional path.
-            let (values, current) = emitter.emit_conditional_tuple_values(conditional, block);
+            // value per tuple element through its own Emit.
+            let (values, current) = conditional.emit(&emitter, block);
             assert!(
                 values.len() == elements.len(),
                 "tuple deconstruction arity mismatch: {} LHS slots vs {} conditional values",

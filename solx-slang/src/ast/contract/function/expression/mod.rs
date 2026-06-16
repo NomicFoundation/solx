@@ -290,7 +290,17 @@ where
             Expression::ShiftExpression(inner) => inner.emit(context, block),
             Expression::FunctionCallExpression(inner) => inner.emit(context, block),
             Expression::TupleExpression(inner) => inner.emit(context, block),
-            Expression::ConditionalExpression(inner) => inner.emit(context, block),
+            Expression::ConditionalExpression(inner) => {
+                let (mut values, block) = inner.emit(context, block);
+                assert!(
+                    values.len() == 1,
+                    "a conditional in value position yields a single value"
+                );
+                BlockAnd {
+                    value: AstValue::from(values.remove(0)),
+                    block,
+                }
+            }
             Expression::ArrayExpression(inner) => inner.emit(context, block),
             Expression::MemberAccessExpression(inner) => inner.emit(context, block),
             Expression::IndexAccessExpression(inner) => inner.emit(context, block),
