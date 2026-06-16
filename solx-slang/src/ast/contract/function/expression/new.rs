@@ -24,7 +24,7 @@ use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::NewOperation;
 use solx_utils::DataLocation;
 
-use crate::ast::contract::ContractEmitter;
+use crate::ast::ContractPayable;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
 use crate::ast::type_conversion::LocationPolicy;
@@ -115,7 +115,7 @@ impl CallKind {
             unreachable!("Slang ContractType always references a Contract definition");
         };
         let contract_name = contract_definition.name().name();
-        let payable = ContractEmitter::is_contract_payable(&contract_definition);
+        let payable = contract_definition.is_payable();
         context.state.add_dependency(contract_name.clone());
 
         // Coerce each constructor argument to its declared parameter type so a

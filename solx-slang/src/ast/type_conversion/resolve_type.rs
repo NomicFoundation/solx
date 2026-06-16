@@ -10,7 +10,7 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use crate::ast::contract::ContractEmitter;
+use crate::ast::ContractPayable;
 
 use super::LocationPolicy;
 
@@ -167,7 +167,7 @@ impl ResolveType for SlangType {
                 crate::ast::Type::contract(
                     builder.context,
                     contract_definition.name().name().as_str(),
-                    ContractEmitter::is_contract_payable(&contract_definition),
+                    contract_definition.is_payable(),
                 )
                 .into_mlir()
             }

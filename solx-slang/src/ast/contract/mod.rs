@@ -29,7 +29,6 @@ use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
-use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::FunctionVisibility;
 use slang_solidity_v2::ast::LibraryDefinition;
 use slang_solidity_v2::ast::NodeId;
@@ -44,6 +43,7 @@ use self::free_function::FreeCallCollector;
 use self::function::FunctionEmitter;
 use self::library::LibraryCallCollector;
 use self::storage_layout::StorageSlot;
+use crate::ast::ContractPayable;
 use crate::ast::operator_binding::OperatorBindings;
 use crate::ast::type_conversion::LocationPolicy;
 use crate::ast::type_conversion::ResolveSignature;
@@ -63,21 +63,6 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// Creates a new contract emitter.
     pub fn new(state: &'state mut Context<'context>) -> Self {
         Self { state }
-    }
-
-    /// Returns whether `contract` is payable (declares a `receive()` function or
-    /// a `payable` `fallback()` function). Single source of truth for payability
-    /// derivation — used both when emitting the `sol.contract` op and when
-    /// resolving `SlangType::Contract` to a `Sol_ContractType`.
-    // TODO: walk the inheritance tree like solc does (`receiveFunction` /
-    // `fallbackFunction` on `ContractDefinition`, `ContractType::isPayable`)
-    // and move this into Slang.
-    pub fn is_contract_payable(contract: &ContractDefinition) -> bool {
-        contract.functions().iter().any(|function| {
-            matches!(function.kind(), FunctionKind::Receive)
-                || (matches!(function.kind(), FunctionKind::Fallback)
-                    && matches!(function.mutability(), FunctionMutability::Payable))
-        })
     }
 
     /// Emits a `sol.contract` containing all function definitions.
@@ -167,7 +152,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let contract_type = crate::ast::Type::contract(
             self.state.builder.context,
             &contract_name,
-            Self::is_contract_payable(contract),
+            contract.is_payable(),
         )
         .into_mlir();
 

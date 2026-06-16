@@ -23,6 +23,7 @@ pub use self::tuple_expression_ext::TupleExpressionExt;
 // The `Type`/`Value` entities live in `solx-mlir` (with the Builder and ODS
 // ops), mirroring how `solx-yul` uses `solx-codegen-evm`'s `Value`/`Pointer`;
 // re-exported here so slang code names them as `crate::ast::{Pointer, Type, Value}`.
+pub use solx_mlir::ContractPayable;
 pub use solx_mlir::Pointer;
 pub use solx_mlir::Type;
 pub use solx_mlir::Value;
