@@ -25,7 +25,6 @@ use slang_solidity_v2::ast::IndexAccessKind;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::PositionalArguments;
-use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::Function;
 use solx_mlir::ods::sol::ExtICallOperation;
@@ -315,59 +314,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(Definition::Library(_) | Definition::Import(_) | Definition::ImportedSymbol(_))
         )
     }
-
-    /// Emits a struct constructor `S(a, b)` / `S({b: …, a: …})` / `Lib.S(...)`:
-    /// allocate the struct in memory, order the field initialisers by member
-    /// declaration, and store each coerced to its field type.
-    fn emit_struct_constructor(
-        &self,
-        call: &FunctionCallExpression,
-        struct_definition: &StructDefinition,
-        arguments: &ArgumentsDeclaration,
-        block: BlockRef<'context, 'block>,
-    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let result_type = AstType::resolve_optional(call.get_type(), &self.state.builder)
-            .expect("slang validated");
-        let member_ids: Vec<NodeId> = struct_definition
-            .members()
-            .iter()
-            .map(|member| member.node_id())
-            .collect();
-        let arguments = arguments.ordered_by(&member_ids);
-        let builder = &self.state.builder;
-        let struct_address = sol_op!(builder, &block, MallocOperation.addr(result_type));
-        let struct_pointer = Pointer::new(struct_address);
-        let mut block = block;
-        for (index, (member, argument)) in struct_definition
-            .members()
-            .iter()
-            .zip(arguments.iter())
-            .enumerate()
-        {
-            let field_slang_type = member.get_type().expect("slang validated");
-            let field_type = AstType::resolve(
-                &field_slang_type,
-                LocationPolicy::Declared(Some(DataLocation::Memory)),
-                builder,
-            );
-            let index_value = AstValue::constant(
-                index as i64,
-                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
-                builder,
-                &block,
-            );
-            let field_address =
-                struct_pointer.gep(index_value, AstType::new(field_type), builder, &block);
-            let BlockAnd {
-                value: argument_value,
-                block: next_block,
-            } = argument.emit(self, block);
-            block = next_block;
-            let stored = argument_value.cast(AstType::new(field_type), builder, &block);
-            field_address.store(stored, builder, &block);
-        }
-        (vec![struct_address], block)
-    }
 }
 
 impl<'state, 'context, 'block, 'scope> Emit<'context, 'block, 'state, 'scope>
@@ -400,23 +346,65 @@ where
         };
         let arguments = self.arguments();
 
-        // `S(x)` builds a struct, `T(x)` converts — both type as a 1-argument
-        // conversion; a struct callee resolves to a `Definition::Struct`.
+        // A callee resolving to a struct definition is a struct constructor —
+        // `S(a, b)` / `S({…})` / `Lib.S(...)`, in any argument spelling: allocate
+        // the struct in memory, order the field initialisers by member
+        // declaration, and store each coerced to its field type.
+        let struct_callee = match &callee {
+            Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+            Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
+            _ => None,
+        };
+        if let Some(Definition::Struct(struct_definition)) = struct_callee {
+            let result_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
+                .expect("slang validated");
+            let member_ids: Vec<NodeId> = struct_definition
+                .members()
+                .iter()
+                .map(|member| member.node_id())
+                .collect();
+            let arguments = arguments.ordered_by(&member_ids);
+            let builder = &context.state.builder;
+            let struct_address = sol_op!(builder, &block, MallocOperation.addr(result_type));
+            let struct_pointer = Pointer::new(struct_address);
+            let mut block = block;
+            for (index, (member, argument)) in struct_definition
+                .members()
+                .iter()
+                .zip(arguments.iter())
+                .enumerate()
+            {
+                let field_slang_type = member.get_type().expect("slang validated");
+                let field_type = AstType::resolve(
+                    &field_slang_type,
+                    LocationPolicy::Declared(Some(DataLocation::Memory)),
+                    builder,
+                );
+                let index_value = AstValue::constant(
+                    index as i64,
+                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
+                    builder,
+                    &block,
+                );
+                let field_address =
+                    struct_pointer.gep(index_value, AstType::new(field_type), builder, &block);
+                let BlockAnd {
+                    value: argument_value,
+                    block: next_block,
+                } = argument.emit(context, block);
+                block = next_block;
+                let stored = argument_value.cast(AstType::new(field_type), builder, &block);
+                field_address.store(stored, builder, &block);
+            }
+            return (vec![struct_address], block);
+        }
+
+        // `T(x)` / `bytesN("…")`: an explicit 1-argument type conversion coerces
+        // the argument to the call's own type.
         if self.is_type_conversion()
             && let ArgumentsDeclaration::PositionalArguments(positional) = &arguments
             && positional.len() == 1
         {
-            let struct_callee = match &callee {
-                Expression::Identifier(identifier) => identifier.resolve_to_definition(),
-                Expression::MemberAccessExpression(access) => {
-                    access.member().resolve_to_definition()
-                }
-                _ => None,
-            };
-            if let Some(Definition::Struct(definition)) = struct_callee {
-                return context.emit_struct_constructor(self, &definition, &arguments, block);
-            }
-            // `T(x)` / `bytesN("…")`: coerce the single argument to the call's type.
             let first = positional.iter().next().expect("slang validated");
             let target_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
                 .expect("slang validated");
@@ -498,11 +486,6 @@ where
                     return (value.into_iter().collect(), block);
                 }
                 None => {}
-            }
-
-            // `Lib.S(...)` builds the struct, like a bare `S(...)`.
-            if let Some(Definition::Struct(definition)) = access.member().resolve_to_definition() {
-                return context.emit_struct_constructor(self, &definition, &arguments, block);
             }
 
             // A member call `x.f(...)`, classified by operand and member resolution.
@@ -715,9 +698,6 @@ where
                     context.emit_call_setup_expressions(&function_definition, &ordered, block);
                 let results = function.call(&argument_values, &context.state.builder, &block);
                 (results, block)
-            }
-            Some(Definition::Struct(definition)) => {
-                context.emit_struct_constructor(self, &definition, &arguments, block)
             }
             // A function-typed variable / parameter / state variable calls through
             // its stored pointer.
