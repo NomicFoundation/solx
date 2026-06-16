@@ -27,7 +27,6 @@ use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::contract::storage_layout::StorageSlot;
-use crate::ast::tuple_expression_ext::TupleExpressionExt;
 
 /// Assignment target resolved from the Slang binder.
 enum AssignmentTarget<'context, 'block> {
@@ -314,6 +313,54 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         right: &Expression,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
+        // Pairs LHS lvalue slots with RHS value expressions, recursing only
+        // where BOTH sides nest — a blank LHS slot opposite a nested RHS tuple
+        // discards it as a unit. A blank slot yields `None` for its lvalue.
+        fn pair_assignment(
+            lhs: &TupleExpression,
+            rhs: &TupleExpression,
+        ) -> Vec<(Option<Expression>, Expression)> {
+            let lhs_items = lhs.items();
+            let rhs_items = rhs.items();
+            assert!(
+                lhs_items.len() == rhs_items.len(),
+                "tuple assignment arity mismatch: {} LHS slots vs {} RHS values",
+                lhs_items.len(),
+                rhs_items.len(),
+            );
+            let mut pairs = Vec::new();
+            for (lhs_item, rhs_item) in lhs_items.iter().zip(rhs_items.iter()) {
+                let lhs_expression = lhs_item.expression();
+                let rhs_expression = rhs_item
+                    .expression()
+                    .expect("a tuple assignment RHS element has an inner expression");
+                match (&lhs_expression, &rhs_expression) {
+                    (
+                        Some(Expression::TupleExpression(lhs_nested)),
+                        Expression::TupleExpression(rhs_nested),
+                    ) => pairs.extend(pair_assignment(lhs_nested, rhs_nested)),
+                    _ => pairs.push((lhs_expression, rhs_expression)),
+                }
+            }
+            pairs
+        }
+
+        // Flattens LHS lvalue leaves, recursing into nested tuples
+        // (`(a, (b, c))` -> `[a, b, c]`); a blank slot is `None` (discarded). For
+        // a call / conditional RHS, whose values are already flat.
+        fn flatten_lvalues(tuple: &TupleExpression) -> Vec<Option<Expression>> {
+            let mut leaves = Vec::new();
+            for item in tuple.items().iter() {
+                match item.expression() {
+                    Some(Expression::TupleExpression(nested)) => {
+                        leaves.extend(flatten_lvalues(&nested))
+                    }
+                    other => leaves.push(other),
+                }
+            }
+            leaves
+        }
+
         // Materialise the assignment as `(lvalue, value)` pairs, evaluating
         // every value before any store (Solidity's `(a, b) = (b, a)` swap).
         let (assignments, mut block): (Vec<(Expression, Value<'context, 'block>)>, _) = match right
@@ -323,7 +370,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // where BOTH sides are tuples — so a blank slot
                 // (`(a, ) = (4, (8, 16, 32))`) discards the whole nested tuple
                 // rather than spreading it across slots.
-                let pairs = tuple.pair_assignment(rhs_tuple);
+                let pairs = pair_assignment(tuple, rhs_tuple);
                 let mut assignments = Vec::new();
                 let mut current = block;
                 for (lvalue, rhs_expression) in pairs {
@@ -351,7 +398,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             // A call / conditional yields a flat value list, so the LHS pairs by
             // flattened leaf (no syntactic nesting can match these).
             Expression::FunctionCallExpression(call) => {
-                let lhs_leaves = tuple.flatten_lvalues();
+                let lhs_leaves = flatten_lvalues(tuple);
                 let (values, current) = self.emit_function_call_results(call, block);
                 assert!(
                     values.len() == lhs_leaves.len(),
@@ -364,7 +411,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Expression::ConditionalExpression(conditional) => {
                 // `(a, b) = cond ? (x, y) : (z, w)` — the conditional yields one
                 // value per tuple element via the shared tuple-conditional path.
-                let lhs_leaves = tuple.flatten_lvalues();
+                let lhs_leaves = flatten_lvalues(tuple);
                 let (values, current) = self.emit_conditional_tuple_values(conditional, block);
                 assert!(
                     values.len() == lhs_leaves.len(),
