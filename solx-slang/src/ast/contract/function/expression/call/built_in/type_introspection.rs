@@ -19,6 +19,8 @@ use solx_mlir::ods::sol::ObjectCodeOperation;
 use solx_mlir::ods::sol::StringLitOperation;
 use solx_utils::DataLocation;
 
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -44,9 +46,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         else {
             unreachable!("type(E).min/max resolves to an enum definition");
         };
-        let result_type =
-            crate::ast::Type::resolve_optional(access.get_type(), &self.state.builder)
-                .expect("slang types type(E).min/max as the enum");
+        let result_type = AstType::resolve_optional(access.get_type(), &self.state.builder)
+            .expect("slang types type(E).min/max as the enum");
         let member_count = enum_definition.members().iter().count();
         let ordinal = match builtin {
             BuiltIn::TypeEnumMin => 0,
@@ -54,14 +55,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             _ => unreachable!("dispatched on TypeEnumMin / TypeEnumMax"),
         };
         let builder = &self.state.builder;
-        let int_value = crate::ast::Value::constant(
+        let int_value = AstValue::constant(
             ordinal,
-            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
             builder,
             &block,
         );
         let enum_value = int_value
-            .cast(crate::ast::Type::new(result_type), builder, &block)
+            .cast(AstType::new(result_type), builder, &block)
             .into_mlir();
         (enum_value, block)
     }
@@ -77,12 +78,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .member()
             .resolve_to_built_in()
             .expect("type(T).min/max dispatches on its built-in member");
-        let result_type =
-            crate::ast::Type::resolve_optional(access.get_type(), &self.state.builder)
-                .expect("slang types type(T).min/max as the integer type");
+        let result_type = AstType::resolve_optional(access.get_type(), &self.state.builder)
+            .expect("slang types type(T).min/max as the integer type");
         let integer_type =
             IntegerType::try_from(result_type).expect("type(T).min/max is an integer type");
-        let bits = crate::ast::Type::new(result_type).integer_bit_width() as usize;
+        let bits = AstType::new(result_type).integer_bit_width() as usize;
         let value = match (builtin, integer_type.is_signed()) {
             (BuiltIn::TypeMin, false) => BigInt::ZERO,
             (BuiltIn::TypeMin, true) => -(BigInt::from(1) << (bits - 1)),
@@ -90,9 +90,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             (BuiltIn::TypeMax, true) => (BigInt::from(1) << (bits - 1)) - 1,
             _ => unreachable!("dispatched on TypeMin / TypeMax"),
         };
-        let value = crate::ast::Value::constant_from_bigint(
+        let value = AstValue::constant_from_bigint(
             &value,
-            crate::ast::Type::new(result_type),
+            AstType::new(result_type),
             &self.state.builder,
             &block,
         )
@@ -133,18 +133,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // `sol.bytes_cast` (the same pattern as `f.selector`).
         let builder = &self.state.builder;
         let integer_type = Type::from(IntegerType::unsigned(builder.context, 32));
-        let integer = crate::ast::Value::constant_from_bigint(
+        let integer = AstValue::constant_from_bigint(
             &BigInt::from(interface_id),
-            crate::ast::Type::new(integer_type),
+            AstType::new(integer_type),
             builder,
             &block,
         );
         let value = integer
-            .cast(
-                crate::ast::Type::fixed_bytes(builder.context, 4),
-                builder,
-                &block,
-            )
+            .cast(AstType::fixed_bytes(builder.context, 4), builder, &block)
             .into_mlir();
         (value, block)
     }
@@ -188,12 +184,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             _ => contract_name,
         };
         self.state.add_dependency(object_name.clone());
-        let result_type =
-            crate::ast::Type::resolve_optional(access.get_type(), &self.state.builder)
-                .unwrap_or_else(|| {
-                    crate::ast::Type::string(self.state.builder.context, DataLocation::Memory)
-                        .into_mlir()
-                });
+        let result_type = AstType::resolve_optional(access.get_type(), &self.state.builder)
+            .unwrap_or_else(|| {
+                AstType::string(self.state.builder.context, DataLocation::Memory).into_mlir()
+            });
         let builder = &self.state.builder;
         let value = sol_op!(
             builder,
@@ -229,11 +223,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             StringLitOperation
                 .value(StringAttribute::new(self.state.builder.context, &type_name))
                 .addr(
-                    crate::ast::Type::string(
-                        self.state.builder.context,
-                        solx_utils::DataLocation::Memory
-                    )
-                    .into_mlir()
+                    AstType::string(self.state.builder.context, solx_utils::DataLocation::Memory)
+                        .into_mlir()
                 )
         );
         (value, block)

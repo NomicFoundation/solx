@@ -24,6 +24,8 @@ use solx_utils::BIT_LENGTH_BYTE;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::Materialize;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 // A decimal and a hex integer literal lower identically: slang has already
@@ -34,11 +36,11 @@ expression_emit!(DecimalNumberExpression, HexNumberExpression; |node, context, b
         .integer_value()
         .expect("an integer literal evaluates to an integer after units");
     let result_type =
-        crate::ast::Type::resolve_optional(node.get_type(), &context.state.builder)
+        AstType::resolve_optional(node.get_type(), &context.state.builder)
             .expect("the binder types every integer literal node");
-    let constant = crate::ast::Value::constant_from_bigint(
+    let constant = AstValue::constant_from_bigint(
         &value,
-        crate::ast::Type::new(result_type),
+        AstType::new(result_type),
         &context.state.builder,
         &block,
     );
@@ -49,12 +51,12 @@ expression_emit!(DecimalNumberExpression, HexNumberExpression; |node, context, b
 });
 
 expression_emit!(TrueKeyword; |context, block| {
-    let value = crate::ast::Value::boolean(true, &context.state.builder, &block);
+    let value = AstValue::boolean(true, &context.state.builder, &block);
     BlockAnd { block, value }
 });
 
 expression_emit!(FalseKeyword; |context, block| {
-    let value = crate::ast::Value::boolean(false, &context.state.builder, &block);
+    let value = AstValue::boolean(false, &context.state.builder, &block);
     BlockAnd { block, value }
 });
 
@@ -85,7 +87,7 @@ expression_emit!(StringExpression; |node, context, block| {
         &block,
         StringLitOperation
             .value(StringAttribute::new(builder.context, literal))
-            .addr(crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir())
+            .addr(AstType::string(builder.context, solx_utils::DataLocation::Memory).into_mlir())
     );
     BlockAnd {
         block,
@@ -112,28 +114,28 @@ where
         target_type: Type<'context>,
         context: Self::Context,
         block: BlockRef<'context, 'block>,
-    ) -> BlockAnd<'context, 'block, crate::ast::Value<'context, 'block>> {
+    ) -> BlockAnd<'context, 'block, AstValue<'context, 'block>> {
         let builder = &context.state.builder;
         // A string literal toward a single `byte` (an element of `bytes` /
         // `string`) materialises as a `!sol.byte` constant.
-        if crate::ast::Type::new(target_type).is_byte() {
+        if AstType::new(target_type).is_byte() {
             let byte = self.value().first().copied().unwrap_or(0); // recut-lint-allow: fail01 — an empty string literal toward a byte is 0x00 (zero-padding)
             let ui8 = Type::from(IntegerType::unsigned(
                 builder.context,
                 BIT_LENGTH_BYTE as u32,
             ));
-            let integer = crate::ast::Value::constant_from_bigint(
+            let integer = AstValue::constant_from_bigint(
                 &BigInt::from(byte),
-                crate::ast::Type::new(ui8),
+                AstType::new(ui8),
                 builder,
                 &block,
             );
-            let value = integer.cast(crate::ast::Type::new(target_type), builder, &block);
+            let value = integer.cast(AstType::new(target_type), builder, &block);
             return BlockAnd { block, value };
         }
         // `bytesN` is left-aligned: the literal occupies the high bytes,
         // zero-padded on the right.
-        if let Some(width) = crate::ast::Type::new(target_type).fixed_bytes_or_byte_width() {
+        if let Some(width) = AstType::new(target_type).fixed_bytes_or_byte_width() {
             let mut buffer = vec![0u8; width as usize];
             for (slot, byte) in buffer.iter_mut().zip(self.value().iter()) {
                 *slot = *byte;
@@ -143,14 +145,14 @@ where
                 builder.context,
                 width * BIT_LENGTH_BYTE as u32,
             ));
-            let integer = crate::ast::Value::constant_from_bigint(
+            let integer = AstValue::constant_from_bigint(
                 &integer_value,
-                crate::ast::Type::new(integer_type),
+                AstType::new(integer_type),
                 builder,
                 &block,
             );
             let value = integer.cast(
-                crate::ast::Type::fixed_bytes(builder.context, width),
+                AstType::fixed_bytes(builder.context, width),
                 builder,
                 &block,
             );

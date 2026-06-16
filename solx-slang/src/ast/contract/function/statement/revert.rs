@@ -15,6 +15,7 @@ use solx_mlir::ods::sol::RevertOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 
@@ -67,10 +68,9 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 } = expression.emit(&emitter, block);
                 let builder = &self.state.builder;
                 let string_memory_type =
-                    crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
-                        .into_mlir();
+                    AstType::string(builder.context, solx_utils::DataLocation::Memory).into_mlir();
                 let message_value = message_value
-                    .cast(crate::ast::Type::new(string_memory_type), builder, &block)
+                    .cast(AstType::new(string_memory_type), builder, &block)
                     .into_mlir();
                 self.emit_revert("Error(string)", &[message_value], true, &block);
                 block
@@ -126,7 +126,7 @@ statement_emit!(RevertStatement; |node, context, block| {
     let parameter_types: Vec<_> = parameters
         .iter()
         .map(|parameter| {
-            crate::ast::Type::resolve(
+            AstType::resolve(
                 &parameter
                     .get_type()
                     .expect("parameter type resolved by semantic analysis"),

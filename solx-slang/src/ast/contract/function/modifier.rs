@@ -33,6 +33,9 @@ use solx_mlir::ods::sol::ReturnOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::body_kind::BodyKind;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -132,8 +135,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         for (index, slot) in return_slots.iter_mut().enumerate() {
             if slot.is_none() {
                 *slot = Some(
-                    crate::ast::Pointer::default_initialized(
-                        crate::ast::Type::new(result_types[index]),
+                    Pointer::default_initialized(
+                        AstType::new(result_types[index]),
                         &self.state.builder,
                         function_entry_block,
                     )
@@ -196,9 +199,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         for params in modifier_stage_params.iter() {
             for binding in params {
                 forward_params.push(
-                    crate::ast::Pointer::new(binding.pointer)
+                    Pointer::new(binding.pointer)
                         .load(
-                            crate::ast::Type::new(binding.element_type),
+                            AstType::new(binding.element_type),
                             &self.state.builder,
                             &current_block,
                         )
@@ -262,14 +265,14 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // Bind this modifier's parameters from the leading arguments.
         let mut environment = Environment::new();
         for (index, binding) in modifier_params.iter().enumerate() {
-            let value = crate::ast::Value::new(
+            let value = AstValue::new(
                 entry
                     .argument(index)
                     .expect("argument index is within the block signature")
                     .into(),
             );
-            let pointer = crate::ast::Pointer::stack_slot(
-                crate::ast::Type::new(binding.element_type),
+            let pointer = Pointer::stack_slot(
+                AstType::new(binding.element_type),
                 &self.state.builder,
                 &entry,
             );
@@ -294,12 +297,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut return_slots: Vec<Option<Value<'context, '_>>> =
             Vec::with_capacity(result_types.len());
         for (index, &return_type) in result_types.iter().enumerate() {
-            let pointer = crate::ast::Pointer::stack_slot(
-                crate::ast::Type::new(return_type),
-                &self.state.builder,
-                &entry,
-            );
-            let incoming = crate::ast::Value::new(
+            let pointer =
+                Pointer::stack_slot(AstType::new(return_type), &self.state.builder, &entry);
+            let incoming = AstValue::new(
                 entry
                     .argument(return_offset + index)
                     .expect("argument index is within the block signature")
@@ -449,26 +449,26 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         let parameter_type = parameter
                             .get_type()
                             .map(|slang_type| {
-                                crate::ast::Type::resolve(
+                                AstType::resolve(
                                     &slang_type,
                                     LocationPolicy::Declared(None),
                                     &self.state.builder,
                                 )
                             })
                             .unwrap_or_else(|| {
-                                crate::ast::Type::unsigned(
+                                AstType::unsigned(
                                     self.state.builder.context,
                                     solx_utils::BIT_LENGTH_FIELD,
                                 )
                                 .into_mlir()
                             });
                         let cast = value.cast(
-                            crate::ast::Type::new(parameter_type),
+                            AstType::new(parameter_type),
                             &self.state.builder,
                             &current_block,
                         );
-                        let pointer = crate::ast::Pointer::stack_slot(
-                            crate::ast::Type::new(parameter_type),
+                        let pointer = Pointer::stack_slot(
+                            AstType::new(parameter_type),
                             &self.state.builder,
                             &current_block,
                         );
@@ -665,29 +665,19 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 let parameter_type = parameter
                     .get_type()
                     .map(|slang_type| {
-                        crate::ast::Type::resolve(
+                        AstType::resolve(
                             &slang_type,
                             LocationPolicy::Declared(None),
                             &self.state.builder,
                         )
                     })
                     .unwrap_or_else(|| {
-                        crate::ast::Type::unsigned(
-                            self.state.builder.context,
-                            solx_utils::BIT_LENGTH_FIELD,
-                        )
-                        .into_mlir()
+                        AstType::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
+                            .into_mlir()
                     });
-                let cast = value.cast(
-                    crate::ast::Type::new(parameter_type),
-                    &self.state.builder,
-                    &block,
-                );
-                let pointer = crate::ast::Pointer::stack_slot(
-                    crate::ast::Type::new(parameter_type),
-                    &self.state.builder,
-                    &block,
-                );
+                let cast = value.cast(AstType::new(parameter_type), &self.state.builder, &block);
+                let pointer =
+                    Pointer::stack_slot(AstType::new(parameter_type), &self.state.builder, &block);
                 pointer.store(cast, &self.state.builder, &block);
                 stage_params.push(ModifierParameterBinding {
                     declaration: parameter.node_id(),

@@ -19,6 +19,9 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
 use crate::ast::Materialize;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -62,7 +65,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 true_items
                     .iter()
                     .map(|item| {
-                        crate::ast::Type::resolve_optional(item.get_type(), &self.state.builder)
+                        AstType::resolve_optional(item.get_type(), &self.state.builder)
                             .expect("slang types every conditional-branch tuple element")
                     })
                     .collect()
@@ -81,11 +84,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .types()
                     .iter()
                     .map(|element_type| {
-                        crate::ast::Type::resolve_optional(
-                            Some(element_type.clone()),
-                            &self.state.builder,
-                        )
-                        .expect("slang types every conditional result element")
+                        AstType::resolve_optional(Some(element_type.clone()), &self.state.builder)
+                            .expect("slang types every conditional result element")
                     })
                     .collect()
             }
@@ -97,11 +97,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             block,
         } = conditional.operand().emit(self, block);
         let condition_boolean = condition_value.is_nonzero(builder, &block).into_mlir();
-        let slots: Vec<crate::ast::Pointer<'context, 'block>> = result_types
+        let slots: Vec<Pointer<'context, 'block>> = result_types
             .iter()
-            .map(|&result_type| {
-                crate::ast::Pointer::stack_slot(crate::ast::Type::new(result_type), builder, &block)
-            })
+            .map(|&result_type| Pointer::stack_slot(AstType::new(result_type), builder, &block))
             .collect();
         let (then_block, else_block) = sol_region_op!(builder, &block, IfOperation.cond(condition_boolean); then_region, else_region);
 
@@ -116,11 +114,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 "a conditional branch yields one value per result slot"
             );
             for (index, value) in values.into_iter().enumerate() {
-                let cast = value.cast(
-                    crate::ast::Type::new(result_types[index]),
-                    builder,
-                    &current,
-                );
+                let cast = value.cast(AstType::new(result_types[index]), builder, &current);
                 slots[index].store(cast, builder, &current);
             }
             sol_op_void!(builder, &current, YieldOperation.ins(&[]));
@@ -129,7 +123,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let mut values = Vec::with_capacity(slots.len());
         for (index, &slot) in slots.iter().enumerate() {
             values.push(
-                slot.load(crate::ast::Type::new(result_types[index]), builder, &block)
+                slot.load(AstType::new(result_types[index]), builder, &block)
                     .into_mlir(),
             );
         }
@@ -144,10 +138,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         &self,
         branch: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> (
-        Vec<crate::ast::Value<'context, 'block>>,
-        BlockRef<'context, 'block>,
-    ) {
+    ) -> (Vec<AstValue<'context, 'block>>, BlockRef<'context, 'block>) {
         match branch {
             Expression::TupleExpression(tuple) => {
                 let mut values = Vec::new();
@@ -164,17 +155,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             }
             Expression::FunctionCallExpression(call) => {
                 let (values, block) = self.emit_function_call_results(call, block);
-                (
-                    values.into_iter().map(crate::ast::Value::from).collect(),
-                    block,
-                )
+                (values.into_iter().map(AstValue::from).collect(), block)
             }
             Expression::ConditionalExpression(nested) => {
                 let (values, block) = self.emit_conditional_tuple_values(nested, block);
-                (
-                    values.into_iter().map(crate::ast::Value::from).collect(),
-                    block,
-                )
+                (values.into_iter().map(AstValue::from).collect(), block)
             }
             other => unimplemented!(
                 "multi-value conditional branch of this expression kind is not supported: {:?}",
@@ -208,16 +193,16 @@ expression_emit!(ConditionalExpression; |node, context, block| {
         .bare_function_ref_type(&node.true_expression())
         .or_else(|| context.bare_function_ref_type(&node.false_expression()))
         .or_else(|| {
-            crate::ast::Type::resolve_optional(node.get_type(), &context.state.builder)
+            AstType::resolve_optional(node.get_type(), &context.state.builder)
         })
         .or_else(|| {
-            crate::ast::Type::resolve_optional(
+            AstType::resolve_optional(
                 node.true_expression().get_type(),
                 &context.state.builder,
             )
         })
         .or_else(|| {
-            crate::ast::Type::resolve_optional(
+            AstType::resolve_optional(
                 node.false_expression().get_type(),
                 &context.state.builder,
             )
@@ -232,8 +217,8 @@ expression_emit!(ConditionalExpression; |node, context, block| {
         .is_nonzero(&context.state.builder, &block)
         .into_mlir();
 
-    let result_slot = crate::ast::Pointer::stack_slot(
-        crate::ast::Type::new(result_type),
+    let result_slot = Pointer::stack_slot(
+        AstType::new(result_type),
         &context.state.builder,
         &block,
     );
@@ -252,7 +237,7 @@ expression_emit!(ConditionalExpression; |node, context, block| {
         true_expression.emit(context, then_block)
     };
     let then_cast = then_value.cast(
-        crate::ast::Type::new(result_type),
+        AstType::new(result_type),
         &context.state.builder,
         &then_end,
     );
@@ -269,7 +254,7 @@ expression_emit!(ConditionalExpression; |node, context, block| {
         false_expression.emit(context, else_block)
     };
     let else_cast = else_value.cast(
-        crate::ast::Type::new(result_type),
+        AstType::new(result_type),
         &context.state.builder,
         &else_end,
     );
@@ -277,7 +262,7 @@ expression_emit!(ConditionalExpression; |node, context, block| {
     sol_op_void!(&context.state.builder, &else_end, YieldOperation.ins(&[]));
 
     let result = result_slot.load(
-        crate::ast::Type::new(result_type),
+        AstType::new(result_type),
         &context.state.builder,
         &block,
     );
@@ -304,7 +289,7 @@ expression_emit!(ArrayExpression; |node, context, block| {
     // rather than leaving a calldata element inside a memory `sol.array_lit`
     // that the backend cannot lower.
     let declared_element_type =
-        crate::ast::Type::resolve(&element_slang_type, LocationPolicy::ForceMemory, builder);
+        AstType::resolve(&element_slang_type, LocationPolicy::ForceMemory, builder);
     // Emit the element values before fixing the element type: for a
     // function-pointer array literal the emitted values are authoritative.
     // A bare function name lowers to an internal `func_ref`, but slang types
@@ -332,7 +317,7 @@ expression_emit!(ArrayExpression; |node, context, block| {
     };
     let array_type = match &result_slang_type {
         SlangType::FixedSizeArray(fixed_array_type) if element_type != declared_element_type => {
-            crate::ast::Type::array(
+            AstType::array(
                 builder.context,
                 solx_mlir::ArraySize::Fixed(fixed_array_type.size() as u64),
                 element_type,
@@ -340,13 +325,13 @@ expression_emit!(ArrayExpression; |node, context, block| {
             )
             .into_mlir()
         }
-        _ => crate::ast::Type::resolve(&result_slang_type, LocationPolicy::ForceMemory, builder),
+        _ => AstType::resolve(&result_slang_type, LocationPolicy::ForceMemory, builder),
     };
     let element_values: Vec<_> = element_values
         .into_iter()
         .map(|value| {
             value
-                .cast(crate::ast::Type::new(element_type), builder, &current)
+                .cast(AstType::new(element_type), builder, &current)
                 .into_mlir()
         })
         .collect();

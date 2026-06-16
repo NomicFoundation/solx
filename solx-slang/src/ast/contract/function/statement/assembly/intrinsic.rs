@@ -11,6 +11,7 @@ use slang_solidity_v2::ast::BuiltIn;
 use solx_mlir::YulCmpPredicate;
 use solx_mlir::ods::yul;
 
+use crate::ast::Type as AstType;
 use crate::ast::contract::function::statement::StatementContext;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
@@ -40,8 +41,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         let context = builder.context;
         let loc = builder.unknown_location;
-        let i256 =
-            crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
+        let i256 = AstType::signless(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
 
         // A Yul value op: build the op, set its single `i256` result, return it.
         macro_rules! yul_value {

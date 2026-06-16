@@ -3,6 +3,8 @@
 //!
 
 /// Compilation builder configuration for the Slang frontend.
+use crate::ast::contract::ContractEmitter;
+use crate::ast::operator_binding::OperatorBindings;
 pub mod compilation_config;
 
 use std::collections::BTreeMap;
@@ -220,7 +222,7 @@ impl Frontend for Slang {
 
         let file_identifiers = unit.file_ids();
         let free_functions = Self::gather_free_functions(&unit);
-        let operator_bindings = crate::ast::operator_binding::OperatorBindings::gather(&unit);
+        let operator_bindings = OperatorBindings::gather(&unit);
 
         for file_identifier in file_identifiers.iter() {
             let Some(file) = unit.file(file_identifier) else {
@@ -283,7 +285,7 @@ impl Frontend for Slang {
                 let evm_version = input_json.settings.evm_version.unwrap_or_default(); // recut-lint-allow: fail01 — optional setting; absent => default target
                 let mut context = solx_mlir::Context::new(&melior_context, evm_version);
                 let (library_name, method_identifiers) =
-                    crate::ast::contract::ContractEmitter::new(&mut context).emit_library(&library);
+                    ContractEmitter::new(&mut context).emit_library(&library);
                 Self::record_object(
                     context,
                     library_name,

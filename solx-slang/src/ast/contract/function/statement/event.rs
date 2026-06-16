@@ -14,6 +14,7 @@ use solx_mlir::ods::sol::EmitOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 
@@ -49,7 +50,7 @@ statement_emit!(EmitStatement; |node, context, block| {
         } = argument.emit(&emitter, current_block);
         current_block = next_block;
         let indexed = parameter.indexed();
-        let parameter_type = crate::ast::Type::resolve(
+        let parameter_type = AstType::resolve(
             &parameter
                 .get_type()
                 .expect("parameter type resolved by semantic analysis"),
@@ -58,7 +59,7 @@ statement_emit!(EmitStatement; |node, context, block| {
         );
         let value = value
             .cast(
-                crate::ast::Type::new(parameter_type),
+                AstType::new(parameter_type),
                 &context.state.builder,
                 &current_block,
             )

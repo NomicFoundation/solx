@@ -24,6 +24,8 @@ use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::built_in::EncodeMode;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
@@ -69,12 +71,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             block,
         } = arguments.emit(self, block);
         let builder = &self.state.builder;
-        let selector = crate::ast::Value::from(values.remove(0))
-            .cast(
-                crate::ast::Type::fixed_bytes(builder.context, 4),
-                builder,
-                &block,
-            )
+        let selector = AstValue::from(values.remove(0))
+            .cast(AstType::fixed_bytes(builder.context, 4), builder, &block)
             .into_mlir();
         let result = self.emit_sol_encode(&values, Some(selector), EncodeMode::Standard, &block);
         (Some(result), block)
@@ -101,7 +99,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .try_into()
                     .expect("keccak256 always yields 32 bytes");
                 let selector_word = u32::from_be_bytes(selector_bytes);
-                let selector_value = crate::ast::Value::selector_constant(
+                let selector_value = AstValue::selector_constant(
                     &BigInt::from(selector_word),
                     4,
                     &self.state.builder,
@@ -119,12 +117,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // its leading four bytes.
                 let hash = self.emit_keccak256(signature_value.into_mlir(), &current);
                 let builder = &self.state.builder;
-                let selector_value = crate::ast::Value::from(hash)
-                    .cast(
-                        crate::ast::Type::fixed_bytes(builder.context, 4),
-                        builder,
-                        &current,
-                    )
+                let selector_value = AstValue::from(hash)
+                    .cast(AstType::fixed_bytes(builder.context, 4), builder, &current)
                     .into_mlir();
                 (selector_value, current)
             }
@@ -184,7 +178,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let selector = function
                     .compute_selector()
                     .expect("abi.encodeCall's callee is an external function with an ABI selector");
-                let selector_value = crate::ast::Value::selector_constant(
+                let selector_value = AstValue::selector_constant(
                     &BigInt::from(selector),
                     4,
                     &self.state.builder,
@@ -197,11 +191,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // cross the call boundary). Use the external (memory) signature
                 // so a memory struct/array argument needs no data-location cast
                 // (solc encodes the same).
-                let (parameter_types, _) = crate::ast::Type::resolve_signature(
-                    &function,
-                    LocationPolicy::ForceMemory,
-                    builder,
-                );
+                let (parameter_types, _) =
+                    AstType::resolve_signature(&function, LocationPolicy::ForceMemory, builder);
                 (selector_value, parameter_types, block)
             }
             _ => {
@@ -218,7 +209,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     &current,
                     ExtFuncSelectorOperation
                         .func(function_value.into_mlir())
-                        .result(crate::ast::Type::fixed_bytes(builder.context, 4).into_mlir())
+                        .result(AstType::fixed_bytes(builder.context, 4).into_mlir())
                 );
                 let SlangType::Function(function_type) = function_expression
                     .get_type()
@@ -230,11 +221,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .parameter_types()
                     .iter()
                     .map(|parameter_type| {
-                        crate::ast::Type::resolve(
-                            parameter_type,
-                            LocationPolicy::ForceMemory,
-                            builder,
-                        )
+                        AstType::resolve(parameter_type, LocationPolicy::ForceMemory, builder)
                     })
                     .collect();
                 (selector_value, parameter_types, current)
@@ -284,10 +271,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         let mut op_builder = EncodeOperation::builder(builder.context, builder.unknown_location)
             .ins(ins)
-            .res(
-                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
-                    .into_mlir(),
-            );
+            .res(AstType::string(builder.context, solx_utils::DataLocation::Memory).into_mlir());
         if let Some(selector_value) = selector {
             op_builder = op_builder.selector(selector_value);
         }
@@ -324,10 +308,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .types()
                 .iter()
                 .map(|slang_type| {
-                    crate::ast::Type::resolve(slang_type, LocationPolicy::Declared(None), builder)
+                    AstType::resolve(slang_type, LocationPolicy::Declared(None), builder)
                 })
                 .collect(),
-            other => vec![crate::ast::Type::resolve(
+            other => vec![AstType::resolve(
                 &other,
                 LocationPolicy::Declared(None),
                 builder,
@@ -367,7 +351,7 @@ impl CallKind {
             Some(SlangDataLocation::Storage)
         ) {
             payload_value.cast(
-                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory),
+                AstType::string(builder.context, solx_utils::DataLocation::Memory),
                 builder,
                 &block,
             )

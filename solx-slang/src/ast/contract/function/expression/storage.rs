@@ -16,6 +16,9 @@ use solx_mlir::ods::sol::CopyOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::storage_layout::StorageSlot;
 
@@ -32,7 +35,7 @@ impl StorageSlot {
     {
         let pointer = self.addr_of(builder, element_type, block);
         pointer
-            .load(crate::ast::Type::new(element_type), builder, block)
+            .load(AstType::new(element_type), builder, block)
             .into_mlir()
     }
 
@@ -47,7 +50,7 @@ impl StorageSlot {
         'context: 'block,
     {
         let pointer = self.addr_of(builder, element_type, block);
-        pointer.store(crate::ast::Value::new(value), builder, block);
+        pointer.store(AstValue::new(value), builder, block);
     }
 
     /// Returns the `!sol.ptr<element_type, location>` place via `sol.addr_of`.
@@ -56,13 +59,13 @@ impl StorageSlot {
         builder: &Builder<'context>,
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
-    ) -> crate::ast::Pointer<'context, 'block>
+    ) -> Pointer<'context, 'block>
     where
         'context: 'block,
     {
         let pointer_type =
-            crate::ast::Type::pointer(builder.context, element_type, self.location).into_mlir();
-        crate::ast::Pointer::new(sol_op!(
+            AstType::pointer(builder.context, element_type, self.location).into_mlir();
+        Pointer::new(sol_op!(
             builder,
             block,
             AddrOfOperation
@@ -100,8 +103,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .expect("slang types every state variable");
             let builder = &self.state.builder;
             let element_type =
-                crate::ast::Type::resolve(&declared_type, LocationPolicy::Declared(None), builder);
-            let address_type = crate::ast::Type::new(element_type)
+                AstType::resolve(&declared_type, LocationPolicy::Declared(None), builder);
+            let address_type = AstType::new(element_type)
                 .address_type(slot.location, builder.context)
                 .into_mlir();
             let storage_ref = sol_op!(
@@ -123,8 +126,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     CopyOperation.src(value.into_mlir()).dst(storage_ref)
                 );
             } else {
-                let stored_value = value.cast(crate::ast::Type::new(element_type), builder, &block);
-                crate::ast::Pointer::new(storage_ref).store(stored_value, builder, &block);
+                let stored_value = value.cast(AstType::new(element_type), builder, &block);
+                Pointer::new(storage_ref).store(stored_value, builder, &block);
             }
         }
         block

@@ -21,6 +21,8 @@ use solx_utils::DataLocation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
@@ -48,9 +50,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         // The call value defaults to zero wei.
         let value = call_value.unwrap_or_else(|| {
-            crate::ast::Value::constant(
+            AstValue::constant(
                 0,
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                 builder,
                 block,
             )
@@ -80,14 +82,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
-        let address = crate::ast::Value::from(receiver).cast(
-            crate::ast::Type::address(builder.context, false),
-            builder,
-            block,
-        );
+        let address =
+            AstValue::from(receiver).cast(AstType::address(builder.context, false), builder, block);
         let ext_func_ref_type =
-            crate::ast::Type::ext_func_ref(builder.context, parameter_types, return_types);
-        crate::ast::Value::ext_func_constant(address, selector, ext_func_ref_type, builder, block)
+            AstType::ext_func_ref(builder.context, parameter_types, return_types);
+        AstValue::ext_func_constant(address, selector, ext_func_ref_type, builder, block)
             .into_mlir()
     }
 
@@ -114,12 +113,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     return None;
                 }
                 Some((
-                    vec![crate::ast::Type::resolve(
+                    vec![AstType::resolve(
                         &key,
                         LocationPolicy::Declared(None),
                         builder,
                     )],
-                    vec![crate::ast::Type::resolve(
+                    vec![AstType::resolve(
                         &value,
                         LocationPolicy::Declared(None),
                         builder,
@@ -133,10 +132,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 }
                 Some((
                     vec![
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir(),
                     ],
-                    vec![crate::ast::Type::resolve(
+                    vec![AstType::resolve(
                         &element,
                         LocationPolicy::Declared(None),
                         builder,
@@ -150,10 +149,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 }
                 Some((
                     vec![
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir(),
                     ],
-                    vec![crate::ast::Type::resolve(
+                    vec![AstType::resolve(
                         &element,
                         LocationPolicy::Declared(None),
                         builder,
@@ -164,7 +163,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let Definition::Struct(struct_definition) = struct_type.definition() else {
                     return None;
                 };
-                let struct_mlir_type = crate::ast::Type::resolve(
+                let struct_mlir_type = AstType::resolve(
                     &declared_type,
                     LocationPolicy::Declared(Some(DataLocation::Storage)),
                     builder,
@@ -182,7 +181,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             }
             other if !other.is_reference_type() => Some((
                 Vec::new(),
-                vec![crate::ast::Type::resolve(
+                vec![AstType::resolve(
                     other,
                     LocationPolicy::Declared(None),
                     builder,
@@ -225,22 +224,22 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // sourced from storage / calldata is copied into memory first.
         let input = input
             .cast(
-                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory),
+                AstType::string(builder.context, solx_utils::DataLocation::Memory),
                 builder,
                 &block,
             )
             .into_mlir();
         let address = address.into_mlir();
         let status_type =
-            crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir();
+            AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir();
         let ret_data_type =
-            crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir();
+            AstType::string(builder.context, solx_utils::DataLocation::Memory).into_mlir();
         let operation = match kind {
             BuiltIn::AddressCall => {
                 let value = call_value.unwrap_or_else(|| {
-                    crate::ast::Value::constant(
+                    AstValue::constant(
                         0,
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                         builder,
                         &block,
                     )
@@ -250,7 +249,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     builder,
                     BareCallOperation
                         .addr(address)
-                        .gas(crate::ast::Value::gas_left(builder, &block).into_mlir())
+                        .gas(AstValue::gas_left(builder, &block).into_mlir())
                         .val(value)
                         .inp(input)
                         .status(status_type)
@@ -261,7 +260,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 builder,
                 BareDelegateCallOperation
                     .addr(address)
-                    .gas(crate::ast::Value::gas_left(builder, &block).into_mlir())
+                    .gas(AstValue::gas_left(builder, &block).into_mlir())
                     .inp(input)
                     .status(status_type)
                     .ret_data(ret_data_type)
@@ -270,7 +269,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 builder,
                 BareStaticCallOperation
                     .addr(address)
-                    .gas(crate::ast::Value::gas_left(builder, &block).into_mlir())
+                    .gas(AstValue::gas_left(builder, &block).into_mlir())
                     .inp(input)
                     .status(status_type)
                     .ret_data(ret_data_type)
@@ -311,7 +310,7 @@ impl MemberCallKind {
         // External calls cross the ABI boundary, so a `calldata` reference
         // parameter is encoded from / decoded to memory — the callee type and
         // argument coercions use the EXTERNAL (memory) representation.
-        let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+        let (parameter_types, return_types) = AstType::resolve_signature(
             function_definition,
             LocationPolicy::ForceMemory,
             &context.state.builder,

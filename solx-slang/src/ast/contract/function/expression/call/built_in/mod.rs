@@ -2,6 +2,8 @@
 //! Solidity built-in function and EVM intrinsic emission.
 //!
 
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 pub mod abi;
 pub mod array;
 pub mod global;
@@ -72,7 +74,7 @@ impl CallKind {
                 )
             }
             BuiltIn::Gasleft => (
-                Some(crate::ast::Value::gas_left(&context.state.builder, &block).into_mlir()),
+                Some(AstValue::gas_left(&context.state.builder, &block).into_mlir()),
                 block,
             ),
             BuiltIn::Blockhash => {
@@ -83,9 +85,9 @@ impl CallKind {
                 let builder = &context.state.builder;
                 // `sol.blockhash` takes a `ui256` block number; coerce a narrower
                 // argument type up first.
-                let block_number = crate::ast::Value::from(values[0])
+                let block_number = AstValue::from(values[0])
                     .cast(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                         builder,
                         &block,
                     )
@@ -95,7 +97,7 @@ impl CallKind {
                     block,
                     BlockHashOperation
                         .block_number(block_number)
-                        .val(crate::ast::Type::fixed_bytes(builder.context, 32).into_mlir())
+                        .val(AstType::fixed_bytes(builder.context, 32).into_mlir())
                 );
                 (Some(value), block)
             }
@@ -118,7 +120,7 @@ impl CallKind {
                     block,
                     Sha256Operation
                         .data(values[0])
-                        .result(crate::ast::Type::fixed_bytes(builder.context, 32).into_mlir())
+                        .result(AstType::fixed_bytes(builder.context, 32).into_mlir())
                 );
                 (Some(value), block)
             }
@@ -133,7 +135,7 @@ impl CallKind {
                     block,
                     Ripemd160Operation
                         .data(values[0])
-                        .result(crate::ast::Type::fixed_bytes(builder.context, 20).into_mlir())
+                        .result(AstType::fixed_bytes(builder.context, 20).into_mlir())
                 );
                 (Some(value), block)
             }
@@ -147,19 +149,19 @@ impl CallKind {
                 // hash / r / s arguments keep their literal `uint256` type, but
                 // `sol.ecrecover` takes `fixedbytes<32>` for them and `ui8` for
                 // `v`. Coerce each to its signature type (matching solc).
-                let bytes32 = crate::ast::Type::fixed_bytes(builder.context, 32).into_mlir();
+                let bytes32 = AstType::fixed_bytes(builder.context, 32).into_mlir();
                 let ui8 = Type::from(IntegerType::unsigned(builder.context, 8));
-                let hash = crate::ast::Value::from(values[0])
-                    .cast(crate::ast::Type::new(bytes32), builder, &block)
+                let hash = AstValue::from(values[0])
+                    .cast(AstType::new(bytes32), builder, &block)
                     .into_mlir();
-                let v = crate::ast::Value::from(values[1])
-                    .cast(crate::ast::Type::new(ui8), builder, &block)
+                let v = AstValue::from(values[1])
+                    .cast(AstType::new(ui8), builder, &block)
                     .into_mlir();
-                let r = crate::ast::Value::from(values[2])
-                    .cast(crate::ast::Type::new(bytes32), builder, &block)
+                let r = AstValue::from(values[2])
+                    .cast(AstType::new(bytes32), builder, &block)
                     .into_mlir();
-                let s = crate::ast::Value::from(values[3])
-                    .cast(crate::ast::Type::new(bytes32), builder, &block)
+                let s = AstValue::from(values[3])
+                    .cast(AstType::new(bytes32), builder, &block)
                     .into_mlir();
                 let value = sol_op!(
                     builder,
@@ -169,7 +171,7 @@ impl CallKind {
                         .v(v)
                         .r(r)
                         .s(s)
-                        .result(crate::ast::Type::address(builder.context, false).into_mlir())
+                        .result(AstType::address(builder.context, false).into_mlir())
                 );
                 (Some(value), block)
             }
@@ -183,16 +185,15 @@ impl CallKind {
                 // narrow type (`addmod(1, 2, d)` → ui8, ui8, ui256); `sol.addmod`
                 // requires identical operand/result types, so widen all to ui256.
                 let ui256 =
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir();
-                let x = crate::ast::Value::from(values[0])
-                    .cast(crate::ast::Type::new(ui256), builder, &block)
+                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
+                let x = AstValue::from(values[0])
+                    .cast(AstType::new(ui256), builder, &block)
                     .into_mlir();
-                let y = crate::ast::Value::from(values[1])
-                    .cast(crate::ast::Type::new(ui256), builder, &block)
+                let y = AstValue::from(values[1])
+                    .cast(AstType::new(ui256), builder, &block)
                     .into_mlir();
-                let modulus = crate::ast::Value::from(values[2])
-                    .cast(crate::ast::Type::new(ui256), builder, &block)
+                let modulus = AstValue::from(values[2])
+                    .cast(AstType::new(ui256), builder, &block)
                     .into_mlir();
                 let value = sol_op!(builder, block, AddModOperation.x(x).y(y).r#mod(modulus));
                 (Some(value), block)
@@ -206,16 +207,15 @@ impl CallKind {
                 // `mulmod` operates on `uint256`; widen narrow literal operands so
                 // all operands/result share the type `sol.mulmod` requires.
                 let ui256 =
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir();
-                let x = crate::ast::Value::from(values[0])
-                    .cast(crate::ast::Type::new(ui256), builder, &block)
+                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
+                let x = AstValue::from(values[0])
+                    .cast(AstType::new(ui256), builder, &block)
                     .into_mlir();
-                let y = crate::ast::Value::from(values[1])
-                    .cast(crate::ast::Type::new(ui256), builder, &block)
+                let y = AstValue::from(values[1])
+                    .cast(AstType::new(ui256), builder, &block)
                     .into_mlir();
-                let modulus = crate::ast::Value::from(values[2])
-                    .cast(crate::ast::Type::new(ui256), builder, &block)
+                let modulus = AstValue::from(values[2])
+                    .cast(AstType::new(ui256), builder, &block)
                     .into_mlir();
                 let value = sol_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus));
                 (Some(value), block)
@@ -269,9 +269,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 block,
             } = access.operand().emit(self, block);
             let builder = &self.state.builder;
-            let placeholder = crate::ast::Value::constant(
+            let placeholder = AstValue::constant(
                 0,
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                 builder,
                 &block,
             )
@@ -296,9 +296,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             )
         {
             let builder = &self.state.builder;
-            let placeholder = crate::ast::Value::constant(
+            let placeholder = AstValue::constant(
                 0,
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                 builder,
                 &block,
             )
@@ -376,9 +376,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             // `CallKind::UdvtWrapUnwrap`). Yield a placeholder.
             Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
                 let builder = &self.state.builder;
-                let placeholder = crate::ast::Value::constant(
+                let placeholder = AstValue::constant(
                     0,
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                     builder,
                     &block,
                 )
@@ -426,7 +426,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         } = arguments.emit(self, block);
         let builder = &self.state.builder;
         let result_type =
-            crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir();
+            AstType::string(builder.context, solx_utils::DataLocation::Memory).into_mlir();
         let value = sol_op!(
             builder,
             block,
@@ -447,9 +447,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
-        let input = crate::ast::Value::from(buffer)
+        let input = AstValue::from(buffer)
             .cast(
-                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory),
+                AstType::string(builder.context, solx_utils::DataLocation::Memory),
                 builder,
                 block,
             )
@@ -459,7 +459,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             block,
             Keccak256Operation
                 .addr(input)
-                .result(crate::ast::Type::fixed_bytes(builder.context, 32).into_mlir())
+                .result(AstType::fixed_bytes(builder.context, 32).into_mlir())
         )
     }
 

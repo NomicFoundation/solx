@@ -18,6 +18,8 @@ use solx_mlir::ods::sol::ExtCallOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
@@ -61,11 +63,7 @@ impl MemberCallKind {
         } = access.operand().emit(context, block);
         let builder = &context.state.builder;
         let self_value = self_value
-            .cast(
-                crate::ast::Type::new(*parameter_self),
-                builder,
-                &current_block,
-            )
+            .cast(AstType::new(*parameter_self), builder, &current_block)
             .into_mlir();
         let (mut argument_values, current_block) =
             context.emit_coerced_arguments(positional_arguments, parameter_rest, current_block);
@@ -89,7 +87,7 @@ impl MemberCallKind {
         self_receiver: Option<&Expression>,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+        let (parameter_types, return_types) = AstType::resolve_signature(
             function,
             LocationPolicy::Declared(None),
             &context.state.builder,
@@ -110,7 +108,7 @@ impl MemberCallKind {
                 } = receiver.emit(context, block);
                 let builder = &context.state.builder;
                 let self_value = self_value
-                    .cast(crate::ast::Type::new(*parameter_self), builder, &block)
+                    .cast(AstType::new(*parameter_self), builder, &block)
                     .into_mlir();
                 let (mut rest_values, block) =
                     context.emit_coerced_argument_expressions(arguments, parameter_rest, block);
@@ -121,20 +119,19 @@ impl MemberCallKind {
         };
 
         let builder = &context.state.builder;
-        let address =
-            crate::ast::Value::library_address(library_name, builder, &current_block).into_mlir();
+        let address = AstValue::library_address(library_name, builder, &current_block).into_mlir();
         let callee_type = FunctionType::new(builder.context, &parameter_types, &return_types);
-        let gas = crate::ast::Value::gas_left(builder, &current_block).into_mlir();
-        let value = crate::ast::Value::constant(
+        let gas = AstValue::gas_left(builder, &current_block).into_mlir();
+        let value = AstValue::constant(
             0,
-            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
             builder,
             &current_block,
         )
         .into_mlir();
-        let selector_value = crate::ast::Value::constant(
+        let selector_value = AstValue::constant(
             i64::from(selector),
-            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
             builder,
             &current_block,
         )
@@ -155,8 +152,7 @@ impl MemberCallKind {
                 .library_call(Attribute::unit(builder.context))
                 .callee_type(TypeAttribute::new(callee_type.into()))
                 .status(
-                    crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
-                        .into_mlir()
+                    AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
                 )
                 .outs(&return_types)
         ));

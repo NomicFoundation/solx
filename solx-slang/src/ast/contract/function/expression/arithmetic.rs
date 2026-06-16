@@ -18,6 +18,7 @@ use slang_solidity_v2::ast::ShiftExpressionOperator;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
 
@@ -92,7 +93,7 @@ expression_emit!(
         // The result type slang assigns the expression annotates the operands and
         // result (matching solc); a `None` lets `emit_binary` pick the wider one.
         let result_type =
-            crate::ast::Type::resolve_optional(node.get_type(), &context.state.builder);
+            AstType::resolve_optional(node.get_type(), &context.state.builder);
         let (value, block) = Operator::from(node).emit_binary(
             context,
             &node.left_operand(),

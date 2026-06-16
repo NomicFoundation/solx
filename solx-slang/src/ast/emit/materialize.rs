@@ -6,6 +6,7 @@
 use melior::ir::BlockRef;
 use melior::ir::Type;
 
+use crate::ast::Value as AstValue;
 use crate::ast::emit::BlockAnd;
 
 /// Emits a string literal toward an expected MLIR type. The one case a string
@@ -27,5 +28,5 @@ pub trait Materialize<'context, 'block, 'state, 'scope> {
         target_type: Type<'context>,
         context: Self::Context,
         block: BlockRef<'context, 'block>,
-    ) -> BlockAnd<'context, 'block, crate::ast::Value<'context, 'block>>;
+    ) -> BlockAnd<'context, 'block, AstValue<'context, 'block>>;
 }

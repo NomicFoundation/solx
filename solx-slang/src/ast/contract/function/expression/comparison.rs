@@ -16,6 +16,7 @@ use solx_mlir::CmpPredicate;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::Materialize;
+use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 expression_emit!(EqualityExpression, InequalityExpression; |node, context, block| {
@@ -71,16 +72,16 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     ) {
         let builder = &context.state.builder;
         let common_width = lhs_width.max(rhs_width);
-        let common = crate::ast::Type::fixed_bytes(builder.context, common_width).into_mlir();
+        let common = AstType::fixed_bytes(builder.context, common_width).into_mlir();
         let lhs_common = if lhs_width == common_width {
             lhs
         } else {
-            lhs.cast(crate::ast::Type::new(common), builder, &block)
+            lhs.cast(AstType::new(common), builder, &block)
         };
         let rhs_common = if rhs_width == common_width {
             rhs
         } else {
-            rhs.cast(crate::ast::Type::new(common), builder, &block)
+            rhs.cast(AstType::new(common), builder, &block)
         };
         let comparison = lhs_common.compare(rhs_common, predicate, builder, &block);
         return BlockAnd { block, value: comparison };
@@ -99,16 +100,16 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     let mlir_context = context.state.builder.context;
     let signed_256 = Type::from(IntegerType::signed(mlir_context, 256));
     let unsigned_256 =
-        crate::ast::Type::unsigned(mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
+        AstType::unsigned(mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
     let lhs_wide_type = if signed_lhs { signed_256 } else { unsigned_256 };
     let rhs_wide_type = if signed_rhs { signed_256 } else { unsigned_256 };
     let lhs_wide = lhs.cast(
-        crate::ast::Type::new(lhs_wide_type),
+        AstType::new(lhs_wide_type),
         &context.state.builder,
         &block,
     );
     let rhs_wide = rhs.cast(
-        crate::ast::Type::new(rhs_wide_type),
+        AstType::new(rhs_wide_type),
         &context.state.builder,
         &block,
     );
@@ -122,12 +123,12 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     let lhs_common = if lhs_wide.r#type().into_mlir() == common {
         lhs_wide
     } else {
-        lhs_wide.cast(crate::ast::Type::new(common), &context.state.builder, &block)
+        lhs_wide.cast(AstType::new(common), &context.state.builder, &block)
     };
     let rhs_common = if rhs_wide.r#type().into_mlir() == common {
         rhs_wide
     } else {
-        rhs_wide.cast(crate::ast::Type::new(common), &context.state.builder, &block)
+        rhs_wide.cast(AstType::new(common), &context.state.builder, &block)
     };
     let comparison = lhs_common.compare(rhs_common, predicate, &context.state.builder, &block);
     BlockAnd { block, value: comparison }

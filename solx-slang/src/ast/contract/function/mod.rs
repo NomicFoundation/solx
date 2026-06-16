@@ -2,6 +2,10 @@
 //! Function definition emission to Sol dialect MLIR.
 //!
 
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
+use slang_solidity_v2::ast::DataLocation;
 pub mod body_kind;
 pub mod expression;
 pub mod modifier;
@@ -260,7 +264,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .map(str::to_owned)
             .unwrap_or_else(|| Self::mlir_function_name(function));
 
-        let (mut mlir_parameter_types, result_types) = crate::ast::Type::resolve_signature(
+        let (mut mlir_parameter_types, result_types) = AstType::resolve_signature(
             function,
             LocationPolicy::Declared(None),
             &self.state.builder,
@@ -316,14 +320,14 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     ) {
         for (index, parameter) in function.parameters().iter().enumerate() {
             let parameter_type = parameter_types[index];
-            let parameter_value = crate::ast::Value::new(
+            let parameter_value = AstValue::new(
                 entry_block
                     .argument(index)
                     .expect("argument index is within the block signature")
                     .into(),
             );
-            let pointer = crate::ast::Pointer::stack_slot(
-                crate::ast::Type::new(parameter_type),
+            let pointer = Pointer::stack_slot(
+                AstType::new(parameter_type),
                 &self.state.builder,
                 entry_block,
             );
@@ -353,12 +357,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             if let Some(returns) = function.returns() {
                 for (index, parameter) in returns.iter().enumerate() {
                     let return_type = result_types[index];
-                    let pointer = crate::ast::Pointer::stack_slot(
-                        crate::ast::Type::new(return_type),
+                    let pointer = Pointer::stack_slot(
+                        AstType::new(return_type),
                         &self.state.builder,
                         entry_block,
                     );
-                    let incoming = crate::ast::Value::new(
+                    let incoming = AstValue::new(
                         entry_block
                             .argument(parameter_count + index)
                             .expect("argument index is within the block signature")
@@ -381,8 +385,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     continue;
                 }
                 let return_type = result_types[index];
-                let pointer = crate::ast::Pointer::default_initialized(
-                    crate::ast::Type::new(return_type),
+                let pointer = Pointer::default_initialized(
+                    AstType::new(return_type),
                     &self.state.builder,
                     entry_block,
                 )
@@ -454,7 +458,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let derived_constructor = contract.constructor();
         let (parameter_types, mutability) = match &derived_constructor {
             Some(constructor) => {
-                let (parameter_types, _) = crate::ast::Type::resolve_signature(
+                let (parameter_types, _) = AstType::resolve_signature(
                     constructor,
                     LocationPolicy::Declared(None),
                     &self.state.builder,
@@ -480,17 +484,14 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         if let Some(constructor) = &derived_constructor {
             for (index, parameter) in constructor.parameters().iter().enumerate() {
                 let parameter_type = signature.parameter_types[index];
-                let parameter_value = crate::ast::Value::new(
+                let parameter_value = AstValue::new(
                     entry
                         .argument(index)
                         .expect("argument index is within the block signature")
                         .into(),
                 );
-                let pointer = crate::ast::Pointer::stack_slot(
-                    crate::ast::Type::new(parameter_type),
-                    &self.state.builder,
-                    &entry,
-                );
+                let pointer =
+                    Pointer::stack_slot(AstType::new(parameter_type), &self.state.builder, &entry);
                 pointer.store(parameter_value, &self.state.builder, &entry);
                 root_environment.define_variable(parameter.node_id(), pointer.into_mlir());
             }
@@ -596,8 +597,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .enumerate()
             .map(
                 |(index, &return_type)| match return_slots.get(index).copied().flatten() {
-                    Some(pointer) => crate::ast::Pointer::new(pointer)
-                        .load(crate::ast::Type::new(return_type), builder, block)
+                    Some(pointer) => Pointer::new(pointer)
+                        .load(AstType::new(return_type), builder, block)
                         .into_mlir(),
                     None => {
                         let slang_type = returns
@@ -625,7 +626,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
-        let is_memory = |location| matches!(location, slang_solidity_v2::ast::DataLocation::Memory);
+        let is_memory = |location| matches!(location, DataLocation::Memory);
         match slang_type {
             Some(SlangType::FixedSizeArray(array)) if is_memory(array.location()) => {
                 sol_op!(
@@ -667,10 +668,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 | SlangType::Function(_)
                 | SlangType::Contract(_)
                 | SlangType::Interface(_),
-            ) => crate::ast::Value::zero(crate::ast::Type::new(return_type), builder, block)
-                .into_mlir(),
-            _ => crate::ast::Value::constant(0, crate::ast::Type::new(return_type), builder, block)
-                .into_mlir(),
+            ) => AstValue::zero(AstType::new(return_type), builder, block).into_mlir(),
+            _ => AstValue::constant(0, AstType::new(return_type), builder, block).into_mlir(),
         }
     }
 

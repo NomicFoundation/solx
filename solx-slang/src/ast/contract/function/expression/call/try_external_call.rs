@@ -18,6 +18,8 @@ use solx_mlir::ods::sol::ExtICallOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 /// A `try recv.f(args)` external call, resolved from the `try` expression. Only
@@ -93,7 +95,7 @@ impl TryExternalCall {
         }
         // External (ABI) signature: `calldata` reference parameters cross the call
         // boundary as memory (see `resolve_external_function_types`).
-        let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+        let (parameter_types, return_types) = AstType::resolve_signature(
             &self.function,
             LocationPolicy::ForceMemory,
             &context.state.builder,
@@ -113,9 +115,9 @@ impl TryExternalCall {
         );
         let builder = &context.state.builder;
         let value = call_value.unwrap_or_else(|| {
-            crate::ast::Value::constant(
+            AstValue::constant(
                 0,
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                 builder,
                 &current_block,
             )
@@ -125,9 +127,8 @@ impl TryExternalCall {
         // form yields the status instead of reverting on failure, so the caller
         // can run a `catch` handler.
         let mut out_types = Vec::with_capacity(return_types.len() + 1);
-        out_types.push(
-            crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
-        );
+        out_types
+            .push(AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
         out_types.extend_from_slice(&return_types);
         let operation = current_block.append_operation(sol_op_build!(
             builder,
@@ -135,7 +136,7 @@ impl TryExternalCall {
                 .outs(&out_types)
                 .callee(callee)
                 .callee_operands(&argument_values)
-                .gas(crate::ast::Value::gas_left(builder, &current_block).into_mlir())
+                .gas(AstValue::gas_left(builder, &current_block).into_mlir())
                 .value(value)
                 .try_call(Attribute::unit(builder.context))
         ));

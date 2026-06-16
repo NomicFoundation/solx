@@ -19,6 +19,8 @@ use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -57,18 +59,17 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         ordinal: usize,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
-        let result_type =
-            crate::ast::Type::resolve_optional(access.get_type(), &self.state.builder)
-                .expect("slang types an enum-variant reference as the enum");
+        let result_type = AstType::resolve_optional(access.get_type(), &self.state.builder)
+            .expect("slang types an enum-variant reference as the enum");
         let builder = &self.state.builder;
-        let raw = crate::ast::Value::constant(
+        let raw = AstValue::constant(
             ordinal as i64,
-            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
             builder,
             &block,
         );
         let value = raw
-            .cast(crate::ast::Type::new(result_type), builder, &block)
+            .cast(AstType::new(result_type), builder, &block)
             .into_mlir();
         (value, block)
     }
@@ -105,7 +106,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         if let Some(selector) = static_selector {
             let block = self.eval_selector_receiver_side_effects(access, block);
-            let value = crate::ast::Value::selector_constant(
+            let value = AstValue::selector_constant(
                 &BigInt::from(selector),
                 4,
                 &self.state.builder,
@@ -127,7 +128,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &block,
             ExtFuncSelectorOperation
                 .func(operand_value.into_mlir())
-                .result(crate::ast::Type::fixed_bytes(self.state.builder.context, 4).into_mlir())
+                .result(AstType::fixed_bytes(self.state.builder.context, 4).into_mlir())
         );
         (Some(selector), block)
     }
@@ -154,7 +155,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &block,
             ExtFuncAddrOperation
                 .func(operand_value.into_mlir())
-                .result(crate::ast::Type::address(self.state.builder.context, false).into_mlir())
+                .result(AstType::address(self.state.builder.context, false).into_mlir())
         );
         (Some(address), block)
     }
@@ -179,7 +180,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // so assigning `this.g` (declared `string calldata`) to a
         // `function (string memory) external` pointer needs no cast: both are the
         // same `ext_func_ref<(string<Memory>) -> …>`.
-        let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+        let (parameter_types, return_types) = AstType::resolve_signature(
             function_definition,
             LocationPolicy::ForceMemory,
             &self.state.builder,
@@ -213,13 +214,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .compute_selector()
             .expect("slang computes a 4-byte selector for an error");
         let block = self.eval_selector_receiver_side_effects(access, block);
-        let value = crate::ast::Value::selector_constant(
-            &BigInt::from(selector),
-            4,
-            &self.state.builder,
-            &block,
-        )
-        .into_mlir();
+        let value =
+            AstValue::selector_constant(&BigInt::from(selector), 4, &self.state.builder, &block)
+                .into_mlir();
         (Some(value), block)
     }
 
@@ -240,8 +237,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
         let topic = BigInt::from_bytes_be(Sign::Plus, hash.as_bytes());
         let block = self.eval_selector_receiver_side_effects(access, block);
-        let value = crate::ast::Value::selector_constant(&topic, 32, &self.state.builder, &block)
-            .into_mlir();
+        let value =
+            AstValue::selector_constant(&topic, 32, &self.state.builder, &block).into_mlir();
         (Some(value), block)
     }
 

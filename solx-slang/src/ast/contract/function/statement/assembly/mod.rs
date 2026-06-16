@@ -3,6 +3,9 @@
 //!
 
 /// Yul EVM-opcode intrinsic emission.
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
+use slang_solidity_v2::ast::YulPaths;
 pub mod intrinsic;
 
 use melior::ir::Block;
@@ -352,8 +355,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let identifier = path.iter().next().expect("empty yul path");
         let builder = &self.state.builder;
-        let i256 =
-            crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
+        let i256 = AstType::signless(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
 
         // A Solidity constant referenced in assembly resolves to a definition,
         // not a Yul/local variable; emit its initializer widened to a word.
@@ -363,9 +365,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             let initializer = constant.value().expect("constant has no initializer");
             let emitter = ExpressionContext::from(self);
             let BlockAnd { value, block } = initializer.emit(&emitter, block);
-            let widened = value
-                .cast(crate::ast::Type::new(i256), builder, &block)
-                .into_mlir();
+            let widened = value.cast(AstType::new(i256), builder, &block).into_mlir();
             return (widened, block);
         }
 
@@ -584,8 +584,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
-        crate::ast::Value::from(pointer)
-            .reinterpret(crate::ast::Type::llvm_ptr(builder.context), builder, block)
+        AstValue::from(pointer)
+            .reinterpret(AstType::llvm_ptr(builder.context), builder, block)
             .into_mlir()
     }
 
@@ -615,7 +615,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// a user-defined Yul function whose return arity matches the lvalue count.
     fn emit_yul_multi_assignment(
         &mut self,
-        variables: &slang_solidity_v2::ast::YulPaths,
+        variables: &YulPaths,
         expression: &YulExpression,
         block: BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {

@@ -2,6 +2,7 @@
 //! Contract definition emission to Sol dialect MLIR.
 //!
 
+use crate::ast::Type as AstType;
 pub mod body_origin;
 pub mod free_function;
 /// Function definition emission to Sol dialect MLIR.
@@ -91,7 +92,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // Register each shadowed base override under its contract-qualified
         // symbol so a `super`/`Base` call resolves to it by node id.
         for (symbol, function) in &super_dispatch.shadowed {
-            let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+            let (parameter_types, return_types) = AstType::resolve_signature(
                 function,
                 LocationPolicy::Declared(None),
                 &self.state.builder,
@@ -149,7 +150,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         let storage_layout = Self::compute_storage_layout(contract);
 
-        let contract_type = crate::ast::Type::contract(
+        let contract_type = AstType::contract(
             self.state.builder.context,
             &contract_name,
             contract.is_payable(),
@@ -174,7 +175,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 continue;
             };
             let element_type =
-                crate::ast::Type::resolve_state_variable(&state_variable, &self.state.builder);
+                AstType::resolve_state_variable(&state_variable, &self.state.builder);
             let builder = &self.state.builder;
             let slot_attribute: IntegerAttribute =
                 Attribute::parse(builder.context, &format!("{} : i256", slot.slot))
@@ -322,7 +323,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // resolve before any body is emitted.
         for function in functions.iter() {
             let mlir_name = FunctionEmitter::mlir_function_name(function);
-            let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+            let (parameter_types, return_types) = AstType::resolve_signature(
                 function,
                 LocationPolicy::Declared(None),
                 &self.state.builder,
@@ -338,8 +339,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // A library has no state, so the storage layout is empty.
         let storage_layout: HashMap<NodeId, StorageSlot> = HashMap::new();
         let library_type =
-            crate::ast::Type::contract(self.state.builder.context, &library_name, false)
-                .into_mlir();
+            AstType::contract(self.state.builder.context, &library_name, false).into_mlir();
         let module_body = self.state.module.body();
         let contract_body = self.emit_contract(
             &library_name,
@@ -435,7 +435,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 continue;
             }
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
-            let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+            let (parameter_types, return_types) = AstType::resolve_signature(
                 &function,
                 LocationPolicy::Declared(None),
                 &self.state.builder,
@@ -474,7 +474,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// resolve regardless of emission order.
     fn register_function_signatures(&mut self, functions: &[FunctionDefinition]) {
         for function in functions {
-            let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+            let (parameter_types, return_types) = AstType::resolve_signature(
                 function,
                 LocationPolicy::Declared(None),
                 &self.state.builder,

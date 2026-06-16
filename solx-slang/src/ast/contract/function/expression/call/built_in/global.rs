@@ -33,6 +33,8 @@ use solx_mlir::ods::sol::TransferOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -47,8 +49,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             sol_op_build!(
                 builder,
                 BalanceOperation.cont_addr(address_value).out(
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir()
+                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
                 )
             )
         })
@@ -65,8 +66,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             sol_op_build!(
                 builder,
                 CodeHashOperation.cont_addr(address_value).out(
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir()
+                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
                 )
             )
         })
@@ -83,8 +83,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             sol_op_build!(
                 builder,
                 CodeOperation.cont_addr(address_value).out(
-                    crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
-                        .into_mlir()
+                    AstType::string(builder.context, solx_utils::DataLocation::Memory).into_mlir()
                 )
             )
         })
@@ -101,8 +100,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             sol_op_build!(
                 builder,
                 LengthOperation.inp(operand).len(
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir()
+                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
                 )
             )
         })
@@ -123,9 +121,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         } = arguments.emit(self, block);
         // `sol.send` takes a `ui256` amount; a narrow literal (`r.send(0)` → ui8)
         // must be widened first, like `address.transfer`.
-        let amount = crate::ast::Value::from(values[0])
+        let amount = AstValue::from(values[0])
             .cast(
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                 builder,
                 &block,
             )
@@ -134,8 +132,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             builder,
             block,
             SendOperation.addr(addr.into_mlir()).val(amount).status(
-                crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
-                    .into_mlir()
+                AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
             )
         );
         (Some(value), block)
@@ -156,9 +153,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         } = arguments.emit(self, block);
         // `sol.transfer` takes a `ui256` amount; a narrow literal (`x.transfer(1)`
         // → ui8) must be widened first.
-        let amount = crate::ast::Value::from(values[0])
+        let amount = AstValue::from(values[0])
             .cast(
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                 builder,
                 &block,
             )
@@ -187,15 +184,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(BuiltIn::TxOrigin) => {
                 sol_op_build!(
                     builder,
-                    OriginOperation
-                        .addr(crate::ast::Type::address(builder.context, false).into_mlir())
+                    OriginOperation.addr(AstType::address(builder.context, false).into_mlir())
                 )
             }
             Some(BuiltIn::TxGasPrice) => {
                 sol_op_build!(
                     builder,
                     GasPriceOperation.val(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir()
                     )
                 )
@@ -203,15 +199,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(BuiltIn::MsgSender) => {
                 sol_op_build!(
                     builder,
-                    CallerOperation
-                        .addr(crate::ast::Type::address(builder.context, false).into_mlir())
+                    CallerOperation.addr(AstType::address(builder.context, false).into_mlir())
                 )
             }
             Some(BuiltIn::MsgValue) => {
                 sol_op_build!(
                     builder,
                     CallValueOperation.val(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir()
                     )
                 )
@@ -220,7 +215,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 sol_op_build!(
                     builder,
                     TimestampOperation.val(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir()
                     )
                 )
@@ -229,7 +224,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 sol_op_build!(
                     builder,
                     BlockNumberOperation.val(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir()
                     )
                 )
@@ -237,15 +232,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(BuiltIn::BlockCoinbase) => {
                 sol_op_build!(
                     builder,
-                    CoinbaseOperation
-                        .addr(crate::ast::Type::address(builder.context, false).into_mlir())
+                    CoinbaseOperation.addr(AstType::address(builder.context, false).into_mlir())
                 )
             }
             Some(BuiltIn::BlockChainid) => {
                 sol_op_build!(
                     builder,
                     ChainIdOperation.val(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir()
                     )
                 )
@@ -254,7 +248,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 sol_op_build!(
                     builder,
                     BaseFeeOperation.val(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir()
                     )
                 )
@@ -263,7 +257,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 sol_op_build!(
                     builder,
                     GasLimitOperation.val(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir()
                     )
                 )
@@ -272,7 +266,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 sol_op_build!(
                     builder,
                     BlobBaseFeeOperation.val(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir()
                     )
                 )
@@ -281,7 +275,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 sol_op_build!(
                     builder,
                     DifficultyOperation.val(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir()
                     )
                 )
@@ -290,7 +284,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 sol_op_build!(
                     builder,
                     PrevRandaoOperation.val(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir()
                     )
                 )
@@ -298,18 +292,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(BuiltIn::MsgSig) => {
                 sol_op_build!(
                     builder,
-                    SigOperation.val(crate::ast::Type::fixed_bytes(builder.context, 4).into_mlir())
+                    SigOperation.val(AstType::fixed_bytes(builder.context, 4).into_mlir())
                 )
             }
             Some(BuiltIn::MsgData) => {
                 sol_op_build!(
                     builder,
                     GetCallDataOperation.addr(
-                        crate::ast::Type::string(
-                            builder.context,
-                            solx_utils::DataLocation::CallData
-                        )
-                        .into_mlir()
+                        AstType::string(builder.context, solx_utils::DataLocation::CallData)
+                            .into_mlir()
                     )
                 )
             }

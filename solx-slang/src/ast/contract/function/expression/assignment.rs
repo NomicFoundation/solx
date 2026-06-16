@@ -25,6 +25,9 @@ use crate::ast::EmitAddress;
 use crate::ast::LocationPolicy;
 use crate::ast::Materialize;
 use crate::ast::Place;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::contract::storage_layout::StorageSlot;
@@ -57,9 +60,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                     Self::from_state_variable(context, &state_variable, block)
                 }
                 Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
-                    let pointer = crate::ast::Pointer::new(
-                        context.environment.variable(definition.node_id()),
-                    );
+                    let pointer = Pointer::new(context.environment.variable(definition.node_id()));
                     (
                         Self::Pointer(pointer.into_mlir(), pointer.pointee().into_mlir()),
                         block,
@@ -148,13 +149,13 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 unimplemented!("unregistered state variable {:?}", state_variable.node_id())
             })
             .clone();
-        let element_type = crate::ast::Type::resolve(
+        let element_type = AstType::resolve(
             &declared_type,
             LocationPolicy::Declared(None),
             &context.state.builder,
         );
         if declared_type.is_reference_type() && !matches!(declared_type, ast::Type::Mapping(_)) {
-            let address_type = crate::ast::Type::new(element_type)
+            let address_type = AstType::new(element_type)
                 .address_type(slot.location, context.state.builder.context)
                 .into_mlir();
             let storage_ref = sol_op!(
@@ -194,25 +195,17 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
     ) -> Value<'context, 'block> {
         match self {
             Self::Pointer(pointer, element_type) => {
-                let stored_value = crate::ast::Value::from(value).cast(
-                    crate::ast::Type::new(*element_type),
+                let stored_value = AstValue::from(value).cast(
+                    AstType::new(*element_type),
                     &context.state.builder,
                     block,
                 );
-                crate::ast::Pointer::new(*pointer).store(
-                    stored_value,
-                    &context.state.builder,
-                    block,
-                );
+                Pointer::new(*pointer).store(stored_value, &context.state.builder, block);
                 stored_value.into_mlir()
             }
             Self::Storage(slot, element_type) => {
-                let stored_value = crate::ast::Value::from(value)
-                    .cast(
-                        crate::ast::Type::new(*element_type),
-                        &context.state.builder,
-                        block,
-                    )
+                let stored_value = AstValue::from(value)
+                    .cast(AstType::new(*element_type), &context.state.builder, block)
                     .into_mlir();
                 slot.store(&context.state.builder, stored_value, *element_type, block);
                 stored_value
@@ -260,9 +253,9 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                     // deep-cleared via the `ReferenceCopy` arm above.)
                     match &slang_type {
                         ast::Type::String(_) | ast::Type::Bytes(_) => {
-                            let size = crate::ast::Value::constant(
+                            let size = AstValue::constant(
                                 0,
-                                crate::ast::Type::unsigned(
+                                AstType::unsigned(
                                     context.state.builder.context,
                                     solx_utils::BIT_LENGTH_FIELD,
                                 ),
@@ -293,12 +286,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                     // an address to `address(0)`, a `bytesN`/enum to its typed zero.
                     // Emitting a `ui256` 0 and letting the store coerce it would
                     // `sol.cast` it to e.g. a `func_ref` (an ill-typed integer cast).
-                    crate::ast::Value::zero(
-                        crate::ast::Type::new(*element_type),
-                        &context.state.builder,
-                        &block,
-                    )
-                    .into_mlir()
+                    AstValue::zero(AstType::new(*element_type), &context.state.builder, &block)
+                        .into_mlir()
                 };
                 target.store(context, zero, &block);
             }
@@ -455,12 +444,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // A fully blank LHS `(, ) = f()` binds nothing; the assignment still has
         // a value in expression position, so fall back to a zero sentinel.
         let result = result.unwrap_or_else(|| {
-            crate::ast::Value::constant(
+            AstValue::constant(
                 0,
-                crate::ast::Type::unsigned(
-                    self.state.builder.context,
-                    solx_utils::BIT_LENGTH_FIELD,
-                ),
+                AstType::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD),
                 &self.state.builder,
                 &block,
             )
@@ -537,8 +523,8 @@ expression_emit!(AssignmentExpression; |node, context, block| {
         };
         let (old, target_type) = match &target {
             AssignmentTarget::Pointer(pointer, element_type) => {
-                let old = crate::ast::Pointer::new(*pointer).load(
-                    crate::ast::Type::new(*element_type),
+                let old = Pointer::new(*pointer).load(
+                    AstType::new(*element_type),
                     &context.state.builder,
                     &block,
                 );
@@ -546,7 +532,7 @@ expression_emit!(AssignmentExpression; |node, context, block| {
             }
             AssignmentTarget::Storage(slot, element_type) => {
                 let old = slot.load(&context.state.builder, *element_type, &block);
-                (crate::ast::Value::from(old), *element_type)
+                (AstValue::from(old), *element_type)
             }
             AssignmentTarget::ReferenceCopy(_) => unreachable!(
                 "a compound assignment to a reference-typed lvalue is rejected by the type checker"

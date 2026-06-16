@@ -40,11 +40,15 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
 use crate::ast::Materialize;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::getter_level::GetterLevel;
 use crate::ast::contract::storage_layout::StorageSlot;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 
 impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// The ABI function entry of a `public` state variable's synthesised getter,
@@ -104,13 +108,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             .get_type()
             .expect("slang types every state variable");
         let builder = &self.state.builder;
-        let element_type = crate::ast::Type::resolve_state_variable(state_variable, builder);
+        let element_type = AstType::resolve_state_variable(state_variable, builder);
         // A reference-typed variable (`string`/`bytes`/array) is addressed by the
         // reference type itself in storage; value types by a `!sol.ptr<T, _>`.
         let address_type = if declared_type.is_reference_type() {
             element_type
         } else {
-            crate::ast::Type::pointer(builder.context, element_type, location).into_mlir()
+            AstType::pointer(builder.context, element_type, location).into_mlir()
         };
         let function_signature = Function::new(signature, Vec::new(), vec![element_type]);
         let entry = function_signature.define(
@@ -131,8 +135,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let value = if declared_type.is_reference_type() {
             storage_ref
         } else {
-            crate::ast::Pointer::new(storage_ref)
-                .load(crate::ast::Type::new(element_type), builder, &entry)
+            Pointer::new(storage_ref)
+                .load(AstType::new(element_type), builder, &entry)
                 .into_mlir()
         };
         sol_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
@@ -168,8 +172,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         if input_types.is_empty() || input_types.len() != abi_input_count {
             return;
         }
-        let container_type = crate::ast::Type::resolve_state_variable(state_variable, builder);
-        let result_type = crate::ast::Type::resolve(
+        let container_type = AstType::resolve_state_variable(state_variable, builder);
+        let result_type = AstType::resolve(
             &result_slang,
             LocationPolicy::Declared(Some(location)),
             builder,
@@ -232,19 +236,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             Some(plan) => {
                 let mut values = Vec::new();
                 for (member_index, member_type, result_member_type) in plan {
-                    let index_value = crate::ast::Value::constant(
+                    let index_value = AstValue::constant(
                         *member_index as i64,
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
                         builder,
                         entry,
                     );
-                    let address = crate::ast::Pointer::new(base)
-                        .gep(
-                            index_value,
-                            crate::ast::Type::new(*member_type),
-                            builder,
-                            entry,
-                        )
+                    let address = Pointer::new(base)
+                        .gep(index_value, AstType::new(*member_type), builder, entry)
                         .into_mlir();
                     values.push(Self::load_getter_member(
                         builder,
@@ -257,8 +256,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 sol_op_void!(builder, entry, ReturnOperation.operands(&values));
             }
             None => {
-                let value = crate::ast::Pointer::new(base)
-                    .load(crate::ast::Type::new(result_type), builder, entry)
+                let value = Pointer::new(base)
+                    .load(AstType::new(result_type), builder, entry)
                     .into_mlir();
                 sol_op_void!(builder, entry, ReturnOperation.operands(&[value]));
             }
@@ -282,7 +281,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 SlangType::Mapping(mapping_type) => {
                     let key_slang = mapping_type.key_type();
                     let value_slang = mapping_type.value_type();
-                    let resolved_value = crate::ast::Type::resolve(
+                    let resolved_value = AstType::resolve(
                         &value_slang,
                         LocationPolicy::Declared(Some(location)),
                         builder,
@@ -292,17 +291,16 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     let level_type = if value_slang.is_reference_type() {
                         resolved_value
                     } else {
-                        crate::ast::Type::pointer(builder.context, resolved_value, location)
-                            .into_mlir()
+                        AstType::pointer(builder.context, resolved_value, location).into_mlir()
                     };
                     // A reference-typed key (`string`/`bytes`) is an ABI input
                     // decoded into memory. slang reports the key with the mapping's
                     // storage location, so build the memory type directly rather
                     // than resolving it (which would yield a storage string).
                     let key_type = if key_slang.is_reference_type() {
-                        crate::ast::Type::string(builder.context, DataLocation::Memory).into_mlir()
+                        AstType::string(builder.context, DataLocation::Memory).into_mlir()
                     } else {
-                        crate::ast::Type::resolve(
+                        AstType::resolve(
                             &key_slang,
                             LocationPolicy::Declared(Some(location)),
                             builder,
@@ -314,13 +312,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
                 SlangType::Array(array_type) => {
                     let element_slang = array_type.element_type();
-                    let element_type = crate::ast::Type::resolve(
+                    let element_type = AstType::resolve(
                         &element_slang,
                         LocationPolicy::Declared(Some(location)),
                         builder,
                     );
                     input_types.push(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir(),
                     );
                     levels.push(GetterLevel::Array(element_type, None));
@@ -328,13 +326,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
                 SlangType::FixedSizeArray(array_type) => {
                     let element_slang = array_type.element_type();
-                    let element_type = crate::ast::Type::resolve(
+                    let element_type = AstType::resolve(
                         &element_slang,
                         LocationPolicy::Declared(Some(location)),
                         builder,
                     );
                     input_types.push(
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir(),
                     );
                     levels.push(GetterLevel::Array(
@@ -368,22 +366,19 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .expect("argument index is within the block signature")
                 .into();
             base = match level {
-                GetterLevel::Mapping(level_type) => crate::ast::Pointer::new(base)
+                GetterLevel::Mapping(level_type) => Pointer::new(base)
                     .entry(
-                        crate::ast::Value::new(arg),
-                        crate::ast::Type::new(*level_type),
+                        AstValue::new(arg),
+                        AstType::new(*level_type),
                         builder,
                         entry,
                     )
                     .into_mlir(),
                 GetterLevel::Array(element_type, fixed_size) => {
                     let length = match fixed_size {
-                        Some(size) => crate::ast::Value::constant(
+                        Some(size) => AstValue::constant(
                             *size as i64,
-                            crate::ast::Type::unsigned(
-                                builder.context,
-                                solx_utils::BIT_LENGTH_FIELD,
-                            ),
+                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                             builder,
                             entry,
                         )
@@ -393,7 +388,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                                 builder,
                                 entry,
                                 LengthOperation.inp(base).len(
-                                    crate::ast::Type::unsigned(
+                                    AstType::unsigned(
                                         builder.context,
                                         solx_utils::BIT_LENGTH_FIELD
                                     )
@@ -402,19 +397,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                             )
                         }
                     };
-                    let in_bounds = crate::ast::Value::from(arg)
-                        .compare(
-                            crate::ast::Value::from(length),
-                            CmpPredicate::Lt,
-                            builder,
-                            entry,
-                        )
+                    let in_bounds = AstValue::from(arg)
+                        .compare(AstValue::from(length), CmpPredicate::Lt, builder, entry)
                         .into_mlir();
                     sol_op_void!(builder, entry, RequireOperation.cond(in_bounds).args(&[]));
-                    crate::ast::Pointer::new(base)
+                    Pointer::new(base)
                         .gep(
-                            crate::ast::Value::new(arg),
-                            crate::ast::Type::new(*element_type),
+                            AstValue::new(arg),
+                            AstType::new(*element_type),
                             builder,
                             entry,
                         )
@@ -455,8 +445,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let slang_type = state_variable
             .get_type()
             .expect("slang types every state variable");
-        let element_type =
-            crate::ast::Type::resolve(&slang_type, LocationPolicy::ForceMemory, builder);
+        let element_type = AstType::resolve(&slang_type, LocationPolicy::ForceMemory, builder);
         let function_signature = Function::new(signature, Vec::new(), vec![element_type]);
         let entry = function_signature.define(
             Some(selector),
@@ -467,13 +456,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             contract_body,
         );
         if let Some(value) = Self::fold_constant_int(&initializer) {
-            let constant = crate::ast::Value::constant_from_bigint(
-                &value,
-                crate::ast::Type::new(element_type),
-                builder,
-                &entry,
-            )
-            .into_mlir();
+            let constant =
+                AstValue::constant_from_bigint(&value, AstType::new(element_type), builder, &entry)
+                    .into_mlir();
             sol_op_void!(builder, &entry, ReturnOperation.operands(&[constant]));
             return;
         }
@@ -497,11 +482,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             initializer.emit(&emitter, entry)
         };
         let value = value
-            .cast(
-                crate::ast::Type::new(element_type),
-                &self.state.builder,
-                &entry,
-            )
+            .cast(AstType::new(element_type), &self.state.builder, &entry)
             .into_mlir();
         sol_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
     }
@@ -531,9 +512,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
             }
             Expression::FunctionCallExpression(call) => {
-                let slang_solidity_v2::ast::ArgumentsDeclaration::PositionalArguments(positional) =
-                    call.arguments()
-                else {
+                let ArgumentsDeclaration::PositionalArguments(positional) = call.arguments() else {
                     return None;
                 };
                 let mut arguments = positional.iter();
@@ -584,7 +563,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         if let SlangType::Struct(struct_type) = &declared_type
             && let Definition::Struct(struct_definition) = struct_type.definition()
         {
-            let struct_mlir_type = crate::ast::Type::resolve(
+            let struct_mlir_type = AstType::resolve(
                 &declared_type,
                 LocationPolicy::Declared(Some(location)),
                 builder,
@@ -596,8 +575,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     .iter()
                     .map(|(_, _, result_type)| *result_type)
                     .collect();
-                let container_type =
-                    crate::ast::Type::resolve_state_variable(state_variable, builder);
+                let container_type = AstType::resolve_state_variable(state_variable, builder);
                 let signature = state_variable
                     .compute_canonical_signature()
                     .expect("a getter state variable has a canonical signature");
@@ -648,7 +626,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 Some(_) => false,
                 None => return None,
             };
-            let member_type = crate::ast::Type::new(struct_mlir_type)
+            let member_type = AstType::new(struct_mlir_type)
                 .element_type(member_index)
                 .into_mlir();
             // A `string`/`bytes` member returns a memory copy; every other member
@@ -657,7 +635,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             // (`is_sol_function_ref`), which solx-mlir does not yet expose — left
             // to the solx-mlir Sol-type-predicate fill.
             let result_member_type = if is_string_or_bytes {
-                crate::ast::Type::string(builder.context, DataLocation::Memory).into_mlir()
+                AstType::string(builder.context, DataLocation::Memory).into_mlir()
             } else {
                 member_type
             };
@@ -678,12 +656,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         if member_type == result_member_type {
-            crate::ast::Pointer::new(address)
-                .load(crate::ast::Type::new(result_member_type), builder, block)
+            Pointer::new(address)
+                .load(AstType::new(result_member_type), builder, block)
                 .into_mlir()
         } else {
-            crate::ast::Value::from(address)
-                .cast(crate::ast::Type::new(result_member_type), builder, block)
+            AstValue::from(address)
+                .cast(AstType::new(result_member_type), builder, block)
                 .into_mlir()
         }
     }

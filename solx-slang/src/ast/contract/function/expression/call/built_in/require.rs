@@ -17,6 +17,7 @@ use solx_mlir::ods::sol::RequireOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -86,10 +87,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     block,
                 } = expression.emit(self, block);
                 let string_memory_type =
-                    crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
-                        .into_mlir();
+                    AstType::string(builder.context, solx_utils::DataLocation::Memory).into_mlir();
                 let message_value = message_value
-                    .cast(crate::ast::Type::new(string_memory_type), builder, &block)
+                    .cast(AstType::new(string_memory_type), builder, &block)
                     .into_mlir();
                 sol_op_void!(
                     builder,
@@ -148,7 +148,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .into_iter()
             .zip(parameters.iter())
             .map(|(value, parameter)| {
-                let parameter_type = crate::ast::Type::resolve(
+                let parameter_type = AstType::resolve(
                     &parameter
                         .get_type()
                         .expect("error parameter type resolved by semantic analysis"),
@@ -156,11 +156,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     builder,
                 );
                 value
-                    .cast(
-                        crate::ast::Type::new(parameter_type),
-                        builder,
-                        &current_block,
-                    )
+                    .cast(AstType::new(parameter_type), builder, &current_block)
                     .into_mlir()
             })
             .collect();

@@ -19,6 +19,9 @@ use crate::ast::Emit;
 use crate::ast::EmitAddress;
 use crate::ast::LocationPolicy;
 use crate::ast::Place;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block, 'scope> EmitAddress<'context, 'block, 'state, 'scope>
@@ -65,7 +68,7 @@ where
 
         let (address, element_type) = match &base_type {
             SlangType::Mapping(_) => {
-                let element_type = crate::ast::Type::resolve(
+                let element_type = AstType::resolve(
                     &result_type,
                     LocationPolicy::Declared(None),
                     &context.state.builder,
@@ -80,7 +83,7 @@ where
                         std::mem::discriminant(&base_type)
                     ),
                 };
-                let address_type = crate::ast::Type::new(element_type)
+                let address_type = AstType::new(element_type)
                     .address_type(base_location, context.state.builder.context);
                 let address = base_value
                     .into_pointer()
@@ -94,7 +97,7 @@ where
                     .into_pointer()
                     .gep(
                         index_value,
-                        crate::ast::Type::new(element_type),
+                        AstType::new(element_type),
                         &context.state.builder,
                         &block,
                     )
@@ -132,20 +135,20 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
             block,
         } = base.emit(context, block);
         let ui256 =
-            crate::ast::Type::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
+            AstType::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
                 .into_mlir();
         let (start_value, block) = match node.start() {
             Some(start_expression) => {
                 let BlockAnd { value, block } = start_expression.emit(context, block);
                 let value = value
-                    .cast(crate::ast::Type::new(ui256), &context.state.builder, &block)
+                    .cast(AstType::new(ui256), &context.state.builder, &block)
                     .into_mlir();
                 (value, block)
             }
             None => {
-                let zero = crate::ast::Value::constant(
+                let zero = AstValue::constant(
                     0,
-                    crate::ast::Type::new(ui256),
+                    AstType::new(ui256),
                     &context.state.builder,
                     &block,
                 )
@@ -157,7 +160,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
             Some(end_expression) => {
                 let BlockAnd { value, block } = end_expression.emit(context, block);
                 let value = value
-                    .cast(crate::ast::Type::new(ui256), &context.state.builder, &block)
+                    .cast(AstType::new(ui256), &context.state.builder, &block)
                     .into_mlir();
                 (value, block)
             }
@@ -171,7 +174,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
                 (length, block)
             }
         };
-        let result_type = crate::ast::Type::resolve(
+        let result_type = AstType::resolve(
             &node
                 .get_type()
                 .expect("slang types every slice expression"),
@@ -197,8 +200,8 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
         },
         block,
     } = node.emit_address(context, block);
-    let value = crate::ast::Pointer::new(address).load(
-        crate::ast::Type::new(element_type),
+    let value = Pointer::new(address).load(
+        AstType::new(element_type),
         &context.state.builder,
         &block,
     );
@@ -216,9 +219,9 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
         .get_type()
         .expect("slang types every index-access expression");
     let slang_expected =
-        crate::ast::Type::resolve(&result_type, LocationPolicy::Declared(None), &context.state.builder);
+        AstType::resolve(&result_type, LocationPolicy::Declared(None), &context.state.builder);
     let value = value.cast(
-        crate::ast::Type::new(slang_expected),
+        AstType::new(slang_expected),
         &context.state.builder,
         &block,
     );

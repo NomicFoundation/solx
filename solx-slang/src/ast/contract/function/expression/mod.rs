@@ -2,6 +2,9 @@
 //! Expression emission to MLIR SSA values.
 //!
 
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 pub mod arithmetic;
 pub mod arithmetic_mode;
 pub mod assignment;
@@ -110,12 +113,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let function = self.state.resolve_function(target_id);
-        let func_ref_type = crate::ast::Type::func_ref(
+        let func_ref_type = AstType::func_ref(
             self.state.builder.context,
             &function.parameter_types,
             &function.return_types,
         );
-        let value = crate::ast::Value::function_constant(
+        let value = AstValue::function_constant(
             &function.mlir_name,
             func_ref_type,
             &self.state.builder,
@@ -143,7 +146,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         let function = self.state.resolve_function(function_definition.node_id());
         Some(
-            crate::ast::Type::func_ref(
+            AstType::func_ref(
                 self.state.builder.context,
                 &function.parameter_types,
                 &function.return_types,
@@ -168,7 +171,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let declared_type = state_variable
             .get_type()
             .expect("slang types every state variable");
-        let element_type = crate::ast::Type::resolve(
+        let element_type = AstType::resolve(
             &declared_type,
             LocationPolicy::Declared(None),
             &self.state.builder,
@@ -197,7 +200,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 unimplemented!("unregistered state variable {:?}", state_variable.node_id())
             });
         let value = if declared_type.is_reference_type() {
-            let address_type = crate::ast::Type::new(element_type)
+            let address_type = AstType::new(element_type)
                 .address_type(slot.location, self.state.builder.context)
                 .into_mlir();
             let address = sol_op!(
@@ -210,12 +213,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     ))
                     .addr(address_type)
             );
-            crate::ast::Pointer::new(address)
-                .load(
-                    crate::ast::Type::new(element_type),
-                    &self.state.builder,
-                    &block,
-                )
+            Pointer::new(address)
+                .load(AstType::new(element_type), &self.state.builder, &block)
                 .into_mlir()
         } else {
             slot.load(&self.state.builder, element_type, &block)
@@ -232,7 +231,7 @@ where
     'state: 'scope,
 {
     type Context = &'scope ExpressionContext<'state, 'context, 'block>;
-    type Output = BlockAnd<'context, 'block, crate::ast::Value<'context, 'block>>;
+    type Output = BlockAnd<'context, 'block, AstValue<'context, 'block>>;
 
     /// Dispatches an expression to its variant's emission, first folding a
     /// compile-time-constant arithmetic/bitwise expression straight to a constant:
@@ -257,12 +256,11 @@ where
                 | Expression::PrefixExpression(_)
         );
         if folds && let Some(folded) = self.integer_value() {
-            let result_type =
-                crate::ast::Type::resolve_optional(self.get_type(), &context.state.builder)
-                    .expect("slang types every folded constant expression");
-            let value = crate::ast::Value::constant_from_bigint(
+            let result_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
+                .expect("slang types every folded constant expression");
+            let value = AstValue::constant_from_bigint(
                 &folded,
-                crate::ast::Type::new(result_type),
+                AstType::new(result_type),
                 &context.state.builder,
                 &block,
             );

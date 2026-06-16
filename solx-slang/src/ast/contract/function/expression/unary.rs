@@ -11,6 +11,7 @@ use slang_solidity_v2::ast::PrefixExpressionOperator;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
 
@@ -33,7 +34,7 @@ expression_emit!(PrefixExpression; |node, context, block| {
         unreachable!("`delete` is value-less; a discard site emits it, not value-position `Emit`");
     }
     let result_type =
-        crate::ast::Type::resolve_optional(node.get_type(), &context.state.builder);
+        AstType::resolve_optional(node.get_type(), &context.state.builder);
     let operator = match node.operator() {
         PrefixExpressionOperator::Bang(_) => Operator::Not,
         PrefixExpressionOperator::DeleteKeyword(_) => {

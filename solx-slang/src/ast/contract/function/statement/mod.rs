@@ -2,6 +2,9 @@
 //! Statement emission to MLIR operations.
 //!
 
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 pub mod assembly;
 pub mod control_flow;
 pub mod discarded;
@@ -304,12 +307,12 @@ statement_emit!(ReturnStatement; |node, context, block| {
         let mut values = Vec::with_capacity(context.return_types.len());
         for (index, &return_type) in context.return_types.iter().enumerate() {
             let value = match context.return_slots.get(index).copied().flatten() {
-                Some(pointer) => crate::ast::Pointer::new(pointer)
-                    .load(crate::ast::Type::new(return_type), builder, &block)
+                Some(pointer) => Pointer::new(pointer)
+                    .load(AstType::new(return_type), builder, &block)
                     .into_mlir(),
-                None => crate::ast::Value::constant(
+                None => AstValue::constant(
                     0,
-                    crate::ast::Type::new(return_type),
+                    AstType::new(return_type),
                     builder,
                     &block,
                 )
@@ -356,7 +359,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
             }
         };
         (
-            values.into_iter().map(crate::ast::Value::from).collect(),
+            values.into_iter().map(AstValue::from).collect(),
             block,
         )
     } else {
@@ -379,7 +382,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
         .map(|(value, &return_type)| {
             value
                 .cast(
-                    crate::ast::Type::new(return_type),
+                    AstType::new(return_type),
                     &context.state.builder,
                     &block,
                 )

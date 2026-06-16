@@ -2,6 +2,8 @@
 //! Function call and member access expression emission.
 //!
 
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 pub mod built_in;
 pub mod call_kind;
 pub mod external_call;
@@ -99,10 +101,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     value = Some(
                         option_value
                             .cast(
-                                crate::ast::Type::unsigned(
-                                    builder.context,
-                                    solx_utils::BIT_LENGTH_FIELD,
-                                ),
+                                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                                 builder,
                                 &current_block,
                             )
@@ -110,8 +109,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     );
                 }
                 Some(BuiltIn::CallOptionSalt) => {
-                    let bytes32 =
-                        crate::ast::Type::fixed_bytes(self.state.builder.context, 32).into_mlir();
+                    let bytes32 = AstType::fixed_bytes(self.state.builder.context, 32).into_mlir();
                     let salt_expression = option.value();
                     let BlockAnd {
                         value: salt_bytes,
@@ -126,10 +124,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     salt = Some(
                         salt_bytes
                             .cast(
-                                crate::ast::Type::unsigned(
-                                    builder.context,
-                                    solx_utils::BIT_LENGTH_FIELD,
-                                ),
+                                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                                 builder,
                                 &current_block,
                             )
@@ -164,7 +159,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     pub fn emit_coerced_arguments(
         &self,
         arguments: &PositionalArguments,
-        parameter_types: &[melior::ir::Type<'context>],
+        parameter_types: &[Type<'context>],
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let arguments: Vec<Expression> = arguments.iter().collect();
@@ -178,7 +173,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     pub fn emit_coerced_argument_expressions(
         &self,
         arguments: &[Expression],
-        parameter_types: &[melior::ir::Type<'context>],
+        parameter_types: &[Type<'context>],
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let mut argument_values = Vec::with_capacity(arguments.len());
@@ -207,8 +202,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         }
         let builder = &self.state.builder;
         for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
-            *value = crate::ast::Value::from(*value)
-                .cast(crate::ast::Type::new(parameter_type), builder, &block)
+            *value = AstValue::from(*value)
+                .cast(AstType::new(parameter_type), builder, &block)
                 .into_mlir();
         }
         (argument_values, block)
@@ -300,7 +295,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .parameter_types()
             .iter()
             .map(|parameter_type| {
-                crate::ast::Type::resolve(parameter_type, LocationPolicy::Declared(None), builder)
+                AstType::resolve(parameter_type, LocationPolicy::Declared(None), builder)
             })
             .collect();
         let result_types: Vec<Type<'context>> = match function_type.return_type() {
@@ -309,10 +304,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .types()
                 .iter()
                 .map(|element_type| {
-                    crate::ast::Type::resolve(element_type, LocationPolicy::Declared(None), builder)
+                    AstType::resolve(element_type, LocationPolicy::Declared(None), builder)
                 })
                 .collect(),
-            other => vec![crate::ast::Type::resolve(
+            other => vec![AstType::resolve(
                 &other,
                 LocationPolicy::Declared(None),
                 builder,
@@ -331,9 +326,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let results = if callee_value.r#type().is_ext_function_ref() {
             // `fp{value: v}(args)` forwards `v`; a plain `fp(args)` sends zero.
             let value = call_value.unwrap_or_else(|| {
-                crate::ast::Value::constant(
+                AstValue::constant(
                     0,
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                     builder,
                     &current_block,
                 )
@@ -387,16 +382,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // `sol.ext_icall` results are `(i1 status, decoded-returns...)`; the status
         // is prepended here and dropped from the values handed back.
         let mut out_types = Vec::with_capacity(result_types.len() + 1);
-        out_types.push(
-            crate::ast::Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
-        );
+        out_types
+            .push(AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
         out_types.extend_from_slice(result_types);
         let mut operation_builder =
             ExtICallOperation::builder(builder.context, builder.unknown_location)
                 .outs(&out_types)
                 .callee(callee)
                 .callee_operands(operands)
-                .gas(crate::ast::Value::gas_left(builder, block).into_mlir())
+                .gas(AstValue::gas_left(builder, block).into_mlir())
                 .value(value);
         if matches!(static_mode, StaticMode::Static) {
             operation_builder = operation_builder.static_call(Attribute::unit(builder.context));

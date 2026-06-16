@@ -20,6 +20,9 @@ use solx_mlir::ods::sol::YieldOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::try_external_call::TryExternalCall;
 use crate::ast::contract::function::statement::StatementContext;
@@ -36,26 +39,19 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         let parameter_type = parameter
             .get_type()
             .map(|slang_type| {
-                crate::ast::Type::resolve(
+                AstType::resolve(
                     &slang_type,
                     LocationPolicy::Declared(None),
                     &self.state.builder,
                 )
             })
             .unwrap_or_else(|| {
-                crate::ast::Type::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
+                AstType::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
                     .into_mlir()
             });
-        let cast = crate::ast::Value::from(value).cast(
-            crate::ast::Type::new(parameter_type),
-            &self.state.builder,
-            block,
-        );
-        let pointer = crate::ast::Pointer::stack_slot(
-            crate::ast::Type::new(parameter_type),
-            &self.state.builder,
-            block,
-        );
+        let cast =
+            AstValue::from(value).cast(AstType::new(parameter_type), &self.state.builder, block);
+        let pointer = Pointer::stack_slot(AstType::new(parameter_type), &self.state.builder, block);
         pointer.store(cast, &self.state.builder, block);
         self.environment
             .define_variable(parameter.node_id(), pointer.into_mlir());
@@ -149,14 +145,14 @@ statement_emit!(TryStatement; |node, context, block| {
     let panic_region = Region::new();
     if has_panic {
         panic_region.append_block(Block::new(&[(
-            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
+            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir(),
             builder.unknown_location,
         )]));
     }
     let error_region = Region::new();
     if has_error {
         error_region.append_block(Block::new(&[(
-            crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir(),
+            AstType::string(builder.context, solx_utils::DataLocation::Memory).into_mlir(),
             builder.unknown_location,
         )]));
     }
@@ -168,7 +164,7 @@ statement_emit!(TryStatement; |node, context, block| {
         }
         TryFallbackKind::Bytes => {
             fallback_region.append_block(Block::new(&[(
-                crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
+                AstType::string(builder.context, solx_utils::DataLocation::Memory)
                     .into_mlir(),
                 builder.unknown_location,
             )]));

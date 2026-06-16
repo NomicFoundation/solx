@@ -12,6 +12,9 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
 use crate::ast::Materialize;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 
@@ -31,10 +34,10 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
     let declared_type = slang_declared_type
         .as_ref()
         .map(|slang_type| {
-            crate::ast::Type::resolve(slang_type, LocationPolicy::Declared(None), &context.state.builder)
+            AstType::resolve(slang_type, LocationPolicy::Declared(None), &context.state.builder)
         })
         .unwrap_or_else(|| {
-            crate::ast::Type::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
+            AstType::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
                 .into_mlir()
         });
 
@@ -54,7 +57,7 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
         };
         let cast_value = initial_value
             .cast(
-                crate::ast::Type::new(declared_type),
+                AstType::new(declared_type),
                 &context.state.builder,
                 &block,
             )
@@ -65,20 +68,20 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
     };
 
     let pointer = if let Some(value) = initial_value {
-        let pointer = crate::ast::Pointer::stack_slot(
-            crate::ast::Type::new(declared_type),
+        let pointer = Pointer::stack_slot(
+            AstType::new(declared_type),
             &context.state.builder,
             &block,
         );
-        pointer.store(crate::ast::Value::new(value), &context.state.builder, &block);
+        pointer.store(AstValue::new(value), &context.state.builder, &block);
         pointer.into_mlir()
     } else {
         // No initializer: default-initialise the slot to the type's zero
         // through the shared primitive (memory aggregates malloc'd, empty
         // `string`/`bytes` a plain malloc, scalar value types their own
         // zero, integers a zeroed slot, references a bare slot).
-        crate::ast::Pointer::default_initialized(
-            crate::ast::Type::new(declared_type),
+        Pointer::default_initialized(
+            AstType::new(declared_type),
             &context.state.builder,
             &block,
         )
@@ -153,17 +156,17 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
         let builder = &context.state.builder;
         let declared_type = declaration
             .get_type()
-            .map(|slang_type| crate::ast::Type::resolve(&slang_type, LocationPolicy::Declared(None), builder))
+            .map(|slang_type| AstType::resolve(&slang_type, LocationPolicy::Declared(None), builder))
             .unwrap_or_else(|| {
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
             });
-        let cast = crate::ast::Value::from(value).cast(
-            crate::ast::Type::new(declared_type),
+        let cast = AstValue::from(value).cast(
+            AstType::new(declared_type),
             builder,
             &current,
         );
         let pointer =
-            crate::ast::Pointer::stack_slot(crate::ast::Type::new(declared_type), builder, &current);
+            Pointer::stack_slot(AstType::new(declared_type), builder, &current);
         pointer.store(cast, builder, &current);
         context
             .environment

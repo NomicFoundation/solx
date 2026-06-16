@@ -15,6 +15,9 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::EmitAddress;
 use crate::ast::Place;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block, 'scope> EmitAddress<'context, 'block, 'state, 'scope>
@@ -65,9 +68,9 @@ where
         } = base.emit(context, block);
         let builder = &context.state.builder;
 
-        let index_value = crate::ast::Value::constant(
+        let index_value = AstValue::constant(
             field_index as i64,
-            crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
+            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
             builder,
             &block,
         );
@@ -131,8 +134,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             },
             block,
         } = node.emit_address(context, block);
-        let value = crate::ast::Pointer::new(address).load(
-            crate::ast::Type::new(element_type),
+        let value = Pointer::new(address).load(
+            AstType::new(element_type),
             &context.state.builder,
             &block,
         );

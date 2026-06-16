@@ -27,6 +27,8 @@ use solx_utils::DataLocation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
 
@@ -50,7 +52,7 @@ impl CallKind {
         // to the syntactic elementary type name (both lower to a memory string).
         let dynamic_result_type = match &slang_type {
             Some(inner @ (SlangType::Array(_) | SlangType::Bytes(_) | SlangType::String(_))) => {
-                Some(crate::ast::Type::resolve(
+                Some(AstType::resolve(
                     inner,
                     LocationPolicy::Declared(Some(DataLocation::Memory)),
                     &context.state.builder,
@@ -63,7 +65,7 @@ impl CallKind {
             ) =>
             {
                 Some(
-                    crate::ast::Type::string(context.state.builder.context, DataLocation::Memory)
+                    AstType::string(context.state.builder.context, DataLocation::Memory)
                         .into_mlir(),
                 )
             }
@@ -77,12 +79,9 @@ impl CallKind {
             let builder = &context.state.builder;
             let address = match values.first() {
                 Some(&size_value) => {
-                    let size = crate::ast::Value::from(size_value)
+                    let size = AstValue::from(size_value)
                         .cast(
-                            crate::ast::Type::unsigned(
-                                builder.context,
-                                solx_utils::BIT_LENGTH_FIELD,
-                            ),
+                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                             builder,
                             &current_block,
                         )
@@ -128,7 +127,7 @@ impl CallKind {
         let parameter_types = contract_definition
             .constructor()
             .map(|constructor| {
-                crate::ast::Type::resolve_signature(
+                AstType::resolve_signature(
                     &constructor,
                     LocationPolicy::Declared(None),
                     &context.state.builder,
@@ -138,12 +137,11 @@ impl CallKind {
             .unwrap_or_default(); // recut-lint-allow: fail01 — a contract without a constructor takes no arguments
         let (ctor_args, block) = context.emit_coerced_arguments(arguments, &parameter_types, block);
         let builder = &context.state.builder;
-        let result_type =
-            crate::ast::Type::contract(builder.context, &contract_name, payable).into_mlir();
+        let result_type = AstType::contract(builder.context, &contract_name, payable).into_mlir();
         let val = value.unwrap_or_else(|| {
-            crate::ast::Value::constant(
+            AstValue::constant(
                 0,
-                crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                 builder,
                 &block,
             )

@@ -8,6 +8,8 @@ use slang_solidity_v2::ast::Identifier;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::Pointer;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 expression_emit!(Identifier; |node, context, block| {
@@ -26,7 +28,7 @@ expression_emit!(Identifier; |node, context, block| {
         }
         Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
             let pointer =
-                crate::ast::Pointer::new(context.environment.variable(definition.node_id()));
+                Pointer::new(context.environment.variable(definition.node_id()));
             let value = pointer.load(pointer.pointee(), &context.state.builder, &block);
             BlockAnd { block, value }
         }
@@ -50,7 +52,7 @@ expression_emit!(Identifier; |node, context, block| {
                 library.get_file_id().to_owned(),
                 Some(library.name().name()),
             );
-            let value = crate::ast::Value::library_address(&name, &context.state.builder, &block);
+            let value = AstValue::library_address(&name, &context.state.builder, &block);
             BlockAnd { block, value }
         }
         None => unreachable!("slang resolves every identifier reference"),

@@ -11,6 +11,9 @@ use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 /// A short-circuit logical operator. Replaces a `default: bool` flag so `&&` and
@@ -46,13 +49,12 @@ impl LogicalOperator {
         let BlockAnd { value: lhs, block } = left.emit(emitter, block);
         let lhs_bool = lhs.is_nonzero(&emitter.state.builder, &block).into_mlir();
 
-        let i1_type = crate::ast::Type::signless(
+        let i1_type = AstType::signless(
             emitter.state.builder.context,
             solx_utils::BIT_LENGTH_BOOLEAN,
         );
-        let result_ptr = crate::ast::Pointer::stack_slot(i1_type, &emitter.state.builder, &block);
-        let default_value =
-            crate::ast::Value::boolean(short_circuit_value, &emitter.state.builder, &block);
+        let result_ptr = Pointer::stack_slot(i1_type, &emitter.state.builder, &block);
+        let default_value = AstValue::boolean(short_circuit_value, &emitter.state.builder, &block);
         result_ptr.store(default_value, &emitter.state.builder, &block);
 
         let (then_block, else_block) = sol_region_op!(

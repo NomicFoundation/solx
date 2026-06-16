@@ -28,6 +28,7 @@ use slang_solidity_v2::compilation::CompilationUnit;
 use solx_mlir::UserDefinedOperator;
 
 use crate::ast::contract::function::expression::operator::Operator;
+use slang_solidity_v2::ast::SourceUnitMember;
 
 /// User-defined operator bindings gathered from a compilation unit.
 pub struct OperatorBindings {
@@ -55,9 +56,7 @@ impl OperatorBindings {
                     .members()
                     .iter()
                     .filter_map(|member| {
-                        if let slang_solidity_v2::ast::SourceUnitMember::UsingDirective(directive) =
-                            member
-                        {
+                        if let SourceUnitMember::UsingDirective(directive) = member {
                             Some(directive)
                         } else {
                             None

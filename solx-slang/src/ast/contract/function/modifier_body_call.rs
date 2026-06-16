@@ -7,6 +7,9 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use solx_mlir::Builder;
 use solx_mlir::ods::sol::CallOperation;
 
@@ -45,8 +48,8 @@ impl<'context, 'block> ModifierBodyCall<'context, 'block> {
         for (slot, result_type) in self.return_slots.iter().zip(self.result_types.iter()) {
             if let Some(pointer) = slot {
                 operands.push(
-                    crate::ast::Pointer::new(*pointer)
-                        .load(crate::ast::Type::new(*result_type), builder, block)
+                    Pointer::new(*pointer)
+                        .load(AstType::new(*result_type), builder, block)
                         .into_mlir(),
                 );
             }
@@ -67,11 +70,7 @@ impl<'context, 'block> ModifierBodyCall<'context, 'block> {
         });
         for (slot, value) in self.return_slots.iter().zip(results) {
             if let Some(pointer) = slot {
-                crate::ast::Pointer::new(*pointer).store(
-                    crate::ast::Value::new(value.into()),
-                    builder,
-                    block,
-                );
+                Pointer::new(*pointer).store(AstValue::new(value.into()), builder, block);
             }
         }
     }

@@ -24,6 +24,9 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
 use crate::ast::Materialize;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
 
@@ -204,7 +207,7 @@ impl CallKind {
             // struct's member-declaration order, then store each.
             Self::StructConstructor(struct_definition) => {
                 let result_type =
-                    crate::ast::Type::resolve_optional(call.get_type(), &context.state.builder)
+                    AstType::resolve_optional(call.get_type(), &context.state.builder)
                         .expect("slang types a struct constructor call");
                 let member_ids: Vec<NodeId> = struct_definition
                     .members()
@@ -214,7 +217,7 @@ impl CallKind {
                 let arguments = arguments.ordered_by(&member_ids);
                 let builder = &context.state.builder;
                 let struct_address = sol_op!(builder, &block, MallocOperation.addr(result_type));
-                let struct_pointer = crate::ast::Pointer::new(struct_address);
+                let struct_pointer = Pointer::new(struct_address);
                 let mut block = block;
                 for (index, (member, argument)) in struct_definition
                     .members()
@@ -224,30 +227,25 @@ impl CallKind {
                 {
                     let field_slang_type =
                         member.get_type().expect("slang types every struct member");
-                    let field_type = crate::ast::Type::resolve(
+                    let field_type = AstType::resolve(
                         &field_slang_type,
                         LocationPolicy::Declared(Some(DataLocation::Memory)),
                         builder,
                     );
-                    let index_value = crate::ast::Value::constant(
+                    let index_value = AstValue::constant(
                         index as i64,
-                        crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
+                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
                         builder,
                         &block,
                     );
-                    let field_address = struct_pointer.gep(
-                        index_value,
-                        crate::ast::Type::new(field_type),
-                        builder,
-                        &block,
-                    );
+                    let field_address =
+                        struct_pointer.gep(index_value, AstType::new(field_type), builder, &block);
                     let BlockAnd {
                         value: argument_value,
                         block: next_block,
                     } = argument.emit(context, block);
                     block = next_block;
-                    let stored =
-                        argument_value.cast(crate::ast::Type::new(field_type), builder, &block);
+                    let stored = argument_value.cast(AstType::new(field_type), builder, &block);
                     field_address.store(stored, builder, &block);
                 }
                 (vec![struct_address], block)
@@ -275,11 +273,9 @@ impl CallKind {
                             .iter()
                             .next()
                             .expect("a type conversion has exactly one argument");
-                        let target_type = crate::ast::Type::resolve_optional(
-                            call.get_type(),
-                            &context.state.builder,
-                        )
-                        .expect("slang types a type-conversion call");
+                        let target_type =
+                            AstType::resolve_optional(call.get_type(), &context.state.builder)
+                                .expect("slang types a type-conversion call");
                         // A `bytesN("…")` literal folds to a fixed-bytes constant.
                         let BlockAnd { value, block } =
                             if let Expression::StringExpression(string_literal) = &first {
@@ -288,11 +284,7 @@ impl CallKind {
                                 first.emit(context, block)
                             };
                         let result = value
-                            .cast(
-                                crate::ast::Type::new(target_type),
-                                &context.state.builder,
-                                &block,
-                            )
+                            .cast(AstType::new(target_type), &context.state.builder, &block)
                             .into_mlir();
                         (vec![result], block)
                     }
@@ -310,16 +302,12 @@ impl CallKind {
                         let BlockAnd { value, block } = argument.emit(context, block);
                         // A UDVT shares its underlying type's representation, so this
                         // is one conversion to the result type (none ⇒ already correct).
-                        let result = match crate::ast::Type::resolve_optional(
+                        let result = match AstType::resolve_optional(
                             call.get_type(),
                             &context.state.builder,
                         ) {
                             Some(result_type) => value
-                                .cast(
-                                    crate::ast::Type::new(result_type),
-                                    &context.state.builder,
-                                    &block,
-                                )
+                                .cast(AstType::new(result_type), &context.state.builder, &block)
                                 .into_mlir(),
                             None => value.into_mlir(),
                         };

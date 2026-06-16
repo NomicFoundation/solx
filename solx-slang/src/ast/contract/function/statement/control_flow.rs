@@ -21,17 +21,20 @@ use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::contract::function::statement::discarded::Discarded;
+use melior::ir::Block;
+use melior::ir::Region;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Appends a dead block with `sol.yield` to a region whose live block
     /// already terminated (e.g. with `sol.return`). Matches the solc pattern
     /// where each `sol.if` region always ends with a `sol.yield` block.
-    fn emit_dead_yield(&self, region: &melior::ir::Region<'context>) {
-        let dead_block = melior::ir::Block::new(&[]);
+    fn emit_dead_yield(&self, region: &Region<'context>) {
+        let dead_block = Block::new(&[]);
         sol_op_void!(&self.state.builder, &dead_block, YieldOperation.ins(&[]));
         region.append_block(dead_block);
     }
@@ -125,7 +128,7 @@ statement_emit!(ForStatement; |node, context, block| {
         }
         ForStatementCondition::Semicolon(_) => {
             let true_value =
-                crate::ast::Value::boolean(true, &context.state.builder, &condition_block)
+                AstValue::boolean(true, &context.state.builder, &condition_block)
                     .into_mlir();
             sol_op_void!(
                 &context.state.builder,

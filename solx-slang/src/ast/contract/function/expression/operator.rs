@@ -40,6 +40,9 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::EmitAddress;
 use crate::ast::Place;
+use crate::ast::Pointer;
+use crate::ast::Type as AstType;
+use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::operator_binding::OperatorBindings;
@@ -115,7 +118,7 @@ impl Operator {
     fn emit_operator_call<'context, 'block>(
         context: &ExpressionContext<'_, 'context, 'block>,
         function_id: NodeId,
-        argument_values: Vec<crate::ast::Value<'context, 'block>>,
+        argument_values: Vec<AstValue<'context, 'block>>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
         let function = context.state.resolve_function(function_id);
@@ -124,11 +127,7 @@ impl Operator {
             .zip(&function.parameter_types)
             .map(|(value, &parameter_type)| {
                 value
-                    .cast(
-                        crate::ast::Type::new(parameter_type),
-                        &context.state.builder,
-                        block,
-                    )
+                    .cast(AstType::new(parameter_type), &context.state.builder, block)
                     .into_mlir()
             })
             .collect();
@@ -212,10 +211,7 @@ impl Operator {
         right: &Expression,
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
-    ) -> (
-        crate::ast::Value<'context, 'block>,
-        BlockRef<'context, 'block>,
-    ) {
+    ) -> (AstValue<'context, 'block>, BlockRef<'context, 'block>) {
         if let Some(function_id) = OperatorBindings::binary_operator(self)
             .and_then(|user_operator| Self::user_defined_operator(context, left, user_operator))
         {
@@ -260,11 +256,11 @@ impl Operator {
         self,
         mode: ArithmeticMode,
         builder: &Builder<'context>,
-        lhs: crate::ast::Value<'context, 'block>,
-        rhs: crate::ast::Value<'context, 'block>,
+        lhs: AstValue<'context, 'block>,
+        rhs: AstValue<'context, 'block>,
         result_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
-    ) -> crate::ast::Value<'context, 'block> {
+    ) -> AstValue<'context, 'block> {
         let is_shift = matches!(self, Operator::ShiftLeft | Operator::ShiftRight);
         let is_bitwise = is_shift
             || matches!(
@@ -273,25 +269,24 @@ impl Operator {
             );
 
         let (lhs, rhs, restore_type) = if is_bitwise
-            && let Some(width) = crate::ast::Type::new(result_type).fixed_bytes_or_byte_width()
+            && let Some(width) = AstType::new(result_type).fixed_bytes_or_byte_width()
         {
             let int_type = Type::from(IntegerType::unsigned(builder.context, 8 * width));
             let lhs = lhs
-                .cast(crate::ast::Type::new(result_type), builder, block)
-                .cast(crate::ast::Type::new(int_type), builder, block)
+                .cast(AstType::new(result_type), builder, block)
+                .cast(AstType::new(int_type), builder, block)
                 .into_mlir();
             let rhs = if is_shift {
-                rhs.cast(crate::ast::Type::new(int_type), builder, block)
-                    .into_mlir()
+                rhs.cast(AstType::new(int_type), builder, block).into_mlir()
             } else {
-                rhs.cast(crate::ast::Type::new(result_type), builder, block)
-                    .cast(crate::ast::Type::new(int_type), builder, block)
+                rhs.cast(AstType::new(result_type), builder, block)
+                    .cast(AstType::new(int_type), builder, block)
                     .into_mlir()
             };
             (lhs, rhs, Some(result_type))
         } else {
             let lhs = lhs
-                .cast(crate::ast::Type::new(result_type), builder, block)
+                .cast(AstType::new(result_type), builder, block)
                 .into_mlir();
             // `**` keeps its exponent its own (unsigned) type: `sol.exp`/`sol.cexp`
             // take an unsigned exponent of any width alongside a possibly-signed
@@ -301,7 +296,7 @@ impl Operator {
             let rhs = if matches!(self, Operator::Exponentiation) {
                 rhs.into_mlir()
             } else {
-                rhs.cast(crate::ast::Type::new(result_type), builder, block)
+                rhs.cast(AstType::new(result_type), builder, block)
                     .into_mlir()
             };
             (lhs, rhs, None)
@@ -314,9 +309,7 @@ impl Operator {
             .into();
 
         match restore_type {
-            Some(fixed) => {
-                crate::ast::Value::from(result).cast(crate::ast::Type::new(fixed), builder, block)
-            }
+            Some(fixed) => AstValue::from(result).cast(AstType::new(fixed), builder, block),
             None => result.into(),
         }
     }
@@ -327,10 +320,7 @@ impl Operator {
         context: &ExpressionContext<'_, 'context, 'block>,
         operand: &Expression,
         block: BlockRef<'context, 'block>,
-    ) -> (
-        crate::ast::Value<'context, 'block>,
-        BlockRef<'context, 'block>,
-    ) {
+    ) -> (AstValue<'context, 'block>, BlockRef<'context, 'block>) {
         if let Some((old, _new, block)) =
             self.emit_increment_decrement_indexed(context, operand, block)
         {
@@ -353,10 +343,7 @@ impl Operator {
         operand: &Expression,
         target_type: Option<Type<'context>>,
         block: BlockRef<'context, 'block>,
-    ) -> (
-        crate::ast::Value<'context, 'block>,
-        BlockRef<'context, 'block>,
-    ) {
+    ) -> (AstValue<'context, 'block>, BlockRef<'context, 'block>) {
         if let Some(function_id) = OperatorBindings::unary_operator(self)
             .and_then(|user_operator| Self::user_defined_operator(context, operand, user_operator))
         {
@@ -378,23 +365,19 @@ impl Operator {
             Operator::BitwiseNot => {
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.unwrap_or_else(|| value.r#type().into_mlir());
-                let value = value.cast(
-                    crate::ast::Type::new(operand_type),
-                    &context.state.builder,
-                    &block,
-                );
+                let value = value.cast(AstType::new(operand_type), &context.state.builder, &block);
                 // `sol.not` is integer-only; for a `bytesN` / `byte` operand
                 // bridge through the equivalent unsigned integer `ui(8*N)` and
                 // cast the result back to the fixed-bytes type.
                 let builder = &context.state.builder;
                 let (value, restore_type) =
-                    match crate::ast::Type::new(operand_type).fixed_bytes_or_byte_width() {
+                    match AstType::new(operand_type).fixed_bytes_or_byte_width() {
                         Some(width) => {
                             let int_type =
                                 Type::from(IntegerType::unsigned(builder.context, 8 * width));
                             (
                                 value
-                                    .cast(crate::ast::Type::new(int_type), builder, &block)
+                                    .cast(AstType::new(int_type), builder, &block)
                                     .into_mlir(),
                                 Some(operand_type),
                             )
@@ -404,8 +387,8 @@ impl Operator {
                 let result: Value<'context, 'block> =
                     sol_op!(builder, block, NotOperation.value(value));
                 let result = match restore_type {
-                    Some(fixed) => crate::ast::Value::from(result)
-                        .cast(crate::ast::Type::new(fixed), builder, &block)
+                    Some(fixed) => AstValue::from(result)
+                        .cast(AstType::new(fixed), builder, &block)
                         .into_mlir(),
                     None => result,
                 };
@@ -413,21 +396,13 @@ impl Operator {
             }
             Operator::Not => {
                 let BlockAnd { value, block } = operand.emit(context, block);
-                let zero =
-                    crate::ast::Value::constant(0, value.r#type(), &context.state.builder, &block);
+                let zero = AstValue::constant(0, value.r#type(), &context.state.builder, &block);
                 let cmp = value.compare(zero, CmpPredicate::Eq, &context.state.builder, &block);
                 let result_type = target_type.unwrap_or(
-                    crate::ast::Type::unsigned(
-                        context.state.builder.context,
-                        solx_utils::BIT_LENGTH_FIELD,
-                    )
-                    .into_mlir(),
+                    AstType::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
+                        .into_mlir(),
                 );
-                let result = cmp.cast(
-                    crate::ast::Type::new(result_type),
-                    &context.state.builder,
-                    &block,
-                );
+                let result = cmp.cast(AstType::new(result_type), &context.state.builder, &block);
                 (result, block)
             }
             Operator::Subtract => {
@@ -438,15 +413,11 @@ impl Operator {
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.unwrap_or_else(|| value.r#type().into_mlir());
                 let value = value
-                    .cast(
-                        crate::ast::Type::new(operand_type),
-                        &context.state.builder,
-                        &block,
-                    )
+                    .cast(AstType::new(operand_type), &context.state.builder, &block)
                     .into_mlir();
-                let zero = crate::ast::Value::constant(
+                let zero = AstValue::constant(
                     0,
-                    crate::ast::Type::new(operand_type),
+                    AstType::new(operand_type),
                     &context.state.builder,
                     &block,
                 )
@@ -482,28 +453,21 @@ impl Operator {
                     .unwrap_or_else(|| {
                         unimplemented!("unregistered state variable {:?}", state_variable.node_id())
                     });
-                let element_type = crate::ast::Type::resolve_state_variable(
-                    &state_variable,
-                    &context.state.builder,
-                );
+                let element_type =
+                    AstType::resolve_state_variable(&state_variable, &context.state.builder);
                 let old = slot.load(&context.state.builder, element_type, block);
                 let new_value = self.emit_step(context, old, element_type, block);
                 slot.store(&context.state.builder, new_value, element_type, block);
                 (old, new_value)
             }
             Some(definition @ (Definition::Variable(_) | Definition::Parameter(_))) => {
-                let pointer =
-                    crate::ast::Pointer::new(context.environment.variable(definition.node_id()));
+                let pointer = Pointer::new(context.environment.variable(definition.node_id()));
                 let element_type = pointer.pointee();
                 let old = pointer
                     .load(element_type, &context.state.builder, block)
                     .into_mlir();
                 let new_value = self.emit_step(context, old, element_type.into_mlir(), block);
-                pointer.store(
-                    crate::ast::Value::new(new_value),
-                    &context.state.builder,
-                    block,
-                );
+                pointer.store(AstValue::new(new_value), &context.state.builder, block);
                 (old, new_value)
             }
             None => unreachable!("slang resolves every identifier reference"),
@@ -551,20 +515,12 @@ impl Operator {
             }
             _ => return None,
         };
-        let pointer = crate::ast::Pointer::new(address);
+        let pointer = Pointer::new(address);
         let old = pointer
-            .load(
-                crate::ast::Type::new(element_type),
-                &context.state.builder,
-                &block,
-            )
+            .load(AstType::new(element_type), &context.state.builder, &block)
             .into_mlir();
         let new_value = self.emit_step(context, old, element_type, &block);
-        pointer.store(
-            crate::ast::Value::new(new_value),
-            &context.state.builder,
-            &block,
-        );
+        pointer.store(AstValue::new(new_value), &context.state.builder, &block);
         Some((old, new_value, block))
     }
 
@@ -578,13 +534,8 @@ impl Operator {
         element_type: Type<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Value<'context, 'block> {
-        let one = crate::ast::Value::constant(
-            1,
-            crate::ast::Type::new(element_type),
-            &context.state.builder,
-            block,
-        )
-        .into_mlir();
+        let one = AstValue::constant(1, AstType::new(element_type), &context.state.builder, block)
+            .into_mlir();
         block
             .append_operation(self.emit_sol_binary_operation(
                 context.arithmetic_mode,
