@@ -9,7 +9,6 @@ pub mod array;
 pub mod global;
 pub mod member_reference;
 pub mod require;
-pub mod type_introspection;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
@@ -342,26 +341,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(BuiltIn::ArrayPush) => {
                 let arguments = arguments.expect("array push is a member-access call");
                 self.emit_array_push(access, arguments, block)
-            }
-            Some(BuiltIn::TypeMin | BuiltIn::TypeMax) => {
-                let (value, block) = self.emit_type_min_max(access, block);
-                (Some(value), block)
-            }
-            Some(BuiltIn::TypeEnumMin | BuiltIn::TypeEnumMax) => {
-                let (value, block) = self.emit_type_enum_min_max(access, block);
-                (Some(value), block)
-            }
-            Some(BuiltIn::TypeInterfaceId) => {
-                let (value, block) = self.emit_type_interface_id(access, block);
-                (Some(value), block)
-            }
-            Some(BuiltIn::TypeName) => {
-                let (value, block) = self.emit_type_name(access, block);
-                (Some(value), block)
-            }
-            Some(BuiltIn::TypeCreationCode | BuiltIn::TypeRuntimeCode) => {
-                let (value, block) = self.emit_type_code(access, block);
-                (Some(value), block)
             }
             Some(BuiltIn::StringConcat | BuiltIn::BytesConcat) => {
                 let arguments = arguments.expect("concat is a member-access call");

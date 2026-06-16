@@ -5,11 +5,23 @@
 //! lvalue write path.
 //!
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Type;
+use melior::ir::Value as MlirValue;
+use melior::ir::attribute::StringAttribute;
+use melior::ir::r#type::IntegerType;
+use num_bigint::BigInt;
+use slang_solidity_v2::ast::BuiltIn;
+use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
+use slang_solidity_v2::ast::TypeName as SlangTypeName;
+use solx_mlir::ods::sol::ObjectCodeOperation;
+use solx_mlir::ods::sol::StringLitOperation;
+use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -60,7 +72,7 @@ where
             .members()
             .iter()
             .position(|member| member.node_id() == member_id)
-            .expect("slang validates the accessed field is a struct member");
+            .expect("slang validated");
 
         let BlockAnd {
             value: base_value,
@@ -117,11 +129,186 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             Some(Definition::Constant(constant)) => {
                 let initializer = constant
                     .value()
-                    .expect("a Solidity constant has an initializer");
+                    .expect("slang validated");
                 return initializer.emit(context, block);
             }
             _ => {}
         }
+    }
+    // `type(T).min/max/interfaceId/name/creationCode/runtimeCode`: a
+    // compile-time property of the named type, dispatched on slang's typed
+    // built-in classification of the member.
+    match node.member().resolve_to_built_in() {
+        Some(builtin @ (BuiltIn::TypeMin | BuiltIn::TypeMax)) => {
+            // `type(T).min/max` for an integer type is a compile-time integer
+            // constant of `T`.
+            let result_type =
+                AstType::resolve_optional(node.get_type(), &context.state.builder)
+                    .expect("slang validated");
+            let integer_type = IntegerType::try_from(result_type).expect("slang validated");
+            let bits = AstType::new(result_type).integer_bit_width() as usize;
+            let integer = match (builtin, integer_type.is_signed()) {
+                (BuiltIn::TypeMin, false) => BigInt::ZERO,
+                (BuiltIn::TypeMin, true) => -(BigInt::from(1) << (bits - 1)),
+                (BuiltIn::TypeMax, false) => (BigInt::from(1) << bits) - 1,
+                (BuiltIn::TypeMax, true) => (BigInt::from(1) << (bits - 1)) - 1,
+                _ => unreachable!("dispatched on TypeMin / TypeMax"),
+            };
+            let value = AstValue::constant_from_bigint(
+                &integer,
+                AstType::new(result_type),
+                &context.state.builder,
+                &block,
+            );
+            return BlockAnd { block, value };
+        }
+        Some(builtin @ (BuiltIn::TypeEnumMin | BuiltIn::TypeEnumMax)) => {
+            // `type(E).min/max` for an enum is the lowest (`0`) or highest
+            // (`member_count - 1`) member ordinal, bridged to the enum type via
+            // `sol.enum_cast`.
+            let Expression::TypeExpression(type_expression) = node.operand() else {
+                unreachable!("type(E).min/max operand is a type expression");
+            };
+            let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name()
+            else {
+                unreachable!("type(E) names an enum via an identifier path");
+            };
+            let Some(Definition::Enum(enum_definition)) =
+                identifier_path.resolve_to_definition()
+            else {
+                unreachable!("type(E).min/max resolves to an enum definition");
+            };
+            let result_type =
+                AstType::resolve_optional(node.get_type(), &context.state.builder)
+                    .expect("slang validated");
+            let member_count = enum_definition.members().iter().count();
+            let ordinal = match builtin {
+                BuiltIn::TypeEnumMin => 0,
+                BuiltIn::TypeEnumMax => member_count.saturating_sub(1) as i64,
+                _ => unreachable!("dispatched on TypeEnumMin / TypeEnumMax"),
+            };
+            let builder = &context.state.builder;
+            let value = AstValue::constant(
+                ordinal,
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                builder,
+                &block,
+            )
+            .cast(AstType::new(result_type), builder, &block);
+            return BlockAnd { block, value };
+        }
+        Some(BuiltIn::TypeInterfaceId) => {
+            // `type(I).interfaceId` (EIP-165): the XOR of the selectors of the
+            // functions declared *directly* in interface `I` (inherited ones are
+            // excluded, matching solc), a compile-time `bytes4`. `sol.fixedbytes<4>`
+            // rejects a bare integer attribute, so emit a `uint32` constant and
+            // bridge to `bytes4` (the `f.selector` pattern).
+            let Expression::TypeExpression(type_expression) = node.operand() else {
+                unreachable!("type(I).interfaceId operand is a type expression");
+            };
+            let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name()
+            else {
+                unreachable!("type(I) names an interface via an identifier path");
+            };
+            let Some(Definition::Interface(interface_definition)) =
+                identifier_path.resolve_to_definition()
+            else {
+                unreachable!("type(I).interfaceId resolves to an interface definition");
+            };
+            let interface_id = interface_definition
+                .members()
+                .iter()
+                .filter_map(|member| match member {
+                    ContractMember::FunctionDefinition(function) => function.compute_selector(),
+                    _ => None,
+                })
+                .fold(0u32, |interface_id, selector| interface_id ^ selector);
+            let builder = &context.state.builder;
+            let integer_type = Type::from(IntegerType::unsigned(builder.context, 32));
+            let value = AstValue::constant_from_bigint(
+                &BigInt::from(interface_id),
+                AstType::new(integer_type),
+                builder,
+                &block,
+            )
+            .cast(AstType::fixed_bytes(builder.context, 4), builder, &block);
+            return BlockAnd { block, value };
+        }
+        Some(BuiltIn::TypeName) => {
+            // `type(C).name` — the contract / interface name as a `string memory`
+            // constant.
+            let Expression::TypeExpression(type_expression) = node.operand() else {
+                unreachable!("type(C).name operand is a type expression");
+            };
+            let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name()
+            else {
+                unreachable!("type(C) names a contract via an identifier path");
+            };
+            let type_name = match identifier_path.resolve_to_definition() {
+                Some(Definition::Contract(contract)) => contract.name().name(),
+                Some(Definition::Interface(interface)) => interface.name().name(),
+                _ => unreachable!("type(C).name resolves to a contract or interface"),
+            };
+            let builder = &context.state.builder;
+            let value: MlirValue<'context, 'block> = sol_op!(
+                builder,
+                &block,
+                StringLitOperation
+                    .value(StringAttribute::new(builder.context, &type_name))
+                    .addr(AstType::string(builder.context, DataLocation::Memory))
+            );
+            return BlockAnd {
+                block,
+                value: value.into(),
+            };
+        }
+        Some(builtin @ (BuiltIn::TypeCreationCode | BuiltIn::TypeRuntimeCode)) => {
+            // `type(C).creationCode/runtimeCode` — the contract's deploy / deployed
+            // bytecode (`bytes memory`) via `sol.object_code`, referencing the object
+            // by name (`C` / `C_deployed`). The reference is a linker dependency so
+            // the assembler pulls the object in; the deployed object is distinct, so
+            // `runtimeCode` must depend on `C_deployed` (depending on `C` alone leaves
+            // its `__datasize__`/`__dataoffset__` symbols unresolved).
+            let Expression::TypeExpression(type_expression) = node.operand() else {
+                unreachable!("type(C).creationCode/runtimeCode operand is a type expression");
+            };
+            let SlangTypeName::IdentifierPath(identifier_path) = type_expression.type_name()
+            else {
+                unreachable!("type(C) names a contract via an identifier path");
+            };
+            let Some(Definition::Contract(contract_definition)) =
+                identifier_path.resolve_to_definition()
+            else {
+                unreachable!("type(C).creationCode/runtimeCode resolves to a contract definition");
+            };
+            let contract_name = contract_definition.name().name();
+            let object_name = match builtin {
+                BuiltIn::TypeRuntimeCode => {
+                    format!("{contract_name}{}", solx_codegen_evm::DEPLOYED_OBJECT_SUFFIX)
+                }
+                _ => contract_name,
+            };
+            context.state.add_dependency(object_name.clone());
+            let result_type =
+                AstType::resolve_optional(node.get_type(), &context.state.builder)
+                    .unwrap_or_else(|| {
+                        AstType::string(context.state.builder.context, DataLocation::Memory)
+                            .into_mlir()
+                    });
+            let builder = &context.state.builder;
+            let value: MlirValue<'context, 'block> = sol_op!(
+                builder,
+                &block,
+                ObjectCodeOperation
+                    .obj_name(StringAttribute::new(builder.context, &object_name))
+                    .out(result_type)
+            );
+            return BlockAnd {
+                block,
+                value: value.into(),
+            };
+        }
+        _ => {}
     }
     // A struct-typed base is a field read (`s.field`); anything else
     // (e.g. `msg.sender`, `addr.balance`) is a built-in member access.
