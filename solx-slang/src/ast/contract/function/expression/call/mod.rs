@@ -98,7 +98,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     let builder = &self.state.builder;
                     value = Some(
                         option_value
-                            .coerce_to(
+                            .cast(
                                 crate::ast::Type::unsigned(
                                     builder.context,
                                     solx_utils::BIT_LENGTH_FIELD,
@@ -207,7 +207,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
             *value = crate::ast::Value::from(*value)
-                .coerce_to(crate::ast::Type::new(parameter_type), builder, &block)
+                .cast(crate::ast::Type::new(parameter_type), builder, &block)
                 .into_mlir();
         }
         (argument_values, block)

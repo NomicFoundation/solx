@@ -53,7 +53,7 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
         })
         .emit(&emitter, block);
         let cast_value = initial_value
-            .coerce_to(
+            .cast(
                 crate::ast::Type::new(declared_type),
                 &context.state.builder,
                 &block,
@@ -157,7 +157,7 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
             .unwrap_or_else(|| {
                 crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
             });
-        let cast = crate::ast::Value::from(value).coerce_to(
+        let cast = crate::ast::Value::from(value).cast(
             crate::ast::Type::new(declared_type),
             builder,
             &current,

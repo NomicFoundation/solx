@@ -504,7 +504,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         })
         .emit(&emitter, entry);
         let value = value
-            .coerce_to(
+            .cast(
                 crate::ast::Type::new(element_type),
                 &self.state.builder,
                 &entry,
@@ -691,7 +691,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .into_mlir()
         } else {
             crate::ast::Value::from(address)
-                .coerce_to(crate::ast::Type::new(result_member_type), builder, block)
+                .cast(crate::ast::Type::new(result_member_type), builder, block)
                 .into_mlir()
         }
     }

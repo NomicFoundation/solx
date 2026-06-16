@@ -199,7 +199,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
     ) -> Value<'context, 'block> {
         match self {
             Self::Pointer(pointer, element_type) => {
-                let stored_value = crate::ast::Value::from(value).coerce_to(
+                let stored_value = crate::ast::Value::from(value).cast(
                     crate::ast::Type::new(*element_type),
                     &context.state.builder,
                     block,
@@ -213,7 +213,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             }
             Self::Storage(slot, element_type) => {
                 let stored_value = crate::ast::Value::from(value)
-                    .coerce_to(
+                    .cast(
                         crate::ast::Type::new(*element_type),
                         &context.state.builder,
                         block,

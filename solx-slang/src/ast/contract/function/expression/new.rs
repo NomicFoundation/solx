@@ -78,7 +78,7 @@ impl CallKind {
             let address = match values.first() {
                 Some(&size_value) => {
                     let size = crate::ast::Value::from(size_value)
-                        .coerce_to(
+                        .cast(
                             crate::ast::Type::unsigned(
                                 builder.context,
                                 solx_utils::BIT_LENGTH_FIELD,

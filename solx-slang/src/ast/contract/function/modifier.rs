@@ -462,7 +462,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                                 )
                                 .into_mlir()
                             });
-                        let cast = value.coerce_to(
+                        let cast = value.cast(
                             crate::ast::Type::new(parameter_type),
                             &self.state.builder,
                             &current_block,
@@ -678,7 +678,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         )
                         .into_mlir()
                     });
-                let cast = value.coerce_to(
+                let cast = value.cast(
                     crate::ast::Type::new(parameter_type),
                     &self.state.builder,
                     &block,

@@ -307,31 +307,11 @@ impl<'context, 'block> Value<'context, 'block> {
         )
     }
 
-    /// Coerces to `target_type`, emitting the conversion (nothing when the types
-    /// already match). The single path every implicit widening and explicit
-    /// `bool(x)` / `address(x)` / `uint(x)` takes: `bool(x)` is a truthiness
-    /// test ([`Self::is_nonzero`]); every other target is a plain cast routed by
-    /// the target type ([`Self::cast`]).
-    pub fn coerce_to(
-        self,
-        target_type: Type<'context>,
-        builder: &Builder<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Self {
-        if self.r#type() == target_type {
-            return self;
-        }
-        if target_type == Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN) {
-            return self.is_nonzero(builder, block);
-        }
-        self.cast(target_type, builder, block)
-    }
-
     /// Casts to `target_type`, handing the value to the target type's cast router
     /// ([`Type::cast`]) — the kind-dispatch that selects the dialect cast op
-    /// (`sol.cast` / `sol.bytes_cast` / `sol.address_cast` / …). Unlike
-    /// [`Self::coerce_to`], a cast to `i1` is a plain representation cast, not a
-    /// `bool(x)` truthiness test.
+    /// (`sol.cast` / `sol.bytes_cast` / `sol.address_cast` / …), and a no-op when
+    /// the value already has `target_type`. A cast to `i1` is a plain
+    /// representation cast; truthiness (`x != 0`) is [`Self::is_nonzero`], not a cast.
     pub fn cast(
         self,
         target_type: Type<'context>,

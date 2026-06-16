@@ -61,7 +61,7 @@ impl MemberCallKind {
         } = access.operand().emit(context, block);
         let builder = &context.state.builder;
         let self_value = self_value
-            .coerce_to(
+            .cast(
                 crate::ast::Type::new(*parameter_self),
                 builder,
                 &current_block,
@@ -110,7 +110,7 @@ impl MemberCallKind {
                 } = receiver.emit(context, block);
                 let builder = &context.state.builder;
                 let self_value = self_value
-                    .coerce_to(crate::ast::Type::new(*parameter_self), builder, &block)
+                    .cast(crate::ast::Type::new(*parameter_self), builder, &block)
                     .into_mlir();
                 let (mut rest_values, block) =
                     context.emit_coerced_argument_expressions(arguments, parameter_rest, block);

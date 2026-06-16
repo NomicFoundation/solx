@@ -246,11 +246,8 @@ impl CallKind {
                         block: next_block,
                     } = argument.emit(context, block);
                     block = next_block;
-                    let stored = argument_value.coerce_to(
-                        crate::ast::Type::new(field_type),
-                        builder,
-                        &block,
-                    );
+                    let stored =
+                        argument_value.cast(crate::ast::Type::new(field_type), builder, &block);
                     field_address.store(stored, builder, &block);
                 }
                 (vec![struct_address], block)
@@ -290,7 +287,7 @@ impl CallKind {
                         })
                         .emit(context, block);
                         let result = value
-                            .coerce_to(
+                            .cast(
                                 crate::ast::Type::new(target_type),
                                 &context.state.builder,
                                 &block,
@@ -317,7 +314,7 @@ impl CallKind {
                             &context.state.builder,
                         ) {
                             Some(result_type) => value
-                                .coerce_to(
+                                .cast(
                                     crate::ast::Type::new(result_type),
                                     &context.state.builder,
                                     &block,

@@ -224,7 +224,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // `sol.bare_call`'s input rejects a non-memory operand, so an argument
         // sourced from storage / calldata is copied into memory first.
         let input = input
-            .coerce_to(
+            .cast(
                 crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory),
                 builder,
                 &block,

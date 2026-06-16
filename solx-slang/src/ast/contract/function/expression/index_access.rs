@@ -138,7 +138,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
             Some(start_expression) => {
                 let BlockAnd { value, block } = start_expression.emit(context, block);
                 let value = value
-                    .coerce_to(crate::ast::Type::new(ui256), &context.state.builder, &block)
+                    .cast(crate::ast::Type::new(ui256), &context.state.builder, &block)
                     .into_mlir();
                 (value, block)
             }
@@ -157,7 +157,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
             Some(end_expression) => {
                 let BlockAnd { value, block } = end_expression.emit(context, block);
                 let value = value
-                    .coerce_to(crate::ast::Type::new(ui256), &context.state.builder, &block)
+                    .cast(crate::ast::Type::new(ui256), &context.state.builder, &block)
                     .into_mlir();
                 (value, block)
             }

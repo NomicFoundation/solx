@@ -243,7 +243,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 crate::ast::Type::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
                     .into_mlir()
             });
-        let cast = crate::ast::Value::from(value).coerce_to(
+        let cast = crate::ast::Value::from(value).cast(
             crate::ast::Type::new(parameter_type),
             &self.state.builder,
             block,
@@ -358,7 +358,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     )
                     .into_mlir()
                 });
-            let cast = value.coerce_to(
+            let cast = value.cast(
                 crate::ast::Type::new(parameter_type),
                 &self.state.builder,
                 &current_block,

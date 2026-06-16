@@ -86,7 +86,7 @@ impl CallKind {
                 // `sol.blockhash` takes a `ui256` block number; coerce a narrower
                 // argument type up first.
                 let block_number = crate::ast::Value::from(values[0])
-                    .coerce_to(
+                    .cast(
                         crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
                         builder,
                         &block,
@@ -152,16 +152,16 @@ impl CallKind {
                 let bytes32 = crate::ast::Type::fixed_bytes(builder.context, 32).into_mlir();
                 let ui8 = Type::from(IntegerType::unsigned(builder.context, 8));
                 let hash = crate::ast::Value::from(values[0])
-                    .coerce_to(crate::ast::Type::new(bytes32), builder, &block)
+                    .cast(crate::ast::Type::new(bytes32), builder, &block)
                     .into_mlir();
                 let v = crate::ast::Value::from(values[1])
-                    .coerce_to(crate::ast::Type::new(ui8), builder, &block)
+                    .cast(crate::ast::Type::new(ui8), builder, &block)
                     .into_mlir();
                 let r = crate::ast::Value::from(values[2])
-                    .coerce_to(crate::ast::Type::new(bytes32), builder, &block)
+                    .cast(crate::ast::Type::new(bytes32), builder, &block)
                     .into_mlir();
                 let s = crate::ast::Value::from(values[3])
-                    .coerce_to(crate::ast::Type::new(bytes32), builder, &block)
+                    .cast(crate::ast::Type::new(bytes32), builder, &block)
                     .into_mlir();
                 let value = sol_op!(
                     builder,
@@ -188,13 +188,13 @@ impl CallKind {
                     crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                         .into_mlir();
                 let x = crate::ast::Value::from(values[0])
-                    .coerce_to(crate::ast::Type::new(ui256), builder, &block)
+                    .cast(crate::ast::Type::new(ui256), builder, &block)
                     .into_mlir();
                 let y = crate::ast::Value::from(values[1])
-                    .coerce_to(crate::ast::Type::new(ui256), builder, &block)
+                    .cast(crate::ast::Type::new(ui256), builder, &block)
                     .into_mlir();
                 let modulus = crate::ast::Value::from(values[2])
-                    .coerce_to(crate::ast::Type::new(ui256), builder, &block)
+                    .cast(crate::ast::Type::new(ui256), builder, &block)
                     .into_mlir();
                 let value = sol_op!(builder, block, AddModOperation.x(x).y(y).r#mod(modulus));
                 (Some(value), block)
@@ -211,13 +211,13 @@ impl CallKind {
                     crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                         .into_mlir();
                 let x = crate::ast::Value::from(values[0])
-                    .coerce_to(crate::ast::Type::new(ui256), builder, &block)
+                    .cast(crate::ast::Type::new(ui256), builder, &block)
                     .into_mlir();
                 let y = crate::ast::Value::from(values[1])
-                    .coerce_to(crate::ast::Type::new(ui256), builder, &block)
+                    .cast(crate::ast::Type::new(ui256), builder, &block)
                     .into_mlir();
                 let modulus = crate::ast::Value::from(values[2])
-                    .coerce_to(crate::ast::Type::new(ui256), builder, &block)
+                    .cast(crate::ast::Type::new(ui256), builder, &block)
                     .into_mlir();
                 let value = sol_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus));
                 (Some(value), block)
@@ -456,7 +456,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> Value<'context, 'block> {
         let builder = &self.state.builder;
         let input = crate::ast::Value::from(buffer)
-            .coerce_to(
+            .cast(
                 crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory),
                 builder,
                 block,

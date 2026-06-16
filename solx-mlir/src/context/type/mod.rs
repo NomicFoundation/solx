@@ -37,7 +37,7 @@ use self::location_policy::LocationPolicy;
 /// kinds, it selects the dialect cast op each pair needs (`sol.cast`,
 /// `sol.bytes_cast`, `sol.enum_cast`, `sol.contract_cast`, `sol.address_cast`,
 /// `sol.data_loc_cast`). A value hands itself to its target type
-/// ([`Value::cast`] / [`Value::coerce_to`] delegate here), so the kind
+/// ([`Value::cast`] delegates here), so the kind
 /// classification lives in exactly one place. All types are constructed through
 /// typed APIs — no string parsing.
 #[derive(Clone, Copy, PartialEq, Eq)]

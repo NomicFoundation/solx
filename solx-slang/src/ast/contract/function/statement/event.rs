@@ -57,7 +57,7 @@ statement_emit!(EmitStatement; |node, context, block| {
             &context.state.builder,
         );
         let value = value
-            .coerce_to(
+            .cast(
                 crate::ast::Type::new(parameter_type),
                 &context.state.builder,
                 &current_block,

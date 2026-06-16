@@ -70,7 +70,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
                         .into_mlir();
                 let message_value = message_value
-                    .coerce_to(crate::ast::Type::new(string_memory_type), builder, &block)
+                    .cast(crate::ast::Type::new(string_memory_type), builder, &block)
                     .into_mlir();
                 self.emit_revert("Error(string)", &[message_value], true, &block);
                 block

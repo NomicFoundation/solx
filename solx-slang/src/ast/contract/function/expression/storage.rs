@@ -123,8 +123,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     CopyOperation.src(value.into_mlir()).dst(storage_ref)
                 );
             } else {
-                let stored_value =
-                    value.coerce_to(crate::ast::Type::new(element_type), builder, &block);
+                let stored_value = value.cast(crate::ast::Type::new(element_type), builder, &block);
                 crate::ast::Pointer::new(storage_ref).store(stored_value, builder, &block);
             }
         }

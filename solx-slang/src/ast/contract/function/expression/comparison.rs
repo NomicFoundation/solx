@@ -107,12 +107,12 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         crate::ast::Type::unsigned(mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
     let lhs_wide_type = if signed_lhs { signed_256 } else { unsigned_256 };
     let rhs_wide_type = if signed_rhs { signed_256 } else { unsigned_256 };
-    let lhs_wide = lhs.coerce_to(
+    let lhs_wide = lhs.cast(
         crate::ast::Type::new(lhs_wide_type),
         &context.state.builder,
         &block,
     );
-    let rhs_wide = rhs.coerce_to(
+    let rhs_wide = rhs.cast(
         crate::ast::Type::new(rhs_wide_type),
         &context.state.builder,
         &block,

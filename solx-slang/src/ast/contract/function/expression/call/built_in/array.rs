@@ -74,7 +74,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .emit(self, block);
             let builder = &self.state.builder;
             let byte_value = value
-                .coerce_to(crate::ast::Type::new(byte_target), builder, &block)
+                .cast(crate::ast::Type::new(byte_target), builder, &block)
                 .into_mlir();
             sol_op_void!(
                 builder,
@@ -117,7 +117,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         })
         .emit(self, block);
         let builder = &self.state.builder;
-        let cast_value = value.coerce_to(crate::ast::Type::new(element_type), builder, &block);
+        let cast_value = value.cast(crate::ast::Type::new(element_type), builder, &block);
         crate::ast::Pointer::new(new_slot).store(cast_value, builder, &block);
         (None, block)
     }

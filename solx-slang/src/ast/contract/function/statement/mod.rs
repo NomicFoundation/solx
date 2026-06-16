@@ -383,7 +383,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
         .zip(context.return_types.iter())
         .map(|(value, &return_type)| {
             value
-                .coerce_to(
+                .cast(
                     crate::ast::Type::new(return_type),
                     &context.state.builder,
                     &block,

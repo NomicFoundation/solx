@@ -116,7 +116,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 "a conditional branch yields one value per result slot"
             );
             for (index, value) in values.into_iter().enumerate() {
-                let cast = value.coerce_to(
+                let cast = value.cast(
                     crate::ast::Type::new(result_types[index]),
                     builder,
                     &current,
@@ -251,7 +251,7 @@ expression_emit!(ConditionalExpression; |node, context, block| {
         target_type: result_type,
     })
     .emit(context, then_block);
-    let then_cast = then_value.coerce_to(
+    let then_cast = then_value.cast(
         crate::ast::Type::new(result_type),
         &context.state.builder,
         &then_end,
@@ -268,7 +268,7 @@ expression_emit!(ConditionalExpression; |node, context, block| {
         target_type: result_type,
     })
     .emit(context, else_block);
-    let else_cast = else_value.coerce_to(
+    let else_cast = else_value.cast(
         crate::ast::Type::new(result_type),
         &context.state.builder,
         &else_end,
@@ -346,7 +346,7 @@ expression_emit!(ArrayExpression; |node, context, block| {
         .into_iter()
         .map(|value| {
             value
-                .coerce_to(crate::ast::Type::new(element_type), builder, &current)
+                .cast(crate::ast::Type::new(element_type), builder, &current)
                 .into_mlir()
         })
         .collect();
