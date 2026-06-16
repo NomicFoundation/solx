@@ -11,10 +11,10 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use super::Type;
 use crate::ArraySize;
 use crate::ContractPayable;
 use crate::LocationPolicy;
+use crate::Type;
 
 /// Resolves a Slang semantic type to its MLIR (Sol dialect) type — the
 /// type-level analogue of the `Emit` projection, a local trait on the foreign

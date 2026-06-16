@@ -33,7 +33,7 @@ use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::RankedTensorType;
 use num::BigInt;
 
-use super::Builder;
+use crate::Builder;
 use crate::ods::yul;
 
 /// Byte alignment of a 256-bit word slot — the alignment `solc` emits on every

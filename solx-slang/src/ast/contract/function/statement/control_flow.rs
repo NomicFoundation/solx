@@ -19,12 +19,12 @@ use solx_mlir::ods::sol::IfOperation;
 use solx_mlir::ods::sol::WhileOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
-use super::discarded::Discarded;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::contract::function::statement::discarded::Discarded;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Appends a dead block with `sol.yield` to a region whose live block
