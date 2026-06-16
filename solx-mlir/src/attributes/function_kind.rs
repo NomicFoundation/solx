@@ -24,7 +24,6 @@ impl FunctionKind {
     /// Builds the Sol-dialect `FunctionKindAttr` for this kind — the dialect
     /// representation a `sol.func` carries (a regular function carries none).
     pub fn attribute(self, context: &Context) -> Attribute<'_> {
-        // `solxCreateFunctionKindAttr` returns a valid MlirAttribute.
         unsafe {
             Attribute::from_raw(crate::ffi::solxCreateFunctionKindAttr(
                 context.to_raw(),

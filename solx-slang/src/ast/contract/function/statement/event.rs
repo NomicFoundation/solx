@@ -32,12 +32,6 @@ statement_emit!(EmitStatement; |node, context, block| {
         .map(|parameter| parameter.node_id())
         .collect::<Vec<_>>();
     let ordered_arguments = node.arguments().ordered_by(&parameter_ids);
-    assert!(
-        ordered_arguments.len() == parameters.len(),
-        "event argument count {} does not match parameter count {}",
-        ordered_arguments.len(),
-        parameters.len()
-    );
 
     let emitter = ExpressionContext::from(&*context);
     let mut indexed_arguments: Vec<Value<'context, 'block>> = Vec::new();

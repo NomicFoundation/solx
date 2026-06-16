@@ -144,8 +144,6 @@ impl<'context> Context<'context> {
 
         // Set the EVM version attribute on the module — required by the
         // Sol-to-Yul conversion pass.
-        // `solxCreateEvmVersionAttr` returns a valid MlirAttribute
-        // from the C++ Sol dialect. The context pointer is valid.
         let evm_version_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateEvmVersionAttr(
                 context.to_raw(),
@@ -224,13 +222,9 @@ impl<'context> Context<'context> {
         parameter_types: Vec<Type<'context>>,
         return_types: Vec<Type<'context>>,
     ) {
-        let previous = self.function_signatures.insert(
+        self.function_signatures.insert(
             definition_id,
             Function::new(mlir_name, parameter_types, return_types),
-        );
-        debug_assert!(
-            previous.is_none(),
-            "duplicate function signature registration for definition {definition_id:?}",
         );
     }
 

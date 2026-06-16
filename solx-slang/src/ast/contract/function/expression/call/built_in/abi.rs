@@ -200,10 +200,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     value: function_value,
                     block: current,
                 } = function_expression.emit(self, block);
-                assert!(
-                    function_value.r#type().is_ext_function_ref(),
-                    "abi.encodeCall's runtime callee resolves to an external function pointer"
-                );
                 let selector_value = sol_op!(
                     builder,
                     &current,

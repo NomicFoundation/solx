@@ -302,19 +302,21 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             block = next;
             targets.push((target, value));
         }
-        let mut result = None;
-        for (target, value) in targets.into_iter().rev() {
-            result = Some(target.store(context, value, &block));
-        }
-        let result = result.unwrap_or_else(|| {
-            AstValue::constant(
-                0,
-                AstType::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD),
-                &context.state.builder,
-                &block,
-            )
-            .into_mlir()
-        });
+        let result = targets
+            .into_iter()
+            .rev()
+            .fold(None, |_, (target, value)| {
+                Some(target.store(context, value, &block))
+            })
+            .unwrap_or_else(|| {
+                AstValue::constant(
+                    0,
+                    AstType::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD),
+                    &context.state.builder,
+                    &block,
+                )
+                .into_mlir()
+            });
         (result, block)
     }
 

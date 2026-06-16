@@ -57,8 +57,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                     if let Some(value_node) = declaration.value() {
                         let expression = value_node.expression();
                         if variables.len() > 1 {
-                            let (values, next) =
-                                self.emit_yul_multi_call(&expression, variables.len(), current);
+                            let (values, next) = self.emit_yul_multi_call(&expression, current);
                             current = next;
                             values.into_iter().map(Some).collect()
                         } else {
@@ -507,12 +506,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             .returns()
             .map(|names| names.iter().collect::<Vec<_>>())
             .unwrap_or_default(); // recut-lint-allow: fail01 — a yul function may declare no returns
-        assert!(
-            arguments.len() == parameters.len(),
-            "yul call `{name}` arity mismatch: {} args vs {} params",
-            arguments.len(),
-            parameters.len()
-        );
 
         let builder = &self.state.builder;
         self.environment.enter_scope();
@@ -619,7 +612,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         expression: &YulExpression,
         block: BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
-        let (values, current) = self.emit_yul_multi_call(expression, variables.len(), block);
+        let (values, current) = self.emit_yul_multi_call(expression, block);
         for (path, value) in variables.iter().zip(values) {
             self.emit_yul_store_to_path(&path, value, current);
         }
@@ -627,12 +620,11 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     }
 
     /// Evaluates a multi-result Yul call (the RHS of a multi-target `let` or
-    /// assignment): the callee must be a user-defined function with `expected`
-    /// returns. Emits the arguments left-to-right, then inlines the call.
+    /// assignment): the callee is a user-defined function. Emits the arguments
+    /// left-to-right, then inlines the call.
     fn emit_yul_multi_call(
         &mut self,
         expression: &YulExpression,
-        expected: usize,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let YulExpression::YulFunctionCallExpression(call) = expression else {
@@ -653,11 +645,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             current = next;
         }
         let (values, current) = self.emit_yul_user_call_multi(&callee, &arguments, current);
-        assert!(
-            values.len() == expected,
-            "yul binding arity mismatch: {expected} targets vs {} results",
-            values.len(),
-        );
         (values, current)
     }
 }

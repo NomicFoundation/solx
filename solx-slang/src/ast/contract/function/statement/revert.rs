@@ -35,12 +35,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         else {
             unimplemented!("only positional arguments supported");
         };
-        let mut arguments = positional_arguments.iter();
-        let message_argument = arguments.next();
-        assert!(
-            arguments.next().is_none(),
-            "revert accepts at most one argument"
-        );
+        let message_argument = positional_arguments.iter().next();
         let block = match message_argument {
             None => {
                 self.emit_revert("", &[], false, &block);

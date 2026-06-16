@@ -24,7 +24,6 @@ impl ContractKind {
     /// representation a `sol.contract` carries, owned by the kind itself rather
     /// than spelled at each emission site.
     pub fn attribute(self, context: &Context) -> Attribute<'_> {
-        // `solxCreateContractKindAttr` returns a valid MlirAttribute.
         unsafe {
             Attribute::from_raw(crate::ffi::solxCreateContractKindAttr(
                 context.to_raw(),

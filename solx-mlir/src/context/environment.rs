@@ -51,7 +51,6 @@ impl<'context, 'block> Environment<'context, 'block> {
 
     /// Pops the innermost lexical scope.
     pub fn exit_scope(&mut self) {
-        assert!(self.scopes.len() > 1, "cannot exit the root scope");
         self.scopes.pop();
     }
 

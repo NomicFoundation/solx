@@ -169,8 +169,6 @@ impl<'context, 'block> Pointer<'context, 'block> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        // `mlirSolGepGetResultType` returns a valid MlirType from
-        // `sol::GepOp::getResultType` on the C++ side.
         let address_type = unsafe {
             MlirType::from_raw(crate::ffi::mlirSolGepGetResultType(
                 self.inner.r#type().to_raw(),

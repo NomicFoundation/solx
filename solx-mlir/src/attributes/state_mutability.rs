@@ -26,7 +26,6 @@ impl StateMutability {
     /// dialect representation a `sol.func` carries, owned by the mutability rather
     /// than spelled at the emission site.
     pub fn attribute(self, context: &Context) -> Attribute<'_> {
-        // `solxCreateStateMutabilityAttr` returns a valid MlirAttribute.
         unsafe {
             Attribute::from_raw(crate::ffi::solxCreateStateMutabilityAttr(
                 context.to_raw(),

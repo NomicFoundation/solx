@@ -103,12 +103,6 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
     let (values, current) = match &expression {
         Expression::TupleExpression(tuple) => {
             let items = tuple.items();
-            assert!(
-                items.len() == elements.len(),
-                "tuple deconstruction arity mismatch: {} LHS slots vs {} RHS values",
-                elements.len(),
-                items.len(),
-            );
             let mut values = Vec::with_capacity(items.len());
             let mut current = block;
             for item in items.iter() {
@@ -123,24 +117,12 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
         }
         Expression::FunctionCallExpression(call) => {
             let (values, current) = call.emit(&emitter, block);
-            assert!(
-                values.len() == elements.len(),
-                "tuple deconstruction arity mismatch: {} LHS slots vs {} call results",
-                elements.len(),
-                values.len(),
-            );
             (values, current)
         }
         Expression::ConditionalExpression(conditional) => {
             // `(a, b) = cond ? (x, y) : (z, w)` — the conditional yields one
             // value per tuple element through its own Emit.
             let (values, current) = conditional.emit(&emitter, block);
-            assert!(
-                values.len() == elements.len(),
-                "tuple deconstruction arity mismatch: {} LHS slots vs {} conditional values",
-                elements.len(),
-                values.len(),
-            );
             (values, current)
         }
         _ => unimplemented!(

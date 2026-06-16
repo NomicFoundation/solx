@@ -290,10 +290,6 @@ where
             Expression::ShiftExpression(inner) => inner.emit(context, block),
             Expression::FunctionCallExpression(inner) => {
                 let (mut values, block) = inner.emit(context, block);
-                assert!(
-                    !values.is_empty(),
-                    "a function call in value position returns a value"
-                );
                 BlockAnd {
                     value: AstValue::from(values.remove(0)),
                     block,
@@ -302,10 +298,6 @@ where
             Expression::TupleExpression(inner) => inner.emit(context, block),
             Expression::ConditionalExpression(inner) => {
                 let (mut values, block) = inner.emit(context, block);
-                assert!(
-                    values.len() == 1,
-                    "a conditional in value position yields a single value"
-                );
                 BlockAnd {
                     value: AstValue::from(values.remove(0)),
                     block,

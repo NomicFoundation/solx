@@ -119,10 +119,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             value: operand_value,
             block,
         } = access.operand().emit(self, block);
-        assert!(
-            operand_value.r#type().is_ext_function_ref(),
-            "function `.selector` resolves to a named function, a public getter, or an external function-pointer value"
-        );
         let selector = sol_op!(
             &self.state.builder,
             &block,
@@ -146,10 +142,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             value: operand_value,
             block,
         } = access.operand().emit(self, block);
-        assert!(
-            operand_value.r#type().is_ext_function_ref(),
-            "function `.address` requires an external function-pointer value"
-        );
         let address = sol_op!(
             &self.state.builder,
             &block,

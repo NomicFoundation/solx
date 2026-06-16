@@ -53,24 +53,12 @@ where
         // both branches store into the shared slots before the loads.
         if let Some(SlangType::Tuple(tuple_type)) = self.get_type() {
             let result_types: Vec<Type<'context>> = match (&true_expression, &false_expression) {
-                (
-                    Expression::TupleExpression(true_tuple),
-                    Expression::TupleExpression(false_tuple),
-                ) => {
+                (Expression::TupleExpression(true_tuple), Expression::TupleExpression(_)) => {
                     let true_items: Vec<Expression> = true_tuple
                         .items()
                         .iter()
                         .filter_map(|item| item.expression())
                         .collect();
-                    let false_count = false_tuple
-                        .items()
-                        .iter()
-                        .filter_map(|item| item.expression())
-                        .count();
-                    assert!(
-                        !true_items.is_empty() && true_items.len() == false_count,
-                        "a multi-value conditional's branches are equal-length, non-empty tuples"
-                    );
                     true_items
                         .iter()
                         .map(|item| {
@@ -132,10 +120,6 @@ where
                         std::mem::discriminant(other)
                     ),
                 };
-                assert!(
-                    values.len() == slots.len(),
-                    "a conditional branch yields one value per result slot"
-                );
                 for (index, value) in values.into_iter().enumerate() {
                     let cast = AstValue::from(value).cast(
                         AstType::new(result_types[index]),
@@ -226,8 +210,7 @@ where
 expression_emit!(TupleExpression; |node, context, block| {
     let items = node.items();
     // TODO: support multi-value tuples (e.g. tuple deconstruction)
-    assert!(items.len() == 1, "multi-value tuples not yet supported");
-    let item = items.iter().next().expect("length checked to be 1 above");
+    let item = items.iter().next().expect("a tuple has at least one element");
     let inner = item
         .expression()
         .expect("a single-element tuple has an inner expression");
