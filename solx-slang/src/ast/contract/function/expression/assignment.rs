@@ -223,6 +223,101 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         }
     }
 
+    /// Collects the `(lvalue, value)` bindings of a destructuring assignment
+    /// `(a, b, …) = rhs`, evaluating every value before the caller stores any (so
+    /// `(a, b) = (b, a)` swaps). A tuple-literal RHS pairs element-wise and
+    /// recurses into nested tuples; a blank slot discards its RHS — a scalar still
+    /// evaluated for its side effects, a nested tuple wholesale. A call /
+    /// conditional RHS is a flat value list, one value per lvalue.
+    fn destructure<'state>(
+        context: &ExpressionContext<'state, 'context, 'block>,
+        lhs: &TupleExpression,
+        rhs: &Expression,
+        mut block: BlockRef<'context, 'block>,
+    ) -> (
+        Vec<(Expression, Value<'context, 'block>)>,
+        BlockRef<'context, 'block>,
+    ) {
+        let mut bindings = Vec::new();
+        match rhs {
+            Expression::TupleExpression(rhs) => {
+                for (lvalue, rhs) in lhs.items().iter().zip(rhs.items().iter()) {
+                    let rhs = rhs
+                        .expression()
+                        .expect("a tuple assignment RHS element has an inner expression");
+                    match (lvalue.expression(), &rhs) {
+                        (
+                            Some(Expression::TupleExpression(lvalue)),
+                            Expression::TupleExpression(_),
+                        ) => {
+                            let (nested, next) = Self::destructure(context, &lvalue, &rhs, block);
+                            bindings.extend(nested);
+                            block = next;
+                        }
+                        (Some(lvalue), _) => {
+                            let BlockAnd { value, block: next } = rhs.emit(context, block);
+                            bindings.push((lvalue, value.into_mlir()));
+                            block = next;
+                        }
+                        (None, Expression::TupleExpression(_)) => {}
+                        (None, _) => block = rhs.emit(context, block).block,
+                    }
+                }
+            }
+            _ => {
+                let (values, next) = match rhs {
+                    Expression::FunctionCallExpression(call) => call.emit(context, block),
+                    Expression::ConditionalExpression(conditional) => {
+                        conditional.emit(context, block)
+                    }
+                    _ => unimplemented!(
+                        "tuple assignment with this right-hand side shape is not yet supported"
+                    ),
+                };
+                block = next;
+                for (lvalue, value) in lhs.items().iter().zip(values) {
+                    if let Some(lvalue) = lvalue.expression() {
+                        bindings.push((lvalue, value));
+                    }
+                }
+            }
+        }
+        (bindings, block)
+    }
+
+    /// Resolves each binding's lvalue to a target left-to-right against the
+    /// pre-assignment state, then stores RIGHT-TO-LEFT — so the leftmost write to
+    /// an aliased destination wins (`(y, y, y) = (1, 2, 3)` leaves `y == 1`) and a
+    /// storage-aggregate swap copies references in place. Returns the last stored
+    /// value, or a zero sentinel when every slot was blank (`(, ) = f()` still has
+    /// a value in expression position).
+    fn store_all<'state>(
+        context: &ExpressionContext<'state, 'context, 'block>,
+        bindings: Vec<(Expression, Value<'context, 'block>)>,
+        mut block: BlockRef<'context, 'block>,
+    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
+        let mut targets = Vec::with_capacity(bindings.len());
+        for (lvalue, value) in bindings {
+            let (target, next) = Self::new(context, &lvalue, block);
+            block = next;
+            targets.push((target, value));
+        }
+        let mut result = None;
+        for (target, value) in targets.into_iter().rev() {
+            result = Some(target.store(context, value, &block));
+        }
+        let result = result.unwrap_or_else(|| {
+            AstValue::constant(
+                0,
+                AstType::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD),
+                &context.state.builder,
+                &block,
+            )
+            .into_mlir()
+        });
+        (result, block)
+    }
+
     /// Emits `delete x` — resets the lvalue `operand` denotes to its zero value.
     /// A reference-typed storage aggregate is deep-cleared via `sol.delete`; a
     /// memory aggregate resets to a freshly allocated zero-filled buffer; a value
@@ -296,178 +391,6 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
     }
 }
 
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits a destructuring assignment `(a, b, …) = rhs` to existing lvalues.
-    ///
-    /// Solidity evaluates every right-hand component before writing any
-    /// destination (so `(a, b) = (b, a)` swaps), so all RHS values are
-    /// materialised first; destinations are then resolved left-to-right against
-    /// pre-assignment state and written right-to-left, so the leftmost write to
-    /// an aliased destination wins: `(y, y, y) = (1, 2, 3)` leaves `y == 1`, and
-    /// a storage-aggregate swap `(x, y) = (y, x)` copies references in place
-    /// (both end equal). A blank slot `(, b)` discards its value.
-    fn emit_tuple_assignment(
-        &self,
-        tuple: &TupleExpression,
-        right: &Expression,
-        block: BlockRef<'context, 'block>,
-    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
-        // Pairs LHS lvalue slots with RHS value expressions, recursing only
-        // where BOTH sides nest — a blank LHS slot opposite a nested RHS tuple
-        // discards it as a unit. A blank slot yields `None` for its lvalue.
-        fn pair_assignment(
-            lhs: &TupleExpression,
-            rhs: &TupleExpression,
-        ) -> Vec<(Option<Expression>, Expression)> {
-            let lhs_items = lhs.items();
-            let rhs_items = rhs.items();
-            assert!(
-                lhs_items.len() == rhs_items.len(),
-                "tuple assignment arity mismatch: {} LHS slots vs {} RHS values",
-                lhs_items.len(),
-                rhs_items.len(),
-            );
-            let mut pairs = Vec::new();
-            for (lhs_item, rhs_item) in lhs_items.iter().zip(rhs_items.iter()) {
-                let lhs_expression = lhs_item.expression();
-                let rhs_expression = rhs_item
-                    .expression()
-                    .expect("a tuple assignment RHS element has an inner expression");
-                match (&lhs_expression, &rhs_expression) {
-                    (
-                        Some(Expression::TupleExpression(lhs_nested)),
-                        Expression::TupleExpression(rhs_nested),
-                    ) => pairs.extend(pair_assignment(lhs_nested, rhs_nested)),
-                    _ => pairs.push((lhs_expression, rhs_expression)),
-                }
-            }
-            pairs
-        }
-
-        // Flattens LHS lvalue leaves, recursing into nested tuples
-        // (`(a, (b, c))` -> `[a, b, c]`); a blank slot is `None` (discarded). For
-        // a call / conditional RHS, whose values are already flat.
-        fn flatten_lvalues(tuple: &TupleExpression) -> Vec<Option<Expression>> {
-            let mut leaves = Vec::new();
-            for item in tuple.items().iter() {
-                match item.expression() {
-                    Some(Expression::TupleExpression(nested)) => {
-                        leaves.extend(flatten_lvalues(&nested))
-                    }
-                    other => leaves.push(other),
-                }
-            }
-            leaves
-        }
-
-        // Materialise the assignment as `(lvalue, value)` pairs, evaluating
-        // every value before any store (Solidity's `(a, b) = (b, a)` swap).
-        let (assignments, mut block): (Vec<(Expression, Value<'context, 'block>)>, _) = match right
-        {
-            Expression::TupleExpression(rhs_tuple) => {
-                // Pair LHS lvalues with RHS value expressions, recursing only
-                // where BOTH sides are tuples — so a blank slot
-                // (`(a, ) = (4, (8, 16, 32))`) discards the whole nested tuple
-                // rather than spreading it across slots.
-                let pairs = pair_assignment(tuple, rhs_tuple);
-                let mut assignments = Vec::new();
-                let mut current = block;
-                for (lvalue, rhs_expression) in pairs {
-                    match lvalue {
-                        Some(lvalue) => {
-                            let BlockAnd { value, block: next } =
-                                rhs_expression.emit(self, current);
-                            current = next;
-                            assignments.push((lvalue, value.into_mlir()));
-                        }
-                        // A discarded scalar is still evaluated for its side
-                        // effects; a discarded nested tuple is dropped wholesale.
-                        None if !matches!(rhs_expression, Expression::TupleExpression(_)) => {
-                            let BlockAnd {
-                                value: _discarded,
-                                block: next,
-                            } = rhs_expression.emit(self, current);
-                            current = next;
-                        }
-                        None => {}
-                    }
-                }
-                (assignments, current)
-            }
-            // A call / conditional yields a flat value list, so the LHS pairs by
-            // flattened leaf (no syntactic nesting can match these).
-            Expression::FunctionCallExpression(call) => {
-                let lhs_leaves = flatten_lvalues(tuple);
-                let (values, current) = call.emit(self, block);
-                assert!(
-                    values.len() == lhs_leaves.len(),
-                    "tuple assignment arity mismatch: {} LHS slots vs {} call results",
-                    lhs_leaves.len(),
-                    values.len(),
-                );
-                (Self::zip_assignments(lhs_leaves, values), current)
-            }
-            Expression::ConditionalExpression(conditional) => {
-                // `(a, b) = cond ? (x, y) : (z, w)` — the conditional yields one
-                // value per tuple element through its own Emit.
-                let lhs_leaves = flatten_lvalues(tuple);
-                let (values, current) = conditional.emit(self, block);
-                assert!(
-                    values.len() == lhs_leaves.len(),
-                    "tuple assignment arity mismatch: {} LHS slots vs {} conditional values",
-                    lhs_leaves.len(),
-                    values.len(),
-                );
-                (Self::zip_assignments(lhs_leaves, values), current)
-            }
-            _ => unimplemented!(
-                "tuple assignment with this right-hand side shape is not yet supported"
-            ),
-        };
-
-        // Resolve every LHS lvalue address first, left-to-right against the
-        // pre-assignment state, then store RIGHT-TO-LEFT: invisible for value
-        // types, but reproducing Solidity's storage-aggregate quirk that a
-        // `(x, y) = (y, x)` swap does not work and that the leftmost write to an
-        // aliased destination wins (`(y, y, y) = (1, 2, 3)` leaves `y == 1`).
-        let mut targets = Vec::with_capacity(assignments.len());
-        for (lvalue, value) in assignments {
-            let (target, next) = AssignmentTarget::new(self, &lvalue, block);
-            block = next;
-            targets.push((target, value));
-        }
-
-        let mut result = None;
-        for (target, value) in targets.into_iter().rev() {
-            result = Some(target.store(self, value, &block));
-        }
-        // A fully blank LHS `(, ) = f()` binds nothing; the assignment still has
-        // a value in expression position, so fall back to a zero sentinel.
-        let result = result.unwrap_or_else(|| {
-            AstValue::constant(
-                0,
-                AstType::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD),
-                &self.state.builder,
-                &block,
-            )
-            .into_mlir()
-        });
-        (result, block)
-    }
-
-    /// Zips flattened LHS leaves with their values, dropping blank slots.
-    fn zip_assignments(
-        lhs_leaves: Vec<Option<Expression>>,
-        values: Vec<Value<'context, 'block>>,
-    ) -> Vec<(Expression, Value<'context, 'block>)> {
-        lhs_leaves
-            .into_iter()
-            .zip(values)
-            .filter_map(|(lvalue, value)| lvalue.map(|lvalue| (lvalue, value)))
-            .collect()
-    }
-}
-
 // An assignment expression (`=`, `+=`, `-=`, `*=`, …).
 expression_emit!(AssignmentExpression; |node, context, block| {
     // `(x) = v` is the scalar `x = v`; a multi-element (or blank-bearing) tuple
@@ -475,7 +398,8 @@ expression_emit!(AssignmentExpression; |node, context, block| {
     let left = node.left_operand().unwrap_parentheses();
     let right = node.right_operand();
     if let Expression::TupleExpression(tuple) = &left {
-        let (value, block) = context.emit_tuple_assignment(tuple, &right, block);
+        let (bindings, block) = AssignmentTarget::destructure(context, tuple, &right, block);
+        let (value, block) = AssignmentTarget::store_all(context, bindings, block);
         return BlockAnd { block, value: value.into() };
     }
 
