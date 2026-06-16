@@ -401,6 +401,55 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 value: value.into(),
             };
         }
+        // A function-like built-in member named WITHOUT a call —
+        // `addr.transfer`/`send`/`call`/`delegatecall`/`staticcall`, `data.pop`/
+        // `push`, e.g. a discarded `data.pop;` — is a reference, not the action
+        // (which the call dispatch handles). solc only binds the function;
+        // evaluate the operand for its side effects and yield a placeholder.
+        Some(
+            BuiltIn::AddressTransfer
+            | BuiltIn::AddressSend
+            | BuiltIn::AddressCall
+            | BuiltIn::AddressDelegatecall
+            | BuiltIn::AddressStaticcall
+            | BuiltIn::ArrayPop
+            | BuiltIn::ArrayPush,
+        ) => {
+            let BlockAnd {
+                value: _operand,
+                block,
+            } = node.operand().emit(context, block);
+            let builder = &context.state.builder;
+            let value = AstValue::constant(
+                0,
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                builder,
+                &block,
+            );
+            return BlockAnd { block, value };
+        }
+        // `abi.encode;` / `T.wrap;` named without a call are no-ops: the operand
+        // is the `abi` namespace keyword or the type, not a value (binding it
+        // would fail), so nothing is evaluated. Yield a placeholder.
+        Some(
+            BuiltIn::AbiEncode
+            | BuiltIn::AbiEncodePacked
+            | BuiltIn::AbiEncodeWithSelector
+            | BuiltIn::AbiEncodeWithSignature
+            | BuiltIn::AbiEncodeCall
+            | BuiltIn::AbiDecode
+            | BuiltIn::Wrap
+            | BuiltIn::Unwrap,
+        ) => {
+            let builder = &context.state.builder;
+            let value = AstValue::constant(
+                0,
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                builder,
+                &block,
+            );
+            return BlockAnd { block, value };
+        }
         _ => {}
     }
     // EVM environment globals (`block`/`tx`/`msg`): nullary `sol.*` intrinsics.

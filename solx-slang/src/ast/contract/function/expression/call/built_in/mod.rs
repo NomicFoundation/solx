@@ -241,68 +241,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let (value, block) = self.emit_enum_variant(access, ordinal, block);
             return (Some(value), block);
         }
-        // A function-like built-in member referenced WITHOUT a call —
-        // `addr.transfer`/`send`/`call`/`delegatecall`/`staticcall`,
-        // `data.pop`/`push`, e.g. a discarded `data.pop;` — is a member
-        // reference, not the action (which the call dispatch handles). solc
-        // only binds the function; evaluate the operand for its side effects
-        // and yield a placeholder. (`abi.*` is handled below: its operand is
-        // the `abi` namespace keyword, not a value.)
-        if arguments.is_none()
-            && matches!(
-                access.member().resolve_to_built_in(),
-                Some(
-                    BuiltIn::AddressTransfer
-                        | BuiltIn::AddressSend
-                        | BuiltIn::AddressCall
-                        | BuiltIn::AddressDelegatecall
-                        | BuiltIn::AddressStaticcall
-                        | BuiltIn::ArrayPop
-                        | BuiltIn::ArrayPush
-                )
-            )
-        {
-            let BlockAnd {
-                value: _operand,
-                block,
-            } = access.operand().emit(self, block);
-            let builder = &self.state.builder;
-            let placeholder = AstValue::constant(
-                0,
-                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                builder,
-                &block,
-            )
-            .into_mlir();
-            return (Some(placeholder), block);
-        }
-        // The `abi.*` builtins referenced WITHOUT a call (e.g. a discarded
-        // `abi.encode;`) are no-ops; their operand is the `abi` namespace
-        // keyword, not a value, so nothing is evaluated (binding `abi` would
-        // fail). Yield a placeholder.
-        if arguments.is_none()
-            && matches!(
-                access.member().resolve_to_built_in(),
-                Some(
-                    BuiltIn::AbiEncode
-                        | BuiltIn::AbiEncodePacked
-                        | BuiltIn::AbiEncodeWithSelector
-                        | BuiltIn::AbiEncodeWithSignature
-                        | BuiltIn::AbiEncodeCall
-                        | BuiltIn::AbiDecode
-                )
-            )
-        {
-            let builder = &self.state.builder;
-            let placeholder = AstValue::constant(
-                0,
-                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                builder,
-                &block,
-            )
-            .into_mlir();
-            return (Some(placeholder), block);
-        }
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressSend) => {
                 let arguments = arguments.expect("send is a member-access call");
@@ -345,20 +283,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(BuiltIn::FunctionAddress) => self.emit_function_address(access, block),
             Some(BuiltIn::ErrorSelector) => self.emit_error_selector(access, block),
             Some(BuiltIn::EventSelector) => self.emit_event_selector(access, block),
-            // `T.wrap` / `T.unwrap` named without a call is a no-op reference to
-            // the built-in itself (the call forms lower in the call dispatch via
-            // `CallKind::UdvtWrapUnwrap`). Yield a placeholder.
-            Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
-                let builder = &self.state.builder;
-                let placeholder = AstValue::constant(
-                    0,
-                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                    builder,
-                    &block,
-                )
-                .into_mlir();
-                (Some(placeholder), block)
-            }
             // A member that resolves to a function used as a value (not called) is
             // a function pointer: an externally-visible function with a selector
             // (`this.f`, `instance.f`) is an external pointer, while a
