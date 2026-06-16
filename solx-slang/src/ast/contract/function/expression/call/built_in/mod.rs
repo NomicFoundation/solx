@@ -78,7 +78,10 @@ impl CallKind {
                 block,
             ),
             BuiltIn::Blockhash => {
-                let (values, block) = context.emit_argument_values(arguments, block);
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = arguments.emit(context, block);
                 let builder = &context.state.builder;
                 // `sol.blockhash` takes a `ui256` block number; coerce a narrower
                 // argument type up first.
@@ -99,12 +102,18 @@ impl CallKind {
                 (Some(value), block)
             }
             BuiltIn::Keccak256 => {
-                let (values, block) = context.emit_argument_values(arguments, block);
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = arguments.emit(context, block);
                 let value = context.emit_keccak256(values[0], &block);
                 (Some(value), block)
             }
             BuiltIn::Sha256 => {
-                let (values, block) = context.emit_argument_values(arguments, block);
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = arguments.emit(context, block);
                 let builder = &context.state.builder;
                 let value = sol_op!(
                     builder,
@@ -116,7 +125,10 @@ impl CallKind {
                 (Some(value), block)
             }
             BuiltIn::Ripemd160 => {
-                let (values, block) = context.emit_argument_values(arguments, block);
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = arguments.emit(context, block);
                 let builder = &context.state.builder;
                 let value = sol_op!(
                     builder,
@@ -128,7 +140,10 @@ impl CallKind {
                 (Some(value), block)
             }
             BuiltIn::Ecrecover => {
-                let (values, block) = context.emit_argument_values(arguments, block);
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = arguments.emit(context, block);
                 let builder = &context.state.builder;
                 // `ecrecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s)`: the
                 // hash / r / s arguments keep their literal `uint256` type, but
@@ -161,7 +176,10 @@ impl CallKind {
                 (Some(value), block)
             }
             BuiltIn::Addmod => {
-                let (values, block) = context.emit_argument_values(arguments, block);
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = arguments.emit(context, block);
                 let builder = &context.state.builder;
                 // `addmod` operates on `uint256`, but a literal operand keeps its
                 // narrow type (`addmod(1, 2, d)` → ui8, ui8, ui256); `sol.addmod`
@@ -182,7 +200,10 @@ impl CallKind {
                 (Some(value), block)
             }
             BuiltIn::Mulmod => {
-                let (values, block) = context.emit_argument_values(arguments, block);
+                let BlockAnd {
+                    value: values,
+                    block,
+                } = arguments.emit(context, block);
                 let builder = &context.state.builder;
                 // `mulmod` operates on `uint256`; widen narrow literal operands so
                 // all operands/result share the type `sol.mulmod` requires.
@@ -407,7 +428,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let (values, block) = self.emit_argument_values(arguments, block);
+        let BlockAnd {
+            value: values,
+            block,
+        } = arguments.emit(self, block);
         let builder = &self.state.builder;
         let result_type =
             crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir();
@@ -417,26 +441,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             ConcatOperation.args(&values).result(result_type)
         );
         (Some(value), block)
-    }
-
-    /// Emits each positional argument and returns the resulting values
-    /// alongside the current block. The shared evaluation primitive that
-    /// [`ExpressionContext::emit_coerced_arguments`] builds on; `pub` so call sites in
-    /// sibling modules (external/library/struct-constructor calls) reuse it
-    /// rather than re-implementing the evaluation loop.
-    pub fn emit_argument_values(
-        &self,
-        arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let mut values = Vec::with_capacity(arguments.len());
-        let mut current = block;
-        for argument in arguments.iter() {
-            let BlockAnd { value, block: next } = argument.emit(self, current);
-            values.push(value.into_mlir());
-            current = next;
-        }
-        (values, current)
     }
 
     /// Emits `keccak256` over a byte buffer, returning the 32-byte hash. The

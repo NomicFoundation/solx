@@ -35,7 +35,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let (values, block) = self.emit_argument_values(arguments, block);
+        let BlockAnd {
+            value: values,
+            block,
+        } = arguments.emit(self, block);
         let result = self.emit_sol_encode(&values, None, EncodeMode::Standard, &block);
         (Some(result), block)
     }
@@ -46,7 +49,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let (values, block) = self.emit_argument_values(arguments, block);
+        let BlockAnd {
+            value: values,
+            block,
+        } = arguments.emit(self, block);
         let result = self.emit_sol_encode(&values, None, EncodeMode::Packed, &block);
         (Some(result), block)
     }
@@ -58,7 +64,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let (mut values, block) = self.emit_argument_values(arguments, block);
+        let BlockAnd {
+            value: mut values,
+            block,
+        } = arguments.emit(self, block);
         let builder = &self.state.builder;
         let selector = crate::ast::Value::from(values.remove(0))
             .cast(

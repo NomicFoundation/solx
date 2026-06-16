@@ -117,7 +117,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let builder = &self.state.builder;
         let BlockAnd { value: addr, block } = access.operand().emit(self, block);
-        let (values, block) = self.emit_argument_values(arguments, block);
+        let BlockAnd {
+            value: values,
+            block,
+        } = arguments.emit(self, block);
         // `sol.send` takes a `ui256` amount; a narrow literal (`r.send(0)` → ui8)
         // must be widened first, like `address.transfer`.
         let amount = crate::ast::Value::from(values[0])
@@ -147,7 +150,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let builder = &self.state.builder;
         let BlockAnd { value: addr, block } = access.operand().emit(self, block);
-        let (values, block) = self.emit_argument_values(arguments, block);
+        let BlockAnd {
+            value: values,
+            block,
+        } = arguments.emit(self, block);
         // `sol.transfer` takes a `ui256` amount; a narrow literal (`x.transfer(1)`
         // → ui8) must be widened first.
         let amount = crate::ast::Value::from(values[0])

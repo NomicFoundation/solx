@@ -24,6 +24,8 @@ use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::NewOperation;
 use solx_utils::DataLocation;
 
+use crate::ast::BlockAnd;
+use crate::ast::Emit;
 use crate::ast::LocationPolicy;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
@@ -68,7 +70,10 @@ impl CallKind {
             _ => None,
         };
         if let Some(result_type) = dynamic_result_type {
-            let (values, current_block) = context.emit_argument_values(arguments, block);
+            let BlockAnd {
+                value: values,
+                block: current_block,
+            } = arguments.emit(context, block);
             let builder = &context.state.builder;
             let address = match values.first() {
                 Some(&size_value) => {

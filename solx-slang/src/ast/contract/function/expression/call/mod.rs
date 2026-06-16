@@ -8,6 +8,7 @@ pub mod external_call;
 pub mod library_call;
 pub mod library_visibility;
 pub mod member_call_kind;
+pub mod positional_arguments;
 pub mod static_mode;
 pub mod try_external_call;
 
@@ -152,8 +153,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         (value, salt, current_block)
     }
 
-    /// Evaluates `arguments` left-to-right (via
-    /// [`Self::emit_argument_values`]) and coerces each resulting value to
+    /// Evaluates `arguments` left-to-right and coerces each resulting value to
     /// its declared parameter type, returning the materialised argument values
     /// and the continuation block.
     ///
