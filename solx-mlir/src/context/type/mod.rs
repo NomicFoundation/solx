@@ -17,6 +17,7 @@ use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::Builder;
+use crate::IntoOds;
 use crate::Value;
 use crate::ods::sol::AddressCastOperation;
 use crate::ods::sol::BytesCastOperation;
@@ -622,5 +623,11 @@ impl<'context> Type<'context> {
 impl<'context> From<MlirType<'context>> for Type<'context> {
     fn from(inner: MlirType<'context>) -> Self {
         Self::new(inner)
+    }
+}
+
+impl<'context> IntoOds<MlirType<'context>> for Type<'context> {
+    fn into_ods(self) -> MlirType<'context> {
+        self.into_mlir()
     }
 }

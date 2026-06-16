@@ -222,10 +222,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &block,
             StringLitOperation
                 .value(StringAttribute::new(self.state.builder.context, &type_name))
-                .addr(
-                    AstType::string(self.state.builder.context, solx_utils::DataLocation::Memory)
-                        .into_mlir()
-                )
+                .addr(AstType::string(
+                    self.state.builder.context,
+                    solx_utils::DataLocation::Memory
+                ))
         );
         (value, block)
     }

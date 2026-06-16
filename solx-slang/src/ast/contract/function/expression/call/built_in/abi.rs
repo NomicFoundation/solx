@@ -208,8 +208,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     builder,
                     &current,
                     ExtFuncSelectorOperation
-                        .func(function_value.into_mlir())
-                        .result(AstType::fixed_bytes(builder.context, 4).into_mlir())
+                        .func(function_value)
+                        .result(AstType::fixed_bytes(builder.context, 4))
                 );
                 let SlangType::Function(function_type) = function_expression
                     .get_type()

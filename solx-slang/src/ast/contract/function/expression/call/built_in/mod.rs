@@ -97,7 +97,7 @@ impl CallKind {
                     block,
                     BlockHashOperation
                         .block_number(block_number)
-                        .val(AstType::fixed_bytes(builder.context, 32).into_mlir())
+                        .val(AstType::fixed_bytes(builder.context, 32))
                 );
                 (Some(value), block)
             }
@@ -120,7 +120,7 @@ impl CallKind {
                     block,
                     Sha256Operation
                         .data(values[0])
-                        .result(AstType::fixed_bytes(builder.context, 32).into_mlir())
+                        .result(AstType::fixed_bytes(builder.context, 32))
                 );
                 (Some(value), block)
             }
@@ -135,7 +135,7 @@ impl CallKind {
                     block,
                     Ripemd160Operation
                         .data(values[0])
-                        .result(AstType::fixed_bytes(builder.context, 20).into_mlir())
+                        .result(AstType::fixed_bytes(builder.context, 20))
                 );
                 (Some(value), block)
             }
@@ -171,7 +171,7 @@ impl CallKind {
                         .v(v)
                         .r(r)
                         .s(s)
-                        .result(AstType::address(builder.context, false).into_mlir())
+                        .result(AstType::address(builder.context, false))
                 );
                 (Some(value), block)
             }
@@ -459,7 +459,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             block,
             Keccak256Operation
                 .addr(input)
-                .result(AstType::fixed_bytes(builder.context, 32).into_mlir())
+                .result(AstType::fixed_bytes(builder.context, 32))
         )
     }
 

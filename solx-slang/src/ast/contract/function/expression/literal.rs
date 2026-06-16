@@ -87,7 +87,7 @@ expression_emit!(StringExpression; |node, context, block| {
         &block,
         StringLitOperation
             .value(StringAttribute::new(builder.context, literal))
-            .addr(AstType::string(builder.context, solx_utils::DataLocation::Memory).into_mlir())
+            .addr(AstType::string(builder.context, solx_utils::DataLocation::Memory))
     );
     BlockAnd {
         block,

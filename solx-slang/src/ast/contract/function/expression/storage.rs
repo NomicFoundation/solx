@@ -120,11 +120,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             } = initializer.emit(self, block);
             block = next_block;
             if declared_type.is_reference_type() {
-                sol_op_void!(
-                    builder,
-                    &block,
-                    CopyOperation.src(value.into_mlir()).dst(storage_ref)
-                );
+                sol_op_void!(builder, &block, CopyOperation.src(value).dst(storage_ref));
             } else {
                 let stored_value = value.cast(AstType::new(element_type), builder, &block);
                 Pointer::new(storage_ref).store(stored_value, builder, &block);

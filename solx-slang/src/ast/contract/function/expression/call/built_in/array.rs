@@ -35,11 +35,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             value: array_value,
             block,
         } = access.operand().emit(self, block);
-        sol_op_void!(
-            &self.state.builder,
-            &block,
-            PopOperation.inp(array_value.into_mlir())
-        );
+        sol_op_void!(&self.state.builder, &block, PopOperation.inp(array_value));
         (None, block)
     }
 
@@ -82,9 +78,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             sol_op_void!(
                 builder,
                 &block,
-                PushStringOperation
-                    .addr(bytes_reference.into_mlir())
-                    .value(byte_value)
+                PushStringOperation.addr(bytes_reference).value(byte_value)
             );
             return (None, block);
         }
@@ -110,7 +104,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             sol_op_void!(
                 &self.state.builder,
                 &block,
-                CopyOperation.src(value.into_mlir()).dst(new_slot)
+                CopyOperation.src(value).dst(new_slot)
             );
             return (None, block);
         }
@@ -186,9 +180,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let new_slot = sol_op!(
             builder,
             &block,
-            PushOperation
-                .inp(array_value.into_mlir())
-                .addr(push_result_type)
+            PushOperation.inp(array_value).addr(push_result_type)
         );
         (new_slot, element_type, block)
     }

@@ -48,9 +48,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         self.emit_unary_member_intrinsic(access, block, |address_value| {
             sol_op_build!(
                 builder,
-                BalanceOperation.cont_addr(address_value).out(
-                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
-                )
+                BalanceOperation
+                    .cont_addr(address_value)
+                    .out(AstType::unsigned(
+                        builder.context,
+                        solx_utils::BIT_LENGTH_FIELD
+                    ))
             )
         })
     }
@@ -65,9 +68,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         self.emit_unary_member_intrinsic(access, block, |address_value| {
             sol_op_build!(
                 builder,
-                CodeHashOperation.cont_addr(address_value).out(
-                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
-                )
+                CodeHashOperation
+                    .cont_addr(address_value)
+                    .out(AstType::unsigned(
+                        builder.context,
+                        solx_utils::BIT_LENGTH_FIELD
+                    ))
             )
         })
     }
@@ -82,9 +88,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         self.emit_unary_member_intrinsic(access, block, |address_value| {
             sol_op_build!(
                 builder,
-                CodeOperation.cont_addr(address_value).out(
-                    AstType::string(builder.context, solx_utils::DataLocation::Memory).into_mlir()
-                )
+                CodeOperation.cont_addr(address_value).out(AstType::string(
+                    builder.context,
+                    solx_utils::DataLocation::Memory
+                ))
             )
         })
     }
@@ -99,9 +106,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         self.emit_unary_member_intrinsic(access, block, |operand| {
             sol_op_build!(
                 builder,
-                LengthOperation.inp(operand).len(
-                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
-                )
+                LengthOperation.inp(operand).len(AstType::unsigned(
+                    builder.context,
+                    solx_utils::BIT_LENGTH_FIELD
+                ))
             )
         })
     }
@@ -131,9 +139,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let value = sol_op!(
             builder,
             block,
-            SendOperation.addr(addr.into_mlir()).val(amount).status(
-                AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
-            )
+            SendOperation
+                .addr(addr)
+                .val(amount)
+                .status(AstType::signless(
+                    builder.context,
+                    solx_utils::BIT_LENGTH_BOOLEAN
+                ))
         );
         (Some(value), block)
     }
@@ -160,11 +172,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 &block,
             )
             .into_mlir();
-        sol_op_void!(
-            builder,
-            block,
-            TransferOperation.addr(addr.into_mlir()).val(amount)
-        );
+        sol_op_void!(builder, block, TransferOperation.addr(addr).val(amount));
         (None, block)
     }
 
@@ -184,124 +192,124 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(BuiltIn::TxOrigin) => {
                 sol_op_build!(
                     builder,
-                    OriginOperation.addr(AstType::address(builder.context, false).into_mlir())
+                    OriginOperation.addr(AstType::address(builder.context, false))
                 )
             }
             Some(BuiltIn::TxGasPrice) => {
                 sol_op_build!(
                     builder,
-                    GasPriceOperation.val(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir()
-                    )
+                    GasPriceOperation.val(AstType::unsigned(
+                        builder.context,
+                        solx_utils::BIT_LENGTH_FIELD
+                    ))
                 )
             }
             Some(BuiltIn::MsgSender) => {
                 sol_op_build!(
                     builder,
-                    CallerOperation.addr(AstType::address(builder.context, false).into_mlir())
+                    CallerOperation.addr(AstType::address(builder.context, false))
                 )
             }
             Some(BuiltIn::MsgValue) => {
                 sol_op_build!(
                     builder,
-                    CallValueOperation.val(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir()
-                    )
+                    CallValueOperation.val(AstType::unsigned(
+                        builder.context,
+                        solx_utils::BIT_LENGTH_FIELD
+                    ))
                 )
             }
             Some(BuiltIn::BlockTimestamp) => {
                 sol_op_build!(
                     builder,
-                    TimestampOperation.val(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir()
-                    )
+                    TimestampOperation.val(AstType::unsigned(
+                        builder.context,
+                        solx_utils::BIT_LENGTH_FIELD
+                    ))
                 )
             }
             Some(BuiltIn::BlockNumber) => {
                 sol_op_build!(
                     builder,
-                    BlockNumberOperation.val(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir()
-                    )
+                    BlockNumberOperation.val(AstType::unsigned(
+                        builder.context,
+                        solx_utils::BIT_LENGTH_FIELD
+                    ))
                 )
             }
             Some(BuiltIn::BlockCoinbase) => {
                 sol_op_build!(
                     builder,
-                    CoinbaseOperation.addr(AstType::address(builder.context, false).into_mlir())
+                    CoinbaseOperation.addr(AstType::address(builder.context, false))
                 )
             }
             Some(BuiltIn::BlockChainid) => {
                 sol_op_build!(
                     builder,
-                    ChainIdOperation.val(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir()
-                    )
+                    ChainIdOperation.val(AstType::unsigned(
+                        builder.context,
+                        solx_utils::BIT_LENGTH_FIELD
+                    ))
                 )
             }
             Some(BuiltIn::BlockBasefee) => {
                 sol_op_build!(
                     builder,
-                    BaseFeeOperation.val(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir()
-                    )
+                    BaseFeeOperation.val(AstType::unsigned(
+                        builder.context,
+                        solx_utils::BIT_LENGTH_FIELD
+                    ))
                 )
             }
             Some(BuiltIn::BlockGaslimit) => {
                 sol_op_build!(
                     builder,
-                    GasLimitOperation.val(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir()
-                    )
+                    GasLimitOperation.val(AstType::unsigned(
+                        builder.context,
+                        solx_utils::BIT_LENGTH_FIELD
+                    ))
                 )
             }
             Some(BuiltIn::BlockBlobbasefee) => {
                 sol_op_build!(
                     builder,
-                    BlobBaseFeeOperation.val(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir()
-                    )
+                    BlobBaseFeeOperation.val(AstType::unsigned(
+                        builder.context,
+                        solx_utils::BIT_LENGTH_FIELD
+                    ))
                 )
             }
             Some(BuiltIn::BlockDifficulty) => {
                 sol_op_build!(
                     builder,
-                    DifficultyOperation.val(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir()
-                    )
+                    DifficultyOperation.val(AstType::unsigned(
+                        builder.context,
+                        solx_utils::BIT_LENGTH_FIELD
+                    ))
                 )
             }
             Some(BuiltIn::BlockPrevrandao) => {
                 sol_op_build!(
                     builder,
-                    PrevRandaoOperation.val(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir()
-                    )
+                    PrevRandaoOperation.val(AstType::unsigned(
+                        builder.context,
+                        solx_utils::BIT_LENGTH_FIELD
+                    ))
                 )
             }
             Some(BuiltIn::MsgSig) => {
                 sol_op_build!(
                     builder,
-                    SigOperation.val(AstType::fixed_bytes(builder.context, 4).into_mlir())
+                    SigOperation.val(AstType::fixed_bytes(builder.context, 4))
                 )
             }
             Some(BuiltIn::MsgData) => {
                 sol_op_build!(
                     builder,
-                    GetCallDataOperation.addr(
-                        AstType::string(builder.context, solx_utils::DataLocation::CallData)
-                            .into_mlir()
-                    )
+                    GetCallDataOperation.addr(AstType::string(
+                        builder.context,
+                        solx_utils::DataLocation::CallData
+                    ))
                 )
             }
             // TODO: split this catch-all so non-built-in member accesses (struct fields, etc.) and unimplemented built-ins surface distinct errors.

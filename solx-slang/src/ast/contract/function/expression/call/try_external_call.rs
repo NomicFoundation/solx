@@ -136,7 +136,7 @@ impl TryExternalCall {
                 .outs(&out_types)
                 .callee(callee)
                 .callee_operands(&argument_values)
-                .gas(AstValue::gas_left(builder, &current_block).into_mlir())
+                .gas(AstValue::gas_left(builder, &current_block))
                 .value(value)
                 .try_call(Attribute::unit(builder.context))
         ));

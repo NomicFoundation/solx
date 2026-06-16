@@ -127,8 +127,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &self.state.builder,
             &block,
             ExtFuncSelectorOperation
-                .func(operand_value.into_mlir())
-                .result(AstType::fixed_bytes(self.state.builder.context, 4).into_mlir())
+                .func(operand_value)
+                .result(AstType::fixed_bytes(self.state.builder.context, 4))
         );
         (Some(selector), block)
     }
@@ -154,8 +154,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             &self.state.builder,
             &block,
             ExtFuncAddrOperation
-                .func(operand_value.into_mlir())
-                .result(AstType::address(self.state.builder.context, false).into_mlir())
+                .func(operand_value)
+                .result(AstType::address(self.state.builder.context, false))
         );
         (Some(address), block)
     }

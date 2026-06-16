@@ -169,7 +169,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
                 let length = sol_op!(
                     builder,
                     block,
-                    LengthOperation.inp(base_value.into_mlir()).len(ui256)
+                    LengthOperation.inp(base_value).len(ui256)
                 );
                 (length, block)
             }
@@ -186,7 +186,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
             builder,
             block,
             SliceOperation
-                .arr(base_value.into_mlir())
+                .arr(base_value)
                 .start(start_value)
                 .end(end_value)
                 .res(result_type)

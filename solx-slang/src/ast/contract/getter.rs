@@ -387,13 +387,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                             sol_op!(
                                 builder,
                                 entry,
-                                LengthOperation.inp(base).len(
-                                    AstType::unsigned(
-                                        builder.context,
-                                        solx_utils::BIT_LENGTH_FIELD
-                                    )
-                                    .into_mlir()
-                                )
+                                LengthOperation.inp(base).len(AstType::unsigned(
+                                    builder.context,
+                                    solx_utils::BIT_LENGTH_FIELD
+                                ))
                             )
                         }
                     };

@@ -347,7 +347,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 builder,
                 ICallOperation
                     .outs(&result_types)
-                    .callee(callee_value.into_mlir())
+                    .callee(callee_value)
                     .callee_operands(&argument_values)
             ));
             (0..result_types.len())

@@ -17,6 +17,7 @@ use solx_utils::BIT_LENGTH_X64;
 
 use crate::Builder;
 use crate::CmpPredicate;
+use crate::IntoOds;
 use crate::Type;
 use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
@@ -81,7 +82,7 @@ impl<'context, 'block> Value<'context, 'block> {
             builder,
             block,
             ConstantOperation
-                .value(IntegerAttribute::new(result_type, value).into())
+                .value(Attribute::from(IntegerAttribute::new(result_type, value)))
                 .result(result_type)
         ))
     }
@@ -362,7 +363,7 @@ impl<'context, 'block> Value<'context, 'block> {
             builder,
             block,
             CmpOperation
-                .predicate(predicate_attribute.into())
+                .predicate(Attribute::from(predicate_attribute))
                 .lhs(self.inner)
                 .rhs(other.inner)
                 .result(
@@ -391,5 +392,11 @@ impl<'context, 'block> Value<'context, 'block> {
 impl<'context, 'block> From<MlirValue<'context, 'block>> for Value<'context, 'block> {
     fn from(inner: MlirValue<'context, 'block>) -> Self {
         Self::new(inner)
+    }
+}
+
+impl<'context, 'block> IntoOds<MlirValue<'context, 'block>> for Value<'context, 'block> {
+    fn into_ods(self) -> MlirValue<'context, 'block> {
+        self.into_mlir()
     }
 }

@@ -249,7 +249,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     builder,
                     BareCallOperation
                         .addr(address)
-                        .gas(AstValue::gas_left(builder, &block).into_mlir())
+                        .gas(AstValue::gas_left(builder, &block))
                         .val(value)
                         .inp(input)
                         .status(status_type)
@@ -260,7 +260,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 builder,
                 BareDelegateCallOperation
                     .addr(address)
-                    .gas(AstValue::gas_left(builder, &block).into_mlir())
+                    .gas(AstValue::gas_left(builder, &block))
                     .inp(input)
                     .status(status_type)
                     .ret_data(ret_data_type)
@@ -269,7 +269,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 builder,
                 BareStaticCallOperation
                     .addr(address)
-                    .gas(AstValue::gas_left(builder, &block).into_mlir())
+                    .gas(AstValue::gas_left(builder, &block))
                     .inp(input)
                     .status(status_type)
                     .ret_data(ret_data_type)

@@ -151,9 +151,10 @@ impl MemberCallKind {
                 .delegate_call(Attribute::unit(builder.context))
                 .library_call(Attribute::unit(builder.context))
                 .callee_type(TypeAttribute::new(callee_type.into()))
-                .status(
-                    AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir()
-                )
+                .status(AstType::signless(
+                    builder.context,
+                    solx_utils::BIT_LENGTH_BOOLEAN
+                ))
                 .outs(&return_types)
         ));
         let results = (0..return_types.len())

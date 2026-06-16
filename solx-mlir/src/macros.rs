@@ -30,6 +30,28 @@
 //! [`Type`]: crate::Type
 //!
 
+/// Coerces one op-builder setter argument to the type the ODS setter expects.
+/// Identity for everything except the `Value` / `Type` entities (which home
+/// their own impls in `context/`) and the array-to-slice passthrough the
+/// operand setters need, so a `sol_op*` site writes `AstType::field(builder)`
+/// instead of `…field(builder).into_mlir()`.
+pub trait IntoOds<T> {
+    /// Converts `self` into the setter's argument type.
+    fn into_ods(self) -> T;
+}
+
+impl<T> IntoOds<T> for T {
+    fn into_ods(self) -> T {
+        self
+    }
+}
+
+impl<'slice, T, const N: usize> IntoOds<&'slice [T]> for &'slice [T; N] {
+    fn into_ods(self) -> &'slice [T] {
+        self
+    }
+}
+
 /// Builds an inlined dialect op and yields it as an `Operation`, without
 /// appending. The op-builder method chain is written inline after the op name.
 /// The setter repetition is `*` (not `+`): a field-less op (`sol.break`,
@@ -38,7 +60,7 @@
 macro_rules! sol_op_build {
     ($builder:expr, $operation:ident $(.$method:ident($($argument:expr),* $(,)?))*) => {
         $operation::builder($builder.context, $builder.unknown_location)
-            $(.$method($($argument),*))*
+            $(.$method($($crate::IntoOds::into_ods($argument)),*))*
             .build()
             .into()
     };
@@ -94,7 +116,7 @@ macro_rules! sol_region_op {
         let operation = melior::ir::BlockLike::append_operation(
             $block,
             $operation::builder($builder.context, $builder.unknown_location)
-                $(.$method($($argument),*))*
+                $(.$method($($crate::IntoOds::into_ods($argument)),*))*
                 $(.$region($region))+
                 .build()
                 .into(),
