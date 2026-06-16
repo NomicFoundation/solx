@@ -130,9 +130,7 @@ impl<'context> Type<'context> {
                 // struct's data location by hand.
                 let mut member_types = Vec::new();
                 for member in struct_definition.members().iter() {
-                    let member_slang_type = member
-                        .get_type()
-                        .expect("slang validated");
+                    let member_slang_type = member.get_type().expect("slang validated");
                     member_types.push(Type::resolve(&member_slang_type, member_policy, builder));
                 }
                 Type::structure(builder.context, &member_types, struct_location).into_mlir()
@@ -179,9 +177,7 @@ impl<'context> Type<'context> {
                 Type::enumeration(builder.context, max.into()).into_mlir()
             }
             SlangType::UserDefinedValue(udvt) => {
-                let target_type = udvt
-                    .target_type()
-                    .expect("slang validated");
+                let target_type = udvt.target_type().expect("slang validated");
                 Type::resolve(&target_type, policy, builder)
             }
             SlangType::Function(function_type) => {

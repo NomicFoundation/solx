@@ -149,9 +149,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .zip(parameters.iter())
             .map(|(value, parameter)| {
                 let parameter_type = AstType::resolve(
-                    &parameter
-                        .get_type()
-                        .expect("slang validated"),
+                    &parameter.get_type().expect("slang validated"),
                     LocationPolicy::Declared(None),
                     builder,
                 );

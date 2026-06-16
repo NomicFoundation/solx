@@ -25,9 +25,7 @@ impl<'context> Type<'context> {
     ) -> (Vec<MlirType<'context>>, Vec<MlirType<'context>>) {
         let resolve = |parameter: Parameter| {
             Type::resolve(
-                &parameter
-                    .get_type()
-                    .expect("slang validated"),
+                &parameter.get_type().expect("slang validated"),
                 policy,
                 builder,
             )

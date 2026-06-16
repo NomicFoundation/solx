@@ -139,9 +139,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         state_variable: &ast::StateVariableDefinition,
         block: BlockRef<'context, 'block>,
     ) -> (Self, BlockRef<'context, 'block>) {
-        let declared_type = state_variable
-            .get_type()
-            .expect("slang validated");
+        let declared_type = state_variable.get_type().expect("slang validated");
         let slot = context
             .storage_layout
             .get(&state_variable.node_id())
@@ -242,9 +240,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         match rhs {
             Expression::TupleExpression(rhs) => {
                 for (lvalue, rhs) in lhs.items().iter().zip(rhs.items().iter()) {
-                    let rhs = rhs
-                        .expression()
-                        .expect("slang validated");
+                    let rhs = rhs.expression().expect("slang validated");
                     match (lvalue.expression(), &rhs) {
                         (
                             Some(Expression::TupleExpression(lvalue)),
@@ -339,9 +335,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 );
             }
             Self::Pointer(_, element_type) | Self::Storage(_, element_type) => {
-                let slang_type = operand
-                    .get_type()
-                    .expect("slang validated");
+                let slang_type = operand.get_type().expect("slang validated");
                 let zero = if slang_type.is_reference_type() {
                     // A memory aggregate (array / struct / `string` / `bytes`)
                     // resets to a freshly allocated zero-filled buffer

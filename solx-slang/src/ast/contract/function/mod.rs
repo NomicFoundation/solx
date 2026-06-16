@@ -557,10 +557,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// Solidity-level identifier.
     pub fn mlir_base_name(function: &FunctionDefinition) -> String {
         match function.kind() {
-            FunctionKind::Regular => function
-                .name()
-                .expect("slang validated")
-                .name(),
+            FunctionKind::Regular => function.name().expect("slang validated").name(),
             FunctionKind::Fallback => "fallback".to_owned(),
             FunctionKind::Receive => "receive".to_owned(),
             FunctionKind::Constructor => "constructor".to_owned(),

@@ -132,10 +132,7 @@ impl Operator {
             })
             .collect();
         let results = function.call(&argument_values, &context.state.builder, block);
-        results
-            .into_iter()
-            .next()
-            .expect("slang validated")
+        results.into_iter().next().expect("slang validated")
     }
 
     /// Builds a Sol dialect binary operation via ODS-generated builders.

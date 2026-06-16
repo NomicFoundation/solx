@@ -202,9 +202,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         else {
             unreachable!("slang resolves an error `.selector` base to an error definition");
         };
-        let selector = error
-            .compute_selector()
-            .expect("slang validated");
+        let selector = error.compute_selector().expect("slang validated");
         let block = self.eval_selector_receiver_side_effects(access, block);
         let value =
             AstValue::selector_constant(&BigInt::from(selector), 4, &self.state.builder, &block)

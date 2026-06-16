@@ -84,9 +84,7 @@ impl<'context> Type<'context> {
         builder: &Builder<'context>,
     ) -> MlirType<'context> {
         Self::resolve(
-            &state_variable
-                .get_type()
-                .expect("slang validated"),
+            &state_variable.get_type().expect("slang validated"),
             LocationPolicy::Declared(None),
             builder,
         )

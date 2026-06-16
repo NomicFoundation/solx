@@ -225,8 +225,7 @@ impl CallKind {
                     .zip(arguments.iter())
                     .enumerate()
                 {
-                    let field_slang_type =
-                        member.get_type().expect("slang validated");
+                    let field_slang_type = member.get_type().expect("slang validated");
                     let field_type = AstType::resolve(
                         &field_slang_type,
                         LocationPolicy::Declared(Some(DataLocation::Memory)),
@@ -269,10 +268,7 @@ impl CallKind {
                     Self::TypeConversion | Self::ArrayTypeConversion => {
                         // Cast the single argument to the call's own type (`T(x)`,
                         // or the data-location cast `T[](x)`).
-                        let first = arguments
-                            .iter()
-                            .next()
-                            .expect("slang validated");
+                        let first = arguments.iter().next().expect("slang validated");
                         let target_type =
                             AstType::resolve_optional(call.get_type(), &context.state.builder)
                                 .expect("slang validated");
@@ -295,10 +291,7 @@ impl CallKind {
                     }
                     Self::AbiDecode => self.emit_abi_decode(context, call, arguments, block),
                     Self::UdvtWrapUnwrap => {
-                        let argument = arguments
-                            .iter()
-                            .next()
-                            .expect("slang validated");
+                        let argument = arguments.iter().next().expect("slang validated");
                         let BlockAnd { value, block } = argument.emit(context, block);
                         // A UDVT shares its underlying type's representation, so this
                         // is one conversion to the result type (none ⇒ already correct).
@@ -324,9 +317,7 @@ impl CallKind {
                         (value.into_iter().collect(), block)
                     }
                     Self::IndirectPointer => {
-                        let function_slang_type = callee
-                            .get_type()
-                            .expect("slang validated");
+                        let function_slang_type = callee.get_type().expect("slang validated");
                         context.emit_indirect_call_results(
                             &callee,
                             &function_slang_type,

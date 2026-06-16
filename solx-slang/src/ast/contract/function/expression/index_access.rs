@@ -47,15 +47,9 @@ where
         }
 
         let base = self.operand();
-        let index_expression = self
-            .start()
-            .expect("slang validated");
-        let base_type = base
-            .get_type()
-            .expect("slang validated");
-        let result_type = self
-            .get_type()
-            .expect("slang validated");
+        let index_expression = self.start().expect("slang validated");
+        let base_type = base.get_type().expect("slang validated");
+        let result_type = self.get_type().expect("slang validated");
 
         let BlockAnd {
             value: base_value,
