@@ -13,11 +13,11 @@ use solx_mlir::ods::sol::EmitOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveType;
 use crate::ast::arguments_declaration_ext::ArgumentsDeclarationExt;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveType;
 
 // Resolve the event definition, classify each argument as indexed or
 // non-indexed per the event's parameter declaration, evaluate argument

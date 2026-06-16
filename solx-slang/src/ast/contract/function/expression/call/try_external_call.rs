@@ -17,9 +17,9 @@ use solx_mlir::ods::sol::ExtICallOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveSignature;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveSignature;
 
 /// A `try recv.f(args)` external call, resolved from the `try` expression. Only
 /// this shape carries a real catch path; classification is a pure precondition,

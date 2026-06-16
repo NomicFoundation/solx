@@ -40,15 +40,14 @@ use solx_mlir::Environment;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::getter_level::GetterLevel;
 use crate::ast::contract::storage_layout::StorageSlot;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveType;
-use crate::ast::type_conversion::TypeConversion;
 
 /// The per-getter emission frame: the state variable, its canonical ABI
 /// signature and selector, declared type, storage slot, and the `sol.contract`
@@ -140,7 +139,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             contract_body,
         } = *abi;
         let builder = &self.state.builder;
-        let element_type = TypeConversion::resolve_state_variable_type(state_variable, builder);
+        let element_type = crate::ast::Type::resolve_state_variable(state_variable, builder);
         // A reference-typed variable (`string`/`bytes`/array) is addressed by the
         // reference type itself in storage; value types by a `!sol.ptr<T, _>`.
         let address_type = if declared_type.is_reference_type() {
@@ -198,7 +197,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         if input_types.is_empty() || input_types.len() != abi_input_count {
             return;
         }
-        let container_type = TypeConversion::resolve_state_variable_type(state_variable, builder);
+        let container_type = crate::ast::Type::resolve_state_variable(state_variable, builder);
         let result_type =
             result_slang.resolve_type(LocationPolicy::Declared(Some(location)), builder);
         // A struct result expands into its flattened returnable-member tuple;
@@ -608,7 +607,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     .map(|(_, _, result_type)| *result_type)
                     .collect();
                 let container_type =
-                    TypeConversion::resolve_state_variable_type(state_variable, builder);
+                    crate::ast::Type::resolve_state_variable(state_variable, builder);
                 let function_signature =
                     Function::new(signature.to_owned(), Vec::new(), result_types.to_vec());
                 let entry = function_signature.define(
@@ -675,9 +674,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         Some(plan)
     }
 
-    /// Loads one struct getter member, casting it to its ABI result type through
-    /// the single [`TypeConversion`](crate::ast::type_conversion::TypeConversion)
-    /// entry.
+    /// Loads one struct getter member, coercing it to its ABI result type.
     pub fn load_getter_member<'block>(
         builder: &solx_mlir::Builder<'context>,
         address: Value<'context, 'block>,

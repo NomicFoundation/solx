@@ -16,9 +16,9 @@ use solx_mlir::ods::sol::RequireOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits an `assert(condition)` built-in via `sol.assert`.

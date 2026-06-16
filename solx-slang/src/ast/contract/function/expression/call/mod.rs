@@ -34,11 +34,11 @@ use self::member_call_kind::MemberCallKind;
 use self::static_mode::StaticMode;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::library_ext::LibraryExt;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveType;
 
 /// Call-expression entry points and the shared emission primitives the call
 /// kinds dispatch through (argument coercion, call-options capture, indirect

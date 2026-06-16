@@ -20,7 +20,6 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
-use crate::ast::type_conversion::TypeConversion;
 
 // Each slang binary-expression node projects to the [`Operator`] it applies —
 // from its typed slang operator enum (or its single fixed operator), never
@@ -93,7 +92,7 @@ expression_emit!(
         // The result type slang assigns the expression annotates the operands and
         // result (matching solc); a `None` lets `emit_binary` pick the wider one.
         let result_type =
-            TypeConversion::resolve_optional_slang_type(node.get_type(), &context.state.builder);
+            crate::ast::Type::resolve_optional(node.get_type(), &context.state.builder);
         let (value, block) = Operator::from(node).emit_binary(
             context,
             &node.left_operand(),

@@ -40,9 +40,9 @@ use self::modifier::ModifiedBody;
 use self::signature::InnerSignature;
 use self::statement::StatementContext;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveSignature;
 use crate::ast::contract::storage_layout::StorageSlot;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveSignature;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
 pub struct FunctionEmitter<'state, 'context> {

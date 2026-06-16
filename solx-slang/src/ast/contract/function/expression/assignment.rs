@@ -21,13 +21,13 @@ use solx_mlir::ods::sol::MallocOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::contract::storage_layout::StorageSlot;
 use crate::ast::tuple_expression_ext::TupleExpressionExt;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveType;
 
 /// Assignment target resolved from the Slang binder.
 enum AssignmentTarget<'context, 'block> {

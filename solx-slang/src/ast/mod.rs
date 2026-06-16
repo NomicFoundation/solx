@@ -10,8 +10,6 @@ pub mod library_ext;
 pub mod named_arguments_ext;
 pub mod operator_binding;
 pub mod tuple_expression_ext;
-/// Solidity type conversion classification and dispatch.
-pub mod type_conversion;
 
 pub use self::arguments_declaration_ext::ArgumentsDeclarationExt;
 pub use self::contract::function::expression::Toward;
@@ -24,7 +22,10 @@ pub use self::tuple_expression_ext::TupleExpressionExt;
 // ops), mirroring how `solx-yul` uses `solx-codegen-evm`'s `Value`/`Pointer`;
 // re-exported here so slang code names them as `crate::ast::{Pointer, Type, Value}`.
 pub use solx_mlir::ContractPayable;
+pub use solx_mlir::LocationPolicy;
 pub use solx_mlir::Pointer;
+pub use solx_mlir::ResolveSignature;
+pub use solx_mlir::ResolveType;
 pub use solx_mlir::Type;
 pub use solx_mlir::Value;
 

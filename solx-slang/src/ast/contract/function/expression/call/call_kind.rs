@@ -22,13 +22,12 @@ use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::arguments_declaration_ext::ArgumentsDeclarationExt;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveType;
-use crate::ast::type_conversion::TypeConversion;
 
 /// The resolved kind of a `FunctionCallExpression`, computed once so dispatch is
 /// a single match rather than a chain of fallible attempts.
@@ -206,11 +205,9 @@ impl CallKind {
             // `S(a, b)` / `S({b: …, a: …})`: order the field initialisers by the
             // struct's member-declaration order, then store each.
             Self::StructConstructor(struct_definition) => {
-                let result_type = TypeConversion::resolve_optional_slang_type(
-                    call.get_type(),
-                    &context.state.builder,
-                )
-                .expect("slang types a struct constructor call");
+                let result_type =
+                    crate::ast::Type::resolve_optional(call.get_type(), &context.state.builder)
+                        .expect("slang types a struct constructor call");
                 let member_ids: Vec<NodeId> = struct_definition
                     .members()
                     .iter()
@@ -282,7 +279,7 @@ impl CallKind {
                             .iter()
                             .next()
                             .expect("a type conversion has exactly one argument");
-                        let target_type = TypeConversion::resolve_optional_slang_type(
+                        let target_type = crate::ast::Type::resolve_optional(
                             call.get_type(),
                             &context.state.builder,
                         )
@@ -316,7 +313,7 @@ impl CallKind {
                         let BlockAnd { value, block } = argument.emit(context, block);
                         // A UDVT shares its underlying type's representation, so this
                         // is one conversion to the result type (none ⇒ already correct).
-                        let result = match TypeConversion::resolve_optional_slang_type(
+                        let result = match crate::ast::Type::resolve_optional(
                             call.get_type(),
                             &context.state.builder,
                         ) {

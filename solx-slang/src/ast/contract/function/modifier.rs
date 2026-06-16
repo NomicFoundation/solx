@@ -32,6 +32,8 @@ use solx_mlir::ods::sol::ReturnOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveType;
 use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::body_kind::BodyKind;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -39,8 +41,6 @@ use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::modifier_body_call::ModifierBodyCall;
 use crate::ast::contract::function::modifier_parameter_binding::ModifierParameterBinding;
 use crate::ast::contract::function::statement::StatementContext;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveType;
 
 /// The evaluated arguments of one modifier stage: one
 /// [`ModifierParameterBinding`] per bound modifier parameter. A support alias

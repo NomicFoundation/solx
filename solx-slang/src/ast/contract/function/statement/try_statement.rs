@@ -19,11 +19,11 @@ use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::try_external_call::TryExternalCall;
 use crate::ast::contract::function::statement::StatementContext;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Emits a `try` statement as a `sol.try`: an external call with try

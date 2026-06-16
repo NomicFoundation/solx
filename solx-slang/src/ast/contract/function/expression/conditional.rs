@@ -17,11 +17,10 @@ use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveType;
-use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits a tuple-valued conditional `cond ? a : b`, producing one value per
@@ -64,11 +63,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 true_items
                     .iter()
                     .map(|item| {
-                        TypeConversion::resolve_optional_slang_type(
-                            item.get_type(),
-                            &self.state.builder,
-                        )
-                        .expect("slang types every conditional-branch tuple element")
+                        crate::ast::Type::resolve_optional(item.get_type(), &self.state.builder)
+                            .expect("slang types every conditional-branch tuple element")
                     })
                     .collect()
             }
@@ -86,7 +82,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .types()
                     .iter()
                     .map(|element_type| {
-                        TypeConversion::resolve_optional_slang_type(
+                        crate::ast::Type::resolve_optional(
                             Some(element_type.clone()),
                             &self.state.builder,
                         )
@@ -213,16 +209,16 @@ expression_emit!(ConditionalExpression; |node, context, block| {
         .bare_function_ref_type(&node.true_expression())
         .or_else(|| context.bare_function_ref_type(&node.false_expression()))
         .or_else(|| {
-            TypeConversion::resolve_optional_slang_type(node.get_type(), &context.state.builder)
+            crate::ast::Type::resolve_optional(node.get_type(), &context.state.builder)
         })
         .or_else(|| {
-            TypeConversion::resolve_optional_slang_type(
+            crate::ast::Type::resolve_optional(
                 node.true_expression().get_type(),
                 &context.state.builder,
             )
         })
         .or_else(|| {
-            TypeConversion::resolve_optional_slang_type(
+            crate::ast::Type::resolve_optional(
                 node.false_expression().get_type(),
                 &context.state.builder,
             )

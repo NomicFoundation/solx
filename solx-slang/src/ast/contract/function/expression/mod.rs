@@ -42,11 +42,10 @@ use solx_mlir::ods::sol::AddrOfOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::storage_layout::StorageSlot;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveType;
-use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers Solidity expressions to MLIR SSA values.
 pub struct ExpressionContext<'state, 'context, 'block> {
@@ -256,11 +255,9 @@ where
                 | Expression::PrefixExpression(_)
         );
         if folds && let Some(folded) = self.integer_value() {
-            let result_type = TypeConversion::resolve_optional_slang_type(
-                self.get_type(),
-                &context.state.builder,
-            )
-            .expect("slang types every folded constant expression");
+            let result_type =
+                crate::ast::Type::resolve_optional(self.get_type(), &context.state.builder)
+                    .expect("slang types every folded constant expression");
             let value = crate::ast::Value::constant_from_bigint(
                 &folded,
                 crate::ast::Type::new(result_type),

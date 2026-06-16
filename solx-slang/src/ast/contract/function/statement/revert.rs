@@ -14,11 +14,11 @@ use solx_mlir::ods::sol::RevertOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveType;
 use crate::ast::arguments_declaration_ext::ArgumentsDeclarationExt;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Emits a `sol.revert` for the call form `revert()` or `revert("message")`.

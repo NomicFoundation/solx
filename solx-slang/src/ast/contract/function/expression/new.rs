@@ -25,11 +25,11 @@ use solx_mlir::ods::sol::NewOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::ContractPayable;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveSignature;
+use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveSignature;
-use crate::ast::type_conversion::ResolveType;
 
 impl CallKind {
     /// Emits a `new` expression: dynamic-aggregate allocation (`new T[](n)`,

@@ -15,10 +15,10 @@ use solx_mlir::ods::sol::CopyOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::storage_layout::StorageSlot;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveType;
 
 impl StorageSlot {
     /// Emits a load of this slot via `sol.addr_of` + `sol.load`.

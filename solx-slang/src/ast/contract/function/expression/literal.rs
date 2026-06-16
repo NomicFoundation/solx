@@ -25,7 +25,6 @@ use solx_utils::BIT_LENGTH_BYTE;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::type_conversion::TypeConversion;
 
 // A decimal and a hex integer literal lower identically: slang has already
 // computed the integer value (decimals after unit/denomination scaling, hex
@@ -35,7 +34,7 @@ expression_emit!(DecimalNumberExpression, HexNumberExpression; |node, context, b
         .integer_value()
         .expect("an integer literal evaluates to an integer after units");
     let result_type =
-        TypeConversion::resolve_optional_slang_type(node.get_type(), &context.state.builder)
+        crate::ast::Type::resolve_optional(node.get_type(), &context.state.builder)
             .expect("the binder types every integer literal node");
     let constant = crate::ast::Value::constant_from_bigint(
         &value,

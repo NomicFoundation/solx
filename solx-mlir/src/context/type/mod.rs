@@ -14,6 +14,8 @@ use melior::ir::BlockRef;
 use melior::ir::Type as MlirType;
 use melior::ir::TypeLike;
 use melior::ir::r#type::IntegerType;
+use slang_solidity_v2::ast::StateVariableDefinition;
+use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::Builder;
 use crate::Value;
@@ -26,6 +28,8 @@ use crate::ods::sol::DynBytesToFixedBytesOperation;
 use crate::ods::sol::EnumCastOperation;
 
 use self::array_size::ArraySize;
+use self::location_policy::LocationPolicy;
+use self::resolve_type::ResolveType;
 
 /// An MLIR type in the Sol dialect.
 ///
@@ -55,6 +59,34 @@ impl<'context> Type<'context> {
     /// The inner melior type, for the op-construction boundary.
     pub fn into_mlir(self) -> MlirType<'context> {
         self.inner
+    }
+
+    /// Resolves a possibly-absent Slang type — `node.get_type()` on a node the
+    /// binder left untyped (an unresolved reference or a semantic error) — under
+    /// a `None` inherited location, yielding `None` when the Slang type is
+    /// absent. The `Option`-lift over the [`ResolveType`] projection.
+    // TODO: slang's binder does not fold binary expressions of literal operands —
+    // its typing rules return the type of one operand (e.g. type of the left
+    // operand for shifts), so `1 << 100` gets typed as ui8 (the type of `1`) and
+    // constant subexpressions overflow at that width. solc folds via
+    // `RationalNumberType::binaryOperatorResult`, sizing the result to fit the
+    // folded value. Either teach slang to fold, or fold here before emission.
+    pub fn resolve_optional(
+        slang_type: Option<SlangType>,
+        builder: &Builder<'context>,
+    ) -> Option<MlirType<'context>> {
+        Some(slang_type?.resolve_type(LocationPolicy::Declared(None), builder))
+    }
+
+    /// Resolves the declared type of a state variable, which Slang always types.
+    pub fn resolve_state_variable(
+        state_variable: &StateVariableDefinition,
+        builder: &Builder<'context>,
+    ) -> MlirType<'context> {
+        state_variable
+            .get_type()
+            .expect("slang types every state variable")
+            .resolve_type(LocationPolicy::Declared(None), builder)
     }
 
     /// An unsigned integer type of `bits` width (`ui<bits>`) — `ui256` (the field

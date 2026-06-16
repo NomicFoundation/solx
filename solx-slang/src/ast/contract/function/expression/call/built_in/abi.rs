@@ -23,12 +23,12 @@ use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveSignature;
+use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::built_in::EncodeMode;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveSignature;
-use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits `abi.encode(args)` as a standard `sol.encode`.

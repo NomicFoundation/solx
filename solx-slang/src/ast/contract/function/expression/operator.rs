@@ -41,7 +41,6 @@ use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::operator_binding::OperatorBindings;
-use crate::ast::type_conversion::TypeConversion;
 
 /// Solidity operator, bridged from slang's typed per-expression operator enums
 /// (`AdditiveExpressionOperator`, `ShiftExpressionOperator`, …) — never parsed
@@ -481,7 +480,7 @@ impl Operator {
                     .unwrap_or_else(|| {
                         unimplemented!("unregistered state variable {:?}", state_variable.node_id())
                     });
-                let element_type = TypeConversion::resolve_state_variable_type(
+                let element_type = crate::ast::Type::resolve_state_variable(
                     &state_variable,
                     &context.state.builder,
                 );

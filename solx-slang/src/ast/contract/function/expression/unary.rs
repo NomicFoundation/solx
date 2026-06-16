@@ -13,7 +13,6 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
-use crate::ast::type_conversion::TypeConversion;
 
 expression_emit!(PostfixExpression; |node, context, block| {
     // Peel parenthesised single-element tuples so `(i)++` / `(arr[j])--` resolve
@@ -34,7 +33,7 @@ expression_emit!(PrefixExpression; |node, context, block| {
         unreachable!("`delete` is value-less; a discard site emits it, not value-position `Emit`");
     }
     let result_type =
-        TypeConversion::resolve_optional_slang_type(node.get_type(), &context.state.builder);
+        crate::ast::Type::resolve_optional(node.get_type(), &context.state.builder);
     let operator = match node.operator() {
         PrefixExpressionOperator::Bang(_) => Operator::Not,
         PrefixExpressionOperator::DeleteKeyword(_) => {

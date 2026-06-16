@@ -20,7 +20,6 @@ use solx_mlir::ods::sol::StringLitOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits `type(E).min` / `type(E).max` for an enum — the lowest (`0`) or
@@ -46,7 +45,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             unreachable!("type(E).min/max resolves to an enum definition");
         };
         let result_type =
-            TypeConversion::resolve_optional_slang_type(access.get_type(), &self.state.builder)
+            crate::ast::Type::resolve_optional(access.get_type(), &self.state.builder)
                 .expect("slang types type(E).min/max as the enum");
         let member_count = enum_definition.members().iter().count();
         let ordinal = match builtin {
@@ -79,7 +78,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .resolve_to_built_in()
             .expect("type(T).min/max dispatches on its built-in member");
         let result_type =
-            TypeConversion::resolve_optional_slang_type(access.get_type(), &self.state.builder)
+            crate::ast::Type::resolve_optional(access.get_type(), &self.state.builder)
                 .expect("slang types type(T).min/max as the integer type");
         let integer_type =
             IntegerType::try_from(result_type).expect("type(T).min/max is an integer type");
@@ -190,7 +189,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         self.state.add_dependency(object_name.clone());
         let result_type =
-            TypeConversion::resolve_optional_slang_type(access.get_type(), &self.state.builder)
+            crate::ast::Type::resolve_optional(access.get_type(), &self.state.builder)
                 .unwrap_or_else(|| {
                     crate::ast::Type::string(self.state.builder.context, DataLocation::Memory)
                         .into_mlir()

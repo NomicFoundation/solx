@@ -18,10 +18,9 @@ use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveSignature;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveSignature;
-use crate::ast::type_conversion::TypeConversion;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Classifies a member access as an enum-variant reference (`E.Variant` or
@@ -60,7 +59,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let result_type =
-            TypeConversion::resolve_optional_slang_type(access.get_type(), &self.state.builder)
+            crate::ast::Type::resolve_optional(access.get_type(), &self.state.builder)
                 .expect("slang types an enum-variant reference as the enum");
         let builder = &self.state.builder;
         let raw = crate::ast::Value::constant(

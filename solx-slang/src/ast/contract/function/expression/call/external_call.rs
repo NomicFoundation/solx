@@ -20,13 +20,13 @@ use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveSignature;
+use crate::ast::ResolveType;
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
 use crate::ast::contract::function::expression::call::static_mode::StaticMode;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveSignature;
-use crate::ast::type_conversion::ResolveType;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// The SOLE `ext_icall` sink for `SelfExternal` + `ExternalInstance`.

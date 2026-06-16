@@ -44,10 +44,9 @@ use self::function::FunctionEmitter;
 use self::library::LibraryCallCollector;
 use self::storage_layout::StorageSlot;
 use crate::ast::ContractPayable;
+use crate::ast::LocationPolicy;
+use crate::ast::ResolveSignature;
 use crate::ast::operator_binding::OperatorBindings;
-use crate::ast::type_conversion::LocationPolicy;
-use crate::ast::type_conversion::ResolveSignature;
-use crate::ast::type_conversion::TypeConversion;
 
 /// Lowers a Solidity contract to Sol dialect MLIR.
 ///
@@ -177,7 +176,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 continue;
             };
             let element_type =
-                TypeConversion::resolve_state_variable_type(&state_variable, &self.state.builder);
+                crate::ast::Type::resolve_state_variable(&state_variable, &self.state.builder);
             let builder = &self.state.builder;
             let slot_attribute: IntegerAttribute =
                 Attribute::parse(builder.context, &format!("{} : i256", slot.slot))
