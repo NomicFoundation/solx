@@ -1,36 +1,24 @@
 //!
-//! The Sol-dialect construction handle, and the emission methods still homed
-//! on it.
+//! The Sol-dialect construction handle the `sol_op!` macros read.
 //!
-//! [`Builder`] carries the `{context, location}` the `sol_op!` macros read. The
-//! methods on it (contracts, functions, reverts, requires, try, and the call
-//! family) are the ops not yet dissolved onto their owning nodes.
+//! [`Builder`] carries the `{context, location}` every op construction needs.
+//! Its one remaining emission method, [`Builder::emit_sol_require`], is the
+//! conditional revert, pending the conditional-flag macro extension that will
+//! let it inline at its producing sites.
 //!
 
 pub mod try_fallback_kind;
 pub mod yul;
 
 use melior::ir::Attribute;
-use melior::ir::Block;
 use melior::ir::BlockLike;
-use melior::ir::BlockRef;
 use melior::ir::Location;
-use melior::ir::Region;
-use melior::ir::RegionLike;
-use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
-use melior::ir::attribute::TypeAttribute;
-use melior::ir::operation::OperationLike;
-use melior::ir::r#type::FunctionType;
-use melior::ir::r#type::IntegerType;
 
-use crate::StateMutability;
-use crate::ods::sol::FuncOperation;
 use crate::ods::sol::RequireOperation;
 
-/// Emission methods for building MLIR operations.
+/// The `{context, location}` handle the `sol_op!` macros read.
 pub struct Builder<'context> {
     /// The MLIR context with all dialects and translations registered.
     pub context: &'context melior::Context,
@@ -45,95 +33,6 @@ impl<'context> Builder<'context> {
             context,
             unknown_location: Location::unknown(context),
         }
-    }
-
-    /// Emits a `sol.func` operation with the given name, parameter types,
-    /// result types, selector, state mutability, and optional function kind.
-    ///
-    /// Returns the entry block of the function body for appending operations.
-    pub fn emit_sol_func<'block>(
-        &self,
-        name: &str,
-        parameter_types: &[Type<'context>],
-        result_types: &[Type<'context>],
-        selector: Option<u32>,
-        state_mutability: StateMutability,
-        kind: Option<crate::FunctionKind>,
-        id: Option<i64>,
-        block: &BlockRef<'context, 'block>,
-    ) -> BlockRef<'context, 'block> {
-        let function_type = FunctionType::new(self.context, parameter_types, result_types);
-        let body_region = Region::new();
-        let entry_block = Block::new(
-            &parameter_types
-                .iter()
-                .map(|parameter_type| (*parameter_type, self.unknown_location))
-                .collect::<Vec<_>>(),
-        );
-        body_region.append_block(entry_block);
-
-        // `solxCreateStateMutabilityAttr` returns a valid MlirAttribute.
-        let mutability_attribute = unsafe {
-            Attribute::from_raw(crate::ffi::solxCreateStateMutabilityAttr(
-                self.context.to_raw(),
-                state_mutability as u32,
-            ))
-        };
-
-        let mut builder = FuncOperation::builder(self.context, self.unknown_location)
-            .sym_name(StringAttribute::new(self.context, name))
-            .function_type(TypeAttribute::new(function_type.into()))
-            .state_mutability(mutability_attribute)
-            .body(body_region);
-
-        if let Some(function_kind) = kind {
-            // `solxCreateFunctionKindAttr` returns a valid MlirAttribute.
-            let kind_attribute = unsafe {
-                Attribute::from_raw(crate::ffi::solxCreateFunctionKindAttr(
-                    self.context.to_raw(),
-                    function_kind as u32,
-                ))
-            };
-            builder = builder.kind(kind_attribute);
-        }
-
-        if let Some(selector_value) = selector {
-            builder = builder.selector(IntegerAttribute::new(
-                IntegerType::new(self.context, crate::Type::SELECTOR_BIT_WIDTH).into(),
-                selector_value as i64,
-            ));
-        }
-
-        // An internal function pointer (`sol.func_constant`) lowers in SolToYul
-        // to the i256 constant `id`, and the `sol.icall` dispatch switches over
-        // every same-signature function's `id`; both read this attribute, so a
-        // referenceable function must carry a unique `id` (its slang node id).
-        if let Some(function_id) = id {
-            builder = builder.id(IntegerAttribute::new(
-                IntegerType::new(self.context, 64).into(),
-                function_id,
-            ));
-        }
-
-        // The fallback dispatcher in SolToYul reads `orig_fn_type` to recover the
-        // pre-conversion Sol signature, so a fallback (like a selector-bearing
-        // function or the constructor) must carry it; without it the pass
-        // dereferences a null type.
-        if selector.is_some()
-            || matches!(
-                kind,
-                Some(crate::FunctionKind::Constructor | crate::FunctionKind::Fallback)
-            )
-        {
-            builder = builder.orig_fn_type(TypeAttribute::new(function_type.into()));
-        }
-
-        let operation = block.append_operation(builder.build().into());
-        operation
-            .region(0)
-            .expect("func has one region")
-            .first_block()
-            .expect("func body has entry block")
     }
 
     /// Emits a `sol.require` conditional revert with an optional message.

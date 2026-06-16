@@ -28,6 +28,7 @@ use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
+use solx_mlir::Function;
 use solx_mlir::StateMutability;
 use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::ReturnOperation;
@@ -134,28 +135,27 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let function_id = (body_kind == BodyKind::Function && mlir_kind.is_none())
             .then(|| self.state.next_function_id());
 
-        let function_entry_block = self.state.builder.emit_sol_func(
-            &mlir_name,
-            &mlir_parameter_types,
-            &result_types,
+        let signature = Function::new(mlir_name, mlir_parameter_types, result_types);
+        let function_entry_block = signature.define(
             selector,
             state_mutability,
             mlir_kind,
             function_id,
+            &self.state.builder,
             contract_body,
         );
 
         let mut environment = Environment::new();
         self.bind_parameters(
             function,
-            &mlir_parameter_types,
+            &signature.parameter_types,
             &function_entry_block,
             &mut environment,
         );
 
         let mut return_slots = self.init_return_slots(
             function,
-            &result_types,
+            &signature.return_types,
             parameter_count,
             body_kind,
             &function_entry_block,
@@ -205,7 +205,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                     &mut environment,
                     &region,
                     self.storage_layout,
-                    &result_types,
+                    &signature.return_types,
                     &return_slots,
                 );
                 match statement.emit(&mut emitter, current_block) {
@@ -219,9 +219,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         } else {
             let frame = ModifiedBody::new(
                 function,
-                &mlir_name,
-                &mlir_parameter_types,
-                &result_types,
+                &signature.mlir_name,
+                &signature.parameter_types,
+                &signature.return_types,
                 contract_body,
                 &function_entry_block,
             );
@@ -239,10 +239,15 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         if !terminated {
-            self.emit_default_return(function, &result_types, &return_slots, &current_block);
+            self.emit_default_return(
+                function,
+                &signature.return_types,
+                &return_slots,
+                &current_block,
+            );
         }
 
-        mlir_name
+        signature.mlir_name
     }
 
     /// Resolves the MLIR signature for `function` — symbol, parameter and result
@@ -426,14 +431,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 self.emit_sol(&constructor, contract_body);
                 return;
             }
-            let entry = self.state.builder.emit_sol_func(
-                "constructor()",
-                &[],
-                &[],
+            let entry = Function::new("constructor()".to_owned(), Vec::new(), Vec::new()).define(
                 None,
                 StateMutability::NonPayable,
                 Some(solx_mlir::FunctionKind::Constructor),
                 None,
+                &self.state.builder,
                 contract_body,
             );
             let environment = Environment::new();
@@ -461,14 +464,13 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             }
             None => (Vec::new(), StateMutability::NonPayable),
         };
-        let entry = self.state.builder.emit_sol_func(
-            "constructor()",
-            &parameter_types,
-            &[],
+        let signature = Function::new("constructor()".to_owned(), parameter_types, Vec::new());
+        let entry = signature.define(
             None,
             mutability,
             Some(solx_mlir::FunctionKind::Constructor),
             None,
+            &self.state.builder,
             contract_body,
         );
 
@@ -479,7 +481,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let mut root_environment = Environment::new();
         if let Some(constructor) = &derived_constructor {
             for (index, parameter) in constructor.parameters().iter().enumerate() {
-                let parameter_type = parameter_types[index];
+                let parameter_type = signature.parameter_types[index];
                 let parameter_value = crate::ast::Value::new(
                     entry
                         .argument(index)

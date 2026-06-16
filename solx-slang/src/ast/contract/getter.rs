@@ -25,6 +25,7 @@ use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::CmpPredicate;
+use solx_mlir::Function;
 use solx_mlir::StateMutability;
 use solx_mlir::ods::sol::AddrOfOperation;
 use solx_mlir::ods::sol::LengthOperation;
@@ -146,14 +147,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         } else {
             crate::ast::Type::pointer(builder.context, element_type, location).into_mlir()
         };
-        let entry = builder.emit_sol_func(
-            signature,
-            &[],
-            std::slice::from_ref(&element_type),
+        let function_signature =
+            Function::new(signature.to_owned(), Vec::new(), vec![element_type]);
+        let entry = function_signature.define(
             Some(selector),
             StateMutability::View,
             None,
             None,
+            builder,
             contract_body,
         );
         let storage_ref = sol_op!(
@@ -221,14 +222,17 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .collect(),
             None => vec![result_type],
         };
-        let entry = builder.emit_sol_func(
-            signature,
-            &input_types,
-            &result_types,
+        let function_signature = Function::new(
+            signature.to_owned(),
+            input_types.to_vec(),
+            result_types.to_vec(),
+        );
+        let entry = function_signature.define(
             Some(selector),
             StateMutability::View,
             None,
             None,
+            builder,
             contract_body,
         );
         let base = sol_op!(
@@ -463,14 +467,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             .get_type()
             .expect("slang types every state variable");
         let element_type = slang_type.resolve_type(LocationPolicy::ForceMemory, builder);
-        let entry = builder.emit_sol_func(
-            &signature,
-            &[],
-            std::slice::from_ref(&element_type),
+        let function_signature =
+            Function::new(signature.to_owned(), Vec::new(), vec![element_type]);
+        let entry = function_signature.define(
             Some(selector),
             StateMutability::Pure,
             None,
             None,
+            builder,
             contract_body,
         );
         if let Some(value) = Self::fold_constant_int(&initializer) {
@@ -604,14 +608,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     .collect();
                 let container_type =
                     TypeConversion::resolve_state_variable_type(state_variable, builder);
-                let entry = builder.emit_sol_func(
-                    signature,
-                    &[],
-                    &result_types,
+                let function_signature =
+                    Function::new(signature.to_owned(), Vec::new(), result_types.to_vec());
+                let entry = function_signature.define(
                     Some(selector),
                     StateMutability::View,
                     None,
                     None,
+                    builder,
                     contract_body,
                 );
                 let base = sol_op!(

@@ -26,6 +26,7 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Statements;
 
 use solx_mlir::Environment;
+use solx_mlir::Function;
 use solx_mlir::StateMutability;
 use solx_mlir::ods::sol::ReturnOperation;
 
@@ -245,14 +246,17 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .chain(result_types.iter().copied())
             .collect();
 
-        let entry = self.state.builder.emit_sol_func(
-            stage_symbol,
-            &parameter_types,
-            result_types,
+        let signature = Function::new(
+            stage_symbol.to_owned(),
+            parameter_types,
+            result_types.to_vec(),
+        );
+        let entry = signature.define(
             None,
             StateMutability::NonPayable,
             None,
             None,
+            &self.state.builder,
             contract_body,
         );
         let region = entry
