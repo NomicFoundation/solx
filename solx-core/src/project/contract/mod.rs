@@ -540,19 +540,11 @@ impl Contract {
                         solx_codegen_evm::Dependencies::new(code_identifier.as_str())
                     }
                 };
-                // Cross-contract references collected during Slang→MLIR emission
-                // (e.g. each `new C(args)` records `C`) so the linker pulls in
-                // the referenced contract's deploy object.
                 for cross_contract in mlir.dependencies.iter() {
                     dependencies.push(cross_contract.clone(), false);
                 }
 
                 let melior_context = solx_mlir::Context::create_mlir_context();
-                // The deploy segment carries the runtime object's immutable
-                // offsets (`Some`); lowering its `llvm.setimmutable` ops to heap
-                // stores at those offsets is required because that op has no LLVM
-                // translation (a `ContractKind::Library`'s library-address
-                // immutable). The runtime segment passes `None` (no setimmutable).
                 let raw_llvm = solx_mlir::Context::translate_source_to_llvm(
                     &melior_context,
                     &mlir.source,

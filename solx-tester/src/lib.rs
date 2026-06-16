@@ -136,8 +136,6 @@ impl<'a> SolxTester<'a> {
         )?);
         let toolchain = solidity_compiler.toolchain();
 
-        // The Slang frontend (`slang-ast`) compiles Solidity only; Yul-input
-        // tests belong to the Yul pipeline and are excluded from its run.
         #[cfg(not(feature = "slang-ast"))]
         let yul_compiler = Arc::new(SolidityCompiler::new(
             solidity_compiler_path.clone(),
