@@ -2,13 +2,12 @@
 //! Solidity type conversion classification and dispatch.
 //!
 
-pub mod location_policy;
-
-pub use self::location_policy::LocationPolicy;
 pub mod resolve_signature;
 pub mod resolve_type;
+
 pub use self::resolve_signature::ResolveSignature;
 pub use self::resolve_type::ResolveType;
+pub use solx_mlir::LocationPolicy;
 
 use melior::ir::Type;
 use num_bigint::BigInt;

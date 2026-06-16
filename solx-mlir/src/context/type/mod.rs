@@ -5,6 +5,7 @@
 
 pub mod array_size;
 pub mod contract_payable;
+pub mod location_policy;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
