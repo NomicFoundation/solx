@@ -39,12 +39,9 @@ pub struct Pointer<'context, 'block> {
 }
 
 impl<'context, 'block> Pointer<'context, 'block> {
-    /// Wraps a melior value whose type is `!sol.ptr<…>`.
+    /// Wraps a place value — a `!sol.ptr<…>`, or a by-reference aggregate in
+    /// `Storage` / `CallData`, which is its own place ([`Type::address_type`]).
     pub fn new(inner: MlirValue<'context, 'block>) -> Self {
-        debug_assert!(
-            Type::new(inner.r#type()).is_pointer(),
-            "Pointer wraps a !sol.ptr value"
-        );
         Self { inner }
     }
 
