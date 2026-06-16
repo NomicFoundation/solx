@@ -6,14 +6,17 @@ use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 pub mod built_in;
 pub mod external_call;
-pub mod library_call;
 pub mod positional_arguments;
 pub mod try_external_call;
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::attribute::StringAttribute;
+use melior::ir::attribute::TypeAttribute;
+use melior::ir::r#type::FunctionType;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::CallOptionsExpression;
@@ -27,6 +30,7 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::Function;
+use solx_mlir::ods::sol::ExtCallOperation;
 use solx_mlir::ods::sol::ExtICallOperation;
 use solx_mlir::ods::sol::ICallOperation;
 use solx_mlir::ods::sol::MallocOperation;
@@ -37,6 +41,7 @@ use crate::ast::Emit;
 use crate::ast::LocationPolicy;
 use crate::ast::Materialize;
 use crate::ast::Pointer;
+use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 /// The shared call-emission primitives the call kinds dispatch through
@@ -539,13 +544,97 @@ where
                     &parameter_ids[..]
                 };
                 let argument_expressions = arguments.ordered_by(explicit_parameter_ids);
-                return context.emit_library_external_call(
-                    &library_name,
+
+                // An external library call delegatecalls into the deployed library
+                // via `sol.ext_call` (with `delegate_call` + `library_call`), whose
+                // conversion owns the ABI encode, the delegatecall, the
+                // revert-bubble, and the result decode. The library address is a
+                // `sol.lib_addr` link placeholder; a `using for` receiver becomes
+                // the implicit leading `self` argument.
+                let (parameter_types, return_types) = AstType::resolve_signature(
                     &library_function,
-                    &argument_expressions,
-                    self_receiver.as_ref(),
-                    block,
+                    LocationPolicy::Declared(None),
+                    &context.state.builder,
                 );
+                let selector = library_function
+                    .compute_selector()
+                    .expect("slang validated");
+                let mlir_name = FunctionEmitter::mlir_function_name(&library_function);
+                let (argument_values, current_block) = match &self_receiver {
+                    Some(receiver) => {
+                        let (parameter_self, parameter_rest) =
+                            parameter_types.split_first().expect("slang validated");
+                        let BlockAnd {
+                            value: self_value,
+                            block,
+                        } = receiver.emit(context, block);
+                        let builder = &context.state.builder;
+                        let self_value = self_value
+                            .cast(AstType::new(*parameter_self), builder, &block)
+                            .into_mlir();
+                        let BlockAnd {
+                            value: mut rest_values,
+                            block,
+                        } = argument_expressions.materialize(parameter_rest, context, block);
+                        rest_values.insert(0, self_value);
+                        (rest_values, block)
+                    }
+                    None => {
+                        let BlockAnd { value, block } =
+                            argument_expressions.materialize(&parameter_types, context, block);
+                        (value, block)
+                    }
+                };
+                let builder = &context.state.builder;
+                let address =
+                    AstValue::library_address(&library_name, builder, &current_block).into_mlir();
+                let callee_type =
+                    FunctionType::new(builder.context, &parameter_types, &return_types);
+                let gas = AstValue::gas_left(builder, &current_block).into_mlir();
+                let value = AstValue::constant(
+                    0,
+                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                    builder,
+                    &current_block,
+                )
+                .into_mlir();
+                let selector_value = AstValue::constant(
+                    i64::from(selector),
+                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                    builder,
+                    &current_block,
+                )
+                .into_mlir();
+                // `sol.ext_call` yields the `i1` success status (result 0) then the
+                // decoded outs; its conversion reverts internally on failure, so the
+                // status is dropped and only the decoded results return.
+                let operation = current_block.append_operation(sol_op_build!(
+                    builder,
+                    ExtCallOperation
+                        .callee(StringAttribute::new(builder.context, &mlir_name))
+                        .ins(&argument_values)
+                        .addr(address)
+                        .gas(gas)
+                        .val(value)
+                        .selector(selector_value)
+                        .delegate_call(Attribute::unit(builder.context))
+                        .library_call(Attribute::unit(builder.context))
+                        .callee_type(TypeAttribute::new(callee_type.into()))
+                        .status(AstType::signless(
+                            builder.context,
+                            solx_utils::BIT_LENGTH_BOOLEAN
+                        ))
+                        .outs(&return_types)
+                ));
+                let results = (0..return_types.len())
+                    .map(|index| {
+                        operation
+                            .result(index + 1)
+                            .expect("sol.ext_call produces the declared results")
+                            .into()
+                    })
+                    .collect();
+                return (results, current_block);
             }
 
             // Every other member call is positional.
