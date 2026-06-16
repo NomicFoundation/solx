@@ -398,7 +398,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             // flattened leaf (no syntactic nesting can match these).
             Expression::FunctionCallExpression(call) => {
                 let lhs_leaves = flatten_lvalues(tuple);
-                let (values, current) = self.emit_function_call_results(call, block);
+                let (values, current) = call.emit(self, block);
                 assert!(
                     values.len() == lhs_leaves.len(),
                     "tuple assignment arity mismatch: {} LHS slots vs {} call results",

@@ -349,7 +349,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
         // the `sol.return` arity matches rather than taking the first value.
         let (values, block) = match &expression {
             Expression::FunctionCallExpression(call) => {
-                emitter.emit_function_call_results(call, block)
+                call.emit(&emitter, block)
             }
             Expression::ConditionalExpression(conditional) => {
                 conditional.emit(&emitter, block)

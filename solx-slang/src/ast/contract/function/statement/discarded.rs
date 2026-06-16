@@ -32,7 +32,7 @@ where
 
     fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) -> Self::Output {
         match self.0 {
-            Expression::FunctionCallExpression(call) => context.emit_function_call(call, block).1,
+            Expression::FunctionCallExpression(call) => call.emit(context, block).1,
             Expression::PrefixExpression(prefix)
                 if matches!(
                     prefix.operator(),

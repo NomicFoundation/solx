@@ -41,31 +41,10 @@ use crate::ast::LocationPolicy;
 use crate::ast::Materialize;
 use crate::ast::contract::function::expression::ExpressionContext;
 
-/// Call-expression entry points and the shared emission primitives the call
-/// kinds dispatch through (argument coercion, call-options capture, indirect
-/// calls, struct construction, external-library link resolution).
+/// The shared call-emission primitives the call kinds dispatch through
+/// (argument coercion, call-options capture, indirect calls, struct
+/// construction, external-library link resolution).
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits a function-call expression in value position, taking its single
-    /// result (`None` for a void callee).
-    pub fn emit_function_call(
-        &self,
-        call: &FunctionCallExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let (results, block) = CallKind::new(self, call).emit(self, call, block);
-        (results.into_iter().next(), block)
-    }
-
-    /// Emits a function-call expression, returning all of its result values in
-    /// declaration order — tuple deconstruction `(a, b) = f(...)`.
-    pub fn emit_function_call_results(
-        &self,
-        call: &FunctionCallExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        CallKind::new(self, call).emit(self, call, block)
-    }
-
     /// Evaluates a `{value: …, gas: …, salt: …}` option list in source order
     /// (each value emitted for its side effects) and returns the captured
     /// `value` (as `msg.value`, coerced to `ui256`) and `salt` (the CREATE2 salt
@@ -407,11 +386,23 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     }
 }
 
-expression_emit!(FunctionCallExpression; |node, context, block| {
-    // Value position: a void callee is impossible here (Solidity forbids using a
-    // void call as a value); the void case is reached only at a statement-position
-    // discard site, which emits the call without `Emit`.
-    let (value, block) = context.emit_function_call(node, block);
-    let value = value.expect("a function call in value position returns a value");
-    BlockAnd { block, value: value.into() }
-});
+impl<'state, 'context, 'block, 'scope> Emit<'context, 'block, 'state, 'scope>
+    for FunctionCallExpression
+where
+    'context: 'block,
+    'context: 'state,
+    'block: 'state,
+    'state: 'scope,
+{
+    type Context = &'scope ExpressionContext<'state, 'context, 'block>;
+    type Output = (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>);
+
+    /// Emits a function call, yielding its result values in declaration order —
+    /// none for a void callee, one for the common case, several for a
+    /// tuple-returning call (`(a, b) = f(...)`). In value position the sole result
+    /// is taken through [`Expression`]'s emit; a statement-position discard keeps
+    /// only the continuation block.
+    fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) -> Self::Output {
+        CallKind::new(context, self).emit(context, self, block)
+    }
+}

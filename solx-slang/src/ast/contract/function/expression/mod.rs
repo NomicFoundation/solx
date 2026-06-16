@@ -288,7 +288,17 @@ where
             Expression::BitwiseOrExpression(inner) => inner.emit(context, block),
             Expression::BitwiseXorExpression(inner) => inner.emit(context, block),
             Expression::ShiftExpression(inner) => inner.emit(context, block),
-            Expression::FunctionCallExpression(inner) => inner.emit(context, block),
+            Expression::FunctionCallExpression(inner) => {
+                let (mut values, block) = inner.emit(context, block);
+                assert!(
+                    !values.is_empty(),
+                    "a function call in value position returns a value"
+                );
+                BlockAnd {
+                    value: AstValue::from(values.remove(0)),
+                    block,
+                }
+            }
             Expression::TupleExpression(inner) => inner.emit(context, block),
             Expression::ConditionalExpression(inner) => {
                 let (mut values, block) = inner.emit(context, block);

@@ -122,7 +122,7 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
             (values, current)
         }
         Expression::FunctionCallExpression(call) => {
-            let (values, current) = emitter.emit_function_call_results(call, block);
+            let (values, current) = call.emit(&emitter, block);
             assert!(
                 values.len() == elements.len(),
                 "tuple deconstruction arity mismatch: {} LHS slots vs {} call results",

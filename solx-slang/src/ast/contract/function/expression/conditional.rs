@@ -125,9 +125,7 @@ where
                         }
                         (values, current)
                     }
-                    Expression::FunctionCallExpression(call) => {
-                        context.emit_function_call_results(call, branch_block)
-                    }
+                    Expression::FunctionCallExpression(call) => call.emit(context, branch_block),
                     Expression::ConditionalExpression(nested) => nested.emit(context, branch_block),
                     other => unimplemented!(
                         "multi-value conditional branch of this expression kind is not supported: {:?}",
