@@ -46,8 +46,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         static_mode: StaticMode,
         block: &BlockRef<'context, 'block>,
     ) -> Vec<Value<'context, 'block>> {
-        let callee =
-            self.emit_external_callee(receiver, selector, parameter_types, return_types, block);
+        let callee = AstValue::external_callee(
+            AstValue::from(receiver),
+            selector,
+            parameter_types,
+            return_types,
+            &self.state.builder,
+            block,
+        )
+        .into_mlir();
         let builder = &self.state.builder;
         // The call value defaults to zero wei.
         let value = call_value.unwrap_or_else(|| {
@@ -67,28 +74,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             static_mode,
             block,
         )
-    }
-
-    /// Packs a receiver address and `selector` into the `!sol.ext_func_ref`
-    /// callee an external interaction carries, via `sol.address_cast` +
-    /// `sol.ext_func_constant`. The single builder of that representation,
-    /// shared by `CALL`/`STATICCALL`, the `try`-call, and a `this.f` /
-    /// `instance.f` external function-pointer value.
-    pub fn emit_external_callee(
-        &self,
-        receiver: Value<'context, 'block>,
-        selector: u32,
-        parameter_types: &[Type<'context>],
-        return_types: &[Type<'context>],
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        let builder = &self.state.builder;
-        let address =
-            AstValue::from(receiver).cast(AstType::address(builder.context, false), builder, block);
-        let ext_func_ref_type =
-            AstType::ext_func_ref(builder.context, parameter_types, return_types);
-        AstValue::ext_func_constant(address, selector, ext_func_ref_type, builder, block)
-            .into_mlir()
     }
 
     /// The ABI signature of a `public` state variable's synthesised getter:

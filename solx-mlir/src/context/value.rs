@@ -5,6 +5,7 @@
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Type as MlirType;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use melior::ir::attribute::FlatSymbolRefAttribute;
@@ -244,6 +245,23 @@ impl<'context, 'block> Value<'context, 'block> {
                 ))
                 .result(result_type.into_mlir())
         ))
+    }
+
+    /// The `!sol.ext_func_ref<…>` callee of an external interaction: `receiver`
+    /// cast to `address`, packed with `selector` over the signature
+    /// `(parameter_types) -> (return_types)`. Shared by CALL / STATICCALL, the
+    /// `try`-call, and a `this.f` / `instance.f` external function-pointer value.
+    pub fn external_callee(
+        receiver: Self,
+        selector: u32,
+        parameter_types: &[MlirType<'context>],
+        return_types: &[MlirType<'context>],
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let address = receiver.cast(Type::address(builder.context, false), builder, block);
+        let ext_func_ref_type = Type::ext_func_ref(builder.context, parameter_types, return_types);
+        Self::ext_func_constant(address, selector, ext_func_ref_type, builder, block)
     }
 
     /// `sol.func_constant` — an internal function pointer (`!sol.func_ref<…>`)

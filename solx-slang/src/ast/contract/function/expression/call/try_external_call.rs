@@ -110,13 +110,15 @@ impl TryExternalCall {
             value: argument_values,
             block: current_block,
         } = arguments.materialize(&parameter_types, context, current_block);
-        let callee = context.emit_external_callee(
-            receiver.into_mlir(),
+        let callee = AstValue::external_callee(
+            receiver,
             self.selector,
             &parameter_types,
             &return_types,
+            &context.state.builder,
             &current_block,
-        );
+        )
+        .into_mlir();
         let builder = &context.state.builder;
         let value = call_value.unwrap_or_else(|| {
             AstValue::constant(

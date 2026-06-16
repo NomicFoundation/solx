@@ -181,13 +181,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             value: receiver,
             block,
         } = access.operand().emit(self, block);
-        let value = self.emit_external_callee(
-            receiver.into_mlir(),
+        let value = AstValue::external_callee(
+            receiver,
             selector,
             &parameter_types,
             &return_types,
+            &self.state.builder,
             &block,
-        );
+        )
+        .into_mlir();
         (Some(value), block)
     }
 
