@@ -164,52 +164,10 @@ impl MemberCallKind {
             unimplemented!("named arguments on this member call are not yet supported");
         };
         match self {
-            // Both are external calls; the signature comes from the callee definition.
-            Self::SelfExternal | Self::ExternalInstance => {
-                let Some(Definition::Function(function_definition)) =
-                    access.member().resolve_to_definition()
-                else {
-                    unreachable!("an external member call resolves to a function");
-                };
-                self.emit_external_call_results(
-                    context,
-                    access,
-                    &function_definition,
-                    call_value,
-                    arguments,
-                    block,
-                )
-            }
-            Self::SelfGetter => {
-                let Some(Definition::StateVariable(state_variable)) =
-                    access.member().resolve_to_definition()
-                else {
-                    unreachable!("a self getter call resolves to a state variable");
-                };
-                self.emit_self_getter_call(
-                    context,
-                    access,
-                    &state_variable,
-                    arguments,
-                    call_value,
-                    block,
-                )
-            }
-            Self::ExternalGetter => {
-                let Some(Definition::StateVariable(state_variable)) =
-                    access.member().resolve_to_definition()
-                else {
-                    unreachable!("an external getter call resolves to a state variable");
-                };
-                let (value, block) = self.emit_external_getter_call(
-                    context,
-                    access,
-                    &state_variable,
-                    arguments,
-                    block,
-                );
-                (value.into_iter().collect(), block)
-            }
+            Self::SelfExternal
+            | Self::ExternalInstance
+            | Self::SelfGetter
+            | Self::ExternalGetter => self.emit_external(context, access, call_value, arguments, block),
             Self::Library(LibraryVisibility::Internal) => {
                 let Some(Definition::Function(library_function)) =
                     access.member().resolve_to_definition()

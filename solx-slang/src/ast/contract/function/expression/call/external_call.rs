@@ -8,7 +8,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
-use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StateVariableDefinition;
@@ -290,77 +290,68 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
 }
 
 impl MemberCallKind {
-    /// Emits a multi-result external call (`(a, b) = recv.f(args)`); always a
-    /// `sol.ext_icall`.
-    pub fn emit_external_call_results<'state, 'context, 'block>(
+    /// A call to a function and a call to a state-variable getter converge on one
+    /// `sol.ext_icall`: they differ only in the selector and signature source — a
+    /// function's `compute_selector` + external (memory) ABI signature with its
+    /// own `static`-ness, versus a getter's `compute_selector` + synthesised
+    /// `getter_signature`, never `static`. A nested / reference-typed getter, or
+    /// an arg-bearing getter on another instance, is a LOUD residual (#H-M7/M10/M11).
+    pub fn emit_external<'state, 'context, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         access: &MemberAccessExpression,
-        function_definition: &FunctionDefinition,
         call_value: Option<Value<'context, 'block>>,
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let selector = function_definition
-            .compute_selector()
-            .expect("slang validated");
-        // The signature comes from the callee's definition (valid for both a
-        // foreign instance and the current contract's own function), so the
-        // unified path never depends on the callee being in the local registry.
-        // External calls cross the ABI boundary, so a `calldata` reference
-        // parameter is encoded from / decoded to memory — the callee type and
-        // argument coercions use the EXTERNAL (memory) representation.
-        let (parameter_types, return_types) = AstType::resolve_signature(
-            function_definition,
-            LocationPolicy::ForceMemory,
-            &context.state.builder,
-        );
-        // The receiver is the member operand: `this` for a self call, the
-        // instance value for an external one — both evaluate to an address.
+        let (selector, parameter_types, return_types, static_mode) =
+            match access.member().resolve_to_definition() {
+                Some(Definition::Function(function)) => {
+                    let (parameter_types, return_types) = AstType::resolve_signature(
+                        &function,
+                        LocationPolicy::ForceMemory,
+                        &context.state.builder,
+                    );
+                    (
+                        function.compute_selector().expect("slang validated"),
+                        parameter_types,
+                        return_types,
+                        StaticMode::from_function(&function),
+                    )
+                }
+                Some(Definition::StateVariable(state_variable)) => {
+                    // A getter on another instance is single-valued here, so an
+                    // arg-bearing mapping / array getter is a LOUD residual; only
+                    // a self getter (`this.m(key)`) lowers its key/index argument.
+                    if !matches!(access.operand(), Expression::ThisKeyword(_))
+                        && !arguments.is_empty()
+                    {
+                        unimplemented!(
+                            "external getter with key/index arguments is not yet supported"
+                        );
+                    }
+                    let Some((parameter_types, return_types)) =
+                        context.getter_signature(&state_variable)
+                    else {
+                        unimplemented!(
+                            "getter of a nested or reference-typed state variable is not yet supported"
+                        );
+                    };
+                    (
+                        state_variable.compute_selector().expect("slang validated"),
+                        parameter_types,
+                        return_types,
+                        StaticMode::Call,
+                    )
+                }
+                _ => unreachable!("an external member call resolves to a function or state variable"),
+            };
         let BlockAnd {
             value: receiver,
-            block: current_block,
+            block,
         } = access.operand().emit(context, block);
-        let (argument_values, current_block) =
-            context.emit_coerced_arguments(arguments, &parameter_types, current_block);
-        let results = context.emit_external_call(
-            receiver.into_mlir(),
-            selector,
-            &parameter_types,
-            &return_types,
-            &argument_values,
-            call_value,
-            StaticMode::from_function(function_definition),
-            &current_block,
-        );
-        (results, current_block)
-    }
-
-    /// Emits a self getter call (`this.x()` / `this.m(key)`); A4 (#H-M7):
-    /// nested / reference-typed getters are a LOUD residual.
-    pub fn emit_self_getter_call<'state, 'context, 'block>(
-        &self,
-        context: &ExpressionContext<'state, 'context, 'block>,
-        access: &MemberAccessExpression,
-        state_variable: &StateVariableDefinition,
-        arguments: &PositionalArguments,
-        call_value: Option<Value<'context, 'block>>,
-        block: BlockRef<'context, 'block>,
-    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let selector = state_variable
-            .compute_selector()
-            .expect("slang validated");
-        let Some((parameter_types, return_types)) = context.getter_signature(state_variable) else {
-            unimplemented!(
-                "self getter of a nested or reference-typed state variable is not yet supported"
-            );
-        };
-        let (argument_values, current_block) =
+        let (argument_values, block) =
             context.emit_coerced_arguments(arguments, &parameter_types, block);
-        let BlockAnd {
-            value: receiver,
-            block: current_block,
-        } = access.operand().emit(context, current_block);
         let results = context.emit_external_call(
             receiver.into_mlir(),
             selector,
@@ -368,50 +359,9 @@ impl MemberCallKind {
             &return_types,
             &argument_values,
             call_value,
-            StaticMode::Call,
-            &current_block,
+            static_mode,
+            &block,
         );
-        (results, current_block)
-    }
-
-    /// Emits an external getter call (`instance.value()` scalar); A4
-    /// (#H-M10/M11): arg-bearing mapping/array getters are a LOUD residual.
-    pub fn emit_external_getter_call<'state, 'context, 'block>(
-        &self,
-        context: &ExpressionContext<'state, 'context, 'block>,
-        access: &MemberAccessExpression,
-        state_variable: &StateVariableDefinition,
-        arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        // The external accessor lowered here is single-valued, so an arg-bearing
-        // mapping / array getter on another instance is a LOUD residual
-        // (#H-M10/M11); only the no-argument scalar / struct getter lowers here.
-        if !arguments.is_empty() {
-            unimplemented!("external getter with key/index arguments is not yet supported");
-        }
-        let selector = state_variable
-            .compute_selector()
-            .expect("slang validated");
-        let Some((parameter_types, return_types)) = context.getter_signature(state_variable) else {
-            unimplemented!(
-                "external getter of a nested or reference-typed state variable is not yet supported"
-            );
-        };
-        let BlockAnd {
-            value: receiver,
-            block: current_block,
-        } = access.operand().emit(context, block);
-        let results = context.emit_external_call(
-            receiver.into_mlir(),
-            selector,
-            &parameter_types,
-            &return_types,
-            &[],
-            None,
-            StaticMode::Call,
-            &current_block,
-        );
-        (results.into_iter().next(), current_block)
+        (results, block)
     }
 }
