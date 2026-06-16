@@ -2,17 +2,12 @@
 //! Identifier expression emission: a bare name resolved to its definition.
 //!
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Value;
-use melior::ir::attribute::StringAttribute;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Identifier;
-use solx_mlir::ods::sol::LibAddrOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
-use crate::ast::LibraryExt;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 expression_emit!(Identifier; |node, context, block| {
@@ -51,18 +46,12 @@ expression_emit!(Identifier; |node, context, block| {
         Some(Definition::Library(library)) => {
             // A library name used as a value (`address(L)`) is its linked deploy
             // address, placed by its link symbol.
-            let builder = &context.state.builder;
-            let value: Value<'context, 'block> = sol_op!(
-                builder,
-                &block,
-                LibAddrOperation
-                    ._name(StringAttribute::new(builder.context, &library.link_symbol()))
-                    .val(crate::ast::Type::address(builder.context, false).into_mlir())
+            let name = solx_utils::ContractName::new(
+                library.get_file_id().to_owned(),
+                Some(library.name().name()),
             );
-            BlockAnd {
-                block,
-                value: value.into(),
-            }
+            let value = crate::ast::Value::library_address(&name, &context.state.builder, &block);
+            BlockAnd { block, value }
         }
         None => unreachable!("slang resolves every identifier reference"),
         Some(other) => {

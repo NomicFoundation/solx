@@ -38,7 +38,6 @@ use crate::ast::LocationPolicy;
 use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::library_ext::LibraryExt;
 
 /// Call-expression entry points and the shared emission primitives the call
 /// kinds dispatch through (argument coercion, call-options capture, indirect
@@ -248,12 +247,17 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     }
 
     /// Resolves an external library call's link target from its member-access
-    /// callee: the `"<file>:<Library>"` link symbol, the callee function, and
-    /// the `self` receiver (`None` for a namespace-qualified `L.f`, the operand
-    /// value for a `using for` `x.f`). Shared by the positional and named paths.
+    /// callee: the library's [`solx_utils::ContractName`], the callee function,
+    /// and the `self` receiver (`None` for a namespace-qualified `L.f`, the
+    /// operand value for a `using for` `x.f`). Shared by the positional and named
+    /// paths.
     fn resolve_external_library(
         access: &MemberAccessExpression,
-    ) -> (String, FunctionDefinition, Option<Expression>) {
+    ) -> (
+        solx_utils::ContractName,
+        FunctionDefinition,
+        Option<Expression>,
+    ) {
         let Some(Definition::Function(library_function)) = access.member().resolve_to_definition()
         else {
             unreachable!("an external library call resolves to a function");
@@ -263,7 +267,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         let operand = access.operand();
         let self_receiver = (!MemberCallKind::is_namespace_qualifier(&operand)).then_some(operand);
-        (library.link_symbol(), library_function, self_receiver)
+        let name = solx_utils::ContractName::new(
+            library.get_file_id().to_owned(),
+            Some(library.name().name()),
+        );
+        (name, library_function, self_receiver)
     }
 
     /// Emits an indirect call through the function-pointer value `callee`

@@ -9,6 +9,7 @@ use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
+use melior::ir::attribute::StringAttribute;
 use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::TypeLike;
 use num::BigInt;
@@ -24,6 +25,7 @@ use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
+use crate::ods::sol::LibAddrOperation;
 
 /// An MLIR value in the Sol dialect.
 ///
@@ -258,6 +260,25 @@ impl<'context, 'block> Value<'context, 'block> {
             FuncConstantOperation
                 .addr(result_type.into_mlir())
                 .sym(FlatSymbolRefAttribute::new(builder.context, name))
+        ))
+    }
+
+    /// `sol.lib_addr` — a library's linked deploy address: a placeholder the LLVM
+    /// linker resolves by the library's [`solx_utils::ContractName`] full path
+    /// (`<file>:<Library>`), the one key it shares with
+    /// [`solx_utils::Libraries::as_linker_symbols`]. The value of `address(L)` and
+    /// the callee address of an external library call.
+    pub fn library_address(
+        name: &solx_utils::ContractName,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(sol_op!(
+            builder,
+            block,
+            LibAddrOperation
+                ._name(StringAttribute::new(builder.context, &name.full_path))
+                .val(Type::address(builder.context, false).into_mlir())
         ))
     }
 

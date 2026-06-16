@@ -14,7 +14,6 @@ use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use solx_mlir::ods::sol::ExtCallOperation;
-use solx_mlir::ods::sol::LibAddrOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -85,7 +84,7 @@ impl MemberCallKind {
     pub fn emit_library_external_call<'state, 'context, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
-        library_name: &str,
+        library_name: &solx_utils::ContractName,
         function: &FunctionDefinition,
         arguments: &[Expression],
         self_receiver: Option<&Expression>,
@@ -120,13 +119,8 @@ impl MemberCallKind {
         };
 
         let builder = &context.state.builder;
-        let address = sol_op!(
-            builder,
-            &current_block,
-            LibAddrOperation
-                ._name(StringAttribute::new(builder.context, library_name))
-                .val(crate::ast::Type::address(builder.context, false).into_mlir())
-        );
+        let address =
+            crate::ast::Value::library_address(library_name, builder, &current_block).into_mlir();
         let callee_type = FunctionType::new(builder.context, &parameter_types, &return_types);
         let gas = crate::ast::Value::gas_left(builder, &current_block).into_mlir();
         let value = crate::ast::Value::constant(
