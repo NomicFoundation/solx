@@ -2,6 +2,7 @@
 //! External / bare-address call emission.
 //!
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
@@ -9,6 +10,7 @@ use melior::ir::Value;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
+use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StateVariableDefinition;
@@ -16,6 +18,7 @@ use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::BareCallOperation;
 use solx_mlir::ods::sol::BareDelegateCallOperation;
 use solx_mlir::ods::sol::BareStaticCallOperation;
+use solx_mlir::ods::sol::ExtICallOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
@@ -27,55 +30,8 @@ use crate::ast::Value as AstValue;
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
-use crate::ast::contract::function::expression::call::static_mode::StaticMode;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// The `ext_icall` sink for `SelfExternal` + `ExternalInstance`.
-    ///
-    /// Inputs are passed flat rather than as a bundle struct, with `static_call`
-    /// carried as [`StaticMode`]. At 9 arguments this is the one signature above
-    /// the `too-many-arguments` clippy threshold — a known WARN, not suppressed.
-    pub fn emit_external_call(
-        &self,
-        receiver: Value<'context, 'block>,
-        selector: u32,
-        parameter_types: &[Type<'context>],
-        return_types: &[Type<'context>],
-        argument_values: &[Value<'context, 'block>],
-        call_value: Option<Value<'context, 'block>>,
-        static_mode: StaticMode,
-        block: &BlockRef<'context, 'block>,
-    ) -> Vec<Value<'context, 'block>> {
-        let callee = AstValue::external_callee(
-            AstValue::from(receiver),
-            selector,
-            parameter_types,
-            return_types,
-            &self.state.builder,
-            block,
-        )
-        .into_mlir();
-        let builder = &self.state.builder;
-        // The call value defaults to zero wei.
-        let value = call_value.unwrap_or_else(|| {
-            AstValue::constant(
-                0,
-                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                builder,
-                block,
-            )
-            .into_mlir()
-        });
-        self.emit_ext_icall(
-            callee,
-            argument_values,
-            return_types,
-            value,
-            static_mode,
-            block,
-        )
-    }
-
     /// The ABI signature of a `public` state variable's synthesised getter:
     /// the key/index parameter types and the returned value types.
     ///
@@ -287,7 +243,9 @@ impl MemberCallKind {
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let (selector, parameter_types, return_types, static_mode) = match access
+        // A `view`/`pure` callee lowers to a STATICCALL (reverting on a state
+        // change, matching solc); a getter is never `static`.
+        let (selector, parameter_types, return_types, is_static) = match access
             .member()
             .resolve_to_definition()
         {
@@ -301,7 +259,10 @@ impl MemberCallKind {
                     function.compute_selector().expect("slang validated"),
                     parameter_types,
                     return_types,
-                    StaticMode::from_function(&function),
+                    matches!(
+                        function.mutability(),
+                        FunctionMutability::View | FunctionMutability::Pure
+                    ),
                 )
             }
             Some(Definition::StateVariable(state_variable)) => {
@@ -323,7 +284,7 @@ impl MemberCallKind {
                     state_variable.compute_selector().expect("slang validated"),
                     parameter_types,
                     return_types,
-                    StaticMode::Call,
+                    false,
                 )
             }
             _ => unreachable!("an external member call resolves to a function or state variable"),
@@ -337,16 +298,51 @@ impl MemberCallKind {
             value: argument_values,
             block,
         } = ordered.materialize(&parameter_types, context, block);
-        let results = context.emit_external_call(
-            receiver.into_mlir(),
+        let builder = &context.state.builder;
+        let callee = AstValue::external_callee(
+            receiver,
             selector,
             &parameter_types,
             &return_types,
-            &argument_values,
-            call_value,
-            static_mode,
+            builder,
             &block,
-        );
+        )
+        .into_mlir();
+        // `fp{value: v}(args)` forwards `v`; a plain call sends zero wei.
+        let value = call_value.unwrap_or_else(|| {
+            AstValue::constant(
+                0,
+                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                builder,
+                &block,
+            )
+            .into_mlir()
+        });
+        // `sol.ext_icall` returns `(i1 status, decoded returns…)`; the status is
+        // dropped (a non-`try` call reverts internally on failure).
+        let mut out_types = Vec::with_capacity(return_types.len() + 1);
+        out_types
+            .push(AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
+        out_types.extend_from_slice(&return_types);
+        let mut operation_builder =
+            ExtICallOperation::builder(builder.context, builder.unknown_location)
+                .outs(&out_types)
+                .callee(callee)
+                .callee_operands(&argument_values)
+                .gas(AstValue::gas_left(builder, &block).into_mlir())
+                .value(value);
+        if is_static {
+            operation_builder = operation_builder.static_call(Attribute::unit(builder.context));
+        }
+        let operation = block.append_operation(operation_builder.build().into());
+        let results = (0..return_types.len())
+            .map(|index| {
+                operation
+                    .result(index + 1)
+                    .expect("sol.ext_icall produces a status plus its declared results")
+                    .into()
+            })
+            .collect();
         (results, block)
     }
 }
