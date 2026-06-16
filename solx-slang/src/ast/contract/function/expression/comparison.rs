@@ -15,7 +15,7 @@ use solx_mlir::CmpPredicate;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
-use crate::ast::Toward;
+use crate::ast::Materialize;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 expression_emit!(EqualityExpression, InequalityExpression; |node, context, block| {
@@ -28,30 +28,25 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     // that type. With neither (or both) a string literal, both emit naturally.
     let left_is_string = matches!(left, Expression::StringExpression(_));
     let right_is_string = matches!(right, Expression::StringExpression(_));
-    let is_bytes_like = |r#type: crate::ast::Type| r#type.fixed_bytes_or_byte_width().is_some();
     let (lhs, rhs, block) = if right_is_string && !left_is_string {
         let BlockAnd { value: lhs, block } = left.emit(context, block);
-        let BlockAnd { value: rhs, block } = if is_bytes_like(lhs.r#type()) {
-            (Toward {
-                expression: &right,
-                target_type: lhs.r#type().into_mlir(),
-            })
-            .emit(context, block)
-        } else {
-            right.emit(context, block)
-        };
+        // `b == "d"`: the string literal materialises toward the non-string
+        // sibling's fixed-bytes type, the sibling emitted first to learn it.
+        let BlockAnd { value: rhs, block } =
+            if let Expression::StringExpression(string_literal) = &right {
+                string_literal.materialize(lhs.r#type().into_mlir(), context, block)
+            } else {
+                right.emit(context, block)
+            };
         (lhs, rhs, block)
     } else if left_is_string && !right_is_string {
         let BlockAnd { value: rhs, block } = right.emit(context, block);
-        let BlockAnd { value: lhs, block } = if is_bytes_like(rhs.r#type()) {
-            (Toward {
-                expression: &left,
-                target_type: rhs.r#type().into_mlir(),
-            })
-            .emit(context, block)
-        } else {
-            left.emit(context, block)
-        };
+        let BlockAnd { value: lhs, block } =
+            if let Expression::StringExpression(string_literal) = &left {
+                string_literal.materialize(rhs.r#type().into_mlir(), context, block)
+            } else {
+                left.emit(context, block)
+            };
         (lhs, rhs, block)
     } else {
         let BlockAnd { value: lhs, block } = left.emit(context, block);

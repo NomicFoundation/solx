@@ -4,12 +4,14 @@
 
 pub mod address;
 pub mod block_and;
+pub mod materialize;
 pub mod place;
 
 use melior::ir::BlockRef;
 
 pub use self::address::EmitAddress;
 pub use self::block_and::BlockAnd;
+pub use self::materialize::Materialize;
 pub use self::place::Place;
 
 /// Emits a Slang AST node to MLIR, appending operations to `block` and threading

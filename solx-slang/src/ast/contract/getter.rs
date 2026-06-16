@@ -41,7 +41,7 @@ use solx_mlir::Environment;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::Toward;
+use crate::ast::Materialize;
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
@@ -498,11 +498,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let BlockAnd {
             value,
             block: entry,
-        } = (Toward {
-            expression: &initializer,
-            target_type: element_type,
-        })
-        .emit(&emitter, entry);
+        } = if let Expression::StringExpression(string_literal) = &initializer {
+            string_literal.materialize(element_type, &emitter, entry)
+        } else {
+            initializer.emit(&emitter, entry)
+        };
         let value = value
             .cast(
                 crate::ast::Type::new(element_type),

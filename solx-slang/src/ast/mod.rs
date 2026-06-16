@@ -7,10 +7,10 @@ pub mod contract;
 pub mod emit;
 pub mod operator_binding;
 
-pub use self::contract::function::expression::Toward;
 pub use self::emit::BlockAnd;
 pub use self::emit::Emit;
 pub use self::emit::EmitAddress;
+pub use self::emit::Materialize;
 pub use self::emit::Place;
 // The `Type`/`Value` entities live in `solx-mlir` (with the Builder and ODS
 // ops), mirroring how `solx-yul` uses `solx-codegen-evm`'s `Value`/`Pointer`;

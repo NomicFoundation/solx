@@ -23,8 +23,8 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::EmitAddress;
 use crate::ast::LocationPolicy;
+use crate::ast::Materialize;
 use crate::ast::Place;
-use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::contract::storage_layout::StorageSlot;
@@ -507,11 +507,12 @@ expression_emit!(AssignmentExpression; |node, context, block| {
         match &target {
             AssignmentTarget::Pointer(_, element_type)
             | AssignmentTarget::Storage(_, element_type) => {
-                let BlockAnd { value, block } = (Toward {
-                    expression: &right,
-                    target_type: *element_type,
-                })
-                .emit(context, block);
+                let BlockAnd { value, block } =
+                    if let Expression::StringExpression(string_literal) = &right {
+                        string_literal.materialize(*element_type, context, block)
+                    } else {
+                        right.emit(context, block)
+                    };
                 (value, block)
             }
             AssignmentTarget::ReferenceCopy(_) => {

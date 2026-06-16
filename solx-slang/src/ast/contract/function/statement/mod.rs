@@ -43,7 +43,7 @@ use self::expression_statement_kind::ExpressionStatementKind;
 use self::modifier_strategy::ModifierStrategy;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
-use crate::ast::Toward;
+use crate::ast::Materialize;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::modifier_body_call::ModifierBodyCall;
@@ -370,11 +370,12 @@ statement_emit!(ReturnStatement; |node, context, block| {
         // declared return type (a `bytesN`/`byte` constant), not a runtime
         // string the cast below would reject.
         let return_type = context.return_types[0];
-        let BlockAnd { value, block } = (Toward {
-            expression: &expression,
-            target_type: return_type,
-        })
-        .emit(&emitter, block);
+        let BlockAnd { value, block } =
+            if let Expression::StringExpression(string_literal) = &expression {
+                string_literal.materialize(return_type, &emitter, block)
+            } else {
+                expression.emit(&emitter, block)
+            };
         (vec![value], block)
     };
 

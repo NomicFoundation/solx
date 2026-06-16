@@ -11,7 +11,7 @@ use slang_solidity_v2::ast::VariableDeclarationTarget;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::Toward;
+use crate::ast::Materialize;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 
@@ -47,11 +47,11 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
         let BlockAnd {
             value: initial_value,
             block,
-        } = (Toward {
-            expression: initializer_expression,
-            target_type: declared_type,
-        })
-        .emit(&emitter, block);
+        } = if let Expression::StringExpression(string_literal) = initializer_expression {
+            string_literal.materialize(declared_type, &emitter, block)
+        } else {
+            initializer_expression.emit(&emitter, block)
+        };
         let cast_value = initial_value
             .cast(
                 crate::ast::Type::new(declared_type),

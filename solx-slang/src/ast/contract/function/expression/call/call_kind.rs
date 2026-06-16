@@ -23,7 +23,7 @@ use solx_utils::DataLocation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::Toward;
+use crate::ast::Materialize;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
 
@@ -281,11 +281,12 @@ impl CallKind {
                         )
                         .expect("slang types a type-conversion call");
                         // A `bytesN("…")` literal folds to a fixed-bytes constant.
-                        let BlockAnd { value, block } = (Toward {
-                            expression: &first,
-                            target_type,
-                        })
-                        .emit(context, block);
+                        let BlockAnd { value, block } =
+                            if let Expression::StringExpression(string_literal) = &first {
+                                string_literal.materialize(target_type, context, block)
+                            } else {
+                                first.emit(context, block)
+                            };
                         let result = value
                             .cast(
                                 crate::ast::Type::new(target_type),

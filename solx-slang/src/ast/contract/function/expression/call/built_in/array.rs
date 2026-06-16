@@ -7,6 +7,7 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
+use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -18,7 +19,7 @@ use solx_mlir::ods::sol::PushStringOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::Toward;
+use crate::ast::Materialize;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -67,11 +68,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             // `byte` constant rather than a runtime `sol.string`.
             let byte_target =
                 crate::ast::Type::fixed_bytes(self.state.builder.context, 1).into_mlir();
-            let BlockAnd { value, block } = (Toward {
-                expression: value_argument,
-                target_type: byte_target,
-            })
-            .emit(self, block);
+            let BlockAnd { value, block } =
+                if let Expression::StringExpression(string_literal) = value_argument {
+                    string_literal.materialize(byte_target, self, block)
+                } else {
+                    value_argument.emit(self, block)
+                };
             let builder = &self.state.builder;
             let byte_value = value
                 .cast(crate::ast::Type::new(byte_target), builder, &block)
@@ -111,11 +113,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             );
             return (None, block);
         }
-        let BlockAnd { value, block } = (Toward {
-            expression: &value_argument,
-            target_type: element_type,
-        })
-        .emit(self, block);
+        let BlockAnd { value, block } =
+            if let Expression::StringExpression(string_literal) = &value_argument {
+                string_literal.materialize(element_type, self, block)
+            } else {
+                value_argument.emit(self, block)
+            };
         let builder = &self.state.builder;
         let cast_value = value.cast(crate::ast::Type::new(element_type), builder, &block);
         crate::ast::Pointer::new(new_slot).store(cast_value, builder, &block);

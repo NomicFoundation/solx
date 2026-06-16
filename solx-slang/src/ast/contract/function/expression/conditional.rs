@@ -18,7 +18,7 @@ use solx_mlir::ods::sol::YieldOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::Toward;
+use crate::ast::Materialize;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -246,11 +246,11 @@ expression_emit!(ConditionalExpression; |node, context, block| {
     let BlockAnd {
         value: then_value,
         block: then_end,
-    } = (Toward {
-        expression: &true_expression,
-        target_type: result_type,
-    })
-    .emit(context, then_block);
+    } = if let Expression::StringExpression(string_literal) = &true_expression {
+        string_literal.materialize(result_type, context, then_block)
+    } else {
+        true_expression.emit(context, then_block)
+    };
     let then_cast = then_value.cast(
         crate::ast::Type::new(result_type),
         &context.state.builder,
@@ -263,11 +263,11 @@ expression_emit!(ConditionalExpression; |node, context, block| {
     let BlockAnd {
         value: else_value,
         block: else_end,
-    } = (Toward {
-        expression: &false_expression,
-        target_type: result_type,
-    })
-    .emit(context, else_block);
+    } = if let Expression::StringExpression(string_literal) = &false_expression {
+        string_literal.materialize(result_type, context, else_block)
+    } else {
+        false_expression.emit(context, else_block)
+    };
     let else_cast = else_value.cast(
         crate::ast::Type::new(result_type),
         &context.state.builder,

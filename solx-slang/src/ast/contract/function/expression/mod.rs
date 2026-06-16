@@ -20,8 +20,6 @@ pub mod short_circuit;
 pub mod storage;
 pub mod unary;
 
-pub use self::literal::Toward;
-
 use std::collections::HashMap;
 
 use melior::ir::BlockLike;
@@ -43,6 +41,7 @@ use solx_mlir::ods::sol::AddrOfOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Materialize;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::storage_layout::StorageSlot;
 
@@ -183,11 +182,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .expect("a constant state variable has an initializer");
             // Emit toward the declared type so a `bytesN constant` initialised
             // from a string literal folds to a fixed-bytes constant.
-            let BlockAnd { value, block } = (Toward {
-                expression: &initializer,
-                target_type: element_type,
-            })
-            .emit(self, block);
+            let BlockAnd { value, block } =
+                if let Expression::StringExpression(string_literal) = &initializer {
+                    string_literal.materialize(element_type, self, block)
+                } else {
+                    initializer.emit(self, block)
+                };
             return (value.into_mlir(), block);
         }
         let slot = self

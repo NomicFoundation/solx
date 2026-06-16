@@ -36,7 +36,7 @@ use self::static_mode::StaticMode;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::Toward;
+use crate::ast::Materialize;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 /// Call-expression entry points and the shared emission primitives the call
@@ -116,11 +116,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     let BlockAnd {
                         value: salt_bytes,
                         block: next_block,
-                    } = (Toward {
-                        expression: &salt_expression,
-                        target_type: bytes32,
-                    })
-                    .emit(self, current_block);
+                    } = if let Expression::StringExpression(string_literal) = &salt_expression {
+                        string_literal.materialize(bytes32, self, current_block)
+                    } else {
+                        salt_expression.emit(self, current_block)
+                    };
                     current_block = next_block;
                     let builder = &self.state.builder;
                     salt = Some(
@@ -189,11 +189,12 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             // constant rather than a runtime `sol.string` the coercion rejects.
             let (value, next_block) = match parameter_types.get(index) {
                 Some(&parameter_type) => {
-                    let BlockAnd { value, block } = (Toward {
-                        expression: argument,
-                        target_type: parameter_type,
-                    })
-                    .emit(self, block);
+                    let BlockAnd { value, block } =
+                        if let Expression::StringExpression(string_literal) = argument {
+                            string_literal.materialize(parameter_type, self, block)
+                        } else {
+                            argument.emit(self, block)
+                        };
                     (value, block)
                 }
                 None => {
