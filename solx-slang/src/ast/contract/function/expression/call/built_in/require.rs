@@ -2,14 +2,17 @@
 //! `assert` and `require` built-in emission.
 //!
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
+use melior::ir::attribute::StringAttribute;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use solx_mlir::ods::sol::AssertOperation;
+use solx_mlir::ods::sol::RequireOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -63,7 +66,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(Expression::StringExpression(string_expression)) => {
                 let bytes = string_expression.value();
                 let literal = String::from_utf8(bytes).expect("require message is valid UTF-8");
-                builder.emit_sol_require(condition_boolean, Some(&literal), &[], false, &block);
+                sol_op_void!(
+                    builder,
+                    &block,
+                    RequireOperation
+                        .cond(condition_boolean)
+                        .args(&[])
+                        .msg(StringAttribute::new(builder.context, &literal))
+                );
                 block
             }
             Some(Expression::FunctionCallExpression(error_call))
@@ -82,17 +92,23 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let message_value = message_value
                     .coerce_to(crate::ast::Type::new(string_memory_type), builder, &block)
                     .into_mlir();
-                builder.emit_sol_require(
-                    condition_boolean,
-                    Some("Error(string)"),
-                    &[message_value],
-                    true,
+                sol_op_void!(
+                    builder,
                     &block,
+                    RequireOperation
+                        .cond(condition_boolean)
+                        .args(&[message_value])
+                        .msg(StringAttribute::new(builder.context, "Error(string)"))
+                        .call(Attribute::unit(builder.context))
                 );
                 block
             }
             None => {
-                builder.emit_sol_require(condition_boolean, None, &[], false, &block);
+                sol_op_void!(
+                    builder,
+                    &block,
+                    RequireOperation.cond(condition_boolean).args(&[])
+                );
                 block
             }
         }
@@ -146,12 +162,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .into_mlir()
             })
             .collect();
-        builder.emit_sol_require(
-            condition,
-            Some(&signature),
-            &argument_values,
-            true,
+        sol_op_void!(
+            builder,
             &current_block,
+            RequireOperation
+                .cond(condition)
+                .args(&argument_values)
+                .msg(StringAttribute::new(builder.context, &signature))
+                .call(Attribute::unit(builder.context))
         );
         current_block
     }

@@ -29,6 +29,7 @@ use solx_mlir::Function;
 use solx_mlir::StateMutability;
 use solx_mlir::ods::sol::AddrOfOperation;
 use solx_mlir::ods::sol::LengthOperation;
+use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 use solx_utils::DataLocation;
 
@@ -427,7 +428,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                             entry,
                         )
                         .into_mlir();
-                    builder.emit_sol_require(in_bounds, None, &[], false, entry);
+                    sol_op_void!(builder, entry, RequireOperation.cond(in_bounds).args(&[]));
                     crate::ast::Pointer::new(base)
                         .gep(
                             crate::ast::Value::new(arg),
