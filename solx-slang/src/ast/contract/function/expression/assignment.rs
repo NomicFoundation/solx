@@ -30,7 +30,7 @@ use crate::ast::contract::function::expression::operator::Operator;
 use crate::ast::contract::storage_layout::StorageSlot;
 
 /// Assignment target resolved from the Slang binder.
-enum AssignmentTarget<'context, 'block> {
+pub enum AssignmentTarget<'context, 'block> {
     /// Address-typed pointer with its declared element type.
     ///
     /// Covers local variables, function parameters, and the result of an
@@ -83,11 +83,9 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 (Self::from_address(address, element_type), block)
             }
             Expression::MemberAccessExpression(access) => {
-                // A namespace-qualified state-variable lvalue (`C.x = v`, notably
-                // a function-pointer state variable) is not a struct field;
-                // resolve it to its storage target exactly like the bare `x = v`.
-                // A genuine struct field resolves to a `StructMember`, so it falls
-                // through to the field-address path.
+                // A namespace-qualified state-variable lvalue (`C.x = v`) is not a
+                // struct field; resolve it like the bare `x = v`. A genuine struct
+                // field resolves to a `StructMember`, falling through below.
                 if let Some(Definition::StateVariable(state_variable)) =
                     access.member().resolve_to_definition()
                 {
@@ -114,8 +112,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 ) =>
             {
                 // `arr.push() = v` — `push` appends a default element and returns a
-                // reference to it; resolve that reference as the lvalue so the RHS
-                // is stored into the freshly-appended slot (like `arr.push(v)`).
+                // reference to it; that reference is the lvalue (like `arr.push(v)`).
                 let Expression::MemberAccessExpression(access) = call.operand() else {
                     unreachable!("guarded by the match arm");
                 };
@@ -130,13 +127,12 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
     }
 
     /// Resolves a state-variable lvalue — bare `x` or namespace-qualified `C.x`
-    /// (e.g. a function-pointer state variable) — to its assignment target.
+    /// — to its assignment target.
     ///
-    /// Reference-typed storage (fixed/dynamic arrays, `string`, `bytes`,
-    /// structs) is assigned by copying the RHS reference's contents into the
-    /// slot via `sol.copy` (a [`Self::ReferenceCopy`]), just like a
-    /// reference-typed inline initializer; a whole mapping is not assignable.
-    /// Value-typed storage stores the coerced scalar directly.
+    /// Reference-typed storage (arrays, `string`, `bytes`, structs) is assigned
+    /// by copying the RHS reference's contents into the slot via `sol.copy` (a
+    /// [`Self::ReferenceCopy`]); a whole mapping is not assignable. Value-typed
+    /// storage stores the coerced scalar directly.
     fn from_state_variable<'state>(
         context: &ExpressionContext<'state, 'context, 'block>,
         state_variable: &ast::StateVariableDefinition,
@@ -177,11 +173,10 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
     }
 
     /// Classifies a computed lvalue `address` (with its `element_type`) into its
-    /// assignment target: a reference-typed element is addressed BY reference —
+    /// assignment target. A reference-typed element is addressed BY reference —
     /// the address value's type IS the element type — so it is copied into
-    /// ([`Self::ReferenceCopy`]); any other element is a pointer stored through
-    /// ([`Self::Pointer`]). Shared by the index, struct-field, and `push()`
-    /// lvalue paths.
+    /// ([`Self::ReferenceCopy`]); any other element is a [`Self::Pointer`] stored
+    /// through. Shared by the index, struct-field, and `push()` lvalue paths.
     fn from_address(address: Value<'context, 'block>, element_type: Type<'context>) -> Self {
         if address.r#type() == element_type {
             Self::ReferenceCopy(address)
@@ -234,29 +229,26 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             }
         }
     }
-}
 
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits `delete x` — resets the lvalue to its zero value. A reference-typed
-    /// storage aggregate (array / `string` / `bytes` / struct) is deep-cleared
-    /// via `sol.delete`; a value-typed lvalue (scalar state variable, `a[i]`,
-    /// `m[k]`) is overwritten with zero, reusing the assignment store path.
-    pub fn emit_delete(
-        &self,
+    /// Emits `delete x` — resets the lvalue `operand` denotes to its zero value.
+    /// A reference-typed storage aggregate is deep-cleared via `sol.delete`; a
+    /// memory aggregate resets to a freshly allocated zero-filled buffer; a value
+    /// lvalue is overwritten with its type's own zero (reusing the store path).
+    pub fn delete<'state>(
+        context: &ExpressionContext<'state, 'context, 'block>,
         operand: &Expression,
         block: BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
-        let (target, block) = AssignmentTarget::new(self, operand, block);
+        let (target, block) = Self::new(context, operand, block);
         match &target {
-            AssignmentTarget::ReferenceCopy(reference) => {
+            Self::ReferenceCopy(reference) => {
                 sol_op_void!(
-                    &self.state.builder,
+                    &context.state.builder,
                     &block,
                     DeleteOperation.reference(*reference)
                 );
             }
-            AssignmentTarget::Pointer(_, element_type)
-            | AssignmentTarget::Storage(_, element_type) => {
+            Self::Pointer(_, element_type) | Self::Storage(_, element_type) => {
                 let slang_type = operand
                     .get_type()
                     .expect("slang types every delete operand");
@@ -271,28 +263,28 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                             let size = crate::ast::Value::constant(
                                 0,
                                 crate::ast::Type::unsigned(
-                                    self.state.builder.context,
+                                    context.state.builder.context,
                                     solx_utils::BIT_LENGTH_FIELD,
                                 ),
-                                &self.state.builder,
+                                &context.state.builder,
                                 &block,
                             )
                             .into_mlir();
                             sol_op!(
-                                &self.state.builder,
+                                &context.state.builder,
                                 &block,
                                 MallocOperation
                                     .addr(*element_type)
                                     .size(size)
-                                    .zero_init(Attribute::unit(self.state.builder.context))
+                                    .zero_init(Attribute::unit(context.state.builder.context))
                             )
                         }
                         _ => sol_op!(
-                            &self.state.builder,
+                            &context.state.builder,
                             &block,
                             MallocOperation
                                 .addr(*element_type)
-                                .zero_init(Attribute::unit(self.state.builder.context))
+                                .zero_init(Attribute::unit(context.state.builder.context))
                         ),
                     }
                 } else {
@@ -303,17 +295,19 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     // `sol.cast` it to e.g. a `func_ref` (an ill-typed integer cast).
                     crate::ast::Value::zero(
                         crate::ast::Type::new(*element_type),
-                        &self.state.builder,
+                        &context.state.builder,
                         &block,
                     )
                     .into_mlir()
                 };
-                target.store(self, zero, &block);
+                target.store(context, zero, &block);
             }
         }
         block
     }
+}
 
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Emits a destructuring assignment `(a, b, …) = rhs` to existing lvalues.
     ///
     /// Solidity evaluates every right-hand component before writing any

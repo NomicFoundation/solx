@@ -8,6 +8,7 @@ use slang_solidity_v2::ast::PrefixExpressionOperator;
 
 use crate::ast::Emit;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::assignment::AssignmentTarget;
 
 /// An expression emitted for its side effects, its value discarded — an
 /// expression statement (`f();`) or a for-loop step (`i++`).
@@ -38,7 +39,7 @@ where
                     PrefixExpressionOperator::DeleteKeyword(_)
                 ) =>
             {
-                context.emit_delete(&prefix.operand(), block)
+                AssignmentTarget::delete(context, &prefix.operand(), block)
             }
             _ => self.0.emit(context, block).block,
         }

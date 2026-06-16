@@ -28,7 +28,7 @@ expression_emit!(PostfixExpression; |node, context, block| {
 
 expression_emit!(PrefixExpression; |node, context, block| {
     // `delete x` is value-less, so it never reaches value position: a statement
-    // discard site emits it directly (`emit_delete`), never through this `Emit`.
+    // discard site emits it directly (`AssignmentTarget::delete`), not through this `Emit`.
     if let PrefixExpressionOperator::DeleteKeyword(_) = node.operator() {
         unreachable!("`delete` is value-less; a discard site emits it, not value-position `Emit`");
     }
