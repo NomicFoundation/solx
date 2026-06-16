@@ -166,6 +166,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// operand value for a `using for` `x.f`). Shared by the positional and named
     /// paths.
     fn resolve_external_library(
+        &self,
         access: &MemberAccessExpression,
     ) -> (
         solx_utils::ContractName,
@@ -180,7 +181,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             unreachable!("an external library call's target is a library member");
         };
         let operand = access.operand();
-        let self_receiver = (!Self::is_namespace_qualifier(&operand)).then_some(operand);
+        let self_receiver = (!self.is_namespace_qualifier(&operand)).then_some(operand);
         let name = solx_utils::ContractName::new(
             library.get_file_id().to_owned(),
             Some(library.name().name()),
@@ -305,7 +306,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Whether a member-access operand `x` in `x.f(...)` is a namespace qualifier
     /// — a library or import alias (`L.f` / `M.f`), which is not a value — rather
     /// than a `using for` receiver, which becomes the implicit `self` argument.
-    fn is_namespace_qualifier(operand: &Expression) -> bool {
+    fn is_namespace_qualifier(&self, operand: &Expression) -> bool {
         let Expression::Identifier(identifier) = operand else {
             return false;
         };
@@ -543,7 +544,7 @@ where
                     ))
             {
                 let (library_name, library_function, self_receiver) =
-                    ExpressionContext::resolve_external_library(access);
+                    context.resolve_external_library(access);
                 let parameter_ids: Vec<NodeId> = library_function
                     .parameters()
                     .iter()
@@ -569,14 +570,53 @@ where
                 unimplemented!("named arguments on this member call are not supported");
             };
             return match member_definition {
-                Some(Definition::Function(function)) => {
-                    if function.compute_selector().is_none() {
-                        // `using for` / `L.f` onto an internal (no-selector) library fn.
-                        context.emit_library_call(access, &function, positional, block)
+                // `using for` / `L.f` onto an internal (no-selector) library fn,
+                // inlined like an ordinary internal call; a selector-bearing one is
+                // a `this.f` / `instance.f` external call.
+                Some(Definition::Function(function)) if function.compute_selector().is_none() => {
+                    let resolved = context.state.resolve_function(function.node_id());
+                    // A namespace qualifier (`L.f` / `M.f`) is not a value, so only
+                    // the explicit arguments pass; a `using for` receiver becomes the
+                    // implicit `self` first parameter.
+                    if context.is_namespace_qualifier(&operand) {
+                        let arguments: Vec<Expression> = positional.iter().collect();
+                        let BlockAnd {
+                            value: argument_values,
+                            block,
+                        } = arguments.materialize(&resolved.parameter_types, context, block);
+                        let results =
+                            resolved.call(&argument_values, &context.state.builder, &block);
+                        (results, block)
                     } else {
-                        // `this.f` / `instance.f`: an external call.
-                        context.emit_external(access, call_value, positional, block)
+                        let (parameter_self, parameter_rest) = resolved
+                            .parameter_types
+                            .split_first()
+                            .expect("slang validated");
+                        let BlockAnd {
+                            value: self_value,
+                            block,
+                        } = operand.emit(context, block);
+                        let self_value = self_value
+                            .cast(
+                                AstType::new(*parameter_self),
+                                &context.state.builder,
+                                &block,
+                            )
+                            .into_mlir();
+                        let arguments: Vec<Expression> = positional.iter().collect();
+                        let BlockAnd {
+                            value: mut argument_values,
+                            block,
+                        } = arguments.materialize(parameter_rest, context, block);
+                        argument_values.insert(0, self_value);
+                        let results =
+                            resolved.call(&argument_values, &context.state.builder, &block);
+                        (results, block)
                     }
+                }
+                Some(Definition::Function(_)) => {
+                    // `this.f` / `instance.f`: an external call.
+                    context.emit_external(access, call_value, positional, block)
                 }
                 // `C.x(args)`: a function-pointer state variable read then called;
                 // `this.x` / `instance.x`: a getter (an external call).

@@ -11,8 +11,6 @@ use melior::ir::attribute::TypeAttribute;
 use melior::ir::r#type::FunctionType;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::PositionalArguments;
 use solx_mlir::ods::sol::ExtCallOperation;
 
 use crate::ast::BlockAnd;
@@ -25,56 +23,6 @@ use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits an internal (`Library { external: false }`) library call — inlined
-    /// like an ordinary internal function.
-    pub fn emit_library_call(
-        &self,
-        access: &MemberAccessExpression,
-        library_function: &FunctionDefinition,
-        positional_arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let context = self;
-        let function = context.state.resolve_function(library_function.node_id());
-        // A `using for` receiver (`x.f(args)`) is a value and becomes the
-        // implicit `self` — the function's first parameter; a namespace qualifier
-        // — a library (`L.f`) or import alias (`M.f`) — is not a value, so only
-        // the explicit arguments pass.
-        if Self::is_namespace_qualifier(&access.operand()) {
-            let arguments: Vec<Expression> = positional_arguments.iter().collect();
-            let BlockAnd {
-                value: argument_values,
-                block: current_block,
-            } = arguments.materialize(&function.parameter_types, context, block);
-            let results = function.call(&argument_values, &context.state.builder, &current_block);
-            return (results, current_block);
-        }
-
-        // Using-for: evaluate the receiver as the leading `self` argument, coerce
-        // it to the first parameter, and coerce the explicit arguments to the
-        // rest.
-        let (parameter_self, parameter_rest) = function
-            .parameter_types
-            .split_first()
-            .expect("slang validated");
-        let BlockAnd {
-            value: self_value,
-            block: current_block,
-        } = access.operand().emit(context, block);
-        let builder = &context.state.builder;
-        let self_value = self_value
-            .cast(AstType::new(*parameter_self), builder, &current_block)
-            .into_mlir();
-        let arguments: Vec<Expression> = positional_arguments.iter().collect();
-        let BlockAnd {
-            value: mut argument_values,
-            block: current_block,
-        } = arguments.materialize(parameter_rest, context, current_block);
-        argument_values.insert(0, self_value);
-        let results = function.call(&argument_values, &context.state.builder, &current_block);
-        (results, current_block)
-    }
-
     /// Emits an external (`Library { external: true }`) library call — a
     /// `delegatecall` to the deployed library via the native `sol.ext_call`
     /// (with `delegate_call` + `library_call` flags), whose conversion owns the ABI
