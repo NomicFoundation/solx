@@ -38,6 +38,8 @@ use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::EmitAddress;
+use crate::ast::Place;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::operator_binding::OperatorBindings;
@@ -526,10 +528,26 @@ impl Operator {
     )> {
         let (address, element_type, block) = match operand {
             Expression::IndexAccessExpression(index_access) => {
-                context.emit_index_access_address(index_access, block)
+                let BlockAnd {
+                    value:
+                        Place {
+                            address,
+                            element_type,
+                        },
+                    block,
+                } = index_access.emit_address(context, block);
+                (address, element_type, block)
             }
             Expression::MemberAccessExpression(access) => {
-                context.emit_struct_field_address(access, block)
+                let BlockAnd {
+                    value:
+                        Place {
+                            address,
+                            element_type,
+                        },
+                    block,
+                } = access.emit_address(context, block);
+                (address, element_type, block)
             }
             _ => return None,
         };

@@ -21,7 +21,9 @@ use solx_mlir::ods::sol::MallocOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::EmitAddress;
 use crate::ast::LocationPolicy;
+use crate::ast::Place;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
@@ -70,8 +72,14 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 ),
             },
             Expression::IndexAccessExpression(index_access) => {
-                let (address, element_type, block) =
-                    context.emit_index_access_address(index_access, block);
+                let BlockAnd {
+                    value:
+                        Place {
+                            address,
+                            element_type,
+                        },
+                    block,
+                } = index_access.emit_address(context, block);
                 (Self::from_address(address, element_type), block)
             }
             Expression::MemberAccessExpression(access) => {
@@ -85,8 +93,14 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 {
                     return Self::from_state_variable(context, &state_variable, block);
                 }
-                let (address, element_type, block) =
-                    context.emit_struct_field_address(access, block);
+                let BlockAnd {
+                    value:
+                        Place {
+                            address,
+                            element_type,
+                        },
+                    block,
+                } = access.emit_address(context, block);
                 (Self::from_address(address, element_type), block)
             }
             Expression::FunctionCallExpression(call)

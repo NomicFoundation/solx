@@ -4,7 +4,6 @@
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::IndexAccessExpression;
@@ -17,61 +16,75 @@ use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::EmitAddress;
 use crate::ast::LocationPolicy;
+use crate::ast::Place;
 use crate::ast::contract::function::expression::ExpressionContext;
 
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits the address yielded by `a[i]` / `m[k]` together with the element
-    /// MLIR type, without the trailing `sol.load`.
-    ///
-    /// Shared between the value-producing read path (the `IndexAccessExpression`
-    /// emission) and the lvalue write path in `emit_assignment`.
-    pub fn emit_index_access_address(
+impl<'state, 'context, 'block, 'scope> EmitAddress<'context, 'block, 'state, 'scope>
+    for IndexAccessExpression
+where
+    'context: 'block,
+    'context: 'state,
+    'block: 'state,
+    'state: 'scope,
+{
+    type Context = &'scope ExpressionContext<'state, 'context, 'block>;
+
+    /// Emits the address `a[i]` / `m[k]` denotes together with the element MLIR
+    /// type — `sol.map` over a mapping key, `sol.gep` over a sequential index —
+    /// without the trailing `sol.load`.
+    fn emit_address(
         &self,
-        index_access: &IndexAccessExpression,
+        context: Self::Context,
         block: BlockRef<'context, 'block>,
-    ) -> (
-        Value<'context, 'block>,
-        Type<'context>,
-        BlockRef<'context, 'block>,
-    ) {
-        if index_access.end().is_some() {
+    ) -> BlockAnd<'context, 'block, Place<'context, 'block>> {
+        if self.end().is_some() {
             unimplemented!("range index (a[i:j]) is not yet supported");
         }
 
-        let base = index_access.operand();
-        let index_expression = index_access
+        let base = self.operand();
+        let index_expression = self
             .start()
             .expect("slang validates a[i] has an index expression");
         let base_type = base
             .get_type()
             .expect("slang types the base of an index access");
-        let result_type = index_access
+        let result_type = self
             .get_type()
             .expect("slang types every index-access expression");
 
         let BlockAnd {
             value: base_value,
             block,
-        } = base.emit(self, block);
+        } = base.emit(context, block);
         let BlockAnd {
             value: index_value,
             block,
-        } = index_expression.emit(self, block);
+        } = index_expression.emit(context, block);
 
         let (address, element_type) = match &base_type {
             SlangType::Mapping(_) => {
                 let element_type = crate::ast::Type::resolve(
                     &result_type,
                     LocationPolicy::Declared(None),
-                    &self.state.builder,
+                    &context.state.builder,
                 );
-                let base_location = Self::resolve_base_location(&base_type);
+                let base_location = match base_type.data_location() {
+                    Some(SlangDataLocation::Inherited) => {
+                        unreachable!("slang should not surface Inherited at an index-access base")
+                    }
+                    Some(other) => DataLocation::from_slang(other, None),
+                    None => unimplemented!(
+                        "index access on a value-typed base is not yet wired: {:?}",
+                        std::mem::discriminant(&base_type)
+                    ),
+                };
                 let address_type = crate::ast::Type::new(element_type)
-                    .address_type(base_location, self.state.builder.context);
+                    .address_type(base_location, context.state.builder.context);
                 let address = base_value
                     .into_pointer()
-                    .entry(index_value, address_type, &self.state.builder, &block)
+                    .entry(index_value, address_type, &context.state.builder, &block)
                     .into_mlir();
                 (address, element_type)
             }
@@ -82,28 +95,19 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .gep(
                         index_value,
                         crate::ast::Type::new(element_type),
-                        &self.state.builder,
+                        &context.state.builder,
                         &block,
                     )
                     .into_mlir();
                 (address, element_type)
             }
         };
-        (address, element_type, block)
-    }
-
-    /// Maps a slang container type's data location to the dialect-side
-    /// `DataLocation`.
-    fn resolve_base_location(base_type: &SlangType) -> DataLocation {
-        match base_type.data_location() {
-            Some(SlangDataLocation::Inherited) => {
-                unreachable!("slang should not surface Inherited at an index-access base")
-            }
-            Some(other) => DataLocation::from_slang(other, None),
-            None => unimplemented!(
-                "index access on a value-typed base is not yet wired: {:?}",
-                std::mem::discriminant(base_type)
-            ),
+        BlockAnd {
+            value: Place {
+                address,
+                element_type,
+            },
+            block,
         }
     }
 }
@@ -186,7 +190,13 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
         );
         return BlockAnd { block, value: value.into() };
     }
-    let (address, element_type, block) = context.emit_index_access_address(node, block);
+    let BlockAnd {
+        value: Place {
+            address,
+            element_type,
+        },
+        block,
+    } = node.emit_address(context, block);
     let value = crate::ast::Pointer::new(address).load(
         crate::ast::Type::new(element_type),
         &context.state.builder,

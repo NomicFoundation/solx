@@ -6,8 +6,6 @@
 //!
 
 use melior::ir::BlockRef;
-use melior::ir::Type;
-use melior::ir::Value;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
@@ -15,27 +13,31 @@ use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
+use crate::ast::EmitAddress;
+use crate::ast::Place;
 use crate::ast::contract::function::expression::ExpressionContext;
 
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits the address yielded by `s.field` together with the field's
-    /// element MLIR type, without the trailing `sol.load`.
-    ///
-    /// Shared between the value-producing read path (the struct branch of the
-    /// `MemberAccessExpression` emission) and the lvalue write path in
-    /// `emit_assignment`. Only called for a struct base.
-    pub fn emit_struct_field_address(
+impl<'state, 'context, 'block, 'scope> EmitAddress<'context, 'block, 'state, 'scope>
+    for MemberAccessExpression
+where
+    'context: 'block,
+    'context: 'state,
+    'block: 'state,
+    'state: 'scope,
+{
+    type Context = &'scope ExpressionContext<'state, 'context, 'block>;
+
+    /// Emits the address `s.field` denotes together with the field's element MLIR
+    /// type (`sol.gep` to the field offset), without the trailing `sol.load`.
+    /// Only valid for a struct base.
+    fn emit_address(
         &self,
-        access: &MemberAccessExpression,
+        context: Self::Context,
         block: BlockRef<'context, 'block>,
-    ) -> (
-        Value<'context, 'block>,
-        Type<'context>,
-        BlockRef<'context, 'block>,
-    ) {
-        let base = access.operand();
+    ) -> BlockAnd<'context, 'block, Place<'context, 'block>> {
+        let base = self.operand();
         let Some(SlangType::Struct(struct_type)) = base.get_type() else {
-            unreachable!("emit_struct_field_address is only called for a struct base");
+            unreachable!("a struct-field address is only emitted for a struct base");
         };
         let Definition::Struct(struct_definition) = struct_type.definition() else {
             unreachable!("slang StructType always references a Struct definition");
@@ -46,7 +48,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // with no direct field-index lookup, but the binder resolves the access,
         // so no name-string comparison is needed.
         let Some(Definition::StructMember(member_definition)) =
-            access.member().resolve_to_definition()
+            self.member().resolve_to_definition()
         else {
             unreachable!("slang resolves a struct field access to its StructMember definition");
         };
@@ -60,8 +62,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let BlockAnd {
             value: base_value,
             block,
-        } = base.emit(self, block);
-        let builder = &self.state.builder;
+        } = base.emit(context, block);
+        let builder = &context.state.builder;
 
         let index_value = crate::ast::Value::constant(
             field_index as i64,
@@ -74,7 +76,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .into_pointer()
             .gep(index_value, element_type, builder, &block)
             .into_mlir();
-        (address, element_type.into_mlir(), block)
+        BlockAnd {
+            value: Place {
+                address,
+                element_type: element_type.into_mlir(),
+            },
+            block,
+        }
     }
 }
 
@@ -116,7 +124,13 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
     // (e.g. `msg.sender`, `addr.balance`) is a built-in member access.
     if matches!(node.operand().get_type(), Some(SlangType::Struct(_))) {
         // Address the field (`sol.gep`) and `sol.load` it.
-        let (address, element_type, block) = context.emit_struct_field_address(node, block);
+        let BlockAnd {
+            value: Place {
+                address,
+                element_type,
+            },
+            block,
+        } = node.emit_address(context, block);
         let value = crate::ast::Pointer::new(address).load(
             crate::ast::Type::new(element_type),
             &context.state.builder,
