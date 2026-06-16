@@ -12,7 +12,6 @@ pub mod require;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Operation;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::r#type::IntegerType;
@@ -229,7 +228,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// `address.balance`, `abi.encode(...)`, `arr.push(...)`).
     ///
     /// Dispatches the resolved member built-in to its family handler; an
-    /// unrecognized member is reported by [`Self::emit_environment_global`].
+    /// unrecognized member is a loud `unimplemented!`.
     pub fn emit_built_in_member_access(
         &self,
         access: &MemberAccessExpression,
@@ -305,10 +304,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             return (Some(placeholder), block);
         }
         match access.member().resolve_to_built_in() {
-            Some(BuiltIn::AddressBalance) => self.emit_address_balance(access, block),
-            Some(BuiltIn::AddressCodehash) => self.emit_address_codehash(access, block),
-            Some(BuiltIn::AddressCode) => self.emit_address_code(access, block),
-            Some(BuiltIn::Length) => self.emit_member_length(access, block),
             Some(BuiltIn::AddressSend) => {
                 let arguments = arguments.expect("send is a member-access call");
                 self.emit_address_send(access, arguments, block)
@@ -369,22 +364,21 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             // (`this.f`, `instance.f`) is an external pointer, while a
             // namespace-qualified internal function with none (`C.f`, `(L.f)`) is
             // an internal pointer (`sol.func_constant`), like a bare `f`.
-            resolved => {
-                if let Some(Definition::Function(function_definition)) =
+            _ => {
+                let Some(Definition::Function(function_definition)) =
                     access.member().resolve_to_definition()
-                {
-                    if function_definition.compute_selector().is_some() {
-                        self.emit_external_function_pointer(access, &function_definition, block)
-                    } else {
-                        // The literal target lowers (no virtual redirect): an
-                        // explicit `Base.f` names Base's own implementation, not
-                        // the most-derived override a bare `f` would bind.
-                        let (value, block) =
-                            self.emit_function_constant(function_definition.node_id(), block);
-                        (Some(value), block)
-                    }
+                else {
+                    unimplemented!("unsupported member access: {}", access.member().name());
+                };
+                if function_definition.compute_selector().is_some() {
+                    self.emit_external_function_pointer(access, &function_definition, block)
                 } else {
-                    self.emit_environment_global(resolved, access, block)
+                    // The literal target lowers (no virtual redirect): an explicit
+                    // `Base.f` names Base's own implementation, not the most-derived
+                    // override a bare `f` would bind.
+                    let (value, block) =
+                        self.emit_function_constant(function_definition.node_id(), block);
+                    (Some(value), block)
                 }
             }
         }
@@ -440,32 +434,5 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .addr(input)
                 .result(AstType::fixed_bytes(builder.context, 32))
         )
-    }
-
-    /// Emits an intrinsic whose single operand is the receiver of a member
-    /// access — e.g. `address.balance` (`sol.balance`), `address.codehash`
-    /// (`sol.code_hash`), or `array.length` (`sol.length`).
-    ///
-    /// Evaluates the receiver, builds the operation via `build_op`, and
-    /// extracts its single result.
-    fn emit_unary_member_intrinsic<F>(
-        &self,
-        access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
-        build_op: F,
-    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>)
-    where
-        F: FnOnce(Value<'context, 'block>) -> Operation<'context>,
-    {
-        let BlockAnd {
-            value: address_value,
-            block,
-        } = access.operand().emit(self, block);
-        let value = block
-            .append_operation(build_op(address_value.into_mlir()))
-            .result(0)
-            .expect("unary member intrinsic always produces one result")
-            .into();
-        (Some(value), block)
     }
 }

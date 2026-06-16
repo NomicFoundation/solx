@@ -19,8 +19,27 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
+use solx_mlir::ods::sol::BalanceOperation;
+use solx_mlir::ods::sol::BaseFeeOperation;
+use solx_mlir::ods::sol::BlobBaseFeeOperation;
+use solx_mlir::ods::sol::BlockNumberOperation;
+use solx_mlir::ods::sol::CallValueOperation;
+use solx_mlir::ods::sol::CallerOperation;
+use solx_mlir::ods::sol::ChainIdOperation;
+use solx_mlir::ods::sol::CodeHashOperation;
+use solx_mlir::ods::sol::CodeOperation;
+use solx_mlir::ods::sol::CoinbaseOperation;
+use solx_mlir::ods::sol::DifficultyOperation;
+use solx_mlir::ods::sol::GasLimitOperation;
+use solx_mlir::ods::sol::GasPriceOperation;
+use solx_mlir::ods::sol::GetCallDataOperation;
+use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::ObjectCodeOperation;
+use solx_mlir::ods::sol::OriginOperation;
+use solx_mlir::ods::sol::PrevRandaoOperation;
+use solx_mlir::ods::sol::SigOperation;
 use solx_mlir::ods::sol::StringLitOperation;
+use solx_mlir::ods::sol::TimestampOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
@@ -308,7 +327,155 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 value: value.into(),
             };
         }
+        // `address.balance`/`codehash`/`code`, `arr.length`: a unary intrinsic
+        // over the receiver value.
+        Some(BuiltIn::AddressBalance) => {
+            let BlockAnd {
+                value: address,
+                block,
+            } = node.operand().emit(context, block);
+            let builder = &context.state.builder;
+            let value: MlirValue<'context, 'block> = sol_op!(
+                builder,
+                &block,
+                BalanceOperation
+                    .cont_addr(address.into_mlir())
+                    .out(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            );
+            return BlockAnd {
+                block,
+                value: value.into(),
+            };
+        }
+        Some(BuiltIn::AddressCodehash) => {
+            let BlockAnd {
+                value: address,
+                block,
+            } = node.operand().emit(context, block);
+            let builder = &context.state.builder;
+            let value: MlirValue<'context, 'block> = sol_op!(
+                builder,
+                &block,
+                CodeHashOperation
+                    .cont_addr(address.into_mlir())
+                    .out(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            );
+            return BlockAnd {
+                block,
+                value: value.into(),
+            };
+        }
+        Some(BuiltIn::AddressCode) => {
+            let BlockAnd {
+                value: address,
+                block,
+            } = node.operand().emit(context, block);
+            let builder = &context.state.builder;
+            let value: MlirValue<'context, 'block> = sol_op!(
+                builder,
+                &block,
+                CodeOperation
+                    .cont_addr(address.into_mlir())
+                    .out(AstType::string(builder.context, DataLocation::Memory))
+            );
+            return BlockAnd {
+                block,
+                value: value.into(),
+            };
+        }
+        Some(BuiltIn::Length) => {
+            let BlockAnd {
+                value: operand,
+                block,
+            } = node.operand().emit(context, block);
+            let builder = &context.state.builder;
+            let value: MlirValue<'context, 'block> = sol_op!(
+                builder,
+                &block,
+                LengthOperation
+                    .inp(operand.into_mlir())
+                    .len(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+            );
+            return BlockAnd {
+                block,
+                value: value.into(),
+            };
+        }
         _ => {}
+    }
+    // EVM environment globals (`block`/`tx`/`msg`): nullary `sol.*` intrinsics.
+    // Built eagerly (each is a distinct op type), then appended once.
+    let builder = &context.state.builder;
+    let environment_op = match node.member().resolve_to_built_in() {
+        Some(BuiltIn::TxOrigin) => {
+            Some(sol_op_build!(builder, OriginOperation.addr(AstType::address(builder.context, false))))
+        }
+        Some(BuiltIn::TxGasPrice) => Some(sol_op_build!(
+            builder,
+            GasPriceOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::MsgSender) => {
+            Some(sol_op_build!(builder, CallerOperation.addr(AstType::address(builder.context, false))))
+        }
+        Some(BuiltIn::MsgValue) => Some(sol_op_build!(
+            builder,
+            CallValueOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockTimestamp) => Some(sol_op_build!(
+            builder,
+            TimestampOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockNumber) => Some(sol_op_build!(
+            builder,
+            BlockNumberOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockCoinbase) => {
+            Some(sol_op_build!(builder, CoinbaseOperation.addr(AstType::address(builder.context, false))))
+        }
+        Some(BuiltIn::BlockChainid) => Some(sol_op_build!(
+            builder,
+            ChainIdOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockBasefee) => Some(sol_op_build!(
+            builder,
+            BaseFeeOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockGaslimit) => Some(sol_op_build!(
+            builder,
+            GasLimitOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockBlobbasefee) => Some(sol_op_build!(
+            builder,
+            BlobBaseFeeOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockDifficulty) => Some(sol_op_build!(
+            builder,
+            DifficultyOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::BlockPrevrandao) => Some(sol_op_build!(
+            builder,
+            PrevRandaoOperation.val(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
+        )),
+        Some(BuiltIn::MsgSig) => Some(sol_op_build!(
+            builder,
+            SigOperation.val(AstType::fixed_bytes(builder.context, 4))
+        )),
+        Some(BuiltIn::MsgData) => Some(sol_op_build!(
+            builder,
+            GetCallDataOperation.addr(AstType::string(builder.context, DataLocation::CallData))
+        )),
+        _ => None,
+    };
+    if let Some(operation) = environment_op {
+        let value: MlirValue<'context, 'block> = block
+            .append_operation(operation)
+            .result(0)
+            .expect("an environment global produces one result")
+            .into();
+        return BlockAnd {
+            block,
+            value: value.into(),
+        };
     }
     // A struct-typed base is a field read (`s.field`); anything else
     // (e.g. `msg.sender`, `addr.balance`) is a built-in member access.
