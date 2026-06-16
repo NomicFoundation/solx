@@ -59,9 +59,8 @@ pub struct StatementContext<'state, 'context, 'block> {
     state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
     environment: &'state mut Environment<'context, 'block>,
-    /// The current region for creating new blocks.
-    /// Stored as a raw pointer to allow switching between Sol op regions
-    /// without lifetime conflicts.
+    /// The current region for creating new blocks. A raw pointer to allow
+    /// switching between Sol op regions without lifetime conflicts.
     region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
     storage_layout: &'state HashMap<NodeId, StorageSlot>,
@@ -80,20 +79,17 @@ pub struct StatementContext<'state, 'context, 'block> {
     /// inside `unchecked {}` blocks.
     arithmetic_mode: ArithmeticMode,
     /// User-defined Yul functions in scope within an `assembly { … }` block,
-    /// keyed by name. Each is inlined at its call sites; an entry lives only
-    /// for the duration of the Yul block (or inlined function frame) that
-    /// declares it, then is removed so outer-scope definitions remain.
+    /// keyed by name. Each is inlined at its call sites; an entry lives only for
+    /// the duration of the declaring Yul block / inlined frame, then is removed.
     yul_functions: HashMap<String, YulFunctionDefinition>,
     /// Per-name inline-recursion guard: a Yul function currently being inlined
-    /// has depth ≥ 1, so a recursive call is rejected (it would otherwise loop
-    /// the compiler) rather than emitted.
+    /// has depth ≥ 1, so a recursive call is rejected (it would loop the compiler).
     yul_inline_depth: HashMap<String, usize>,
 }
 
-/// Builds an [`ExpressionContext`] for a statement context — the shared state,
-/// environment, storage layout, and arithmetic mode every expression emission
-/// needs. The unchecked loop-step is the one site that builds its context
-/// explicitly instead, with [`ArithmeticMode::Unchecked`].
+/// Builds an [`ExpressionContext`] from a statement context. The unchecked
+/// loop-step is the one site that builds its context explicitly instead, with
+/// [`ArithmeticMode::Unchecked`].
 impl<'state, 'context, 'block> From<&'state StatementContext<'_, 'context, 'block>>
     for ExpressionContext<'state, 'context, 'block>
 {
@@ -141,9 +137,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     }
 
     /// Loads the inline modifier-chain stages for a constructor body emission
-    /// (built by [`FunctionEmitter::build_modifier_stages`], with the constructor
-    /// body pushed as the final stage), then drive them with
-    /// [`Self::emit_inline_modifier_chain`].
+    /// (built by [`FunctionEmitter::build_modifier_stages`], the constructor body
+    /// the final stage), driven by [`Self::emit_inline_modifier_chain`].
     pub fn set_modifier_stages(
         &mut self,
         modifier_stages: Vec<Statements>,
@@ -157,13 +152,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     }
 
     /// Emits the inline modifier chain for a constructor body from the current
-    /// stage. Stage 0 is the outermost modifier body; each `_;` placeholder
-    /// recurses to the next stage, and the constructor body (the final stage)
-    /// runs at the innermost `_;`. Each stage's modifier parameters are bound in a
-    /// scope that brackets the whole stage — including the `_;` tail — so a
-    /// repeated modifier keeps a distinct binding per use and the binding is gone
-    /// once the stage unwinds. A constructor has no return value, so the chain
-    /// simply unwinds past the last stage (no separate body call).
+    /// stage. Stage 0 is the outermost modifier body; each `_;` recurses to the
+    /// next stage, and the constructor body (final stage) runs at the innermost
+    /// `_;`. A stage's parameters are bound in a scope bracketing the whole stage
+    /// — including the `_;` tail — so a repeated modifier keeps a distinct binding
+    /// per use. A constructor has no return value, so the chain unwinds past the
+    /// last stage (no separate body call).
     pub fn emit_inline_modifier_chain(
         &mut self,
         block: BlockRef<'context, 'block>,
@@ -259,8 +253,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
 
     /// Emits only the side effects of a discarded type-reference expression: a
     /// member access recurses into its operand; a conditional whose branches are
-    /// types runs only its condition (the type branches are compile-time, with no
-    /// runtime value or side effect); any other type/module reference has none.
+    /// types runs only its condition (the type branches are compile-time); any
+    /// other type/module reference has none.
     fn emit_type_reference_side_effects(
         &mut self,
         expression: Expression,
@@ -423,7 +417,7 @@ statement_emit!(ContinueStatement; |context, block| {
 // tuple-valued conditional routes through the tuple path, and any other
 // expression is emitted and its value discarded.
 statement_emit!(ExpressionStatement; |node, context, block| {
-    match ExpressionStatementKind::classify(node) {
+    match ExpressionStatementKind::from_statement(node) {
         // A constructor's modifiers run as an inline chain, where `_;`
         // recurses to the next stage / the constructor body; a regular
         // function's modifiers are separate `sol.func`s, where `_;` hands off

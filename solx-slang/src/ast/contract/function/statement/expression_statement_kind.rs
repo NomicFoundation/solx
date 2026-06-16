@@ -37,10 +37,10 @@ pub enum ExpressionStatementKind {
 }
 
 impl ExpressionStatementKind {
-    /// Classifies the expression of a statement. slang accessors hand out fresh
-    /// owned expression handles cheaply, so each shape is examined from its own
-    /// handle and the chosen variant keeps the node it needs.
-    pub fn classify(expression_statement: &ExpressionStatement) -> Self {
+    /// slang accessors hand out fresh owned expression handles cheaply, so each
+    /// shape is examined from its own handle and the chosen variant keeps the
+    /// node it needs.
+    pub fn from_statement(expression_statement: &ExpressionStatement) -> Self {
         let expression = expression_statement.expression();
         // A bare `_;` inside a modifier body is the placeholder for the wrapped
         // body (or the next modifier stage).

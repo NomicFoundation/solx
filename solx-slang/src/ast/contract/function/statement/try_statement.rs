@@ -25,10 +25,8 @@ use crate::ast::contract::function::expression::call::try_external_call::TryExte
 use crate::ast::contract::function::statement::StatementContext;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
-    /// Casts a decoded value to the bound parameter's declared type, stores it
-    /// into a fresh stack slot, and defines the parameter in scope by its node id
-    /// — the shared binding for the success `returns (...)`, the typed
-    /// `Error`/`Panic` reason/code, and the low-level `bytes` data.
+    /// Casts `value` to the parameter's declared type, spills it to a stack slot,
+    /// and defines the parameter in scope by node id.
     fn bind_parameter(
         &mut self,
         parameter: &Parameter,
@@ -64,10 +62,8 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     }
 }
 
-// One catch clause's region body. The `sol.try` conversion delivers the decoded
-// panic code / error reason / raw returndata as block argument 0, bound to the
-// clause's parameter (a parameter-less `catch {}` binds nothing) before the body
-// runs. The caller terminates the region with the trailing `sol.yield`.
+// Binds block argument 0 (the decoded payload) to the clause parameter — a
+// parameter-less `catch {}` binds nothing — then emits the body.
 statement_emit!(CatchClause; |node, context, block| {
     let region = block.parent_region().expect("block belongs to a region");
     context.set_region(&region);
@@ -83,19 +79,14 @@ statement_emit!(CatchClause; |node, context, block| {
     context.emit_block(node.body().statements(), block)
 });
 
-// A `try` statement lowers to a `sol.try`: an external call with try semantics
-// yields the success `status`, and the op carries four regions — success, panic,
-// error, fallback. The success region binds the declared `returns (...)` and runs
-// the body; each present catch clause populates its region from the decoded
-// payload. Absent clauses leave empty regions, and the op's conversion owns the
-// selector dispatch, payload decode, and raw re-revert when no clause matches.
+// Lowers to `sol.try`: four regions (success, panic, error, fallback). The op's
+// conversion owns selector dispatch, payload decode, and re-revert on no match.
 statement_emit!(TryStatement; |node, context, block| {
     let expression = node.expression();
 
-    // Only a lowerable external call (`recv.f(args)` / `recv.f{value: v}(args)`)
-    // carries a real catch path; any other `try` expression runs only the success
-    // body, binding the first declared (named) return.
-    let Some(try_call) = TryExternalCall::classify(&expression) else {
+    // Only a lowerable external call carries a real catch path; any other `try`
+    // expression runs just the success body, binding the first named return.
+    let Some(try_call) = TryExternalCall::from_expression(&expression) else {
         let BlockAnd { value, block: current_block } = {
             let emitter = ExpressionContext::from(&*context);
             expression.emit(&emitter, block)
@@ -112,11 +103,9 @@ statement_emit!(TryStatement; |node, context, block| {
     let (status, results, current_block) =
         try_call.emit(&ExpressionContext::from(&*context), block);
 
-    // Classify the catch clauses into the `sol.try` regions: a parameter-less
-    // `catch {}` has no error group; a low-level `catch (bytes r)` an unnamed one;
-    // a typed `catch Error(...)` / `catch Panic(...)` is told apart by its bound
-    // parameter's type (`Error(string)` vs `Panic(uint256)`), never by identifier
-    // text.
+    // Bucket the catch clauses: parameter-less `catch {}` and unnamed `catch
+    // (bytes r)` are fallbacks; typed clauses are told apart by parameter type
+    // (`Error(string)` vs `Panic(uint256)`), never by identifier text.
     let mut panic_clause: Option<CatchClause> = None;
     let mut error_clause: Option<CatchClause> = None;
     let mut fallback_clause: Option<CatchClause> = None;
@@ -153,10 +142,8 @@ statement_emit!(TryStatement; |node, context, block| {
     let builder = &context.state.builder;
     let has_panic = panic_clause.is_some();
     let has_error = error_clause.is_some();
-    // sol.try carries four regions — success, panic, error, fallback. An absent
-    // clause leaves an empty region; a present catch region carries its decoded
-    // payload (panic code `ui256`, error reason / bytes `string`) as block
-    // argument 0.
+    // An absent clause leaves an empty region; a present one carries its decoded
+    // payload (panic `ui256`, error/bytes `string`) as block argument 0.
     let success_region = Region::new();
     success_region.append_block(Block::new(&[]));
     let panic_region = Region::new();

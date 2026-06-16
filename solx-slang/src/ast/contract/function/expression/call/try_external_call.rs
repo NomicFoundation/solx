@@ -38,10 +38,10 @@ pub struct TryExternalCall {
 }
 
 impl TryExternalCall {
-    /// Classifies a `try` expression as a lowerable external call — `recv.f(args)`,
-    /// optionally wrapped in a `{value: v}` / `{gas: g}` call-options layer.
-    /// Returns `None` for any other shape, which runs only the success body.
-    pub fn classify(expression: &Expression) -> Option<Self> {
+    /// A `try` expression is lowerable only when it wraps an external call —
+    /// `recv.f(args)`, optionally inside a `{value: v}` / `{gas: g}` call-options
+    /// layer. Any other shape yields `None` and runs only the success body.
+    pub fn from_expression(expression: &Expression) -> Option<Self> {
         let Expression::FunctionCallExpression(call) = expression else {
             return None;
         };
