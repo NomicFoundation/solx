@@ -27,13 +27,11 @@ use crate::ast::contract::function::expression::call::member_call_kind::MemberCa
 use crate::ast::contract::function::expression::call::static_mode::StaticMode;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// The SOLE `ext_icall` sink for `SelfExternal` + `ExternalInstance`.
+    /// The `ext_icall` sink for `SelfExternal` + `ExternalInstance`.
     ///
-    /// The call's inputs are passed flat — a single bundle struct would be a
-    /// forbidden second top-level type under §2a — with `static_call` enum-ized
-    /// into [`StaticMode`] (R8-4). At 9 args (`&self` + 8) this is the one
-    /// signature above the `clippy.toml` `too-many-arguments-threshold`; it is a
-    /// deliberate WARN at the skeleton tip, never an `#[allow]` (Rule 11).
+    /// Inputs are passed flat rather than as a bundle struct, with `static_call`
+    /// carried as [`StaticMode`]. At 9 arguments this is the one signature above
+    /// the `too-many-arguments` clippy threshold — a known WARN, not suppressed.
     pub fn emit_external_call(
         &self,
         receiver: Value<'context, 'block>,

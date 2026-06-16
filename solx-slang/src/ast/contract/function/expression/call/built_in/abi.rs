@@ -145,7 +145,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// callee's declared parameter types, so an integer literal encodes at the
     /// parameter's width (matching solc). The callee is classified by resolving
     /// the reference to its definition / function-pointer type, never by name
-    /// text (Rule-7).
+    /// text.
     pub fn emit_abi_encode_call(
         &self,
         arguments: &PositionalArguments,

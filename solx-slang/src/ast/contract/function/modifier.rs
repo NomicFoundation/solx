@@ -42,15 +42,12 @@ use crate::ast::contract::function::modifier_parameter_binding::ModifierParamete
 use crate::ast::contract::function::statement::StatementContext;
 
 /// The evaluated arguments of one modifier stage: one
-/// [`ModifierParameterBinding`] per bound modifier parameter. A support alias
-/// (not a top-level type, so §2a is satisfied by the sole [`ModifiedBody`]
-/// struct).
+/// [`ModifierParameterBinding`] per bound modifier parameter.
 pub type ModifierStageParams<'context, 'env> = Vec<ModifierParameterBinding<'context, 'env>>;
 
-/// The frame threaded through the modifier-wrapped emission of one function.
-///
-/// The SOLE top-level type of this module (§2a) — the references its modifier
-/// methods need in common, bundled so `emit_modified_body` takes one frame.
+/// The frame threaded through the modifier-wrapped emission of one function —
+/// the references its modifier methods need in common, bundled so
+/// `emit_modified_body` takes one frame.
 pub struct ModifiedBody<'body, 'context, 'block> {
     /// The function being modifier-wrapped.
     function: &'body FunctionDefinition,
@@ -776,7 +773,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
     /// linearisation. Modifiers cannot be overloaded, so the name uniquely keys
     /// an override chain; `linearised_bases` is most-derived first, so the first
     /// body-bearing modifier of each name is the active override. The name is
-    /// only ever a map key — never string-compared (rule 7).
+    /// only ever a map key — never string-compared.
     fn most_derived_modifiers_by_name(&self) -> HashMap<String, FunctionDefinition> {
         let mut by_name: HashMap<String, FunctionDefinition> = HashMap::new();
         for modifier in self.linearised_modifiers() {
@@ -809,8 +806,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // Resolve the path to its contract definition: the whole path
         // (`Base`), else its final segment (`M.Base` — an import-aliased path
         // does not resolve as a whole, but its last segment names the contract).
-        // Matching by the resolved node id keeps this rule-7-clean — no name
-        // comparison — and keys the entry to the linearisation-driven body walk.
+        // Matching by the resolved node id needs no name comparison and keys the
+        // entry to the linearisation-driven body walk.
         let base_definition = path
             .resolve_to_definition()
             .or_else(|| path.iter().last()?.resolve_to_definition());

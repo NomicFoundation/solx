@@ -44,7 +44,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // Resolve the accessed field to its `StructMember` definition and locate
         // it by node-id identity — slang exposes struct fields as an ordered list
         // with no direct field-index lookup, but the binder resolves the access,
-        // so no name-string comparison is needed (Rule-7).
+        // so no name-string comparison is needed.
         let Some(Definition::StructMember(member_definition)) =
             access.member().resolve_to_definition()
         else {

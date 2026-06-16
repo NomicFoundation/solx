@@ -50,7 +50,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             try_call.emit(&ExpressionContext::from(&*self), block);
 
         // Classify the catch clauses into the `sol.try` regions, all structurally
-        // (Rule-7): a parameter-less `catch {}` has no error group; a low-level
+        // a parameter-less `catch {}` has no error group; a low-level
         // `catch (bytes r)` has an error group with no name; a typed
         // `catch Error(...)` / `catch Panic(...)` names its error, and Error vs
         // Panic is told apart by its bound parameter's type (`Error(string)` vs

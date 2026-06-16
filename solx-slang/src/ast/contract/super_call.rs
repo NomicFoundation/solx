@@ -25,10 +25,6 @@ use crate::ast::contract::function::FunctionEmitter;
 /// The result of re-resolving a contract's `super` and virtual calls against
 /// its C3 linearisation, plus the pass-local visitor state that gathers the
 /// `super.f` / `Base.f` accesses.
-///
-/// The SOLE top-level type of this module (§2a): the super-call visitor state
-/// (the `super_calls` / `base_calls` working fields) is consolidated onto this
-/// type so the module declares exactly one type.
 #[derive(Default)]
 pub struct SuperDispatch {
     /// `super` member-access node id -> target function node id.

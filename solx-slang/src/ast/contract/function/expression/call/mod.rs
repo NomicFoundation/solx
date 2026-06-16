@@ -68,7 +68,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// `value` (as `msg.value`, coerced to `ui256`) and `salt` (the CREATE2 salt
     /// for `new`, cast from `bytes32`). The option KIND comes from slang's typed
     /// `BuiltIn::CallOption*` classification, never from comparing the option
-    /// name as text (Rule-7). The `{gas: …}` option is not yet threaded into the
+    /// name as text. The `{gas: …}` option is not yet threaded into the
     /// call op and is deferred loudly.
     fn capture_call_options(
         &self,

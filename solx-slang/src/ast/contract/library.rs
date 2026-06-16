@@ -24,9 +24,6 @@ use crate::ast::contract::body_origin::BodyOrigin;
 use crate::ast::contract::reachability::ReachabilityWalk;
 
 /// Visitor that records library functions reached from a walked function body.
-///
-/// The SOLE top-level type of this module (§2a); the reachability walk is an
-/// associated function on it (Rule-5).
 #[derive(Default)]
 pub struct LibraryCallCollector {
     /// Functions reached by member access (`L.f` / `x.f`).

@@ -10,13 +10,10 @@ use melior::ir::attribute::FlatSymbolRefAttribute;
 use solx_mlir::Builder;
 use solx_mlir::ods::sol::CallOperation;
 
-/// The hand-off from a modifier stage to the wrapped function body.
-///
-/// The SOLE top-level type of this module (§2a), homed here rather than inline in
-/// `statement/mod.rs` (which would force a second top-level type there). A
-/// modifier stage's `_` placeholder lowers to a call of the internal
-/// `$body` (or next-stage) `sol.func`, forwarding the wrapping function's
-/// parameters and storing the call results into its return slots.
+/// The hand-off from a modifier stage to the wrapped function body: a modifier
+/// stage's `_` placeholder emits a call of the internal `$body` (or next-stage)
+/// `sol.func`, forwarding the wrapping function's parameters and storing the
+/// call results into its return slots.
 pub struct ModifierBodyCall<'context, 'block> {
     /// Symbol of the internal `sol.func` holding the wrapped body / next stage.
     pub symbol: String,

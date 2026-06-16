@@ -19,9 +19,8 @@ use slang_solidity_v2::ast::NodeId;
 /// over that body and reports what it reaches through [`reach`](Self::reach),
 /// and [`into_reached`](Self::into_reached) returns the accumulated result.
 ///
-/// The SOLE top-level type of this module (§2a). It owns only the BFS
-/// scaffolding (the worklist, the walked/collected dedup sets, and the
-/// root-seeding); each reachability pass — free functions, library functions,
+/// Owns the BFS scaffolding — the worklist, the walked/collected dedup sets, and
+/// the root-seeding; each reachability pass — free functions, library functions,
 /// and a planned `super`-dispatch pass — supplies its own per-body Visitor and
 /// decides what counts as reached, so they do not each re-implement the walk.
 pub struct ReachabilityWalk {

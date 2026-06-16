@@ -15,11 +15,11 @@ use crate::ast::contract::function::statement::StatementContext;
 
 impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Emits a Yul EVM-opcode intrinsic, dispatching on the TYPED
-    /// `BuiltIn::Yul*` variant (R8-9: resolved via `resolve_to_built_in()`, NOT
-    /// `match name: &str` — a Rule-7 conversion, not a carve-out).
+    /// `BuiltIn::Yul*` variant resolved via `resolve_to_built_in()`, never a
+    /// `match` on the opcode name as text.
     ///
     /// Every operand and result is the signless `i256` Yul word, so each opcode
-    /// is a one-to-one `yul.*` op with no Sol-dialect crossing (rule 16): the
+    /// is a one-to-one `yul.*` op with no Sol-dialect crossing: the
     /// arithmetic/bitwise/shift ops, the unsigned and signed comparisons
     /// (`yul.cmp`), the block/account context ops, raw memory/storage/transient
     /// access, calldata/code/return-data, the call/create family, `log`,

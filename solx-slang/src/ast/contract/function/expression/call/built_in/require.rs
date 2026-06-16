@@ -178,7 +178,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
 
     /// Whether `error_call`'s callee resolves to an error definition (a custom
     /// error constructor used as a `require` message), located by typed
-    /// resolution rather than by comparing the callee name as text (Rule-7).
+    /// resolution rather than by comparing the callee name as text.
     fn call_resolves_to_error(error_call: &FunctionCallExpression) -> bool {
         matches!(
             Self::callee_definition(error_call),

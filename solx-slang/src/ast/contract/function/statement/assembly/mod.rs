@@ -342,7 +342,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     /// Lowers a Yul path read to a 256-bit word: a single-segment path resolves
     /// to a Solidity constant's widened initializer or a local/Yul variable's
     /// loaded value; a two-segment `x.slot` / `x.offset` (keyed by the typed
-    /// `BuiltIn::YulSlot` / `BuiltIn::YulOffset` suffix, R8-9 — never the member
+    /// `BuiltIn::YulSlot` / `BuiltIn::YulOffset` suffix — never the member
     /// name string) resolves to a state variable's slot index / in-slot byte
     /// offset.
     pub fn emit_yul_path(

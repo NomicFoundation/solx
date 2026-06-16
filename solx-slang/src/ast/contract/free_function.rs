@@ -25,9 +25,6 @@ use crate::ast::contract::reachability::ReachabilityWalk;
 
 /// Visitor that records every `f(...)` call whose callee is a plain identifier
 /// resolving to one of the source unit's free functions.
-///
-/// The SOLE top-level type of this module (§2a). The reachability walk is an
-/// associated function on this type (Rule-5: every `fn` lives in an `impl`).
 pub struct FreeCallCollector {
     /// Node ids of the source unit's free functions.
     free_ids: HashSet<NodeId>,

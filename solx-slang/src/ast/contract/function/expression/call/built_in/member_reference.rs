@@ -25,7 +25,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Classifies a member access as an enum-variant reference (`E.Variant` or
     /// qualified `C.E.Variant`), returning the variant's ordinal when it is one
     /// (and not a call). The ordinal is located by NodeId identity against the
-    /// enum's members, never by comparing the member name as text (Rule-7).
+    /// enum's members, never by comparing the member name as text.
     pub fn enum_variant_ordinal(
         &self,
         access: &MemberAccessExpression,
@@ -92,7 +92,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// function-pointer VALUE (`(cond ? a : b).selector`, a `function (...)
     /// external` local) pulls its selector at runtime via `sol.ext_func_selector`.
     /// slang already classifies the member as `BuiltIn::FunctionSelector`, so the
-    /// member is never recognised by comparing its name as text (Rule-7).
+    /// member is never recognised by comparing its name as text.
     pub fn emit_function_selector(
         &self,
         access: &MemberAccessExpression,
@@ -134,8 +134,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
 
     /// `f.address` — the address component of an external function-pointer VALUE,
     /// pulled out of its `!sol.ext_func_ref` at runtime via `sol.ext_func_addr`.
-    /// slang classifies the member as `BuiltIn::FunctionAddress` (never by name
-    /// text, Rule-7).
+    /// slang classifies the member as `BuiltIn::FunctionAddress`, never by name
+    /// text.
     pub fn emit_function_address(
         &self,
         access: &MemberAccessExpression,
