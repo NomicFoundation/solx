@@ -47,11 +47,9 @@ impl CallKind {
     /// Emits an identifier-callee built-in (`assert`, `require`, `keccak256`,
     /// `sha256`, `ripemd160`, `ecrecover`, `addmod`, `mulmod`, `gasleft`).
     ///
-    /// The returned value is `Some(...)` for value-producing built-ins and
-    /// `None` for statement-style ones (`assert`, `require`). Only handled
-    /// built-ins with a matching argument count reach here, so the
-    /// argument-count expectations always hold and unhandled variants are
-    /// unreachable.
+    /// `Some(...)` for value-producing built-ins, `None` for statement-style
+    /// ones (`assert`, `require`). Only handled built-ins with a matching
+    /// argument count reach here, so the expectations hold.
     pub fn emit_built_in_call<'state, 'context, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -245,16 +243,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let (value, block) = self.emit_enum_variant(access, ordinal, block);
             return (Some(value), block);
         }
-        // A function-like built-in member over a value operand referenced
-        // WITHOUT a call — `addr.transfer` / `addr.send` / `addr.call` /
-        // `delegatecall` / `staticcall`, or `data.pop` / `data.push` — e.g. a
-        // discarded `payable(this).transfer;` or `data.pop;` statement — is a
-        // member reference, not the action itself (which the call dispatch
-        // handles; for the uncalled form solc only binds the function and checks
-        // its stack size). Evaluate the operand for its side effects and yield a
-        // placeholder value. (The `abi.*` forms are also no-ops uncalled but
-        // their operand is the `abi` namespace keyword, not a value, so they are
-        // not bound here.)
+        // A function-like built-in member referenced WITHOUT a call —
+        // `addr.transfer`/`send`/`call`/`delegatecall`/`staticcall`,
+        // `data.pop`/`push`, e.g. a discarded `data.pop;` — is a member
+        // reference, not the action (which the call dispatch handles). solc
+        // only binds the function; evaluate the operand for its side effects
+        // and yield a placeholder. (`abi.*` is handled below: its operand is
+        // the `abi` namespace keyword, not a value.)
         if arguments.is_none()
             && matches!(
                 access.member().resolve_to_built_in(),
@@ -283,11 +278,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .into_mlir();
             return (Some(placeholder), block);
         }
-        // The `abi.*` builtins referenced WITHOUT a call — `abi.encode;`,
-        // `abi.encodePacked;`, `abi.decode;` and friends, e.g. a discarded
-        // statement — are no-ops too, but unlike the actions above their operand
-        // is the `abi` namespace keyword, not a value, so nothing is evaluated
-        // (binding `abi` would itself fail); just yield a placeholder.
+        // The `abi.*` builtins referenced WITHOUT a call (e.g. a discarded
+        // `abi.encode;`) are no-ops; their operand is the `abi` namespace
+        // keyword, not a value, so nothing is evaluated (binding `abi` would
+        // fail). Yield a placeholder.
         if arguments.is_none()
             && matches!(
                 access.member().resolve_to_built_in(),
@@ -377,11 +371,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(BuiltIn::FunctionAddress) => self.emit_function_address(access, block),
             Some(BuiltIn::ErrorSelector) => self.emit_error_selector(access, block),
             Some(BuiltIn::EventSelector) => self.emit_event_selector(access, block),
-            // A bare `T.wrap` / `T.unwrap` named without a call (a discarded
-            // `(MyInt).wrap;` statement) references the built-in itself, which
-            // has no runtime value. The call forms `T.wrap(x)` / `T.unwrap(v)`
-            // lower in the call dispatch (`CallKind::UdvtWrapUnwrap`); a bare
-            // reference is a no-op, so yield a placeholder.
+            // `T.wrap` / `T.unwrap` named without a call is a no-op reference to
+            // the built-in itself (the call forms lower in the call dispatch via
+            // `CallKind::UdvtWrapUnwrap`). Yield a placeholder.
             Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
                 let builder = &self.state.builder;
                 let placeholder = crate::ast::Value::constant(

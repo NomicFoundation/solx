@@ -137,8 +137,7 @@ impl SuperDispatch {
             if !walked.insert(function.node_id()) {
                 continue;
             }
-            // Gather this function's `super.f` / `Base.f` accesses (the visitor
-            // populates the consolidated working fields on a fresh instance).
+            // Gather this function's `super.f` / `Base.f` accesses.
             let mut collector = SuperDispatch::default();
             accept_function_definition(&function, &mut collector);
             for (access_id, lexical_target) in collector.super_calls {
@@ -214,8 +213,7 @@ impl SuperDispatch {
 
     /// Records one resolved super/base target into the dispatch maps,
     /// scheduling the shadowed override (if any) for emission under its
-    /// contract-qualified symbol. (Eight args sit at the `clippy.toml`
-    /// `too-many-arguments-threshold`, so no `#[allow]` is needed — D2.)
+    /// contract-qualified symbol.
     pub fn record_target(
         dispatch: &mut SuperDispatch,
         shadowed_ids: &mut HashSet<NodeId>,

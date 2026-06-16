@@ -96,12 +96,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         self.emit_sol_inner(function, Some(symbol), contract_body, BodyKind::Function)
     }
 
-    /// The central function-emission driver: opens the `sol.func`, binds
-    /// parameters and return slots, threads the body statements, and closes with
-    /// the default return. `symbol_override` names the `sol.func` explicitly (a
-    /// free/library function) and suppresses the public selector and special
-    /// kind; otherwise the canonical [`Self::mlir_function_name`] and computed
-    /// selector are used.
+    /// Opens the `sol.func`, binds parameters and return slots, threads the body
+    /// statements, and closes with the default return. `symbol_override` names the
+    /// `sol.func` explicitly (a free/library function) and suppresses the public
+    /// selector and special kind; otherwise the canonical
+    /// [`Self::mlir_function_name`] and computed selector are used.
     fn emit_sol_inner(
         &self,
         function: &FunctionDefinition,
@@ -126,11 +125,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             mlir_kind,
         } = self.resolve_inner_signature(function, symbol_override, body_kind);
 
-        // A regular function (real body, not a constructor/fallback/receive, and
-        // not a modifier-stage `$body`) can be the target of an internal function
-        // pointer, so it carries a unique dispatch tag. This includes free and
-        // library functions, also referenceable (`p(libFn)`); only modifier bodies
-        // (`BodyKind::ModifierBody`) and synthetic dispatchers are excluded.
+        // A regular function (real body, not a constructor/fallback/receive, not a
+        // modifier-stage `$body`) can be the target of an internal function pointer,
+        // so it carries a unique dispatch tag. Includes free/library functions
+        // (`p(libFn)`); only modifier bodies and synthetic dispatchers are excluded.
         let function_id = (body_kind == BodyKind::Function && mlir_kind.is_none())
             .then(|| self.state.next_function_id());
 
@@ -166,9 +164,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .expect("entry block belongs to a region");
         let mut current_block = function_entry_block;
 
-        // State variable initializers run at the top of the constructor body,
-        // before any user-written statements. The wrapping modified function
-        // already runs them, so a `$body` emission must not run them again.
+        // State variable initializers run at the top of the constructor body. The
+        // wrapping modified function already runs them, so a `$body` emission must
+        // not run them again.
         if matches!(function.kind(), FunctionKind::Constructor) && body_kind == BodyKind::Function {
             let emitter = ExpressionContext::new(
                 self.state,
@@ -185,8 +183,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         // Collect the modifier bodies that wrap this function
         // (`function f() onlyOwner {...}`). In modifier-body mode the stages are
-        // emitted by the wrapping call, so this raw `$body` emission collects
-        // none.
+        // emitted by the wrapping call, so a raw `$body` emission collects none.
         let (modifier_stages, modifier_stage_params) = if body_kind == BodyKind::ModifierBody {
             (Vec::new(), Vec::new())
         } else {
@@ -269,13 +266,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             &self.state.builder,
         );
 
-        // The function's own parameters, recorded before the modifier-body
-        // extension below.
+        // Recorded before the modifier-body extension below.
         let parameter_count = mlir_parameter_types.len();
 
-        // A modifier body (`$body`) receives the wrapping function's return
-        // values as trailing parameters, so its return slots can be seeded from
-        // the body call and observed by the modifier tail and epilogue.
+        // A modifier body (`$body`) receives the wrapping function's return values
+        // as trailing parameters, so its return slots can be seeded from the body
+        // call and observed by the modifier tail and epilogue.
         if body_kind == BodyKind::ModifierBody {
             mlir_parameter_types.extend(result_types.iter().copied());
         }
@@ -349,10 +345,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         environment: &mut Environment<'context, 'block>,
     ) -> Vec<Option<Value<'context, 'block>>> {
         // A modifier body seeds every return slot (named or not) from the values
-        // threaded in as trailing block arguments at the `parameter_count`
-        // offset, rather than zero-initialising only the named ones, so the
-        // shared return state is observable and survives an empty body or a
-        // partial `_` reach.
+        // threaded in as trailing block arguments at the `parameter_count` offset,
+        // rather than zero-initialising only the named ones, so the shared return
+        // state survives an empty body or a partial `_` reach.
         if body_kind == BodyKind::ModifierBody {
             let mut return_slots: Vec<Option<Value<'context, 'block>>> = Vec::new();
             if let Some(returns) = function.returns() {
@@ -422,11 +417,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
         // When no base contributes a constructor, the contract's own constructor
         // (or an empty one running just the state-variable initializers) is the
-        // entire construction, emitted via `emit_sol` (which wraps its own
-        // modifiers as separate `sol.func`s). A chain that DOES have a base
-        // constructor — with or without modifiers — takes the chain path below,
-        // where `emit_constructor_bodies` runs every base body in C3 order and
-        // applies each constructor's modifiers as an inline chain.
+        // entire construction, emitted via `emit_sol`. A chain that DOES have a base
+        // constructor takes the chain path below, where `emit_constructor_bodies`
+        // runs every base body in C3 order and applies each constructor's modifiers
+        // as an inline chain.
         let has_base_constructor = mro.iter().skip(1).any(|base| base.constructor().is_some());
         if !has_base_constructor {
             if let Some(constructor) = contract.constructor() {
@@ -479,10 +473,9 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             contract_body,
         );
 
-        // Per-contract constructor scopes, keyed by contract node id. Each holds
-        // that contract's constructor parameters (and, while its body is emitted,
-        // its local variables). Base constructors routinely reuse the derived
-        // contract's parameter names, so a single flat scope would clobber them.
+        // Per-contract constructor scopes, keyed by contract node id. Base
+        // constructors routinely reuse the derived contract's parameter names, so a
+        // single flat scope would clobber them.
         let mut root_environment = Environment::new();
         if let Some(constructor) = &derived_constructor {
             for (index, parameter) in constructor.parameters().iter().enumerate() {
@@ -504,8 +497,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         // State-variable initializers (whole C3 hierarchy) run first; they cannot
-        // reference constructor parameters, so the scope only matters for the
-        // shared storage layout.
+        // reference constructor parameters, so the scope only matters for the shared
+        // storage layout.
         let mut current_block = {
             let emitter = ExpressionContext::new(
                 self.state,
@@ -534,13 +527,12 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
 
     /// Returns the unique MLIR symbol name for a function.
     ///
-    /// Externally-callable functions use slang's canonical ABI signature (a
-    /// struct parameter expands to its component tuple, so overloads taking
-    /// different structs do not collapse onto one symbol); internal/private
-    /// functions use slang's internal signature. Constructor / fallback /
-    /// receive have neither — they are not callable by name, so the base name
-    /// alone is unique. Every definition and call site routes through this, so
-    /// the symbol stays consistent.
+    /// Externally-callable functions use slang's canonical ABI signature (a struct
+    /// parameter expands to its component tuple, so overloads taking different
+    /// structs do not collapse onto one symbol); internal/private functions use
+    /// slang's internal signature. Constructor / fallback / receive have neither —
+    /// not callable by name, so the base name alone is unique. Every definition and
+    /// call site routes through this, so the symbol stays consistent.
     pub fn mlir_function_name(function: &FunctionDefinition) -> String {
         if let Some(AbiEntry::Function(abi_function)) = function.compute_abi_entry() {
             if let Some(signature) = function.compute_canonical_signature() {
@@ -590,11 +582,10 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         if block.terminator().is_some() {
             return;
         }
-        // Named returns load from their slot; an unnamed return (no slot) reached
-        // on this fall-through path materialises its type's own default. The
-        // default must be type-correct, not `emit_sol_constant(0, r#type)` — a string
-        // / bytes / aggregate / address / fixed-bytes type is not an integer, so
-        // an integer-attribute zero of that type is an ill-typed op.
+        // Named returns load from their slot; an unnamed return (no slot) reached on
+        // this fall-through path materialises its type's own default. The default
+        // must be type-correct: a string/bytes/aggregate/address/fixed-bytes type is
+        // not an integer, so an integer-attribute zero of that type is ill-typed.
         let returns: Vec<_> = function
             .returns()
             .map(|params| params.iter().collect::<Vec<_>>())

@@ -165,13 +165,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             &module_body,
         );
 
-        // Declare every state variable in the C3-linearised hierarchy (inherited
-        // + own), not just this contract's own members: a derived contract owns
-        // the FULL storage layout, and an inherited getter / inherited function
-        // body emits `sol.addr_of @var` against an inherited slot, which the
-        // backend resolves by `lookupSymbol` in this
-        // contract's module (asserts if the `sol.state_var` declaration is
-        // absent).
+        // Declare every state variable in the C3-linearised hierarchy (inherited +
+        // own): a derived contract owns the FULL layout, and inherited getters /
+        // bodies emit `sol.addr_of @var` against inherited slots the backend
+        // resolves by `lookupSymbol` (asserts if the `sol.state_var` is absent).
         for state_variable in contract.linearised_state_variables() {
             let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
                 continue;
@@ -217,18 +214,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             .filter_map(|state_variable| state_variable.compute_selector())
             .collect();
 
-        // Walk the C3-linearised function set so a derived contract emits its
-        // inherited methods (regular functions, fallback, receive) too — not just
-        // its own — subject to override resolution. Constructors and modifiers are
-        // emitted by their own paths (the constructor below; modifiers inline at
-        // their call sites), so skip them here.
-        // A contract has a single fallback and a single receive dispatcher
-        // entry. The C3 linearisation lists the most-derived override first, so
-        // emit the first fallback / receive encountered and skip any inherited
-        // base versions — they have distinct signatures (`fallback(bytes)` vs an
-        // overriding `fallback()`) so override resolution does not collapse them,
-        // and emitting a second `sol.func` of either kind makes the backend
-        // assert there is exactly one fallback / receive (`!fallbackFn`).
+        // Walk the C3-linearised function set so a derived contract emits inherited
+        // methods too, override-resolved. Constructors and modifiers go through
+        // their own paths (constructor below, modifiers inline), so skip them.
+        // The linearisation lists the most-derived override first; emit the first
+        // fallback / receive and skip inherited base versions — their distinct
+        // signatures (`fallback(bytes)` vs `fallback()`) escape override collapse,
+        // and a second `sol.func` of either makes the backend assert (`!fallbackFn`).
         let mut fallback_emitted = false;
         let mut receive_emitted = false;
         for function in contract.linearised_functions() {
@@ -282,15 +274,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// Emits a deployable library object — its externally-dispatchable functions
     /// as `sol.func`s under a `sol.contract`, plus the method-identifier map.
     ///
-    /// A `delegatecall`ed library object dispatches only its `external` /
-    /// `public` functions; `internal` / `private` functions and modifiers are
-    /// inlined into their callers, so they are not part of the library's own
-    /// object. A library with no externally-visible function is therefore
-    /// emitted as an empty, call-protected stub — matching solc, and avoiding
-    /// standalone emission of inlined-only functions that assume a caller context
-    /// (e.g. a storage-parameter modifier), which would otherwise panic. The
-    /// stub still exists in the build artifacts so the harness's `// library:`
-    /// directive can deploy and link it.
+    /// A `delegatecall`ed library dispatches only `external` / `public` functions;
+    /// `internal` / `private` ones and modifiers are inlined into callers. A library
+    /// with no externally-visible function is emitted as an empty, call-protected
+    /// stub (matching solc) — emitting its inlined-only functions standalone would
+    /// panic on the absent caller context. The stub stays in the artifacts so the
+    /// harness's `// library:` directive can deploy and link it.
     pub fn emit_library(
         &mut self,
         library: &LibraryDefinition,

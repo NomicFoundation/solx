@@ -31,15 +31,12 @@ use self::location_policy::LocationPolicy;
 
 /// An MLIR type in the Sol dialect.
 ///
-/// A newtype over the melior type that is the home for type construction, the
+/// A newtype over the melior type: the home for type construction, the
 /// Sol-dialect kind predicates, and the cast a value undergoes to *reach* this
-/// type. [`Self::cast`] is the one router: keyed on the source and target type
-/// kinds, it selects the dialect cast op each pair needs (`sol.cast`,
-/// `sol.bytes_cast`, `sol.enum_cast`, `sol.contract_cast`, `sol.address_cast`,
-/// `sol.data_loc_cast`). A value hands itself to its target type
-/// ([`Value::cast`] delegates here), so the kind
-/// classification lives in exactly one place. All types are constructed through
-/// typed APIs — no string parsing.
+/// type. [`Self::cast`] is the one router: keyed on source and target kinds, it
+/// selects the dialect cast op each pair needs (`sol.cast`, `sol.bytes_cast`,
+/// `sol.enum_cast`, `sol.contract_cast`, `sol.address_cast`, `sol.data_loc_cast`).
+/// [`Value::cast`] delegates here, so kind classification lives in one place.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Type<'context> {
     inner: MlirType<'context>,
@@ -114,8 +111,6 @@ impl<'context> Type<'context> {
 
     /// A `sol::AddressType` with the given payability.
     pub fn address(context: &'context melior::Context, payable: bool) -> Self {
-        // `solxCreateAddressType` returns a valid MlirType from the
-        // C++ Sol dialect. The context pointer is valid.
         Self::new(unsafe {
             MlirType::from_raw(crate::ffi::solxCreateAddressType(context.to_raw(), payable))
         })
@@ -127,8 +122,6 @@ impl<'context> Type<'context> {
         element_type: MlirType<'context>,
         location: solx_utils::DataLocation,
     ) -> Self {
-        // `solxCreatePointerType` returns a valid MlirType from the
-        // C++ Sol dialect. The context and element type pointers are valid.
         Self::new(unsafe {
             MlirType::from_raw(crate::ffi::solxCreatePointerType(
                 context.to_raw(),

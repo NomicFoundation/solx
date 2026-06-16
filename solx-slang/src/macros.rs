@@ -12,16 +12,12 @@
 //!
 
 /// Generates `impl Emit` for one or more value-producing expression nodes that
-/// share the emission `$body` — so nodes that emit identically (the decimal and
-/// hex integer literals) state their body once. The closure binds the node
-/// (`|node, context, block|`, where `node` is the `&self` AST node) or omits it
-/// when unused (`|context, block|`); `context` is the `&ExpressionContext`. The
-/// body returns `anyhow::Result<BlockAnd<Value>>` (an expression in value position
-/// always produces a value). Names resolve against the call site's imports
-/// (`Emit`, `BlockAnd`, `ExpressionContext`, `BlockRef`); the [`Value`] output
-/// type is referenced by absolute path, so a body may keep its own
-/// `melior::ir::Value` import for intermediate values. The body returns the
-/// bare [`BlockAnd`] output — emission never fails (slang validated the source).
+/// share the emission `$body` — so nodes that emit identically (decimal and hex
+/// integer literals) state their body once. The closure binds the node
+/// (`|node, context, block|`) or omits it when unused (`|context, block|`);
+/// `context` is the `&ExpressionContext`. Names resolve against the call site's
+/// imports; the [`Value`] output type is referenced by absolute path, so a body
+/// may keep its own `melior::ir::Value` import for intermediate values.
 macro_rules! expression_emit {
     ($($node:ty),+ ; |$bound:ident, $context:ident, $block:ident| $body:block) => {
         $(

@@ -2,10 +2,8 @@
 //! Public state-variable getter synthesis.
 //!
 //! Solidity synthesises an external accessor for every `public` state variable.
-//! This module is the getter emission / classification methods as `impl` blocks
-//! on the foreign [`ContractEmitter`]; each path takes the state variable, its
-//! storage slot, data location, and the `sol.contract` body, and derives the
-//! signature / selector / declared type from the variable.
+//! These [`ContractEmitter`] `impl` blocks emit / classify those getters; each
+//! path derives the signature / selector / declared type from the variable.
 //!
 
 use melior::ir::BlockLike;
@@ -60,10 +58,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     }
 
     /// Dispatches getter synthesis for one non-constant state variable to the
-    /// scalar or indexed (mapping/array) path. Struct getters are emitted by a
-    /// later fill; a variable left without an accessor is harmless (the rest of
-    /// the contract still compiles). The signature, selector, and declared type
-    /// are derived from `state_variable` on each path rather than threaded.
+    /// scalar or indexed (mapping/array) path. A variable left without an
+    /// accessor is harmless (the rest of the contract still compiles).
     pub fn emit_state_variable_getter(
         &self,
         state_variable: &StateVariableDefinition,
@@ -300,10 +296,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                             .into_mlir()
                     };
                     // A reference-typed key (`string`/`bytes`) is an ABI input
-                    // decoded into memory; `sol.map` hashes the key bytes for the
-                    // slot. slang reports the key with the mapping's storage
-                    // location, so build the memory type directly rather than
-                    // resolving it (which would yield a storage string).
+                    // decoded into memory. slang reports the key with the mapping's
+                    // storage location, so build the memory type directly rather
+                    // than resolving it (which would yield a storage string).
                     let key_type = if key_slang.is_reference_type() {
                         crate::ast::Type::string(builder.context, DataLocation::Memory).into_mlir()
                     } else {
@@ -484,10 +479,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
         // A non-integer constant — a `string` / `bytesN` literal — is not
         // integer-foldable; materialise its initializer toward the return type
-        // through the expression emitter, exactly as an explicit getter
-        // `return <const>` would (a constant body has no locals, so an empty
-        // environment suffices). Matches solc: a `sol.string_lit`, or the
-        // literal's value `bytes_cast` to `bytesN`.
+        // through the expression emitter, as an explicit `return <const>` would
+        // (a constant body has no locals, so an empty environment suffices).
         let environment = Environment::new();
         let emitter = ExpressionContext::new(
             self.state,
@@ -659,11 +652,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .element_type(member_index)
                 .into_mlir();
             // A `string`/`bytes` member returns a memory copy; every other member
-            // reaching here is a value type (mapping/array/struct/string/bytes are
-            // skipped above). A function-pointer member would need a func-ref
-            // guard (an `is_sol_function_ref` predicate), which solx-mlir does
-            // not yet expose; such a struct is vanishingly rare and absent
-            // from the test corpus — left to the solx-mlir Sol-type-predicate fill.
+            // reaching here is a value type (mapping/array/struct are skipped
+            // above). A function-pointer member would need a func-ref guard
+            // (`is_sol_function_ref`), which solx-mlir does not yet expose — left
+            // to the solx-mlir Sol-type-predicate fill.
             let result_member_type = if is_string_or_bytes {
                 crate::ast::Type::string(builder.context, DataLocation::Memory).into_mlir()
             } else {

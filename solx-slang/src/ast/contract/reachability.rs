@@ -19,10 +19,9 @@ use slang_solidity_v2::ast::NodeId;
 /// over that body and reports what it reaches through [`reach`](Self::reach),
 /// and [`into_reached`](Self::into_reached) returns the accumulated result.
 ///
-/// Owns the BFS scaffolding — the worklist, the walked/collected dedup sets, and
-/// the root-seeding; each reachability pass — free functions, library functions,
-/// and a planned `super`-dispatch pass — supplies its own per-body Visitor and
-/// decides what counts as reached, so they do not each re-implement the walk.
+/// Owns the BFS scaffolding — worklist, walked/collected dedup sets, root-seeding
+/// — so each reachability pass (free functions, library functions) supplies only
+/// its own per-body Visitor and decides what counts as reached.
 pub struct ReachabilityWalk {
     /// Reached functions, deduplicated by node id — the result set.
     collected: HashMap<NodeId, FunctionDefinition>,

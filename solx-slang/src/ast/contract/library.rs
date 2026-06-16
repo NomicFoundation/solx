@@ -2,10 +2,9 @@
 //! Collection of library functions inlined into a contract.
 //!
 //! Internal (no-selector) library functions are inlined into the calling
-//! contract's MLIR module under the library's linker symbol. This pass walks a
-//! contract's functions (transitively through the library and free functions
-//! they reach) and returns every such library function, so the contract emitter
-//! can pre-register and emit them.
+//! contract's MLIR module under the library's linker symbol. This pass returns
+//! every such function reached transitively from a contract's functions, so the
+//! contract emitter can pre-register and emit them.
 //!
 
 use std::collections::HashSet;
@@ -59,9 +58,8 @@ impl LibraryCallCollector {
         let free_ids: HashSet<NodeId> = free_functions.iter().map(|f| f.node_id()).collect();
         let mut walk = ReachabilityWalk::new(contract, extra_roots);
         // Library functions reached so far — walking one is "inside a library",
-        // which enables bare-identifier sibling-call collection. Contract roots
-        // (linearised functions + constructor) are not libraries, so they collect
-        // only member-access (`L.f`) calls.
+        // enabling bare-identifier sibling-call collection. Contract roots are not
+        // libraries, so they collect only member-access (`L.f`) calls.
         let mut library_ids: HashSet<NodeId> = HashSet::new();
 
         while let Some(function) = walk.next_body() {
@@ -89,7 +87,7 @@ impl LibraryCallCollector {
                 .filter(|f| !own.contains(&f.node_id()) && !free_ids.contains(&f.node_id()));
             for library_function in member_reached.chain(bare_reached) {
                 // Newly seen — also a library function, so mark it before `reach`
-                // queues its body, which is then walked with `inside_library` set.
+                // queues its body (walked with `inside_library` set).
                 if !walk.is_collected(library_function.node_id()) {
                     library_ids.insert(library_function.node_id());
                 }
@@ -127,10 +125,9 @@ impl Visitor for LibraryCallCollector {
     }
 
     fn enter_member_access_expression(&mut self, node: &MemberAccessExpression) -> bool {
-        // A member access whose member resolves to a no-selector library
-        // function is an internal library call, inlined here — unless the operand
-        // is a contract / `super` / `this`, in which case it is a contract
-        // function dispatched through the super/base/virtual mechanism.
+        // A member access resolving to a no-selector library function is an
+        // internal library call, inlined here — unless the operand is a contract /
+        // `super` / `this`, which dispatches through the super/base/virtual mechanism.
         let operand_is_contract_or_keyword = match node.operand() {
             Expression::Identifier(identifier) => matches!(
                 identifier.resolve_to_definition(),
