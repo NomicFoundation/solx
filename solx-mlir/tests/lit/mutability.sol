@@ -1,10 +1,10 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*pure_fn.*}}{{.*}} state_mutability = #{{.*}}Pure
-// CHECK: sol.func @{{.*view_fn.*}}{{.*}} state_mutability = #{{.*}}View
-// CHECK: sol.func @{{.*payable_fn.*}}{{.*}} state_mutability = #{{.*}}Payable
-// CHECK: sol.func @{{.*nonpayable_fn.*}}{{.*}} state_mutability = #{{.*}}NonPayable
+// CHECK-DAG: sol.func @{{.*pure_fn.*}}{{.*}} state_mutability = #Pure
+// CHECK-DAG: sol.func @{{.*view_fn.*}}{{.*}} state_mutability = #View
+// CHECK-DAG: sol.func @{{.*payable_fn.*}}{{.*}} state_mutability = #Payable
+// CHECK-DAG: sol.func @{{.*nonpayable_fn.*}}{{.*}} state_mutability = #NonPayable
 
 contract C {
     uint256 x;

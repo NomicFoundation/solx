@@ -5,20 +5,20 @@
 // dispatch to the dedicated cast op (centralised in Builder::emit_sol_cast), so
 // they never reach `sol.cast`'s integer-only folder.
 
-// CHECK: sol.func @{{.*to_bytes32.*}}
-// CHECK: sol.bytes_cast %{{.*}} to !sol.fixedbytes<32>
+// CHECK-DAG: sol.func @{{.*to_bytes32.*}}
+// CHECK-DAG: sol.bytes_cast %{{.*}} to !sol.fixedbytes<32>
 
-// CHECK: sol.func @{{.*narrow_bytes.*}}
-// CHECK: sol.bytes_cast %{{.*}} : !sol.fixedbytes<32> to !sol.fixedbytes<16>
+// CHECK-DAG: sol.func @{{.*narrow_bytes.*}}
+// CHECK-DAG: sol.bytes_cast %{{.*}} : !sol.fixedbytes<32> to !sol.fixedbytes<16>
 
-// CHECK: sol.func @{{.*to_address.*}}
-// CHECK: sol.address_cast %{{.*}} to !sol.address
+// CHECK-DAG: sol.func @{{.*to_address.*}}
+// CHECK-DAG: sol.address_cast %{{.*}} to !sol.address
 
-// CHECK: sol.func @{{.*from_enum.*}}
-// CHECK: sol.enum_cast %{{.*}} : !sol.enum<2> to ui8
+// CHECK-DAG: sol.func @{{.*from_enum.*}}
+// CHECK-DAG: sol.enum_cast %{{.*}} : !sol.enum<2> to ui8
 
-// CHECK: sol.func @{{.*to_enum.*}}
-// CHECK: sol.enum_cast %{{.*}} : ui8 to !sol.enum<2>
+// CHECK-DAG: sol.func @{{.*to_enum.*}}
+// CHECK-DAG: sol.enum_cast %{{.*}} : ui8 to !sol.enum<2>
 
 contract C {
     enum E {

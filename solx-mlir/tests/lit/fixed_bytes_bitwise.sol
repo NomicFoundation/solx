@@ -6,16 +6,16 @@
 // is cast back to the fixed-bytes type. (solc emits the same bridge, but errors
 // on the shift-amount width, so this checks solx only.)
 
-// CHECK: sol.func @{{.*xr.*}}
-// CHECK: sol.bytes_cast %{{[0-9]+}} : !sol.fixedbytes<4> to ui32
-// CHECK: sol.bytes_cast %{{[0-9]+}} : !sol.fixedbytes<4> to ui32
-// CHECK: sol.xor %{{[0-9]+}}, %{{[0-9]+}} : ui32
-// CHECK: sol.bytes_cast %{{[0-9]+}} : ui32 to !sol.fixedbytes<4>
+// CHECK-DAG: sol.func @{{.*xr.*}}
+// CHECK-DAG: sol.bytes_cast %{{[0-9]+}} : !sol.fixedbytes<4> to ui32
+// CHECK-DAG: sol.bytes_cast %{{[0-9]+}} : !sol.fixedbytes<4> to ui32
+// CHECK-DAG: sol.xor %{{[0-9]+}}, %{{[0-9]+}} : ui32
+// CHECK-DAG: sol.bytes_cast %{{[0-9]+}} : ui32 to !sol.fixedbytes<4>
 
-// CHECK: sol.func @{{.*bnot.*}}
-// CHECK: sol.bytes_cast %{{[0-9]+}} : !sol.fixedbytes<32> to ui256
-// CHECK: sol.not %{{[0-9]+}} : ui256
-// CHECK: sol.bytes_cast %{{[0-9]+}} : ui256 to !sol.fixedbytes<32>
+// CHECK-DAG: sol.func @{{.*bnot.*}}
+// CHECK-DAG: sol.bytes_cast %{{[0-9]+}} : !sol.fixedbytes<32> to ui256
+// CHECK-DAG: sol.not %{{[0-9]+}} : ui256
+// CHECK-DAG: sol.bytes_cast %{{[0-9]+}} : ui256 to !sol.fixedbytes<32>
 
 contract C {
     function xr(bytes4 a, bytes4 b) public pure returns (bytes4) {

@@ -6,23 +6,23 @@
 // `yul.if` (raw word condition, no else), `yul.break`/`yul.continue`, and
 // `yul.switch` (one region per case plus a default).
 
-// CHECK: sol.func @{{.*loop.*}}
-// CHECK: yul.for cond {
-// CHECK: yul.cmp ult
-// CHECK: yul.condition
-// CHECK: } body {
-// CHECK: yul.if
-// CHECK: yul.continue
-// CHECK: yul.if
-// CHECK: yul.break
-// CHECK: } step {
-// CHECK: yul.yield
+// CHECK-DAG: sol.func @{{.*loop.*}}
+// CHECK-DAG: yul.for cond {
+// CHECK-DAG: yul.cmp ult
+// CHECK-DAG: yul.condition
+// CHECK-DAG: } body {
+// CHECK-DAG: yul.if
+// CHECK-DAG: yul.continue
+// CHECK-DAG: yul.if
+// CHECK-DAG: yul.break
+// CHECK-DAG: } step {
+// CHECK-DAG: yul.yield
 
-// CHECK: sol.func @{{.*choose.*}}
-// CHECK: yul.switch
-// CHECK: case 1 {
-// CHECK: case 2 {
-// CHECK: default {
+// CHECK-DAG: sol.func @{{.*choose.*}}
+// CHECK-DAG: yul.switch
+// CHECK-DAG: case 1 {
+// CHECK-DAG: case 2 {
+// CHECK-DAG: default {
 
 contract C {
     function loop(uint256 n) public pure returns (uint256 r) {

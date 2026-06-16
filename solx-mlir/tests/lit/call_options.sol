@@ -8,17 +8,19 @@
 // symbol-callee `sol.ext_call`, so the op names differ; the value/salt operand
 // wiring is identical. (The `{gas: …}` option is not yet threaded.)
 
-// CHECK-LABEL: sol.func @{{.*}}external_value
-// CHECK: sol.ext_icall {{.*}} value %{{[0-9]+}}
-
+// Functions emit in the order solx walks them (alphabetical by symbol), so the
+// CHECK-LABEL blocks follow that order.
 // CHECK-LABEL: sol.func @{{.*}}bare_value
 // CHECK: sol.bare_call {{.*}} value %{{[0-9]+}} input
+
+// CHECK-LABEL: sol.func @{{.*}}create_salt_only
+// CHECK: sol.new "Created" value = %c0_ui256 salt = %{{[0-9]+}} ctor
 
 // CHECK-LABEL: sol.func @{{.*}}create_value_salt
 // CHECK: sol.new "Created" value = %{{[0-9]+}} salt = %{{[0-9]+}} ctor
 
-// CHECK-LABEL: sol.func @{{.*}}create_salt_only
-// CHECK: sol.new "Created" value = %c0_ui256 salt = %{{[0-9]+}} ctor
+// CHECK-LABEL: sol.func @{{.*}}external_value
+// CHECK: sol.ext_icall {{.*}} value %{{[0-9]+}}
 
 pragma solidity ^0.8.0;
 

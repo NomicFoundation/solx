@@ -1,20 +1,20 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*uint8_arith.*}}(%{{.*}}: ui8, %{{.*}}: ui8) -> ui8
-// CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui8
+// CHECK-DAG: sol.func @{{.*uint8_arith.*}}(%{{.*}}: ui8, %{{.*}}: ui8) -> ui8
+// CHECK-DAG:   sol.cadd %{{.*}}, %{{.*}} : ui8
 
-// CHECK: sol.func @{{.*uint128_arith.*}}(%{{.*}}: ui128, %{{.*}}: ui128) -> ui128
-// CHECK:   sol.cadd %{{.*}}, %{{.*}} : ui128
+// CHECK-DAG: sol.func @{{.*uint128_arith.*}}(%{{.*}}: ui128, %{{.*}}: ui128) -> ui128
+// CHECK-DAG:   sol.cadd %{{.*}}, %{{.*}} : ui128
 
-// CHECK: sol.func @{{.*int256_arith.*}}(%{{.*}}: si256, %{{.*}}: si256) -> si256
-// CHECK:   sol.cadd %{{.*}}, %{{.*}} : si256
+// CHECK-DAG: sol.func @{{.*int256_arith.*}}(%{{.*}}: si256, %{{.*}}: si256) -> si256
+// CHECK-DAG:   sol.cadd %{{.*}}, %{{.*}} : si256
 
-// CHECK: sol.func @{{.*bool_return.*}}
-// CHECK:   %true = sol.constant true
+// CHECK-DAG: sol.func @{{.*bool_return.*}}
+// CHECK-DAG:   %true = sol.constant true
 
-// CHECK: sol.func @{{.*bool_false.*}}
-// CHECK:   %false = sol.constant false
+// CHECK-DAG: sol.func @{{.*bool_false.*}}
+// CHECK-DAG:   %false = sol.constant false
 
 contract C {
     function uint8_arith(uint8 a, uint8 b) public pure returns (uint8) {

@@ -7,14 +7,8 @@
 // compile-time constant bridged to fixedbytes; an external function-pointer
 // VALUE pulls its selector / address at runtime via the native Sol ops.
 
-// CHECK-LABEL: sol.func @{{.*}}named_selector
-// CHECK: sol.constant {{.*}} : ui32
-// CHECK: sol.bytes_cast {{.*}} to !sol.fixedbytes<4>
-
-// CHECK-LABEL: sol.func @{{.*}}pointer_members
-// CHECK-DAG: sol.ext_func_selector {{.*}} -> !sol.fixedbytes<4>
-// CHECK-DAG: sol.ext_func_addr {{.*}} -> !sol.address
-
+// Functions emit alphabetically by symbol, so the CHECK-LABEL blocks follow
+// that order (error_selector, event_selector, named_selector, …).
 // CHECK-LABEL: sol.func @{{.*}}error_selector
 // CHECK: sol.constant {{.*}} : ui32
 // CHECK: sol.bytes_cast {{.*}} to !sol.fixedbytes<4>
@@ -22,6 +16,14 @@
 // CHECK-LABEL: sol.func @{{.*}}event_selector
 // CHECK: sol.constant {{.*}} : ui256
 // CHECK: sol.bytes_cast {{.*}} to !sol.fixedbytes<32>
+
+// CHECK-LABEL: sol.func @{{.*}}named_selector
+// CHECK: sol.constant {{.*}} : ui32
+// CHECK: sol.bytes_cast {{.*}} to !sol.fixedbytes<4>
+
+// CHECK-LABEL: sol.func @{{.*}}pointer_members
+// CHECK-DAG: sol.ext_func_selector {{.*}} -> !sol.fixedbytes<4>
+// CHECK-DAG: sol.ext_func_addr {{.*}} -> !sol.address
 
 // `this.bar` used as a value (not called) is an external function pointer.
 // CHECK-LABEL: sol.func @{{.*}}pointer_value

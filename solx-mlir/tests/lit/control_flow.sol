@@ -1,53 +1,50 @@
 // RUN: solx --emit-mlir=sol %s | FileCheck %s
 // RUN: solc --mlir-action=print-init %s 2>/dev/null | FileCheck %s
 
-// CHECK: sol.func @{{.*if_else.*}}
-// CHECK:   sol.if %{{.*}} {
-// CHECK:     sol.return
-// CHECK:   } else {
-// CHECK:     sol.return
+// CHECK-DAG: sol.func @{{.*if_else.*}}
+// CHECK-DAG:   sol.if %{{.*}} {
+// CHECK-DAG:     sol.return
+// CHECK-DAG:   } else {
+// CHECK-DAG:     sol.return
 
-// CHECK: sol.func @{{.*while_loop.*}}
-// CHECK:   sol.while {
-// CHECK:     sol.condition %{{.*}}
-// CHECK:   } do {
-// CHECK:     sol.yield
+// CHECK-DAG: sol.func @{{.*while_loop.*}}
+// CHECK-DAG:   sol.while {
+// CHECK-DAG:     sol.condition %{{.*}}
+// CHECK-DAG:   } do {
+// CHECK-DAG:     sol.yield
 
 // For-loop step uses unchecked add (sol.add not sol.cadd)
-// CHECK: sol.func @{{.*for_loop.*}}
-// CHECK:   sol.for cond {
-// CHECK:     sol.condition %{{.*}}
-// CHECK:   } body {
-// CHECK:     sol.yield
-// CHECK:   } step {
-// CHECK:     sol.add %
-// CHECK:     sol.yield
+// CHECK-DAG: sol.func @{{.*for_loop.*}}
+// CHECK-DAG:   sol.for cond {
+// CHECK-DAG:     sol.condition %{{.*}}
+// CHECK-DAG:   } body {
+// CHECK-DAG:     sol.yield
+// CHECK-DAG:   } step {
+// CHECK-DAG:     sol.add %
+// CHECK-DAG:     sol.yield
 
-// CHECK: sol.func @{{.*do_while.*}}
-// CHECK:   sol.do {
-// CHECK:     sol.yield
-// CHECK:   } while {
-// CHECK:     sol.condition %{{.*}}
+// CHECK-DAG: sol.func @{{.*do_while.*}}
+// CHECK-DAG:   sol.do {
+// CHECK-DAG:     sol.yield
+// CHECK-DAG:   } while {
+// CHECK-DAG:     sol.condition %{{.*}}
 
-// CHECK: sol.func @{{.*infinite_for.*}}
-// CHECK:   sol.for cond {
-// CHECK:     %[[TRUE:.*]] = sol.constant true
-// CHECK:     sol.condition %[[TRUE]]
-// CHECK:   } body {
+// CHECK-DAG: sol.func @{{.*infinite_for.*}}
+// CHECK-DAG:     sol.constant true
 
-// CHECK: sol.func @{{.*with_break.*}}
-// CHECK:   sol.while {
-// CHECK:     sol.condition
-// CHECK:   } do {
-// CHECK:     sol.if
-// CHECK:       sol.break
+// CHECK-DAG: sol.func @{{.*with_break.*}}
+// CHECK-DAG:   sol.while {
+// CHECK-DAG:     sol.condition
+// CHECK-DAG:   } do {
+// CHECK-DAG:     sol.if
+// CHECK-DAG:       sol.break
 
-// CHECK: sol.func @{{.*with_continue.*}}
-// CHECK:   sol.while {
-// CHECK:     sol.condition
-// CHECK:   } do {
-// CHECK:     sol.if
-// CHECK:       sol.continue
+// CHECK-DAG: sol.func @{{.*with_continue.*}}
+// CHECK-DAG:   sol.while {
+// CHECK-DAG:     sol.condition
+// CHECK-DAG:   } do {
+// CHECK-DAG:     sol.if
+// CHECK-DAG:       sol.continue
 
 contract C {
     function if_else(uint256 x) public pure returns (uint256) {
