@@ -11,7 +11,6 @@ use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use crate::ast::arguments_declaration_ext::ArgumentsDeclarationExt;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::library_visibility::LibraryVisibility;
 

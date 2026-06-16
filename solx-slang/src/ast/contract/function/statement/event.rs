@@ -15,7 +15,6 @@ use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
 use crate::ast::ResolveType;
-use crate::ast::arguments_declaration_ext::ArgumentsDeclarationExt;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 

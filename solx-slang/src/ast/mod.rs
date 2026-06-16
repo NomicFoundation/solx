@@ -2,18 +2,14 @@
 //! Slang AST emission to MLIR.
 //!
 
-pub mod arguments_declaration_ext;
 /// Contract definition emission to Sol dialect MLIR.
 pub mod contract;
 pub mod emit;
-pub mod named_arguments_ext;
 pub mod operator_binding;
 
-pub use self::arguments_declaration_ext::ArgumentsDeclarationExt;
 pub use self::contract::function::expression::Toward;
 pub use self::emit::BlockAnd;
 pub use self::emit::Emit;
-pub use self::named_arguments_ext::NamedArgumentsExt;
 // The `Type`/`Value` entities live in `solx-mlir` (with the Builder and ODS
 // ops), mirroring how `solx-yul` uses `solx-codegen-evm`'s `Value`/`Pointer`;
 // re-exported here so slang code names them as `crate::ast::{Pointer, Type, Value}`.
