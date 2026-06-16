@@ -33,7 +33,6 @@ use solx_mlir::ods::sol::ReturnOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::body_kind::BodyKind;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -52,30 +51,30 @@ pub type ModifierStageParams<'context, 'env> = Vec<ModifierParameterBinding<'con
 ///
 /// The SOLE top-level type of this module (§2a) — the references its modifier
 /// methods need in common, bundled so `emit_modified_body` takes one frame.
-pub struct ModifiedBody<'a, 'context, 'block> {
+pub struct ModifiedBody<'body, 'context, 'block> {
     /// The function being modifier-wrapped.
-    function: &'a FunctionDefinition,
+    function: &'body FunctionDefinition,
     /// The public entry symbol.
-    mlir_name: &'a str,
+    mlir_name: &'body str,
     /// The entry's MLIR parameter types.
-    mlir_parameter_types: &'a [Type<'context>],
+    mlir_parameter_types: &'body [Type<'context>],
     /// The entry's MLIR result types.
-    result_types: &'a [Type<'context>],
+    result_types: &'body [Type<'context>],
     /// The `sol.contract` body the stage `sol.func`s are appended to.
-    contract_body: &'a BlockRef<'context, 'block>,
+    contract_body: &'body BlockRef<'context, 'block>,
     /// The public entry's own entry block.
-    function_entry_block: &'a BlockRef<'context, 'block>,
+    function_entry_block: &'body BlockRef<'context, 'block>,
 }
 
-impl<'a, 'context, 'block> ModifiedBody<'a, 'context, 'block> {
+impl<'body, 'context, 'block> ModifiedBody<'body, 'context, 'block> {
     /// Bundles the references the modifier emission threads in common.
     pub fn new(
-        function: &'a FunctionDefinition,
-        mlir_name: &'a str,
-        mlir_parameter_types: &'a [Type<'context>],
-        result_types: &'a [Type<'context>],
-        contract_body: &'a BlockRef<'context, 'block>,
-        function_entry_block: &'a BlockRef<'context, 'block>,
+        function: &'body FunctionDefinition,
+        mlir_name: &'body str,
+        mlir_parameter_types: &'body [Type<'context>],
+        result_types: &'body [Type<'context>],
+        contract_body: &'body BlockRef<'context, 'block>,
+        function_entry_block: &'body BlockRef<'context, 'block>,
     ) -> Self {
         Self {
             function,
@@ -197,7 +196,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         // `ModifierBodyCall::emit`) and capturing the results back into the
         // shared return slots, then fall through to `f`'s epilogue.
         let mut forward_params: Vec<Value<'context, 'block>> = Vec::new();
-        for params in &modifier_stage_params {
+        for params in modifier_stage_params.iter() {
             for binding in params {
                 forward_params.push(
                     crate::ast::Pointer::new(binding.pointer)
@@ -453,7 +452,8 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                         let parameter_type = parameter
                             .get_type()
                             .map(|slang_type| {
-                                slang_type.resolve_type(
+                                crate::ast::Type::resolve(
+                                    &slang_type,
                                     LocationPolicy::Declared(None),
                                     &self.state.builder,
                                 )
@@ -636,7 +636,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 continue;
             };
             let argument_expressions =
-                Self::positional_arguments(invocation.arguments()).unwrap_or_default();
+                Self::positional_arguments(invocation.arguments()).unwrap_or_default(); // recut-lint-allow: fail01 — a modifier invocation may carry no arguments
             let mut stage_params: ModifierStageParams<'context, 'env> = Vec::new();
             for (parameter, argument) in modifier_definition
                 .parameters()
@@ -668,7 +668,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 let parameter_type = parameter
                     .get_type()
                     .map(|slang_type| {
-                        slang_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder)
+                        crate::ast::Type::resolve(
+                            &slang_type,
+                            LocationPolicy::Declared(None),
+                            &self.state.builder,
+                        )
                     })
                     .unwrap_or_else(|| {
                         crate::ast::Type::unsigned(

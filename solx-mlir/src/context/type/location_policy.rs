@@ -4,8 +4,10 @@
 
 use solx_utils::DataLocation;
 
-/// How Slang→MLIR type resolution (the `ResolveType` projection) picks the data
-/// location of each reference type it resolves.
+/// How Slang→MLIR type resolution ([`Type::resolve`]) picks the data location
+/// of each reference type it resolves.
+///
+/// [`Type::resolve`]: crate::Type::resolve
 #[derive(Clone, Copy)]
 pub enum LocationPolicy {
     /// Use each reference type's declared data location, substituting the carried

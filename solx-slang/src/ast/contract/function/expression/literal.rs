@@ -128,7 +128,7 @@ where
             // A string literal toward a single `byte` (an element of
             // `bytes`/`string`) materialises as a `!sol.byte` constant.
             if crate::ast::Type::new(self.target_type).is_byte() {
-                let byte = string_expression.value().first().copied().unwrap_or(0);
+                let byte = string_expression.value().first().copied().unwrap_or(0); // recut-lint-allow: fail01 — an empty string literal toward a byte is 0x00 (zero-padding)
                 let ui8 = Type::from(IntegerType::unsigned(
                     builder.context,
                     BIT_LENGTH_BYTE as u32,

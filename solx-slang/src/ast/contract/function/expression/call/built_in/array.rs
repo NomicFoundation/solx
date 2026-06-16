@@ -18,7 +18,6 @@ use solx_mlir::ods::sol::PushStringOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 
@@ -143,9 +142,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         let (element_type, slang_location) = match &base_slang_type {
             SlangType::Array(array_type) => (
-                array_type
-                    .element_type()
-                    .resolve_type(LocationPolicy::Declared(None), builder),
+                crate::ast::Type::resolve(
+                    &array_type.element_type(),
+                    LocationPolicy::Declared(None),
+                    builder,
+                ),
                 array_type.location(),
             ),
             SlangType::Bytes(bytes_type) => (

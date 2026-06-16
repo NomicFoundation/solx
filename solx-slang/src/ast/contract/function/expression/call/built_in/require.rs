@@ -17,7 +17,6 @@ use solx_mlir::ods::sol::RequireOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -149,10 +148,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .into_iter()
             .zip(parameters.iter())
             .map(|(value, parameter)| {
-                let parameter_type = parameter
-                    .get_type()
-                    .expect("error parameter type resolved by semantic analysis")
-                    .resolve_type(LocationPolicy::Declared(None), builder);
+                let parameter_type = crate::ast::Type::resolve(
+                    &parameter
+                        .get_type()
+                        .expect("error parameter type resolved by semantic analysis"),
+                    LocationPolicy::Declared(None),
+                    builder,
+                );
                 value
                     .coerce_to(
                         crate::ast::Type::new(parameter_type),

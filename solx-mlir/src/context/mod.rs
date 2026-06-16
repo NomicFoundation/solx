@@ -356,7 +356,13 @@ impl<'context> Context<'context> {
             operation.next_in_block_mut()
         })
         .find_map(|mut operation| {
-            if operation.name().as_string_ref().as_str().unwrap_or("") != Self::BUILTIN_MODULE {
+            if operation
+                .name()
+                .as_string_ref()
+                .as_str()
+                .expect("an MLIR operation name is valid UTF-8")
+                != Self::BUILTIN_MODULE
+            {
                 return None;
             }
             let symbol = operation.attribute("sym_name").ok()?;

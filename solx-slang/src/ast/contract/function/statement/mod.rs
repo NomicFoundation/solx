@@ -94,10 +94,10 @@ pub struct StatementContext<'state, 'context, 'block> {
 /// environment, storage layout, and arithmetic mode every expression emission
 /// needs. The unchecked loop-step is the one site that builds its context
 /// explicitly instead, with [`ArithmeticMode::Unchecked`].
-impl<'a, 'context, 'block> From<&'a StatementContext<'_, 'context, 'block>>
-    for ExpressionContext<'a, 'context, 'block>
+impl<'state, 'context, 'block> From<&'state StatementContext<'_, 'context, 'block>>
+    for ExpressionContext<'state, 'context, 'block>
 {
-    fn from(statement: &'a StatementContext<'_, 'context, 'block>) -> Self {
+    fn from(statement: &'state StatementContext<'_, 'context, 'block>) -> Self {
         ExpressionContext::new(
             statement.state,
             statement.environment,
@@ -180,7 +180,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         let Some(statements) = stages.get(stage).cloned() else {
             return Some(block);
         };
-        let params = parameters.get(stage).cloned().unwrap_or_default();
+        let params = parameters.get(stage).cloned().unwrap_or_default(); // recut-lint-allow: fail01 — a modifier stage may declare no parameters
         // Advance the cursor for the recursive `_;` (the borrow of the strategy
         // ended once `statements` / `params` were cloned out), restore it after.
         self.set_modifier_stage_index(stage + 1);

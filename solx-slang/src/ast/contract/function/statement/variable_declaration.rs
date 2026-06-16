@@ -11,7 +11,6 @@ use slang_solidity_v2::ast::VariableDeclarationTarget;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
@@ -32,7 +31,7 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
     let declared_type = slang_declared_type
         .as_ref()
         .map(|slang_type| {
-            slang_type.resolve_type(LocationPolicy::Declared(None), &context.state.builder)
+            crate::ast::Type::resolve(slang_type, LocationPolicy::Declared(None), &context.state.builder)
         })
         .unwrap_or_else(|| {
             crate::ast::Type::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
@@ -154,7 +153,7 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
         let builder = &context.state.builder;
         let declared_type = declaration
             .get_type()
-            .map(|slang_type| slang_type.resolve_type(LocationPolicy::Declared(None), builder))
+            .map(|slang_type| crate::ast::Type::resolve(&slang_type, LocationPolicy::Declared(None), builder))
             .unwrap_or_else(|| {
                 crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
             });

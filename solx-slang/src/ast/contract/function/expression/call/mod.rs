@@ -35,7 +35,6 @@ use self::static_mode::StaticMode;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 
@@ -217,13 +216,13 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Resolves the callee's MLIR signature and evaluates/coerces its arguments,
     /// already in parameter-declaration order. The expression-keyed core of the
     /// direct-call path, shared by the positional and named-argument forms.
-    fn emit_call_setup_expressions<'a>(
-        &'a self,
+    fn emit_call_setup_expressions<'call>(
+        &'call self,
         function_definition: &FunctionDefinition,
         arguments: &[Expression],
         block: BlockRef<'context, 'block>,
     ) -> (
-        &'a Function<'context>,
+        &'call Function<'context>,
         Vec<Value<'context, 'block>>,
         BlockRef<'context, 'block>,
     ) {
@@ -300,7 +299,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .parameter_types()
             .iter()
             .map(|parameter_type| {
-                parameter_type.resolve_type(LocationPolicy::Declared(None), builder)
+                crate::ast::Type::resolve(parameter_type, LocationPolicy::Declared(None), builder)
             })
             .collect();
         let result_types: Vec<Type<'context>> = match function_type.return_type() {
@@ -309,10 +308,14 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .types()
                 .iter()
                 .map(|element_type| {
-                    element_type.resolve_type(LocationPolicy::Declared(None), builder)
+                    crate::ast::Type::resolve(element_type, LocationPolicy::Declared(None), builder)
                 })
                 .collect(),
-            other => vec![other.resolve_type(LocationPolicy::Declared(None), builder)],
+            other => vec![crate::ast::Type::resolve(
+                &other,
+                LocationPolicy::Declared(None),
+                builder,
+            )],
         };
         let (argument_values, current_block) =
             self.emit_coerced_arguments(positional_arguments, &parameter_types, block);

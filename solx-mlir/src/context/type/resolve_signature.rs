@@ -1,49 +1,42 @@
 //!
-//! Slang function-signature → MLIR type resolution: a function resolves its own
-//! parameter and return types, the signature-level companion to [`ResolveType`].
+//! Slang function-signature → MLIR type resolution.
 //!
-//! [`ResolveType`]: crate::ResolveType
 
 use melior::ir::Type as MlirType;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::Parameter;
 
+use crate::Builder;
 use crate::LocationPolicy;
-use crate::ResolveType;
+use crate::Type;
 
-/// Resolves a function's parameter and return types from Slang to MLIR.
-pub trait ResolveSignature {
-    /// The function's `(parameter_types, return_types)` resolved under `policy`:
-    /// [`LocationPolicy::Declared`] for the declared signature (used inside the
-    /// callee's own body), [`LocationPolicy::ForceMemory`] for the external (ABI)
-    /// signature — an external call ABI-encodes its arguments and decodes its
-    /// results into memory (`calldata` cannot cross the call boundary), so solc
-    /// shows a `bytes calldata` parameter as `!sol.string<Memory>` in the call's
-    /// `callee_type`.
-    fn resolve_signature_types<'context>(
-        &self,
+impl<'context> Type<'context> {
+    /// Resolves a function's `(parameter_types, return_types)` from Slang to MLIR
+    /// under `policy`: [`LocationPolicy::Declared`] for the declared signature
+    /// (used inside the callee's own body), [`LocationPolicy::ForceMemory`] for
+    /// the external (ABI) signature — an external call ABI-encodes its arguments
+    /// and decodes its results into memory (`calldata` cannot cross the call
+    /// boundary), so solc shows a `bytes calldata` parameter as
+    /// `!sol.string<Memory>` in the call's `callee_type`.
+    pub fn resolve_signature(
+        function: &FunctionDefinition,
         policy: LocationPolicy,
-        builder: &crate::Builder<'context>,
-    ) -> (Vec<MlirType<'context>>, Vec<MlirType<'context>>);
-}
-
-impl ResolveSignature for FunctionDefinition {
-    fn resolve_signature_types<'context>(
-        &self,
-        policy: LocationPolicy,
-        builder: &crate::Builder<'context>,
+        builder: &Builder<'context>,
     ) -> (Vec<MlirType<'context>>, Vec<MlirType<'context>>) {
         let resolve = |parameter: Parameter| {
-            parameter
-                .get_type()
-                .expect("parameter type resolved by semantic analysis")
-                .resolve_type(policy, builder)
+            Type::resolve(
+                &parameter
+                    .get_type()
+                    .expect("parameter type resolved by semantic analysis"),
+                policy,
+                builder,
+            )
         };
-        let parameter_types = self.parameters().iter().map(&resolve).collect();
-        let return_types = self
-            .returns()
-            .map(|returns| returns.iter().map(&resolve).collect())
-            .unwrap_or_default();
+        let parameter_types = function.parameters().iter().map(&resolve).collect();
+        let return_types = match function.returns() {
+            Some(returns) => returns.iter().map(&resolve).collect(),
+            None => Vec::new(),
+        };
         (parameter_types, return_types)
     }
 }

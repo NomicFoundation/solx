@@ -18,7 +18,6 @@ use solx_mlir::ods::sol::ExtCallOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveSignature;
 use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
@@ -90,8 +89,11 @@ impl MemberCallKind {
         self_receiver: Option<&Expression>,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let (parameter_types, return_types) = function
-            .resolve_signature_types(LocationPolicy::Declared(None), &context.state.builder);
+        let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+            function,
+            LocationPolicy::Declared(None),
+            &context.state.builder,
+        );
         let selector = function
             .compute_selector()
             .expect("an external library function has a selector");

@@ -24,10 +24,7 @@ use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::NewOperation;
 use solx_utils::DataLocation;
 
-use crate::ast::ContractPayable;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveSignature;
-use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
 
@@ -51,7 +48,8 @@ impl CallKind {
         // to the syntactic elementary type name (both lower to a memory string).
         let dynamic_result_type = match &slang_type {
             Some(inner @ (SlangType::Array(_) | SlangType::Bytes(_) | SlangType::String(_))) => {
-                Some(inner.resolve_type(
+                Some(crate::ast::Type::resolve(
+                    inner,
                     LocationPolicy::Declared(Some(DataLocation::Memory)),
                     &context.state.builder,
                 ))
@@ -125,11 +123,14 @@ impl CallKind {
         let parameter_types = contract_definition
             .constructor()
             .map(|constructor| {
-                constructor
-                    .resolve_signature_types(LocationPolicy::Declared(None), &context.state.builder)
-                    .0
+                crate::ast::Type::resolve_signature(
+                    &constructor,
+                    LocationPolicy::Declared(None),
+                    &context.state.builder,
+                )
+                .0
             })
-            .unwrap_or_default();
+            .unwrap_or_default(); // recut-lint-allow: fail01 — a contract without a constructor takes no arguments
         let (ctor_args, block) = context.emit_coerced_arguments(arguments, &parameter_types, block);
         let builder = &context.state.builder;
         let result_type =

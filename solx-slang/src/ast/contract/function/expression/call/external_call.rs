@@ -21,8 +21,6 @@ use solx_utils::DataLocation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveSignature;
-use crate::ast::ResolveType;
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
@@ -118,8 +116,16 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     return None;
                 }
                 Some((
-                    vec![key.resolve_type(LocationPolicy::Declared(None), builder)],
-                    vec![value.resolve_type(LocationPolicy::Declared(None), builder)],
+                    vec![crate::ast::Type::resolve(
+                        &key,
+                        LocationPolicy::Declared(None),
+                        builder,
+                    )],
+                    vec![crate::ast::Type::resolve(
+                        &value,
+                        LocationPolicy::Declared(None),
+                        builder,
+                    )],
                 ))
             }
             SlangType::Array(array_type) => {
@@ -132,7 +138,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir(),
                     ],
-                    vec![element.resolve_type(LocationPolicy::Declared(None), builder)],
+                    vec![crate::ast::Type::resolve(
+                        &element,
+                        LocationPolicy::Declared(None),
+                        builder,
+                    )],
                 ))
             }
             SlangType::FixedSizeArray(array_type) => {
@@ -145,14 +155,19 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir(),
                     ],
-                    vec![element.resolve_type(LocationPolicy::Declared(None), builder)],
+                    vec![crate::ast::Type::resolve(
+                        &element,
+                        LocationPolicy::Declared(None),
+                        builder,
+                    )],
                 ))
             }
             SlangType::Struct(struct_type) => {
                 let Definition::Struct(struct_definition) = struct_type.definition() else {
                     return None;
                 };
-                let struct_mlir_type = declared_type.resolve_type(
+                let struct_mlir_type = crate::ast::Type::resolve(
+                    &declared_type,
                     LocationPolicy::Declared(Some(DataLocation::Storage)),
                     builder,
                 );
@@ -169,7 +184,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             }
             other if !other.is_reference_type() => Some((
                 Vec::new(),
-                vec![other.resolve_type(LocationPolicy::Declared(None), builder)],
+                vec![crate::ast::Type::resolve(
+                    other,
+                    LocationPolicy::Declared(None),
+                    builder,
+                )],
             )),
             _ => None,
         }
@@ -294,8 +313,11 @@ impl MemberCallKind {
         // External calls cross the ABI boundary, so a `calldata` reference
         // parameter is encoded from / decoded to memory — the callee type and
         // argument coercions use the EXTERNAL (memory) representation.
-        let (parameter_types, return_types) = function_definition
-            .resolve_signature_types(LocationPolicy::ForceMemory, &context.state.builder);
+        let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+            function_definition,
+            LocationPolicy::ForceMemory,
+            &context.state.builder,
+        );
         // The receiver is the member operand: `this` for a self call, the
         // instance value for an external one — both evaluate to an address.
         let BlockAnd {

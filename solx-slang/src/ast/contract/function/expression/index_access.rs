@@ -18,7 +18,6 @@ use solx_utils::DataLocation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -62,8 +61,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
 
         let (address, element_type) = match &base_type {
             SlangType::Mapping(_) => {
-                let element_type =
-                    result_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder);
+                let element_type = crate::ast::Type::resolve(
+                    &result_type,
+                    LocationPolicy::Declared(None),
+                    &self.state.builder,
+                );
                 let base_location = Self::resolve_base_location(&base_type);
                 let address_type = crate::ast::Type::new(element_type)
                     .address_type(base_location, self.state.builder.context);
@@ -165,10 +167,13 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
                 (length, block)
             }
         };
-        let result_type = node
-            .get_type()
-            .expect("slang types every slice expression")
-            .resolve_type(LocationPolicy::Declared(None), &context.state.builder);
+        let result_type = crate::ast::Type::resolve(
+            &node
+                .get_type()
+                .expect("slang types every slice expression"),
+            LocationPolicy::Declared(None),
+            &context.state.builder,
+        );
         let builder = &context.state.builder;
         let value: Value<'context, 'block> = sol_op!(
             builder,
@@ -201,7 +206,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
         .get_type()
         .expect("slang types every index-access expression");
     let slang_expected =
-        result_type.resolve_type(LocationPolicy::Declared(None), &context.state.builder);
+        crate::ast::Type::resolve(&result_type, LocationPolicy::Declared(None), &context.state.builder);
     let value = value.cast(
         crate::ast::Type::new(slang_expected),
         &context.state.builder,

@@ -43,7 +43,6 @@ use solx_mlir::ods::sol::AddrOfOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::storage_layout::StorageSlot;
 
@@ -170,8 +169,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let declared_type = state_variable
             .get_type()
             .expect("slang types every state variable");
-        let element_type =
-            declared_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder);
+        let element_type = crate::ast::Type::resolve(
+            &declared_type,
+            LocationPolicy::Declared(None),
+            &self.state.builder,
+        );
         if matches!(
             state_variable.mutability(),
             StateVariableMutability::Constant

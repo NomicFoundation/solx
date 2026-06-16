@@ -41,7 +41,6 @@ use self::signature::InnerSignature;
 use self::statement::StatementContext;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveSignature;
 use crate::ast::contract::storage_layout::StorageSlot;
 
 /// Lowers a Solidity function definition to a `sol.func` operation.
@@ -264,8 +263,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             .map(str::to_owned)
             .unwrap_or_else(|| Self::mlir_function_name(function));
 
-        let (mut mlir_parameter_types, result_types) =
-            function.resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder);
+        let (mut mlir_parameter_types, result_types) = crate::ast::Type::resolve_signature(
+            function,
+            LocationPolicy::Declared(None),
+            &self.state.builder,
+        );
 
         // The function's own parameters, recorded before the modifier-body
         // extension below.
@@ -458,8 +460,11 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let derived_constructor = contract.constructor();
         let (parameter_types, mutability) = match &derived_constructor {
             Some(constructor) => {
-                let (parameter_types, _) = constructor
-                    .resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder);
+                let (parameter_types, _) = crate::ast::Type::resolve_signature(
+                    constructor,
+                    LocationPolicy::Declared(None),
+                    &self.state.builder,
+                );
                 (parameter_types, Self::map_state_mutability(constructor))
             }
             None => (Vec::new(), StateMutability::NonPayable),
@@ -593,7 +598,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let returns: Vec<_> = function
             .returns()
             .map(|params| params.iter().collect::<Vec<_>>())
-            .unwrap_or_default();
+            .unwrap_or_default(); // recut-lint-allow: fail01 — a function may declare no returns
         let builder = &self.state.builder;
         let values: Vec<Value<'context, 'block>> = result_types
             .iter()

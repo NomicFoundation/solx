@@ -15,7 +15,6 @@ use solx_mlir::ods::sol::RevertOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 
@@ -127,10 +126,13 @@ statement_emit!(RevertStatement; |node, context, block| {
     let parameter_types: Vec<_> = parameters
         .iter()
         .map(|parameter| {
-            parameter
-                .get_type()
-                .expect("parameter type resolved by semantic analysis")
-                .resolve_type(LocationPolicy::Declared(None), &context.state.builder)
+            crate::ast::Type::resolve(
+                &parameter
+                    .get_type()
+                    .expect("parameter type resolved by semantic analysis"),
+                LocationPolicy::Declared(None),
+                &context.state.builder,
+            )
         })
         .collect();
     let emitter = ExpressionContext::from(&*context);

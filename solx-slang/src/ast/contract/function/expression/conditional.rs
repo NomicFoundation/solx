@@ -18,7 +18,6 @@ use solx_mlir::ods::sol::YieldOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 
@@ -305,7 +304,7 @@ expression_emit!(ArrayExpression; |node, context, block| {
     // rather than leaving a calldata element inside a memory `sol.array_lit`
     // that the backend cannot lower.
     let declared_element_type =
-        element_slang_type.resolve_type(LocationPolicy::ForceMemory, builder);
+        crate::ast::Type::resolve(&element_slang_type, LocationPolicy::ForceMemory, builder);
     // Emit the element values before fixing the element type: for a
     // function-pointer array literal the emitted values are authoritative.
     // A bare function name lowers to an internal `func_ref`, but slang types
@@ -341,7 +340,7 @@ expression_emit!(ArrayExpression; |node, context, block| {
             )
             .into_mlir()
         }
-        _ => result_slang_type.resolve_type(LocationPolicy::ForceMemory, builder),
+        _ => crate::ast::Type::resolve(&result_slang_type, LocationPolicy::ForceMemory, builder),
     };
     let element_values: Vec<_> = element_values
         .into_iter()

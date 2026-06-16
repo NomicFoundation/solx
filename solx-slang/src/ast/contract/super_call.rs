@@ -75,7 +75,7 @@ impl SuperDispatch {
                 .entry(FunctionEmitter::mlir_function_name(&function))
                 .or_insert_with(|| function.node_id());
         }
-        for base_contract in &mro {
+        for base_contract in mro.iter() {
             for function in base_contract.functions() {
                 let node_id = function.node_id();
                 if most_derived_ids.contains(&node_id) {
@@ -98,7 +98,8 @@ impl SuperDispatch {
         // with the mro index of the contract whose body it is.
         let mut to_walk: Vec<(usize, FunctionDefinition)> = Vec::new();
         for function in contract.linearised_functions() {
-            let index = Self::defining_index(&mro, function.node_id()).unwrap_or(0);
+            let index = Self::defining_index(&mro, function.node_id())
+                .expect("a linearised function is defined by a contract in the mro");
             to_walk.push((index, function));
         }
         for (index, base_contract) in mro.iter().enumerate() {

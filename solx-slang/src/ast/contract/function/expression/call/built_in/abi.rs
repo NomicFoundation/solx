@@ -24,8 +24,6 @@ use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveSignature;
-use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::built_in::EncodeMode;
 use crate::ast::contract::function::expression::call::call_kind::CallKind;
@@ -190,8 +188,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 // cross the call boundary). Use the external (memory) signature
                 // so a memory struct/array argument needs no data-location cast
                 // (solc encodes the same).
-                let (parameter_types, _) =
-                    function.resolve_signature_types(LocationPolicy::ForceMemory, builder);
+                let (parameter_types, _) = crate::ast::Type::resolve_signature(
+                    &function,
+                    LocationPolicy::ForceMemory,
+                    builder,
+                );
                 (selector_value, parameter_types, block)
             }
             _ => {
@@ -220,7 +221,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .parameter_types()
                     .iter()
                     .map(|parameter_type| {
-                        parameter_type.resolve_type(LocationPolicy::ForceMemory, builder)
+                        crate::ast::Type::resolve(
+                            parameter_type,
+                            LocationPolicy::ForceMemory,
+                            builder,
+                        )
                     })
                     .collect();
                 (selector_value, parameter_types, current)
@@ -309,9 +314,15 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             SlangType::Tuple(tuple) => tuple
                 .types()
                 .iter()
-                .map(|slang_type| slang_type.resolve_type(LocationPolicy::Declared(None), builder))
+                .map(|slang_type| {
+                    crate::ast::Type::resolve(slang_type, LocationPolicy::Declared(None), builder)
+                })
                 .collect(),
-            other => vec![other.resolve_type(LocationPolicy::Declared(None), builder)],
+            other => vec![crate::ast::Type::resolve(
+                &other,
+                LocationPolicy::Declared(None),
+                builder,
+            )],
         }
     }
 }

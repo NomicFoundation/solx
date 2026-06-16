@@ -506,7 +506,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         let returns: Vec<_> = definition
             .returns()
             .map(|names| names.iter().collect::<Vec<_>>())
-            .unwrap_or_default();
+            .unwrap_or_default(); // recut-lint-allow: fail01 — a yul function may declare no returns
         assert!(
             arguments.len() == parameters.len(),
             "yul call `{name}` arity mismatch: {} args vs {} params",
@@ -522,7 +522,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             self.environment
                 .define_variable(parameter.node_id(), pointer);
         }
-        for return_identifier in &returns {
+        for return_identifier in returns.iter() {
             let pointer = builder.emit_yul_local_alloca(&block);
             let zero = builder.emit_yul_constant(&BigInt::from(0u32), &block);
             builder.emit_yul_local_store(zero, pointer, &block);
@@ -557,12 +557,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
                 break;
             }
         }
-        for nested_name in &hoisted {
+        for nested_name in hoisted.iter() {
             self.yul_functions.remove(nested_name);
         }
 
         let mut return_values = Vec::with_capacity(returns.len());
-        for return_identifier in &returns {
+        for return_identifier in returns.iter() {
             let pointer = self.environment.variable(return_identifier.node_id());
             let loaded = self.state.builder.emit_yul_local_load(pointer, &current);
             return_values.push(loaded);

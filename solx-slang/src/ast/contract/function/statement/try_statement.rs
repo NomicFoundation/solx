@@ -20,7 +20,6 @@ use solx_mlir::ods::sol::YieldOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::try_external_call::TryExternalCall;
 use crate::ast::contract::function::statement::StatementContext;
@@ -234,7 +233,11 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         let parameter_type = parameter
             .get_type()
             .map(|slang_type| {
-                slang_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder)
+                crate::ast::Type::resolve(
+                    &slang_type,
+                    LocationPolicy::Declared(None),
+                    &self.state.builder,
+                )
             })
             .unwrap_or_else(|| {
                 crate::ast::Type::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
@@ -342,7 +345,11 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             let parameter_type = parameter
                 .get_type()
                 .map(|slang_type| {
-                    slang_type.resolve_type(LocationPolicy::Declared(None), &self.state.builder)
+                    crate::ast::Type::resolve(
+                        &slang_type,
+                        LocationPolicy::Declared(None),
+                        &self.state.builder,
+                    )
                 })
                 .unwrap_or_else(|| {
                     crate::ast::Type::unsigned(

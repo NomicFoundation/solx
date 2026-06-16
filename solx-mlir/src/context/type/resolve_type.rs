@@ -1,6 +1,5 @@
 //!
-//! Slang type → MLIR (Sol dialect) type resolution: the type-level analogue of
-//! the `Emit` projection.
+//! Slang type → MLIR (Sol dialect) type resolution.
 //!
 
 use melior::ir::Type as MlirType;
@@ -12,15 +11,12 @@ use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ArraySize;
-use crate::ContractPayable;
+use crate::Builder;
 use crate::LocationPolicy;
 use crate::Type;
 
-/// Resolves a Slang semantic type to its MLIR (Sol dialect) type — the
-/// type-level analogue of the `Emit` projection, a local trait on the foreign
-/// Slang `Type` so a type resolves itself (`slang_type.resolve_type(..)`).
-pub trait ResolveType {
-    /// Maps this Slang type to an MLIR type.
+impl<'context> Type<'context> {
+    /// Resolves a Slang semantic type to its MLIR (Sol dialect) type.
     ///
     /// `policy` picks each reference type's data location: [`LocationPolicy::Declared`]
     /// uses the type's own Slang location (with an inherited fallback for
@@ -28,20 +24,12 @@ pub trait ResolveType {
     /// the external (ABI) representation where `calldata` cannot cross the call
     /// boundary. Top-level callers pass `LocationPolicy::Declared(None)`; the
     /// `Struct` arm carries the parent struct's location into member resolution.
-    fn resolve_type<'context>(
-        &self,
+    pub fn resolve(
+        slang_type: &SlangType,
         policy: LocationPolicy,
-        builder: &crate::Builder<'context>,
-    ) -> MlirType<'context>;
-}
-
-impl ResolveType for SlangType {
-    fn resolve_type<'context>(
-        &self,
-        policy: LocationPolicy,
-        builder: &crate::Builder<'context>,
+        builder: &Builder<'context>,
     ) -> MlirType<'context> {
-        match self {
+        match slang_type {
             SlangType::Integer(integer_type) => {
                 let bits = integer_type.bits();
                 if integer_type.signed() {
@@ -102,14 +90,12 @@ impl ResolveType for SlangType {
                 Type::fixed_bytes(builder.context, byte_array_type.width()).into_mlir()
             }
             SlangType::Array(array_type) => {
-                let element_type = array_type.element_type().resolve_type(policy, builder);
+                let element_type = Type::resolve(&array_type.element_type(), policy, builder);
                 let location = policy.data_location(array_type.location());
                 Type::array(builder.context, ArraySize::Dynamic, element_type, location).into_mlir()
             }
             SlangType::FixedSizeArray(fixed_array_type) => {
-                let element_type = fixed_array_type
-                    .element_type()
-                    .resolve_type(policy, builder);
+                let element_type = Type::resolve(&fixed_array_type.element_type(), policy, builder);
                 let location = policy.data_location(fixed_array_type.location());
                 Type::array(
                     builder.context,
@@ -120,11 +106,13 @@ impl ResolveType for SlangType {
                 .into_mlir()
             }
             SlangType::Mapping(mapping_type) => {
-                let key_type = mapping_type.key_type().resolve_type(
+                let key_type = Type::resolve(
+                    &mapping_type.key_type(),
                     LocationPolicy::Declared(Some(solx_utils::DataLocation::Storage)),
                     builder,
                 );
-                let value_type = mapping_type.value_type().resolve_type(
+                let value_type = Type::resolve(
+                    &mapping_type.value_type(),
                     LocationPolicy::Declared(Some(solx_utils::DataLocation::Storage)),
                     builder,
                 );
@@ -145,7 +133,7 @@ impl ResolveType for SlangType {
                     let member_slang_type = member
                         .get_type()
                         .expect("struct member type resolved by semantic analysis");
-                    member_types.push(member_slang_type.resolve_type(member_policy, builder));
+                    member_types.push(Type::resolve(&member_slang_type, member_policy, builder));
                 }
                 Type::structure(builder.context, &member_types, struct_location).into_mlir()
             }
@@ -194,7 +182,7 @@ impl ResolveType for SlangType {
                 let target_type = udvt
                     .target_type()
                     .expect("UDVT target type resolved by semantic analysis");
-                target_type.resolve_type(policy, builder)
+                Type::resolve(&target_type, policy, builder)
             }
             SlangType::Function(function_type) => {
                 // A function pointer lowers to `!sol.func_ref<fnTy>` (internal)
@@ -205,7 +193,7 @@ impl ResolveType for SlangType {
                     .parameter_types()
                     .iter()
                     .map(|parameter_type| {
-                        parameter_type.resolve_type(LocationPolicy::Declared(None), builder)
+                        Type::resolve(parameter_type, LocationPolicy::Declared(None), builder)
                     })
                     .collect();
                 let result_types: Vec<_> = match function_type.return_type() {
@@ -214,11 +202,15 @@ impl ResolveType for SlangType {
                         .types()
                         .iter()
                         .map(|element_type| {
-                            element_type.resolve_type(LocationPolicy::Declared(None), builder)
+                            Type::resolve(element_type, LocationPolicy::Declared(None), builder)
                         })
                         .collect(),
                     other => {
-                        vec![other.resolve_type(LocationPolicy::Declared(None), builder)]
+                        vec![Type::resolve(
+                            &other,
+                            LocationPolicy::Declared(None),
+                            builder,
+                        )]
                     }
                 };
                 if function_type.is_externally_visible() {

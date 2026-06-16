@@ -205,7 +205,7 @@ impl Frontend for Slang {
                 )
             }));
 
-        for file_identifier in &unit.file_ids() {
+        for file_identifier in unit.file_ids().iter() {
             if let Some(output_source) = output.sources.get_mut(file_identifier) {
                 output_source.ast = Some(
                     serde_json::to_value(unit.file(file_identifier).map(|file| file.ast()))
@@ -222,7 +222,7 @@ impl Frontend for Slang {
         let free_functions = Self::gather_free_functions(&unit);
         let operator_bindings = crate::ast::operator_binding::OperatorBindings::gather(&unit);
 
-        for file_identifier in &file_identifiers {
+        for file_identifier in file_identifiers.iter() {
             let Some(file) = unit.file(file_identifier) else {
                 continue;
             };
@@ -248,7 +248,7 @@ impl Frontend for Slang {
                 let emitted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
                     || -> anyhow::Result<()> {
                         let melior_context = solx_mlir::Context::create_mlir_context();
-                        let evm_version = input_json.settings.evm_version.unwrap_or_default();
+                        let evm_version = input_json.settings.evm_version.unwrap_or_default(); // recut-lint-allow: fail01 — optional setting; absent => default target
                         let mut context = solx_mlir::Context::new(&melior_context, evm_version);
                         let mut emitter = AstEmitter::new(&mut context);
                         let (contract_name, method_identifiers) =
@@ -280,7 +280,7 @@ impl Frontend for Slang {
                 };
 
                 let melior_context = solx_mlir::Context::create_mlir_context();
-                let evm_version = input_json.settings.evm_version.unwrap_or_default();
+                let evm_version = input_json.settings.evm_version.unwrap_or_default(); // recut-lint-allow: fail01 — optional setting; absent => default target
                 let mut context = solx_mlir::Context::new(&melior_context, evm_version);
                 let (library_name, method_identifiers) =
                     crate::ast::contract::ContractEmitter::new(&mut context).emit_library(&library);

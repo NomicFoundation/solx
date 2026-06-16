@@ -2,10 +2,10 @@
 //! Public state-variable getter synthesis.
 //!
 //! Solidity synthesises an external accessor for every `public` state variable.
-//! This module carries the per-getter frame ([`GetterAbi`]) and the emission /
-//! classification methods that lower it; the dispatching entry points are `impl`
-//! blocks on the foreign [`ContractEmitter`] (§2a: the SOLE top-level type here
-//! is `GetterAbi`).
+//! This module is the getter emission / classification methods as `impl` blocks
+//! on the foreign [`ContractEmitter`]; each path takes the state variable, its
+//! storage slot, data location, and the `sol.contract` body, and derives the
+//! signature / selector / declared type from the variable.
 //!
 
 use melior::ir::BlockLike;
@@ -41,7 +41,6 @@ use solx_mlir::Environment;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -49,52 +48,22 @@ use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::getter_level::GetterLevel;
 use crate::ast::contract::storage_layout::StorageSlot;
 
-/// The per-getter emission frame: the state variable, its canonical ABI
-/// signature and selector, declared type, storage slot, and the `sol.contract`
-/// body the getter `sol.func` is appended to.
-///
-/// The SOLE top-level type of this module (§2a); a pure `Copy` data carrier
-/// destructured by the `ContractEmitter` emission methods.
-#[derive(Clone, Copy)]
-pub struct GetterAbi<'a, 'context, 'block> {
-    /// The state variable whose accessor is being generated.
-    state_variable: &'a StateVariableDefinition,
-    /// The canonical ABI signature, e.g. `balances(address)`.
-    signature: &'a str,
-    /// The 4-byte function selector derived from the signature.
-    selector: u32,
-    /// The variable's declared Solidity type (mapping/array/struct/scalar).
-    declared_type: &'a SlangType,
-    /// The storage slot holding the variable (carries the `{label}_{node_id}`
-    /// symbol name addressed by `sol.addr_of`).
-    slot: &'a StorageSlot,
-    /// The storage data location (`Storage` for persistent state).
-    location: DataLocation,
-    /// The `sol.contract` body the getter `sol.func` is appended to.
-    contract_body: &'a BlockRef<'context, 'block>,
-}
-
 impl<'state, 'context> ContractEmitter<'state, 'context> {
-    /// Computes the shared ABI prologue of a `public` state variable's getter —
-    /// its function ABI entry (carrying the input parameters), canonical
-    /// signature, and selector — or `None` when the variable has no synthesised
-    /// accessor. The single source the constant and storage getter entry points
-    /// both read.
-    fn getter_abi_prologue(
-        state_variable: &StateVariableDefinition,
-    ) -> Option<(AbiFunction, String, u32)> {
-        let Some(AbiEntry::Function(abi)) = state_variable.compute_abi_entry() else {
-            return None;
-        };
-        let signature = state_variable.compute_canonical_signature()?;
-        let selector = state_variable.compute_selector()?;
-        Some((abi, signature, selector))
+    /// The ABI function entry of a `public` state variable's synthesised getter,
+    /// or `None` when the variable has no accessor. Its input parameters' count
+    /// selects the scalar vs. indexed emission path.
+    fn getter_abi_function(state_variable: &StateVariableDefinition) -> Option<AbiFunction> {
+        match state_variable.compute_abi_entry() {
+            Some(AbiEntry::Function(abi)) => Some(abi),
+            _ => None,
+        }
     }
 
     /// Dispatches getter synthesis for one non-constant state variable to the
     /// scalar or indexed (mapping/array) path. Struct getters are emitted by a
     /// later fill; a variable left without an accessor is harmless (the rest of
-    /// the contract still compiles).
+    /// the contract still compiles). The signature, selector, and declared type
+    /// are derived from `state_variable` on each path rather than threaded.
     pub fn emit_state_variable_getter(
         &self,
         state_variable: &StateVariableDefinition,
@@ -102,42 +71,42 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         location: DataLocation,
         contract_body: &BlockRef<'context, '_>,
     ) {
-        let Some((abi, signature, selector)) = Self::getter_abi_prologue(state_variable) else {
+        let Some(abi) = Self::getter_abi_function(state_variable) else {
             return;
-        };
-        let declared_type = state_variable
-            .get_type()
-            .expect("slang types every state variable");
-        let frame = GetterAbi {
-            state_variable,
-            signature: &signature,
-            selector,
-            declared_type: &declared_type,
-            slot,
-            location,
-            contract_body,
         };
         if !abi.inputs().is_empty() {
-            return self.emit_indexed_getter(&frame, abi.inputs().len());
+            return self.emit_indexed_getter(
+                state_variable,
+                slot,
+                location,
+                contract_body,
+                abi.inputs().len(),
+            );
         }
-        if self.emit_struct_getter(&frame) {
+        if self.emit_struct_getter(state_variable, slot, location, contract_body) {
             return;
         }
-        self.emit_scalar_getter(&frame)
+        self.emit_scalar_getter(state_variable, slot, location, contract_body)
     }
 
     /// Emits a scalar / reference getter: `T public name` becomes `function
     /// name() view returns (T)` reading the variable's slot.
-    fn emit_scalar_getter(&self, abi: &GetterAbi<'_, 'context, '_>) {
-        let GetterAbi {
-            state_variable,
-            signature,
-            selector,
-            declared_type,
-            slot,
-            location,
-            contract_body,
-        } = *abi;
+    fn emit_scalar_getter(
+        &self,
+        state_variable: &StateVariableDefinition,
+        slot: &StorageSlot,
+        location: DataLocation,
+        contract_body: &BlockRef<'context, '_>,
+    ) {
+        let signature = state_variable
+            .compute_canonical_signature()
+            .expect("a getter state variable has a canonical signature");
+        let selector = state_variable
+            .compute_selector()
+            .expect("a getter state variable has a selector");
+        let declared_type = state_variable
+            .get_type()
+            .expect("slang types every state variable");
         let builder = &self.state.builder;
         let element_type = crate::ast::Type::resolve_state_variable(state_variable, builder);
         // A reference-typed variable (`string`/`bytes`/array) is addressed by the
@@ -147,8 +116,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         } else {
             crate::ast::Type::pointer(builder.context, element_type, location).into_mlir()
         };
-        let function_signature =
-            Function::new(signature.to_owned(), Vec::new(), vec![element_type]);
+        let function_signature = Function::new(signature, Vec::new(), vec![element_type]);
         let entry = function_signature.define(
             Some(selector),
             StateMutability::View,
@@ -181,25 +149,35 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ///
     /// Struct and other reference results are emitted by a later fill (the
     /// getter is left ungenerated meanwhile rather than emitted incorrectly).
-    fn emit_indexed_getter(&self, abi: &GetterAbi<'_, 'context, '_>, abi_input_count: usize) {
-        let GetterAbi {
-            state_variable,
-            signature,
-            selector,
-            declared_type,
-            slot,
-            location,
-            contract_body,
-        } = *abi;
+    fn emit_indexed_getter(
+        &self,
+        state_variable: &StateVariableDefinition,
+        slot: &StorageSlot,
+        location: DataLocation,
+        contract_body: &BlockRef<'context, '_>,
+        abi_input_count: usize,
+    ) {
+        let signature = state_variable
+            .compute_canonical_signature()
+            .expect("a getter state variable has a canonical signature");
+        let selector = state_variable
+            .compute_selector()
+            .expect("a getter state variable has a selector");
+        let declared_type = state_variable
+            .get_type()
+            .expect("slang types every state variable");
         let builder = &self.state.builder;
         let (input_types, levels, result_slang) =
-            self.plan_indexed_getter_levels(declared_type, location);
+            self.plan_indexed_getter_levels(&declared_type, location);
         if input_types.is_empty() || input_types.len() != abi_input_count {
             return;
         }
         let container_type = crate::ast::Type::resolve_state_variable(state_variable, builder);
-        let result_type =
-            result_slang.resolve_type(LocationPolicy::Declared(Some(location)), builder);
+        let result_type = crate::ast::Type::resolve(
+            &result_slang,
+            LocationPolicy::Declared(Some(location)),
+            builder,
+        );
         // A struct result expands into its flattened returnable-member tuple;
         // other reference results aren't handled yet (left ungenerated).
         let struct_plan = match &result_slang {
@@ -222,11 +200,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .collect(),
             None => vec![result_type],
         };
-        let function_signature = Function::new(
-            signature.to_owned(),
-            input_types.to_vec(),
-            result_types.to_vec(),
-        );
+        let function_signature =
+            Function::new(signature, input_types.to_vec(), result_types.to_vec());
         let entry = function_signature.define(
             Some(selector),
             StateMutability::View,
@@ -311,8 +286,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 SlangType::Mapping(mapping_type) => {
                     let key_slang = mapping_type.key_type();
                     let value_slang = mapping_type.value_type();
-                    let resolved_value =
-                        value_slang.resolve_type(LocationPolicy::Declared(Some(location)), builder);
+                    let resolved_value = crate::ast::Type::resolve(
+                        &value_slang,
+                        LocationPolicy::Declared(Some(location)),
+                        builder,
+                    );
                     // Intermediate containers are addressed by their reference; a
                     // value terminal by a `!sol.ptr<V>`.
                     let level_type = if value_slang.is_reference_type() {
@@ -329,7 +307,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     let key_type = if key_slang.is_reference_type() {
                         crate::ast::Type::string(builder.context, DataLocation::Memory).into_mlir()
                     } else {
-                        key_slang.resolve_type(LocationPolicy::Declared(Some(location)), builder)
+                        crate::ast::Type::resolve(
+                            &key_slang,
+                            LocationPolicy::Declared(Some(location)),
+                            builder,
+                        )
                     };
                     input_types.push(key_type);
                     levels.push(GetterLevel::Mapping(level_type));
@@ -337,8 +319,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
                 SlangType::Array(array_type) => {
                     let element_slang = array_type.element_type();
-                    let element_type = element_slang
-                        .resolve_type(LocationPolicy::Declared(Some(location)), builder);
+                    let element_type = crate::ast::Type::resolve(
+                        &element_slang,
+                        LocationPolicy::Declared(Some(location)),
+                        builder,
+                    );
                     input_types.push(
                         crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir(),
@@ -348,8 +333,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 }
                 SlangType::FixedSizeArray(array_type) => {
                     let element_slang = array_type.element_type();
-                    let element_type = element_slang
-                        .resolve_type(LocationPolicy::Declared(Some(location)), builder);
+                    let element_type = crate::ast::Type::resolve(
+                        &element_slang,
+                        LocationPolicy::Declared(Some(location)),
+                        builder,
+                    );
                     input_types.push(
                         crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                             .into_mlir(),
@@ -449,7 +437,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         storage_layout: &HashMap<NodeId, StorageSlot>,
         contract_body: &BlockRef<'context, '_>,
     ) {
-        let Some((abi, signature, selector)) = Self::getter_abi_prologue(state_variable) else {
+        let Some(abi) = Self::getter_abi_function(state_variable) else {
             return;
         };
         if !abi.inputs().is_empty() {
@@ -458,6 +446,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let Some(initializer) = state_variable.value() else {
             return;
         };
+        let signature = state_variable
+            .compute_canonical_signature()
+            .expect("a getter state variable has a canonical signature");
+        let selector = state_variable
+            .compute_selector()
+            .expect("a getter state variable has a selector");
 
         let builder = &self.state.builder;
         // The getter returns the constant's value type, reference types
@@ -466,9 +460,9 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let slang_type = state_variable
             .get_type()
             .expect("slang types every state variable");
-        let element_type = slang_type.resolve_type(LocationPolicy::ForceMemory, builder);
-        let function_signature =
-            Function::new(signature.to_owned(), Vec::new(), vec![element_type]);
+        let element_type =
+            crate::ast::Type::resolve(&slang_type, LocationPolicy::ForceMemory, builder);
+        let function_signature = Function::new(signature, Vec::new(), vec![element_type]);
         let entry = function_signature.define(
             Some(selector),
             StateMutability::Pure,
@@ -583,22 +577,25 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
     /// Emits a no-argument getter for a `public` struct state variable (its
     /// returnable members as a flattened tuple). Emitted by a later fill.
-    pub fn emit_struct_getter(&self, abi: &GetterAbi<'_, 'context, '_>) -> bool {
-        let GetterAbi {
-            state_variable,
-            signature,
-            selector,
-            declared_type,
-            slot,
-            location,
-            contract_body,
-        } = *abi;
+    pub fn emit_struct_getter(
+        &self,
+        state_variable: &StateVariableDefinition,
+        slot: &StorageSlot,
+        location: DataLocation,
+        contract_body: &BlockRef<'context, '_>,
+    ) -> bool {
+        let declared_type = state_variable
+            .get_type()
+            .expect("slang types every state variable");
         let builder = &self.state.builder;
-        if let SlangType::Struct(struct_type) = declared_type
+        if let SlangType::Struct(struct_type) = &declared_type
             && let Definition::Struct(struct_definition) = struct_type.definition()
         {
-            let struct_mlir_type =
-                declared_type.resolve_type(LocationPolicy::Declared(Some(location)), builder);
+            let struct_mlir_type = crate::ast::Type::resolve(
+                &declared_type,
+                LocationPolicy::Declared(Some(location)),
+                builder,
+            );
             if let Some(plan) =
                 Self::struct_getter_layout(&struct_definition, struct_mlir_type, builder)
             {
@@ -608,8 +605,14 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     .collect();
                 let container_type =
                     crate::ast::Type::resolve_state_variable(state_variable, builder);
+                let signature = state_variable
+                    .compute_canonical_signature()
+                    .expect("a getter state variable has a canonical signature");
+                let selector = state_variable
+                    .compute_selector()
+                    .expect("a getter state variable has a selector");
                 let function_signature =
-                    Function::new(signature.to_owned(), Vec::new(), result_types.to_vec());
+                    Function::new(signature, Vec::new(), result_types.to_vec());
                 let entry = function_signature.define(
                     Some(selector),
                     StateMutability::View,

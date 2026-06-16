@@ -43,9 +43,7 @@ use self::free_function::FreeCallCollector;
 use self::function::FunctionEmitter;
 use self::library::LibraryCallCollector;
 use self::storage_layout::StorageSlot;
-use crate::ast::ContractPayable;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveSignature;
 use crate::ast::operator_binding::OperatorBindings;
 
 /// Lowers a Solidity contract to Sol dialect MLIR.
@@ -93,8 +91,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // Register each shadowed base override under its contract-qualified
         // symbol so a `super`/`Base` call resolves to it by node id.
         for (symbol, function) in &super_dispatch.shadowed {
-            let (parameter_types, return_types) = function
-                .resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder);
+            let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+                function,
+                LocationPolicy::Declared(None),
+                &self.state.builder,
+            );
             self.state.register_function_signature(
                 function.node_id(),
                 symbol.clone(),
@@ -265,7 +266,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // Emit the collected free functions so their `sol.call`s resolve. Each
         // is emitted under its node-id-qualified symbol so two file-level
         // functions of the same name and signature do not collide on one symbol.
-        for free in &reached_free_functions {
+        for free in reached_free_functions.iter() {
             self.state.current_contract_type = Some(contract_type);
             FunctionEmitter::new(self.state, Some(contract), &storage_layout).emit_sol_with_symbol(
                 free,
@@ -330,10 +331,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         // Pre-register every function so calls between the library's functions
         // resolve before any body is emitted.
-        for function in &functions {
+        for function in functions.iter() {
             let mlir_name = FunctionEmitter::mlir_function_name(function);
-            let (parameter_types, return_types) = function
-                .resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder);
+            let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+                function,
+                LocationPolicy::Declared(None),
+                &self.state.builder,
+            );
             self.state.register_function_signature(
                 function.node_id(),
                 mlir_name,
@@ -360,7 +364,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             &module_body,
         );
 
-        for function in &functions {
+        for function in functions.iter() {
             self.state.current_contract_type = Some(library_type);
             FunctionEmitter::new(self.state, None, &storage_layout)
                 .emit_sol(function, &contract_body);
@@ -368,7 +372,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
 
         let mut method_identifiers = BTreeMap::new();
-        for function in &functions {
+        for function in functions.iter() {
             let Some(signature) = function.compute_canonical_signature() else {
                 continue;
             };
@@ -442,8 +446,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 continue;
             }
             let mlir_name = FunctionEmitter::mlir_function_name(&function);
-            let (parameter_types, return_types) = function
-                .resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder);
+            let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+                &function,
+                LocationPolicy::Declared(None),
+                &self.state.builder,
+            );
 
             self.state.register_function_signature(
                 function.node_id(),
@@ -478,8 +485,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// resolve regardless of emission order.
     fn register_function_signatures(&mut self, functions: &[FunctionDefinition]) {
         for function in functions {
-            let (parameter_types, return_types) = function
-                .resolve_signature_types(LocationPolicy::Declared(None), &self.state.builder);
+            let (parameter_types, return_types) = crate::ast::Type::resolve_signature(
+                function,
+                LocationPolicy::Declared(None),
+                &self.state.builder,
+            );
             self.state.register_function_signature(
                 function.node_id(),
                 Self::node_id_qualified_symbol(function),

@@ -22,7 +22,6 @@ use solx_mlir::ods::sol::MallocOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
@@ -139,8 +138,11 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 unimplemented!("unregistered state variable {:?}", state_variable.node_id())
             })
             .clone();
-        let element_type =
-            declared_type.resolve_type(LocationPolicy::Declared(None), &context.state.builder);
+        let element_type = crate::ast::Type::resolve(
+            &declared_type,
+            LocationPolicy::Declared(None),
+            &context.state.builder,
+        );
         if declared_type.is_reference_type() && !matches!(declared_type, ast::Type::Mapping(_)) {
             let address_type = crate::ast::Type::new(element_type)
                 .address_type(slot.location, context.state.builder.context)

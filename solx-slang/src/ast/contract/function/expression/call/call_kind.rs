@@ -23,7 +23,6 @@ use solx_utils::DataLocation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::ResolveType;
 use crate::ast::Toward;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::member_call_kind::MemberCallKind;
@@ -225,7 +224,8 @@ impl CallKind {
                 {
                     let field_slang_type =
                         member.get_type().expect("slang types every struct member");
-                    let field_type = field_slang_type.resolve_type(
+                    let field_type = crate::ast::Type::resolve(
+                        &field_slang_type,
                         LocationPolicy::Declared(Some(DataLocation::Memory)),
                         builder,
                     );

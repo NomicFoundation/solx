@@ -28,14 +28,14 @@ use crate::ast::contract::reachability::ReachabilityWalk;
 ///
 /// The SOLE top-level type of this module (§2a). The reachability walk is an
 /// associated function on this type (Rule-5: every `fn` lives in an `impl`).
-pub struct FreeCallCollector<'a> {
+pub struct FreeCallCollector {
     /// Node ids of the source unit's free functions.
-    free_ids: &'a HashSet<NodeId>,
+    free_ids: HashSet<NodeId>,
     /// Free functions reached during a single body walk.
     reached: Vec<FunctionDefinition>,
 }
 
-impl<'a> FreeCallCollector<'a> {
+impl FreeCallCollector {
     /// Returns the free functions reachable from `contract`'s own functions and
     /// constructor, including those reached only through other free functions.
     ///
@@ -49,19 +49,24 @@ impl<'a> FreeCallCollector<'a> {
         free_functions: &[FunctionDefinition],
         extra_roots: &[FunctionDefinition],
     ) -> Vec<FunctionDefinition> {
-        let free_ids: HashSet<NodeId> = free_functions.iter().map(|f| f.node_id()).collect();
+        let free_ids: HashSet<NodeId> = free_functions
+            .iter()
+            .map(|function| function.node_id())
+            .collect();
         if free_ids.is_empty() {
             return Vec::new();
         }
 
+        // One collector for the whole walk: it owns the id set and clears its
+        // `reached` accumulator between bodies, so no per-body borrow lifetime.
+        let mut collector = FreeCallCollector {
+            free_ids,
+            reached: Vec::new(),
+        };
         let mut walk = ReachabilityWalk::new(contract, extra_roots);
         while let Some(function) = walk.next_body() {
-            let mut collector = FreeCallCollector {
-                free_ids: &free_ids,
-                reached: Vec::new(),
-            };
             accept_function_definition(&function, &mut collector);
-            for free_function in collector.reached {
+            for free_function in collector.reached.drain(..) {
                 walk.reach(free_function);
             }
         }
@@ -69,7 +74,7 @@ impl<'a> FreeCallCollector<'a> {
     }
 }
 
-impl Visitor for FreeCallCollector<'_> {
+impl Visitor for FreeCallCollector {
     fn enter_function_call_expression(&mut self, node: &FunctionCallExpression) -> bool {
         if let Expression::Identifier(identifier) = node.operand()
             && let Some(Definition::Function(function)) = identifier.resolve_to_definition()
