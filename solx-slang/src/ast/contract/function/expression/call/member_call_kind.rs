@@ -11,6 +11,8 @@ use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use crate::ast::BlockAnd;
+use crate::ast::Materialize;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::library_visibility::LibraryVisibility;
 
@@ -167,7 +169,9 @@ impl MemberCallKind {
             Self::SelfExternal
             | Self::ExternalInstance
             | Self::SelfGetter
-            | Self::ExternalGetter => self.emit_external(context, access, call_value, arguments, block),
+            | Self::ExternalGetter => {
+                self.emit_external(context, access, call_value, arguments, block)
+            }
             Self::Library(LibraryVisibility::Internal) => {
                 let Some(Definition::Function(library_function)) =
                     access.member().resolve_to_definition()
@@ -187,11 +191,10 @@ impl MemberCallKind {
                     .expect("a super/base call has a recorded redirect target");
                 let argument_expressions: Vec<Expression> = arguments.iter().collect();
                 let function = context.state.resolve_function(target_id);
-                let (argument_values, current_block) = context.emit_coerced_argument_expressions(
-                    &argument_expressions,
-                    &function.parameter_types,
-                    block,
-                );
+                let BlockAnd {
+                    value: argument_values,
+                    block: current_block,
+                } = argument_expressions.materialize(&function.parameter_types, context, block);
                 let results =
                     function.call(&argument_values, &context.state.builder, &current_block);
                 (results, current_block)
@@ -200,9 +203,7 @@ impl MemberCallKind {
                 // `s.f` through a function-pointer field: the indirect-call path on
                 // the loaded `func_ref`.
                 let callee = Expression::MemberAccessExpression(access.clone());
-                let function_slang_type = access
-                    .get_type()
-                    .expect("slang validated");
+                let function_slang_type = access.get_type().expect("slang validated");
                 context.emit_indirect_call_results(
                     &callee,
                     &function_slang_type,

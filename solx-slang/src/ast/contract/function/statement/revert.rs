@@ -15,6 +15,7 @@ use solx_mlir::ods::sol::RevertOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Materialize;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
@@ -131,8 +132,10 @@ statement_emit!(RevertStatement; |node, context, block| {
         })
         .collect();
     let emitter = ExpressionContext::from(&*context);
-    let (values, block) =
-        emitter.emit_coerced_argument_expressions(&ordered, &parameter_types, block);
+    let BlockAnd {
+        value: values,
+        block,
+    } = ordered.materialize(&parameter_types, &emitter, block);
     context.emit_revert(&signature, &values, true, &block);
     Some(block)
 });

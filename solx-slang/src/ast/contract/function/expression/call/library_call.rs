@@ -18,6 +18,7 @@ use solx_mlir::ods::sol::ExtCallOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Materialize;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::FunctionEmitter;
@@ -41,11 +42,11 @@ impl MemberCallKind {
         // — a library (`L.f`) or import alias (`M.f`) — is not a value, so only
         // the explicit arguments pass.
         if MemberCallKind::is_namespace_qualifier(&access.operand()) {
-            let (argument_values, current_block) = context.emit_coerced_arguments(
-                positional_arguments,
-                &function.parameter_types,
-                block,
-            );
+            let arguments: Vec<Expression> = positional_arguments.iter().collect();
+            let BlockAnd {
+                value: argument_values,
+                block: current_block,
+            } = arguments.materialize(&function.parameter_types, context, block);
             let results = function.call(&argument_values, &context.state.builder, &current_block);
             return (results, current_block);
         }
@@ -65,8 +66,11 @@ impl MemberCallKind {
         let self_value = self_value
             .cast(AstType::new(*parameter_self), builder, &current_block)
             .into_mlir();
-        let (mut argument_values, current_block) =
-            context.emit_coerced_arguments(positional_arguments, parameter_rest, current_block);
+        let arguments: Vec<Expression> = positional_arguments.iter().collect();
+        let BlockAnd {
+            value: mut argument_values,
+            block: current_block,
+        } = arguments.materialize(parameter_rest, context, current_block);
         argument_values.insert(0, self_value);
         let results = function.call(&argument_values, &context.state.builder, &current_block);
         (results, current_block)
@@ -92,16 +96,13 @@ impl MemberCallKind {
             LocationPolicy::Declared(None),
             &context.state.builder,
         );
-        let selector = function
-            .compute_selector()
-            .expect("slang validated");
+        let selector = function.compute_selector().expect("slang validated");
         let mlir_name = FunctionEmitter::mlir_function_name(function);
 
         let (argument_values, current_block) = match self_receiver {
             Some(receiver) => {
-                let (parameter_self, parameter_rest) = parameter_types
-                    .split_first()
-                    .expect("slang validated");
+                let (parameter_self, parameter_rest) =
+                    parameter_types.split_first().expect("slang validated");
                 let BlockAnd {
                     value: self_value,
                     block,
@@ -110,12 +111,18 @@ impl MemberCallKind {
                 let self_value = self_value
                     .cast(AstType::new(*parameter_self), builder, &block)
                     .into_mlir();
-                let (mut rest_values, block) =
-                    context.emit_coerced_argument_expressions(arguments, parameter_rest, block);
+                let BlockAnd {
+                    value: mut rest_values,
+                    block,
+                } = arguments.materialize(parameter_rest, context, block);
                 rest_values.insert(0, self_value);
                 (rest_values, block)
             }
-            None => context.emit_coerced_argument_expressions(arguments, &parameter_types, block),
+            None => {
+                let BlockAnd { value, block } =
+                    arguments.materialize(&parameter_types, context, block);
+                (value, block)
+            }
         };
 
         let builder = &context.state.builder;

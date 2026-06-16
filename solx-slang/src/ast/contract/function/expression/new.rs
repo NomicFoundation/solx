@@ -27,6 +27,7 @@ use solx_utils::DataLocation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Materialize;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -135,7 +136,11 @@ impl CallKind {
                 .0
             })
             .unwrap_or_default(); // recut-lint-allow: fail01 — a contract without a constructor takes no arguments
-        let (ctor_args, block) = context.emit_coerced_arguments(arguments, &parameter_types, block);
+        let ordered: Vec<Expression> = arguments.iter().collect();
+        let BlockAnd {
+            value: ctor_args,
+            block,
+        } = ordered.materialize(&parameter_types, context, block);
         let builder = &context.state.builder;
         let result_type = AstType::contract(builder.context, &contract_name, payable).into_mlir();
         let val = value.unwrap_or_else(|| {

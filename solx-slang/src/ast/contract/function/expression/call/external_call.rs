@@ -21,6 +21,7 @@ use solx_utils::DataLocation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Materialize;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::ContractEmitter;
@@ -210,10 +211,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             value: address,
             block,
         } = access.operand().emit(self, block);
-        let argument = arguments
-            .iter()
-            .next()
-            .expect("slang validated");
+        let argument = arguments.iter().next().expect("slang validated");
         let BlockAnd {
             value: input,
             block,
@@ -304,54 +302,56 @@ impl MemberCallKind {
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let (selector, parameter_types, return_types, static_mode) =
-            match access.member().resolve_to_definition() {
-                Some(Definition::Function(function)) => {
-                    let (parameter_types, return_types) = AstType::resolve_signature(
-                        &function,
-                        LocationPolicy::ForceMemory,
-                        &context.state.builder,
+        let (selector, parameter_types, return_types, static_mode) = match access
+            .member()
+            .resolve_to_definition()
+        {
+            Some(Definition::Function(function)) => {
+                let (parameter_types, return_types) = AstType::resolve_signature(
+                    &function,
+                    LocationPolicy::ForceMemory,
+                    &context.state.builder,
+                );
+                (
+                    function.compute_selector().expect("slang validated"),
+                    parameter_types,
+                    return_types,
+                    StaticMode::from_function(&function),
+                )
+            }
+            Some(Definition::StateVariable(state_variable)) => {
+                // A getter on another instance is single-valued here, so an
+                // arg-bearing mapping / array getter is a LOUD residual; only
+                // a self getter (`this.m(key)`) lowers its key/index argument.
+                if !matches!(access.operand(), Expression::ThisKeyword(_)) && !arguments.is_empty()
+                {
+                    unimplemented!("external getter with key/index arguments is not yet supported");
+                }
+                let Some((parameter_types, return_types)) =
+                    context.getter_signature(&state_variable)
+                else {
+                    unimplemented!(
+                        "getter of a nested or reference-typed state variable is not yet supported"
                     );
-                    (
-                        function.compute_selector().expect("slang validated"),
-                        parameter_types,
-                        return_types,
-                        StaticMode::from_function(&function),
-                    )
-                }
-                Some(Definition::StateVariable(state_variable)) => {
-                    // A getter on another instance is single-valued here, so an
-                    // arg-bearing mapping / array getter is a LOUD residual; only
-                    // a self getter (`this.m(key)`) lowers its key/index argument.
-                    if !matches!(access.operand(), Expression::ThisKeyword(_))
-                        && !arguments.is_empty()
-                    {
-                        unimplemented!(
-                            "external getter with key/index arguments is not yet supported"
-                        );
-                    }
-                    let Some((parameter_types, return_types)) =
-                        context.getter_signature(&state_variable)
-                    else {
-                        unimplemented!(
-                            "getter of a nested or reference-typed state variable is not yet supported"
-                        );
-                    };
-                    (
-                        state_variable.compute_selector().expect("slang validated"),
-                        parameter_types,
-                        return_types,
-                        StaticMode::Call,
-                    )
-                }
-                _ => unreachable!("an external member call resolves to a function or state variable"),
-            };
+                };
+                (
+                    state_variable.compute_selector().expect("slang validated"),
+                    parameter_types,
+                    return_types,
+                    StaticMode::Call,
+                )
+            }
+            _ => unreachable!("an external member call resolves to a function or state variable"),
+        };
         let BlockAnd {
             value: receiver,
             block,
         } = access.operand().emit(context, block);
-        let (argument_values, block) =
-            context.emit_coerced_arguments(arguments, &parameter_types, block);
+        let ordered: Vec<Expression> = arguments.iter().collect();
+        let BlockAnd {
+            value: argument_values,
+            block,
+        } = ordered.materialize(&parameter_types, context, block);
         let results = context.emit_external_call(
             receiver.into_mlir(),
             selector,

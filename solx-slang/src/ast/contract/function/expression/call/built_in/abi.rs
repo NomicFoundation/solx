@@ -24,6 +24,7 @@ use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Materialize;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -155,12 +156,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let mut iter = arguments.iter();
-        let function_expression = iter
-            .next()
-            .expect("slang validated");
-        let call_arguments = iter
-            .next()
-            .expect("slang validated");
+        let function_expression = iter.next().expect("slang validated");
+        let call_arguments = iter.next().expect("slang validated");
         let definition = match &function_expression {
             Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
             Expression::Identifier(identifier) => identifier.resolve_to_definition(),
@@ -175,9 +172,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         // function type.
         let (selector_value, parameter_types, current) = match definition {
             Some(Definition::Function(function)) => {
-                let selector = function
-                    .compute_selector()
-                    .expect("slang validated");
+                let selector = function.compute_selector().expect("slang validated");
                 let selector_value = AstValue::selector_constant(
                     &BigInt::from(selector),
                     4,
@@ -207,9 +202,8 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         .func(function_value)
                         .result(AstType::fixed_bytes(builder.context, 4))
                 );
-                let SlangType::Function(function_type) = function_expression
-                    .get_type()
-                    .expect("slang validated")
+                let SlangType::Function(function_type) =
+                    function_expression.get_type().expect("slang validated")
                 else {
                     unreachable!("a non-static abi.encodeCall callee is a function pointer")
                 };
@@ -233,11 +227,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .collect(),
             other => vec![other],
         };
-        let (values, current) = self.emit_coerced_argument_expressions(
-            &argument_expressions,
-            &parameter_types,
-            current,
-        );
+        let BlockAnd {
+            value: values,
+            block: current,
+        } = argument_expressions.materialize(&parameter_types, self, current);
         let result = self.emit_sol_encode(
             &values,
             Some(selector_value),
@@ -296,9 +289,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// one per tuple element. Resolved from the call's binder-assigned type.
     fn abi_decode_result_types(&self, call: &FunctionCallExpression) -> Vec<Type<'context>> {
         let builder = &self.state.builder;
-        let return_slang_type = call
-            .get_type()
-            .expect("slang validated");
+        let return_slang_type = call.get_type().expect("slang validated");
         match return_slang_type {
             SlangType::Tuple(tuple) => tuple
                 .types()
@@ -326,10 +317,7 @@ impl CallKind {
         arguments: &PositionalArguments,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let payload_expression = arguments
-            .iter()
-            .next()
-            .expect("slang validated");
+        let payload_expression = arguments.iter().next().expect("slang validated");
         let BlockAnd {
             value: payload_value,
             block,

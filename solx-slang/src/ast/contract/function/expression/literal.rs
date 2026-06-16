@@ -99,7 +99,7 @@ expression_emit!(StringExpression; |node, context, block| {
 // that type as a compile-time fixed-bytes / byte constant rather than the runtime
 // `sol.string` its natural `Emit` produces. The impl lives here, beside that
 // `Emit`, because both read `ExpressionContext`'s private state.
-impl<'state, 'context, 'block, 'scope> Materialize<'context, 'block, 'state, 'scope>
+impl<'state, 'context, 'block, 'scope> Materialize<'context, 'block, 'state, 'scope, Type<'context>>
     for StringExpression
 where
     'context: 'block,
@@ -108,6 +108,7 @@ where
     'state: 'scope,
 {
     type Context = &'scope ExpressionContext<'state, 'context, 'block>;
+    type Output = AstValue<'context, 'block>;
 
     fn materialize(
         &self,

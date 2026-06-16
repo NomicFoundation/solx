@@ -1,32 +1,33 @@
 //!
-//! Target-typed string-literal materialisation: a string literal emits as a
-//! fixed-bytes / byte constant when used where `bytesN` / `byte` is expected.
+//! Target-typed emission: emitting a node coerced to an expected MLIR type.
 //!
 
 use melior::ir::BlockRef;
-use melior::ir::Type;
 
-use crate::ast::Value as AstValue;
 use crate::ast::emit::BlockAnd;
 
-/// Emits a string literal toward an expected MLIR type. The one case a string
-/// literal's natural [`Emit`](crate::ast::Emit) is wrong: toward `bytesN` /
-/// `byte` it is a compile-time, left-aligned fixed-bytes / byte constant — the
-/// literal occupies the high bytes, zero-padded on the right — not a runtime
-/// `sol.string` (which the integer-only verifier rejects). slang types the
-/// literal `Literal(String)` context-free, so the target reaches the literal only
-/// from the use site. For any other type it is the literal's natural emission, so
-/// a coercion site routed here is a pure superset of
-/// [`Emit::emit`](crate::ast::Emit::emit).
-pub trait Materialize<'context, 'block, 'state, 'scope> {
+/// Emits a node coerced to an expected MLIR type — the projection's argument /
+/// initialiser coercion, a superset of [`Emit`](crate::ast::Emit).
+///
+/// Most expressions emit naturally and then cast to the target. The exception is
+/// a string literal: slang types it `Literal(String)` context-free, so toward
+/// `bytesN` / `byte` it must materialise as a compile-time, left-aligned
+/// fixed-bytes / byte constant — the literal in the high bytes, zero-padded right
+/// — rather than a runtime `sol.string` the integer-only verifier rejects; the
+/// target reaches the literal only from the use site. `Target` is a single
+/// [`Type`](melior::ir::Type) for one expression and a `&[Type]` signature for an
+/// ordered argument list, each element coerced to its parameter type.
+pub trait Materialize<'context, 'block, 'state, 'scope, Target> {
     /// The shared emission scope threaded into `materialize`.
     type Context;
+    /// The coerced result — a single value, or the coerced argument vector.
+    type Output;
 
-    /// Emits this string literal as a value of `target_type`.
+    /// Emits this node coerced to `target`.
     fn materialize(
         &self,
-        target_type: Type<'context>,
+        target: Target,
         context: Self::Context,
         block: BlockRef<'context, 'block>,
-    ) -> BlockAnd<'context, 'block, AstValue<'context, 'block>>;
+    ) -> BlockAnd<'context, 'block, Self::Output>;
 }

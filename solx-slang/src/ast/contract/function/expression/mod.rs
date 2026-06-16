@@ -168,9 +168,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         state_variable: &ast::StateVariableDefinition,
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
-        let declared_type = state_variable
-            .get_type()
-            .expect("slang validated");
+        let declared_type = state_variable.get_type().expect("slang validated");
         let element_type = AstType::resolve(
             &declared_type,
             LocationPolicy::Declared(None),
@@ -180,9 +178,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             state_variable.mutability(),
             StateVariableMutability::Constant
         ) {
-            let initializer = state_variable
-                .value()
-                .expect("slang validated");
+            let initializer = state_variable.value().expect("slang validated");
             // Emit toward the declared type so a `bytesN constant` initialised
             // from a string literal folds to a fixed-bytes constant.
             let BlockAnd { value, block } =
@@ -315,5 +311,37 @@ where
                 unimplemented!("expression emission: bare type/keyword")
             }
         }
+    }
+}
+
+impl<'state, 'context, 'block, 'scope> Materialize<'context, 'block, 'state, 'scope, Type<'context>>
+    for Expression
+where
+    'context: 'block,
+    'context: 'state,
+    'block: 'state,
+    'state: 'scope,
+{
+    type Context = &'scope ExpressionContext<'state, 'context, 'block>;
+    type Output = AstValue<'context, 'block>;
+
+    /// Emits this expression coerced to `target_type`: a string literal
+    /// materialises in the target representation (a `bytesN` / `byte` constant),
+    /// every other expression emits naturally; the result then casts to the target
+    /// — a no-op when the literal already materialised at it.
+    fn materialize(
+        &self,
+        target_type: Type<'context>,
+        context: Self::Context,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockAnd<'context, 'block, AstValue<'context, 'block>> {
+        let BlockAnd { value, block } = match self {
+            Expression::StringExpression(string_literal) => {
+                string_literal.materialize(target_type, context, block)
+            }
+            _ => self.emit(context, block),
+        };
+        let value = value.cast(AstType::new(target_type), &context.state.builder, &block);
+        BlockAnd { value, block }
     }
 }

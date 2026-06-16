@@ -18,6 +18,7 @@ use solx_mlir::ods::sol::ExtICallOperation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
+use crate::ast::Materialize;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -104,8 +105,11 @@ impl TryExternalCall {
             value: receiver,
             block: current_block,
         } = self.access.operand().emit(context, current_block);
-        let (argument_values, current_block) =
-            context.emit_coerced_arguments(&self.arguments, &parameter_types, current_block);
+        let arguments: Vec<Expression> = self.arguments.iter().collect();
+        let BlockAnd {
+            value: argument_values,
+            block: current_block,
+        } = arguments.materialize(&parameter_types, context, current_block);
         let callee = context.emit_external_callee(
             receiver.into_mlir(),
             self.selector,

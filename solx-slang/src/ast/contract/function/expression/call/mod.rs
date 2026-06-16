@@ -127,67 +127,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         (value, salt, current_block)
     }
 
-    /// Evaluates `arguments` left-to-right and coerces each resulting value to
-    /// its declared parameter type, returning the materialised argument values
-    /// and the continuation block.
-    ///
-    /// The single argument eval-and-coerce primitive: every call site (internal,
-    /// external, library, struct-constructor) delegates here rather than
-    /// re-implementing the evaluation and zip-coerce loops. `pub` so the call
-    /// fills in sibling modules reuse it.
-    pub fn emit_coerced_arguments(
-        &self,
-        arguments: &PositionalArguments,
-        parameter_types: &[Type<'context>],
-        block: BlockRef<'context, 'block>,
-    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let arguments: Vec<Expression> = arguments.iter().collect();
-        self.emit_coerced_argument_expressions(&arguments, parameter_types, block)
-    }
-
-    /// Evaluates `arguments` left-to-right and coerces each value to its declared
-    /// parameter type. The expression-keyed core of [`Self::emit_coerced_arguments`]:
-    /// named calls feed it a reordered argument list, positional calls the source
-    /// order.
-    pub fn emit_coerced_argument_expressions(
-        &self,
-        arguments: &[Expression],
-        parameter_types: &[Type<'context>],
-        block: BlockRef<'context, 'block>,
-    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let mut argument_values = Vec::with_capacity(arguments.len());
-        let mut block = block;
-        for (index, argument) in arguments.iter().enumerate() {
-            // Emit each argument toward its parameter type so a string literal
-            // bound to a `bytesN` / `byte` parameter materialises as a fixed-bytes
-            // constant rather than a runtime `sol.string` the coercion rejects.
-            let (value, next_block) = match parameter_types.get(index) {
-                Some(&parameter_type) => {
-                    let BlockAnd { value, block } =
-                        if let Expression::StringExpression(string_literal) = argument {
-                            string_literal.materialize(parameter_type, self, block)
-                        } else {
-                            argument.emit(self, block)
-                        };
-                    (value, block)
-                }
-                None => {
-                    let BlockAnd { value, block } = argument.emit(self, block);
-                    (value, block)
-                }
-            };
-            argument_values.push(value.into_mlir());
-            block = next_block;
-        }
-        let builder = &self.state.builder;
-        for (value, &parameter_type) in argument_values.iter_mut().zip(parameter_types) {
-            *value = AstValue::from(*value)
-                .cast(AstType::new(parameter_type), builder, &block)
-                .into_mlir();
-        }
-        (argument_values, block)
-    }
-
     /// Resolves the callee's MLIR signature and evaluates/coerces its arguments,
     /// already in parameter-declaration order. The expression-keyed core of the
     /// direct-call path, shared by the positional and named-argument forms.
@@ -215,8 +154,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .copied()
             .unwrap_or(node_id);
         let function = self.state.resolve_function(call_id);
-        let (argument_values, current_block) =
-            self.emit_coerced_argument_expressions(arguments, &function.parameter_types, block);
+        let BlockAnd {
+            value: argument_values,
+            block: current_block,
+        } = arguments.materialize(&function.parameter_types, self, block);
         (function, argument_values, current_block)
     }
 
@@ -292,8 +233,11 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 builder,
             )],
         };
-        let (argument_values, current_block) =
-            self.emit_coerced_arguments(positional_arguments, &parameter_types, block);
+        let arguments: Vec<Expression> = positional_arguments.iter().collect();
+        let BlockAnd {
+            value: argument_values,
+            block: current_block,
+        } = arguments.materialize(&parameter_types, self, block);
         let builder = &self.state.builder;
         // Dispatch internal (`sol.icall`) vs external (`sol.ext_icall`) on the
         // callee value's actual reference kind, not slang's
