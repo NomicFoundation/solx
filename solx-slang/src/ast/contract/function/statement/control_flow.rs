@@ -27,19 +27,9 @@ use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::contract::function::statement::discarded::Discarded;
 use melior::ir::Block;
-use melior::ir::Region;
 
-impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
-    /// Appends a dead block with `sol.yield` to a region whose live block
-    /// already terminated (e.g. with `sol.return`). Matches the solc pattern
-    /// where each `sol.if` region always ends with a `sol.yield` block.
-    fn emit_dead_yield(&self, region: &Region<'context>) {
-        let dead_block = Block::new(&[]);
-        sol_op_void!(&self.state.builder, &dead_block, YieldOperation.ins(&[]));
-        region.append_block(dead_block);
-    }
-}
-
+// A `sol.if` region whose live block already terminated (e.g. with `sol.return`)
+// still ends with a dead `sol.yield` block, matching solc.
 statement_emit!(IfStatement; |node, context, block| {
     let condition_expression = node.condition();
     let emitter = ExpressionContext::from(&*context);
@@ -67,7 +57,9 @@ statement_emit!(IfStatement; |node, context, block| {
     if let Some(then_end) = then_end {
         sol_op_void!(&context.state.builder, &then_end, YieldOperation.ins(&[]));
     } else {
-        context.emit_dead_yield(&then_region);
+        let dead_block = Block::new(&[]);
+        sol_op_void!(&context.state.builder, &dead_block, YieldOperation.ins(&[]));
+        then_region.append_block(dead_block);
     }
 
     // Emit else body (or empty yield).
@@ -77,7 +69,9 @@ statement_emit!(IfStatement; |node, context, block| {
         if let Some(else_end) = else_end {
             sol_op_void!(&context.state.builder, &else_end, YieldOperation.ins(&[]));
         } else {
-            context.emit_dead_yield(&else_region);
+            let dead_block = Block::new(&[]);
+            sol_op_void!(&context.state.builder, &dead_block, YieldOperation.ins(&[]));
+            else_region.append_block(dead_block);
         }
         context.region_pointer = saved_region;
     } else {
