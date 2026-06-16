@@ -100,7 +100,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             };
             let declared_type = state_variable
                 .get_type()
-                .expect("slang types every state variable");
+                .expect("slang validated");
             let builder = &self.state.builder;
             let element_type =
                 AstType::resolve(&declared_type, LocationPolicy::Declared(None), builder);

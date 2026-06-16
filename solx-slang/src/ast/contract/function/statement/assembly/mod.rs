@@ -361,7 +361,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         if path.len() == 1
             && let Some(Definition::Constant(constant)) = identifier.resolve_to_definition()
         {
-            let initializer = constant.value().expect("constant has no initializer");
+            let initializer = constant.value().expect("slang validated");
             let emitter = ExpressionContext::from(self);
             let BlockAnd { value, block } = initializer.emit(&emitter, block);
             let widened = value.cast(AstType::new(i256), builder, &block).into_mlir();

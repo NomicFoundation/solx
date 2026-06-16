@@ -108,7 +108,7 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
             for item in items.iter() {
                 let inner = item
                     .expression()
-                    .expect("a deconstruction RHS tuple element has an inner expression");
+                    .expect("slang validated");
                 let BlockAnd { value, block: next } = inner.emit(&emitter, current);
                 values.push(value.into_mlir());
                 current = next;

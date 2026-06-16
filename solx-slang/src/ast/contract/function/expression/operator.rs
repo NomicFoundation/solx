@@ -135,7 +135,7 @@ impl Operator {
         results
             .into_iter()
             .next()
-            .expect("a user-defined operator returns one value")
+            .expect("slang validated")
     }
 
     /// Builds a Sol dialect binary operation via ODS-generated builders.

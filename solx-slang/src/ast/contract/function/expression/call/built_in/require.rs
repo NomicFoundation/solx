@@ -128,7 +128,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         let signature = error_definition
             .compute_canonical_signature()
-            .expect("slang computes a canonical signature for an error");
+            .expect("slang validated");
         let parameters = error_definition.parameters();
         let ArgumentsDeclaration::PositionalArguments(positional) = error_call.arguments() else {
             unimplemented!("named arguments in a require custom error are not yet supported");
@@ -151,7 +151,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let parameter_type = AstType::resolve(
                     &parameter
                         .get_type()
-                        .expect("error parameter type resolved by semantic analysis"),
+                        .expect("slang validated"),
                     LocationPolicy::Declared(None),
                     builder,
                 );

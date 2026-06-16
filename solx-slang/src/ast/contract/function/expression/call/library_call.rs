@@ -56,7 +56,7 @@ impl MemberCallKind {
         let (parameter_self, parameter_rest) = function
             .parameter_types
             .split_first()
-            .expect("a using-for library function has a self parameter");
+            .expect("slang validated");
         let BlockAnd {
             value: self_value,
             block: current_block,
@@ -94,14 +94,14 @@ impl MemberCallKind {
         );
         let selector = function
             .compute_selector()
-            .expect("an external library function has a selector");
+            .expect("slang validated");
         let mlir_name = FunctionEmitter::mlir_function_name(function);
 
         let (argument_values, current_block) = match self_receiver {
             Some(receiver) => {
                 let (parameter_self, parameter_rest) = parameter_types
                     .split_first()
-                    .expect("a using-for library function has a self parameter");
+                    .expect("slang validated");
                 let BlockAnd {
                     value: self_value,
                     block,

@@ -121,10 +121,10 @@ statement_emit!(TryStatement; |node, context, block| {
                     .parameters()
                     .iter()
                     .next()
-                    .expect("a typed catch clause declares one parameter");
+                    .expect("slang validated");
                 match parameter
                     .get_type()
-                    .expect("catch parameter type resolved by semantic analysis")
+                    .expect("slang validated")
                 {
                     SlangType::String(_) => error_clause = Some(clause),
                     SlangType::Integer(_) => panic_clause = Some(clause),

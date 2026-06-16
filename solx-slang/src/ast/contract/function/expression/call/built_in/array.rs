@@ -52,7 +52,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let base = access.operand();
         let base_slang_type = base
             .get_type()
-            .expect("slang types the base of an array push");
+            .expect("slang validated");
         let value_argument = arguments.iter().next();
         if let (SlangType::Bytes(_), Some(value_argument)) = (&base_slang_type, &value_argument) {
             // `bytes.push(x)` appends a single byte in place via `sol.push_string`;
@@ -136,7 +136,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let base = access.operand();
         let base_slang_type = base
             .get_type()
-            .expect("slang types the base of an array push");
+            .expect("slang validated");
         let builder = &self.state.builder;
         let (element_type, slang_location) = match &base_slang_type {
             SlangType::Array(array_type) => (

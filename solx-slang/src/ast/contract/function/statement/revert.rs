@@ -111,7 +111,7 @@ statement_emit!(RevertStatement; |node, context, block| {
     };
     let signature = error
         .compute_canonical_signature()
-        .expect("slang computes a canonical signature for an error");
+        .expect("slang validated");
     let parameters = error.parameters();
     let parameter_ids = parameters
         .iter()
@@ -124,7 +124,7 @@ statement_emit!(RevertStatement; |node, context, block| {
             AstType::resolve(
                 &parameter
                     .get_type()
-                    .expect("parameter type resolved by semantic analysis"),
+                    .expect("slang validated"),
                 LocationPolicy::Declared(None),
                 &context.state.builder,
             )

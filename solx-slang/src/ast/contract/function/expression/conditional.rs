@@ -63,7 +63,7 @@ where
                         .iter()
                         .map(|item| {
                             AstType::resolve_optional(item.get_type(), &context.state.builder)
-                                .expect("slang types every conditional-branch tuple element")
+                                .expect("slang validated")
                         })
                         .collect()
                 }
@@ -75,7 +75,7 @@ where
                             Some(element_type.clone()),
                             &context.state.builder,
                         )
-                        .expect("slang types every conditional result element")
+                        .expect("slang validated")
                     })
                     .collect(),
             };
@@ -160,7 +160,7 @@ where
             .or_else(|| {
                 AstType::resolve_optional(false_expression.get_type(), &context.state.builder)
             })
-            .expect("a conditional resolves its type from itself or one of its branches");
+            .expect("slang validated");
         let BlockAnd {
             value: condition_value,
             block,
@@ -210,15 +210,15 @@ where
 expression_emit!(TupleExpression; |node, context, block| {
     let items = node.items();
     // TODO: support multi-value tuples (e.g. tuple deconstruction)
-    let item = items.iter().next().expect("a tuple has at least one element");
+    let item = items.iter().next().expect("slang validated");
     let inner = item
         .expression()
-        .expect("a single-element tuple has an inner expression");
+        .expect("slang validated");
     inner.emit(context, block)
 });
 
 expression_emit!(ArrayExpression; |node, context, block| {
-    let result_slang_type = node.get_type().expect("slang types every array literal");
+    let result_slang_type = node.get_type().expect("slang validated");
     let element_slang_type = match &result_slang_type {
         SlangType::FixedSizeArray(fixed_array_type) => fixed_array_type.element_type(),
         SlangType::Array(array_type) => array_type.element_type(),

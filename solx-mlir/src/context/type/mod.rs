@@ -86,7 +86,7 @@ impl<'context> Type<'context> {
         Self::resolve(
             &state_variable
                 .get_type()
-                .expect("slang types every state variable"),
+                .expect("slang validated"),
             LocationPolicy::Declared(None),
             builder,
         )

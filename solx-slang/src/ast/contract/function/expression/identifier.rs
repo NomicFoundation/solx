@@ -35,7 +35,7 @@ expression_emit!(Identifier; |node, context, block| {
         Some(Definition::Constant(constant)) => {
             let initializer = constant
                 .value()
-                .expect("a Solidity constant has an initializer");
+                .expect("slang validated");
             initializer.emit(context, block)
         }
         Some(Definition::Function(function_definition)) => {

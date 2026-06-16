@@ -170,7 +170,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let declared_type = state_variable
             .get_type()
-            .expect("slang types every state variable");
+            .expect("slang validated");
         let element_type = AstType::resolve(
             &declared_type,
             LocationPolicy::Declared(None),
@@ -182,7 +182,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         ) {
             let initializer = state_variable
                 .value()
-                .expect("a constant state variable has an initializer");
+                .expect("slang validated");
             // Emit toward the declared type so a `bytesN constant` initialised
             // from a string literal folds to a fixed-bytes constant.
             let BlockAnd { value, block } =
@@ -257,7 +257,7 @@ where
         );
         if folds && let Some(folded) = self.integer_value() {
             let result_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
-                .expect("slang types every folded constant expression");
+                .expect("slang validated");
             let value = AstValue::constant_from_bigint(
                 &folded,
                 AstType::new(result_type),

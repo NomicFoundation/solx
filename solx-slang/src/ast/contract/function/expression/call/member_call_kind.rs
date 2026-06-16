@@ -244,7 +244,7 @@ impl MemberCallKind {
                 let callee = Expression::MemberAccessExpression(access.clone());
                 let function_slang_type = access
                     .get_type()
-                    .expect("a function-pointer member call is function-typed");
+                    .expect("slang validated");
                 context.emit_indirect_call_results(
                     &callee,
                     &function_slang_type,

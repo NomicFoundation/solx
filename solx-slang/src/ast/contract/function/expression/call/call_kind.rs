@@ -208,7 +208,7 @@ impl CallKind {
             Self::StructConstructor(struct_definition) => {
                 let result_type =
                     AstType::resolve_optional(call.get_type(), &context.state.builder)
-                        .expect("slang types a struct constructor call");
+                        .expect("slang validated");
                 let member_ids: Vec<NodeId> = struct_definition
                     .members()
                     .iter()
@@ -226,7 +226,7 @@ impl CallKind {
                     .enumerate()
                 {
                     let field_slang_type =
-                        member.get_type().expect("slang types every struct member");
+                        member.get_type().expect("slang validated");
                     let field_type = AstType::resolve(
                         &field_slang_type,
                         LocationPolicy::Declared(Some(DataLocation::Memory)),
@@ -272,10 +272,10 @@ impl CallKind {
                         let first = arguments
                             .iter()
                             .next()
-                            .expect("a type conversion has exactly one argument");
+                            .expect("slang validated");
                         let target_type =
                             AstType::resolve_optional(call.get_type(), &context.state.builder)
-                                .expect("slang types a type-conversion call");
+                                .expect("slang validated");
                         // A `bytesN("…")` literal folds to a fixed-bytes constant.
                         let BlockAnd { value, block } =
                             if let Expression::StringExpression(string_literal) = &first {
@@ -298,7 +298,7 @@ impl CallKind {
                         let argument = arguments
                             .iter()
                             .next()
-                            .expect("wrap/unwrap takes exactly one argument");
+                            .expect("slang validated");
                         let BlockAnd { value, block } = argument.emit(context, block);
                         // A UDVT shares its underlying type's representation, so this
                         // is one conversion to the result type (none ⇒ already correct).
@@ -326,7 +326,7 @@ impl CallKind {
                     Self::IndirectPointer => {
                         let function_slang_type = callee
                             .get_type()
-                            .expect("slang types every indirect-call callee");
+                            .expect("slang validated");
                         context.emit_indirect_call_results(
                             &callee,
                             &function_slang_type,

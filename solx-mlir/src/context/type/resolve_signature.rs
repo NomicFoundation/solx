@@ -27,7 +27,7 @@ impl<'context> Type<'context> {
             Type::resolve(
                 &parameter
                     .get_type()
-                    .expect("parameter type resolved by semantic analysis"),
+                    .expect("slang validated"),
                 policy,
                 builder,
             )

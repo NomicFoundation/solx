@@ -559,7 +559,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         match function.kind() {
             FunctionKind::Regular => function
                 .name()
-                .expect("regular functions have a name")
+                .expect("slang validated")
                 .name(),
             FunctionKind::Fallback => "fallback".to_owned(),
             FunctionKind::Receive => "receive".to_owned(),

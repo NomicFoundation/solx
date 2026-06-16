@@ -47,7 +47,7 @@ statement_emit!(EmitStatement; |node, context, block| {
         let parameter_type = AstType::resolve(
             &parameter
                 .get_type()
-                .expect("parameter type resolved by semantic analysis"),
+                .expect("slang validated"),
             LocationPolicy::Declared(None),
             &context.state.builder,
         );
@@ -75,7 +75,7 @@ statement_emit!(EmitStatement; |node, context, block| {
         Some(
             event_definition
                 .compute_canonical_signature()
-                .expect("slang computes a canonical signature for a non-anonymous event"),
+                .expect("slang validated"),
         )
     };
     // `sol.emit` carries the indexed topics first, then the data arguments;
@@ -88,7 +88,7 @@ statement_emit!(EmitStatement; |node, context, block| {
         .copied()
         .collect();
     let indexed_count = i8::try_from(indexed_arguments.len())
-        .expect("EVM events have at most four indexed arguments");
+        .expect("slang validated");
     let indexed_count_attribute = IntegerAttribute::new(
         Type::from(IntegerType::new(builder.context, 8)),
         indexed_count.into(),

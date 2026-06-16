@@ -87,7 +87,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let mut iter = arguments.iter();
-        let signature_expression = iter.next().expect("slang validates non-empty arguments");
+        let signature_expression = iter.next().expect("slang validated");
         // A literal signature hashes at compile time to a constant selector; a
         // runtime signature (`abi.encodeWithSignature(sig, …)`) is hashed by
         // `keccak256` and truncated to its leading four bytes.
@@ -157,10 +157,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let mut iter = arguments.iter();
         let function_expression = iter
             .next()
-            .expect("abi.encodeCall takes a function reference");
+            .expect("slang validated");
         let call_arguments = iter
             .next()
-            .expect("abi.encodeCall takes a call-arguments argument");
+            .expect("slang validated");
         let definition = match &function_expression {
             Expression::MemberAccessExpression(access) => access.member().resolve_to_definition(),
             Expression::Identifier(identifier) => identifier.resolve_to_definition(),
@@ -177,7 +177,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             Some(Definition::Function(function)) => {
                 let selector = function
                     .compute_selector()
-                    .expect("abi.encodeCall's callee is an external function with an ABI selector");
+                    .expect("slang validated");
                 let selector_value = AstValue::selector_constant(
                     &BigInt::from(selector),
                     4,
@@ -209,7 +209,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 );
                 let SlangType::Function(function_type) = function_expression
                     .get_type()
-                    .expect("slang types every function-pointer expression")
+                    .expect("slang validated")
                 else {
                     unreachable!("a non-static abi.encodeCall callee is a function pointer")
                 };
@@ -298,7 +298,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let builder = &self.state.builder;
         let return_slang_type = call
             .get_type()
-            .expect("abi.decode call is typed by the binder");
+            .expect("slang validated");
         match return_slang_type {
             SlangType::Tuple(tuple) => tuple
                 .types()
@@ -329,7 +329,7 @@ impl CallKind {
         let payload_expression = arguments
             .iter()
             .next()
-            .expect("slang validates the payload argument");
+            .expect("slang validated");
         let BlockAnd {
             value: payload_value,
             block,

@@ -335,7 +335,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
         for item in items.iter() {
             let inner = item
                 .expression()
-                .expect("a return tuple element has an inner expression");
+                .expect("slang validated");
             let BlockAnd { value, block: next } = inner.emit(&emitter, current);
             values.push(value);
             current = next;

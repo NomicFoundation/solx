@@ -213,7 +213,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let argument = arguments
             .iter()
             .next()
-            .expect("a bare call takes one bytes argument");
+            .expect("slang validated");
         let BlockAnd {
             value: input,
             block,
@@ -303,7 +303,7 @@ impl MemberCallKind {
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let selector = function_definition
             .compute_selector()
-            .expect("an external call resolves to a function with a selector");
+            .expect("slang validated");
         // The signature comes from the callee's definition (valid for both a
         // foreign instance and the current contract's own function), so the
         // unified path never depends on the callee being in the local registry.
@@ -349,7 +349,7 @@ impl MemberCallKind {
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let selector = state_variable
             .compute_selector()
-            .expect("a public state variable has a getter selector");
+            .expect("slang validated");
         let Some((parameter_types, return_types)) = context.getter_signature(state_variable) else {
             unimplemented!(
                 "self getter of a nested or reference-typed state variable is not yet supported"
@@ -392,7 +392,7 @@ impl MemberCallKind {
         }
         let selector = state_variable
             .compute_selector()
-            .expect("a public state variable has a getter selector");
+            .expect("slang validated");
         let Some((parameter_types, return_types)) = context.getter_signature(state_variable) else {
             unimplemented!(
                 "external getter of a nested or reference-typed state variable is not yet supported"

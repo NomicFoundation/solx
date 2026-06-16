@@ -132,7 +132,7 @@ impl<'context> Type<'context> {
                 for member in struct_definition.members().iter() {
                     let member_slang_type = member
                         .get_type()
-                        .expect("struct member type resolved by semantic analysis");
+                        .expect("slang validated");
                     member_types.push(Type::resolve(&member_slang_type, member_policy, builder));
                 }
                 Type::structure(builder.context, &member_types, struct_location).into_mlir()
@@ -181,7 +181,7 @@ impl<'context> Type<'context> {
             SlangType::UserDefinedValue(udvt) => {
                 let target_type = udvt
                     .target_type()
-                    .expect("UDVT target type resolved by semantic analysis");
+                    .expect("slang validated");
                 Type::resolve(&target_type, policy, builder)
             }
             SlangType::Function(function_type) => {

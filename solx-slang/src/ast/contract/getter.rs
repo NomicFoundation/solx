@@ -100,13 +100,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ) {
         let signature = state_variable
             .compute_canonical_signature()
-            .expect("a getter state variable has a canonical signature");
+            .expect("slang validated");
         let selector = state_variable
             .compute_selector()
-            .expect("a getter state variable has a selector");
+            .expect("slang validated");
         let declared_type = state_variable
             .get_type()
-            .expect("slang types every state variable");
+            .expect("slang validated");
         let builder = &self.state.builder;
         let element_type = AstType::resolve_state_variable(state_variable, builder);
         // A reference-typed variable (`string`/`bytes`/array) is addressed by the
@@ -159,13 +159,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ) {
         let signature = state_variable
             .compute_canonical_signature()
-            .expect("a getter state variable has a canonical signature");
+            .expect("slang validated");
         let selector = state_variable
             .compute_selector()
-            .expect("a getter state variable has a selector");
+            .expect("slang validated");
         let declared_type = state_variable
             .get_type()
-            .expect("slang types every state variable");
+            .expect("slang validated");
         let builder = &self.state.builder;
         let (input_types, levels, result_slang) =
             self.plan_indexed_getter_levels(&declared_type, location);
@@ -430,10 +430,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         };
         let signature = state_variable
             .compute_canonical_signature()
-            .expect("a getter state variable has a canonical signature");
+            .expect("slang validated");
         let selector = state_variable
             .compute_selector()
-            .expect("a getter state variable has a selector");
+            .expect("slang validated");
 
         let builder = &self.state.builder;
         // The getter returns the constant's value type, reference types
@@ -441,7 +441,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // back — not their declared storage location.
         let slang_type = state_variable
             .get_type()
-            .expect("slang types every state variable");
+            .expect("slang validated");
         let element_type = AstType::resolve(&slang_type, LocationPolicy::ForceMemory, builder);
         let function_signature = Function::new(signature, Vec::new(), vec![element_type]);
         let entry = function_signature.define(
@@ -555,7 +555,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     ) -> bool {
         let declared_type = state_variable
             .get_type()
-            .expect("slang types every state variable");
+            .expect("slang validated");
         let builder = &self.state.builder;
         if let SlangType::Struct(struct_type) = &declared_type
             && let Definition::Struct(struct_definition) = struct_type.definition()
@@ -575,10 +575,10 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 let container_type = AstType::resolve_state_variable(state_variable, builder);
                 let signature = state_variable
                     .compute_canonical_signature()
-                    .expect("a getter state variable has a canonical signature");
+                    .expect("slang validated");
                 let selector = state_variable
                     .compute_selector()
-                    .expect("a getter state variable has a selector");
+                    .expect("slang validated");
                 let function_signature =
                     Function::new(signature, Vec::new(), result_types.to_vec());
                 let entry = function_signature.define(

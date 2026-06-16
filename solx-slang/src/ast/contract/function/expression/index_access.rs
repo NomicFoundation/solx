@@ -49,13 +49,13 @@ where
         let base = self.operand();
         let index_expression = self
             .start()
-            .expect("slang validates a[i] has an index expression");
+            .expect("slang validated");
         let base_type = base
             .get_type()
-            .expect("slang types the base of an index access");
+            .expect("slang validated");
         let result_type = self
             .get_type()
-            .expect("slang types every index-access expression");
+            .expect("slang validated");
 
         let BlockAnd {
             value: base_value,
@@ -177,7 +177,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
         let result_type = AstType::resolve(
             &node
                 .get_type()
-                .expect("slang types every slice expression"),
+                .expect("slang validated"),
             LocationPolicy::Declared(None),
             &context.state.builder,
         );
@@ -217,7 +217,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
     }
     let result_type = node
         .get_type()
-        .expect("slang types every index-access expression");
+        .expect("slang validated");
     let slang_expected =
         AstType::resolve(&result_type, LocationPolicy::Declared(None), &context.state.builder);
     let value = value.cast(

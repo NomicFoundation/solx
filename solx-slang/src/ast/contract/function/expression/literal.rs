@@ -34,10 +34,10 @@ use crate::ast::contract::function::expression::ExpressionContext;
 expression_emit!(DecimalNumberExpression, HexNumberExpression; |node, context, block| {
     let value = node
         .integer_value()
-        .expect("an integer literal evaluates to an integer after units");
+        .expect("slang validated");
     let result_type =
         AstType::resolve_optional(node.get_type(), &context.state.builder)
-            .expect("the binder types every integer literal node");
+            .expect("slang validated");
     let constant = AstValue::constant_from_bigint(
         &value,
         AstType::new(result_type),
@@ -64,7 +64,7 @@ expression_emit!(ThisKeyword; |context, block| {
     let contract_type = context
         .state
         .current_contract_type
-        .expect("`this` only appears inside a contract method");
+        .expect("slang validated");
     let value: Value<'context, 'block> =
         sol_op!(&context.state.builder, block, ThisOperation.addr(contract_type));
     BlockAnd {

@@ -60,7 +60,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         block: BlockRef<'context, 'block>,
     ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
         let result_type = AstType::resolve_optional(access.get_type(), &self.state.builder)
-            .expect("slang types an enum-variant reference as the enum");
+            .expect("slang validated");
         let builder = &self.state.builder;
         let raw = AstValue::constant(
             ordinal as i64,
@@ -164,7 +164,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
         let selector = function_definition
             .compute_selector()
-            .expect("an external function pointer resolves to a function with a selector");
+            .expect("slang validated");
         // An external function pointer's ABI representation (address + selector)
         // types its reference parameters as `Memory`, not their declared
         // `calldata`/`storage` location — calldata cannot cross the call
@@ -204,7 +204,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         let selector = error
             .compute_selector()
-            .expect("slang computes a 4-byte selector for an error");
+            .expect("slang validated");
         let block = self.eval_selector_receiver_side_effects(access, block);
         let value =
             AstValue::selector_constant(&BigInt::from(selector), 4, &self.state.builder, &block)
@@ -225,7 +225,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         };
         let signature = event
             .compute_canonical_signature()
-            .expect("slang computes a canonical signature for a non-anonymous event");
+            .expect("slang validated");
         let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
         let topic = BigInt::from_bytes_be(Sign::Plus, hash.as_bytes());
         let block = self.eval_selector_receiver_side_effects(access, block);
