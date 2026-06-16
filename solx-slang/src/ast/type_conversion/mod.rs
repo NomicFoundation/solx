@@ -3,30 +3,20 @@
 //!
 
 pub mod resolve_signature;
-pub mod resolve_type;
 
 pub use self::resolve_signature::ResolveSignature;
-pub use self::resolve_type::ResolveType;
 pub use solx_mlir::LocationPolicy;
+pub use solx_mlir::ResolveType;
 
 use melior::ir::Type;
-use num_bigint::BigInt;
-use num_traits::sign::Signed;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
-/// Solidity type resolution and default-initialisation.
-///
-/// A transitional namespace: the cast/coercion this type once classified now
-/// lives on [`crate::ast::Value`] (`coerce_to` / `cast`), routed by the target
-/// [`crate::ast::Type`]. What remains here — Slang→MLIR type resolution and
-/// zero / default-initialisation — moves onto `Type` and `Value` / `Pointer` in
-/// the resolution and constants stages.
-// TODO: relocate `resolve_type` / `ResolveType` / `LocationPolicy` onto `Type`
-// (solx-mlir, which already deps slang), per SPEC §3.1. `resolve_type`'s only
-// solx-slang dependency is `ContractEmitter::is_contract_payable` (a pure
-// slang-API derivation over `functions()` kind/mutability); it moves alongside.
-// The §3.5 ideal is for slang to expose `is_payable()` so it isn't derived here.
+/// Transitional namespace for the two Slang→MLIR type-resolution entry points
+/// not yet homed on the [`crate::ast::Type`] entity: the `Option`-lift over a
+/// maybe-typed node and the always-typed state-variable resolution. Both
+/// dissolve onto `Type` next; the recursive projection already lives there
+/// ([`ResolveType`]).
 pub struct TypeConversion;
 
 impl TypeConversion {
@@ -45,21 +35,6 @@ impl TypeConversion {
         builder: &solx_mlir::Builder<'context>,
     ) -> Option<Type<'context>> {
         Some(slang_type?.resolve_type(LocationPolicy::Declared(None), builder))
-    }
-
-    // TODO: Remove when nomicFoundation/slang#1793 is merged and we can instead
-    // depend on `LiteralType::mobile_type()` for literal type conversion.
-    fn integer_bits_required(value: &BigInt) -> u32 {
-        if value.is_negative() {
-            let magnitude_minus_one = -value - 1u32;
-            u32::try_from(magnitude_minus_one.bits())
-                .expect("literal magnitude bit count fits in u32")
-                + 1
-        } else {
-            u32::try_from(value.bits())
-                .expect("literal bit count fits in u32")
-                .max(1)
-        }
     }
 
     /// Resolves the declared Solidity type of a state variable to an MLIR type.

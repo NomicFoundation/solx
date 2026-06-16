@@ -3,19 +3,21 @@
 //! the `Emit` projection.
 //!
 
-use melior::ir::Type;
+use melior::ir::Type as MlirType;
 use melior::ir::r#type::IntegerType;
-use num_traits::sign::Signed;
+use num::BigInt;
+use num::Signed;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use crate::ast::ContractPayable;
-
-use super::LocationPolicy;
+use super::Type;
+use crate::ArraySize;
+use crate::ContractPayable;
+use crate::LocationPolicy;
 
 /// Resolves a Slang semantic type to its MLIR (Sol dialect) type — the
-/// type-level analogue of [`crate::ast::Emit`], a local trait on the foreign
+/// type-level analogue of the `Emit` projection, a local trait on the foreign
 /// Slang `Type` so a type resolves itself (`slang_type.resolve_type(..)`).
 pub trait ResolveType {
     /// Maps this Slang type to an MLIR type.
@@ -29,55 +31,52 @@ pub trait ResolveType {
     fn resolve_type<'context>(
         &self,
         policy: LocationPolicy,
-        builder: &solx_mlir::Builder<'context>,
-    ) -> Type<'context>;
+        builder: &crate::Builder<'context>,
+    ) -> MlirType<'context>;
 }
 
 impl ResolveType for SlangType {
     fn resolve_type<'context>(
         &self,
         policy: LocationPolicy,
-        builder: &solx_mlir::Builder<'context>,
-    ) -> Type<'context> {
+        builder: &crate::Builder<'context>,
+    ) -> MlirType<'context> {
         match self {
             SlangType::Integer(integer_type) => {
                 let bits = integer_type.bits();
                 if integer_type.signed() {
-                    Type::from(IntegerType::signed(builder.context, bits))
+                    MlirType::from(IntegerType::signed(builder.context, bits))
                 } else {
-                    Type::from(IntegerType::unsigned(builder.context, bits))
+                    MlirType::from(IntegerType::unsigned(builder.context, bits))
                 }
             }
-            SlangType::Boolean(_) => Type::from(IntegerType::new(
+            SlangType::Boolean(_) => MlirType::from(IntegerType::new(
                 builder.context,
                 solx_utils::BIT_LENGTH_BOOLEAN as u32,
             )),
-            SlangType::Address(_) => crate::ast::Type::address(builder.context, false).into_mlir(),
+            SlangType::Address(_) => Type::address(builder.context, false).into_mlir(),
             SlangType::Literal(literal_type) => match literal_type.kind() {
-                LiteralKind::Address { .. } => {
-                    crate::ast::Type::address(builder.context, false).into_mlir()
-                }
+                LiteralKind::Address { .. } => Type::address(builder.context, false).into_mlir(),
                 LiteralKind::Integer { value } => {
-                    let bits = super::TypeConversion::integer_bits_required(&value) as usize;
+                    let bits = integer_bits_required(&value) as usize;
                     let bits = bits
                         .next_multiple_of(solx_utils::BIT_LENGTH_BYTE)
                         .max(solx_utils::BIT_LENGTH_BYTE);
                     let bits = u32::try_from(bits).expect("bit size fits in 32 bits");
                     if value.is_negative() {
-                        Type::from(IntegerType::signed(builder.context, bits))
+                        MlirType::from(IntegerType::signed(builder.context, bits))
                     } else {
-                        Type::from(IntegerType::unsigned(builder.context, bits))
+                        MlirType::from(IntegerType::unsigned(builder.context, bits))
                     }
                 }
                 LiteralKind::HexInteger { bytes, .. } => {
                     let bits = bytes * solx_utils::BIT_LENGTH_BYTE as u32;
-                    Type::from(IntegerType::unsigned(builder.context, bits))
+                    MlirType::from(IntegerType::unsigned(builder.context, bits))
                 }
                 LiteralKind::String { .. } => {
-                    crate::ast::Type::string(builder.context, solx_utils::DataLocation::Memory)
-                        .into_mlir()
+                    Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir()
                 }
-                LiteralKind::HexString { bytes } => crate::ast::Type::fixed_bytes(
+                LiteralKind::HexString { bytes } => Type::fixed_bytes(
                     builder.context,
                     bytes.try_into().expect("hex string length fits in u32"),
                 )
@@ -87,42 +86,34 @@ impl ResolveType for SlangType {
                     // intermediate that constant folding consumes (see the folding
                     // gate in `ExpressionContext::emit`); a rational that survived
                     // to runtime would fail downstream, not at type resolution.
-                    crate::ast::Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir()
+                    Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
                 }
             },
-            SlangType::String(string_type) => crate::ast::Type::string(
+            SlangType::String(string_type) => Type::string(
                 builder.context,
                 policy.data_location(string_type.location()),
             )
             .into_mlir(),
-            SlangType::Bytes(bytes_type) => crate::ast::Type::string(
-                builder.context,
-                policy.data_location(bytes_type.location()),
-            )
-            .into_mlir(),
+            SlangType::Bytes(bytes_type) => {
+                Type::string(builder.context, policy.data_location(bytes_type.location()))
+                    .into_mlir()
+            }
             SlangType::ByteArray(byte_array_type) => {
-                crate::ast::Type::fixed_bytes(builder.context, byte_array_type.width()).into_mlir()
+                Type::fixed_bytes(builder.context, byte_array_type.width()).into_mlir()
             }
             SlangType::Array(array_type) => {
                 let element_type = array_type.element_type().resolve_type(policy, builder);
                 let location = policy.data_location(array_type.location());
-                crate::ast::Type::array(
-                    builder.context,
-                    solx_mlir::ArraySize::Dynamic,
-                    element_type,
-                    location,
-                )
-                .into_mlir()
+                Type::array(builder.context, ArraySize::Dynamic, element_type, location).into_mlir()
             }
             SlangType::FixedSizeArray(fixed_array_type) => {
                 let element_type = fixed_array_type
                     .element_type()
                     .resolve_type(policy, builder);
                 let location = policy.data_location(fixed_array_type.location());
-                crate::ast::Type::array(
+                Type::array(
                     builder.context,
-                    solx_mlir::ArraySize::Fixed(fixed_array_type.size() as u64),
+                    ArraySize::Fixed(fixed_array_type.size() as u64),
                     element_type,
                     location,
                 )
@@ -137,7 +128,7 @@ impl ResolveType for SlangType {
                     LocationPolicy::Declared(Some(solx_utils::DataLocation::Storage)),
                     builder,
                 );
-                crate::ast::Type::mapping(builder.context, key_type, value_type).into_mlir()
+                Type::mapping(builder.context, key_type, value_type).into_mlir()
             }
             SlangType::Struct(struct_type) => {
                 let struct_location = policy.data_location(struct_type.location());
@@ -156,15 +147,14 @@ impl ResolveType for SlangType {
                         .expect("struct member type resolved by semantic analysis");
                     member_types.push(member_slang_type.resolve_type(member_policy, builder));
                 }
-                crate::ast::Type::structure(builder.context, &member_types, struct_location)
-                    .into_mlir()
+                Type::structure(builder.context, &member_types, struct_location).into_mlir()
             }
             SlangType::Contract(contract_type) => {
                 let contract_definition = match contract_type.definition() {
                     Definition::Contract(definition) => definition,
                     _ => unreachable!("Slang ContractType always references a Contract definition"),
                 };
-                crate::ast::Type::contract(
+                Type::contract(
                     builder.context,
                     contract_definition.name().name().as_str(),
                     contract_definition.is_payable(),
@@ -174,13 +164,15 @@ impl ResolveType for SlangType {
             SlangType::Interface(interface_type) => {
                 let interface_definition = match interface_type.definition() {
                     Definition::Interface(definition) => definition,
-                    _ => unreachable!(
-                        "Slang InterfaceType always references an Interface definition"
-                    ),
+                    _ => {
+                        unreachable!(
+                            "Slang InterfaceType always references an Interface definition"
+                        )
+                    }
                 };
                 // Interfaces are never `payable` themselves; payability lives
                 // on the address-cast at the call site.
-                crate::ast::Type::contract(
+                Type::contract(
                     builder.context,
                     interface_definition.name().name().as_str(),
                     false,
@@ -196,7 +188,7 @@ impl ResolveType for SlangType {
                 // Solidity caps enums at 256 members, so the max enumerator
                 // index always fits in a `u8`.
                 let max = u8::try_from(member_count - 1).expect("enum member count fits in u8");
-                crate::ast::Type::enumeration(builder.context, max.into()).into_mlir()
+                Type::enumeration(builder.context, max.into()).into_mlir()
             }
             SlangType::UserDefinedValue(udvt) => {
                 let target_type = udvt
@@ -230,14 +222,26 @@ impl ResolveType for SlangType {
                     }
                 };
                 if function_type.is_externally_visible() {
-                    crate::ast::Type::ext_func_ref(builder.context, &parameter_types, &result_types)
-                        .into_mlir()
+                    Type::ext_func_ref(builder.context, &parameter_types, &result_types).into_mlir()
                 } else {
-                    crate::ast::Type::func_ref(builder.context, &parameter_types, &result_types)
-                        .into_mlir()
+                    Type::func_ref(builder.context, &parameter_types, &result_types).into_mlir()
                 }
             }
             _ => unimplemented!("unsupported Slang type"),
         }
+    }
+}
+
+// TODO: Remove when nomicFoundation/slang#1793 is merged and we can instead
+// depend on `LiteralType::mobile_type()` for literal type conversion.
+fn integer_bits_required(value: &BigInt) -> u32 {
+    if value.is_negative() {
+        let magnitude_minus_one = -value - 1u32;
+        u32::try_from(magnitude_minus_one.bits()).expect("literal magnitude bit count fits in u32")
+            + 1
+    } else {
+        u32::try_from(value.bits())
+            .expect("literal bit count fits in u32")
+            .max(1)
     }
 }
