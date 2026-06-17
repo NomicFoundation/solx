@@ -17,7 +17,6 @@ pub mod index_access;
 pub mod literal;
 pub mod logical_operator;
 pub mod member;
-pub mod new;
 pub mod operator;
 pub mod short_circuit;
 pub mod storage;

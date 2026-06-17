@@ -5,12 +5,15 @@
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Operation;
 use melior::ir::Type as MlirType;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
+use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
+use melior::ir::operation::OperationMutLike;
 use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::TypeLike;
 use num::BigInt;
@@ -28,6 +31,7 @@ use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::LibAddrOperation;
+use crate::ods::sol::NewOperation;
 
 /// An MLIR value in the Sol dialect.
 ///
@@ -299,6 +303,48 @@ impl<'context, 'block> Value<'context, 'block> {
                 ._name(StringAttribute::new(builder.context, &name.full_path))
                 .val(Type::address(builder.context, false).into_mlir())
         ))
+    }
+
+    /// `sol.new` — contract creation embedding `obj_name`'s deploy bytecode,
+    /// yielding the new instance. `val` is the forwarded wei; a `salt` selects
+    /// CREATE2 over CREATE. The operands are appended in ODS order (val, salt,
+    /// ctorArgs) and `operand_segment_sizes` is set by hand because melior's ODS
+    /// builder does not synthesize it for this `AttrSizedOperandSegments` op, so
+    /// the verifier rejects the op without it. The optional salt must be appended
+    /// before the variadic ctor args — appending it after would transpose the salt
+    /// and the first constructor argument.
+    pub fn create_contract(
+        obj_name: &str,
+        val: Self,
+        salt: Option<Self>,
+        ctor_args: &[MlirValue<'context, 'block>],
+        result_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let mut new_builder = NewOperation::builder(builder.context, builder.unknown_location)
+            .obj_name(StringAttribute::new(builder.context, obj_name))
+            .val(val.inner);
+        if let Some(salt) = salt {
+            new_builder = new_builder.salt(salt.inner);
+        }
+        let new_builder = new_builder
+            .ctor_args(ctor_args)
+            .out(result_type.into_mlir());
+        let mut operation: Operation = new_builder.build().into();
+        let ctor_args_count =
+            i32::try_from(ctor_args.len()).expect("constructor argument count fits in i32");
+        let salt_segment = i32::from(salt.is_some());
+        let segment_sizes =
+            DenseI32ArrayAttribute::new(builder.context, &[1, salt_segment, ctor_args_count]);
+        operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
+        Self::new(
+            block
+                .append_operation(operation)
+                .result(0)
+                .expect("sol.new always produces one result")
+                .into(),
+        )
     }
 
     /// A function/error selector or event topic as a `bytesN` value: the integer
