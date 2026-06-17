@@ -23,7 +23,6 @@ use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
-use solx_mlir::ods::sol::Keccak256Operation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
 use solx_mlir::ods::sol::Sha256Operation;
@@ -103,7 +102,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     value: values,
                     block,
                 } = arguments.emit(context, block);
-                let value = context.emit_keccak256(values[0], &block);
+                let value =
+                    AstValue::keccak256(AstValue::from(values[0]), &context.state.builder, &block)
+                        .into_mlir();
                 (Some(value), block)
             }
             BuiltIn::Sha256 => {
@@ -329,33 +330,5 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             ConcatOperation.args(&values).result(result_type)
         );
         (Some(value), block)
-    }
-
-    /// Emits `keccak256` over a byte buffer, returning the 32-byte hash. The
-    /// buffer is coerced to memory first — a storage / calldata `bytes` is a
-    /// reference, which solc copies to memory before hashing (`sol.keccak256`
-    /// hashes a memory buffer) — a no-op when the buffer is already memory.
-    /// Shared by the `keccak256` built-in and `abi.encodeWithSignature`'s
-    /// runtime-signature hash.
-    pub fn emit_keccak256(
-        &self,
-        buffer: Value<'context, 'block>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        let builder = &self.state.builder;
-        let input = AstValue::from(buffer)
-            .cast(
-                AstType::string(builder.context, solx_utils::DataLocation::Memory),
-                builder,
-                block,
-            )
-            .into_mlir();
-        sol_op!(
-            builder,
-            block,
-            Keccak256Operation
-                .addr(input)
-                .result(AstType::fixed_bytes(builder.context, 32))
-        )
     }
 }

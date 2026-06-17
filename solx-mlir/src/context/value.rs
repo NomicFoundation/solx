@@ -30,6 +30,7 @@ use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
+use crate::ods::sol::Keccak256Operation;
 use crate::ods::sol::LibAddrOperation;
 use crate::ods::sol::NewOperation;
 
@@ -345,6 +346,32 @@ impl<'context, 'block> Value<'context, 'block> {
                 .expect("sol.new always produces one result")
                 .into(),
         )
+    }
+
+    /// `sol.keccak256` over a byte buffer, yielding the 32-byte hash. The buffer
+    /// is coerced to memory first — a storage / calldata `bytes` is a reference,
+    /// which solc copies to memory before hashing — a no-op when already memory.
+    /// Shared by the `keccak256` built-in and `abi.encodeWithSignature`'s
+    /// runtime-signature hash.
+    pub fn keccak256(
+        buffer: Self,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let input = buffer
+            .cast(
+                Type::string(builder.context, solx_utils::DataLocation::Memory),
+                builder,
+                block,
+            )
+            .into_mlir();
+        Self::new(sol_op!(
+            builder,
+            block,
+            Keccak256Operation
+                .addr(input)
+                .result(Type::fixed_bytes(builder.context, 32))
+        ))
     }
 
     /// A function/error selector or event topic as a `bytesN` value: the integer

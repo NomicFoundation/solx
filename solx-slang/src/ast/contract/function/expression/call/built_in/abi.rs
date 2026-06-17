@@ -115,9 +115,9 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 } = signature_expression.emit(self, block);
                 // The runtime signature is hashed by `keccak256` and truncated to
                 // its leading four bytes.
-                let hash = self.emit_keccak256(signature_value.into_mlir(), &current);
+                let hash = AstValue::keccak256(signature_value, &self.state.builder, &current);
                 let builder = &self.state.builder;
-                let selector_value = AstValue::from(hash)
+                let selector_value = hash
                     .cast(AstType::fixed_bytes(builder.context, 4), builder, &current)
                     .into_mlir();
                 (selector_value, current)
