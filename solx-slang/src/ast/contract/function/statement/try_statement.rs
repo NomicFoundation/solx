@@ -170,7 +170,7 @@ statement_emit!(TryStatement; |node, context, block| {
             )]));
         }
     }
-    let operation = current_block.append_operation(sol_op_build!(
+    let operation = current_block.append_operation(mlir_op_build!(
         builder,
         TryOperation
             .status(status)
@@ -222,7 +222,7 @@ statement_emit!(TryStatement; |node, context, block| {
     }
     let success_end = context.emit_block(node.body().statements(), success_block);
     if let Some(end) = success_end {
-        sol_op_void!(&context.state.builder, &end, YieldOperation.ins(&[]));
+        mlir_op_void!(&context.state.builder, &end, YieldOperation.ins(&[]));
     }
 
     // Each present catch region: bind its decoded payload and run its body, then
@@ -235,7 +235,7 @@ statement_emit!(TryStatement; |node, context, block| {
         if let Some(catch_block) = catch_block {
             let clause = clause.expect("a populated catch region implies its clause");
             if let Some(end) = clause.emit(context, catch_block) {
-                sol_op_void!(&context.state.builder, &end, YieldOperation.ins(&[]));
+                mlir_op_void!(&context.state.builder, &end, YieldOperation.ins(&[]));
             }
         }
     }

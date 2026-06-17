@@ -56,7 +56,7 @@ impl<'context, 'block> ModifierBodyCall<'context, 'block> {
         }
         // The synthetic `$body` / next-stage `sol.func` is not a registered
         // function, so its call is built here rather than through `Function::call`.
-        let operation = block.append_operation(sol_op_build!(
+        let operation = block.append_operation(mlir_op_build!(
             builder,
             CallOperation
                 .callee(FlatSymbolRefAttribute::new(builder.context, &self.symbol))

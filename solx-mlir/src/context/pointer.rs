@@ -79,7 +79,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
     {
         let address_type =
             Type::pointer(builder.context, pointee.into_mlir(), DataLocation::Stack).into_mlir();
-        Self::new(sol_op!(
+        Self::new(mlir_op!(
             builder,
             block,
             AllocaOperation
@@ -99,12 +99,12 @@ impl<'context, 'block> Pointer<'context, 'block> {
     ) -> Self {
         let slot = Self::stack_slot(pointee, builder, block);
         if pointee.is_string() {
-            let buffer = sol_op!(builder, block, MallocOperation.addr(pointee.into_mlir()));
+            let buffer = mlir_op!(builder, block, MallocOperation.addr(pointee.into_mlir()));
             slot.store(Value::new(buffer), builder, block);
         } else if (pointee.is_array() || pointee.is_struct())
             && matches!(pointee.data_location(), DataLocation::Memory)
         {
-            let buffer = sol_op!(
+            let buffer = mlir_op!(
                 builder,
                 block,
                 MallocOperation
@@ -134,7 +134,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         if self.r#type() == result_type {
             return self.into_value();
         }
-        Value::new(sol_op!(
+        Value::new(mlir_op!(
             builder,
             block,
             LoadOperation.addr(self.inner).out(result_type.into_mlir())
@@ -147,7 +147,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        sol_op_void!(
+        mlir_op_void!(
             builder,
             block,
             StoreOperation.val(value.into_mlir()).addr(self.inner)
@@ -175,7 +175,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
                 element_type.into_mlir().to_raw(),
             ))
         };
-        Self::new(sol_op!(
+        Self::new(mlir_op!(
             builder,
             block,
             GepOperation
@@ -204,7 +204,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        Self::new(sol_op!(
+        Self::new(mlir_op!(
             builder,
             block,
             MapOperation

@@ -292,7 +292,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
             );
             out_types.extend_from_slice(&result_types);
-            let operation = current_block.append_operation(sol_op_build!(
+            let operation = current_block.append_operation(mlir_op_build!(
                 builder,
                 ExtICallOperation
                     .outs(&out_types)
@@ -310,7 +310,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 })
                 .collect()
         } else {
-            let operation = current_block.append_operation(sol_op_build!(
+            let operation = current_block.append_operation(mlir_op_build!(
                 builder,
                 ICallOperation
                     .outs(&result_types)
@@ -392,7 +392,7 @@ where
                 .collect();
             let arguments = arguments.ordered_by(&member_ids);
             let builder = &context.state.builder;
-            let struct_address = sol_op!(builder, &block, MallocOperation.addr(result_type));
+            let struct_address = mlir_op!(builder, &block, MallocOperation.addr(result_type));
             let struct_pointer = Pointer::new(struct_address);
             let mut block = block;
             for (index, (member, argument)) in struct_definition
@@ -472,7 +472,7 @@ where
                     let condition_boolean = condition_value
                         .is_nonzero(&context.state.builder, &block)
                         .into_mlir();
-                    sol_op_void!(
+                    mlir_op_void!(
                         &context.state.builder,
                         &block,
                         AssertOperation.cond(condition_boolean)
@@ -497,7 +497,7 @@ where
                             let bytes = string_expression.value();
                             let literal =
                                 String::from_utf8(bytes).expect("require message is valid UTF-8");
-                            sol_op_void!(
+                            mlir_op_void!(
                                 builder,
                                 &block,
                                 RequireOperation
@@ -567,7 +567,7 @@ where
                                             .into_mlir()
                                     })
                                     .collect();
-                                sol_op_void!(
+                                mlir_op_void!(
                                     builder,
                                     &current_block,
                                     RequireOperation
@@ -590,7 +590,7 @@ where
                                 let message_value = message_value
                                     .cast(AstType::new(string_memory_type), builder, &block)
                                     .into_mlir();
-                                sol_op_void!(
+                                mlir_op_void!(
                                     builder,
                                     &block,
                                     RequireOperation
@@ -603,7 +603,7 @@ where
                             }
                         }
                         None => {
-                            sol_op_void!(
+                            mlir_op_void!(
                                 builder,
                                 &block,
                                 RequireOperation.cond(condition_boolean).args(&[])
@@ -632,7 +632,7 @@ where
                             &block,
                         )
                         .into_mlir();
-                    let value = sol_op!(
+                    let value = mlir_op!(
                         builder,
                         block,
                         BlockHashOperation
@@ -660,7 +660,7 @@ where
                         block,
                     } = positional.emit(context, block);
                     let builder = &context.state.builder;
-                    let value = sol_op!(
+                    let value = mlir_op!(
                         builder,
                         block,
                         Sha256Operation
@@ -675,7 +675,7 @@ where
                         block,
                     } = positional.emit(context, block);
                     let builder = &context.state.builder;
-                    let value = sol_op!(
+                    let value = mlir_op!(
                         builder,
                         block,
                         Ripemd160Operation
@@ -708,7 +708,7 @@ where
                     let s = AstValue::from(values[3])
                         .cast(AstType::new(bytes32), builder, &block)
                         .into_mlir();
-                    let value = sol_op!(
+                    let value = mlir_op!(
                         builder,
                         block,
                         EcrecoverOperation
@@ -740,7 +740,7 @@ where
                     let modulus = AstValue::from(values[2])
                         .cast(AstType::new(ui256), builder, &block)
                         .into_mlir();
-                    let value = sol_op!(builder, block, AddModOperation.x(x).y(y).r#mod(modulus));
+                    let value = mlir_op!(builder, block, AddModOperation.x(x).y(y).r#mod(modulus));
                     (vec![value], block)
                 }
                 BuiltIn::Mulmod => {
@@ -762,7 +762,7 @@ where
                     let modulus = AstValue::from(values[2])
                         .cast(AstType::new(ui256), builder, &block)
                         .into_mlir();
-                    let value = sol_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus));
+                    let value = mlir_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus));
                     (vec![value], block)
                 }
                 _ => unreachable!("only emittable identifier built-ins are gated into this arm"),
@@ -880,7 +880,7 @@ where
                                     &block,
                                 )
                                 .into_mlir();
-                            let value = sol_op!(
+                            let value = mlir_op!(
                                 builder,
                                 block,
                                 SendOperation
@@ -912,7 +912,7 @@ where
                                     &block,
                                 )
                                 .into_mlir();
-                            sol_op_void!(builder, block, TransferOperation.addr(addr).val(amount));
+                            mlir_op_void!(builder, block, TransferOperation.addr(addr).val(amount));
                             (None, block)
                         }
                         BuiltIn::AbiEncode => {
@@ -1067,7 +1067,7 @@ where
                                         value: function_value,
                                         block: current,
                                     } = function_expression.emit(context, block);
-                                    let selector_value = sol_op!(
+                                    let selector_value = mlir_op!(
                                         builder,
                                         &current,
                                         ExtFuncSelectorOperation
@@ -1125,7 +1125,7 @@ where
                                 value: array_value,
                                 block,
                             } = access.operand().emit(context, block);
-                            sol_op_void!(
+                            mlir_op_void!(
                                 &context.state.builder,
                                 &block,
                                 PopOperation.inp(array_value)
@@ -1164,7 +1164,7 @@ where
                                 let byte_value = value
                                     .cast(AstType::new(byte_target), builder, &block)
                                     .into_mlir();
-                                sol_op_void!(
+                                mlir_op_void!(
                                     builder,
                                     &block,
                                     PushStringOperation.addr(bytes_reference).value(byte_value)
@@ -1193,7 +1193,7 @@ where
                                     // emits, as the lvalue `arr.push() = v` does.
                                     let BlockAnd { value, block } =
                                         value_argument.emit(context, block);
-                                    sol_op_void!(
+                                    mlir_op_void!(
                                         &context.state.builder,
                                         &block,
                                         CopyOperation.src(value).dst(new_slot)
@@ -1228,7 +1228,7 @@ where
                             let result_type =
                                 AstType::string(builder.context, solx_utils::DataLocation::Memory)
                                     .into_mlir();
-                            let value = sol_op!(
+                            let value = mlir_op!(
                                 builder,
                                 block,
                                 ConcatOperation.args(&values).result(result_type)
@@ -1360,7 +1360,7 @@ where
                 // `sol.ext_call` yields the `i1` success status (result 0) then the
                 // decoded outs; its conversion reverts internally on failure, so the
                 // status is dropped and only the decoded results return.
-                let operation = current_block.append_operation(sol_op_build!(
+                let operation = current_block.append_operation(mlir_op_build!(
                     builder,
                     ExtCallOperation
                         .callee(StringAttribute::new(builder.context, &mlir_name))
@@ -1642,7 +1642,7 @@ where
                                 &current_block,
                             )
                             .into_mlir();
-                        sol_op!(
+                        mlir_op!(
                             builder,
                             &current_block,
                             MallocOperation
@@ -1651,7 +1651,7 @@ where
                                 .zero_init(Attribute::unit(builder.context))
                         )
                     }
-                    None => sol_op!(
+                    None => mlir_op!(
                         builder,
                         &current_block,
                         MallocOperation

@@ -84,7 +84,7 @@ impl<'context, 'block> Value<'context, 'block> {
         'context: 'block,
     {
         let result_type = result_type.into_mlir();
-        Self::new(sol_op!(
+        Self::new(mlir_op!(
             builder,
             block,
             ConstantOperation
@@ -129,7 +129,7 @@ impl<'context, 'block> Value<'context, 'block> {
                 ))
             }
         };
-        Self::new(sol_op!(
+        Self::new(mlir_op!(
             builder,
             block,
             ConstantOperation
@@ -195,7 +195,7 @@ impl<'context, 'block> Value<'context, 'block> {
             Self::ext_func_constant(address, 0, r#type, builder, block)
         } else if r#type.is_function_ref() {
             // An internal pointer's zero reverts when called.
-            Self::new(sol_op!(
+            Self::new(mlir_op!(
                 builder,
                 block,
                 DefaultFuncConstantOperation.addr(r#type.into_mlir())
@@ -217,7 +217,7 @@ impl<'context, 'block> Value<'context, 'block> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        Self::new(sol_op!(
+        Self::new(mlir_op!(
             builder,
             block,
             GasLeftOperation
@@ -239,7 +239,7 @@ impl<'context, 'block> Value<'context, 'block> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        Self::new(sol_op!(
+        Self::new(mlir_op!(
             builder,
             block,
             ExtFuncConstantOperation
@@ -278,7 +278,7 @@ impl<'context, 'block> Value<'context, 'block> {
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        Self::new(sol_op!(
+        Self::new(mlir_op!(
             builder,
             block,
             FuncConstantOperation
@@ -297,7 +297,7 @@ impl<'context, 'block> Value<'context, 'block> {
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        Self::new(sol_op!(
+        Self::new(mlir_op!(
             builder,
             block,
             LibAddrOperation
@@ -365,7 +365,7 @@ impl<'context, 'block> Value<'context, 'block> {
                 block,
             )
             .into_mlir();
-        Self::new(sol_op!(
+        Self::new(mlir_op!(
             builder,
             block,
             Keccak256Operation
@@ -428,7 +428,7 @@ impl<'context, 'block> Value<'context, 'block> {
         if self.r#type() == target_type {
             return self;
         }
-        Self::new(sol_op!(
+        Self::new(mlir_op!(
             builder,
             block,
             ConvCastOperation
@@ -450,7 +450,7 @@ impl<'context, 'block> Value<'context, 'block> {
             IntegerType::new(builder.context, BIT_LENGTH_X64 as u32).into(),
             predicate as i64,
         );
-        let value: MlirValue<'context, 'block> = sol_op!(
+        let value: MlirValue<'context, 'block> = mlir_op!(
             builder,
             block,
             CmpOperation

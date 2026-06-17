@@ -577,7 +577,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         }
 
         if !terminated {
-            sol_op_void!(
+            mlir_op_void!(
                 &self.state.builder,
                 &current_block,
                 ReturnOperation.operands(&[])

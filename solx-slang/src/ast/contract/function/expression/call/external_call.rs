@@ -178,7 +178,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     )
                     .into_mlir()
                 });
-                sol_op_build!(
+                mlir_op_build!(
                     builder,
                     BareCallOperation
                         .addr(address)
@@ -189,7 +189,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         .ret_data(ret_data_type)
                 )
             }
-            BuiltIn::AddressDelegatecall => sol_op_build!(
+            BuiltIn::AddressDelegatecall => mlir_op_build!(
                 builder,
                 BareDelegateCallOperation
                     .addr(address)
@@ -198,7 +198,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     .status(status_type)
                     .ret_data(ret_data_type)
             ),
-            BuiltIn::AddressStaticcall => sol_op_build!(
+            BuiltIn::AddressStaticcall => mlir_op_build!(
                 builder,
                 BareStaticCallOperation
                     .addr(address)

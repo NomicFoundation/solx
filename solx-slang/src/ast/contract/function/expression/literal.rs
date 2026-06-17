@@ -66,7 +66,7 @@ expression_emit!(ThisKeyword; |context, block| {
         .current_contract_type
         .expect("slang validated");
     let value: Value<'context, 'block> =
-        sol_op!(&context.state.builder, block, ThisOperation.addr(contract_type));
+        mlir_op!(&context.state.builder, block, ThisOperation.addr(contract_type));
     BlockAnd {
         block,
         value: value.into(),
@@ -82,7 +82,7 @@ expression_emit!(StringExpression; |node, context, block| {
     // to `StringRef::new` — that reads `.as_ptr()`/`.len()` and never assumes UTF-8
     // validity, so the non-UTF-8 literal bytes are sound here.
     let literal = unsafe { std::str::from_utf8_unchecked(&bytes) };
-    let value: Value<'context, 'block> = sol_op!(
+    let value: Value<'context, 'block> = mlir_op!(
         builder,
         &block,
         StringLitOperation

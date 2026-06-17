@@ -226,7 +226,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         let condition_boolean = condition_value
             .is_nonzero(&self.state.builder, &condition_end)
             .into_mlir();
-        sol_op_void!(
+        mlir_op_void!(
             &self.state.builder,
             &condition_end,
             ConditionOperation.condition(condition_boolean)
@@ -320,7 +320,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
             };
             values.push(value);
         }
-        sol_op_void!(builder, &block, ReturnOperation.operands(&values));
+        mlir_op_void!(builder, &block, ReturnOperation.operands(&values));
         return None;
     };
 
@@ -390,7 +390,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
         })
         .collect();
 
-    sol_op_void!(
+    mlir_op_void!(
         &context.state.builder,
         &block,
         ReturnOperation.operands(&cast_values)
@@ -403,12 +403,12 @@ statement_emit!(Block; |node, context, block| {
 });
 
 statement_emit!(BreakStatement; |context, block| {
-    sol_op_void!(&context.state.builder, &block, BreakOperation);
+    mlir_op_void!(&context.state.builder, &block, BreakOperation);
     None
 });
 
 statement_emit!(ContinueStatement; |context, block| {
-    sol_op_void!(&context.state.builder, &block, ContinueOperation);
+    mlir_op_void!(&context.state.builder, &block, ContinueOperation);
     None
 });
 

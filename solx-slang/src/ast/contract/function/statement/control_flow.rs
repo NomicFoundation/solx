@@ -41,7 +41,7 @@ statement_emit!(IfStatement; |node, context, block| {
         .is_nonzero(&context.state.builder, &block)
         .into_mlir();
 
-    let (then_block, else_block) = sol_region_op!(
+    let (then_block, else_block) = mlir_region_op!(
         &context.state.builder, &block,
         IfOperation.cond(condition_boolean); then_region, else_region
     );
@@ -55,10 +55,10 @@ statement_emit!(IfStatement; |node, context, block| {
     context.set_region(&then_region);
     let then_end = node.body().emit(context, then_block);
     if let Some(then_end) = then_end {
-        sol_op_void!(&context.state.builder, &then_end, YieldOperation.ins(&[]));
+        mlir_op_void!(&context.state.builder, &then_end, YieldOperation.ins(&[]));
     } else {
         let dead_block = Block::new(&[]);
-        sol_op_void!(&context.state.builder, &dead_block, YieldOperation.ins(&[]));
+        mlir_op_void!(&context.state.builder, &dead_block, YieldOperation.ins(&[]));
         then_region.append_block(dead_block);
     }
 
@@ -67,15 +67,15 @@ statement_emit!(IfStatement; |node, context, block| {
         context.set_region(&else_region);
         let else_end = else_statement.emit(context, else_block);
         if let Some(else_end) = else_end {
-            sol_op_void!(&context.state.builder, &else_end, YieldOperation.ins(&[]));
+            mlir_op_void!(&context.state.builder, &else_end, YieldOperation.ins(&[]));
         } else {
             let dead_block = Block::new(&[]);
-            sol_op_void!(&context.state.builder, &dead_block, YieldOperation.ins(&[]));
+            mlir_op_void!(&context.state.builder, &dead_block, YieldOperation.ins(&[]));
             else_region.append_block(dead_block);
         }
         context.region_pointer = saved_region;
     } else {
-        sol_op_void!(&context.state.builder, &else_block, YieldOperation.ins(&[]));
+        mlir_op_void!(&context.state.builder, &else_block, YieldOperation.ins(&[]));
         context.region_pointer = saved_region;
     }
 
@@ -111,7 +111,7 @@ statement_emit!(ForStatement; |node, context, block| {
     };
 
     let (condition_block, body_block, step_block) =
-        sol_region_op!(&context.state.builder, &block, ForOperation; cond, body, step);
+        mlir_region_op!(&context.state.builder, &block, ForOperation; cond, body, step);
     let body_region = solx_mlir::ffi::block_parent_region(&body_block);
     let saved_region = context.region_pointer;
 
@@ -124,7 +124,7 @@ statement_emit!(ForStatement; |node, context, block| {
             let true_value =
                 AstValue::boolean(true, &context.state.builder, &condition_block)
                     .into_mlir();
-            sol_op_void!(
+            mlir_op_void!(
                 &context.state.builder,
                 &condition_block,
                 ConditionOperation.condition(true_value)
@@ -136,7 +136,7 @@ statement_emit!(ForStatement; |node, context, block| {
     context.set_region(&body_region);
     let body_end = node.body().emit(context, body_block);
     if let Some(body_end) = body_end {
-        sol_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
+        mlir_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
     }
 
     // Step region — always unchecked (matches solc: loop step i++ uses sol.add).
@@ -151,9 +151,9 @@ statement_emit!(ForStatement; |node, context, block| {
         // The step is in statement position: its value is discarded and it
         // may be a value-less producer (a void call or `delete`).
         let step_end = Discarded(iterator_expression).emit(&emitter, step_block);
-        sol_op_void!(&context.state.builder, &step_end, YieldOperation.ins(&[]));
+        mlir_op_void!(&context.state.builder, &step_end, YieldOperation.ins(&[]));
     } else {
-        sol_op_void!(&context.state.builder, &step_block, YieldOperation.ins(&[]));
+        mlir_op_void!(&context.state.builder, &step_block, YieldOperation.ins(&[]));
     }
 
     context.region_pointer = saved_region;
@@ -163,7 +163,7 @@ statement_emit!(ForStatement; |node, context, block| {
 
 statement_emit!(WhileStatement; |node, context, block| {
     let (condition_block, body_block) =
-        sol_region_op!(&context.state.builder, &block, WhileOperation; cond, body);
+        mlir_region_op!(&context.state.builder, &block, WhileOperation; cond, body);
     let body_region = solx_mlir::ffi::block_parent_region(&body_block);
     let saved_region = context.region_pointer;
 
@@ -174,7 +174,7 @@ statement_emit!(WhileStatement; |node, context, block| {
     context.set_region(&body_region);
     let body_end = node.body().emit(context, body_block);
     if let Some(body_end) = body_end {
-        sol_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
+        mlir_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
     }
 
     context.region_pointer = saved_region;
@@ -183,7 +183,7 @@ statement_emit!(WhileStatement; |node, context, block| {
 
 statement_emit!(DoWhileStatement; |node, context, block| {
     let (body_block, condition_block) =
-        sol_region_op!(&context.state.builder, &block, DoWhileOperation; body, cond);
+        mlir_region_op!(&context.state.builder, &block, DoWhileOperation; body, cond);
     let body_region = solx_mlir::ffi::block_parent_region(&body_block);
     let saved_region = context.region_pointer;
 
@@ -191,7 +191,7 @@ statement_emit!(DoWhileStatement; |node, context, block| {
     context.set_region(&body_region);
     let body_end = node.body().emit(context, body_block);
     if let Some(body_end) = body_end {
-        sol_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
+        mlir_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
     }
 
     // Condition region.

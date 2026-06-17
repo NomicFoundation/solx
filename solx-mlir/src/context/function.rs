@@ -62,7 +62,7 @@ impl<'context> Function<'context> {
         B: BlockLike<'context, 'block>,
         'context: 'block,
     {
-        let operation = block.append_operation(sol_op_build!(
+        let operation = block.append_operation(mlir_op_build!(
             builder,
             CallOperation
                 .callee(FlatSymbolRefAttribute::new(

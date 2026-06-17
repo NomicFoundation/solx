@@ -160,7 +160,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
             }
             None => {
                 let builder = &context.state.builder;
-                let length = sol_op!(
+                let length = mlir_op!(
                     builder,
                     block,
                     LengthOperation.inp(base_value).len(ui256)
@@ -176,7 +176,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
             &context.state.builder,
         );
         let builder = &context.state.builder;
-        let value: Value<'context, 'block> = sol_op!(
+        let value: Value<'context, 'block> = mlir_op!(
             builder,
             block,
             SliceOperation

@@ -440,7 +440,7 @@ impl<'context> Type<'context> {
         // Enum ↔ integer (`sol.enum_cast` accepts the integer-backed enum;
         // narrowing to an enum range-checks and may revert).
         if source.is_enum() || self.is_enum() {
-            return Value::new(sol_op!(
+            return Value::new(mlir_op!(
                 builder,
                 block,
                 EnumCastOperation.inp(value.into_mlir()).out(self.inner)
@@ -448,7 +448,7 @@ impl<'context> Type<'context> {
         }
         // Contract ↔ contract (inheritance up/downcast, interface).
         if source.is_contract() && self.is_contract() {
-            return Value::new(sol_op!(
+            return Value::new(mlir_op!(
                 builder,
                 block,
                 ContractCastOperation.inp(value.into_mlir()).out(self.inner)
@@ -475,7 +475,7 @@ impl<'context> Type<'context> {
         // Dynamic `bytes`/`string` → `bytesN`: take the leading N bytes via the
         // dedicated op (`sol.bytes_cast` rejects a `!sol.string` operand).
         if source.is_reference() && self.is_fixed_bytes() {
-            return Value::new(sol_op!(
+            return Value::new(mlir_op!(
                 builder,
                 block,
                 DynBytesToFixedBytesOperation
@@ -516,13 +516,13 @@ impl<'context> Type<'context> {
         // only by data location; a reference→reference cast routes through
         // `sol.data_loc_cast`.
         if source.is_reference() && self.is_reference() {
-            return Value::new(sol_op!(
+            return Value::new(mlir_op!(
                 builder,
                 block,
                 DataLocCastOperation.inp(value.into_mlir()).out(self.inner)
             ));
         }
-        Value::new(sol_op!(
+        Value::new(mlir_op!(
             builder,
             block,
             CastOperation.inp(value.into_mlir()).out(self.inner)
@@ -542,7 +542,7 @@ impl<'context> Type<'context> {
     where
         'context: 'block,
     {
-        Value::new(sol_op!(
+        Value::new(mlir_op!(
             builder,
             block,
             BytesCastOperation.inp(value.into_mlir()).out(self.inner)
@@ -561,7 +561,7 @@ impl<'context> Type<'context> {
     where
         'context: 'block,
     {
-        Value::new(sol_op!(
+        Value::new(mlir_op!(
             builder,
             block,
             AddressCastOperation.inp(value.into_mlir()).out(self.inner)

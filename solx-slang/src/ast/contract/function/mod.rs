@@ -447,7 +447,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 ArithmeticMode::Checked,
             );
             let block = emitter.emit_state_var_initializers(contract, entry);
-            sol_op_void!(&self.state.builder, &block, ReturnOperation.operands(&[]));
+            mlir_op_void!(&self.state.builder, &block, ReturnOperation.operands(&[]));
             return;
         }
 
@@ -606,7 +606,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 },
             )
             .collect();
-        sol_op_void!(builder, block, ReturnOperation.operands(&values));
+        mlir_op_void!(builder, block, ReturnOperation.operands(&values));
     }
 
     /// The default value of a return position reached without an explicit
@@ -626,7 +626,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
         let is_memory = |location| matches!(location, DataLocation::Memory);
         match slang_type {
             Some(SlangType::FixedSizeArray(array)) if is_memory(array.location()) => {
-                sol_op!(
+                mlir_op!(
                     builder,
                     block,
                     MallocOperation
@@ -635,7 +635,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 )
             }
             Some(SlangType::Struct(structure)) if is_memory(structure.location()) => {
-                sol_op!(
+                mlir_op!(
                     builder,
                     block,
                     MallocOperation
@@ -644,7 +644,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
                 )
             }
             Some(SlangType::Array(array)) if is_memory(array.location()) => {
-                sol_op!(
+                mlir_op!(
                     builder,
                     block,
                     MallocOperation
@@ -655,7 +655,7 @@ impl<'state, 'context> FunctionEmitter<'state, 'context> {
             Some(SlangType::String(_) | SlangType::Bytes(_)) => {
                 // A fresh zero-length buffer (plain `sol.malloc`, matching solc),
                 // not a sized `new bytes(0)`.
-                sol_op!(builder, block, MallocOperation.addr(return_type))
+                mlir_op!(builder, block, MallocOperation.addr(return_type))
             }
             Some(
                 SlangType::Address(_)

@@ -65,7 +65,7 @@ impl StorageSlot {
     {
         let pointer_type =
             AstType::pointer(builder.context, element_type, self.location).into_mlir();
-        Pointer::new(sol_op!(
+        Pointer::new(mlir_op!(
             builder,
             block,
             AddrOfOperation
@@ -105,7 +105,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let address_type = AstType::new(element_type)
                 .address_type(slot.location, builder.context)
                 .into_mlir();
-            let storage_ref = sol_op!(
+            let storage_ref = mlir_op!(
                 builder,
                 &block,
                 AddrOfOperation
@@ -118,7 +118,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             } = initializer.emit(self, block);
             block = next_block;
             if declared_type.is_reference_type() {
-                sol_op_void!(builder, &block, CopyOperation.src(value).dst(storage_ref));
+                mlir_op_void!(builder, &block, CopyOperation.src(value).dst(storage_ref));
             } else {
                 let stored_value = value.cast(AstType::new(element_type), builder, &block);
                 Pointer::new(storage_ref).store(stored_value, builder, &block);

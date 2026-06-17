@@ -90,7 +90,7 @@ where
                 .iter()
                 .map(|&result_type| Pointer::stack_slot(AstType::new(result_type), builder, &block))
                 .collect();
-            let (then_block, else_block) = sol_region_op!(builder, &block, IfOperation.cond(condition_boolean); then_region, else_region);
+            let (then_block, else_block) = mlir_region_op!(builder, &block, IfOperation.cond(condition_boolean); then_region, else_region);
 
             for (branch_block, branch_expression) in [
                 (then_block, &true_expression),
@@ -128,7 +128,7 @@ where
                     );
                     slots[index].store(cast, builder, &current);
                 }
-                sol_op_void!(builder, &current, YieldOperation.ins(&[]));
+                mlir_op_void!(builder, &current, YieldOperation.ins(&[]));
             }
 
             let mut values = Vec::with_capacity(slots.len());
@@ -171,7 +171,7 @@ where
 
         let result_slot =
             Pointer::stack_slot(AstType::new(result_type), &context.state.builder, &block);
-        let (then_block, else_block) = sol_region_op!(
+        let (then_block, else_block) = mlir_region_op!(
             &context.state.builder, &block,
             IfOperation.cond(condition_boolean); then_region, else_region
         );
@@ -187,7 +187,7 @@ where
         let then_cast =
             then_value.cast(AstType::new(result_type), &context.state.builder, &then_end);
         result_slot.store(then_cast, &context.state.builder, &then_end);
-        sol_op_void!(&context.state.builder, &then_end, YieldOperation.ins(&[]));
+        mlir_op_void!(&context.state.builder, &then_end, YieldOperation.ins(&[]));
 
         let BlockAnd {
             value: else_value,
@@ -200,7 +200,7 @@ where
         let else_cast =
             else_value.cast(AstType::new(result_type), &context.state.builder, &else_end);
         result_slot.store(else_cast, &context.state.builder, &else_end);
-        sol_op_void!(&context.state.builder, &else_end, YieldOperation.ins(&[]));
+        mlir_op_void!(&context.state.builder, &else_end, YieldOperation.ins(&[]));
 
         let result = result_slot.load(AstType::new(result_type), &context.state.builder, &block);
         (vec![result.into_mlir()], block)
@@ -282,7 +282,7 @@ expression_emit!(ArrayExpression; |node, context, block| {
                 .into_mlir()
         })
         .collect();
-    let value: Value<'context, 'block> = sol_op!(
+    let value: Value<'context, 'block> = mlir_op!(
         builder,
         &current,
         ArrayLitOperation.ins(&element_values).addr(array_type)

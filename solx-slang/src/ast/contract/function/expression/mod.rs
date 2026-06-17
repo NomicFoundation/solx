@@ -198,7 +198,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             let address_type = AstType::new(element_type)
                 .address_type(slot.location, self.state.builder.context)
                 .into_mlir();
-            let address = sol_op!(
+            let address = mlir_op!(
                 &self.state.builder,
                 &block,
                 AddrOfOperation

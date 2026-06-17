@@ -74,7 +74,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         } else {
             AstType::pointer(builder.context, element_type, base_location).into_mlir()
         };
-        let new_slot = sol_op!(
+        let new_slot = mlir_op!(
             builder,
             &block,
             PushOperation.inp(array_value).addr(push_result_type)

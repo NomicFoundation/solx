@@ -121,7 +121,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             builder,
             contract_body,
         );
-        let storage_ref = sol_op!(
+        let storage_ref = mlir_op!(
             builder,
             &entry,
             AddrOfOperation
@@ -135,7 +135,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .load(AstType::new(element_type), builder, &entry)
                 .into_mlir()
         };
-        sol_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
+        mlir_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
     }
 
     /// Emits an indexed getter for a mapping / array state variable: `m(k)`,
@@ -202,7 +202,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             builder,
             contract_body,
         );
-        let base = sol_op!(
+        let base = mlir_op!(
             builder,
             &entry,
             AddrOfOperation
@@ -245,13 +245,13 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         entry,
                     ));
                 }
-                sol_op_void!(builder, entry, ReturnOperation.operands(&values));
+                mlir_op_void!(builder, entry, ReturnOperation.operands(&values));
             }
             None => {
                 let value = Pointer::new(base)
                     .load(AstType::new(result_type), builder, entry)
                     .into_mlir();
-                sol_op_void!(builder, entry, ReturnOperation.operands(&[value]));
+                mlir_op_void!(builder, entry, ReturnOperation.operands(&[value]));
             }
         }
     }
@@ -376,7 +376,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         )
                         .into_mlir(),
                         None => {
-                            sol_op!(
+                            mlir_op!(
                                 builder,
                                 entry,
                                 LengthOperation.inp(base).len(AstType::unsigned(
@@ -389,7 +389,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     let in_bounds = AstValue::from(arg)
                         .compare(AstValue::from(length), CmpPredicate::Lt, builder, entry)
                         .into_mlir();
-                    sol_op_void!(builder, entry, RequireOperation.cond(in_bounds).args(&[]));
+                    mlir_op_void!(builder, entry, RequireOperation.cond(in_bounds).args(&[]));
                     Pointer::new(base)
                         .gep(
                             AstValue::new(arg),
@@ -444,7 +444,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             let constant =
                 AstValue::constant_from_bigint(&value, AstType::new(element_type), builder, &entry)
                     .into_mlir();
-            sol_op_void!(builder, &entry, ReturnOperation.operands(&[constant]));
+            mlir_op_void!(builder, &entry, ReturnOperation.operands(&[constant]));
             return;
         }
         // A non-integer constant — a `string` / `bytesN` literal — is not
@@ -469,7 +469,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         let value = value
             .cast(AstType::new(element_type), &self.state.builder, &entry)
             .into_mlir();
-        sol_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
+        mlir_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
     }
 
     /// Folds a constant integer expression to a [`BigInt`], when it is one of the
@@ -573,7 +573,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                     builder,
                     contract_body,
                 );
-                let base = sol_op!(
+                let base = mlir_op!(
                     builder,
                     &entry,
                     AddrOfOperation

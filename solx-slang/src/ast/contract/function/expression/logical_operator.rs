@@ -57,7 +57,7 @@ impl LogicalOperator {
         let default_value = AstValue::boolean(short_circuit_value, &emitter.state.builder, &block);
         result_ptr.store(default_value, &emitter.state.builder, &block);
 
-        let (then_block, else_block) = sol_region_op!(
+        let (then_block, else_block) = mlir_region_op!(
             &emitter.state.builder, &block,
             IfOperation.cond(lhs_bool); then_region, else_region
         );
@@ -74,9 +74,9 @@ impl LogicalOperator {
         } = right.emit(emitter, rhs_block);
         let rhs_bool = rhs.is_nonzero(&emitter.state.builder, &rhs_end);
         result_ptr.store(rhs_bool, &emitter.state.builder, &rhs_end);
-        sol_op_void!(&emitter.state.builder, &rhs_end, YieldOperation.ins(&[]));
+        mlir_op_void!(&emitter.state.builder, &rhs_end, YieldOperation.ins(&[]));
         // The short-circuiting branch keeps the default.
-        sol_op_void!(
+        mlir_op_void!(
             &emitter.state.builder,
             &short_circuit_block,
             YieldOperation.ins(&[])

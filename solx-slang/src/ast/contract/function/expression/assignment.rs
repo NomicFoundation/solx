@@ -156,7 +156,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             let address_type = AstType::new(element_type)
                 .address_type(slot.location, context.state.builder.context)
                 .into_mlir();
-            let storage_ref = sol_op!(
+            let storage_ref = mlir_op!(
                 &context.state.builder,
                 &block,
                 AddrOfOperation
@@ -211,7 +211,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             Self::ReferenceCopy(address) => {
                 // The RHS is already a reference of the matching type; copy its
                 // contents into the destination reference (no scalar coercion).
-                sol_op_void!(
+                mlir_op_void!(
                     &context.state.builder,
                     block,
                     CopyOperation.src(value).dst(*address)
@@ -328,7 +328,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         let (target, block) = Self::new(context, operand, block);
         match &target {
             Self::ReferenceCopy(reference) => {
-                sol_op_void!(
+                mlir_op_void!(
                     &context.state.builder,
                     &block,
                     DeleteOperation.reference(*reference)
@@ -354,7 +354,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                                 &block,
                             )
                             .into_mlir();
-                            sol_op!(
+                            mlir_op!(
                                 &context.state.builder,
                                 &block,
                                 MallocOperation
@@ -363,7 +363,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                                     .zero_init(Attribute::unit(context.state.builder.context))
                             )
                         }
-                        _ => sol_op!(
+                        _ => mlir_op!(
                             &context.state.builder,
                             &block,
                             MallocOperation

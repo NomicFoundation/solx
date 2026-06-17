@@ -136,7 +136,7 @@ impl TryExternalCall {
         out_types
             .push(AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
         out_types.extend_from_slice(&return_types);
-        let operation = current_block.append_operation(sol_op_build!(
+        let operation = current_block.append_operation(mlir_op_build!(
             builder,
             ExtICallOperation
                 .outs(&out_types)

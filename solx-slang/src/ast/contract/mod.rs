@@ -381,7 +381,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         block: &BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
         let builder = &self.state.builder;
-        sol_region_op!(
+        mlir_region_op!(
             builder,
             block,
             ContractOperation

@@ -7,7 +7,7 @@
 //!   once);
 //! - [`statement_emit`] — its statement counterpart.
 //!
-//! The ODS op-construction macros (`sol_op!` / `sol_op_build!` / `sol_op_void!`)
+//! The ODS op-construction macros (`mlir_op!` / `mlir_op_build!` / `mlir_op_void!`)
 //! live with the Builder in `solx-mlir`, imported crate-wide via `#[macro_use]`.
 //!
 
