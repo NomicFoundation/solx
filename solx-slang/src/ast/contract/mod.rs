@@ -3,17 +3,13 @@
 //!
 
 use crate::ast::Type as AstType;
-pub mod body_origin;
-pub mod free_function;
+pub mod analysis;
 /// Function definition emission to Sol dialect MLIR.
 pub mod function;
 pub mod getter;
 pub mod getter_level;
-pub mod library;
-pub mod reachability;
 /// Contract storage layout: the slot assignment of state variables.
 pub mod storage_layout;
-pub mod super_call;
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -40,9 +36,9 @@ use solx_mlir::ods::sol::ContractOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 use solx_utils::DataLocation;
 
-use self::free_function::FreeCallCollector;
+use self::analysis::free_function::FreeCallCollector;
+use self::analysis::library::LibraryCallCollector;
 use self::function::FunctionEmitter;
-use self::library::LibraryCallCollector;
 use self::storage_layout::StorageSlot;
 use crate::ast::LocationPolicy;
 use crate::ast::operator_binding::OperatorBindings;
@@ -79,7 +75,8 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // through `super` are emitted internal-only under contract-qualified
         // symbols below, and their bodies are walked by the free / library
         // collectors so the internals they call also register.
-        let super_dispatch = super_call::SuperDispatch::build_super_dispatch(contract);
+        let super_dispatch =
+            self::analysis::super_call::SuperDispatch::build_super_dispatch(contract);
         self.state.super_redirect = super_dispatch.redirect.clone();
         self.state.virtual_redirect = super_dispatch.virtual_redirect.clone();
         let shadowed_functions: Vec<FunctionDefinition> = super_dispatch

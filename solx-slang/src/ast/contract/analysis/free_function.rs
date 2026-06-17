@@ -21,7 +21,7 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::visitor::Visitor;
 use slang_solidity_v2::ast::visitor::accept_function_definition;
 
-use crate::ast::contract::reachability::ReachabilityWalk;
+use crate::ast::contract::analysis::reachability::ReachabilityWalk;
 
 /// Visitor that records every `f(...)` call whose callee is a plain identifier
 /// resolving to one of the source unit's free functions.

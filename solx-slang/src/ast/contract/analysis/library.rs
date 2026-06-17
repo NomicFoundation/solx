@@ -19,8 +19,8 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::visitor::Visitor;
 use slang_solidity_v2::ast::visitor::accept_function_definition;
 
-use crate::ast::contract::body_origin::BodyOrigin;
-use crate::ast::contract::reachability::ReachabilityWalk;
+use crate::ast::contract::analysis::body_origin::BodyOrigin;
+use crate::ast::contract::analysis::reachability::ReachabilityWalk;
 
 /// Visitor that records library functions reached from a walked function body.
 #[derive(Default)]
