@@ -798,13 +798,42 @@ where
                         };
                     return (vec![result], block);
                 }
-                // Any other member built-in in call position (`abi.encode`, `arr.push`, …).
-                Some(_) => {
+                // Any other member built-in in call position: an ABI encode, a
+                // dynamic-array `push`/`pop`, an address value transfer, or a
+                // `string`/`bytes` concat — dispatched on slang's typed
+                // classification of the member.
+                Some(member_built_in) => {
                     let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
                         unimplemented!("a built-in member takes positional arguments only");
                     };
-                    let (value, block) =
-                        context.emit_built_in_member_access(access, Some(positional), block);
+                    let (value, block) = match member_built_in {
+                        BuiltIn::AddressSend => {
+                            context.emit_address_send(access, positional, block)
+                        }
+                        BuiltIn::AddressTransfer => {
+                            context.emit_address_transfer(access, positional, block)
+                        }
+                        BuiltIn::AbiEncode => context.emit_abi_encode(positional, block),
+                        BuiltIn::AbiEncodePacked => {
+                            context.emit_abi_encode_packed(positional, block)
+                        }
+                        BuiltIn::AbiEncodeWithSelector => {
+                            context.emit_abi_encode_with_selector(positional, block)
+                        }
+                        BuiltIn::AbiEncodeWithSignature => {
+                            context.emit_abi_encode_with_signature(positional, block)
+                        }
+                        BuiltIn::AbiEncodeCall => context.emit_abi_encode_call(positional, block),
+                        BuiltIn::ArrayPop => context.emit_array_pop(access, block),
+                        BuiltIn::ArrayPush => context.emit_array_push(access, positional, block),
+                        BuiltIn::StringConcat | BuiltIn::BytesConcat => {
+                            context.emit_concat(positional, block)
+                        }
+                        _ => unimplemented!(
+                            "unsupported call-position member built-in: {}",
+                            access.member().name()
+                        ),
+                    };
                     return (value.into_iter().collect(), block);
                 }
                 None => {}
