@@ -36,6 +36,7 @@ use solx_mlir::Function;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::AssertOperation;
 use solx_mlir::ods::sol::BlockHashOperation;
+use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::ExtCallOperation;
 use solx_mlir::ods::sol::ExtICallOperation;
@@ -44,7 +45,9 @@ use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
+use solx_mlir::ods::sol::SendOperation;
 use solx_mlir::ods::sol::Sha256Operation;
+use solx_mlir::ods::sol::TransferOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
@@ -808,10 +811,60 @@ where
                     };
                     let (value, block) = match member_built_in {
                         BuiltIn::AddressSend => {
-                            context.emit_address_send(access, positional, block)
+                            // `address.send(value)` → `sol.send`, yielding the
+                            // success flag. `sol.send` takes a `ui256` amount, so a
+                            // narrow literal (`r.send(0)` → ui8) is widened first.
+                            let builder = &context.state.builder;
+                            let BlockAnd { value: addr, block } =
+                                access.operand().emit(context, block);
+                            let BlockAnd {
+                                value: values,
+                                block,
+                            } = positional.emit(context, block);
+                            let amount = AstValue::from(values[0])
+                                .cast(
+                                    AstType::unsigned(
+                                        builder.context,
+                                        solx_utils::BIT_LENGTH_FIELD,
+                                    ),
+                                    builder,
+                                    &block,
+                                )
+                                .into_mlir();
+                            let value = sol_op!(
+                                builder,
+                                block,
+                                SendOperation
+                                    .addr(addr)
+                                    .val(amount)
+                                    .status(AstType::signless(
+                                        builder.context,
+                                        solx_utils::BIT_LENGTH_BOOLEAN
+                                    ))
+                            );
+                            (Some(value), block)
                         }
                         BuiltIn::AddressTransfer => {
-                            context.emit_address_transfer(access, positional, block)
+                            // `address.transfer(value)` → `sol.transfer` (no result).
+                            let builder = &context.state.builder;
+                            let BlockAnd { value: addr, block } =
+                                access.operand().emit(context, block);
+                            let BlockAnd {
+                                value: values,
+                                block,
+                            } = positional.emit(context, block);
+                            let amount = AstValue::from(values[0])
+                                .cast(
+                                    AstType::unsigned(
+                                        builder.context,
+                                        solx_utils::BIT_LENGTH_FIELD,
+                                    ),
+                                    builder,
+                                    &block,
+                                )
+                                .into_mlir();
+                            sol_op_void!(builder, block, TransferOperation.addr(addr).val(amount));
+                            (None, block)
                         }
                         BuiltIn::AbiEncode => context.emit_abi_encode(positional, block),
                         BuiltIn::AbiEncodePacked => {
@@ -827,7 +880,23 @@ where
                         BuiltIn::ArrayPop => context.emit_array_pop(access, block),
                         BuiltIn::ArrayPush => context.emit_array_push(access, positional, block),
                         BuiltIn::StringConcat | BuiltIn::BytesConcat => {
-                            context.emit_concat(positional, block)
+                            // `string.concat(...)` / `bytes.concat(...)` → `sol.concat`
+                            // over the variadic string / `bytesN` values, yielding a
+                            // fresh memory string. An empty list is valid.
+                            let BlockAnd {
+                                value: values,
+                                block,
+                            } = positional.emit(context, block);
+                            let builder = &context.state.builder;
+                            let result_type =
+                                AstType::string(builder.context, solx_utils::DataLocation::Memory)
+                                    .into_mlir();
+                            let value = sol_op!(
+                                builder,
+                                block,
+                                ConcatOperation.args(&values).result(result_type)
+                            );
+                            (Some(value), block)
                         }
                         _ => unimplemented!(
                             "unsupported call-position member built-in: {}",
