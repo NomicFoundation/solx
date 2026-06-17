@@ -32,7 +32,6 @@ use slang_solidity_v2::ast::ReturnStatement;
 use slang_solidity_v2::ast::Statement;
 use slang_solidity_v2::ast::Statements;
 use slang_solidity_v2::ast::UncheckedBlock;
-use slang_solidity_v2::ast::YulFunctionDefinition;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -81,13 +80,6 @@ pub struct StatementContext<'state, 'context, 'block> {
     /// [`ArithmeticMode::Checked`] by default; [`ArithmeticMode::Unchecked`]
     /// inside `unchecked {}` blocks.
     arithmetic_mode: ArithmeticMode,
-    /// User-defined Yul functions in scope within an `assembly { … }` block,
-    /// keyed by name. Each is inlined at its call sites; an entry lives only for
-    /// the duration of the declaring Yul block / inlined frame, then is removed.
-    yul_functions: HashMap<String, YulFunctionDefinition>,
-    /// Per-name inline-recursion guard: a Yul function currently being inlined
-    /// has depth ≥ 1, so a recursive call is rejected (it would loop the compiler).
-    yul_inline_depth: HashMap<String, usize>,
 }
 
 /// Builds an [`ExpressionContext`] from a statement context. The unchecked
@@ -125,8 +117,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             return_slots,
             modifier_strategy: ModifierStrategy::None,
             arithmetic_mode: ArithmeticMode::Checked,
-            yul_functions: HashMap::new(),
-            yul_inline_depth: HashMap::new(),
         }
     }
 

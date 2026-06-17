@@ -12,9 +12,9 @@ use solx_mlir::YulCmpPredicate;
 use solx_mlir::ods::yul;
 
 use crate::ast::Type as AstType;
-use crate::ast::contract::function::statement::StatementContext;
+use crate::ast::contract::function::statement::assembly::YulContext;
 
-impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
+impl<'frame, 'context, 'block> YulContext<'frame, 'context, 'block> {
     /// Emits a Yul EVM-opcode intrinsic, dispatching on the TYPED
     /// `BuiltIn::Yul*` variant resolved via `resolve_to_built_in()`, never a
     /// `match` on the opcode name as text.
