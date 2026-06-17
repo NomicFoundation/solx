@@ -37,12 +37,15 @@ use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::AssertOperation;
 use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::ConcatOperation;
+use solx_mlir::ods::sol::CopyOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::ExtCallOperation;
 use solx_mlir::ods::sol::ExtICallOperation;
 use solx_mlir::ods::sol::ICallOperation;
 use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::MulModOperation;
+use solx_mlir::ods::sol::PopOperation;
+use solx_mlir::ods::sol::PushStringOperation;
 use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
 use solx_mlir::ods::sol::SendOperation;
@@ -877,8 +880,103 @@ where
                             context.emit_abi_encode_with_signature(positional, block)
                         }
                         BuiltIn::AbiEncodeCall => context.emit_abi_encode_call(positional, block),
-                        BuiltIn::ArrayPop => context.emit_array_pop(access, block),
-                        BuiltIn::ArrayPush => context.emit_array_push(access, positional, block),
+                        BuiltIn::ArrayPop => {
+                            // `arr.pop()` / `bytes.pop()` → `sol.pop`.
+                            let BlockAnd {
+                                value: array_value,
+                                block,
+                            } = access.operand().emit(context, block);
+                            sol_op_void!(
+                                &context.state.builder,
+                                &block,
+                                PopOperation.inp(array_value)
+                            );
+                            (None, block)
+                        }
+                        BuiltIn::ArrayPush => {
+                            let base = access.operand();
+                            let base_slang_type = base.get_type().expect("slang validated");
+                            let value_argument = positional.iter().next();
+                            if let (SlangType::Bytes(_), Some(value_argument)) =
+                                (&base_slang_type, &value_argument)
+                            {
+                                // `bytes.push(x)` appends a single byte in place via
+                                // `sol.push_string`; the packed element is not
+                                // separately addressable, so unlike an array push
+                                // there is no returned slot to store into. A
+                                // string-literal byte materialises as a `byte`
+                                // constant rather than a runtime `sol.string`.
+                                let BlockAnd {
+                                    value: bytes_reference,
+                                    block,
+                                } = base.emit(context, block);
+                                let byte_target =
+                                    AstType::fixed_bytes(context.state.builder.context, 1)
+                                        .into_mlir();
+                                let BlockAnd { value, block } =
+                                    if let Expression::StringExpression(string_literal) =
+                                        value_argument
+                                    {
+                                        string_literal.materialize(byte_target, context, block)
+                                    } else {
+                                        value_argument.emit(context, block)
+                                    };
+                                let builder = &context.state.builder;
+                                let byte_value = value
+                                    .cast(AstType::new(byte_target), builder, &block)
+                                    .into_mlir();
+                                sol_op_void!(
+                                    builder,
+                                    &block,
+                                    PushStringOperation.addr(bytes_reference).value(byte_value)
+                                );
+                                (None, block)
+                            } else {
+                                let (new_slot, element_type, block) =
+                                    context.emit_push_slot(access, block);
+                                let Some(value_argument) = value_argument else {
+                                    // `arr.push()` in value position yields the
+                                    // freshly-appended element: `sol.load` reads a
+                                    // value element as a fresh default and a reference
+                                    // element as its canonical storage reference (the
+                                    // raw slot pointer would mis-cast in the consumer).
+                                    let builder = &context.state.builder;
+                                    let loaded = Pointer::new(new_slot)
+                                        .load(AstType::new(element_type), builder, &block)
+                                        .into_mlir();
+                                    return (vec![loaded], block);
+                                };
+                                if AstType::new(element_type).is_reference() {
+                                    // A reference-typed element (nested array / struct
+                                    // / string) is appended by copying the source
+                                    // memory aggregate into the storage slot `push`
+                                    // returns — the memory→storage `sol.copy` solc
+                                    // emits, as the lvalue `arr.push() = v` does.
+                                    let BlockAnd { value, block } =
+                                        value_argument.emit(context, block);
+                                    sol_op_void!(
+                                        &context.state.builder,
+                                        &block,
+                                        CopyOperation.src(value).dst(new_slot)
+                                    );
+                                    (None, block)
+                                } else {
+                                    let BlockAnd { value, block } =
+                                        if let Expression::StringExpression(string_literal) =
+                                            &value_argument
+                                        {
+                                            string_literal.materialize(element_type, context, block)
+                                        } else {
+                                            value_argument.emit(context, block)
+                                        };
+                                    let builder = &context.state.builder;
+                                    let cast_value =
+                                        value.cast(AstType::new(element_type), builder, &block);
+                                    Pointer::new(new_slot).store(cast_value, builder, &block);
+                                    (None, block)
+                                }
+                            }
+                        }
                         BuiltIn::StringConcat | BuiltIn::BytesConcat => {
                             // `string.concat(...)` / `bytes.concat(...)` → `sol.concat`
                             // over the variadic string / `bytesN` values, yielding a
