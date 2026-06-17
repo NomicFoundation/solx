@@ -34,6 +34,7 @@ use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
 use solx_mlir::Function;
 use solx_mlir::ods::sol::AddModOperation;
+use solx_mlir::ods::sol::AssertOperation;
 use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::ExtCallOperation;
@@ -41,6 +42,7 @@ use solx_mlir::ods::sol::ExtICallOperation;
 use solx_mlir::ods::sol::ICallOperation;
 use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::MulModOperation;
+use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::Ripemd160Operation;
 use solx_mlir::ods::sol::Sha256Operation;
 use solx_utils::DataLocation;
@@ -452,16 +454,153 @@ where
             return match built_in {
                 BuiltIn::Assert => {
                     let condition = positional.iter().next().expect("assert has one argument");
-                    (vec![], context.emit_assert(&condition, block))
+                    let BlockAnd {
+                        value: condition_value,
+                        block,
+                    } = condition.emit(context, block);
+                    let condition_boolean = condition_value
+                        .is_nonzero(&context.state.builder, &block)
+                        .into_mlir();
+                    sol_op_void!(
+                        &context.state.builder,
+                        &block,
+                        AssertOperation.cond(condition_boolean)
+                    );
+                    (vec![], block)
                 }
                 BuiltIn::Require => {
                     let mut iter = positional.iter();
                     let condition = iter.next().expect("require has a condition argument");
                     let message = iter.next();
-                    (
-                        vec![],
-                        context.emit_require(&condition, message.as_ref(), block),
-                    )
+                    let BlockAnd {
+                        value: condition_value,
+                        block,
+                    } = condition.emit(context, block);
+                    let condition_boolean = condition_value
+                        .is_nonzero(&context.state.builder, &block)
+                        .into_mlir();
+                    let builder = &context.state.builder;
+                    let block = match message {
+                        // A literal string message lowers to `sol.require %cond, "msg"`.
+                        Some(Expression::StringExpression(string_expression)) => {
+                            let bytes = string_expression.value();
+                            let literal =
+                                String::from_utf8(bytes).expect("require message is valid UTF-8");
+                            sol_op_void!(
+                                builder,
+                                &block,
+                                RequireOperation
+                                    .cond(condition_boolean)
+                                    .args(&[])
+                                    .msg(StringAttribute::new(builder.context, &literal))
+                            );
+                            block
+                        }
+                        Some(expression) => {
+                            // `require(cond, CustomError(args))` (Solidity ≥ 0.8.26)
+                            // lowers to the `call` form of `sol.require` carrying the
+                            // error's canonical signature and its ABI-encoded
+                            // arguments — the same payload `revert CustomError(args)`
+                            // builds, but guarded by the condition. Any other runtime
+                            // expression is ABI-encoded under the `Error(string)`
+                            // selector.
+                            if let Expression::FunctionCallExpression(error_call) = &expression
+                                && let Some(Definition::Error(error_definition)) =
+                                    (match error_call.operand() {
+                                        Expression::Identifier(identifier) => {
+                                            identifier.resolve_to_definition()
+                                        }
+                                        Expression::MemberAccessExpression(access) => {
+                                            access.member().resolve_to_definition()
+                                        }
+                                        _ => None,
+                                    })
+                            {
+                                let signature = error_definition
+                                    .compute_canonical_signature()
+                                    .expect("slang validated");
+                                let parameters = error_definition.parameters();
+                                let ArgumentsDeclaration::PositionalArguments(error_arguments) =
+                                    error_call.arguments()
+                                else {
+                                    unimplemented!(
+                                        "named arguments in a require custom error are not yet supported"
+                                    );
+                                };
+                                let mut current_block = block;
+                                let mut argument_values = Vec::new();
+                                for argument in error_arguments.iter() {
+                                    let BlockAnd {
+                                        value,
+                                        block: next_block,
+                                    } = argument.emit(context, current_block);
+                                    current_block = next_block;
+                                    argument_values.push(value);
+                                }
+                                let builder = &context.state.builder;
+                                let argument_values: Vec<_> = argument_values
+                                    .into_iter()
+                                    .zip(parameters.iter())
+                                    .map(|(value, parameter)| {
+                                        let parameter_type = AstType::resolve(
+                                            &parameter.get_type().expect("slang validated"),
+                                            LocationPolicy::Declared(None),
+                                            builder,
+                                        );
+                                        value
+                                            .cast(
+                                                AstType::new(parameter_type),
+                                                builder,
+                                                &current_block,
+                                            )
+                                            .into_mlir()
+                                    })
+                                    .collect();
+                                sol_op_void!(
+                                    builder,
+                                    &current_block,
+                                    RequireOperation
+                                        .cond(condition_boolean)
+                                        .args(&argument_values)
+                                        .msg(StringAttribute::new(builder.context, &signature))
+                                        .call(Attribute::unit(builder.context))
+                                );
+                                current_block
+                            } else {
+                                let BlockAnd {
+                                    value: message_value,
+                                    block,
+                                } = expression.emit(context, block);
+                                let string_memory_type = AstType::string(
+                                    builder.context,
+                                    solx_utils::DataLocation::Memory,
+                                )
+                                .into_mlir();
+                                let message_value = message_value
+                                    .cast(AstType::new(string_memory_type), builder, &block)
+                                    .into_mlir();
+                                sol_op_void!(
+                                    builder,
+                                    &block,
+                                    RequireOperation
+                                        .cond(condition_boolean)
+                                        .args(&[message_value])
+                                        .msg(StringAttribute::new(builder.context, "Error(string)"))
+                                        .call(Attribute::unit(builder.context))
+                                );
+                                block
+                            }
+                        }
+                        None => {
+                            sol_op_void!(
+                                builder,
+                                &block,
+                                RequireOperation.cond(condition_boolean).args(&[])
+                            );
+                            block
+                        }
+                    };
+                    (vec![], block)
                 }
                 BuiltIn::Gasleft => (
                     vec![AstValue::gas_left(&context.state.builder, &block).into_mlir()],

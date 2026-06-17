@@ -7,7 +7,6 @@ pub mod abi;
 pub mod array;
 pub mod global;
 pub mod member_reference;
-pub mod require;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
