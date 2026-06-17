@@ -24,6 +24,7 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionDefinition;
+use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::IndexAccessKind;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
@@ -687,29 +688,21 @@ where
                         (results, block)
                     }
                 }
-                Some(Definition::Function(_)) => {
-                    // `this.f` / `instance.f`: an external call.
-                    context.emit_external(access, call_value, positional, block)
-                }
-                // `C.x(args)`: a function-pointer state variable read then called;
-                // `this.x` / `instance.x`: a getter (an external call).
-                Some(Definition::StateVariable(_)) => {
+                // `C.x(args)`: a function-pointer state variable read then called.
+                Some(Definition::StateVariable(_))
                     if matches!(&operand, Expression::Identifier(identifier)
                         if matches!(identifier.resolve_to_definition(), Some(Definition::Contract(_))))
-                        && matches!(access.get_type(), Some(SlangType::Function(_)))
-                    {
-                        let callee = Expression::MemberAccessExpression(access.clone());
-                        let function_slang_type = access.get_type().expect("slang validated");
-                        context.emit_indirect_call_results(
-                            &callee,
-                            &function_slang_type,
-                            positional,
-                            call_value,
-                            block,
-                        )
-                    } else {
-                        context.emit_external(access, call_value, positional, block)
-                    }
+                        && matches!(access.get_type(), Some(SlangType::Function(_))) =>
+                {
+                    let callee = Expression::MemberAccessExpression(access.clone());
+                    let function_slang_type = access.get_type().expect("slang validated");
+                    context.emit_indirect_call_results(
+                        &callee,
+                        &function_slang_type,
+                        positional,
+                        call_value,
+                        block,
+                    )
                 }
                 // `s.f(...)` through a function-pointer struct field.
                 Some(Definition::StructMember(_))
@@ -724,6 +717,125 @@ where
                         call_value,
                         block,
                     )
+                }
+                // `this.f` / `instance.f` (an external call) and `this.x` /
+                // `instance.x` (a getter) converge on one `sol.ext_icall`: they
+                // differ only in the selector and signature source — a function's
+                // `compute_selector` + external (memory) ABI signature with its own
+                // `static`-ness, versus a getter's `compute_selector` + synthesised
+                // `getter_signature`, never `static`. A `view`/`pure` callee lowers
+                // to a STATICCALL (reverting on a state change, matching solc). A
+                // nested / reference-typed getter, or an arg-bearing getter on
+                // another instance, is a LOUD residual.
+                Some(Definition::Function(_) | Definition::StateVariable(_)) => {
+                    let (selector, parameter_types, return_types, is_static) = match access
+                        .member()
+                        .resolve_to_definition()
+                    {
+                        Some(Definition::Function(function)) => {
+                            let (parameter_types, return_types) = AstType::resolve_signature(
+                                &function,
+                                LocationPolicy::ForceMemory,
+                                &context.state.builder,
+                            );
+                            (
+                                function.compute_selector().expect("slang validated"),
+                                parameter_types,
+                                return_types,
+                                matches!(
+                                    function.mutability(),
+                                    FunctionMutability::View | FunctionMutability::Pure
+                                ),
+                            )
+                        }
+                        Some(Definition::StateVariable(state_variable)) => {
+                            // A getter on another instance is single-valued here,
+                            // so an arg-bearing mapping / array getter is a LOUD
+                            // residual; only a self getter (`this.m(key)`) lowers
+                            // its key/index argument.
+                            if !matches!(access.operand(), Expression::ThisKeyword(_))
+                                && !positional.is_empty()
+                            {
+                                unimplemented!(
+                                    "external getter with key/index arguments is not yet supported"
+                                );
+                            }
+                            let Some((parameter_types, return_types)) =
+                                context.getter_signature(&state_variable)
+                            else {
+                                unimplemented!(
+                                    "getter of a nested or reference-typed state variable is not yet supported"
+                                );
+                            };
+                            (
+                                state_variable.compute_selector().expect("slang validated"),
+                                parameter_types,
+                                return_types,
+                                false,
+                            )
+                        }
+                        _ => unreachable!(
+                            "an external member call resolves to a function or state variable"
+                        ),
+                    };
+                    let BlockAnd {
+                        value: receiver,
+                        block,
+                    } = access.operand().emit(context, block);
+                    let ordered: Vec<Expression> = positional.iter().collect();
+                    let BlockAnd {
+                        value: argument_values,
+                        block,
+                    } = ordered.materialize(&parameter_types, context, block);
+                    let builder = &context.state.builder;
+                    let callee = AstValue::external_callee(
+                        receiver,
+                        selector,
+                        &parameter_types,
+                        &return_types,
+                        builder,
+                        &block,
+                    )
+                    .into_mlir();
+                    // `fp{value: v}(args)` forwards `v`; a plain call sends zero wei.
+                    let value = call_value.unwrap_or_else(|| {
+                        AstValue::constant(
+                            0,
+                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                            builder,
+                            &block,
+                        )
+                        .into_mlir()
+                    });
+                    // `sol.ext_icall` returns `(i1 status, decoded returns…)`; the
+                    // status is dropped (a non-`try` call reverts internally on failure).
+                    let mut out_types = Vec::with_capacity(return_types.len() + 1);
+                    out_types.push(
+                        AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
+                            .into_mlir(),
+                    );
+                    out_types.extend_from_slice(&return_types);
+                    let mut operation_builder =
+                        ExtICallOperation::builder(builder.context, builder.unknown_location)
+                            .outs(&out_types)
+                            .callee(callee)
+                            .callee_operands(&argument_values)
+                            .gas(AstValue::gas_left(builder, &block).into_mlir())
+                            .value(value);
+                    if is_static {
+                        operation_builder =
+                            operation_builder.static_call(Attribute::unit(builder.context));
+                    }
+                    let operation = block.append_operation(operation_builder.build().into());
+                    let results = (0..return_types.len())
+                        .map(|index| {
+                            operation
+                                .result(index + 1)
+                                .expect("sol.ext_icall produces a status plus its declared results")
+                                .into()
+                        })
+                        .collect();
+                    (results, block)
                 }
                 other => unimplemented!(
                     "unsupported member call: {:?}",

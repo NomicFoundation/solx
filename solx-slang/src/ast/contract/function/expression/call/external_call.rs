@@ -2,15 +2,12 @@
 //! External / bare-address call emission.
 //!
 
-use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
-use slang_solidity_v2::ast::Expression;
-use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StateVariableDefinition;
@@ -18,13 +15,11 @@ use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::BareCallOperation;
 use solx_mlir::ods::sol::BareDelegateCallOperation;
 use solx_mlir::ods::sol::BareStaticCallOperation;
-use solx_mlir::ods::sol::ExtICallOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::LocationPolicy;
-use crate::ast::Materialize;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::ContractEmitter;
@@ -40,7 +35,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// member layout, so the call decodes exactly what the getter returns).
     /// Single-level only — a nested or reference-typed key / value / element
     /// returns `None`, a LOUD residual at the (already-classified) call site.
-    fn getter_signature(
+    pub fn getter_signature(
         &self,
         state_variable: &StateVariableDefinition,
     ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)> {
@@ -224,124 +219,5 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .expect("a bare call always produces return data")
             .into();
         (status, ret_data, block)
-    }
-}
-
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// A call to a function and a call to a state-variable getter converge on one
-    /// `sol.ext_icall`: they differ only in the selector and signature source — a
-    /// function's `compute_selector` + external (memory) ABI signature with its
-    /// own `static`-ness, versus a getter's `compute_selector` + synthesised
-    /// `getter_signature`, never `static`. A nested / reference-typed getter, or
-    /// an arg-bearing getter on another instance, is a LOUD residual (#H-M7/M10/M11).
-    pub fn emit_external(
-        &self,
-        access: &MemberAccessExpression,
-        call_value: Option<Value<'context, 'block>>,
-        arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let context = self;
-        // A `view`/`pure` callee lowers to a STATICCALL (reverting on a state
-        // change, matching solc); a getter is never `static`.
-        let (selector, parameter_types, return_types, is_static) = match access
-            .member()
-            .resolve_to_definition()
-        {
-            Some(Definition::Function(function)) => {
-                let (parameter_types, return_types) = AstType::resolve_signature(
-                    &function,
-                    LocationPolicy::ForceMemory,
-                    &context.state.builder,
-                );
-                (
-                    function.compute_selector().expect("slang validated"),
-                    parameter_types,
-                    return_types,
-                    matches!(
-                        function.mutability(),
-                        FunctionMutability::View | FunctionMutability::Pure
-                    ),
-                )
-            }
-            Some(Definition::StateVariable(state_variable)) => {
-                // A getter on another instance is single-valued here, so an
-                // arg-bearing mapping / array getter is a LOUD residual; only
-                // a self getter (`this.m(key)`) lowers its key/index argument.
-                if !matches!(access.operand(), Expression::ThisKeyword(_)) && !arguments.is_empty()
-                {
-                    unimplemented!("external getter with key/index arguments is not yet supported");
-                }
-                let Some((parameter_types, return_types)) =
-                    context.getter_signature(&state_variable)
-                else {
-                    unimplemented!(
-                        "getter of a nested or reference-typed state variable is not yet supported"
-                    );
-                };
-                (
-                    state_variable.compute_selector().expect("slang validated"),
-                    parameter_types,
-                    return_types,
-                    false,
-                )
-            }
-            _ => unreachable!("an external member call resolves to a function or state variable"),
-        };
-        let BlockAnd {
-            value: receiver,
-            block,
-        } = access.operand().emit(context, block);
-        let ordered: Vec<Expression> = arguments.iter().collect();
-        let BlockAnd {
-            value: argument_values,
-            block,
-        } = ordered.materialize(&parameter_types, context, block);
-        let builder = &context.state.builder;
-        let callee = AstValue::external_callee(
-            receiver,
-            selector,
-            &parameter_types,
-            &return_types,
-            builder,
-            &block,
-        )
-        .into_mlir();
-        // `fp{value: v}(args)` forwards `v`; a plain call sends zero wei.
-        let value = call_value.unwrap_or_else(|| {
-            AstValue::constant(
-                0,
-                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                builder,
-                &block,
-            )
-            .into_mlir()
-        });
-        // `sol.ext_icall` returns `(i1 status, decoded returns…)`; the status is
-        // dropped (a non-`try` call reverts internally on failure).
-        let mut out_types = Vec::with_capacity(return_types.len() + 1);
-        out_types
-            .push(AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
-        out_types.extend_from_slice(&return_types);
-        let mut operation_builder =
-            ExtICallOperation::builder(builder.context, builder.unknown_location)
-                .outs(&out_types)
-                .callee(callee)
-                .callee_operands(&argument_values)
-                .gas(AstValue::gas_left(builder, &block).into_mlir())
-                .value(value);
-        if is_static {
-            operation_builder = operation_builder.static_call(Attribute::unit(builder.context));
-        }
-        let operation = block.append_operation(operation_builder.build().into());
-        let results = (0..return_types.len())
-            .map(|index| {
-                operation
-                    .result(index + 1)
-                    .expect("sol.ext_icall produces a status plus its declared results")
-                    .into()
-            })
-            .collect();
-        (results, block)
     }
 }
