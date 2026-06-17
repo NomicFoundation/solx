@@ -5,7 +5,9 @@
 //! - [`expression_emit`] — value-producing expression nodes (so identically
 //!   emitted nodes — e.g. the decimal and hex integer literals — are written
 //!   once);
-//! - [`statement_emit`] — its statement counterpart.
+//! - [`statement_emit`] — its statement counterpart;
+//! - [`yul_emit`] — the inline-assembly (Yul) counterpart, threading a
+//!   `&mut YulContext` and an explicit per-node output.
 //!
 //! The ODS op-construction macros (`mlir_op!` / `mlir_op_build!` / `mlir_op_void!`)
 //! live with the Builder in `solx-mlir`, imported crate-wide via `#[macro_use]`.
@@ -113,5 +115,36 @@ macro_rules! statement_emit {
                 ) -> Self::Output $body
             }
         )+
+    };
+}
+
+/// The inline-assembly (Yul) counterpart of [`statement_emit`] / [`expression_emit`]:
+/// generates `impl Emit` for a Yul node. The context is `&mut YulContext` (a Yul
+/// `let` declares variables); the output is stated per node because Yul never
+/// diverges solx control flow — a statement yields its continuation `BlockRef`
+/// (not an `Option`), an expression its `(word, continuation)` pair. The closure
+/// binds the node (`|node, context, block|`). Names resolve against the call
+/// site's imports.
+macro_rules! yul_emit {
+    ($node:ty => $output:ty ; |$bound:ident, $context:ident, $block:ident| $body:block) => {
+        impl<'state, 'context, 'block, 'scope> Emit<'context, 'block, 'state, 'scope> for $node
+        where
+            'context: 'block,
+            'context: 'state,
+            'block: 'state,
+            'state: 'scope,
+        {
+            type Context = &'scope mut YulContext<'state, 'context, 'block>;
+            type Output = $output;
+
+            fn emit(
+                &self,
+                $context: Self::Context,
+                $block: BlockRef<'context, 'block>,
+            ) -> Self::Output {
+                let $bound = self;
+                $body
+            }
+        }
     };
 }

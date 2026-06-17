@@ -34,6 +34,7 @@ pub use self::context::r#type::Type;
 pub use self::context::r#type::array_size::ArraySize;
 pub use self::context::r#type::location_policy::LocationPolicy;
 pub use self::context::value::Value;
+pub use self::context::yul_value::YulValue;
 pub use self::dialect::Dialect;
 pub use self::macros::IntoOds;
 pub use self::output::MlirOutput;

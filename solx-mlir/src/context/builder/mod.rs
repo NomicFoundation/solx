@@ -1,14 +1,13 @@
 //!
-//! The Sol-dialect construction handle the `mlir_op!` macros read.
+//! The dialect construction handle the `mlir_op!` macros read.
 //!
 //! [`Builder`] is the `{context, location}` pair every op construction needs —
-//! the `mlir_op!` family of macros read these two fields. The Sol-dialect
-//! emission methods have all dissolved onto their owning nodes and entities; the
-//! Yul cluster ([`yul`]) is the remaining tenant, pending a `YulContext` peer.
+//! the `mlir_op!` family of macros read these two fields. The dialect emission
+//! methods all live on their owning nodes and entities ([`crate::Value`] for Sol,
+//! [`crate::YulValue`] for Yul).
 //!
 
 pub mod try_fallback_kind;
-pub mod yul;
 
 use melior::ir::Location;
 
