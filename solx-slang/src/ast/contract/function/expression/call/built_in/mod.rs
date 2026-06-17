@@ -6,13 +6,11 @@ use crate::ast::Type as AstType;
 pub mod abi;
 pub mod array;
 pub mod global;
-pub mod member_reference;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::BuiltIn;
-use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use solx_mlir::ods::sol::ConcatOperation;
@@ -32,8 +30,8 @@ pub enum EncodeMode {
 }
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits a member-access built-in (e.g. `tx.origin`, `msg.sender`,
-    /// `address.balance`, `abi.encode(...)`, `arr.push(...)`).
+    /// Emits a call-position member-access built-in (`abi.encode(...)`,
+    /// `arr.push(...)`, `addr.send(...)`, `string.concat(...)`).
     ///
     /// Dispatches the resolved member built-in to its family handler; an
     /// unrecognized member is a loud `unimplemented!`.
@@ -43,12 +41,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         arguments: Option<&PositionalArguments>,
         block: BlockRef<'context, 'block>,
     ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        // An enum-variant reference (`E.Variant`) resolves to a value, not a
-        // built-in or intrinsic; handle it before the built-in dispatch.
-        if let Some(ordinal) = self.enum_variant_ordinal(access, arguments) {
-            let (value, block) = self.emit_enum_variant(access, ordinal, block);
-            return (Some(value), block);
-        }
         match access.member().resolve_to_built_in() {
             Some(BuiltIn::AddressSend) => {
                 let arguments = arguments.expect("send is a member-access call");
@@ -87,32 +79,10 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 let arguments = arguments.expect("concat is a member-access call");
                 self.emit_concat(arguments, block)
             }
-            Some(BuiltIn::FunctionSelector) => self.emit_function_selector(access, block),
-            Some(BuiltIn::FunctionAddress) => self.emit_function_address(access, block),
-            Some(BuiltIn::ErrorSelector) => self.emit_error_selector(access, block),
-            Some(BuiltIn::EventSelector) => self.emit_event_selector(access, block),
-            // A member that resolves to a function used as a value (not called) is
-            // a function pointer: an externally-visible function with a selector
-            // (`this.f`, `instance.f`) is an external pointer, while a
-            // namespace-qualified internal function with none (`C.f`, `(L.f)`) is
-            // an internal pointer (`sol.func_constant`), like a bare `f`.
-            _ => {
-                let Some(Definition::Function(function_definition)) =
-                    access.member().resolve_to_definition()
-                else {
-                    unimplemented!("unsupported member access: {}", access.member().name());
-                };
-                if function_definition.compute_selector().is_some() {
-                    self.emit_external_function_pointer(access, &function_definition, block)
-                } else {
-                    // The literal target lowers (no virtual redirect): an explicit
-                    // `Base.f` names Base's own implementation, not the most-derived
-                    // override a bare `f` would bind.
-                    let (value, block) =
-                        self.emit_function_constant(function_definition.node_id(), block);
-                    (Some(value), block)
-                }
-            }
+            _ => unimplemented!(
+                "unsupported call-position member built-in: {}",
+                access.member().name()
+            ),
         }
     }
 

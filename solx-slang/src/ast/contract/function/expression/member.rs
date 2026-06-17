@@ -12,11 +12,13 @@ use melior::ir::Value as MlirValue;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
+use num_bigint::Sign;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
+use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
 use solx_mlir::ods::sol::BalanceOperation;
@@ -30,6 +32,8 @@ use solx_mlir::ods::sol::CodeHashOperation;
 use solx_mlir::ods::sol::CodeOperation;
 use solx_mlir::ods::sol::CoinbaseOperation;
 use solx_mlir::ods::sol::DifficultyOperation;
+use solx_mlir::ods::sol::ExtFuncAddrOperation;
+use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 use solx_mlir::ods::sol::GasLimitOperation;
 use solx_mlir::ods::sol::GasPriceOperation;
 use solx_mlir::ods::sol::GetCallDataOperation;
@@ -45,6 +49,7 @@ use solx_utils::DataLocation;
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
 use crate::ast::EmitAddress;
+use crate::ast::LocationPolicy;
 use crate::ast::Place;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
@@ -543,13 +548,250 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             &block,
         );
         BlockAnd { block, value }
+    } else if let Some(ordinal) = context.enum_variant_ordinal(node, None) {
+        // `E.Variant` (or qualified `C.E.Variant`): the variant's ordinal as an
+        // integer constant, bridged to the enum type via `sol.enum_cast`.
+        let result_type = AstType::resolve_optional(node.get_type(), &context.state.builder)
+            .expect("slang validated");
+        let builder = &context.state.builder;
+        let value = AstValue::constant(
+            ordinal as i64,
+            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+            builder,
+            &block,
+        )
+        .cast(AstType::new(result_type), builder, &block);
+        BlockAnd { block, value }
     } else {
-        // `msg.sender`, `addr.balance`, `arr.length`: a built-in member access,
-        // which in value position always yields a value.
-        let (value, block) = context.emit_built_in_member_access(node, None, block);
-        BlockAnd {
-            block,
-            value: value.expect("a bare member access yields a value").into(),
+        // A value-position member built-in over a non-struct base: `.selector` /
+        // `.address`, or an external function pointer.
+        match node.member().resolve_to_built_in() {
+            // `f.selector` — the 4-byte selector (`bytes4`). A statically named
+            // function (`this.f`, `i.foo`) or public-getter member folds to a
+            // compile-time constant via `compute_selector()`; an external
+            // function-pointer VALUE pulls its selector at runtime via
+            // `sol.ext_func_selector`.
+            Some(BuiltIn::FunctionSelector) => {
+                let static_selector = match context.resolve_member_access_operand(&node.operand()) {
+                    Some(Definition::Function(function)) => function.compute_selector(),
+                    Some(Definition::StateVariable(state_variable)) => {
+                        state_variable.compute_selector()
+                    }
+                    _ => None,
+                };
+                if let Some(selector) = static_selector {
+                    let block = context.eval_selector_receiver_side_effects(node, block);
+                    let value = AstValue::selector_constant(
+                        &BigInt::from(selector),
+                        4,
+                        &context.state.builder,
+                        &block,
+                    );
+                    return BlockAnd { block, value };
+                }
+                let BlockAnd {
+                    value: operand_value,
+                    block,
+                } = node.operand().emit(context, block);
+                let value: MlirValue<'context, 'block> = sol_op!(
+                    &context.state.builder,
+                    &block,
+                    ExtFuncSelectorOperation
+                        .func(operand_value)
+                        .result(AstType::fixed_bytes(context.state.builder.context, 4))
+                );
+                BlockAnd {
+                    block,
+                    value: value.into(),
+                }
+            }
+            // `f.address` — the address component of an external function-pointer
+            // VALUE, pulled out of its `!sol.ext_func_ref` via `sol.ext_func_addr`.
+            Some(BuiltIn::FunctionAddress) => {
+                let BlockAnd {
+                    value: operand_value,
+                    block,
+                } = node.operand().emit(context, block);
+                let value: MlirValue<'context, 'block> = sol_op!(
+                    &context.state.builder,
+                    &block,
+                    ExtFuncAddrOperation
+                        .func(operand_value)
+                        .result(AstType::address(context.state.builder.context, false))
+                );
+                BlockAnd {
+                    block,
+                    value: value.into(),
+                }
+            }
+            // `MyError.selector` — the error's 4-byte selector as a compile-time
+            // constant.
+            Some(BuiltIn::ErrorSelector) => {
+                let Some(Definition::Error(error)) =
+                    context.resolve_member_access_operand(&node.operand())
+                else {
+                    unreachable!("slang resolves an error `.selector` base to an error definition");
+                };
+                let selector = error.compute_selector().expect("slang validated");
+                let block = context.eval_selector_receiver_side_effects(node, block);
+                let value = AstValue::selector_constant(
+                    &BigInt::from(selector),
+                    4,
+                    &context.state.builder,
+                    &block,
+                );
+                BlockAnd { block, value }
+            }
+            // `MyEvent.selector` — the event's 32-byte topic hash (`bytes32`), the
+            // keccak256 of its canonical signature, as a compile-time constant.
+            Some(BuiltIn::EventSelector) => {
+                let Some(Definition::Event(event)) =
+                    context.resolve_member_access_operand(&node.operand())
+                else {
+                    unreachable!("slang resolves an event `.selector` base to an event definition");
+                };
+                let signature = event.compute_canonical_signature().expect("slang validated");
+                let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
+                let topic = BigInt::from_bytes_be(Sign::Plus, hash.as_bytes());
+                let block = context.eval_selector_receiver_side_effects(node, block);
+                let value =
+                    AstValue::selector_constant(&topic, 32, &context.state.builder, &block);
+                BlockAnd { block, value }
+            }
+            // A member resolving to a function used as a value (not called) is a
+            // function pointer: an externally-visible function with a selector
+            // (`this.f`, `instance.f`) is an external pointer, while a
+            // namespace-qualified internal function with none (`C.f`, `(L.f)`) is
+            // an internal pointer (`sol.func_constant`), like a bare `f`.
+            _ => {
+                let Some(Definition::Function(function_definition)) =
+                    node.member().resolve_to_definition()
+                else {
+                    unimplemented!("unsupported member access: {}", node.member().name());
+                };
+                if let Some(selector) = function_definition.compute_selector() {
+                    // An external function pointer's ABI representation (address +
+                    // selector) types its reference parameters as `Memory`, not their
+                    // declared `calldata`/`storage` location — calldata cannot cross
+                    // the call boundary, and solc emits the pointer at this memory
+                    // signature.
+                    let (parameter_types, return_types) = AstType::resolve_signature(
+                        &function_definition,
+                        LocationPolicy::ForceMemory,
+                        &context.state.builder,
+                    );
+                    let BlockAnd {
+                        value: receiver,
+                        block,
+                    } = node.operand().emit(context, block);
+                    let value = AstValue::external_callee(
+                        receiver,
+                        selector,
+                        &parameter_types,
+                        &return_types,
+                        &context.state.builder,
+                        &block,
+                    );
+                    BlockAnd { block, value }
+                } else {
+                    // The literal target lowers (no virtual redirect): an explicit
+                    // `Base.f` names Base's own implementation, not the most-derived
+                    // override a bare `f` would bind.
+                    let (value, block) =
+                        context.emit_function_constant(function_definition.node_id(), block);
+                    BlockAnd {
+                        block,
+                        value: value.into(),
+                    }
+                }
+            }
         }
     }
 });
+
+impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
+    /// Classifies a member access as an enum-variant reference (`E.Variant` or
+    /// qualified `C.E.Variant`), returning the variant's ordinal when it is one
+    /// (and not a call). The ordinal is located by NodeId identity against the
+    /// enum's members, never by comparing the member name as text.
+    fn enum_variant_ordinal(
+        &self,
+        access: &MemberAccessExpression,
+        arguments: Option<&PositionalArguments>,
+    ) -> Option<usize> {
+        if arguments.is_some() {
+            return None;
+        }
+        let Definition::EnumMember(member_definition) = access.member().resolve_to_definition()?
+        else {
+            return None;
+        };
+        let Definition::Enum(enum_definition) =
+            self.resolve_member_access_operand(&access.operand())?
+        else {
+            return None;
+        };
+        enum_definition
+            .members()
+            .iter()
+            .position(|member| member.node_id() == member_definition.node_id())
+    }
+
+    /// Resolves a member-access operand to its definition: a bare type name
+    /// (`E.Variant`, whose operand is the `Identifier` `E`) or a qualified path
+    /// whose operand is itself a member access (`C.E.Variant`).
+    fn resolve_member_access_operand(&self, operand: &Expression) -> Option<Definition> {
+        match operand {
+            Expression::Identifier(identifier) => identifier.resolve_to_definition(),
+            Expression::MemberAccessExpression(member_access) => {
+                member_access.member().resolve_to_definition()
+            }
+            _ => None,
+        }
+    }
+
+    /// Evaluates the receiver of a `<receiver>.member.selector` for its side
+    /// effects when `<receiver>` is a runtime value (e.g. the call in
+    /// `h().f.selector`). A namespace / type qualifier (`C.f.selector`) has no
+    /// runtime value, so nothing is evaluated. The selector itself stays a
+    /// compile-time constant; this only reproduces the discarded receiver's
+    /// evaluation.
+    fn eval_selector_receiver_side_effects(
+        &self,
+        access: &MemberAccessExpression,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockRef<'context, 'block> {
+        let Expression::MemberAccessExpression(inner) = access.operand() else {
+            return block;
+        };
+        let receiver = inner.operand();
+        if self.is_namespace_or_type_operand(&receiver) {
+            return block;
+        }
+        let BlockAnd {
+            value: _discarded,
+            block,
+        } = receiver.emit(self, block);
+        block
+    }
+
+    /// Whether `expression` is a namespace or type reference (a contract /
+    /// interface / library / import / enum / struct / user-defined-value-type
+    /// name) rather than a runtime value — such an operand carries no side
+    /// effects, so a `.selector` taken through it evaluates nothing.
+    fn is_namespace_or_type_operand(&self, expression: &Expression) -> bool {
+        matches!(
+            self.resolve_member_access_operand(expression),
+            Some(
+                Definition::Contract(_)
+                    | Definition::Interface(_)
+                    | Definition::Library(_)
+                    | Definition::Import(_)
+                    | Definition::ImportedSymbol(_)
+                    | Definition::Enum(_)
+                    | Definition::Struct(_)
+                    | Definition::UserDefinedValueType(_)
+            )
+        )
+    }
+}
