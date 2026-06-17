@@ -39,11 +39,22 @@ expression_emit!(Identifier; |node, context, block| {
             initializer.emit(context, block)
         }
         Some(Definition::Function(function_definition)) => {
-            let (value, block) = context.emit_internal_function_pointer(&function_definition, block);
-            BlockAnd {
-                block,
-                value: value.into(),
-            }
+            // A bare function name binds the most-derived override (virtual
+            // dispatch): the lexical base version is shadowed and unregistered
+            // when the derived contract is compiled. An explicit `Base.f` skips
+            // this redirect (see member access emission).
+            let node_id = function_definition.node_id();
+            let target_id = context
+                .state
+                .virtual_redirect
+                .get(&node_id)
+                .copied()
+                .unwrap_or(node_id);
+            let value = context
+                .state
+                .resolve_function(target_id)
+                .pointer_constant(&context.state.builder, &block);
+            BlockAnd { block, value }
         }
         Some(Definition::Library(library)) => {
             // A library name used as a value (`address(L)`) is its linked deploy

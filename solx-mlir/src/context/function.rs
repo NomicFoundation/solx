@@ -82,6 +82,28 @@ impl<'context> Function<'context> {
             .collect()
     }
 
+    /// The `!sol.func_ref<…>` type of an internal pointer to this function,
+    /// built from its declared signature.
+    pub fn func_ref_type(&self, builder: &Builder<'context>) -> crate::Type<'context> {
+        crate::Type::func_ref(builder.context, &self.parameter_types, &self.return_types)
+    }
+
+    /// `sol.func_constant` — the internal function pointer to this function, the
+    /// value a bare function reference lowers to. Emitting the pointer is the
+    /// function metadata's own behavior, beside `call` and `define`.
+    pub fn pointer_constant<'block>(
+        &self,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> crate::Value<'context, 'block> {
+        crate::Value::function_constant(
+            &self.mlir_name,
+            self.func_ref_type(builder),
+            builder,
+            block,
+        )
+    }
+
     /// Emits this function's `sol.func` definition with an empty entry block and
     /// returns that block for appending the body. `selector` / `kind` / `id` are
     /// the optional dispatch attributes; a selector-bearing function, constructor,

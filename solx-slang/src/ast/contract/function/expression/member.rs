@@ -697,12 +697,11 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     // The literal target lowers (no virtual redirect): an explicit
                     // `Base.f` names Base's own implementation, not the most-derived
                     // override a bare `f` would bind.
-                    let (value, block) =
-                        context.emit_function_constant(function_definition.node_id(), block);
-                    BlockAnd {
-                        block,
-                        value: value.into(),
-                    }
+                    let value = context
+                        .state
+                        .resolve_function(function_definition.node_id())
+                        .pointer_constant(&context.state.builder, &block);
+                    BlockAnd { block, value }
                 }
             }
         }
