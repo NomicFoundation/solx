@@ -2,8 +2,10 @@
 //! Public state-variable getter synthesis.
 //!
 //! Solidity synthesises an external accessor for every `public` state variable.
-//! These [`ContractEmitter`] `impl` blocks emit / classify those getters; each
-//! path derives the signature / selector / declared type from the variable.
+//! The state variable emits its own accessor: a `constant` folds to a pure
+//! literal getter, a scalar reads its slot, a mapping/array chains a
+//! `sol.map`/bounds-checked `sol.gep` per key/index, and a struct expands to its
+//! flattened returnable members.
 //!
 
 use melior::ir::BlockLike;
@@ -13,15 +15,17 @@ use melior::ir::Value;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use num_bigint::BigInt;
 use slang_solidity_v2::abi::AbiEntry;
-use slang_solidity_v2::abi::AbiFunction;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::StateVariableDefinition;
+use slang_solidity_v2::ast::StateVariableMutability;
 use slang_solidity_v2::ast::StructDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
+use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
 use solx_mlir::Function;
 use solx_mlir::StateMutability;
@@ -30,11 +34,6 @@ use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 use solx_utils::DataLocation;
-
-use std::collections::HashMap;
-
-use slang_solidity_v2::ast::NodeId;
-use solx_mlir::Environment;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -45,554 +44,19 @@ use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
-use crate::ast::contract::getter_level::GetterLevel;
-use crate::ast::contract::storage_layout::StorageSlot;
-use slang_solidity_v2::ast::ArgumentsDeclaration;
 
 impl<'state, 'context> ContractEmitter<'state, 'context> {
-    /// The ABI function entry of a `public` state variable's synthesised getter,
-    /// or `None` when the variable has no accessor. Its input parameters' count
-    /// selects the scalar vs. indexed emission path.
-    fn getter_abi_function(state_variable: &StateVariableDefinition) -> Option<AbiFunction> {
-        match state_variable.compute_abi_entry() {
-            Some(AbiEntry::Function(abi)) => Some(abi),
-            _ => None,
-        }
-    }
-
-    /// Dispatches getter synthesis for one non-constant state variable to the
-    /// scalar or indexed (mapping/array) path. A variable left without an
-    /// accessor is harmless (the rest of the contract still compiles).
-    pub fn emit_state_variable_getter(
-        &self,
-        state_variable: &StateVariableDefinition,
-        slot: &StorageSlot,
-        location: DataLocation,
-        contract_body: &BlockRef<'context, '_>,
-    ) {
-        let Some(abi) = Self::getter_abi_function(state_variable) else {
-            return;
-        };
-        if !abi.inputs().is_empty() {
-            return self.emit_indexed_getter(
-                state_variable,
-                slot,
-                location,
-                contract_body,
-                abi.inputs().len(),
-            );
-        }
-        if self.emit_struct_getter(state_variable, slot, location, contract_body) {
-            return;
-        }
-        self.emit_scalar_getter(state_variable, slot, location, contract_body)
-    }
-
-    /// Emits a scalar / reference getter: `T public name` becomes `function
-    /// name() view returns (T)` reading the variable's slot.
-    fn emit_scalar_getter(
-        &self,
-        state_variable: &StateVariableDefinition,
-        slot: &StorageSlot,
-        location: DataLocation,
-        contract_body: &BlockRef<'context, '_>,
-    ) {
-        let signature = state_variable
-            .compute_canonical_signature()
-            .expect("slang validated");
-        let selector = state_variable.compute_selector().expect("slang validated");
-        let declared_type = state_variable.get_type().expect("slang validated");
-        let builder = &self.state.builder;
-        let element_type = AstType::resolve_state_variable(state_variable, builder);
-        // A reference-typed variable (`string`/`bytes`/array) is addressed by the
-        // reference type itself in storage; value types by a `!sol.ptr<T, _>`.
-        let address_type = if declared_type.is_reference_type() {
-            element_type
-        } else {
-            AstType::pointer(builder.context, element_type, location).into_mlir()
-        };
-        let function_signature = Function::new(signature, Vec::new(), vec![element_type]);
-        let entry = function_signature.define(
-            Some(selector),
-            StateMutability::View,
-            None,
-            None,
-            builder,
-            contract_body,
-        );
-        let storage_ref = mlir_op!(
-            builder,
-            &entry,
-            AddrOfOperation
-                .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
-                .addr(address_type)
-        );
-        let value = if declared_type.is_reference_type() {
-            storage_ref
-        } else {
-            Pointer::new(storage_ref)
-                .load(AstType::new(element_type), builder, &entry)
-                .into_mlir()
-        };
-        mlir_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
-    }
-
-    /// Emits an indexed getter for a mapping / array state variable: `m(k)`,
-    /// `a(uint256)`, `a(i, j)`, `m(k1, k2)`, ... Each nesting level chains a
-    /// `sol.map` (mappings) or a bounds-checked `sol.gep` (arrays) over its
-    /// key/index argument; the final value is loaded.
-    ///
-    /// Struct and other reference results are emitted by a later fill (the
-    /// getter is left ungenerated meanwhile rather than emitted incorrectly).
-    fn emit_indexed_getter(
-        &self,
-        state_variable: &StateVariableDefinition,
-        slot: &StorageSlot,
-        location: DataLocation,
-        contract_body: &BlockRef<'context, '_>,
-        abi_input_count: usize,
-    ) {
-        let signature = state_variable
-            .compute_canonical_signature()
-            .expect("slang validated");
-        let selector = state_variable.compute_selector().expect("slang validated");
-        let declared_type = state_variable.get_type().expect("slang validated");
-        let builder = &self.state.builder;
-        let (input_types, levels, result_slang) =
-            self.plan_indexed_getter_levels(&declared_type, location);
-        if input_types.is_empty() || input_types.len() != abi_input_count {
-            return;
-        }
-        let container_type = AstType::resolve_state_variable(state_variable, builder);
-        let result_type = AstType::resolve(
-            &result_slang,
-            LocationPolicy::Declared(Some(location)),
-            builder,
-        );
-        // A struct result expands into its flattened returnable-member tuple;
-        // other reference results aren't handled yet (left ungenerated).
-        let struct_plan = match &result_slang {
-            SlangType::Struct(struct_type) => {
-                let Definition::Struct(struct_definition) = struct_type.definition() else {
-                    return;
-                };
-                match Self::struct_getter_layout(&struct_definition, result_type, builder) {
-                    Some(plan) => Some(plan),
-                    None => return,
-                }
-            }
-            _ if result_slang.is_reference_type() => return,
-            _ => None,
-        };
-        let result_types: Vec<Type<'context>> = match &struct_plan {
-            Some(plan) => plan
-                .iter()
-                .map(|(_, _, member_result)| *member_result)
-                .collect(),
-            None => vec![result_type],
-        };
-        let function_signature =
-            Function::new(signature, input_types.to_vec(), result_types.to_vec());
-        let entry = function_signature.define(
-            Some(selector),
-            StateMutability::View,
-            None,
-            None,
-            builder,
-            contract_body,
-        );
-        let base = mlir_op!(
-            builder,
-            &entry,
-            AddrOfOperation
-                .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
-                .addr(container_type)
-        );
-        let base = self.emit_getter_access_chain(base, &levels, &entry);
-        self.emit_indexed_getter_result(base, &struct_plan, result_type, &entry)
-    }
-
-    /// Emits the indexed getter's return: a struct result expands into its
-    /// flattened returnable-member tuple (each member loaded from `base`); a
-    /// scalar result loads the single value.
-    fn emit_indexed_getter_result<'block>(
-        &self,
-        base: Value<'context, 'block>,
-        struct_plan: &Option<Vec<(u64, Type<'context>, Type<'context>)>>,
-        result_type: Type<'context>,
-        entry: &BlockRef<'context, 'block>,
-    ) {
-        let builder = &self.state.builder;
-        match struct_plan {
-            Some(plan) => {
-                let mut values = Vec::new();
-                for (member_index, member_type, result_member_type) in plan {
-                    let index_value = AstValue::constant(
-                        *member_index as i64,
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
-                        builder,
-                        entry,
-                    );
-                    let address = Pointer::new(base)
-                        .gep(index_value, AstType::new(*member_type), builder, entry)
-                        .into_mlir();
-                    values.push(Self::load_getter_member(
-                        builder,
-                        address,
-                        *member_type,
-                        *result_member_type,
-                        entry,
-                    ));
-                }
-                mlir_op_void!(builder, entry, ReturnOperation.operands(&values));
-            }
-            None => {
-                let value = Pointer::new(base)
-                    .load(AstType::new(result_type), builder, entry)
-                    .into_mlir();
-                mlir_op_void!(builder, entry, ReturnOperation.operands(&[value]));
-            }
-        }
-    }
-
-    /// Walks the mapping/array nesting of an indexed getter's declared type,
-    /// producing the per-key/index ABI input types, the ordered access-`level`
-    /// plan, and the terminal Solidity type reached after all levels.
-    fn plan_indexed_getter_levels(
-        &self,
-        declared_type: &SlangType,
-        location: DataLocation,
-    ) -> (Vec<Type<'context>>, Vec<GetterLevel<'context>>, SlangType) {
-        let builder = &self.state.builder;
-        let mut input_types: Vec<Type<'context>> = Vec::new();
-        let mut levels: Vec<GetterLevel<'context>> = Vec::new();
-        let mut current = declared_type.clone();
-        loop {
-            match &current {
-                SlangType::Mapping(mapping_type) => {
-                    let key_slang = mapping_type.key_type();
-                    let value_slang = mapping_type.value_type();
-                    let resolved_value = AstType::resolve(
-                        &value_slang,
-                        LocationPolicy::Declared(Some(location)),
-                        builder,
-                    );
-                    // Intermediate containers are addressed by their reference; a
-                    // value terminal by a `!sol.ptr<V>`.
-                    let level_type = if value_slang.is_reference_type() {
-                        resolved_value
-                    } else {
-                        AstType::pointer(builder.context, resolved_value, location).into_mlir()
-                    };
-                    // A reference-typed key (`string`/`bytes`) is an ABI input
-                    // decoded into memory. slang reports the key with the mapping's
-                    // storage location, so build the memory type directly rather
-                    // than resolving it (which would yield a storage string).
-                    let key_type = if key_slang.is_reference_type() {
-                        AstType::string(builder.context, DataLocation::Memory).into_mlir()
-                    } else {
-                        AstType::resolve(
-                            &key_slang,
-                            LocationPolicy::Declared(Some(location)),
-                            builder,
-                        )
-                    };
-                    input_types.push(key_type);
-                    levels.push(GetterLevel::Mapping(level_type));
-                    current = value_slang;
-                }
-                SlangType::Array(array_type) => {
-                    let element_slang = array_type.element_type();
-                    let element_type = AstType::resolve(
-                        &element_slang,
-                        LocationPolicy::Declared(Some(location)),
-                        builder,
-                    );
-                    input_types.push(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir(),
-                    );
-                    levels.push(GetterLevel::Array(element_type, None));
-                    current = element_slang;
-                }
-                SlangType::FixedSizeArray(array_type) => {
-                    let element_slang = array_type.element_type();
-                    let element_type = AstType::resolve(
-                        &element_slang,
-                        LocationPolicy::Declared(Some(location)),
-                        builder,
-                    );
-                    input_types.push(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir(),
-                    );
-                    levels.push(GetterLevel::Array(
-                        element_type,
-                        Some(array_type.size() as u64),
-                    ));
-                    current = element_slang;
-                }
-                _ => break,
-            }
-        }
-        (input_types, levels, current)
-    }
-
-    /// Chains the per-level storage access for an indexed getter, starting from
-    /// the base slot reference: a `sol.map` for each mapping key and a
-    /// bounds-checked `sol.gep` for each array index (out-of-bounds bare-revert
-    /// via a no-message `sol.require`, matching solc's accessor — NOT `sol.gep`'s
-    /// `Panic(0x32)`, which the semantic tests reject). Returns the reference to
-    /// the addressed element.
-    fn emit_getter_access_chain<'block>(
-        &self,
-        mut base: Value<'context, 'block>,
-        levels: &[GetterLevel<'context>],
-        entry: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        let builder = &self.state.builder;
-        for (index, level) in levels.iter().enumerate() {
-            let arg: Value<'context, 'block> = entry
-                .argument(index)
-                .expect("argument index is within the block signature")
-                .into();
-            base = match level {
-                GetterLevel::Mapping(level_type) => Pointer::new(base)
-                    .entry(
-                        AstValue::new(arg),
-                        AstType::new(*level_type),
-                        builder,
-                        entry,
-                    )
-                    .into_mlir(),
-                GetterLevel::Array(element_type, fixed_size) => {
-                    let length = match fixed_size {
-                        Some(size) => AstValue::constant(
-                            *size as i64,
-                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                            builder,
-                            entry,
-                        )
-                        .into_mlir(),
-                        None => {
-                            mlir_op!(
-                                builder,
-                                entry,
-                                LengthOperation.inp(base).len(AstType::unsigned(
-                                    builder.context,
-                                    solx_utils::BIT_LENGTH_FIELD
-                                ))
-                            )
-                        }
-                    };
-                    let in_bounds = AstValue::from(arg)
-                        .compare(AstValue::from(length), CmpPredicate::Lt, builder, entry)
-                        .into_mlir();
-                    mlir_op_void!(builder, entry, RequireOperation.cond(in_bounds).args(&[]));
-                    Pointer::new(base)
-                        .gep(
-                            AstValue::new(arg),
-                            AstType::new(*element_type),
-                            builder,
-                            entry,
-                        )
-                        .into_mlir()
-                }
-            };
-        }
-        base
-    }
-
-    /// Emits a `constant` state variable's getter (a folded compile-time value).
-    pub fn emit_constant_getter(
-        &self,
-        state_variable: &StateVariableDefinition,
-        storage_layout: &HashMap<NodeId, StorageSlot>,
-        contract_body: &BlockRef<'context, '_>,
-    ) {
-        let Some(abi) = Self::getter_abi_function(state_variable) else {
-            return;
-        };
-        if !abi.inputs().is_empty() {
-            return;
-        }
-        let Some(initializer) = state_variable.value() else {
-            return;
-        };
-        let signature = state_variable
-            .compute_canonical_signature()
-            .expect("slang validated");
-        let selector = state_variable.compute_selector().expect("slang validated");
-
-        let builder = &self.state.builder;
-        // The getter returns the constant's value type, reference types
-        // (`string` / `bytes`) in `Memory` — what an external getter call hands
-        // back — not their declared storage location.
-        let slang_type = state_variable.get_type().expect("slang validated");
-        let element_type = AstType::resolve(&slang_type, LocationPolicy::ForceMemory, builder);
-        let function_signature = Function::new(signature, Vec::new(), vec![element_type]);
-        let entry = function_signature.define(
-            Some(selector),
-            StateMutability::Pure,
-            None,
-            None,
-            builder,
-            contract_body,
-        );
-        if let Some(value) = Self::fold_constant_int(&initializer) {
-            let constant =
-                AstValue::constant_from_bigint(&value, AstType::new(element_type), builder, &entry)
-                    .into_mlir();
-            mlir_op_void!(builder, &entry, ReturnOperation.operands(&[constant]));
-            return;
-        }
-        // A non-integer constant — a `string` / `bytesN` literal — is not
-        // integer-foldable; materialise its initializer toward the return type
-        // through the expression emitter, as an explicit `return <const>` would
-        // (a constant body has no locals, so an empty environment suffices).
-        let environment = Environment::new();
-        let emitter = ExpressionContext::new(
-            self.state,
-            &environment,
-            storage_layout,
-            ArithmeticMode::Checked,
-        );
-        let BlockAnd {
-            value,
-            block: entry,
-        } = if let Expression::StringExpression(string_literal) = &initializer {
-            string_literal.materialize(element_type, &emitter, entry)
-        } else {
-            initializer.emit(&emitter, entry)
-        };
-        let value = value
-            .cast(AstType::new(element_type), &self.state.builder, &entry)
-            .into_mlir();
-        mlir_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
-    }
-
-    /// Folds a constant integer expression to a [`BigInt`], when it is one of the
-    /// closed set of integer-foldable forms.
-    pub fn fold_constant_int(expression: &Expression) -> Option<BigInt> {
-        match expression {
-            Expression::DecimalNumberExpression(decimal) => decimal.integer_value(),
-            Expression::HexNumberExpression(hex) => hex.integer_value(),
-            Expression::Identifier(identifier) => match identifier.resolve_to_definition() {
-                Some(Definition::StateVariable(state_variable)) => {
-                    Self::fold_constant_int(&state_variable.value()?)
-                }
-                Some(Definition::Constant(constant)) => Self::fold_constant_int(&constant.value()?),
-                _ => None,
-            },
-            Expression::MemberAccessExpression(access) => {
-                match access.member().resolve_to_definition() {
-                    Some(Definition::StateVariable(state_variable)) => {
-                        Self::fold_constant_int(&state_variable.value()?)
-                    }
-                    Some(Definition::Constant(constant)) => {
-                        Self::fold_constant_int(&constant.value()?)
-                    }
-                    _ => None,
-                }
-            }
-            Expression::FunctionCallExpression(call) => {
-                let ArgumentsDeclaration::PositionalArguments(positional) = call.arguments() else {
-                    return None;
-                };
-                let mut arguments = positional.iter();
-                let argument = arguments.next()?;
-                if arguments.next().is_some() {
-                    return None;
-                }
-                let is_wrap_unwrap = matches!(
-                    &call.operand(),
-                    Expression::MemberAccessExpression(member)
-                        if matches!(
-                            member.member().resolve_to_built_in(),
-                            Some(BuiltIn::Wrap | BuiltIn::Unwrap)
-                        )
-                );
-                if is_wrap_unwrap || call.is_type_conversion() {
-                    Self::fold_constant_int(&argument)
-                } else {
-                    None
-                }
-            }
-            _ => expression
-                .get_type()
-                .and_then(|slang_type| match slang_type {
-                    SlangType::Literal(literal) => match literal.kind() {
-                        LiteralKind::Integer { value } => Some(value),
-                        LiteralKind::HexInteger { value, .. } => Some(BigInt::from(value)),
-                        _ => None,
-                    },
-                    _ => None,
-                }),
-        }
-    }
-
-    /// Emits a no-argument getter for a `public` struct state variable (its
-    /// returnable members as a flattened tuple). Emitted by a later fill.
-    pub fn emit_struct_getter(
-        &self,
-        state_variable: &StateVariableDefinition,
-        slot: &StorageSlot,
-        location: DataLocation,
-        contract_body: &BlockRef<'context, '_>,
-    ) -> bool {
-        let declared_type = state_variable.get_type().expect("slang validated");
-        let builder = &self.state.builder;
-        if let SlangType::Struct(struct_type) = &declared_type
-            && let Definition::Struct(struct_definition) = struct_type.definition()
-        {
-            let struct_mlir_type = AstType::resolve(
-                &declared_type,
-                LocationPolicy::Declared(Some(location)),
-                builder,
-            );
-            if let Some(plan) =
-                Self::struct_getter_layout(&struct_definition, struct_mlir_type, builder)
-            {
-                let result_types: Vec<Type<'context>> = plan
-                    .iter()
-                    .map(|(_, _, result_type)| *result_type)
-                    .collect();
-                let container_type = AstType::resolve_state_variable(state_variable, builder);
-                let signature = state_variable
-                    .compute_canonical_signature()
-                    .expect("slang validated");
-                let selector = state_variable.compute_selector().expect("slang validated");
-                let function_signature =
-                    Function::new(signature, Vec::new(), result_types.to_vec());
-                let entry = function_signature.define(
-                    Some(selector),
-                    StateMutability::View,
-                    None,
-                    None,
-                    builder,
-                    contract_body,
-                );
-                let base = mlir_op!(
-                    builder,
-                    &entry,
-                    AddrOfOperation
-                        .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
-                        .addr(container_type)
-                );
-                self.emit_indexed_getter_result(base, &Some(plan), struct_mlir_type, &entry);
-                return true;
-            }
-        }
-        false
-    }
-
-    /// Plans a struct getter's destructured member layout (offset, member type,
-    /// result member type), when the result type is a struct.
+    /// The destructured returnable members of a `public` struct, as its accessor
+    /// returns them: for each member the accessor yields — every scalar, plus
+    /// `string` / `bytes` returned as a memory copy — its field index, MLIR
+    /// member type, and ABI result type. Nested mappings, arrays, and structs are
+    /// skipped (Solidity omits them from the accessor tuple). `None` when no
+    /// member is returnable or a member is untyped. Shared by the struct getter
+    /// and a struct external-call return.
     pub fn struct_getter_layout(
         struct_definition: &StructDefinition,
         struct_mlir_type: Type<'context>,
-        builder: &solx_mlir::Builder<'context>,
+        builder: &Builder<'context>,
     ) -> Option<Vec<(u64, Type<'context>, Type<'context>)>> {
         let mut plan = Vec::new();
         for (member_index, member) in struct_definition.members().iter().enumerate() {
@@ -612,9 +76,7 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                 .into_mlir();
             // A `string`/`bytes` member returns a memory copy; every other member
             // reaching here is a value type (mapping/array/struct are skipped
-            // above). A function-pointer member would need a func-ref guard
-            // (`is_sol_function_ref`), which solx-mlir does not yet expose — left
-            // to the solx-mlir Sol-type-predicate fill.
+            // above).
             let result_member_type = if is_string_or_bytes {
                 AstType::string(builder.context, DataLocation::Memory).into_mlir()
             } else {
@@ -627,23 +89,477 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         }
         Some(plan)
     }
+}
 
-    /// Loads one struct getter member, coercing it to its ABI result type.
-    pub fn load_getter_member<'block>(
-        builder: &solx_mlir::Builder<'context>,
-        address: Value<'context, 'block>,
-        member_type: Type<'context>,
-        result_member_type: Type<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        if member_type == result_member_type {
-            Pointer::new(address)
-                .load(AstType::new(result_member_type), builder, block)
-                .into_mlir()
-        } else {
-            AstValue::from(address)
-                .cast(AstType::new(result_member_type), builder, block)
-                .into_mlir()
+impl<'state, 'context, 'block, 'scope> Emit<'context, 'block, 'state, 'scope>
+    for StateVariableDefinition
+where
+    'context: 'block,
+    'context: 'state,
+    'block: 'state,
+    'state: 'scope,
+{
+    type Context = &'scope ExpressionContext<'state, 'context, 'block>;
+    type Output = ();
+
+    /// Emits the auto-generated external accessor for this `public` state variable
+    /// into the contract body. A variable with no accessor, or whose accessor is
+    /// not yet supported (a non-struct reference terminal), is left ungenerated —
+    /// the rest of the contract still compiles.
+    fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) {
+        /// Folds a constant integer expression to a [`BigInt`] when it is one of
+        /// the closed set of integer-foldable forms.
+        fn fold_constant_int(expression: &Expression) -> Option<BigInt> {
+            match expression {
+                Expression::DecimalNumberExpression(decimal) => decimal.integer_value(),
+                Expression::HexNumberExpression(hex) => hex.integer_value(),
+                Expression::Identifier(identifier) => match identifier.resolve_to_definition() {
+                    Some(Definition::StateVariable(state_variable)) => {
+                        fold_constant_int(&state_variable.value()?)
+                    }
+                    Some(Definition::Constant(constant)) => fold_constant_int(&constant.value()?),
+                    _ => None,
+                },
+                Expression::MemberAccessExpression(access) => {
+                    match access.member().resolve_to_definition() {
+                        Some(Definition::StateVariable(state_variable)) => {
+                            fold_constant_int(&state_variable.value()?)
+                        }
+                        Some(Definition::Constant(constant)) => {
+                            fold_constant_int(&constant.value()?)
+                        }
+                        _ => None,
+                    }
+                }
+                Expression::FunctionCallExpression(call) => {
+                    let ArgumentsDeclaration::PositionalArguments(positional) = call.arguments()
+                    else {
+                        return None;
+                    };
+                    let mut arguments = positional.iter();
+                    let argument = arguments.next()?;
+                    if arguments.next().is_some() {
+                        return None;
+                    }
+                    let is_wrap_unwrap = matches!(
+                        &call.operand(),
+                        Expression::MemberAccessExpression(member)
+                            if matches!(
+                                member.member().resolve_to_built_in(),
+                                Some(BuiltIn::Wrap | BuiltIn::Unwrap)
+                            )
+                    );
+                    if is_wrap_unwrap || call.is_type_conversion() {
+                        fold_constant_int(&argument)
+                    } else {
+                        None
+                    }
+                }
+                _ => expression
+                    .get_type()
+                    .and_then(|slang_type| match slang_type {
+                        SlangType::Literal(literal) => match literal.kind() {
+                            LiteralKind::Integer { value } => Some(value),
+                            LiteralKind::HexInteger { value, .. } => Some(BigInt::from(value)),
+                            _ => None,
+                        },
+                        _ => None,
+                    }),
+            }
         }
+
+        /// Emits the terminal `sol.return` from the addressed `base`: a struct
+        /// expands into its flattened returnable members (each loaded and coerced
+        /// to its ABI result type), a scalar loads the single value.
+        fn return_loaded<'context, 'block>(
+            base: Value<'context, 'block>,
+            struct_plan: &Option<Vec<(u64, Type<'context>, Type<'context>)>>,
+            result_type: Type<'context>,
+            builder: &Builder<'context>,
+            entry: &BlockRef<'context, 'block>,
+        ) {
+            match struct_plan {
+                Some(plan) => {
+                    let mut values = Vec::new();
+                    for (member_index, member_type, result_member_type) in plan {
+                        let index_value = AstValue::constant(
+                            *member_index as i64,
+                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_X64),
+                            builder,
+                            entry,
+                        );
+                        let address = Pointer::new(base)
+                            .gep(index_value, AstType::new(*member_type), builder, entry)
+                            .into_mlir();
+                        let value = if member_type == result_member_type {
+                            Pointer::new(address)
+                                .load(AstType::new(*result_member_type), builder, entry)
+                                .into_mlir()
+                        } else {
+                            AstValue::new(address)
+                                .cast(AstType::new(*result_member_type), builder, entry)
+                                .into_mlir()
+                        };
+                        values.push(value);
+                    }
+                    mlir_op_void!(builder, entry, ReturnOperation.operands(&values));
+                }
+                None => {
+                    let value = Pointer::new(base)
+                        .load(AstType::new(result_type), builder, entry)
+                        .into_mlir();
+                    mlir_op_void!(builder, entry, ReturnOperation.operands(&[value]));
+                }
+            }
+        }
+
+        let state_variable = self;
+        let builder = &context.state().builder;
+
+        // A variable with no ABI accessor has no getter.
+        let abi = match state_variable.compute_abi_entry() {
+            Some(AbiEntry::Function(abi)) => abi,
+            _ => return,
+        };
+
+        // A `constant` getter folds its compile-time initializer (no slot, no
+        // inputs), exactly as a file-level `constant`.
+        if matches!(
+            state_variable.mutability(),
+            StateVariableMutability::Constant
+        ) {
+            if !abi.inputs().is_empty() {
+                return;
+            }
+            let Some(initializer) = state_variable.value() else {
+                return;
+            };
+            let signature = state_variable
+                .compute_canonical_signature()
+                .expect("slang validated");
+            let selector = state_variable.compute_selector().expect("slang validated");
+            // Reference types (`string` / `bytes`) return in `Memory` — what an
+            // external getter call hands back — not their declared storage location.
+            let slang_type = state_variable.get_type().expect("slang validated");
+            let element_type = AstType::resolve(&slang_type, LocationPolicy::ForceMemory, builder);
+            let entry = Function::new(signature, Vec::new(), vec![element_type]).define(
+                Some(selector),
+                StateMutability::Pure,
+                None,
+                None,
+                builder,
+                &block,
+            );
+            if let Some(value) = fold_constant_int(&initializer) {
+                let constant = AstValue::constant_from_bigint(
+                    &value,
+                    AstType::new(element_type),
+                    builder,
+                    &entry,
+                )
+                .into_mlir();
+                mlir_op_void!(builder, &entry, ReturnOperation.operands(&[constant]));
+                return;
+            }
+            // A non-integer constant (`string` / `bytesN` literal) materialises its
+            // initializer toward the return type, as an explicit `return <const>`
+            // would; the getter's empty scope is the threaded context itself.
+            let BlockAnd {
+                value,
+                block: entry,
+            } = if let Expression::StringExpression(string_literal) = &initializer {
+                string_literal.materialize(element_type, context, entry)
+            } else {
+                initializer.emit(context, entry)
+            };
+            let value = value
+                .cast(AstType::new(element_type), builder, &entry)
+                .into_mlir();
+            mlir_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
+            return;
+        }
+
+        let Some(slot) = context.storage_layout().get(&state_variable.node_id()) else {
+            return;
+        };
+        let location = slot.location;
+        let declared_type = state_variable.get_type().expect("slang validated");
+
+        // An indexed (mapping/array) getter: each key/index is a parameter. Walk
+        // the nesting once to collect the parameter types and reach the terminal
+        // type — needed to define the function before its entry block exists.
+        if !abi.inputs().is_empty() {
+            let signature = state_variable
+                .compute_canonical_signature()
+                .expect("slang validated");
+            let selector = state_variable.compute_selector().expect("slang validated");
+
+            let mut input_types: Vec<Type<'context>> = Vec::new();
+            let mut terminal = declared_type.clone();
+            loop {
+                match &terminal {
+                    SlangType::Mapping(mapping_type) => {
+                        let key_slang = mapping_type.key_type();
+                        // A reference-typed key (`string` / `bytes`) is an ABI input
+                        // decoded into memory; slang reports it with the mapping's
+                        // storage location, so build the memory type directly.
+                        let key_type = if key_slang.is_reference_type() {
+                            AstType::string(builder.context, DataLocation::Memory).into_mlir()
+                        } else {
+                            AstType::resolve(
+                                &key_slang,
+                                LocationPolicy::Declared(Some(location)),
+                                builder,
+                            )
+                        };
+                        input_types.push(key_type);
+                        terminal = mapping_type.value_type();
+                    }
+                    SlangType::Array(array_type) => {
+                        input_types.push(
+                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                                .into_mlir(),
+                        );
+                        terminal = array_type.element_type();
+                    }
+                    SlangType::FixedSizeArray(array_type) => {
+                        input_types.push(
+                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
+                                .into_mlir(),
+                        );
+                        terminal = array_type.element_type();
+                    }
+                    _ => break,
+                }
+            }
+            if input_types.is_empty() || input_types.len() != abi.inputs().len() {
+                return;
+            }
+
+            let container_type = AstType::resolve_state_variable(state_variable, builder);
+            let result_type =
+                AstType::resolve(&terminal, LocationPolicy::Declared(Some(location)), builder);
+            // A struct terminal expands into its flattened returnable members;
+            // another reference terminal is not yet handled (left ungenerated).
+            let struct_plan = match &terminal {
+                SlangType::Struct(struct_type) => {
+                    let Definition::Struct(struct_definition) = struct_type.definition() else {
+                        return;
+                    };
+                    match ContractEmitter::struct_getter_layout(
+                        &struct_definition,
+                        result_type,
+                        builder,
+                    ) {
+                        Some(plan) => Some(plan),
+                        None => return,
+                    }
+                }
+                _ if terminal.is_reference_type() => return,
+                _ => None,
+            };
+            let result_types: Vec<Type<'context>> = match &struct_plan {
+                Some(plan) => plan.iter().map(|(_, _, result)| *result).collect(),
+                None => vec![result_type],
+            };
+            let entry = Function::new(signature, input_types, result_types).define(
+                Some(selector),
+                StateMutability::View,
+                None,
+                None,
+                builder,
+                &block,
+            );
+            let mut base = mlir_op!(
+                builder,
+                &entry,
+                AddrOfOperation
+                    .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
+                    .addr(container_type)
+            );
+            // Re-walk the nesting, stepping the access over each parameter: a
+            // `sol.map` for a mapping key, a bounds-checked `sol.gep` for an array
+            // index (out-of-bounds bare-revert via a no-message `sol.require`,
+            // matching solc's accessor — not `sol.gep`'s `Panic(0x32)`).
+            let mut current = declared_type.clone();
+            let mut index = 0usize;
+            loop {
+                match &current {
+                    SlangType::Mapping(mapping_type) => {
+                        let arg: Value<'context, 'block> = entry
+                            .argument(index)
+                            .expect("argument index is within the block signature")
+                            .into();
+                        let value_slang = mapping_type.value_type();
+                        let resolved_value = AstType::resolve(
+                            &value_slang,
+                            LocationPolicy::Declared(Some(location)),
+                            builder,
+                        );
+                        // Intermediate containers are addressed by their reference;
+                        // a value terminal by a `!sol.ptr<V>`.
+                        let level_type = if value_slang.is_reference_type() {
+                            resolved_value
+                        } else {
+                            AstType::pointer(builder.context, resolved_value, location).into_mlir()
+                        };
+                        base = Pointer::new(base)
+                            .entry(
+                                AstValue::new(arg),
+                                AstType::new(level_type),
+                                builder,
+                                &entry,
+                            )
+                            .into_mlir();
+                        index += 1;
+                        current = value_slang;
+                    }
+                    SlangType::Array(array_type) => {
+                        let arg: Value<'context, 'block> = entry
+                            .argument(index)
+                            .expect("argument index is within the block signature")
+                            .into();
+                        let element_type = AstType::resolve(
+                            &array_type.element_type(),
+                            LocationPolicy::Declared(Some(location)),
+                            builder,
+                        );
+                        let length = mlir_op!(
+                            builder,
+                            &entry,
+                            LengthOperation.inp(base).len(AstType::unsigned(
+                                builder.context,
+                                solx_utils::BIT_LENGTH_FIELD
+                            ))
+                        );
+                        let in_bounds = AstValue::new(arg)
+                            .compare(AstValue::new(length), CmpPredicate::Lt, builder, &entry)
+                            .into_mlir();
+                        mlir_op_void!(builder, &entry, RequireOperation.cond(in_bounds).args(&[]));
+                        base = Pointer::new(base)
+                            .gep(
+                                AstValue::new(arg),
+                                AstType::new(element_type),
+                                builder,
+                                &entry,
+                            )
+                            .into_mlir();
+                        index += 1;
+                        current = array_type.element_type();
+                    }
+                    SlangType::FixedSizeArray(array_type) => {
+                        let arg: Value<'context, 'block> = entry
+                            .argument(index)
+                            .expect("argument index is within the block signature")
+                            .into();
+                        let element_type = AstType::resolve(
+                            &array_type.element_type(),
+                            LocationPolicy::Declared(Some(location)),
+                            builder,
+                        );
+                        let length = AstValue::constant(
+                            array_type.size() as i64,
+                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                            builder,
+                            &entry,
+                        )
+                        .into_mlir();
+                        let in_bounds = AstValue::new(arg)
+                            .compare(AstValue::new(length), CmpPredicate::Lt, builder, &entry)
+                            .into_mlir();
+                        mlir_op_void!(builder, &entry, RequireOperation.cond(in_bounds).args(&[]));
+                        base = Pointer::new(base)
+                            .gep(
+                                AstValue::new(arg),
+                                AstType::new(element_type),
+                                builder,
+                                &entry,
+                            )
+                            .into_mlir();
+                        index += 1;
+                        current = array_type.element_type();
+                    }
+                    _ => break,
+                }
+            }
+            return_loaded(base, &struct_plan, result_type, builder, &entry);
+            return;
+        }
+
+        // A no-argument struct getter expands the struct's returnable members.
+        if let SlangType::Struct(struct_type) = &declared_type
+            && let Definition::Struct(struct_definition) = struct_type.definition()
+        {
+            let struct_mlir_type = AstType::resolve(
+                &declared_type,
+                LocationPolicy::Declared(Some(location)),
+                builder,
+            );
+            if let Some(plan) =
+                ContractEmitter::struct_getter_layout(&struct_definition, struct_mlir_type, builder)
+            {
+                let result_types: Vec<Type<'context>> =
+                    plan.iter().map(|(_, _, result)| *result).collect();
+                let container_type = AstType::resolve_state_variable(state_variable, builder);
+                let signature = state_variable
+                    .compute_canonical_signature()
+                    .expect("slang validated");
+                let selector = state_variable.compute_selector().expect("slang validated");
+                let entry = Function::new(signature, Vec::new(), result_types).define(
+                    Some(selector),
+                    StateMutability::View,
+                    None,
+                    None,
+                    builder,
+                    &block,
+                );
+                let base = mlir_op!(
+                    builder,
+                    &entry,
+                    AddrOfOperation
+                        .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
+                        .addr(container_type)
+                );
+                return_loaded(base, &Some(plan), struct_mlir_type, builder, &entry);
+                return;
+            }
+        }
+
+        // A scalar / reference getter reads the variable's slot directly.
+        let signature = state_variable
+            .compute_canonical_signature()
+            .expect("slang validated");
+        let selector = state_variable.compute_selector().expect("slang validated");
+        let element_type = AstType::resolve_state_variable(state_variable, builder);
+        // A reference-typed variable is addressed by the reference type itself in
+        // storage; a value type by a `!sol.ptr<T, _>`.
+        let address_type = if declared_type.is_reference_type() {
+            element_type
+        } else {
+            AstType::pointer(builder.context, element_type, location).into_mlir()
+        };
+        let entry = Function::new(signature, Vec::new(), vec![element_type]).define(
+            Some(selector),
+            StateMutability::View,
+            None,
+            None,
+            builder,
+            &block,
+        );
+        let storage_ref = mlir_op!(
+            builder,
+            &entry,
+            AddrOfOperation
+                .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
+                .addr(address_type)
+        );
+        let value = if declared_type.is_reference_type() {
+            storage_ref
+        } else {
+            Pointer::new(storage_ref)
+                .load(AstType::new(element_type), builder, &entry)
+                .into_mlir()
+        };
+        mlir_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
     }
 }

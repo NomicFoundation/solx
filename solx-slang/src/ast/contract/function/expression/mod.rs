@@ -78,6 +78,16 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         }
     }
 
+    /// The shared MLIR context.
+    pub fn state(&self) -> &'state Context<'context> {
+        self.state
+    }
+
+    /// The state-variable storage layout (node ID → slot).
+    pub fn storage_layout(&self) -> &'state HashMap<NodeId, StorageSlot> {
+        self.storage_layout
+    }
+
     /// Emits an internal function used as a value (`g` in `f = g;`) as a
     /// `sol.func_constant` producing an `!sol.func_ref<…>` pointer.
     ///

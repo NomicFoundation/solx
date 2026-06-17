@@ -7,7 +7,6 @@ pub mod analysis;
 /// Function definition emission to Sol dialect MLIR.
 pub mod function;
 pub mod getter;
-pub mod getter_level;
 /// Contract storage layout: the slot assignment of state variables.
 pub mod storage_layout;
 
@@ -29,9 +28,9 @@ use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionVisibility;
 use slang_solidity_v2::ast::LibraryDefinition;
 use slang_solidity_v2::ast::NodeId;
-use slang_solidity_v2::ast::StateVariableMutability;
 
 use solx_mlir::Context;
+use solx_mlir::Environment;
 use solx_mlir::ods::sol::ContractOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 use solx_utils::DataLocation;
@@ -39,7 +38,10 @@ use solx_utils::DataLocation;
 use self::analysis::free_function::FreeCallCollector;
 use self::analysis::library::LibraryCallCollector;
 use self::function::FunctionEmitter;
+use self::function::expression::ExpressionContext;
+use self::function::expression::arithmetic_mode::ArithmeticMode;
 use self::storage_layout::StorageSlot;
+use crate::ast::Emit;
 use crate::ast::LocationPolicy;
 use crate::ast::operator_binding::OperatorBindings;
 
@@ -403,20 +405,18 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         storage_layout: &HashMap<NodeId, StorageSlot>,
         contract_body: &BlockRef<'context, '_>,
     ) {
+        // A getter has no caller-bound locals; each state variable emits its own
+        // accessor over the shared (empty) emission scope, reading its slot from
+        // the storage layout.
+        let environment = Environment::new();
+        let context = ExpressionContext::new(
+            self.state,
+            &environment,
+            storage_layout,
+            ArithmeticMode::Checked,
+        );
         for state_variable in contract.linearised_state_variables() {
-            if matches!(
-                state_variable.mutability(),
-                StateVariableMutability::Constant
-            ) {
-                self.emit_constant_getter(&state_variable, storage_layout, contract_body);
-            } else if let Some(slot) = storage_layout.get(&state_variable.node_id()) {
-                self.emit_state_variable_getter(
-                    &state_variable,
-                    slot,
-                    slot.location,
-                    contract_body,
-                );
-            }
+            state_variable.emit(&context, *contract_body);
         }
     }
 
