@@ -3,7 +3,6 @@
 //!
 
 use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
 pub mod abi;
 pub mod array;
 pub mod global;
@@ -12,20 +11,12 @@ pub mod require;
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
-use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::PositionalArguments;
-use solx_mlir::ods::sol::AddModOperation;
-use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::ConcatOperation;
-use solx_mlir::ods::sol::EcrecoverOperation;
-use solx_mlir::ods::sol::MulModOperation;
-use solx_mlir::ods::sol::Ripemd160Operation;
-use solx_mlir::ods::sol::Sha256Operation;
 
 use crate::ast::BlockAnd;
 use crate::ast::Emit;
@@ -39,188 +30,6 @@ pub enum EncodeMode {
     Standard,
     /// Packed ABI encoding with no per-element padding (`abi.encodePacked`).
     Packed,
-}
-
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits an identifier-callee built-in (`assert`, `require`, `keccak256`,
-    /// `sha256`, `ripemd160`, `ecrecover`, `addmod`, `mulmod`, `gasleft`).
-    ///
-    /// `Some(...)` for value-producing built-ins, `None` for statement-style
-    /// ones (`assert`, `require`). Only handled built-ins with a matching
-    /// argument count reach here, so the expectations hold.
-    pub fn emit_built_in_call(
-        &self,
-        built_in: BuiltIn,
-        arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let context = self;
-        match built_in {
-            BuiltIn::Assert => {
-                let condition = arguments.iter().next().expect("assert has one argument");
-                (None, context.emit_assert(&condition, block))
-            }
-            BuiltIn::Require => {
-                let mut iter = arguments.iter();
-                let condition = iter.next().expect("require has a condition argument");
-                let message = iter.next();
-                (
-                    None,
-                    context.emit_require(&condition, message.as_ref(), block),
-                )
-            }
-            BuiltIn::Gasleft => (
-                Some(AstValue::gas_left(&context.state.builder, &block).into_mlir()),
-                block,
-            ),
-            BuiltIn::Blockhash => {
-                let BlockAnd {
-                    value: values,
-                    block,
-                } = arguments.emit(context, block);
-                let builder = &context.state.builder;
-                // `sol.blockhash` takes a `ui256` block number; coerce a narrower
-                // argument type up first.
-                let block_number = AstValue::from(values[0])
-                    .cast(
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                        builder,
-                        &block,
-                    )
-                    .into_mlir();
-                let value = sol_op!(
-                    builder,
-                    block,
-                    BlockHashOperation
-                        .block_number(block_number)
-                        .val(AstType::fixed_bytes(builder.context, 32))
-                );
-                (Some(value), block)
-            }
-            BuiltIn::Keccak256 => {
-                let BlockAnd {
-                    value: values,
-                    block,
-                } = arguments.emit(context, block);
-                let value =
-                    AstValue::keccak256(AstValue::from(values[0]), &context.state.builder, &block)
-                        .into_mlir();
-                (Some(value), block)
-            }
-            BuiltIn::Sha256 => {
-                let BlockAnd {
-                    value: values,
-                    block,
-                } = arguments.emit(context, block);
-                let builder = &context.state.builder;
-                let value = sol_op!(
-                    builder,
-                    block,
-                    Sha256Operation
-                        .data(values[0])
-                        .result(AstType::fixed_bytes(builder.context, 32))
-                );
-                (Some(value), block)
-            }
-            BuiltIn::Ripemd160 => {
-                let BlockAnd {
-                    value: values,
-                    block,
-                } = arguments.emit(context, block);
-                let builder = &context.state.builder;
-                let value = sol_op!(
-                    builder,
-                    block,
-                    Ripemd160Operation
-                        .data(values[0])
-                        .result(AstType::fixed_bytes(builder.context, 20))
-                );
-                (Some(value), block)
-            }
-            BuiltIn::Ecrecover => {
-                let BlockAnd {
-                    value: values,
-                    block,
-                } = arguments.emit(context, block);
-                let builder = &context.state.builder;
-                // `ecrecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s)`: the
-                // hash / r / s arguments keep their literal `uint256` type, but
-                // `sol.ecrecover` takes `fixedbytes<32>` for them and `ui8` for
-                // `v`. Coerce each to its signature type (matching solc).
-                let bytes32 = AstType::fixed_bytes(builder.context, 32).into_mlir();
-                let ui8 = Type::from(IntegerType::unsigned(builder.context, 8));
-                let hash = AstValue::from(values[0])
-                    .cast(AstType::new(bytes32), builder, &block)
-                    .into_mlir();
-                let v = AstValue::from(values[1])
-                    .cast(AstType::new(ui8), builder, &block)
-                    .into_mlir();
-                let r = AstValue::from(values[2])
-                    .cast(AstType::new(bytes32), builder, &block)
-                    .into_mlir();
-                let s = AstValue::from(values[3])
-                    .cast(AstType::new(bytes32), builder, &block)
-                    .into_mlir();
-                let value = sol_op!(
-                    builder,
-                    block,
-                    EcrecoverOperation
-                        .hash(hash)
-                        .v(v)
-                        .r(r)
-                        .s(s)
-                        .result(AstType::address(builder.context, false))
-                );
-                (Some(value), block)
-            }
-            BuiltIn::Addmod => {
-                let BlockAnd {
-                    value: values,
-                    block,
-                } = arguments.emit(context, block);
-                let builder = &context.state.builder;
-                // `addmod` operates on `uint256`, but a literal operand keeps its
-                // narrow type (`addmod(1, 2, d)` → ui8, ui8, ui256); `sol.addmod`
-                // requires identical operand/result types, so widen all to ui256.
-                let ui256 =
-                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
-                let x = AstValue::from(values[0])
-                    .cast(AstType::new(ui256), builder, &block)
-                    .into_mlir();
-                let y = AstValue::from(values[1])
-                    .cast(AstType::new(ui256), builder, &block)
-                    .into_mlir();
-                let modulus = AstValue::from(values[2])
-                    .cast(AstType::new(ui256), builder, &block)
-                    .into_mlir();
-                let value = sol_op!(builder, block, AddModOperation.x(x).y(y).r#mod(modulus));
-                (Some(value), block)
-            }
-            BuiltIn::Mulmod => {
-                let BlockAnd {
-                    value: values,
-                    block,
-                } = arguments.emit(context, block);
-                let builder = &context.state.builder;
-                // `mulmod` operates on `uint256`; widen narrow literal operands so
-                // all operands/result share the type `sol.mulmod` requires.
-                let ui256 =
-                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
-                let x = AstValue::from(values[0])
-                    .cast(AstType::new(ui256), builder, &block)
-                    .into_mlir();
-                let y = AstValue::from(values[1])
-                    .cast(AstType::new(ui256), builder, &block)
-                    .into_mlir();
-                let modulus = AstValue::from(values[2])
-                    .cast(AstType::new(ui256), builder, &block)
-                    .into_mlir();
-                let value = sol_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus));
-                (Some(value), block)
-            }
-            _ => unreachable!("only emittable identifier built-ins are routed here"),
-        }
-    }
 }
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
