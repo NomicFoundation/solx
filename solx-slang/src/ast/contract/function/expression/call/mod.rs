@@ -21,6 +21,7 @@ use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::CallOptionsExpression;
+use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
@@ -38,6 +39,7 @@ use solx_mlir::ods::sol::AssertOperation;
 use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::CopyOperation;
+use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::ExtCallOperation;
 use solx_mlir::ods::sol::ExtICallOperation;
@@ -60,6 +62,7 @@ use crate::ast::Materialize;
 use crate::ast::Pointer;
 use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::built_in::EncodeMode;
 
 /// The shared call-emission primitives the call kinds dispatch through
 /// (argument coercion, call-options capture, indirect calls, struct
@@ -781,12 +784,53 @@ where
                         context.emit_bare_call(access, kind, positional, call_value, block);
                     return (vec![status, ret_data], block);
                 }
-                // `abi.decode(payload, (T))` — result type from the call.
+                // `abi.decode(payload, (T))` — `sol.decode` to the result types the
+                // call's slang type resolves to (one per requested type).
                 Some(BuiltIn::AbiDecode) => {
                     let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
                         unimplemented!("abi.decode takes positional arguments only");
                     };
-                    return context.emit_abi_decode(self, positional, block);
+                    let payload_expression = positional.iter().next().expect("slang validated");
+                    let BlockAnd {
+                        value: payload_value,
+                        block,
+                    } = payload_expression.emit(context, block);
+                    let result_types = context.abi_decode_result_types(self);
+                    let builder = &context.state.builder;
+                    // `sol.decode` requires a memory or calldata byte buffer; a
+                    // storage `bytes` / `string` is a reference, so copy it to memory
+                    // first (solc emits a Storage->Memory cast). Memory and calldata
+                    // payloads are already valid buffers and pass through unchanged.
+                    let payload_value = if matches!(
+                        payload_expression
+                            .get_type()
+                            .and_then(|payload_type| payload_type.data_location()),
+                        Some(SlangDataLocation::Storage)
+                    ) {
+                        payload_value.cast(
+                            AstType::string(builder.context, solx_utils::DataLocation::Memory),
+                            builder,
+                            &block,
+                        )
+                    } else {
+                        payload_value
+                    };
+                    let operation = block.append_operation(
+                        DecodeOperation::builder(builder.context, builder.unknown_location)
+                            .addr(payload_value.into_mlir())
+                            .outs(&result_types)
+                            .build()
+                            .into(),
+                    );
+                    let values = (0..result_types.len())
+                        .map(|index| {
+                            operation
+                                .result(index)
+                                .expect("sol.decode yields one result per requested type")
+                                .into()
+                        })
+                        .collect();
+                    return (values, block);
                 }
                 // `T.wrap(x)` / `T.unwrap(x)`: a single conversion to the result type.
                 Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
@@ -869,12 +913,48 @@ where
                             sol_op_void!(builder, block, TransferOperation.addr(addr).val(amount));
                             (None, block)
                         }
-                        BuiltIn::AbiEncode => context.emit_abi_encode(positional, block),
+                        BuiltIn::AbiEncode => {
+                            // `abi.encode(args)` → a standard `sol.encode`.
+                            let BlockAnd {
+                                value: values,
+                                block,
+                            } = positional.emit(context, block);
+                            let result = context.emit_sol_encode(
+                                &values,
+                                None,
+                                EncodeMode::Standard,
+                                &block,
+                            );
+                            (Some(result), block)
+                        }
                         BuiltIn::AbiEncodePacked => {
-                            context.emit_abi_encode_packed(positional, block)
+                            // `abi.encodePacked(args)` → a packed `sol.encode`.
+                            let BlockAnd {
+                                value: values,
+                                block,
+                            } = positional.emit(context, block);
+                            let result =
+                                context.emit_sol_encode(&values, None, EncodeMode::Packed, &block);
+                            (Some(result), block)
                         }
                         BuiltIn::AbiEncodeWithSelector => {
-                            context.emit_abi_encode_with_selector(positional, block)
+                            // `abi.encodeWithSelector(selector, args)`: cast the first
+                            // argument to `bytes4` and prepend it to the payload.
+                            let BlockAnd {
+                                value: mut values,
+                                block,
+                            } = positional.emit(context, block);
+                            let builder = &context.state.builder;
+                            let selector = AstValue::from(values.remove(0))
+                                .cast(AstType::fixed_bytes(builder.context, 4), builder, &block)
+                                .into_mlir();
+                            let result = context.emit_sol_encode(
+                                &values,
+                                Some(selector),
+                                EncodeMode::Standard,
+                                &block,
+                            );
+                            (Some(result), block)
                         }
                         BuiltIn::AbiEncodeWithSignature => {
                             context.emit_abi_encode_with_signature(positional, block)

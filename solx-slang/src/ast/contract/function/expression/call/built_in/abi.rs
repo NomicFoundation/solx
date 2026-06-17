@@ -11,13 +11,11 @@ use melior::ir::Value;
 use melior::ir::attribute::DenseI32ArrayAttribute;
 use melior::ir::operation::OperationMutLike;
 use num_bigint::BigInt;
-use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
-use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::EncodeOperation;
 use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 
@@ -31,53 +29,6 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::built_in::EncodeMode;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits `abi.encode(args)` as a standard `sol.encode`.
-    pub fn emit_abi_encode(
-        &self,
-        arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let BlockAnd {
-            value: values,
-            block,
-        } = arguments.emit(self, block);
-        let result = self.emit_sol_encode(&values, None, EncodeMode::Standard, &block);
-        (Some(result), block)
-    }
-
-    /// Emits `abi.encodePacked(args)` as a packed `sol.encode`.
-    pub fn emit_abi_encode_packed(
-        &self,
-        arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let BlockAnd {
-            value: values,
-            block,
-        } = arguments.emit(self, block);
-        let result = self.emit_sol_encode(&values, None, EncodeMode::Packed, &block);
-        (Some(result), block)
-    }
-
-    /// Emits `abi.encodeWithSelector(selector, args)`, casting the first
-    /// argument to `!sol.fixed_bytes<4>` and prepending it to the payload.
-    pub fn emit_abi_encode_with_selector(
-        &self,
-        arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> (Option<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let BlockAnd {
-            value: mut values,
-            block,
-        } = arguments.emit(self, block);
-        let builder = &self.state.builder;
-        let selector = AstValue::from(values.remove(0))
-            .cast(AstType::fixed_bytes(builder.context, 4), builder, &block)
-            .into_mlir();
-        let result = self.emit_sol_encode(&values, Some(selector), EncodeMode::Standard, &block);
-        (Some(result), block)
-    }
-
     /// Emits `abi.encodeWithSignature(sig, args)`, hashing the signature to a
     /// 4-byte selector and prepending it to the payload. A literal signature is
     /// hashed at compile time; a runtime one through `keccak256`.
@@ -249,7 +200,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// Sets `operand_segment_sizes` manually because melior's ODS-generated
     /// builder does not synthesize the attribute for `AttrSizedOperandSegments`
     /// ops; the dialect verifier rejects the op without it.
-    fn emit_sol_encode(
+    pub fn emit_sol_encode(
         &self,
         ins: &[Value<'context, 'block>],
         selector: Option<Value<'context, 'block>>,
@@ -286,7 +237,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// The MLIR result types of an `abi.decode` call — one per requested type.
     /// `abi.decode(data, T)` yields one; `abi.decode(data, (A, B, …))` yields
     /// one per tuple element. Resolved from the call's binder-assigned type.
-    fn abi_decode_result_types(&self, call: &FunctionCallExpression) -> Vec<Type<'context>> {
+    pub fn abi_decode_result_types(&self, call: &FunctionCallExpression) -> Vec<Type<'context>> {
         let builder = &self.state.builder;
         let return_slang_type = call.get_type().expect("slang validated");
         match return_slang_type {
@@ -303,59 +254,5 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 builder,
             )],
         }
-    }
-}
-
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits `abi.decode(payload, (T))` as a `sol.decode`. The result type comes
-    /// from the call's slang type; multi-result decode is not yet supported.
-    pub fn emit_abi_decode(
-        &self,
-        call: &FunctionCallExpression,
-        arguments: &PositionalArguments,
-        block: BlockRef<'context, 'block>,
-    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let context = self;
-        let payload_expression = arguments.iter().next().expect("slang validated");
-        let BlockAnd {
-            value: payload_value,
-            block,
-        } = payload_expression.emit(context, block);
-        let result_types = context.abi_decode_result_types(call);
-        let builder = &context.state.builder;
-        // `sol.decode` requires a memory or calldata byte buffer; a storage
-        // `bytes` / `string` is a reference, so copy it to memory first (solc
-        // emits a Storage->Memory `sol.data_loc_cast` here). Memory and calldata
-        // payloads are already valid buffers and pass through unchanged.
-        let payload_value = if matches!(
-            payload_expression
-                .get_type()
-                .and_then(|payload_type| payload_type.data_location()),
-            Some(SlangDataLocation::Storage)
-        ) {
-            payload_value.cast(
-                AstType::string(builder.context, solx_utils::DataLocation::Memory),
-                builder,
-                &block,
-            )
-        } else {
-            payload_value
-        };
-        let operation = block.append_operation(
-            DecodeOperation::builder(builder.context, builder.unknown_location)
-                .addr(payload_value.into_mlir())
-                .outs(&result_types)
-                .build()
-                .into(),
-        );
-        let values = (0..result_types.len())
-            .map(|index| {
-                operation
-                    .result(index)
-                    .expect("sol.decode yields one result per requested type")
-                    .into()
-            })
-            .collect();
-        (values, block)
     }
 }
