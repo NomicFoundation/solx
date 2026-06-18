@@ -20,7 +20,7 @@ use slang_solidity_v2::ast::visitor::Visitor;
 use slang_solidity_v2::ast::visitor::accept_function_definition;
 use slang_solidity_v2::ast::visitor::accept_inheritance_type;
 
-use crate::ast::contract::function::FunctionEmitter;
+use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 
 /// The result of re-resolving a contract's `super` and virtual calls against
 /// its C3 linearisation, plus the pass-local visitor state that gathers the
@@ -68,7 +68,7 @@ impl SuperDispatch {
         let mut most_derived_by_signature: HashMap<String, NodeId> = HashMap::new();
         for function in contract.linearised_functions() {
             most_derived_by_signature
-                .entry(FunctionEmitter::mlir_function_name(&function))
+                .entry(function.mlir_function_name())
                 .or_insert_with(|| function.node_id());
         }
         for base_contract in mro.iter() {
@@ -77,8 +77,7 @@ impl SuperDispatch {
                 if most_derived_ids.contains(&node_id) {
                     continue;
                 }
-                if let Some(&target) =
-                    most_derived_by_signature.get(&FunctionEmitter::mlir_function_name(&function))
+                if let Some(&target) = most_derived_by_signature.get(&function.mlir_function_name())
                     && target != node_id
                 {
                     dispatch.virtual_redirect.insert(node_id, target);
@@ -141,7 +140,7 @@ impl SuperDispatch {
             let mut collector = SuperDispatch::default();
             accept_function_definition(&function, &mut collector);
             for (access_id, lexical_target) in collector.super_calls {
-                let signature = FunctionEmitter::mlir_function_name(&lexical_target);
+                let signature = lexical_target.mlir_function_name();
                 let Some((target_index, target)) =
                     Self::resolve_super_target(&mro, from_index, &signature)
                 else {
@@ -201,9 +200,7 @@ impl SuperDispatch {
     ) -> Option<(usize, FunctionDefinition)> {
         for (index, contract) in mro.iter().enumerate().skip(from_index + 1) {
             for function in contract.functions() {
-                if function.body().is_some()
-                    && FunctionEmitter::mlir_function_name(&function) == signature
-                {
+                if function.body().is_some() && function.mlir_function_name() == signature {
                     return Some((index, function));
                 }
             }
@@ -229,7 +226,7 @@ impl SuperDispatch {
             let symbol = format!(
                 "{}.{}",
                 mro[target_index].name().name(),
-                FunctionEmitter::mlir_function_name(&target)
+                target.mlir_function_name()
             );
             dispatch.shadowed.push((symbol, target.clone()));
         }

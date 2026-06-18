@@ -11,7 +11,8 @@ use slang_solidity_v2::ast::YulPath;
 use solx_mlir::YulValue;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitExpression;
+use crate::ast::EmitYul;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;

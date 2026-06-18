@@ -36,16 +36,16 @@ use solx_mlir::ods::sol::ReturnOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
-use crate::ast::Materialize;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
-use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 
-impl<'state, 'context> ContractEmitter<'state, 'context> {
+/// The field-layout plan for a struct's `public` accessor return tuple.
+pub trait StructGetterLayout {
     /// The destructured returnable members of a `public` struct, as its accessor
     /// returns them: for each member the accessor yields — every scalar, plus
     /// `string` / `bytes` returned as a memory copy — its field index, MLIR
@@ -53,13 +53,21 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     /// skipped (Solidity omits them from the accessor tuple). `None` when no
     /// member is returnable or a member is untyped. Shared by the struct getter
     /// and a struct external-call return.
-    pub fn struct_getter_layout(
-        struct_definition: &StructDefinition,
+    fn struct_getter_layout<'context>(
+        &self,
+        struct_mlir_type: Type<'context>,
+        builder: &Builder<'context>,
+    ) -> Option<Vec<(u64, Type<'context>, Type<'context>)>>;
+}
+
+impl StructGetterLayout for StructDefinition {
+    fn struct_getter_layout<'context>(
+        &self,
         struct_mlir_type: Type<'context>,
         builder: &Builder<'context>,
     ) -> Option<Vec<(u64, Type<'context>, Type<'context>)>> {
         let mut plan = Vec::new();
-        for (member_index, member) in struct_definition.members().iter().enumerate() {
+        for (member_index, member) in self.members().iter().enumerate() {
             let is_string_or_bytes = match member.get_type() {
                 Some(
                     SlangType::Mapping(_)
@@ -91,22 +99,18 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
     }
 }
 
-impl<'state, 'context, 'block, 'scope> Emit<'context, 'block, 'state, 'scope>
-    for StateVariableDefinition
-where
-    'context: 'block,
-    'context: 'state,
-    'block: 'state,
-    'state: 'scope,
-{
-    type Context = &'scope ExpressionContext<'state, 'context, 'block>;
+impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariableDefinition {
     type Output = ();
 
     /// Emits the auto-generated external accessor for this `public` state variable
     /// into the contract body. A variable with no accessor, or whose accessor is
     /// not yet supported (a non-struct reference terminal), is left ungenerated —
     /// the rest of the contract still compiles.
-    fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) {
+    fn emit<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) {
         /// Folds a constant integer expression to a [`BigInt`] when it is one of
         /// the closed set of integer-foldable forms.
         fn fold_constant_int(expression: &Expression) -> Option<BigInt> {
@@ -214,7 +218,7 @@ where
         }
 
         let state_variable = self;
-        let builder = &context.state().builder;
+        let builder = &context.state.builder;
 
         // A variable with no ABI accessor has no getter.
         let abi = match state_variable.compute_abi_entry() {
@@ -268,7 +272,7 @@ where
                 value,
                 block: entry,
             } = if let Expression::StringExpression(string_literal) = &initializer {
-                string_literal.materialize(element_type, context, entry)
+                string_literal.emit_as(element_type, context, entry)
             } else {
                 initializer.emit(context, entry)
             };
@@ -279,7 +283,7 @@ where
             return;
         }
 
-        let Some(slot) = context.storage_layout().get(&state_variable.node_id()) else {
+        let Some(slot) = context.storage_layout.get(&state_variable.node_id()) else {
             return;
         };
         let location = slot.location;
@@ -346,11 +350,7 @@ where
                     let Definition::Struct(struct_definition) = struct_type.definition() else {
                         return;
                     };
-                    match ContractEmitter::struct_getter_layout(
-                        &struct_definition,
-                        result_type,
-                        builder,
-                    ) {
+                    match struct_definition.struct_getter_layout(result_type, builder) {
                         Some(plan) => Some(plan),
                         None => return,
                     }
@@ -495,9 +495,7 @@ where
                 LocationPolicy::Declared(Some(location)),
                 builder,
             );
-            if let Some(plan) =
-                ContractEmitter::struct_getter_layout(&struct_definition, struct_mlir_type, builder)
-            {
+            if let Some(plan) = struct_definition.struct_getter_layout(struct_mlir_type, builder) {
                 let result_types: Vec<Type<'context>> =
                     plan.iter().map(|(_, _, result)| *result).collect();
                 let container_type = AstType::resolve_state_variable(state_variable, builder);

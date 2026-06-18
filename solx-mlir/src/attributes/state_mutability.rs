@@ -4,6 +4,7 @@
 
 use melior::Context;
 use melior::ir::Attribute;
+use slang_solidity_v2::ast::FunctionMutability;
 
 /// Sol dialect state mutability.
 ///
@@ -19,6 +20,19 @@ pub enum StateMutability {
     NonPayable = 2,
     /// Payable — can receive ether.
     Payable = 3,
+}
+
+/// Maps Slang's `FunctionMutability` to the Sol dialect's `StateMutability`; the
+/// dialect defines its own mutability enum independently of the Slang AST.
+impl From<FunctionMutability> for StateMutability {
+    fn from(mutability: FunctionMutability) -> Self {
+        match mutability {
+            FunctionMutability::Pure => Self::Pure,
+            FunctionMutability::View => Self::View,
+            FunctionMutability::Payable => Self::Payable,
+            FunctionMutability::NonPayable => Self::NonPayable,
+        }
+    }
 }
 
 impl StateMutability {

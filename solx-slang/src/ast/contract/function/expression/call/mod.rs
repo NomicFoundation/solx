@@ -58,13 +58,13 @@ use solx_mlir::ods::sol::TransferOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
-use crate::ast::Materialize;
 use crate::ast::Pointer;
-use crate::ast::contract::function::FunctionEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::built_in::EncodeMode;
+use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 
 /// The shared call-emission primitives the call kinds dispatch through
 /// (argument coercion, call-options capture, indirect calls, struct
@@ -119,7 +119,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                         value: salt_bytes,
                         block: next_block,
                     } = if let Expression::StringExpression(string_literal) = &salt_expression {
-                        string_literal.materialize(bytes32, self, current_block)
+                        string_literal.emit_as(bytes32, self, current_block)
                     } else {
                         salt_expression.emit(self, current_block)
                     };
@@ -182,7 +182,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let BlockAnd {
             value: argument_values,
             block: current_block,
-        } = arguments.materialize(&function.parameter_types, self, block);
+        } = arguments.emit_as(&function.parameter_types, self, block);
         (function, argument_values, current_block)
     }
 
@@ -263,7 +263,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         let BlockAnd {
             value: argument_values,
             block: current_block,
-        } = arguments.materialize(&parameter_types, self, block);
+        } = arguments.emit_as(&parameter_types, self, block);
         let builder = &self.state.builder;
         // Dispatch internal (`sol.icall`) vs external (`sol.ext_icall`) on the
         // callee value's actual reference kind, not slang's
@@ -343,15 +343,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     }
 }
 
-impl<'state, 'context, 'block, 'scope> Emit<'context, 'block, 'state, 'scope>
-    for FunctionCallExpression
-where
-    'context: 'block,
-    'context: 'state,
-    'block: 'state,
-    'state: 'scope,
-{
-    type Context = &'scope ExpressionContext<'state, 'context, 'block>;
+impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCallExpression {
     type Output = (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>);
 
     /// Emits a function call, yielding its result values in declaration order —
@@ -359,7 +351,11 @@ where
     /// tuple-returning call. The callee, resolved through slang's binder, selects
     /// the shape directly: a single match over the callee expression and its
     /// resolved definition, no intermediate kind enum.
-    fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) -> Self::Output {
+    fn emit<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> Self::Output {
         // `recv.f{value: v}(args)` / `new C{value, salt}(args)`: evaluate the
         // option list (each for its side effects, in source order) before the
         // arguments, forwarding `value` as msg.value and `salt` as the CREATE2
@@ -435,7 +431,7 @@ where
             let first = positional.iter().next().expect("slang validated");
             let target_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
                 .expect("slang validated");
-            let BlockAnd { value, block } = first.materialize(target_type, context, block);
+            let BlockAnd { value, block } = first.emit_as(target_type, context, block);
             return (vec![value.into_mlir()], block);
         }
 
@@ -1106,11 +1102,7 @@ where
                             let BlockAnd {
                                 value: values,
                                 block: current,
-                            } = argument_expressions.materialize(
-                                &parameter_types,
-                                context,
-                                current,
-                            );
+                            } = argument_expressions.emit_as(&parameter_types, context, current);
                             let result = context.emit_sol_encode(
                                 &values,
                                 Some(selector_value),
@@ -1156,7 +1148,7 @@ where
                                     if let Expression::StringExpression(string_literal) =
                                         value_argument
                                     {
-                                        string_literal.materialize(byte_target, context, block)
+                                        string_literal.emit_as(byte_target, context, block)
                                     } else {
                                         value_argument.emit(context, block)
                                     };
@@ -1204,7 +1196,7 @@ where
                                         if let Expression::StringExpression(string_literal) =
                                             &value_argument
                                         {
-                                            string_literal.materialize(element_type, context, block)
+                                            string_literal.emit_as(element_type, context, block)
                                         } else {
                                             value_argument.emit(context, block)
                                         };
@@ -1265,7 +1257,7 @@ where
                 let BlockAnd {
                     value: argument_values,
                     block,
-                } = argument_expressions.materialize(&function.parameter_types, context, block);
+                } = argument_expressions.emit_as(&function.parameter_types, context, block);
                 let results = function.call(&argument_values, &context.state.builder, &block);
                 return (results, block);
             }
@@ -1311,7 +1303,7 @@ where
                 let selector = library_function
                     .compute_selector()
                     .expect("slang validated");
-                let mlir_name = FunctionEmitter::mlir_function_name(&library_function);
+                let mlir_name = library_function.mlir_function_name();
                 let (argument_values, current_block) = match &self_receiver {
                     Some(receiver) => {
                         let (parameter_self, parameter_rest) =
@@ -1327,13 +1319,13 @@ where
                         let BlockAnd {
                             value: mut rest_values,
                             block,
-                        } = argument_expressions.materialize(parameter_rest, context, block);
+                        } = argument_expressions.emit_as(parameter_rest, context, block);
                         rest_values.insert(0, self_value);
                         (rest_values, block)
                     }
                     None => {
                         let BlockAnd { value, block } =
-                            argument_expressions.materialize(&parameter_types, context, block);
+                            argument_expressions.emit_as(&parameter_types, context, block);
                         (value, block)
                     }
                 };
@@ -1407,7 +1399,7 @@ where
                         let BlockAnd {
                             value: argument_values,
                             block,
-                        } = arguments.materialize(&resolved.parameter_types, context, block);
+                        } = arguments.emit_as(&resolved.parameter_types, context, block);
                         let results =
                             resolved.call(&argument_values, &context.state.builder, &block);
                         (results, block)
@@ -1431,7 +1423,7 @@ where
                         let BlockAnd {
                             value: mut argument_values,
                             block,
-                        } = arguments.materialize(parameter_rest, context, block);
+                        } = arguments.emit_as(parameter_rest, context, block);
                         argument_values.insert(0, self_value);
                         let results =
                             resolved.call(&argument_values, &context.state.builder, &block);
@@ -1536,7 +1528,7 @@ where
                     let BlockAnd {
                         value: argument_values,
                         block,
-                    } = ordered.materialize(&parameter_types, context, block);
+                    } = ordered.emit_as(&parameter_types, context, block);
                     let builder = &context.state.builder;
                     let callee = AstValue::external_callee(
                         receiver,
@@ -1695,7 +1687,7 @@ where
             let BlockAnd {
                 value: ctor_args,
                 block,
-            } = ordered.materialize(&parameter_types, context, block);
+            } = ordered.emit_as(&parameter_types, context, block);
             let builder = &context.state.builder;
             let result_type = AstType::contract(builder.context, &contract_name, payable);
             // `new C{value: v}()` forwards `v` wei; a plain `new C()` sends zero.
@@ -1735,7 +1727,7 @@ where
                 let target_type =
                     AstType::resolve_optional(self.get_type(), &context.state.builder)
                         .expect("slang validated");
-                let BlockAnd { value, block } = first.materialize(target_type, context, block);
+                let BlockAnd { value, block } = first.emit_as(target_type, context, block);
                 return (vec![value.into_mlir()], block);
             }
             // `arr[i](args)` / `(cond ? f : g)(args)`: a call through a pointer value.

@@ -10,7 +10,7 @@ use solx_mlir::ods::sol::IfOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitExpression;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;

@@ -37,8 +37,8 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
-use crate::ast::EmitAddress;
+use crate::ast::EmitExpression;
+use crate::ast::EmitPlace;
 use crate::ast::Place;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
@@ -496,7 +496,7 @@ impl Operator {
                             element_type,
                         },
                     block,
-                } = index_access.emit_address(context, block);
+                } = index_access.emit_place(context, block);
                 (address, element_type, block)
             }
             Expression::MemberAccessExpression(access) => {
@@ -507,7 +507,7 @@ impl Operator {
                             element_type,
                         },
                     block,
-                } = access.emit_address(context, block);
+                } = access.emit_place(context, block);
                 (address, element_type, block)
             }
             _ => return None,

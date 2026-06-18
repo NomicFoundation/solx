@@ -20,10 +20,10 @@ use solx_mlir::ods::sol::DeleteOperation;
 use solx_mlir::ods::sol::MallocOperation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
-use crate::ast::EmitAddress;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
+use crate::ast::EmitPlace;
 use crate::ast::LocationPolicy;
-use crate::ast::Materialize;
 use crate::ast::Place;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
@@ -80,7 +80,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                             element_type,
                         },
                     block,
-                } = index_access.emit_address(context, block);
+                } = index_access.emit_place(context, block);
                 (Self::from_address(address, element_type), block)
             }
             Expression::MemberAccessExpression(access) => {
@@ -99,7 +99,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                             element_type,
                         },
                     block,
-                } = access.emit_address(context, block);
+                } = access.emit_place(context, block);
                 (Self::from_address(address, element_type), block)
             }
             Expression::FunctionCallExpression(call)
@@ -409,7 +409,7 @@ expression_emit!(AssignmentExpression; |node, context, block| {
             | AssignmentTarget::Storage(_, element_type) => {
                 let BlockAnd { value, block } =
                     if let Expression::StringExpression(string_literal) = &right {
-                        string_literal.materialize(*element_type, context, block)
+                        string_literal.emit_as(*element_type, context, block)
                     } else {
                         right.emit(context, block)
                     };

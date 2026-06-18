@@ -18,7 +18,7 @@ use slang_solidity_v2::ast::YulSwitchCase;
 use solx_mlir::YulValue;
 use solx_mlir::ods::yul::*;
 
-use crate::ast::Emit;
+use crate::ast::EmitYul;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::statement::assembly::YulContext;

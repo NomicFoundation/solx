@@ -1,29 +1,30 @@
 //!
-//! Contract definition emission to Sol dialect MLIR.
+//! Contract / library definition emission to Sol dialect MLIR.
 //!
 
-use crate::ast::Type as AstType;
 pub mod analysis;
+/// Contract constructor synthesis to Sol dialect MLIR.
+pub mod constructor;
 /// Function definition emission to Sol dialect MLIR.
 pub mod function;
 pub mod getter;
+pub mod object_scope;
 /// Contract storage layout: the slot assignment of state variables.
 pub mod storage_layout;
 
-use std::collections::BTreeMap;
+pub use self::object_scope::ObjectScope;
+
 use std::collections::HashMap;
 use std::collections::HashSet;
 
 use melior::ir::Attribute;
 use melior::ir::BlockLike;
-use melior::ir::BlockRef;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::attribute::TypeAttribute;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::ContractMember;
-use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
 use slang_solidity_v2::ast::FunctionVisibility;
 use slang_solidity_v2::ast::LibraryDefinition;
@@ -31,45 +32,26 @@ use slang_solidity_v2::ast::NodeId;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
-use solx_mlir::ods::sol::ContractOperation;
 use solx_mlir::ods::sol::StateVarOperation;
 use solx_utils::DataLocation;
 
 use self::analysis::free_function::FreeCallCollector;
 use self::analysis::library::LibraryCallCollector;
-use self::function::FunctionEmitter;
+use self::function::FunctionScope;
 use self::function::expression::ExpressionContext;
 use self::function::expression::arithmetic_mode::ArithmeticMode;
+use self::function::mlir_symbol_name::MlirSymbolName;
 use self::storage_layout::StorageSlot;
-use crate::ast::Emit;
-use crate::ast::LocationPolicy;
-use crate::ast::operator_binding::OperatorBindings;
+use crate::ast::EmitExpression;
+use crate::ast::EmitFunction;
+use crate::ast::EmitObject;
+use crate::ast::Type as AstType;
+use crate::ast::emit::EmitConstructor;
+use crate::ast::pending_queries::StorageLayout;
 
-/// Lowers a Solidity contract to Sol dialect MLIR.
-///
-/// Emits `sol.contract` wrapping `sol.func` definitions. The
-/// `convert-sol-to-yul` pass generates the entry-point dispatcher
-/// from the function selectors.
-pub struct ContractEmitter<'state, 'context> {
-    /// The shared MLIR context.
-    state: &'state mut Context<'context>,
-}
-
-impl<'state, 'context> ContractEmitter<'state, 'context> {
-    /// Creates a new contract emitter.
-    pub fn new(state: &'state mut Context<'context>) -> Self {
-        Self { state }
-    }
-
-    /// Emits a `sol.contract` containing all function definitions.
-    pub fn emit(
-        &mut self,
-        contract: &ContractDefinition,
-        free_functions: &[FunctionDefinition],
-        operator_bindings: &OperatorBindings,
-    ) {
-        let contract_name = contract.name().name();
-        self.state.operator_bindings = operator_bindings.map.clone();
+impl EmitObject for ContractDefinition {
+    fn emit(&self, context: &mut Context, scope: &ObjectScope) {
+        let contract_name = self.name().name();
 
         // Re-resolve `super.f(...)` / `Base.f(...)` against the C3 linearisation
         // (slang resolves them lexically, which is wrong in a diamond). The
@@ -77,90 +59,90 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // through `super` are emitted internal-only under contract-qualified
         // symbols below, and their bodies are walked by the free / library
         // collectors so the internals they call also register.
-        let super_dispatch =
-            self::analysis::super_call::SuperDispatch::build_super_dispatch(contract);
-        self.state.super_redirect = super_dispatch.redirect.clone();
-        self.state.virtual_redirect = super_dispatch.virtual_redirect.clone();
-        let shadowed_functions: Vec<FunctionDefinition> = super_dispatch
+        let super_dispatch = self::analysis::super_call::SuperDispatch::build_super_dispatch(self);
+        context.super_redirect = super_dispatch.redirect.clone();
+        context.virtual_redirect = super_dispatch.virtual_redirect.clone();
+        let shadowed_functions: Vec<_> = super_dispatch
             .shadowed
             .iter()
             .map(|(_, function)| function.clone())
             .collect();
 
-        self.pre_register_functions(contract);
+        // Pre-register the C3-linearised function set (override-resolved, one
+        // entry per signature) so an inherited method called by its bare name in a
+        // derived contract resolves to its registered symbol.
+        self.register_signatures(
+            context,
+            self.linearised_functions()
+                .into_iter()
+                .filter(|function| !matches!(function.kind(), FunctionKind::Modifier))
+                .map(|function| {
+                    let symbol = function.mlir_function_name();
+                    (function, symbol)
+                }),
+        );
         // Register each shadowed base override under its contract-qualified
         // symbol so a `super`/`Base` call resolves to it by node id.
-        for (symbol, function) in &super_dispatch.shadowed {
-            let (parameter_types, return_types) = AstType::resolve_signature(
-                function,
-                LocationPolicy::Declared(None),
-                &self.state.builder,
-            );
-            self.state.register_function_signature(
-                function.node_id(),
-                symbol.clone(),
-                parameter_types,
-                return_types,
-            );
-        }
+        self.register_signatures(
+            context,
+            super_dispatch
+                .shadowed
+                .iter()
+                .map(|(symbol, function)| (function.clone(), symbol.clone())),
+        );
 
         // Free functions (`f(...)` declared at file level) reachable from this
-        // contract, transitively. They are not in the linearised function set,
-        // so pre-register their signatures here and emit their bodies into this
-        // contract's module below, where they lower as ordinary internal
-        // functions. (No `super`/library roots yet — those clusters extend the
-        // `extra_roots` walk and add the duplicate-symbol filtering.)
+        // contract, transitively — not in the linearised set, so registered here
+        // and emitted as ordinary internal functions below.
         let mut reached_free_functions = FreeCallCollector::reachable_free_functions(
-            contract,
-            free_functions,
+            self,
+            scope.free_functions,
             &shadowed_functions,
         );
 
         // Out-of-band function sources the reachability walk does not reach by
-        // name are appended through one growing `seen` set, so each dedup is
-        // against everything appended so far (not a per-source stale snapshot).
+        // name, appended through one growing `seen` set so each dedup is against
+        // everything appended so far: operator-bound functions (invoked only
+        // through an operator) and internal library functions (`L.f(...)`).
         let mut seen: HashSet<NodeId> = reached_free_functions
             .iter()
             .map(|function| function.node_id())
             .collect();
-
-        // Operator functions bound via `using {f as op} for T global;` are free
-        // functions the reachability walk misses — they are never called by
-        // name, only invoked through an operator (`a + b`). They lower as ordinary
-        // internal functions and the backend drops any left unused.
-        Self::extend_unreached(
-            &mut reached_free_functions,
-            &mut seen,
-            operator_bindings.functions.iter().cloned(),
-        );
-
-        // Internal (no-selector) library functions called via `L.f(...)` or
-        // using-for `x.f(...)` are not in the linearised set either; append the
-        // not-already-reached ones so they register and emit as ordinary internal
-        // `sol.func`s (a library call resolves them by node id).
         let library_functions = LibraryCallCollector::reachable_library_functions(
-            contract,
-            free_functions,
+            self,
+            scope.free_functions,
             &shadowed_functions,
         );
-        Self::extend_unreached(&mut reached_free_functions, &mut seen, library_functions);
+        for function in scope
+            .operator_functions
+            .iter()
+            .cloned()
+            .chain(library_functions)
+        {
+            if seen.insert(function.node_id()) {
+                reached_free_functions.push(function);
+            }
+        }
 
-        self.register_function_signatures(&reached_free_functions);
+        // Register each reached free function under its node-id-qualified symbol so
+        // calls resolve regardless of emission order, even when a same-named
+        // function is reached together.
+        self.register_signatures(
+            context,
+            reached_free_functions
+                .iter()
+                .map(|function| (function.clone(), function.node_id_qualified_symbol())),
+        );
 
-        let storage_layout = Self::compute_storage_layout(contract);
+        let storage_layout = self.storage_layout();
+        let contract_type =
+            AstType::contract(context.builder.context, &contract_name, self.is_payable())
+                .into_mlir();
 
-        let contract_type = AstType::contract(
-            self.state.builder.context,
+        let module_body = context.module.body();
+        let contract_body = self.emit_contract_shell(
+            context,
             &contract_name,
-            contract.is_payable(),
-        )
-        .into_mlir();
-
-        // Emit sol.contract and functions.
-        let module_body = self.state.module.body();
-        let contract_body = self.emit_contract(
-            &contract_name,
-            // TODO: investigate how other contract kinds (e.g. interface, library) should be represented in MLIR
             solx_mlir::ContractKind::Contract,
             &module_body,
         );
@@ -169,13 +151,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
         // own): a derived contract owns the FULL layout, and inherited getters /
         // bodies emit `sol.addr_of @var` against inherited slots the backend
         // resolves by `lookupSymbol` (asserts if the `sol.state_var` is absent).
-        for state_variable in contract.linearised_state_variables() {
+        for state_variable in self.linearised_state_variables() {
             let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };
-            let element_type =
-                AstType::resolve_state_variable(&state_variable, &self.state.builder);
-            let builder = &self.state.builder;
+            let element_type = AstType::resolve_state_variable(&state_variable, &context.builder);
+            let builder = &context.builder;
             let slot_attribute: IntegerAttribute =
                 Attribute::parse(builder.context, &format!("{} : i256", slot.slot))
                     .expect("valid slot literal")
@@ -199,16 +180,18 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             contract_body.append_operation(operation.build().into());
         }
 
-        self.state.current_contract_type = Some(contract_type);
-        FunctionEmitter::new(self.state, Some(contract), &storage_layout)
-            .emit_constructor(&contract_body);
-        self.state.current_contract_type = None;
+        context.current_contract_type = Some(contract_type);
+        self.emit_constructor(
+            &FunctionScope::new(context, Some(self), &storage_layout),
+            &contract_body,
+        );
+        context.current_contract_type = None;
 
         // An overridden public function whose signature matches an inherited
         // public state variable's auto-getter would emit a second function under
         // the getter's selector symbol (`redefinition of symbol`); the getter
         // (emitted last) wins, so skip such functions here.
-        let getter_selectors: std::collections::HashSet<u32> = contract
+        let getter_selectors: HashSet<u32> = self
             .linearised_state_variables()
             .iter()
             .filter_map(|state_variable| state_variable.compute_selector())
@@ -216,14 +199,12 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         // Walk the C3-linearised function set so a derived contract emits inherited
         // methods too, override-resolved. Constructors and modifiers go through
-        // their own paths (constructor below, modifiers inline), so skip them.
-        // The linearisation lists the most-derived override first; emit the first
-        // fallback / receive and skip inherited base versions — their distinct
-        // signatures (`fallback(bytes)` vs `fallback()`) escape override collapse,
-        // and a second `sol.func` of either makes the backend assert (`!fallbackFn`).
+        // their own paths, so skip them. The linearisation lists the most-derived
+        // override first; emit the first fallback / receive and skip inherited base
+        // versions — a second `sol.func` of either makes the backend assert.
         let mut fallback_emitted = false;
         let mut receive_emitted = false;
-        for function in contract.linearised_functions() {
+        for function in self.linearised_functions() {
             match function.kind() {
                 FunctionKind::Constructor | FunctionKind::Modifier => continue,
                 FunctionKind::Fallback if fallback_emitted => continue,
@@ -237,56 +218,68 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
             {
                 continue;
             }
-            self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, Some(contract), &storage_layout)
-                .emit_sol(&function, &contract_body);
-            self.state.current_contract_type = None;
+            context.current_contract_type = Some(contract_type);
+            function.emit(
+                &FunctionScope::new(context, Some(self), &storage_layout),
+                &contract_body,
+            );
+            context.current_contract_type = None;
         }
 
         // Emit shadowed base overrides reached through `super` under their
         // contract-qualified symbols (internal-only, no selector).
         for (symbol, function) in &super_dispatch.shadowed {
-            self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, Some(contract), &storage_layout).emit_sol_with_symbol(
-                function,
+            context.current_contract_type = Some(contract_type);
+            function.emit_with_symbol(
+                &FunctionScope::new(context, Some(self), &storage_layout),
                 symbol,
                 &contract_body,
             );
-            self.state.current_contract_type = None;
+            context.current_contract_type = None;
         }
 
-        // Emit the collected free functions so their `sol.call`s resolve. Each
-        // is emitted under its node-id-qualified symbol so two file-level
-        // functions of the same name and signature do not collide on one symbol.
+        // Emit the collected free functions, each under its node-id-qualified
+        // symbol so two file-level functions of the same signature do not collide.
         for free in reached_free_functions.iter() {
-            self.state.current_contract_type = Some(contract_type);
-            FunctionEmitter::new(self.state, Some(contract), &storage_layout).emit_sol_with_symbol(
-                free,
-                &Self::node_id_qualified_symbol(free),
+            context.current_contract_type = Some(contract_type);
+            free.emit_with_symbol(
+                &FunctionScope::new(context, Some(self), &storage_layout),
+                &free.node_id_qualified_symbol(),
                 &contract_body,
             );
-            self.state.current_contract_type = None;
+            context.current_contract_type = None;
         }
 
-        self.emit_state_variable_getters(contract, &storage_layout, &contract_body);
+        // Auto-generated external accessors for `public` state variables; each
+        // reads its slot over the shared (empty) emission scope.
+        let environment = Environment::new();
+        let getter_context = ExpressionContext::new(
+            context,
+            &environment,
+            &storage_layout,
+            ArithmeticMode::Checked,
+        );
+        for state_variable in self.linearised_state_variables() {
+            state_variable.emit(&getter_context, contract_body);
+        }
     }
+}
 
+impl EmitObject for LibraryDefinition {
     /// Emits a deployable library object — its externally-dispatchable functions
-    /// as `sol.func`s under a `sol.contract`, plus the method-identifier map.
+    /// as `sol.func`s under a `sol.contract`.
     ///
     /// A `delegatecall`ed library dispatches only `external` / `public` functions;
     /// `internal` / `private` ones and modifiers are inlined into callers. A library
     /// with no externally-visible function is emitted as an empty, call-protected
     /// stub (matching solc) — emitting its inlined-only functions standalone would
     /// panic on the absent caller context. The stub stays in the artifacts so the
-    /// harness's `// library:` directive can deploy and link it.
-    pub fn emit_library(
-        &mut self,
-        library: &LibraryDefinition,
-    ) -> (String, BTreeMap<String, String>) {
-        let library_name = library.name().name();
+    /// harness's `// library:` directive can deploy and link it. A library has no
+    /// free-function inputs, so the object scope is unused.
+    fn emit(&self, context: &mut Context, _scope: &ObjectScope) {
+        let library_name = self.name().name();
 
-        let has_deployable_function = library.members().iter().any(|member| {
+        let has_deployable_function = self.members().iter().any(|member| {
             matches!(
                 member,
                 ContractMember::FunctionDefinition(function)
@@ -297,13 +290,11 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
                         )
             )
         });
-        // When the library is deployable, emit all of its `Regular` functions
-        // (the internal ones the dispatched functions call included); the
-        // backend DCEs any left unreferenced. When it is not, emit none — the
-        // empty stub.
-        let functions: Vec<FunctionDefinition> = if has_deployable_function {
-            library
-                .members()
+        // When the library is deployable, emit all of its `Regular` functions (the
+        // internal ones the dispatched functions call included); the backend DCEs
+        // any left unreferenced. When it is not, emit none — the empty stub.
+        let functions: Vec<_> = if has_deployable_function {
+            self.members()
                 .iter()
                 .filter_map(|member| match member {
                     ContractMember::FunctionDefinition(function)
@@ -320,181 +311,35 @@ impl<'state, 'context> ContractEmitter<'state, 'context> {
 
         // Pre-register every function so calls between the library's functions
         // resolve before any body is emitted.
-        for function in functions.iter() {
-            let mlir_name = FunctionEmitter::mlir_function_name(function);
-            let (parameter_types, return_types) = AstType::resolve_signature(
-                function,
-                LocationPolicy::Declared(None),
-                &self.state.builder,
-            );
-            self.state.register_function_signature(
-                function.node_id(),
-                mlir_name,
-                parameter_types,
-                return_types,
-            );
-        }
+        self.register_signatures(
+            context,
+            functions
+                .iter()
+                .map(|function| (function.clone(), function.mlir_function_name())),
+        );
 
         // A library has no state, so the storage layout is empty.
         let storage_layout: HashMap<NodeId, StorageSlot> = HashMap::new();
         let library_type =
-            AstType::contract(self.state.builder.context, &library_name, false).into_mlir();
-        let module_body = self.state.module.body();
-        let contract_body = self.emit_contract(
+            AstType::contract(context.builder.context, &library_name, false).into_mlir();
+        let module_body = context.module.body();
+        // A library is `ContractKind::Library`: the backend dispatcher passes a
+        // `storage` reference parameter as its slot (instead of ABI-decoding it) and
+        // emits the library-address self-reference as a `llvm.setimmutable`.
+        let contract_body = self.emit_contract_shell(
+            context,
             &library_name,
-            // A library is `ContractKind::Library`: the backend dispatcher passes
-            // a `storage` reference parameter as its slot (instead of ABI-decoding
-            // it) and emits the library-address self-reference as a
-            // `llvm.setimmutable`. That immutable is lowered to a heap store in the
-            // deploy segment's MLIR→LLVM step (`translate_source_to_llvm`'s
-            // `lowerSetImmutables`), using the offsets the runtime object reserves.
             solx_mlir::ContractKind::Library,
             &module_body,
         );
 
         for function in functions.iter() {
-            self.state.current_contract_type = Some(library_type);
-            FunctionEmitter::new(self.state, None, &storage_layout)
-                .emit_sol(function, &contract_body);
-            self.state.current_contract_type = None;
-        }
-
-        let mut method_identifiers = BTreeMap::new();
-        for function in functions.iter() {
-            let Some(signature) = function.compute_canonical_signature() else {
-                continue;
-            };
-            let Some(selector) = function.compute_selector() else {
-                continue;
-            };
-            method_identifiers.insert(signature, format!("{selector:08x}"));
-        }
-
-        (library_name, method_identifiers)
-    }
-
-    /// Emits a `sol.contract` with an empty body region, returning that body
-    /// block for appending function definitions. The kind builds its own dialect
-    /// attribute ([`solx_mlir::ContractKind::attribute`]).
-    fn emit_contract<'block>(
-        &self,
-        name: &str,
-        kind: solx_mlir::ContractKind,
-        block: &BlockRef<'context, 'block>,
-    ) -> BlockRef<'context, 'block> {
-        let builder = &self.state.builder;
-        mlir_region_op!(
-            builder,
-            block,
-            ContractOperation
-                .sym_name(StringAttribute::new(builder.context, name))
-                .kind(kind.attribute(builder.context))
-            ; body_region
-        )
-    }
-
-    /// Synthesises the auto-generated external accessor for each `public` state
-    /// variable: `constant` variables fold to a pure literal getter, scalar
-    /// storage variables read their slot. Struct and indexed (mapping/array)
-    /// getters resolve through the same dispatcher; a variable whose accessor is
-    /// not yet supported is left ungenerated (the rest of the contract still
-    /// compiles).
-    fn emit_state_variable_getters(
-        &self,
-        contract: &ContractDefinition,
-        storage_layout: &HashMap<NodeId, StorageSlot>,
-        contract_body: &BlockRef<'context, '_>,
-    ) {
-        // A getter has no caller-bound locals; each state variable emits its own
-        // accessor over the shared (empty) emission scope, reading its slot from
-        // the storage layout.
-        let environment = Environment::new();
-        let context = ExpressionContext::new(
-            self.state,
-            &environment,
-            storage_layout,
-            ArithmeticMode::Checked,
-        );
-        for state_variable in contract.linearised_state_variables() {
-            state_variable.emit(&context, *contract_body);
-        }
-    }
-
-    /// Pre-registers all function signatures for call resolution before bodies
-    /// are emitted. Walks the C3-linearised function set (override-resolved, one
-    /// entry per signature) so an inherited method called by its bare name in a
-    /// derived contract resolves to its registered symbol — not only the
-    /// contract's own functions, which would leave every inherited call
-    /// unresolved.
-    fn pre_register_functions(&mut self, contract: &ContractDefinition) {
-        for function in contract.linearised_functions() {
-            if matches!(function.kind(), FunctionKind::Modifier) {
-                continue;
-            }
-            let mlir_name = FunctionEmitter::mlir_function_name(&function);
-            let (parameter_types, return_types) = AstType::resolve_signature(
-                &function,
-                LocationPolicy::Declared(None),
-                &self.state.builder,
+            context.current_contract_type = Some(library_type);
+            function.emit(
+                &FunctionScope::new(context, None, &storage_layout),
+                &contract_body,
             );
-
-            self.state.register_function_signature(
-                function.node_id(),
-                mlir_name,
-                parameter_types,
-                return_types,
-            );
+            context.current_contract_type = None;
         }
-    }
-
-    /// Appends to `reached` every function in `additions` whose node id is not
-    /// already in `seen`, growing `seen` as it goes — the single dedup-append for
-    /// the out-of-band function sources (operator-bound, library) that the
-    /// reachability walk does not reach by name. One growing set keeps each
-    /// source deduplicated against all those appended before it.
-    fn extend_unreached(
-        reached: &mut Vec<FunctionDefinition>,
-        seen: &mut HashSet<NodeId>,
-        additions: impl IntoIterator<Item = FunctionDefinition>,
-    ) {
-        for function in additions {
-            if seen.insert(function.node_id()) {
-                reached.push(function);
-            }
-        }
-    }
-
-    /// Registers each free function's `(symbol, parameter types, return types)`
-    /// signature under its node-id-qualified symbol, so calls to it resolve to a
-    /// distinct internal `sol.func` even when a same-named function is reached
-    /// together. Pre-registration runs before any body is emitted so calls
-    /// resolve regardless of emission order.
-    fn register_function_signatures(&mut self, functions: &[FunctionDefinition]) {
-        for function in functions {
-            let (parameter_types, return_types) = AstType::resolve_signature(
-                function,
-                LocationPolicy::Declared(None),
-                &self.state.builder,
-            );
-            self.state.register_function_signature(
-                function.node_id(),
-                Self::node_id_qualified_symbol(function),
-                parameter_types,
-                return_types,
-            );
-        }
-    }
-
-    /// A function's MLIR symbol qualified by its globally-unique node id, so two
-    /// file-level functions of the same canonical signature — reachable together
-    /// when one is imported under an alias — do not collide on a single symbol.
-    /// These functions are only ever resolved by node id, so the exact spelling
-    /// is immaterial.
-    fn node_id_qualified_symbol(function: &FunctionDefinition) -> String {
-        format!(
-            "{}#{:?}",
-            FunctionEmitter::mlir_function_name(function),
-            function.node_id()
-        )
     }
 }

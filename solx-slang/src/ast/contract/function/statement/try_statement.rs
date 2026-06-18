@@ -18,7 +18,8 @@ use solx_mlir::ods::sol::TryOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitExpression;
+use crate::ast::EmitStatement;
 use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
@@ -62,7 +63,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
 // parameter-less `catch {}` binds nothing — then emits the body.
 statement_emit!(CatchClause; |node, context, block| {
     let region = block.parent_region().expect("block belongs to a region");
-    context.set_region(&region);
+    context.region_pointer = &*region as *const _;
     if let Some(error) = node.error()
         && let Some(parameter) = error.parameters().iter().next()
     {
@@ -211,7 +212,7 @@ statement_emit!(TryStatement; |node, context, block| {
     let success_region = success_block
         .parent_region()
         .expect("block belongs to a region");
-    context.set_region(&success_region);
+    context.region_pointer = &*success_region as *const _;
     if let Some(parameters) = node.returns() {
         for (parameter, result) in parameters.iter().zip(results.iter()) {
             if parameter.name().is_none() {

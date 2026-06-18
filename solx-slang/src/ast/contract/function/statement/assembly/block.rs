@@ -10,7 +10,7 @@ use slang_solidity_v2::ast::YulBlock;
 use slang_solidity_v2::ast::YulStatement;
 use solx_mlir::ods::yul::*;
 
-use crate::ast::Emit;
+use crate::ast::EmitYul;
 use crate::ast::contract::function::statement::assembly::YulContext;
 
 // Yul resolves function calls regardless of textual order, so a block first

@@ -16,23 +16,15 @@ use solx_mlir::ods::sol::IfOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
-use crate::ast::Materialize;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
-impl<'state, 'context, 'block, 'scope> Emit<'context, 'block, 'state, 'scope>
-    for ConditionalExpression
-where
-    'context: 'block,
-    'context: 'state,
-    'block: 'state,
-    'state: 'scope,
-{
-    type Context = &'scope ExpressionContext<'state, 'context, 'block>;
+impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalExpression {
     type Output = (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>);
 
     /// Emits `cond ? a : b`, yielding one value per result: a scalar ternary
@@ -41,7 +33,11 @@ where
     /// branches store into shared result slots and the loads after the `sol.if`
     /// yield the result(s). In value position a scalar conditional is dispatched
     /// through [`Expression`]'s emit, which takes the sole value.
-    fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) -> Self::Output {
+    fn emit<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> Self::Output {
         let true_expression = self.true_expression();
         let false_expression = self.false_expression();
 
@@ -180,7 +176,7 @@ where
             value: then_value,
             block: then_end,
         } = if let Expression::StringExpression(string_literal) = &true_expression {
-            string_literal.materialize(result_type, context, then_block)
+            string_literal.emit_as(result_type, context, then_block)
         } else {
             true_expression.emit(context, then_block)
         };
@@ -193,7 +189,7 @@ where
             value: else_value,
             block: else_end,
         } = if let Expression::StringExpression(string_literal) = &false_expression {
-            string_literal.materialize(result_type, context, else_block)
+            string_literal.emit_as(result_type, context, else_block)
         } else {
             false_expression.emit(context, else_block)
         };

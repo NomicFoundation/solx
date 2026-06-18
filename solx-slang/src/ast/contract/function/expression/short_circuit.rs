@@ -8,7 +8,7 @@ use slang_solidity_v2::ast::AndExpression;
 use slang_solidity_v2::ast::OrExpression;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitExpression;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::logical_operator::LogicalOperator;
 

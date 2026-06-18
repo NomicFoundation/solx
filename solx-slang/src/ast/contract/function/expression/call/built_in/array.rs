@@ -13,7 +13,7 @@ use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::ods::sol::PushOperation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;

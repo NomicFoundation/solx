@@ -7,7 +7,6 @@ use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 pub mod assembly;
 pub mod control_flow;
-pub mod discarded;
 pub mod event;
 pub mod expression_statement_kind;
 pub mod modifier_strategy;
@@ -40,16 +39,15 @@ use solx_mlir::ods::sol::ConditionOperation;
 use solx_mlir::ods::sol::ContinueOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 
-use self::discarded::Discarded;
 use self::expression_statement_kind::ExpressionStatementKind;
 use self::modifier_strategy::ModifierStrategy;
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
-use crate::ast::Materialize;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
+use crate::ast::EmitForEffect;
+use crate::ast::EmitStatement;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
-use crate::ast::contract::function::modifier_body_call::ModifierBodyCall;
-use crate::ast::contract::function::modifier_parameter_binding::ModifierParameterBinding;
 use crate::ast::contract::storage_layout::StorageSlot;
 
 /// Lowers Solidity statements to MLIR operations with control flow.
@@ -58,28 +56,30 @@ use crate::ast::contract::storage_layout::StorageSlot;
 /// flow has been terminated (by `return`, `break`, or `continue`).
 pub struct StatementContext<'state, 'context, 'block> {
     /// The shared MLIR context.
-    state: &'state Context<'context>,
+    pub state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
-    environment: &'state mut Environment<'context, 'block>,
+    pub environment: &'state mut Environment<'context, 'block>,
     /// The current region for creating new blocks. A raw pointer to allow
-    /// switching between Sol op regions without lifetime conflicts.
-    region_pointer: *const Region<'context>,
+    /// switching between Sol op regions without lifetime conflicts; re-pointed
+    /// by direct assignment (`context.region_pointer = &region as *const _`).
+    pub region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, StorageSlot>,
+    pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
     /// The function's declared return types, for `emit_return` to cast to.
-    return_types: &'state [Type<'context>],
+    pub return_types: &'state [Type<'context>],
     /// The function's return slots, parallel to `return_types` (`None` for an
     /// unnamed return). A bare `return;` and the fall-through epilogue load these
     /// so the `sol.return` arity matches the declared returns.
-    return_slots: &'state [Option<Value<'context, 'block>>],
+    pub return_slots: &'state [Option<Value<'context, 'block>>],
     /// How the `_;` placeholder lowers: a regular function's body-call hand-off,
     /// a constructor's inline modifier chain, or nothing outside a modifier.
-    modifier_strategy: ModifierStrategy<'context, 'block>,
+    /// Set by direct assignment (`context.modifier_strategy = …`).
+    pub modifier_strategy: ModifierStrategy<'context, 'block>,
     /// Arithmetic overflow-checking mode for binary operations.
     ///
     /// [`ArithmeticMode::Checked`] by default; [`ArithmeticMode::Unchecked`]
     /// inside `unchecked {}` blocks.
-    arithmetic_mode: ArithmeticMode,
+    pub arithmetic_mode: ArithmeticMode,
 }
 
 /// Builds an [`ExpressionContext`] from a statement context. The unchecked
@@ -120,30 +120,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         }
     }
 
-    /// Sets the modifier-stage hand-off the `_;` placeholder lowers to. Called by
-    /// [`FunctionEmitter::emit_modifier_stage_func`] before threading a modifier
-    /// body's statements.
-    ///
-    /// [`FunctionEmitter::emit_modifier_stage_func`]: crate::ast::contract::function::FunctionEmitter::emit_modifier_stage_func
-    pub fn set_modifier_body_call(&mut self, call: ModifierBodyCall<'context, 'block>) {
-        self.modifier_strategy = ModifierStrategy::BodyCall(call);
-    }
-
-    /// Loads the inline modifier-chain stages for a constructor body emission
-    /// (built by [`FunctionEmitter::build_modifier_stages`], the constructor body
-    /// the final stage), driven by [`Self::emit_inline_modifier_chain`].
-    pub fn set_modifier_stages(
-        &mut self,
-        modifier_stages: Vec<Statements>,
-        modifier_stage_params: Vec<Vec<ModifierParameterBinding<'context, 'block>>>,
-    ) {
-        self.modifier_strategy = ModifierStrategy::InlineChain {
-            stages: modifier_stages,
-            parameters: modifier_stage_params,
-            index: 0,
-        };
-    }
-
     /// Emits the inline modifier chain for a constructor body from the current
     /// stage. Stage 0 is the outermost modifier body; each `_;` recurses to the
     /// next stage, and the constructor body (final stage) runs at the innermost
@@ -170,7 +146,9 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         let params = parameters.get(stage).cloned().unwrap_or_default(); // recut-lint-allow: fail01 — a modifier stage may declare no parameters
         // Advance the cursor for the recursive `_;` (the borrow of the strategy
         // ended once `statements` / `params` were cloned out), restore it after.
-        self.set_modifier_stage_index(stage + 1);
+        if let ModifierStrategy::InlineChain { index, .. } = &mut self.modifier_strategy {
+            *index = stage + 1;
+        }
         self.environment.enter_scope();
         for binding in params {
             self.environment
@@ -178,27 +156,10 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         }
         let result = self.emit_block(statements, block);
         self.environment.exit_scope();
-        self.set_modifier_stage_index(stage);
-        result
-    }
-
-    /// Sets the inline modifier-chain cursor. A no-op unless an
-    /// [`ModifierStrategy::InlineChain`] is active.
-    fn set_modifier_stage_index(&mut self, stage: usize) {
         if let ModifierStrategy::InlineChain { index, .. } = &mut self.modifier_strategy {
             *index = stage;
         }
-    }
-
-    /// Returns a reference to the current region.
-    pub fn region(&self) -> &Region<'context> {
-        // The region is owned by the MLIR module and outlives this emitter.
-        unsafe { &*self.region_pointer }
-    }
-
-    /// Switches the current region for emitting into Sol op regions.
-    pub fn set_region(&mut self, region: &Region<'context>) {
-        self.region_pointer = region as *const Region<'context>;
+        result
     }
 
     /// Evaluates a loop `condition` in `condition_block` and emits the
@@ -269,7 +230,7 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
 
     /// Lowers a modifier stage's `_;` placeholder to the modifier-body hand-off
     /// (call the wrapped body / next stage, threading the shared return values),
-    /// delegating to [`ModifierBodyCall::emit`]. Outside a modifier stage `_;`
+    /// delegating to `ModifierBodyCall::emit`. Outside a modifier stage `_;`
     /// has no hand-off set and emits nothing.
     fn emit_modifier_body_call(
         &self,
@@ -359,7 +320,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
         let return_type = context.return_types[0];
         let BlockAnd { value, block } =
             if let Expression::StringExpression(string_literal) = &expression {
-                string_literal.materialize(return_type, &emitter, block)
+                string_literal.emit_as(return_type, &emitter, block)
             } else {
                 expression.emit(&emitter, block)
             };
@@ -434,7 +395,7 @@ statement_emit!(ExpressionStatement; |node, context, block| {
         }
         ExpressionStatementKind::Value(expression) => {
             let emitter = ExpressionContext::from(&*context);
-            Some(Discarded(&expression).emit(&emitter, block))
+            Some(expression.emit_for_effect(&emitter, block))
         }
     }
 });
@@ -447,19 +408,14 @@ statement_emit!(UncheckedBlock; |node, context, block| {
     result
 });
 
-impl<'state, 'context, 'block, 'scope> Emit<'context, 'block, 'state, 'scope> for Statement
-where
-    'context: 'block,
-    'context: 'state,
-    'block: 'state,
-    'state: 'scope,
-{
-    type Context = &'scope mut StatementContext<'state, 'context, 'block>;
-    type Output = Option<BlockRef<'context, 'block>>;
-
+impl<'context: 'block, 'block> EmitStatement<'context, 'block> for Statement {
     /// Dispatches a statement to its variant's emission, threading the
     /// continuation block (`None` when control diverged).
-    fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) -> Self::Output {
+    fn emit<'state>(
+        &self,
+        context: &mut StatementContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> Option<BlockRef<'context, 'block>> {
         match self {
             Statement::VariableDeclarationStatement(inner) => inner.emit(context, block),
             Statement::ExpressionStatement(inner) => inner.emit(context, block),

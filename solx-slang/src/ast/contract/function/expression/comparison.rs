@@ -14,8 +14,8 @@ use slang_solidity_v2::ast::InequalityExpression;
 use solx_mlir::CmpPredicate;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
-use crate::ast::Materialize;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 
@@ -35,7 +35,7 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         // sibling's fixed-bytes type, the sibling emitted first to learn it.
         let BlockAnd { value: rhs, block } =
             if let Expression::StringExpression(string_literal) = &right {
-                string_literal.materialize(lhs.r#type().into_mlir(), context, block)
+                string_literal.emit_as(lhs.r#type().into_mlir(), context, block)
             } else {
                 right.emit(context, block)
             };
@@ -44,7 +44,7 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         let BlockAnd { value: rhs, block } = right.emit(context, block);
         let BlockAnd { value: lhs, block } =
             if let Expression::StringExpression(string_literal) = &left {
-                string_literal.materialize(rhs.r#type().into_mlir(), context, block)
+                string_literal.emit_as(rhs.r#type().into_mlir(), context, block)
             } else {
                 left.emit(context, block)
             };

@@ -7,7 +7,7 @@ use melior::ir::BlockRef;
 use slang_solidity_v2::ast::CallOptionsExpression;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitExpression;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 expression_emit!(CallOptionsExpression; |node, context, block| {

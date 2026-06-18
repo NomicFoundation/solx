@@ -35,10 +35,9 @@ impl<'context, 'block> ModifierBodyCall<'context, 'block> {
     /// then store the call's results back into the return slots so the modifier
     /// tail and the epilogue observe them. The single source for this sequence,
     /// shared by the `_;` placeholder ([`StatementContext`]) and the public
-    /// entry's outermost-stage call ([`FunctionEmitter::emit_modified_body`]).
+    /// entry's outermost-stage call (`EmitModifierChain::emit_modified_body`).
     ///
     /// [`StatementContext`]: crate::ast::contract::function::statement::StatementContext
-    /// [`FunctionEmitter::emit_modified_body`]: crate::ast::contract::function::FunctionEmitter::emit_modified_body
     pub fn emit<Block>(&self, builder: &Builder<'context>, block: &Block)
     where
         Block: BlockLike<'context, 'block>,

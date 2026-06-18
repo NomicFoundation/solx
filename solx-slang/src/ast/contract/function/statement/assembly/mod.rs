@@ -21,7 +21,8 @@ use slang_solidity_v2::ast::YulFunctionDefinition;
 use solx_mlir::Context;
 use solx_mlir::Environment;
 
-use crate::ast::Emit;
+use crate::ast::EmitStatement;
+use crate::ast::EmitYul;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::contract::storage_layout::StorageSlot;
 

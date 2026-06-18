@@ -17,7 +17,7 @@ use slang_solidity_v2::ast::ShiftExpression;
 use slang_solidity_v2::ast::ShiftExpressionOperator;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitExpression;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;

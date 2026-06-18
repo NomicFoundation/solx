@@ -40,26 +40,28 @@ use solx_mlir::Environment;
 use solx_mlir::ods::sol::AddrOfOperation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
+use crate::ast::EmitForEffect;
 use crate::ast::LocationPolicy;
-use crate::ast::Materialize;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
+use crate::ast::contract::function::expression::assignment::AssignmentTarget;
 use crate::ast::contract::storage_layout::StorageSlot;
 
 /// Lowers Solidity expressions to MLIR SSA values.
 pub struct ExpressionContext<'state, 'context, 'block> {
     /// The shared MLIR context.
-    state: &'state Context<'context>,
+    pub state: &'state Context<'context>,
     /// Variable environment.
-    environment: &'state Environment<'context, 'block>,
+    pub environment: &'state Environment<'context, 'block>,
     /// State variable node ID to storage slot mapping.
-    storage_layout: &'state HashMap<NodeId, StorageSlot>,
+    pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
     /// Arithmetic overflow-checking mode for binary operations.
     ///
     /// [`ArithmeticMode::Checked`] by default (Solidity 0.8+);
     /// [`ArithmeticMode::Unchecked`] inside `unchecked {}` blocks and for-loop
     /// step expressions.
-    arithmetic_mode: ArithmeticMode,
+    pub arithmetic_mode: ArithmeticMode,
 }
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
@@ -76,16 +78,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             storage_layout,
             arithmetic_mode,
         }
-    }
-
-    /// The shared MLIR context.
-    pub fn state(&self) -> &'state Context<'context> {
-        self.state
-    }
-
-    /// The state-variable storage layout (node ID → slot).
-    pub fn storage_layout(&self) -> &'state HashMap<NodeId, StorageSlot> {
-        self.storage_layout
     }
 
     /// Emits an internal function used as a value (`g` in `f = g;`) as a
@@ -143,7 +135,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             // from a string literal folds to a fixed-bytes constant.
             let BlockAnd { value, block } =
                 if let Expression::StringExpression(string_literal) = &initializer {
-                    string_literal.materialize(element_type, self, block)
+                    string_literal.emit_as(element_type, self, block)
                 } else {
                     initializer.emit(self, block)
                 };
@@ -179,14 +171,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     }
 }
 
-impl<'state, 'context, 'block, 'scope> Emit<'context, 'block, 'state, 'scope> for Expression
-where
-    'context: 'block,
-    'context: 'state,
-    'block: 'state,
-    'state: 'scope,
-{
-    type Context = &'scope ExpressionContext<'state, 'context, 'block>;
+impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
     type Output = BlockAnd<'context, 'block, AstValue<'context, 'block>>;
 
     /// Dispatches an expression to its variant's emission, first folding a
@@ -195,7 +180,11 @@ where
     /// matches solc's exact rational arithmetic (`1/2*2 == 1`, `2**256-1` without
     /// 256-bit wraparound) and is the only way to lower a rational intermediate,
     /// which has no runtime type.
-    fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) -> Self::Output {
+    fn emit<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> Self::Output {
         // A COMPUTED constant expression (arithmetic / bitwise / shift / prefix)
         // folds to its exact integer — slang records the value on its `Literal`
         // type — and is emitted as that constant directly. A bare literal is
@@ -274,34 +263,50 @@ where
     }
 }
 
-impl<'state, 'context, 'block, 'scope> Materialize<'context, 'block, 'state, 'scope, Type<'context>>
-    for Expression
-where
-    'context: 'block,
-    'context: 'state,
-    'block: 'state,
-    'state: 'scope,
-{
-    type Context = &'scope ExpressionContext<'state, 'context, 'block>;
+impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Expression {
     type Output = AstValue<'context, 'block>;
 
     /// Emits this expression coerced to `target_type`: a string literal
     /// materialises in the target representation (a `bytesN` / `byte` constant),
     /// every other expression emits naturally; the result then casts to the target
     /// — a no-op when the literal already materialised at it.
-    fn materialize(
+    fn emit_as<'state>(
         &self,
         target_type: Type<'context>,
-        context: Self::Context,
+        context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, AstValue<'context, 'block>> {
         let BlockAnd { value, block } = match self {
             Expression::StringExpression(string_literal) => {
-                string_literal.materialize(target_type, context, block)
+                string_literal.emit_as(target_type, context, block)
             }
             _ => self.emit(context, block),
         };
         let value = value.cast(AstType::new(target_type), &context.state.builder, &block);
         BlockAnd { value, block }
+    }
+}
+
+impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
+    /// Emits this expression for its side effects, discarding the value: a void
+    /// call and `delete` lower directly (they reach no value position), every other
+    /// expression emits naturally and drops its value, yielding the continuation.
+    fn emit_for_effect<'state>(
+        &self,
+        context: &ExpressionContext<'state, 'context, 'block>,
+        block: BlockRef<'context, 'block>,
+    ) -> BlockRef<'context, 'block> {
+        match self {
+            Expression::FunctionCallExpression(call) => call.emit(context, block).1,
+            Expression::PrefixExpression(prefix)
+                if matches!(
+                    prefix.operator(),
+                    ast::PrefixExpressionOperator::DeleteKeyword(_)
+                ) =>
+            {
+                AssignmentTarget::delete(context, &prefix.operand(), block)
+            }
+            _ => self.emit(context, block).block,
+        }
     }
 }

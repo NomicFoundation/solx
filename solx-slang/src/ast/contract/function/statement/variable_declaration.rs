@@ -9,9 +9,10 @@ use slang_solidity_v2::ast::VariableDeclarationStatement;
 use slang_solidity_v2::ast::VariableDeclarationTarget;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
+use crate::ast::EmitStatement;
 use crate::ast::LocationPolicy;
-use crate::ast::Materialize;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
@@ -51,7 +52,7 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
             value: initial_value,
             block,
         } = if let Expression::StringExpression(string_literal) = initializer_expression {
-            string_literal.materialize(declared_type, &emitter, block)
+            string_literal.emit_as(declared_type, &emitter, block)
         } else {
             initializer_expression.emit(&emitter, block)
         };

@@ -10,7 +10,7 @@ use slang_solidity_v2::ast::PrefixExpression;
 use slang_solidity_v2::ast::PrefixExpressionOperator;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitExpression;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;

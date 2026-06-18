@@ -2,11 +2,8 @@
 //! The `BodyKind` function/modifier-body discriminant enum.
 //!
 
-/// Which form of a function [`FunctionEmitter::emit_sol_inner`] emits —
-/// disambiguating a normal function emission from the unwrapped `$body` of a
-/// modified function.
-///
-/// [`FunctionEmitter::emit_sol_inner`]: super::FunctionEmitter::emit_sol_inner
+/// Which form of a function `EmitFunction::emit_inner` emits — disambiguating a
+/// normal function emission from the unwrapped `$body` of a modified function.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum BodyKind {
     /// A normal function emission: public selector and modifier wrapping.

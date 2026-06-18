@@ -18,12 +18,12 @@ use solx_mlir::ods::sol::BareStaticCallOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
-use crate::ast::contract::ContractEmitter;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::getter::StructGetterLayout;
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// The ABI signature of a `public` state variable's synthesised getter:
@@ -104,11 +104,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                     LocationPolicy::Declared(Some(DataLocation::Storage)),
                     builder,
                 );
-                let plan = ContractEmitter::struct_getter_layout(
-                    &struct_definition,
-                    struct_mlir_type,
-                    builder,
-                )?;
+                let plan = struct_definition.struct_getter_layout(struct_mlir_type, builder)?;
                 let return_types = plan
                     .iter()
                     .map(|(_, _, result_type)| *result_type)

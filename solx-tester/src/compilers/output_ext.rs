@@ -64,7 +64,7 @@ pub fn get_last_contract(
                 match last_contract_name(source) {
                     Ok(name) => {
                         return Ok(
-                            solx_utils::ContractName::new(path.clone(), Some(name)).full_path,
+                            solx_utils::ContractName::new(path.clone(), Some(name)).full_path
                         );
                     }
                     Err(_error) => continue,
@@ -75,15 +75,17 @@ pub fn get_last_contract(
             {
                 for (path, _source) in sources.iter().rev() {
                     if let Some(contracts) = output.contracts.get(path)
-                        && let Some(ast) =
-                            output.sources.get(path).and_then(|source| source.ast.as_ref())
+                        && let Some(ast) = output
+                            .sources
+                            .get(path)
+                            .and_then(|source| source.ast.as_ref())
                         && let Some(name) = slang_contract_names_in_source_order(ast)
                             .into_iter()
                             .rev()
                             .find(|name| contracts.contains_key(name.as_str()))
                     {
                         return Ok(
-                            solx_utils::ContractName::new(path.clone(), Some(name)).full_path,
+                            solx_utils::ContractName::new(path.clone(), Some(name)).full_path
                         );
                     }
                 }
@@ -109,12 +111,9 @@ pub fn get_last_contract(
                 .contracts
                 .first_key_value()
                 .and_then(|(path, contracts)| {
-                    contracts
-                        .first_key_value()
-                        .map(|(name, _contract)| {
-                            solx_utils::ContractName::new(path.clone(), Some(name.clone()))
-                                .full_path
-                        })
+                    contracts.first_key_value().map(|(name, _contract)| {
+                        solx_utils::ContractName::new(path.clone(), Some(name.clone())).full_path
+                    })
                 })
                 .ok_or_else(|| {
                     anyhow::anyhow!("The sources are empty. Found errors: {:?}", output.errors)

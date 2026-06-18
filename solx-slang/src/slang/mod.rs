@@ -3,8 +3,10 @@
 //!
 
 /// Compilation builder configuration for the Slang frontend.
-use crate::ast::contract::ContractEmitter;
+use crate::ast::EmitObject;
+use crate::ast::contract::ObjectScope;
 use crate::ast::operator_binding::OperatorBindings;
+use crate::ast::pending_queries::MethodIdentifiers;
 pub mod compilation_config;
 
 use std::collections::BTreeMap;
@@ -21,8 +23,6 @@ use slang_solidity_v2_common::evm_targets::EvmTarget;
 use solx_core::Frontend;
 use solx_standard_json::CollectableError;
 use solx_standard_json::output::error::source_location::SourceLocation;
-
-use crate::ast::AstEmitter;
 
 use self::compilation_config::CompilationConfig;
 
@@ -252,13 +252,13 @@ impl Frontend for Slang {
                         let melior_context = solx_mlir::Context::create_mlir_context();
                         let evm_version = input_json.settings.evm_version.unwrap_or_default(); // recut-lint-allow: fail01 — optional setting; absent => default target
                         let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-                        let mut emitter = AstEmitter::new(&mut context);
-                        let (contract_name, method_identifiers) =
-                            emitter.emit_contract(contract, &free_functions, &operator_bindings);
+                        context.operator_bindings = operator_bindings.map.clone();
+                        let scope = ObjectScope::new(&free_functions, &operator_bindings.functions);
+                        contract.emit(&mut context, &scope);
                         Self::record_object(
                             context,
-                            contract_name,
-                            method_identifiers,
+                            contract.name().name(),
+                            contract.method_identifiers(),
                             input_json,
                             file_identifier,
                             &mut output,
@@ -284,12 +284,12 @@ impl Frontend for Slang {
                 let melior_context = solx_mlir::Context::create_mlir_context();
                 let evm_version = input_json.settings.evm_version.unwrap_or_default(); // recut-lint-allow: fail01 — optional setting; absent => default target
                 let mut context = solx_mlir::Context::new(&melior_context, evm_version);
-                let (library_name, method_identifiers) =
-                    ContractEmitter::new(&mut context).emit_library(&library);
+                let scope = ObjectScope::new(&[], &[]);
+                library.emit(&mut context, &scope);
                 Self::record_object(
                     context,
-                    library_name,
-                    method_identifiers,
+                    library.name().name(),
+                    library.method_identifiers(),
                     input_json,
                     file_identifier,
                     &mut output,

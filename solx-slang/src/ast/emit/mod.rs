@@ -1,45 +1,32 @@
 //!
-//! The emission trait: each Slang AST node emits its own MLIR.
+//! Slang AST emission traits: each node emits its own MLIR through a per-family
+//! trait implemented directly on the Slang AST type.
 //!
+//! Each emission mode is one trait, threading the shared emission scope and the
+//! current block: [`EmitExpression`] (a value), [`EmitStatement`] (a control-flow
+//! continuation), [`EmitYul`] (inline assembly), [`EmitForEffect`] (an expression
+//! in statement position), [`EmitPlace`] (an lvalue), and [`EmitAs`] (an expression
+//! coerced to an expected type). The shared result types [`BlockAnd`](crate::ast::BlockAnd)
+//! and [`Place`](crate::ast::Place) live beside this module.
 
-pub mod address;
-pub mod block_and;
-pub mod materialize;
-pub mod place;
+pub mod emit_as;
+pub mod emit_constructor;
+pub mod emit_expression;
+pub mod emit_for_effect;
+pub mod emit_function;
+pub mod emit_modifier_chain;
+pub mod emit_object;
+pub mod emit_place;
+pub mod emit_statement;
+pub mod emit_yul;
 
-use melior::ir::BlockRef;
-
-pub use self::address::EmitAddress;
-pub use self::block_and::BlockAnd;
-pub use self::materialize::Materialize;
-pub use self::place::Place;
-
-/// Emits a Slang AST node to MLIR, appending operations to `block` and threading
-/// the continuation back to the caller.
-///
-/// Implemented per node (one node, one module). The associated `Context` carries
-/// the shared emission scope — `&ExpressionContext` (an expression cannot declare
-/// variables) or `&mut StatementContext` (a statement can) — so the `&`/`&mut`
-/// split *is* that invariant. `Output` is the node family's result: a [`BlockAnd`]
-/// for an expression, an `Option<BlockRef>` continuation for a statement (`None`
-/// when control diverged).
-///
-/// Four lifetimes, outermost → innermost: `'context` (MLIR context), `'block`
-/// (block region), `'state` (the emitter's own field borrows), `'scope` (the
-/// borrow of the emitter passed to `emit`). `'state` and `'scope` are distinct
-/// because a `&mut` context is invariant — the dispatcher's short borrow of the
-/// emitter (`'scope`) cannot be unified with the emitter's longer field-borrow
-/// lifetime (`'state`).
-///
-/// Emission never fails: slang validates the source beforehand, so a node always
-/// produces its value, and an unsupported construct or violated invariant panics
-/// instead of returning an error.
-pub trait Emit<'context, 'block, 'state, 'scope> {
-    /// The shared emission scope (expression or statement) threaded into `emit`.
-    type Context;
-    /// The node family's result.
-    type Output;
-
-    /// Emits this node into `block`.
-    fn emit(&self, context: Self::Context, block: BlockRef<'context, 'block>) -> Self::Output;
-}
+pub use self::emit_as::EmitAs;
+pub use self::emit_constructor::EmitConstructor;
+pub use self::emit_expression::EmitExpression;
+pub use self::emit_for_effect::EmitForEffect;
+pub use self::emit_function::EmitFunction;
+pub use self::emit_modifier_chain::EmitModifierChain;
+pub use self::emit_object::EmitObject;
+pub use self::emit_place::EmitPlace;
+pub use self::emit_statement::EmitStatement;
+pub use self::emit_yul::EmitYul;

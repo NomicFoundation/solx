@@ -20,12 +20,13 @@ use solx_mlir::ods::sol::WhileOperation;
 use solx_mlir::ods::sol::YieldOperation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitExpression;
+use crate::ast::EmitForEffect;
+use crate::ast::EmitStatement;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::statement::StatementContext;
-use crate::ast::contract::function::statement::discarded::Discarded;
 use melior::ir::Block;
 
 // A `sol.if` region whose live block already terminated (e.g. with `sol.return`)
@@ -52,7 +53,7 @@ statement_emit!(IfStatement; |node, context, block| {
 
     // Emit then body.
     let saved_region = context.region_pointer;
-    context.set_region(&then_region);
+    context.region_pointer = &*then_region as *const _;
     let then_end = node.body().emit(context, then_block);
     if let Some(then_end) = then_end {
         mlir_op_void!(&context.state.builder, &then_end, YieldOperation.ins(&[]));
@@ -64,7 +65,7 @@ statement_emit!(IfStatement; |node, context, block| {
 
     // Emit else body (or empty yield).
     if let Some(ref else_statement) = node.else_branch() {
-        context.set_region(&else_region);
+        context.region_pointer = &*else_region as *const _;
         let else_end = else_statement.emit(context, else_block);
         if let Some(else_end) = else_end {
             mlir_op_void!(&context.state.builder, &else_end, YieldOperation.ins(&[]));
@@ -133,7 +134,7 @@ statement_emit!(ForStatement; |node, context, block| {
     }
 
     // Body region.
-    context.set_region(&body_region);
+    context.region_pointer = &*body_region as *const _;
     let body_end = node.body().emit(context, body_block);
     if let Some(body_end) = body_end {
         mlir_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
@@ -150,7 +151,7 @@ statement_emit!(ForStatement; |node, context, block| {
         );
         // The step is in statement position: its value is discarded and it
         // may be a value-less producer (a void call or `delete`).
-        let step_end = Discarded(iterator_expression).emit(&emitter, step_block);
+        let step_end = iterator_expression.emit_for_effect(&emitter, step_block);
         mlir_op_void!(&context.state.builder, &step_end, YieldOperation.ins(&[]));
     } else {
         mlir_op_void!(&context.state.builder, &step_block, YieldOperation.ins(&[]));
@@ -171,7 +172,7 @@ statement_emit!(WhileStatement; |node, context, block| {
     context.emit_loop_condition(&node.condition(), condition_block);
 
     // Body region.
-    context.set_region(&body_region);
+    context.region_pointer = &*body_region as *const _;
     let body_end = node.body().emit(context, body_block);
     if let Some(body_end) = body_end {
         mlir_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
@@ -188,7 +189,7 @@ statement_emit!(DoWhileStatement; |node, context, block| {
     let saved_region = context.region_pointer;
 
     // Body region (executes first).
-    context.set_region(&body_region);
+    context.region_pointer = &*body_region as *const _;
     let body_end = node.body().emit(context, body_block);
     if let Some(body_end) = body_end {
         mlir_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));

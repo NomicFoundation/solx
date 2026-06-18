@@ -16,9 +16,9 @@ use slang_solidity_v2::ast::PositionalArguments;
 use solx_mlir::ods::sol::ExtICallOperation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
-use crate::ast::Materialize;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -109,7 +109,7 @@ impl TryExternalCall {
         let BlockAnd {
             value: argument_values,
             block: current_block,
-        } = arguments.materialize(&parameter_types, context, current_block);
+        } = arguments.emit_as(&parameter_types, context, current_block);
         let callee = AstValue::external_callee(
             receiver,
             self.selector,

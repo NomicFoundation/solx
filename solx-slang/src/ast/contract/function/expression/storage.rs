@@ -8,18 +8,12 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 
-use slang_solidity_v2::ast::ContractDefinition;
 use solx_mlir::Builder;
 use solx_mlir::ods::sol::AddrOfOperation;
-use solx_mlir::ods::sol::CopyOperation;
 
-use crate::ast::BlockAnd;
-use crate::ast::Emit;
-use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
-use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::storage_layout::StorageSlot;
 
 impl StorageSlot {
@@ -72,58 +66,5 @@ impl StorageSlot {
                 .var(FlatSymbolRefAttribute::new(builder.context, &self.name))
                 .addr(pointer_type)
         ))
-    }
-}
-
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits every state-variable inline initializer (`T x = <expr>;`)
-    /// declared in `contract`, in source order.
-    ///
-    /// Reference-typed slots are written via `sol.copy` from the evaluated
-    /// value into the storage reference. Value-typed slots cast to the
-    /// declared element type and store via `sol.store`.
-    pub fn emit_state_var_initializers(
-        &self,
-        contract: &ContractDefinition,
-        mut block: BlockRef<'context, 'block>,
-    ) -> BlockRef<'context, 'block> {
-        // Run initializers for the whole C3-linearised hierarchy (inherited +
-        // own) in linearisation order, so a derived contract's construction
-        // executes its base contracts' state-variable initializers — including
-        // their side effects (`uint y = f();`) — exactly as solc does.
-        for state_variable in contract.linearised_state_variables() {
-            let Some(slot) = self.storage_layout.get(&state_variable.node_id()) else {
-                continue;
-            };
-            let Some(initializer) = state_variable.value() else {
-                continue;
-            };
-            let declared_type = state_variable.get_type().expect("slang validated");
-            let builder = &self.state.builder;
-            let element_type =
-                AstType::resolve(&declared_type, LocationPolicy::Declared(None), builder);
-            let address_type = AstType::new(element_type)
-                .address_type(slot.location, builder.context)
-                .into_mlir();
-            let storage_ref = mlir_op!(
-                builder,
-                &block,
-                AddrOfOperation
-                    .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
-                    .addr(address_type)
-            );
-            let BlockAnd {
-                value,
-                block: next_block,
-            } = initializer.emit(self, block);
-            block = next_block;
-            if declared_type.is_reference_type() {
-                mlir_op_void!(builder, &block, CopyOperation.src(value).dst(storage_ref));
-            } else {
-                let stored_value = value.cast(AstType::new(element_type), builder, &block);
-                Pointer::new(storage_ref).store(stored_value, builder, &block);
-            }
-        }
-        block
     }
 }

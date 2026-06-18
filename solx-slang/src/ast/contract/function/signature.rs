@@ -9,9 +9,9 @@ use solx_mlir::StateMutability;
 /// The resolved MLIR signature of a function: its symbol name, parameter and
 /// result types, public selector, mutability, and MLIR kind.
 ///
-/// Built by `FunctionEmitter::resolve_inner_signature` (the parent module reads
-/// these `pub` fields directly — no `pub(crate)` per the recut rules).
-pub struct InnerSignature<'context> {
+/// Built by `<FunctionDefinition as EmitFunction>::resolve_signature` (the caller
+/// reads these `pub` fields directly — no `pub(crate)` per the recut rules).
+pub struct Signature<'context> {
     /// The MLIR symbol the `sol.func` is emitted under.
     pub mlir_name: String,
     /// The Sol-typed parameter types, parallel to the function's parameters.
@@ -32,7 +32,7 @@ pub struct InnerSignature<'context> {
     pub selector: Option<u32>,
     /// The Sol dialect state mutability.
     pub state_mutability: StateMutability,
-    /// The Sol dialect function kind (constructor / fallback / receive), or
-    /// `None` for a regular function.
+    /// The Sol dialect function kind (constructor / fallback / receive), or `None`
+    /// for a regular function.
     pub mlir_kind: Option<solx_mlir::FunctionKind>,
 }

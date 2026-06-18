@@ -13,7 +13,7 @@ use solx_mlir::YulCmpPredicate;
 use solx_mlir::YulValue;
 use solx_mlir::ods::yul::*;
 
-use crate::ast::Emit;
+use crate::ast::EmitYul;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::statement::assembly::YulContext;
 

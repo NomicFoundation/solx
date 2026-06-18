@@ -7,7 +7,7 @@ use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Identifier;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitExpression;
 use crate::ast::Pointer;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;

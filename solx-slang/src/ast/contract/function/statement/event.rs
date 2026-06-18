@@ -8,11 +8,12 @@ use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::StringAttribute;
 use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::Definition;
-use slang_solidity_v2::ast::EmitStatement;
+use slang_solidity_v2::ast::EmitStatement as EmitStatementNode;
 use solx_mlir::ods::sol::EmitOperation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
+use crate::ast::EmitExpression;
+use crate::ast::EmitStatement;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -22,7 +23,7 @@ use crate::ast::contract::function::statement::StatementContext;
 // non-indexed per the event's parameter declaration, evaluate argument
 // expressions in declaration order, and emit `sol.emit` with the canonical
 // signature (`None` for an anonymous event).
-statement_emit!(EmitStatement; |node, context, block| {
+statement_emit!(EmitStatementNode; |node, context, block| {
     let Some(Definition::Event(event_definition)) = node.event().resolve_to_definition() else {
         unreachable!("slang resolves an emit target to an event definition");
     };

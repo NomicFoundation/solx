@@ -15,8 +15,8 @@ use solx_mlir::ods::sol::SliceOperation;
 use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
-use crate::ast::EmitAddress;
+use crate::ast::EmitExpression;
+use crate::ast::EmitPlace;
 use crate::ast::LocationPolicy;
 use crate::ast::Place;
 use crate::ast::Pointer;
@@ -24,22 +24,13 @@ use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
-impl<'state, 'context, 'block, 'scope> EmitAddress<'context, 'block, 'state, 'scope>
-    for IndexAccessExpression
-where
-    'context: 'block,
-    'context: 'state,
-    'block: 'state,
-    'state: 'scope,
-{
-    type Context = &'scope ExpressionContext<'state, 'context, 'block>;
-
+impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpression {
     /// Emits the address `a[i]` / `m[k]` denotes together with the element MLIR
     /// type — `sol.map` over a mapping key, `sol.gep` over a sequential index —
     /// without the trailing `sol.load`.
-    fn emit_address(
+    fn emit_place<'state>(
         &self,
-        context: Self::Context,
+        context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, Place<'context, 'block>> {
         if self.end().is_some() {
@@ -193,7 +184,7 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
             element_type,
         },
         block,
-    } = node.emit_address(context, block);
+    } = node.emit_place(context, block);
     let value = Pointer::new(address).load(
         AstType::new(element_type),
         &context.state.builder,

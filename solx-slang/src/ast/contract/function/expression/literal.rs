@@ -22,8 +22,8 @@ use solx_mlir::ods::sol::ThisOperation;
 use solx_utils::BIT_LENGTH_BYTE;
 
 use crate::ast::BlockAnd;
-use crate::ast::Emit;
-use crate::ast::Materialize;
+use crate::ast::EmitAs;
+use crate::ast::EmitExpression;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -97,23 +97,15 @@ expression_emit!(StringExpression; |node, context, block| {
 
 // A string literal used where `bytesN` / `byte` is expected materialises toward
 // that type as a compile-time fixed-bytes / byte constant rather than the runtime
-// `sol.string` its natural `Emit` produces. The impl lives here, beside that
-// `Emit`, because both read `ExpressionContext`'s private state.
-impl<'state, 'context, 'block, 'scope> Materialize<'context, 'block, 'state, 'scope, Type<'context>>
-    for StringExpression
-where
-    'context: 'block,
-    'context: 'state,
-    'block: 'state,
-    'state: 'scope,
-{
-    type Context = &'scope ExpressionContext<'state, 'context, 'block>;
+// `sol.string` its natural `EmitExpression` produces. The impl lives here, beside
+// that `EmitExpression`, because both read `ExpressionContext`'s private state.
+impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for StringExpression {
     type Output = AstValue<'context, 'block>;
 
-    fn materialize(
+    fn emit_as<'state>(
         &self,
         target_type: Type<'context>,
-        context: Self::Context,
+        context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> BlockAnd<'context, 'block, AstValue<'context, 'block>> {
         let builder = &context.state.builder;
