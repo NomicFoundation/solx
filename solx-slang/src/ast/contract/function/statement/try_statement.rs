@@ -73,7 +73,7 @@ statement_emit!(CatchClause; |node, context, block| {
             .into();
         context.bind_parameter(&parameter, decoded, &block);
     }
-    context.emit_block(node.body().statements(), block)
+    node.body().emit(context, block)
 });
 
 // Lowers to `sol.try`: four regions (success, panic, error, fallback). The op's
@@ -94,7 +94,7 @@ statement_emit!(TryStatement; |node, context, block| {
         {
             context.bind_parameter(&parameter, value.into_mlir(), &current_block);
         }
-        return context.emit_block(node.body().statements(), current_block);
+        return node.body().emit(context, current_block);
     };
 
     let (status, results, current_block) =
@@ -221,7 +221,7 @@ statement_emit!(TryStatement; |node, context, block| {
             context.bind_parameter(&parameter, *result, &success_block);
         }
     }
-    let success_end = context.emit_block(node.body().statements(), success_block);
+    let success_end = node.body().emit(context, success_block);
     if let Some(end) = success_end {
         mlir_op_void!(&context.state.builder, &end, YieldOperation.ins(&[]));
     }

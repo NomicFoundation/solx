@@ -35,7 +35,6 @@ use slang_solidity_v2::ast::UncheckedBlock;
 use solx_mlir::Context;
 use solx_mlir::Environment;
 use solx_mlir::ods::sol::BreakOperation;
-use solx_mlir::ods::sol::ConditionOperation;
 use solx_mlir::ods::sol::ContinueOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 
@@ -160,28 +159,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             *index = stage;
         }
         result
-    }
-
-    /// Evaluates a loop `condition` in `condition_block` and emits the
-    /// `sol.condition` terminator. Shared by `for`, `while`, and `do-while`.
-    fn emit_loop_condition(
-        &self,
-        condition: &Expression,
-        condition_block: BlockRef<'context, 'block>,
-    ) {
-        let emitter = ExpressionContext::from(self);
-        let BlockAnd {
-            value: condition_value,
-            block: condition_end,
-        } = condition.emit(&emitter, condition_block);
-        let condition_boolean = condition_value
-            .is_nonzero(&self.state.builder, &condition_end)
-            .into_mlir();
-        mlir_op_void!(
-            &self.state.builder,
-            &condition_end,
-            ConditionOperation.condition(condition_boolean)
-        );
     }
 
     /// Emits a sequence of statements inside a new lexical scope.
@@ -350,7 +327,15 @@ statement_emit!(ReturnStatement; |node, context, block| {
 });
 
 statement_emit!(Block; |node, context, block| {
-    context.emit_block(node.statements(), block)
+    // A `{ … }` block emits its statements in a fresh lexical scope, threading the
+    // continuation block and short-circuiting the moment control diverges.
+    context.environment.enter_scope();
+    let result = node
+        .statements()
+        .iter()
+        .try_fold(block, |block, statement| statement.emit(context, block));
+    context.environment.exit_scope();
+    result
 });
 
 statement_emit!(BreakStatement; |context, block| {
@@ -403,7 +388,7 @@ statement_emit!(ExpressionStatement; |node, context, block| {
 statement_emit!(UncheckedBlock; |node, context, block| {
     let saved_mode = context.arithmetic_mode;
     context.arithmetic_mode = ArithmeticMode::Unchecked;
-    let result = context.emit_block(node.block().statements(), block);
+    let result = node.block().emit(context, block);
     context.arithmetic_mode = saved_mode;
     result
 });

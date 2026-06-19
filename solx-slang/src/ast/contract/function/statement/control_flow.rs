@@ -119,7 +119,19 @@ statement_emit!(ForStatement; |node, context, block| {
     // Condition region.
     match node.condition() {
         ForStatementCondition::ExpressionStatement(expression_statement) => {
-            context.emit_loop_condition(&expression_statement.expression(), condition_block);
+            let emitter = ExpressionContext::from(&*context);
+            let BlockAnd {
+                value: condition_value,
+                block: condition_end,
+            } = expression_statement.expression().emit(&emitter, condition_block);
+            let condition_boolean = condition_value
+                .is_nonzero(&context.state.builder, &condition_end)
+                .into_mlir();
+            mlir_op_void!(
+                &context.state.builder,
+                &condition_end,
+                ConditionOperation.condition(condition_boolean)
+            );
         }
         ForStatementCondition::Semicolon(_) => {
             let true_value =
@@ -169,7 +181,19 @@ statement_emit!(WhileStatement; |node, context, block| {
     let saved_region = context.region_pointer;
 
     // Condition region.
-    context.emit_loop_condition(&node.condition(), condition_block);
+    let emitter = ExpressionContext::from(&*context);
+    let BlockAnd {
+        value: condition_value,
+        block: condition_end,
+    } = node.condition().emit(&emitter, condition_block);
+    let condition_boolean = condition_value
+        .is_nonzero(&context.state.builder, &condition_end)
+        .into_mlir();
+    mlir_op_void!(
+        &context.state.builder,
+        &condition_end,
+        ConditionOperation.condition(condition_boolean)
+    );
 
     // Body region.
     context.region_pointer = &*body_region as *const _;
@@ -196,7 +220,19 @@ statement_emit!(DoWhileStatement; |node, context, block| {
     }
 
     // Condition region.
-    context.emit_loop_condition(&node.condition(), condition_block);
+    let emitter = ExpressionContext::from(&*context);
+    let BlockAnd {
+        value: condition_value,
+        block: condition_end,
+    } = node.condition().emit(&emitter, condition_block);
+    let condition_boolean = condition_value
+        .is_nonzero(&context.state.builder, &condition_end)
+        .into_mlir();
+    mlir_op_void!(
+        &context.state.builder,
+        &condition_end,
+        ConditionOperation.condition(condition_boolean)
+    );
 
     context.region_pointer = saved_region;
     Some(block)
