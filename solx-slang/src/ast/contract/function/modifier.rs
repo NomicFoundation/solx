@@ -298,6 +298,12 @@ impl EmitModifierChain for FunctionDefinition {
             return_slots: return_slots.clone(),
         });
 
+        // A regular-function modifier stage iterates the body statements
+        // directly rather than through `Block::emit`: the stage func owns the
+        // `terminated` / `emit_default_return` interleaving (mirroring
+        // `emit_inner`), which a plain block descent does not express. The
+        // constructor inline path has no such epilogue and so routes its stage
+        // blocks through `Block::emit`.
         let mut current_block = entry;
         let mut terminated = false;
         for statement in modifier_body.statements().iter() {
