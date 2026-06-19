@@ -410,7 +410,7 @@ impl EmitConstructor for ContractDefinition {
                 // The constructor body is the innermost stage: the last modifier's
                 // `_;` runs it inline. A constructor has no return value, so the
                 // body need not be a separate `sol.func`.
-                modifier_stages.push(body.statements());
+                modifier_stages.push(body.clone());
                 modifier_stage_params.push(Vec::new());
                 let mut emitter = StatementContext::new(
                     scope.state,

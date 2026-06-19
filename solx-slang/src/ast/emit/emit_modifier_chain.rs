@@ -7,7 +7,7 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 
-use slang_solidity_v2::ast::Statements;
+use slang_solidity_v2::ast::Block;
 
 use solx_mlir::Environment;
 
@@ -33,7 +33,7 @@ pub trait EmitModifierChain {
         frame: &ModifiedBody<'frame, 'context, 'block>,
         environment: &mut Environment<'context, 'block>,
         return_slots: &mut Vec<Option<Value<'context, 'block>>>,
-        modifier_stages: Vec<Statements>,
+        modifier_stages: Vec<Block>,
         modifier_stage_params: Vec<ModifierStageParams<'context, 'block>>,
         current_block: BlockRef<'context, 'block>,
     ) -> Option<BlockRef<'context, 'block>>;
@@ -45,7 +45,7 @@ pub trait EmitModifierChain {
         &self,
         scope: &FunctionScope<'state, 'context>,
         stage_symbol: &str,
-        modifier_body: &Statements,
+        modifier_body: &Block,
         modifier_params: &ModifierStageParams<'context, '_>,
         downstream_types: &[Type<'context>],
         result_types: &[Type<'context>],
@@ -63,7 +63,7 @@ pub trait EmitModifierChain {
         environment: &Environment<'context, 'env>,
         block: BlockRef<'context, 'env>,
     ) -> (
-        Vec<Statements>,
+        Vec<Block>,
         Vec<ModifierStageParams<'context, 'env>>,
         BlockRef<'context, 'env>,
     );

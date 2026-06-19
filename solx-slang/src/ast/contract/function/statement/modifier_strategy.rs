@@ -2,7 +2,7 @@
 //! How the `_;` placeholder of a modifier-wrapped function body is lowered.
 //!
 
-use slang_solidity_v2::ast::Statements;
+use slang_solidity_v2::ast::Block;
 
 use crate::ast::contract::function::modifier_body_call::ModifierBodyCall;
 use crate::ast::contract::function::modifier_parameter_binding::ModifierParameterBinding;
@@ -25,11 +25,11 @@ pub enum ModifierStrategy<'context, 'block> {
     /// `sol.func`, threading the shared return values.
     BodyCall(ModifierBodyCall<'context, 'block>),
     /// A constructor's inline modifier chain: each stage is one modifier's body
-    /// statements (the constructor body pushed as the final stage); a `_;`
-    /// placeholder recurses to the next stage.
+    /// (the constructor body pushed as the final stage); a `_;` placeholder
+    /// recurses to the next stage, emitting it through `Block::emit`.
     InlineChain {
-        /// Each stage's body statements (the constructor body is the last stage).
-        stages: Vec<Statements>,
+        /// Each stage's body block (the constructor body is the last stage).
+        stages: Vec<Block>,
         /// Each stage's parameter bindings, parallel to `stages`.
         parameters: Vec<Vec<ModifierParameterBinding<'context, 'block>>>,
         /// The stage currently being emitted.

@@ -11,9 +11,9 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
+use slang_solidity_v2::ast::Block;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::Statements;
 
 use solx_mlir::Environment;
 use solx_mlir::Function;
@@ -86,7 +86,7 @@ impl EmitModifierChain for FunctionDefinition {
         frame: &ModifiedBody<'frame, 'context, 'block>,
         environment: &mut Environment<'context, 'block>,
         return_slots: &mut Vec<Option<Value<'context, 'block>>>,
-        modifier_stages: Vec<Statements>,
+        modifier_stages: Vec<Block>,
         modifier_stage_params: Vec<ModifierStageParams<'context, 'block>>,
         current_block: BlockRef<'context, 'block>,
     ) -> Option<BlockRef<'context, 'block>> {
@@ -205,7 +205,7 @@ impl EmitModifierChain for FunctionDefinition {
         &self,
         scope: &FunctionScope<'state, 'context>,
         stage_symbol: &str,
-        modifier_body: &Statements,
+        modifier_body: &Block,
         modifier_params: &ModifierStageParams<'context, '_>,
         downstream_types: &[Type<'context>],
         result_types: &[Type<'context>],
@@ -300,7 +300,7 @@ impl EmitModifierChain for FunctionDefinition {
 
         let mut current_block = entry;
         let mut terminated = false;
-        for statement in modifier_body.iter() {
+        for statement in modifier_body.statements().iter() {
             match statement.emit(&mut emitter, current_block) {
                 Some(next) => current_block = next,
                 None => {
@@ -320,11 +320,11 @@ impl EmitModifierChain for FunctionDefinition {
         environment: &Environment<'context, 'env>,
         mut block: BlockRef<'context, 'env>,
     ) -> (
-        Vec<Statements>,
+        Vec<Block>,
         Vec<ModifierStageParams<'context, 'env>>,
         BlockRef<'context, 'env>,
     ) {
-        let mut modifier_stages: Vec<Statements> = Vec::new();
+        let mut modifier_stages: Vec<Block> = Vec::new();
         let mut modifier_params: Vec<ModifierStageParams<'context, 'env>> = Vec::new();
         for invocation in self.modifier_invocations().iter() {
             // Resolve the invocation lexically (a plain `m`), else by its final
@@ -407,7 +407,7 @@ impl EmitModifierChain for FunctionDefinition {
                     element_type: parameter_type,
                 });
             }
-            modifier_stages.push(modifier_body.statements());
+            modifier_stages.push(modifier_body);
             modifier_params.push(stage_params);
         }
         (modifier_stages, modifier_params, block)

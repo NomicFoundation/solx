@@ -29,7 +29,6 @@ use slang_solidity_v2::ast::ExpressionStatement;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::ReturnStatement;
 use slang_solidity_v2::ast::Statement;
-use slang_solidity_v2::ast::Statements;
 use slang_solidity_v2::ast::UncheckedBlock;
 
 use solx_mlir::Context;
@@ -139,47 +138,28 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             return Some(block);
         };
         let stage = *index;
-        let Some(statements) = stages.get(stage).cloned() else {
+        let Some(stage_block) = stages.get(stage).cloned() else {
             return Some(block);
         };
         let params = parameters.get(stage).cloned().unwrap_or_default(); // recut-lint-allow: fail01 — a modifier stage may declare no parameters
         // Advance the cursor for the recursive `_;` (the borrow of the strategy
-        // ended once `statements` / `params` were cloned out), restore it after.
+        // ended once `stage_block` / `params` were cloned out), restore it after.
         if let ModifierStrategy::InlineChain { index, .. } = &mut self.modifier_strategy {
             *index = stage + 1;
         }
+        // The stage's parameters bracket the whole stage — including the `_;`
+        // tail — in their own scope; the stage block opens its own inner scope.
         self.environment.enter_scope();
         for binding in params {
             self.environment
                 .define_variable(binding.declaration, binding.pointer);
         }
-        let result = self.emit_block(statements, block);
+        let result = stage_block.emit(self, block);
         self.environment.exit_scope();
         if let ModifierStrategy::InlineChain { index, .. } = &mut self.modifier_strategy {
             *index = stage;
         }
         result
-    }
-
-    /// Emits a sequence of statements inside a new lexical scope.
-    pub fn emit_block(
-        &mut self,
-        statements: Statements,
-        block: BlockRef<'context, 'block>,
-    ) -> Option<BlockRef<'context, 'block>> {
-        self.environment.enter_scope();
-        let mut current = block;
-        for statement in statements.iter() {
-            match statement.emit(self, current) {
-                Some(next) => current = next,
-                None => {
-                    self.environment.exit_scope();
-                    return None;
-                }
-            }
-        }
-        self.environment.exit_scope();
-        Some(current)
     }
 }
 
