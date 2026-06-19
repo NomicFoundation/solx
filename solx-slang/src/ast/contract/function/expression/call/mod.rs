@@ -34,9 +34,11 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
-use solx_mlir::Function;
 use solx_mlir::ods::sol::AddModOperation;
 use solx_mlir::ods::sol::AssertOperation;
+use solx_mlir::ods::sol::BareCallOperation;
+use solx_mlir::ods::sol::BareDelegateCallOperation;
+use solx_mlir::ods::sol::BareStaticCallOperation;
 use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::ConcatOperation;
 use solx_mlir::ods::sol::CopyOperation;
@@ -149,40 +151,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             }
         }
         (value, salt, current_block)
-    }
-
-    /// Resolves the callee's MLIR signature and evaluates/coerces its arguments,
-    /// already in parameter-declaration order. The expression-keyed core of the
-    /// direct-call path, shared by the positional and named-argument forms.
-    fn emit_call_setup_expressions<'call>(
-        &'call self,
-        function_definition: &FunctionDefinition,
-        arguments: &[Expression],
-        block: BlockRef<'context, 'block>,
-    ) -> (
-        &'call Function<'context>,
-        Vec<Value<'context, 'block>>,
-        BlockRef<'context, 'block>,
-    ) {
-        // Virtual dispatch: a bare internal call resolving (lexically) to an
-        // overridden base function is routed to the most-derived override of its
-        // signature, so a base-body `g()` reaches the derived `g`. The redirect
-        // holds only shadowed-override nodes, so a non-virtual callee passes
-        // through unchanged. (`super`/`Base.f` bypass this — they resolve the
-        // exact linearised target by id through `super_redirect`.)
-        let node_id = function_definition.node_id();
-        let call_id = self
-            .state
-            .virtual_redirect
-            .get(&node_id)
-            .copied()
-            .unwrap_or(node_id);
-        let function = self.state.resolve_function(call_id);
-        let BlockAnd {
-            value: argument_values,
-            block: current_block,
-        } = arguments.emit_as(&function.parameter_types, self, block);
-        (function, argument_values, current_block)
     }
 
     /// Resolves an external library call's link target from its member-access
@@ -777,8 +745,88 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     let ArgumentsDeclaration::PositionalArguments(positional) = &arguments else {
                         unimplemented!("a bare low-level call takes positional arguments only");
                     };
-                    let (status, ret_data, block) =
-                        context.emit_bare_call(access, kind, positional, call_value, block);
+                    let BlockAnd {
+                        value: address,
+                        block,
+                    } = access.operand().emit(context, block);
+                    let argument = positional.iter().next().expect("slang validated");
+                    let BlockAnd {
+                        value: input,
+                        block,
+                    } = argument.emit(context, block);
+                    let builder = &context.state.builder;
+                    // `sol.bare_call`'s input rejects a non-memory operand, so an
+                    // argument sourced from storage / calldata is copied into memory first.
+                    let input = input
+                        .cast(
+                            AstType::string(builder.context, solx_utils::DataLocation::Memory),
+                            builder,
+                            &block,
+                        )
+                        .into_mlir();
+                    let address = address.into_mlir();
+                    let status_type =
+                        AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
+                            .into_mlir();
+                    let ret_data_type =
+                        AstType::string(builder.context, solx_utils::DataLocation::Memory)
+                            .into_mlir();
+                    let operation = match kind {
+                        BuiltIn::AddressCall => {
+                            let value = call_value.unwrap_or_else(|| {
+                                AstValue::constant(
+                                    0,
+                                    AstType::unsigned(
+                                        builder.context,
+                                        solx_utils::BIT_LENGTH_FIELD,
+                                    ),
+                                    builder,
+                                    &block,
+                                )
+                                .into_mlir()
+                            });
+                            mlir_op_build!(
+                                builder,
+                                BareCallOperation
+                                    .addr(address)
+                                    .gas(AstValue::gas_left(builder, &block))
+                                    .val(value)
+                                    .inp(input)
+                                    .status(status_type)
+                                    .ret_data(ret_data_type)
+                            )
+                        }
+                        BuiltIn::AddressDelegatecall => mlir_op_build!(
+                            builder,
+                            BareDelegateCallOperation
+                                .addr(address)
+                                .gas(AstValue::gas_left(builder, &block))
+                                .inp(input)
+                                .status(status_type)
+                                .ret_data(ret_data_type)
+                        ),
+                        BuiltIn::AddressStaticcall => mlir_op_build!(
+                            builder,
+                            BareStaticCallOperation
+                                .addr(address)
+                                .gas(AstValue::gas_left(builder, &block))
+                                .inp(input)
+                                .status(status_type)
+                                .ret_data(ret_data_type)
+                        ),
+                        _ => {
+                            unreachable!("bare call kind must be Call, Delegatecall, or Staticcall")
+                        }
+                    };
+                    let operation = block.append_operation(operation);
+                    let status = operation
+                        .result(0)
+                        .expect("a bare call always produces a status")
+                        .into();
+                    let ret_data = operation
+                        .result(1)
+                        .expect("a bare call always produces return data")
+                        .into();
                     return (vec![status, ret_data], block);
                 }
                 // `abi.decode(payload, (T))` — `sol.decode` to the result types the
@@ -949,9 +997,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 block,
                             } = positional.emit(context, block);
                             let builder = &context.state.builder;
-                            let result =
-                                AstValue::abi_encode(&values, None, true, builder, &block)
-                                    .into_mlir();
+                            let result = AstValue::abi_encode(&values, None, true, builder, &block)
+                                .into_mlir();
                             (Some(result), block)
                         }
                         BuiltIn::AbiEncodeWithSelector => {
@@ -965,9 +1012,14 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             let selector = AstValue::from(values.remove(0))
                                 .cast(AstType::fixed_bytes(builder.context, 4), builder, &block)
                                 .into_mlir();
-                            let result =
-                                AstValue::abi_encode(&values, Some(selector), false, builder, &block)
-                                    .into_mlir();
+                            let result = AstValue::abi_encode(
+                                &values,
+                                Some(selector),
+                                false,
+                                builder,
+                                &block,
+                            )
+                            .into_mlir();
                             (Some(result), block)
                         }
                         BuiltIn::AbiEncodeWithSignature => {
@@ -1777,8 +1829,24 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     .map(|parameter| parameter.node_id())
                     .collect();
                 let ordered = arguments.ordered_by(&parameter_ids);
-                let (function, argument_values, block) =
-                    context.emit_call_setup_expressions(&function_definition, &ordered, block);
+                // Virtual dispatch: a bare internal call resolving (lexically) to an
+                // overridden base function is routed to the most-derived override of
+                // its signature, so a base-body `g()` reaches the derived `g`. The
+                // redirect holds only shadowed-override nodes, so a non-virtual callee
+                // passes through unchanged. (`super`/`Base.f` bypass this — they
+                // resolve the exact linearised target by id through `super_redirect`.)
+                let node_id = function_definition.node_id();
+                let call_id = context
+                    .state
+                    .virtual_redirect
+                    .get(&node_id)
+                    .copied()
+                    .unwrap_or(node_id);
+                let function = context.state.resolve_function(call_id);
+                let BlockAnd {
+                    value: argument_values,
+                    block,
+                } = ordered.emit_as(&function.parameter_types, context, block);
                 let results = function.call(&argument_values, &context.state.builder, &block);
                 (results, block)
             }

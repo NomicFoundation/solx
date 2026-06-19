@@ -1,27 +1,15 @@
 //!
-//! External / bare-address call emission.
+//! Public state-variable getter ABI-signature resolution.
 //!
 
-use melior::ir::BlockLike;
-use melior::ir::BlockRef;
 use melior::ir::Type;
-use melior::ir::Value;
-use slang_solidity_v2::ast::BuiltIn;
 use slang_solidity_v2::ast::Definition;
-use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
-use solx_mlir::ods::sol::BareCallOperation;
-use solx_mlir::ods::sol::BareDelegateCallOperation;
-use solx_mlir::ods::sol::BareStaticCallOperation;
 use solx_utils::DataLocation;
 
-use crate::ast::BlockAnd;
-use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::getter::StructGetterLayout;
 
@@ -121,99 +109,5 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             )),
             _ => None,
         }
-    }
-
-    /// Emits a bare address call (`addr.call`/`delegatecall`/`staticcall`),
-    /// returning `(success, returndata-pointer, block)`. Inner
-    /// `_ => unreachable!("bare call kind must be Call/Delegatecall/Staticcall")`.
-    pub fn emit_bare_call(
-        &self,
-        access: &MemberAccessExpression,
-        kind: BuiltIn,
-        arguments: &PositionalArguments,
-        call_value: Option<Value<'context, 'block>>,
-        block: BlockRef<'context, 'block>,
-    ) -> (
-        Value<'context, 'block>,
-        Value<'context, 'block>,
-        BlockRef<'context, 'block>,
-    ) {
-        let BlockAnd {
-            value: address,
-            block,
-        } = access.operand().emit(self, block);
-        let argument = arguments.iter().next().expect("slang validated");
-        let BlockAnd {
-            value: input,
-            block,
-        } = argument.emit(self, block);
-
-        let builder = &self.state.builder;
-        // `sol.bare_call`'s input rejects a non-memory operand, so an argument
-        // sourced from storage / calldata is copied into memory first.
-        let input = input
-            .cast(
-                AstType::string(builder.context, solx_utils::DataLocation::Memory),
-                builder,
-                &block,
-            )
-            .into_mlir();
-        let address = address.into_mlir();
-        let status_type =
-            AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir();
-        let ret_data_type =
-            AstType::string(builder.context, solx_utils::DataLocation::Memory).into_mlir();
-        let operation = match kind {
-            BuiltIn::AddressCall => {
-                let value = call_value.unwrap_or_else(|| {
-                    AstValue::constant(
-                        0,
-                        AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                        builder,
-                        &block,
-                    )
-                    .into_mlir()
-                });
-                mlir_op_build!(
-                    builder,
-                    BareCallOperation
-                        .addr(address)
-                        .gas(AstValue::gas_left(builder, &block))
-                        .val(value)
-                        .inp(input)
-                        .status(status_type)
-                        .ret_data(ret_data_type)
-                )
-            }
-            BuiltIn::AddressDelegatecall => mlir_op_build!(
-                builder,
-                BareDelegateCallOperation
-                    .addr(address)
-                    .gas(AstValue::gas_left(builder, &block))
-                    .inp(input)
-                    .status(status_type)
-                    .ret_data(ret_data_type)
-            ),
-            BuiltIn::AddressStaticcall => mlir_op_build!(
-                builder,
-                BareStaticCallOperation
-                    .addr(address)
-                    .gas(AstValue::gas_left(builder, &block))
-                    .inp(input)
-                    .status(status_type)
-                    .ret_data(ret_data_type)
-            ),
-            _ => unreachable!("bare call kind must be Call, Delegatecall, or Staticcall"),
-        };
-        let operation = block.append_operation(operation);
-        let status = operation
-            .result(0)
-            .expect("a bare call always produces a status")
-            .into();
-        let ret_data = operation
-            .result(1)
-            .expect("a bare call always produces return data")
-            .into();
-        (status, ret_data, block)
     }
 }
