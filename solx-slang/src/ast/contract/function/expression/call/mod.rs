@@ -63,7 +63,6 @@ use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::call::built_in::EncodeMode;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 
 /// The shared call-emission primitives the call kinds dispatch through
@@ -793,7 +792,27 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         value: payload_value,
                         block,
                     } = payload_expression.emit(context, block);
-                    let result_types = context.abi_decode_result_types(self);
+                    // The MLIR result types — one per requested type: `abi.decode(data, T)`
+                    // yields one, `abi.decode(data, (A, B, …))` one per tuple element —
+                    // resolved from the call's binder-assigned type.
+                    let result_types: Vec<Type> = match self.get_type().expect("slang validated") {
+                        SlangType::Tuple(tuple) => tuple
+                            .types()
+                            .iter()
+                            .map(|slang_type| {
+                                AstType::resolve(
+                                    slang_type,
+                                    LocationPolicy::Declared(None),
+                                    &context.state.builder,
+                                )
+                            })
+                            .collect(),
+                        other => vec![AstType::resolve(
+                            &other,
+                            LocationPolicy::Declared(None),
+                            &context.state.builder,
+                        )],
+                    };
                     let builder = &context.state.builder;
                     // `sol.decode` requires a memory or calldata byte buffer; a
                     // storage `bytes` / `string` is a reference, so copy it to memory
@@ -917,12 +936,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 value: values,
                                 block,
                             } = positional.emit(context, block);
-                            let result = context.emit_sol_encode(
-                                &values,
-                                None,
-                                EncodeMode::Standard,
-                                &block,
-                            );
+                            let builder = &context.state.builder;
+                            let result =
+                                AstValue::abi_encode(&values, None, false, builder, &block)
+                                    .into_mlir();
                             (Some(result), block)
                         }
                         BuiltIn::AbiEncodePacked => {
@@ -931,8 +948,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 value: values,
                                 block,
                             } = positional.emit(context, block);
+                            let builder = &context.state.builder;
                             let result =
-                                context.emit_sol_encode(&values, None, EncodeMode::Packed, &block);
+                                AstValue::abi_encode(&values, None, true, builder, &block)
+                                    .into_mlir();
                             (Some(result), block)
                         }
                         BuiltIn::AbiEncodeWithSelector => {
@@ -946,12 +965,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             let selector = AstValue::from(values.remove(0))
                                 .cast(AstType::fixed_bytes(builder.context, 4), builder, &block)
                                 .into_mlir();
-                            let result = context.emit_sol_encode(
-                                &values,
-                                Some(selector),
-                                EncodeMode::Standard,
-                                &block,
-                            );
+                            let result =
+                                AstValue::abi_encode(&values, Some(selector), false, builder, &block)
+                                    .into_mlir();
                             (Some(result), block)
                         }
                         BuiltIn::AbiEncodeWithSignature => {
@@ -1007,12 +1023,15 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 values.push(value.into_mlir());
                                 current = next;
                             }
-                            let result = context.emit_sol_encode(
+                            let builder = &context.state.builder;
+                            let result = AstValue::abi_encode(
                                 &values,
                                 Some(selector_value),
-                                EncodeMode::Standard,
+                                false,
+                                builder,
                                 &current,
-                            );
+                            )
+                            .into_mlir();
                             (Some(result), current)
                         }
                         BuiltIn::AbiEncodeCall => {
@@ -1103,12 +1122,14 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 value: values,
                                 block: current,
                             } = argument_expressions.emit_as(&parameter_types, context, current);
-                            let result = context.emit_sol_encode(
+                            let result = AstValue::abi_encode(
                                 &values,
                                 Some(selector_value),
-                                EncodeMode::Standard,
+                                false,
+                                builder,
                                 &current,
-                            );
+                            )
+                            .into_mlir();
                             (Some(result), current)
                         }
                         BuiltIn::ArrayPop => {

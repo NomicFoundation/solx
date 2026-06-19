@@ -27,6 +27,7 @@ use crate::ods::sol::CmpOperation;
 use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
+use crate::ods::sol::EncodeOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
 use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
@@ -372,6 +373,50 @@ impl<'context, 'block> Value<'context, 'block> {
                 .addr(input)
                 .result(Type::fixed_bytes(builder.context, 32))
         ))
+    }
+
+    /// `sol.encode` — the ABI-encoded `bytes memory` payload of `ins`. A
+    /// `selector`, when present, is prepended as the leading 4 bytes and must
+    /// already be `!sol.fixed_bytes<4>`. `packed` selects the packed encoding (no
+    /// per-element padding, `abi.encodePacked`). Shared by every `abi.encode*`
+    /// arm — the standard / packed encode, the selector / signature / call forms.
+    ///
+    /// Sets `operand_segment_sizes` by hand because melior's ODS-generated builder
+    /// does not synthesize the attribute for this `AttrSizedOperandSegments` op;
+    /// the dialect verifier rejects the op without it.
+    pub fn abi_encode(
+        ins: &[MlirValue<'context, 'block>],
+        selector: Option<MlirValue<'context, 'block>>,
+        packed: bool,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let mut op_builder = EncodeOperation::builder(builder.context, builder.unknown_location)
+            .ins(ins)
+            .res(Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir());
+        if let Some(selector_value) = selector {
+            op_builder = op_builder.selector(selector_value);
+        }
+        if packed {
+            op_builder = op_builder.packed(Attribute::unit(builder.context));
+        }
+        let mut operation: Operation = op_builder.build().into();
+        // TODO: drop this manual segment-sizes plumbing once the melior op-builder
+        // macro emits `operand_segment_sizes` automatically for ops with variadic
+        // or optional operand groups.
+        let ins_count = i32::try_from(ins.len()).expect("encode argument count fits in i32");
+        let segment_sizes = DenseI32ArrayAttribute::new(
+            builder.context,
+            &[ins_count, i32::from(selector.is_some())],
+        );
+        operation.set_inherent_attribute("operand_segment_sizes", segment_sizes.into());
+        Self::new(
+            block
+                .append_operation(operation)
+                .result(0)
+                .expect("sol.encode always produces one result")
+                .into(),
+        )
     }
 
     /// A function/error selector or event topic as a `bytesN` value: the integer
