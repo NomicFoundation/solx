@@ -16,11 +16,14 @@ pub mod variable_declaration;
 
 use std::collections::HashMap;
 
+use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Region;
 use melior::ir::Type;
 use melior::ir::Value;
+use melior::ir::attribute::StringAttribute;
+use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Block;
 use slang_solidity_v2::ast::BreakStatement;
 use slang_solidity_v2::ast::ContinueStatement;
@@ -36,6 +39,7 @@ use solx_mlir::Environment;
 use solx_mlir::ods::sol::BreakOperation;
 use solx_mlir::ods::sol::ContinueOperation;
 use solx_mlir::ods::sol::ReturnOperation;
+use solx_mlir::ods::sol::RevertOperation;
 
 use self::expression_statement_kind::ExpressionStatementKind;
 use self::modifier_strategy::ModifierStrategy;
@@ -315,7 +319,73 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                 Some(block)
             }
         }
-        ExpressionStatementKind::RevertCall(call) => context.emit_revert_call(&call, block),
+        ExpressionStatementKind::RevertCall(call) => {
+            let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
+            else {
+                unimplemented!("only positional arguments supported");
+            };
+            // `sol.revert` is not a terminator; the block stays live for the
+            // caller (an enclosing yield or the epilogue default return).
+            let block = match positional_arguments.iter().next() {
+                // `revert()` — a no-data revert.
+                None => {
+                    let builder = &context.state.builder;
+                    mlir_op_void!(
+                        builder,
+                        &block,
+                        RevertOperation
+                            .signature(StringAttribute::new(builder.context, ""))
+                            .args(&[])
+                    );
+                    block
+                }
+                // A non-empty string literal bakes the message into the op as the
+                // `Error(string)` payload (no runtime encoding).
+                Some(Expression::StringExpression(string_expression))
+                    if !string_expression.value().is_empty() =>
+                {
+                    let message = String::from_utf8(string_expression.value())
+                        .expect("revert message is valid UTF-8");
+                    let builder = &context.state.builder;
+                    mlir_op_void!(
+                        builder,
+                        &block,
+                        RevertOperation
+                            .signature(StringAttribute::new(builder.context, &message))
+                            .args(&[])
+                    );
+                    block
+                }
+                // A non-literal message (`revert(expr)`) or an empty literal
+                // (`revert("")`, i.e. `Error("")`) is evaluated at runtime and
+                // ABI-encoded under the `Error(string)` selector, like
+                // `require(cond, expr)`.
+                Some(expression) => {
+                    let emitter = ExpressionContext::from(&*context);
+                    let BlockAnd {
+                        value: message_value,
+                        block,
+                    } = expression.emit(&emitter, block);
+                    let builder = &context.state.builder;
+                    let string_memory_type =
+                        AstType::string(builder.context, solx_utils::DataLocation::Memory)
+                            .into_mlir();
+                    let message_value = message_value
+                        .cast(AstType::new(string_memory_type), builder, &block)
+                        .into_mlir();
+                    mlir_op_void!(
+                        builder,
+                        &block,
+                        RevertOperation
+                            .signature(StringAttribute::new(builder.context, "Error(string)"))
+                            .args(&[message_value])
+                            .call(Attribute::unit(builder.context))
+                    );
+                    block
+                }
+            };
+            Some(block)
+        }
         ExpressionStatementKind::TypeOrSuperNoop => Some(block),
         ExpressionStatementKind::TypeReference(expression) => {
             // A discarded type / selector reference (`C.f.selector;`) is a
