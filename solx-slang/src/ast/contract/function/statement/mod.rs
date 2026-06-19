@@ -181,43 +181,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
         self.environment.exit_scope();
         Some(current)
     }
-
-    /// Emits only the side effects of a discarded type-reference expression: a
-    /// member access recurses into its operand; a conditional whose branches are
-    /// types runs only its condition (the type branches are compile-time); any
-    /// other type/module reference has none.
-    fn emit_type_reference_side_effects(
-        &mut self,
-        expression: Expression,
-        block: BlockRef<'context, 'block>,
-    ) -> Option<BlockRef<'context, 'block>> {
-        match expression.unwrap_parentheses() {
-            Expression::MemberAccessExpression(access) => {
-                self.emit_type_reference_side_effects(access.operand(), block)
-            }
-            Expression::ConditionalExpression(conditional) => {
-                let emitter = ExpressionContext::from(&*self);
-                let operand = conditional.operand();
-                let BlockAnd { block, .. } = operand.emit(&emitter, block);
-                Some(block)
-            }
-            _ => Some(block),
-        }
-    }
-
-    /// Lowers a modifier stage's `_;` placeholder to the modifier-body hand-off
-    /// (call the wrapped body / next stage, threading the shared return values),
-    /// delegating to `ModifierBodyCall::emit`. Outside a modifier stage `_;`
-    /// has no hand-off set and emits nothing.
-    fn emit_modifier_body_call(
-        &self,
-        block: BlockRef<'context, 'block>,
-    ) -> Option<BlockRef<'context, 'block>> {
-        if let ModifierStrategy::BodyCall(body_call) = &self.modifier_strategy {
-            body_call.emit(&self.state.builder, &block);
-        }
-        Some(block)
-    }
 }
 
 // A multi-element tuple expression in the return position is unpacked into one
@@ -365,13 +328,30 @@ statement_emit!(ExpressionStatement; |node, context, block| {
             if matches!(context.modifier_strategy, ModifierStrategy::InlineChain { .. }) {
                 context.emit_inline_modifier_chain(block)
             } else {
-                context.emit_modifier_body_call(block)
+                // A regular function's `_;` calls the wrapped body / next stage.
+                if let ModifierStrategy::BodyCall(body_call) = &context.modifier_strategy {
+                    body_call.emit(&context.state.builder, &block);
+                }
+                Some(block)
             }
         }
         ExpressionStatementKind::RevertCall(call) => context.emit_revert_call(&call, block),
         ExpressionStatementKind::TypeOrSuperNoop => Some(block),
         ExpressionStatementKind::TypeReference(expression) => {
-            context.emit_type_reference_side_effects(expression, block)
+            // A discarded type / selector reference (`C.f.selector;`) is a
+            // compile-time value; only a runtime receiver buried under the
+            // member-access chain — a conditional, `(c ? a : b).f.selector` —
+            // carries side effects, so peel to the base and run just that.
+            let mut current = expression.unwrap_parentheses();
+            while let Expression::MemberAccessExpression(access) = current {
+                current = access.operand().unwrap_parentheses();
+            }
+            if let Expression::ConditionalExpression(conditional) = current {
+                let emitter = ExpressionContext::from(&*context);
+                Some(conditional.operand().emit(&emitter, block).block)
+            } else {
+                Some(block)
+            }
         }
         ExpressionStatementKind::TupleConditional(conditional) => {
             let emitter = ExpressionContext::from(&*context);
