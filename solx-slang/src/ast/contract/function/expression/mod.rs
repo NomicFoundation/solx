@@ -8,6 +8,7 @@ use crate::ast::Value as AstValue;
 pub mod arithmetic;
 pub mod arithmetic_mode;
 pub mod assignment;
+pub mod bare_function_ref_type;
 pub mod call;
 pub mod call_options;
 pub mod comparison;
@@ -30,7 +31,6 @@ use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::attribute::FlatSymbolRefAttribute;
 use slang_solidity_v2::ast;
-use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::StateVariableMutability;
@@ -78,33 +78,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             storage_layout,
             arithmetic_mode,
         }
-    }
-
-    /// Emits an internal function used as a value (`g` in `f = g;`) as a
-    /// `sol.func_constant` producing an `!sol.func_ref<…>` pointer.
-    ///
-    /// The target is routed through the virtual redirect exactly as a direct
-    /// call is, so a base-body `f = g` binds the most-derived override of `g`
-    /// — the lexical base version is shadowed and thus unregistered when the
-    /// derived contract is compiled.
-    /// If `expression` is a bare function name — always an *internal* function
-    /// pointer — returns its `!sol.func_ref` type, built from the function's
-    /// declared signature. slang types such a reference from the function's
-    /// visibility (a `Public` function resolves to its return type, not the
-    /// pointer type), so a caller inferring a result type from the expression —
-    /// e.g. a ternary whose branches are function names — uses this to recover
-    /// the authoritative internal-pointer type the branch values carry. Returns
-    /// `None` for any expression that is not a bare reference to a function.
-    fn bare_function_ref_type(&self, expression: &Expression) -> Option<Type<'context>> {
-        let Expression::Identifier(identifier) = expression else {
-            return None;
-        };
-        let Some(Definition::Function(function_definition)) = identifier.resolve_to_definition()
-        else {
-            return None;
-        };
-        let function = self.state.resolve_function(function_definition.node_id());
-        Some(function.func_ref_type(&self.state.builder).into_mlir())
     }
 
     /// Reads a contract state variable's value: a `constant` inlines its

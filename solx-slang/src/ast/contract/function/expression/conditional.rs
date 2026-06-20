@@ -23,6 +23,7 @@ use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::bare_function_ref_type::BareFunctionRefType;
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalExpression {
     type Output = (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>);
@@ -146,9 +147,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
         // when the binder leaves the conditional untyped, rather than silently
         // defaulting to `ui256` (which masked the mismatch and `sol.cast`-ed a
         // `func_ref` to integer).
-        let result_type = context
-            .bare_function_ref_type(&true_expression)
-            .or_else(|| context.bare_function_ref_type(&false_expression))
+        let result_type = true_expression
+            .bare_function_ref_type(context.state)
+            .or_else(|| false_expression.bare_function_ref_type(context.state))
             .or_else(|| AstType::resolve_optional(self.get_type(), &context.state.builder))
             .or_else(|| {
                 AstType::resolve_optional(true_expression.get_type(), &context.state.builder)

@@ -6,16 +6,18 @@ use melior::ir::Type;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
+use solx_mlir::Builder;
 use solx_utils::DataLocation;
 
 use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
-use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::getter::StructGetterLayout;
 
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// The ABI signature of a `public` state variable's synthesised getter:
-    /// the key/index parameter types and the returned value types.
+/// The external ABI signature of a `public` state variable's synthesised getter.
+/// Carried by the state variable, the entity the getter accessor belongs to.
+pub trait GetterSignature {
+    /// The getter's `(parameter_types, return_types)`: the key/index parameters
+    /// and the returned value types.
     ///
     /// A scalar variable `T public x` is `() -> (T)`; a mapping `mapping(K => V)`
     /// is `(K) -> (V)`; an array is `(uint256) -> (element)`; a struct is
@@ -23,12 +25,18 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
     /// member layout, so the call decodes exactly what the getter returns).
     /// Single-level only — a nested or reference-typed key / value / element
     /// returns `None`, a LOUD residual at the (already-classified) call site.
-    pub fn getter_signature(
+    fn getter_signature<'context>(
         &self,
-        state_variable: &StateVariableDefinition,
+        builder: &Builder<'context>,
+    ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)>;
+}
+
+impl GetterSignature for StateVariableDefinition {
+    fn getter_signature<'context>(
+        &self,
+        builder: &Builder<'context>,
     ) -> Option<(Vec<Type<'context>>, Vec<Type<'context>>)> {
-        let declared_type = state_variable.get_type()?;
-        let builder = &self.state.builder;
+        let declared_type = self.get_type()?;
         match &declared_type {
             SlangType::Mapping(mapping_type) => {
                 let key = mapping_type.key_type();

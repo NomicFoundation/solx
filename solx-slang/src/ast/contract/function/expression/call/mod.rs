@@ -5,7 +5,7 @@
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 pub mod built_in;
-pub mod external_call;
+pub mod getter_signature;
 pub mod positional_arguments;
 pub mod try_external_call;
 
@@ -26,10 +26,8 @@ use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionCallExpression;
-use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::IndexAccessKind;
-use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -65,7 +63,9 @@ use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call::getter_signature::GetterSignature;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
+use crate::ast::pending_queries::MemberAccessOperand;
 
 /// The shared call-emission primitives the call kinds dispatch through
 /// (argument coercion, call-options capture, indirect calls, struct
@@ -151,35 +151,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             }
         }
         (value, salt, current_block)
-    }
-
-    /// Resolves an external library call's link target from its member-access
-    /// callee: the library's [`solx_utils::ContractName`], the callee function,
-    /// and the `self` receiver (`None` for a namespace-qualified `L.f`, the
-    /// operand value for a `using for` `x.f`). Shared by the positional and named
-    /// paths.
-    fn resolve_external_library(
-        &self,
-        access: &MemberAccessExpression,
-    ) -> (
-        solx_utils::ContractName,
-        FunctionDefinition,
-        Option<Expression>,
-    ) {
-        let Some(Definition::Function(library_function)) = access.member().resolve_to_definition()
-        else {
-            unreachable!("an external library call resolves to a function");
-        };
-        let Some(Definition::Library(library)) = library_function.enclosing_definition() else {
-            unreachable!("an external library call's target is a library member");
-        };
-        let operand = access.operand();
-        let self_receiver = (!self.is_namespace_qualifier(&operand)).then_some(operand);
-        let name = solx_utils::ContractName::new(
-            library.get_file_id().to_owned(),
-            Some(library.name().name()),
-        );
-        (name, library_function, self_receiver)
     }
 
     /// Emits an indirect call through the function-pointer value `callee`
@@ -294,19 +265,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
                 .collect()
         };
         (results, current_block)
-    }
-
-    /// Whether a member-access operand `x` in `x.f(...)` is a namespace qualifier
-    /// — a library or import alias (`L.f` / `M.f`), which is not a value — rather
-    /// than a `using for` receiver, which becomes the implicit `self` argument.
-    fn is_namespace_qualifier(&self, operand: &Expression) -> bool {
-        let Expression::Identifier(identifier) = operand else {
-            return false;
-        };
-        matches!(
-            identifier.resolve_to_definition(),
-            Some(Definition::Library(_) | Definition::Import(_) | Definition::ImportedSymbol(_))
-        )
     }
 }
 
@@ -1348,8 +1306,26 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         Some(Definition::Library(_))
                     ))
             {
-                let (library_name, library_function, self_receiver) =
-                    context.resolve_external_library(access);
+                // Resolve the link target from the member-access callee: the
+                // library function, its `solx_utils::ContractName`, and the `self`
+                // receiver (`None` for a namespace-qualified `L.f`, the operand value
+                // for a `using for` `x.f`).
+                let Some(Definition::Function(library_function)) =
+                    access.member().resolve_to_definition()
+                else {
+                    unreachable!("an external library call resolves to a function");
+                };
+                let Some(Definition::Library(library)) = library_function.enclosing_definition()
+                else {
+                    unreachable!("an external library call's target is a library member");
+                };
+                let library_operand = access.operand();
+                let self_receiver =
+                    (!library_operand.is_namespace_qualifier()).then_some(library_operand);
+                let library_name = solx_utils::ContractName::new(
+                    library.get_file_id().to_owned(),
+                    Some(library.name().name()),
+                );
                 let parameter_ids: Vec<NodeId> = library_function
                     .parameters()
                     .iter()
@@ -1467,7 +1443,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     // A namespace qualifier (`L.f` / `M.f`) is not a value, so only
                     // the explicit arguments pass; a `using for` receiver becomes the
                     // implicit `self` first parameter.
-                    if context.is_namespace_qualifier(&operand) {
+                    if operand.is_namespace_qualifier() {
                         let arguments: Vec<Expression> = positional.iter().collect();
                         let BlockAnd {
                             value: argument_values,
@@ -1576,7 +1552,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 );
                             }
                             let Some((parameter_types, return_types)) =
-                                context.getter_signature(&state_variable)
+                                state_variable.getter_signature(&context.state.builder)
                             else {
                                 unimplemented!(
                                     "getter of a nested or reference-typed state variable is not yet supported"

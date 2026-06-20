@@ -18,7 +18,6 @@ use slang_solidity_v2::ast::ContractMember;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::MemberAccessExpression;
-use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
 use solx_mlir::ods::sol::BalanceOperation;
@@ -55,6 +54,7 @@ use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::pending_queries::MemberAccessOperand;
 
 impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpression {
     /// Emits the address `s.field` denotes together with the field's element MLIR
@@ -539,9 +539,24 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             &block,
         );
         BlockAnd { block, value }
-    } else if let Some(ordinal) = context.enum_variant_ordinal(node, None) {
-        // `E.Variant` (or qualified `C.E.Variant`): the variant's ordinal as an
-        // integer constant, bridged to the enum type via `sol.enum_cast`.
+    } else if let Some(ordinal) = match (
+        node.member().resolve_to_definition(),
+        node.operand().resolve_member_access_operand(),
+    ) {
+        // `E.Variant` (or qualified `C.E.Variant`) not in call position: the
+        // variant's ordinal, located by NodeId identity against the enum's members
+        // (never by comparing the member name as text).
+        (
+            Some(Definition::EnumMember(member_definition)),
+            Some(Definition::Enum(enum_definition)),
+        ) => enum_definition
+            .members()
+            .iter()
+            .position(|member| member.node_id() == member_definition.node_id()),
+        _ => None,
+    } {
+        // The variant's ordinal as an integer constant, bridged to the enum type
+        // via `sol.enum_cast`.
         let result_type = AstType::resolve_optional(node.get_type(), &context.state.builder)
             .expect("slang validated");
         let builder = &context.state.builder;
@@ -563,7 +578,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             // function-pointer VALUE pulls its selector at runtime via
             // `sol.ext_func_selector`.
             Some(BuiltIn::FunctionSelector) => {
-                let static_selector = match context.resolve_member_access_operand(&node.operand()) {
+                let static_selector = match node.operand().resolve_member_access_operand() {
                     Some(Definition::Function(function)) => function.compute_selector(),
                     Some(Definition::StateVariable(state_variable)) => {
                         state_variable.compute_selector()
@@ -618,8 +633,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             // `MyError.selector` — the error's 4-byte selector as a compile-time
             // constant.
             Some(BuiltIn::ErrorSelector) => {
-                let Some(Definition::Error(error)) =
-                    context.resolve_member_access_operand(&node.operand())
+                let Some(Definition::Error(error)) = node.operand().resolve_member_access_operand()
                 else {
                     unreachable!("slang resolves an error `.selector` base to an error definition");
                 };
@@ -636,8 +650,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             // `MyEvent.selector` — the event's 32-byte topic hash (`bytes32`), the
             // keccak256 of its canonical signature, as a compile-time constant.
             Some(BuiltIn::EventSelector) => {
-                let Some(Definition::Event(event)) =
-                    context.resolve_member_access_operand(&node.operand())
+                let Some(Definition::Event(event)) = node.operand().resolve_member_access_operand()
                 else {
                     unreachable!("slang resolves an event `.selector` base to an event definition");
                 };
@@ -700,46 +713,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
 });
 
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Classifies a member access as an enum-variant reference (`E.Variant` or
-    /// qualified `C.E.Variant`), returning the variant's ordinal when it is one
-    /// (and not a call). The ordinal is located by NodeId identity against the
-    /// enum's members, never by comparing the member name as text.
-    fn enum_variant_ordinal(
-        &self,
-        access: &MemberAccessExpression,
-        arguments: Option<&PositionalArguments>,
-    ) -> Option<usize> {
-        if arguments.is_some() {
-            return None;
-        }
-        let Definition::EnumMember(member_definition) = access.member().resolve_to_definition()?
-        else {
-            return None;
-        };
-        let Definition::Enum(enum_definition) =
-            self.resolve_member_access_operand(&access.operand())?
-        else {
-            return None;
-        };
-        enum_definition
-            .members()
-            .iter()
-            .position(|member| member.node_id() == member_definition.node_id())
-    }
-
-    /// Resolves a member-access operand to its definition: a bare type name
-    /// (`E.Variant`, whose operand is the `Identifier` `E`) or a qualified path
-    /// whose operand is itself a member access (`C.E.Variant`).
-    fn resolve_member_access_operand(&self, operand: &Expression) -> Option<Definition> {
-        match operand {
-            Expression::Identifier(identifier) => identifier.resolve_to_definition(),
-            Expression::MemberAccessExpression(member_access) => {
-                member_access.member().resolve_to_definition()
-            }
-            _ => None,
-        }
-    }
-
     /// Evaluates the receiver of a `<receiver>.member.selector` for its side
     /// effects when `<receiver>` is a runtime value (e.g. the call in
     /// `h().f.selector`). A namespace / type qualifier (`C.f.selector`) has no
@@ -755,7 +728,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             return block;
         };
         let receiver = inner.operand();
-        if self.is_namespace_or_type_operand(&receiver) {
+        if receiver.is_namespace_or_type_operand() {
             return block;
         }
         let BlockAnd {
@@ -763,25 +736,5 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             block,
         } = receiver.emit(self, block);
         block
-    }
-
-    /// Whether `expression` is a namespace or type reference (a contract /
-    /// interface / library / import / enum / struct / user-defined-value-type
-    /// name) rather than a runtime value — such an operand carries no side
-    /// effects, so a `.selector` taken through it evaluates nothing.
-    fn is_namespace_or_type_operand(&self, expression: &Expression) -> bool {
-        matches!(
-            self.resolve_member_access_operand(expression),
-            Some(
-                Definition::Contract(_)
-                    | Definition::Interface(_)
-                    | Definition::Library(_)
-                    | Definition::Import(_)
-                    | Definition::ImportedSymbol(_)
-                    | Definition::Enum(_)
-                    | Definition::Struct(_)
-                    | Definition::UserDefinedValueType(_)
-            )
-        )
     }
 }
