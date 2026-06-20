@@ -1319,8 +1319,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     unreachable!("an external library call's target is a library member");
                 };
                 let library_operand = access.operand();
-                let self_receiver =
-                    (!library_operand.is_namespace_qualifier()).then_some(library_operand);
+                let self_receiver = (!MemberAccessOperand(&library_operand)
+                    .is_namespace_qualifier())
+                .then_some(library_operand);
                 let library_name = solx_utils::ContractName::new(
                     library.get_file_id().to_owned(),
                     Some(library.name().name()),
@@ -1442,7 +1443,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     // A namespace qualifier (`L.f` / `M.f`) is not a value, so only
                     // the explicit arguments pass; a `using for` receiver becomes the
                     // implicit `self` first parameter.
-                    if operand.is_namespace_qualifier() {
+                    if MemberAccessOperand(&operand).is_namespace_qualifier() {
                         let arguments: Vec<Expression> = positional.iter().collect();
                         let BlockAnd {
                             value: argument_values,

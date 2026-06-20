@@ -541,7 +541,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
         BlockAnd { block, value }
     } else if let Some(ordinal) = match (
         node.member().resolve_to_definition(),
-        node.operand().resolve_member_access_operand(),
+        MemberAccessOperand(&node.operand()).resolve(),
     ) {
         // `E.Variant` (or qualified `C.E.Variant`) not in call position: the
         // variant's ordinal, located by NodeId identity against the enum's members
@@ -578,7 +578,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             // function-pointer VALUE pulls its selector at runtime via
             // `sol.ext_func_selector`.
             Some(BuiltIn::FunctionSelector) => {
-                let static_selector = match node.operand().resolve_member_access_operand() {
+                let static_selector = match MemberAccessOperand(&node.operand()).resolve() {
                     Some(Definition::Function(function)) => function.compute_selector(),
                     Some(Definition::StateVariable(state_variable)) => {
                         state_variable.compute_selector()
@@ -633,7 +633,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             // `MyError.selector` — the error's 4-byte selector as a compile-time
             // constant.
             Some(BuiltIn::ErrorSelector) => {
-                let Some(Definition::Error(error)) = node.operand().resolve_member_access_operand()
+                let Some(Definition::Error(error)) = MemberAccessOperand(&node.operand()).resolve()
                 else {
                     unreachable!("slang resolves an error `.selector` base to an error definition");
                 };
@@ -650,7 +650,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             // `MyEvent.selector` — the event's 32-byte topic hash (`bytes32`), the
             // keccak256 of its canonical signature, as a compile-time constant.
             Some(BuiltIn::EventSelector) => {
-                let Some(Definition::Event(event)) = node.operand().resolve_member_access_operand()
+                let Some(Definition::Event(event)) = MemberAccessOperand(&node.operand()).resolve()
                 else {
                     unreachable!("slang resolves an event `.selector` base to an event definition");
                 };
@@ -728,7 +728,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             return block;
         };
         let receiver = inner.operand();
-        if receiver.is_namespace_or_type_operand() {
+        if MemberAccessOperand(&receiver).is_namespace_or_type() {
             return block;
         }
         let BlockAnd {
