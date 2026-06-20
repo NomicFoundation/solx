@@ -8,7 +8,6 @@ use crate::ast::Value as AstValue;
 pub mod arithmetic;
 pub mod arithmetic_mode;
 pub mod assignment;
-pub mod bare_function_ref_type;
 pub mod call;
 pub mod call_options;
 pub mod comparison;

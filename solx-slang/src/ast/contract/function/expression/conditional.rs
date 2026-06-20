@@ -8,6 +8,7 @@ use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::ArrayExpression;
 use slang_solidity_v2::ast::ConditionalExpression;
+use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -23,7 +24,6 @@ use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::contract::function::expression::bare_function_ref_type::BareFunctionRefType;
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalExpression {
     type Output = (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>);
@@ -142,14 +142,27 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
         // yields an *internal* function pointer, but slang types it from the
         // function's visibility — a `Public` function as its return type — not the
         // pointer type. The branches emit `func_ref` values, so recover the
-        // internal-pointer type from a branch when present; otherwise the
-        // conditional's own type is authoritative, falling back to a branch's type
-        // when the binder leaves the conditional untyped, rather than silently
-        // defaulting to `ui256` (which masked the mismatch and `sol.cast`-ed a
-        // `func_ref` to integer).
-        let result_type = true_expression
-            .bare_function_ref_type(context.state)
-            .or_else(|| false_expression.bare_function_ref_type(context.state))
+        // internal-pointer type (built from the function's declared signature, the
+        // target routed through the virtual redirect exactly as a direct call) from
+        // a branch when present; otherwise the conditional's own type is
+        // authoritative, falling back to a branch's type when the binder leaves the
+        // conditional untyped, rather than silently defaulting to `ui256` (which
+        // masked the mismatch and `sol.cast`-ed a `func_ref` to integer).
+        let func_ref_type = |expression: &Expression| {
+            let Expression::Identifier(identifier) = expression else {
+                return None;
+            };
+            let Definition::Function(function_definition) = identifier.resolve_to_definition()?
+            else {
+                return None;
+            };
+            let function = context
+                .state
+                .resolve_function(function_definition.node_id());
+            Some(function.func_ref_type(&context.state.builder).into_mlir())
+        };
+        let result_type = func_ref_type(&true_expression)
+            .or_else(|| func_ref_type(&false_expression))
             .or_else(|| AstType::resolve_optional(self.get_type(), &context.state.builder))
             .or_else(|| {
                 AstType::resolve_optional(true_expression.get_type(), &context.state.builder)
