@@ -4,8 +4,15 @@
 
 use std::collections::HashMap;
 
+use melior::ir::BlockRef;
 use melior::ir::Value;
 use slang_solidity_v2::ast::NodeId;
+use slang_solidity_v2::ast::Parameter;
+
+use crate::Builder;
+use crate::LocationPolicy;
+use crate::Pointer;
+use crate::Type;
 
 /// Tracks variable places (alloca'd pointers) for lexical scoping.
 ///
@@ -61,6 +68,29 @@ impl<'context, 'block> Environment<'context, 'block> {
             .last_mut()
             .expect("at least one scope exists")
             .insert(declaration, pointer);
+    }
+
+    /// Binds `parameter` to `value` in the current scope: coerces the value to the
+    /// parameter's declared type (an untyped catch binding defaults to `ui256`),
+    /// spills it to a fresh stack slot, and defines the parameter by node id.
+    /// Shared by the `try` success returns and the `catch` clause payload.
+    pub fn bind_parameter(
+        &mut self,
+        parameter: &Parameter,
+        value: Value<'context, 'block>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) {
+        let parameter_type = parameter
+            .get_type()
+            .map(|slang_type| Type::resolve(&slang_type, LocationPolicy::Declared(None), builder))
+            .unwrap_or_else(|| {
+                Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
+            });
+        let cast = crate::Value::new(value).cast(Type::new(parameter_type), builder, block);
+        let pointer = Pointer::stack_slot(Type::new(parameter_type), builder, block);
+        pointer.store(cast, builder, block);
+        self.define_variable(parameter.node_id(), pointer.into_mlir());
     }
 
     /// Looks up a variable's place by its declaration's [`NodeId`] (from

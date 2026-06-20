@@ -87,7 +87,7 @@ where
             .parent_region()
             .expect("region body block has a parent region");
         let saved_region = context.region_pointer;
-        context.set_region(&region);
+        context.region_pointer = &*region as *const _;
         let end = match self.emit(context, target_block) {
             Some(end) => end,
             None => region.append_block(Block::new(&[])),

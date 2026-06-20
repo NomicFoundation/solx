@@ -33,20 +33,20 @@ use crate::ast::contract::storage_layout::StorageSlot;
 /// and the in-scope user-defined Yul functions with their inline-recursion guard.
 pub struct YulContext<'frame, 'context, 'block> {
     /// The shared MLIR context.
-    state: &'frame Context<'context>,
+    pub state: &'frame Context<'context>,
     /// Variable environment (mutable for Yul `let` declarations).
-    environment: &'frame mut Environment<'context, 'block>,
+    pub environment: &'frame mut Environment<'context, 'block>,
     /// The current region for creating new blocks. A raw pointer to allow
     /// switching between Yul op regions without lifetime conflicts.
-    region_pointer: *const Region<'context>,
+    pub region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
-    storage_layout: &'frame HashMap<NodeId, StorageSlot>,
+    pub storage_layout: &'frame HashMap<NodeId, StorageSlot>,
     /// User-defined Yul functions in scope, keyed by name; each is inlined at its
     /// call sites and lives only for the declaring block / inlined frame.
-    yul_functions: HashMap<String, YulFunctionDefinition>,
+    pub yul_functions: HashMap<String, YulFunctionDefinition>,
     /// Per-name inline-recursion guard: a function being inlined has depth ≥ 1, so
     /// a recursive call is rejected (it would loop the compiler).
-    yul_inline_depth: HashMap<String, usize>,
+    pub yul_inline_depth: HashMap<String, usize>,
 }
 
 impl<'frame, 'context, 'block> YulContext<'frame, 'context, 'block> {
@@ -65,11 +65,6 @@ impl<'frame, 'context, 'block> YulContext<'frame, 'context, 'block> {
             yul_functions: HashMap::new(),
             yul_inline_depth: HashMap::new(),
         }
-    }
-
-    /// Switches the current region for emitting into a Yul op's region.
-    pub fn set_region(&mut self, region: &Region<'context>) {
-        self.region_pointer = region as *const Region<'context>;
     }
 }
 

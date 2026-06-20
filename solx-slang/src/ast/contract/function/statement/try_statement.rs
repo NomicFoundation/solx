@@ -10,7 +10,6 @@ use melior::ir::RegionLike;
 use melior::ir::Value;
 use melior::ir::operation::OperationLike;
 use slang_solidity_v2::ast::CatchClause;
-use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::TryStatement;
 use slang_solidity_v2::ast::Type as SlangType;
 use solx_mlir::TryFallbackKind;
@@ -20,44 +19,10 @@ use solx_mlir::ods::sol::YieldOperation;
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
 use crate::ast::EmitStatement;
-use crate::ast::LocationPolicy;
-use crate::ast::Pointer;
 use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call::try_external_call::TryExternalCall;
 use crate::ast::contract::function::statement::StatementContext;
-
-impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
-    /// Casts `value` to the parameter's declared type, spills it to a stack slot,
-    /// and defines the parameter in scope by node id.
-    fn bind_parameter(
-        &mut self,
-        parameter: &Parameter,
-        value: Value<'context, 'block>,
-        block: &BlockRef<'context, 'block>,
-    ) {
-        let parameter_type = parameter
-            .get_type()
-            .map(|slang_type| {
-                AstType::resolve(
-                    &slang_type,
-                    LocationPolicy::Declared(None),
-                    &self.state.builder,
-                )
-            })
-            .unwrap_or_else(|| {
-                AstType::unsigned(self.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
-                    .into_mlir()
-            });
-        let cast =
-            AstValue::from(value).cast(AstType::new(parameter_type), &self.state.builder, block);
-        let pointer = Pointer::stack_slot(AstType::new(parameter_type), &self.state.builder, block);
-        pointer.store(cast, &self.state.builder, block);
-        self.environment
-            .define_variable(parameter.node_id(), pointer.into_mlir());
-    }
-}
 
 // Binds block argument 0 (the decoded payload) to the clause parameter — a
 // parameter-less `catch {}` binds nothing — then emits the body.
@@ -71,7 +36,9 @@ statement_emit!(CatchClause; |node, context, block| {
             .argument(0)
             .expect("argument index is within the block signature")
             .into();
-        context.bind_parameter(&parameter, decoded, &block);
+        context
+            .environment
+            .bind_parameter(&parameter, decoded, &context.state.builder, &block);
     }
     node.body().emit(context, block)
 });
@@ -92,7 +59,12 @@ statement_emit!(TryStatement; |node, context, block| {
             && let Some(parameter) = parameters.iter().next()
             && parameter.name().is_some()
         {
-            context.bind_parameter(&parameter, value.into_mlir(), &current_block);
+            context.environment.bind_parameter(
+                &parameter,
+                value.into_mlir(),
+                &context.state.builder,
+                &current_block,
+            );
         }
         return node.body().emit(context, current_block);
     };
@@ -218,7 +190,12 @@ statement_emit!(TryStatement; |node, context, block| {
             if parameter.name().is_none() {
                 continue;
             }
-            context.bind_parameter(&parameter, *result, &success_block);
+            context.environment.bind_parameter(
+                &parameter,
+                *result,
+                &context.state.builder,
+                &success_block,
+            );
         }
     }
     let success_end = node.body().emit(context, success_block);

@@ -145,7 +145,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                 .parent_region()
                 .expect("yul.for cond block has a parent region");
             let saved_region = context.region_pointer;
-            context.set_region(&cond_region);
+            context.region_pointer = &*cond_region as *const _;
             let (cond_value, cond_end) = for_statement.condition().emit(context, cond_block);
             mlir_op_void!(
                 &context.state.builder,
