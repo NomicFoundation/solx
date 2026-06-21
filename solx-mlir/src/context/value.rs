@@ -42,6 +42,7 @@ use crate::ods::sol::LibAddrOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::NewOperation;
 use crate::ods::sol::PushOperation;
+use crate::ods::sol::StringLitOperation;
 
 /// An MLIR value in the Sol dialect.
 ///
@@ -159,6 +160,24 @@ impl<'context, 'block> Value<'context, 'block> {
             builder,
             block,
         )
+    }
+
+    /// A `string memory` value holding `text` verbatim, via `sol.string_lit` — the
+    /// runtime materialisation of a string literal and of `type(C).name`. The bytes
+    /// are taken as-is: a string literal need not be valid UTF-8 (`hex"..."`,
+    /// `"\xff"`), and the caller is responsible for that invariant.
+    pub fn string_literal(
+        text: &str,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            builder,
+            block,
+            StringLitOperation
+                .value(StringAttribute::new(builder.context, text))
+                .addr(Type::string(builder.context, solx_utils::DataLocation::Memory).into_mlir())
+        ))
     }
 
     /// The zero of a scalar value type, built at its own representation width and

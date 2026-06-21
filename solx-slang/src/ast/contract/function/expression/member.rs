@@ -38,7 +38,6 @@ use solx_mlir::ods::sol::ObjectCodeOperation;
 use solx_mlir::ods::sol::OriginOperation;
 use solx_mlir::ods::sol::PrevRandaoOperation;
 use solx_mlir::ods::sol::SigOperation;
-use solx_mlir::ods::sol::StringLitOperation;
 use solx_mlir::ods::sol::TimestampOperation;
 use solx_utils::DataLocation;
 
@@ -252,18 +251,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 Some(Definition::Interface(interface)) => interface.name().name(),
                 _ => unreachable!("type(C).name resolves to a contract or interface"),
             };
-            let builder = &context.state.builder;
-            let value: MlirValue<'context, 'block> = mlir_op!(
-                builder,
-                &block,
-                StringLitOperation
-                    .value(StringAttribute::new(builder.context, &type_name))
-                    .addr(AstType::string(builder.context, DataLocation::Memory))
-            );
-            return BlockAnd {
-                block,
-                value: value.into(),
-            };
+            let value = AstValue::string_literal(&type_name, &context.state.builder, &block);
+            return BlockAnd { block, value };
         }
         Some(builtin @ (BuiltIn::TypeCreationCode | BuiltIn::TypeRuntimeCode)) => {
             // `type(C).creationCode/runtimeCode` — the contract's deploy / deployed

@@ -7,7 +7,6 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::attribute::StringAttribute;
 use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
 use num_bigint::Sign;
@@ -17,7 +16,6 @@ use slang_solidity_v2::ast::HexNumberExpression;
 use slang_solidity_v2::ast::StringExpression;
 use slang_solidity_v2::ast::ThisKeyword;
 use slang_solidity_v2::ast::TrueKeyword;
-use solx_mlir::ods::sol::StringLitOperation;
 use solx_mlir::ods::sol::ThisOperation;
 use solx_utils::BIT_LENGTH_BYTE;
 
@@ -77,22 +75,12 @@ expression_emit!(StringExpression; |node, context, block| {
     // A string literal's bytes are emitted verbatim — they need not be valid
     // UTF-8 (`hex"..."`, `"\xff"`).
     let bytes = node.value();
-    let builder = &context.state.builder;
     // the `&str` is only consumed by `StringAttribute::new`, which hands it
     // to `StringRef::new` — that reads `.as_ptr()`/`.len()` and never assumes UTF-8
     // validity, so the non-UTF-8 literal bytes are sound here.
     let literal = unsafe { std::str::from_utf8_unchecked(&bytes) };
-    let value: Value<'context, 'block> = mlir_op!(
-        builder,
-        &block,
-        StringLitOperation
-            .value(StringAttribute::new(builder.context, literal))
-            .addr(AstType::string(builder.context, solx_utils::DataLocation::Memory))
-    );
-    BlockAnd {
-        block,
-        value: value.into(),
-    }
+    let value = AstValue::string_literal(literal, &context.state.builder, &block);
+    BlockAnd { block, value }
 });
 
 // A string literal used where `bytesN` / `byte` is expected materialises toward
