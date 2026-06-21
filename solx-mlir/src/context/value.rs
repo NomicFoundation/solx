@@ -37,6 +37,7 @@ use crate::ods::sol::Keccak256Operation;
 use crate::ods::sol::LibAddrOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::NewOperation;
+use crate::ods::sol::PushOperation;
 
 /// An MLIR value in the Sol dialect.
 ///
@@ -501,6 +502,33 @@ impl<'context, 'block> Value<'context, 'block> {
             builder,
             block,
         )
+    }
+
+    /// Appends a default element to this dynamic-array / `bytes` value (typed by
+    /// its `base_type`) and returns the new element's place together with its
+    /// element MLIR type (`sol.push`). A reference-typed element yields its
+    /// reference directly (the caller copies into it via `sol.copy`); a value-typed
+    /// one yields a `!sol.ptr` to the slot at the array's location (stored into via
+    /// `sol.store`) — a reference element pushed as a pointer would force a
+    /// memory→storage data-location cast the backend cannot lower.
+    pub fn push_slot(
+        self,
+        base_type: &SlangType,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> (Self, MlirType<'context>) {
+        let (element_type, location) = Type::dynamic_array_element(base_type, builder);
+        let push_result_type = if Type::new(element_type).is_reference() {
+            element_type
+        } else {
+            Type::pointer(builder.context, element_type, location).into_mlir()
+        };
+        let new_slot = Self::new(mlir_op!(
+            builder,
+            block,
+            PushOperation.inp(self.into_mlir()).addr(push_result_type)
+        ));
+        (new_slot, element_type)
     }
 
     /// Casts to `target_type`, handing the value to the target type's cast router

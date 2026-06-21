@@ -6,6 +6,7 @@ use melior::ir::Type as MlirType;
 use melior::ir::r#type::IntegerType;
 use num::BigInt;
 use num::Signed;
+use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::Parameter;
@@ -218,6 +219,40 @@ impl<'context> Type<'context> {
             }
             _ => unimplemented!("unsupported Slang type"),
         }
+    }
+
+    /// The MLIR element type and data location of a dynamic-array / `bytes` base —
+    /// an `arr.push` receiver: an array's resolved element type at its own
+    /// location, or `byte` for `bytes`. Used to type the pushed slot.
+    pub fn dynamic_array_element(
+        base_type: &SlangType,
+        builder: &Builder<'context>,
+    ) -> (MlirType<'context>, solx_utils::DataLocation) {
+        let (element_type, slang_location) = match base_type {
+            SlangType::Array(array_type) => (
+                Type::resolve(
+                    &array_type.element_type(),
+                    LocationPolicy::Declared(None),
+                    builder,
+                ),
+                array_type.location(),
+            ),
+            SlangType::Bytes(bytes_type) => (
+                Type::fixed_bytes(builder.context, 1).into_mlir(),
+                bytes_type.location(),
+            ),
+            other => unreachable!(
+                "Solidity's .push is a member of dynamic arrays and bytes only; got {:?}",
+                std::mem::discriminant(other)
+            ),
+        };
+        let location = match slang_location {
+            SlangDataLocation::Inherited => {
+                unreachable!("slang's binder should not surface Inherited at an array push base")
+            }
+            other => solx_utils::DataLocation::from_slang(other, None),
+        };
+        (element_type, location)
     }
 
     /// Resolves a function or modifier parameter's declared MLIR type. An untyped

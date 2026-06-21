@@ -4,7 +4,6 @@
 
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
-pub mod built_in;
 pub mod positional_arguments;
 pub mod try_external_call;
 
@@ -1193,8 +1192,18 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 );
                                 (None, block)
                             } else {
-                                let (new_slot, element_type, block) =
-                                    context.emit_push_slot(access, block);
+                                let base_slang_type =
+                                    access.operand().get_type().expect("slang validated");
+                                let BlockAnd {
+                                    value: array_value,
+                                    block,
+                                } = access.operand().emit(context, block);
+                                let (new_slot, element_type) = array_value.push_slot(
+                                    &base_slang_type,
+                                    &context.state.builder,
+                                    &block,
+                                );
+                                let new_slot = new_slot.into_mlir();
                                 let Some(value_argument) = value_argument else {
                                     // `arr.push()` in value position yields the
                                     // freshly-appended element: `sol.load` reads a

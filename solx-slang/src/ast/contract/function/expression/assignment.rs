@@ -117,8 +117,17 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 let Expression::MemberAccessExpression(access) = call.operand() else {
                     unreachable!("guarded by the match arm");
                 };
-                let (new_slot, element_type, block) = context.emit_push_slot(&access, block);
-                (Self::from_address(new_slot, element_type), block)
+                let base_slang_type = access.operand().get_type().expect("slang validated");
+                let BlockAnd {
+                    value: array_value,
+                    block,
+                } = access.operand().emit(context, block);
+                let (new_slot, element_type) =
+                    array_value.push_slot(&base_slang_type, &context.state.builder, &block);
+                (
+                    Self::from_address(new_slot.into_mlir(), element_type),
+                    block,
+                )
             }
             _ => unimplemented!(
                 "assignment target {:?} is not yet supported",
