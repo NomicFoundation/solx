@@ -235,27 +235,39 @@ impl<'context, 'block> Value<'context, 'block> {
         }
     }
 
-    /// `sol.malloc` — a fresh memory buffer typed as `mlir_type`. `zero_init`
-    /// zero-fills it (a memory aggregate's default-initialised contents); without
-    /// it the buffer is left uninitialised, the zero-length form a dynamic
-    /// `string` / `bytes` starts from. The allocation primitive behind a memory
-    /// type default and a `string` / `bytes` / aggregate stack-slot seed.
+    /// `sol.malloc` — a fresh memory buffer typed as `mlir_type`. A `Some` `size`
+    /// allocates a dynamically-sized buffer (`new T[](n)`, `new bytes(n)`); `None`
+    /// sizes it from the type alone. `zero_init` zero-fills it (a memory
+    /// aggregate's default-initialised contents); without it the buffer is left
+    /// uninitialised, the zero-length form a dynamic `string` / `bytes` starts
+    /// from. The allocation primitive behind a memory type default, a `new`
+    /// dynamic allocation, and a `string` / `bytes` / aggregate stack-slot seed.
     pub fn malloc(
         mlir_type: MlirType<'context>,
+        size: Option<MlirValue<'context, 'block>>,
         zero_init: bool,
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let value = if zero_init {
-            mlir_op!(
+        let zero_init = zero_init.then(|| Attribute::unit(builder.context));
+        let value = match (size, zero_init) {
+            (Some(size), Some(zero_init)) => mlir_op!(
                 builder,
                 block,
                 MallocOperation
                     .addr(mlir_type)
-                    .zero_init(Attribute::unit(builder.context))
-            )
-        } else {
-            mlir_op!(builder, block, MallocOperation.addr(mlir_type))
+                    .size(size)
+                    .zero_init(zero_init)
+            ),
+            (Some(size), None) => {
+                mlir_op!(builder, block, MallocOperation.addr(mlir_type).size(size))
+            }
+            (None, Some(zero_init)) => mlir_op!(
+                builder,
+                block,
+                MallocOperation.addr(mlir_type).zero_init(zero_init)
+            ),
+            (None, None) => mlir_op!(builder, block, MallocOperation.addr(mlir_type)),
         };
         Self::new(value)
     }
@@ -274,18 +286,18 @@ impl<'context, 'block> Value<'context, 'block> {
         let is_memory = |location| matches!(location, DataLocation::Memory);
         match slang_type {
             Some(SlangType::FixedSizeArray(array)) if is_memory(array.location()) => {
-                Self::malloc(mlir_type, true, builder, block)
+                Self::malloc(mlir_type, None, true, builder, block)
             }
             Some(SlangType::Struct(structure)) if is_memory(structure.location()) => {
-                Self::malloc(mlir_type, true, builder, block)
+                Self::malloc(mlir_type, None, true, builder, block)
             }
             Some(SlangType::Array(array)) if is_memory(array.location()) => {
-                Self::malloc(mlir_type, true, builder, block)
+                Self::malloc(mlir_type, None, true, builder, block)
             }
             Some(SlangType::String(_) | SlangType::Bytes(_)) => {
                 // A fresh zero-length buffer (plain `sol.malloc`, matching solc),
                 // not a sized `new bytes(0)`.
-                Self::malloc(mlir_type, false, builder, block)
+                Self::malloc(mlir_type, None, false, builder, block)
             }
             Some(
                 SlangType::Address(_)

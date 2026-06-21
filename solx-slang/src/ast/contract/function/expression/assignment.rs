@@ -2,7 +2,6 @@
 //! Assignment expression emission.
 //!
 
-use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
@@ -15,7 +14,6 @@ use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
 use solx_mlir::ods::sol::CopyOperation;
 use solx_mlir::ods::sol::DeleteOperation;
-use solx_mlir::ods::sol::MallocOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
@@ -348,22 +346,23 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                                 &block,
                             )
                             .into_mlir();
-                            mlir_op!(
+                            AstValue::malloc(
+                                *element_type,
+                                Some(size),
+                                true,
                                 &context.state.builder,
                                 &block,
-                                MallocOperation
-                                    .addr(*element_type)
-                                    .size(size)
-                                    .zero_init(Attribute::unit(context.state.builder.context))
                             )
+                            .into_mlir()
                         }
-                        _ => mlir_op!(
+                        _ => AstValue::malloc(
+                            *element_type,
+                            None,
+                            true,
                             &context.state.builder,
                             &block,
-                            MallocOperation
-                                .addr(*element_type)
-                                .zero_init(Attribute::unit(context.state.builder.context))
-                        ),
+                        )
+                        .into_mlir(),
                     }
                 } else {
                     // The zero of a value lvalue is its type's own zero, not a raw

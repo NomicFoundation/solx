@@ -39,7 +39,6 @@ use solx_mlir::ods::sol::CopyOperation;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::ExtCallOperation;
-use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::PopOperation;
 use solx_mlir::ods::sol::PushStringOperation;
@@ -106,7 +105,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 .collect();
             let arguments = arguments.ordered_by(&member_ids);
             let builder = &context.state.builder;
-            let struct_address = mlir_op!(builder, &block, MallocOperation.addr(result_type));
+            let struct_address =
+                AstValue::malloc(result_type, None, false, builder, &block).into_mlir();
             let struct_pointer = Pointer::new(struct_address);
             let mut block = block;
             for (index, (member, argument)) in struct_definition
@@ -1576,22 +1576,11 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 &current_block,
                             )
                             .into_mlir();
-                        mlir_op!(
-                            builder,
-                            &current_block,
-                            MallocOperation
-                                .addr(result_type)
-                                .size(size)
-                                .zero_init(Attribute::unit(builder.context))
-                        )
+                        AstValue::malloc(result_type, Some(size), true, builder, &current_block)
+                            .into_mlir()
                     }
-                    None => mlir_op!(
-                        builder,
-                        &current_block,
-                        MallocOperation
-                            .addr(result_type)
-                            .zero_init(Attribute::unit(builder.context))
-                    ),
+                    None => AstValue::malloc(result_type, None, true, builder, &current_block)
+                        .into_mlir(),
                 };
                 return BlockAnd {
                     value: vec![address],
