@@ -25,11 +25,9 @@ use std::collections::HashMap;
 
 use melior::ir::BlockRef;
 use melior::ir::Type;
-use melior::ir::Value;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
-use slang_solidity_v2::ast::StateVariableMutability;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
@@ -38,7 +36,6 @@ use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
 use crate::ast::EmitForEffect;
-use crate::ast::LocationPolicy;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::function::expression::assignment::AssignmentTarget;
 use crate::ast::contract::storage_layout::StorageSlot;
@@ -73,50 +70,6 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             storage_layout,
             arithmetic_mode,
         }
-    }
-
-    /// Reads a contract state variable's value: a `constant` inlines its
-    /// compile-time initializer (exactly as a file-level `constant`), otherwise
-    /// the storage slot is loaded. A value-typed slot reads through the shared
-    /// storage-load path; a reference-typed one evaluates to its storage
-    /// reference, whose address type is the reference itself (the single
-    /// `address_type` rule). Shared by a bare identifier reference and a
-    /// namespace-qualified `C.stateVar` / `L.CONST` access (the latter
-    /// disambiguating from a shadowing local).
-    fn emit_state_variable_read(
-        &self,
-        state_variable: &ast::StateVariableDefinition,
-        block: BlockRef<'context, 'block>,
-    ) -> (Value<'context, 'block>, BlockRef<'context, 'block>) {
-        let declared_type = state_variable.get_type().expect("slang validated");
-        let element_type = AstType::resolve(
-            &declared_type,
-            LocationPolicy::Declared(None),
-            &self.state.builder,
-        );
-        if matches!(
-            state_variable.mutability(),
-            StateVariableMutability::Constant
-        ) {
-            let initializer = state_variable.value().expect("slang validated");
-            // Emit toward the declared type so a `bytesN constant` initialised
-            // from a string literal folds to a fixed-bytes constant.
-            let BlockAnd { value, block } =
-                if let Expression::StringExpression(string_literal) = &initializer {
-                    string_literal.emit_as(element_type, self, block)
-                } else {
-                    initializer.emit(self, block)
-                };
-            return (value.into_mlir(), block);
-        }
-        let slot = self
-            .storage_layout
-            .get(&state_variable.node_id())
-            .unwrap_or_else(|| {
-                unimplemented!("unregistered state variable {:?}", state_variable.node_id())
-            });
-        let value = slot.load(&self.state.builder, element_type, &block);
-        (value, block)
     }
 }
 
