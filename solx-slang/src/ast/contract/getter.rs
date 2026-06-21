@@ -394,11 +394,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                         );
                         // Intermediate containers are addressed by their reference;
                         // a value terminal by a `!sol.ptr<V>`.
-                        let level_type = if value_slang.is_reference_type() {
-                            resolved_value
-                        } else {
-                            AstType::pointer(builder.context, resolved_value, location).into_mlir()
-                        };
+                        let level_type = AstType::new(resolved_value)
+                            .address_type(location, builder.context)
+                            .into_mlir();
                         base = Pointer::new(base)
                             .entry(
                                 AstValue::new(arg),
@@ -517,11 +515,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
         );
         // A reference-typed variable is addressed by the reference type itself in
         // storage; a value type by a `!sol.ptr<T, _>`.
-        let address_type = if declared_type.is_reference_type() {
-            element_type
-        } else {
-            AstType::pointer(builder.context, element_type, location).into_mlir()
-        };
+        let address_type = AstType::new(element_type)
+            .address_type(location, builder.context)
+            .into_mlir();
         let entry = Function::new(signature, Vec::new(), vec![element_type]).define(
             Some(selector),
             StateMutability::View,

@@ -613,11 +613,9 @@ impl<'context, 'block> Value<'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> (Self, MlirType<'context>) {
         let (element_type, location) = Type::dynamic_array_element(base_type, builder);
-        let push_result_type = if Type::new(element_type).is_reference() {
-            element_type
-        } else {
-            Type::pointer(builder.context, element_type, location).into_mlir()
-        };
+        let push_result_type = Type::new(element_type)
+            .address_type(location, builder.context)
+            .into_mlir();
         let new_slot = Self::new(mlir_op!(
             builder,
             block,
