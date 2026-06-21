@@ -47,6 +47,7 @@ use solx_utils::DataLocation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
+use crate::ast::EmitForEffect;
 use crate::ast::EmitPlace;
 use crate::ast::LocationPolicy;
 use crate::ast::Place;
@@ -571,30 +572,59 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
     } else {
         // A value-position member built-in over a non-struct base: `.selector` /
         // `.address`, or an external function pointer.
-        match node.member().resolve_to_built_in() {
-            // `f.selector` — the 4-byte selector (`bytes4`). A statically named
-            // function (`this.f`, `i.foo`) or public-getter member folds to a
-            // compile-time constant via `compute_selector()`; an external
-            // function-pointer VALUE pulls its selector at runtime via
-            // `sol.ext_func_selector`.
-            Some(BuiltIn::FunctionSelector) => {
-                let static_selector = match MemberAccessOperand(&node.operand()).resolve() {
-                    Some(Definition::Function(function)) => function.compute_selector(),
-                    Some(Definition::StateVariable(state_variable)) => {
-                        state_variable.compute_selector()
-                    }
-                    _ => None,
-                };
-                if let Some(selector) = static_selector {
-                    let block = context.eval_selector_receiver_side_effects(node, block);
-                    let value = AstValue::selector_constant(
-                        &BigInt::from(selector),
-                        4,
-                        &context.state.builder,
-                        &block,
-                    );
-                    return BlockAnd { block, value };
+        // `f.selector` (statically named), `MyError.selector`, and
+        // `MyEvent.selector` are compile-time constants reached the same way: the
+        // (4-byte function/error selector, or 32-byte event topic hash) constant,
+        // preceded by the runtime receiver's side effects. `f.selector` on an
+        // external function-pointer VALUE has no static selector and falls through.
+        let selector_constant = match node.member().resolve_to_built_in() {
+            Some(BuiltIn::FunctionSelector) => match MemberAccessOperand(&node.operand()).resolve() {
+                Some(Definition::Function(function)) => {
+                    function.compute_selector().map(|selector| (BigInt::from(selector), 4))
                 }
+                Some(Definition::StateVariable(state_variable)) => {
+                    state_variable.compute_selector().map(|selector| (BigInt::from(selector), 4))
+                }
+                _ => None,
+            },
+            Some(BuiltIn::ErrorSelector) => {
+                let Some(Definition::Error(error)) = MemberAccessOperand(&node.operand()).resolve()
+                else {
+                    unreachable!("slang resolves an error `.selector` base to an error definition");
+                };
+                Some((BigInt::from(error.compute_selector().expect("slang validated")), 4))
+            }
+            Some(BuiltIn::EventSelector) => {
+                let Some(Definition::Event(event)) = MemberAccessOperand(&node.operand()).resolve()
+                else {
+                    unreachable!("slang resolves an event `.selector` base to an event definition");
+                };
+                let signature = event.compute_canonical_signature().expect("slang validated");
+                let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
+                Some((BigInt::from_bytes_be(Sign::Plus, hash.as_bytes()), 32))
+            }
+            _ => None,
+        };
+        if let Some((selector, byte_width)) = selector_constant {
+            // The runtime receiver of a `<receiver>.member.selector` (e.g. the call
+            // in `h().f.selector`) still runs for its side effects, through
+            // `emit_for_effect`; a namespace / type qualifier (`C.f.selector`) is no
+            // value and runs nothing.
+            let block = if let Expression::MemberAccessExpression(inner) = node.operand()
+                && !MemberAccessOperand(&inner.operand()).is_namespace_or_type()
+            {
+                inner.operand().emit_for_effect(context, block)
+            } else {
+                block
+            };
+            let value =
+                AstValue::selector_constant(&selector, byte_width, &context.state.builder, &block);
+            return BlockAnd { block, value };
+        }
+        match node.member().resolve_to_built_in() {
+            // `f.selector` on an external function-pointer VALUE pulls its selector
+            // at runtime via `sol.ext_func_selector`.
+            Some(BuiltIn::FunctionSelector) => {
                 let BlockAnd {
                     value: operand_value,
                     block,
@@ -629,38 +659,6 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     block,
                     value: value.into(),
                 }
-            }
-            // `MyError.selector` — the error's 4-byte selector as a compile-time
-            // constant.
-            Some(BuiltIn::ErrorSelector) => {
-                let Some(Definition::Error(error)) = MemberAccessOperand(&node.operand()).resolve()
-                else {
-                    unreachable!("slang resolves an error `.selector` base to an error definition");
-                };
-                let selector = error.compute_selector().expect("slang validated");
-                let block = context.eval_selector_receiver_side_effects(node, block);
-                let value = AstValue::selector_constant(
-                    &BigInt::from(selector),
-                    4,
-                    &context.state.builder,
-                    &block,
-                );
-                BlockAnd { block, value }
-            }
-            // `MyEvent.selector` — the event's 32-byte topic hash (`bytes32`), the
-            // keccak256 of its canonical signature, as a compile-time constant.
-            Some(BuiltIn::EventSelector) => {
-                let Some(Definition::Event(event)) = MemberAccessOperand(&node.operand()).resolve()
-                else {
-                    unreachable!("slang resolves an event `.selector` base to an event definition");
-                };
-                let signature = event.compute_canonical_signature().expect("slang validated");
-                let hash = solx_utils::Keccak256Hash::from_slice(signature.as_bytes());
-                let topic = BigInt::from_bytes_be(Sign::Plus, hash.as_bytes());
-                let block = context.eval_selector_receiver_side_effects(node, block);
-                let value =
-                    AstValue::selector_constant(&topic, 32, &context.state.builder, &block);
-                BlockAnd { block, value }
             }
             // A member resolving to a function used as a value (not called) is a
             // function pointer: an externally-visible function with a selector
@@ -711,30 +709,3 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
         }
     }
 });
-
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Evaluates the receiver of a `<receiver>.member.selector` for its side
-    /// effects when `<receiver>` is a runtime value (e.g. the call in
-    /// `h().f.selector`). A namespace / type qualifier (`C.f.selector`) has no
-    /// runtime value, so nothing is evaluated. The selector itself stays a
-    /// compile-time constant; this only reproduces the discarded receiver's
-    /// evaluation.
-    fn eval_selector_receiver_side_effects(
-        &self,
-        access: &MemberAccessExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> BlockRef<'context, 'block> {
-        let Expression::MemberAccessExpression(inner) = access.operand() else {
-            return block;
-        };
-        let receiver = inner.operand();
-        if MemberAccessOperand(&receiver).is_namespace_or_type() {
-            return block;
-        }
-        let BlockAnd {
-            value: _discarded,
-            block,
-        } = receiver.emit(self, block);
-        block
-    }
-}
