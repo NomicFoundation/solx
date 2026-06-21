@@ -35,6 +35,7 @@ use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::ICallOperation;
 use crate::ods::sol::Keccak256Operation;
+use crate::ods::sol::LengthOperation;
 use crate::ods::sol::LibAddrOperation;
 use crate::ods::sol::MallocOperation;
 use crate::ods::sol::NewOperation;
@@ -679,6 +680,18 @@ impl<'context, 'block> Value<'context, 'block> {
                 )
         );
         Self::new(value)
+    }
+
+    /// The length of this dynamic value (array / `bytes` / `string`) as a `ui256`,
+    /// via `sol.length`.
+    pub fn length(self, builder: &Builder<'context>, block: &BlockRef<'context, 'block>) -> Self {
+        Self::new(mlir_op!(
+            builder,
+            block,
+            LengthOperation
+                .inp(self.inner)
+                .len(Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir())
+        ))
     }
 
     /// Tests the value against zero, producing an `i1`. Short-circuits when the

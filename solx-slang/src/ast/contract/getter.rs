@@ -28,7 +28,6 @@ use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
 use solx_mlir::Function;
 use solx_mlir::StateMutability;
-use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 use solx_utils::DataLocation;
@@ -421,16 +420,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                             LocationPolicy::Declared(Some(location)),
                             builder,
                         );
-                        let length = mlir_op!(
-                            builder,
-                            &entry,
-                            LengthOperation.inp(base).len(AstType::unsigned(
-                                builder.context,
-                                solx_utils::BIT_LENGTH_FIELD
-                            ))
-                        );
+                        let length = AstValue::new(base).length(builder, &entry);
                         let in_bounds = AstValue::new(arg)
-                            .compare(AstValue::new(length), CmpPredicate::Lt, builder, &entry)
+                            .compare(length, CmpPredicate::Lt, builder, &entry)
                             .into_mlir();
                         mlir_op_void!(builder, &entry, RequireOperation.cond(in_bounds).args(&[]));
                         base = Pointer::new(base)

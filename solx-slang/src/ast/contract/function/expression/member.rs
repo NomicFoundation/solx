@@ -36,7 +36,6 @@ use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 use solx_mlir::ods::sol::GasLimitOperation;
 use solx_mlir::ods::sol::GasPriceOperation;
 use solx_mlir::ods::sol::GetCallDataOperation;
-use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::ObjectCodeOperation;
 use solx_mlir::ods::sol::OriginOperation;
 use solx_mlir::ods::sol::PrevRandaoOperation;
@@ -375,17 +374,9 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 value: operand,
                 block,
             } = node.operand().emit(context, block);
-            let builder = &context.state.builder;
-            let value: MlirValue<'context, 'block> = mlir_op!(
-                builder,
-                &block,
-                LengthOperation
-                    .inp(operand.into_mlir())
-                    .len(AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD))
-            );
             return BlockAnd {
+                value: operand.length(&context.state.builder, &block),
                 block,
-                value: value.into(),
             };
         }
         // A function-like built-in member named WITHOUT a call —

@@ -10,7 +10,6 @@ use slang_solidity_v2::ast::IndexAccessExpression;
 use slang_solidity_v2::ast::IndexAccessKind;
 use slang_solidity_v2::ast::Type as SlangType;
 
-use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::SliceOperation;
 use solx_utils::DataLocation;
 
@@ -150,12 +149,9 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
                 (value, block)
             }
             None => {
-                let builder = &context.state.builder;
-                let length = mlir_op!(
-                    builder,
-                    block,
-                    LengthOperation.inp(base_value).len(ui256)
-                );
+                let length = base_value
+                    .length(&context.state.builder, &block)
+                    .into_mlir();
                 (length, block)
             }
         };
