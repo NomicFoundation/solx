@@ -492,15 +492,16 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     );
                     (vec![value], block)
                 }
-                BuiltIn::Addmod => {
+                BuiltIn::Addmod | BuiltIn::Mulmod => {
                     let BlockAnd {
                         value: values,
                         block,
                     } = positional.emit(context, block);
                     let builder = &context.state.builder;
-                    // `addmod` operates on `uint256`, but a literal operand keeps its
-                    // narrow type (`addmod(1, 2, d)` → ui8, ui8, ui256); `sol.addmod`
-                    // requires identical operand/result types, so widen all to ui256.
+                    // `addmod`/`mulmod` operate on `uint256`, but a literal operand
+                    // keeps its narrow type (`addmod(1, 2, d)` → ui8, ui8, ui256); the
+                    // `sol.addmod`/`sol.mulmod` ops require identical operand/result
+                    // types, so widen all three to ui256.
                     let ui256 = AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
                         .into_mlir();
                     let x = AstValue::from(values[0])
@@ -512,29 +513,11 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     let modulus = AstValue::from(values[2])
                         .cast(AstType::new(ui256), builder, &block)
                         .into_mlir();
-                    let value = mlir_op!(builder, block, AddModOperation.x(x).y(y).r#mod(modulus));
-                    (vec![value], block)
-                }
-                BuiltIn::Mulmod => {
-                    let BlockAnd {
-                        value: values,
-                        block,
-                    } = positional.emit(context, block);
-                    let builder = &context.state.builder;
-                    // `mulmod` operates on `uint256`; widen narrow literal operands so
-                    // all operands/result share the type `sol.mulmod` requires.
-                    let ui256 = AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD)
-                        .into_mlir();
-                    let x = AstValue::from(values[0])
-                        .cast(AstType::new(ui256), builder, &block)
-                        .into_mlir();
-                    let y = AstValue::from(values[1])
-                        .cast(AstType::new(ui256), builder, &block)
-                        .into_mlir();
-                    let modulus = AstValue::from(values[2])
-                        .cast(AstType::new(ui256), builder, &block)
-                        .into_mlir();
-                    let value = mlir_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus));
+                    let value = if matches!(built_in, BuiltIn::Addmod) {
+                        mlir_op!(builder, block, AddModOperation.x(x).y(y).r#mod(modulus))
+                    } else {
+                        mlir_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus))
+                    };
                     (vec![value], block)
                 }
                 _ => unreachable!("only emittable identifier built-ins are gated into this arm"),
