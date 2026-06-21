@@ -2,6 +2,11 @@
 //! Yul dialect comparison predicate values.
 //!
 
+use melior::ir::attribute::IntegerAttribute;
+use melior::ir::r#type::IntegerType;
+
+use solx_utils::BIT_LENGTH_X64;
+
 /// Yul dialect `yul.cmp` predicate values.
 ///
 /// Unlike `sol.cmp` (which carries signedness in the operand type), the Yul
@@ -31,4 +36,15 @@ pub enum YulCmpPredicate {
     Sgt = 8,
     /// Signed greater than or equal (`sge`).
     Sge = 9,
+}
+
+impl YulCmpPredicate {
+    /// This predicate's encoding as the `i64` [`IntegerAttribute`] the `yul.cmp`
+    /// predicate operand demands.
+    pub fn attribute(self, context: &melior::Context) -> IntegerAttribute<'_> {
+        IntegerAttribute::new(
+            IntegerType::new(context, BIT_LENGTH_X64 as u32).into(),
+            self as i64,
+        )
+    }
 }

@@ -11,9 +11,11 @@ use melior::ir::BlockRef;
 use melior::ir::Value as MlirValue;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::TypeAttribute;
+use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::TypeLike;
 use num::BigInt;
 use solx_utils::BIT_LENGTH_FIELD;
+use solx_utils::BIT_LENGTH_X64;
 
 use crate::Builder;
 use crate::IntoOds;
@@ -137,7 +139,7 @@ impl<'context, 'block> YulValue<'context, 'block> {
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let predicate_attribute = builder.x64_attribute(predicate as i64);
+        let predicate_attribute = predicate.attribute(builder.context);
         Self::new(mlir_op!(
             builder,
             block,
@@ -167,7 +169,10 @@ impl<'context, 'block> YulValue<'context, 'block> {
 
     /// The `alignment = 32 : i64` attribute every Yul-word `llvm` slot op carries.
     fn word_alignment(builder: &Builder<'context>) -> IntegerAttribute<'context> {
-        builder.x64_attribute(Self::WORD_ALIGNMENT)
+        IntegerAttribute::new(
+            IntegerType::new(builder.context, BIT_LENGTH_X64 as u32).into(),
+            Self::WORD_ALIGNMENT,
+        )
     }
 }
 

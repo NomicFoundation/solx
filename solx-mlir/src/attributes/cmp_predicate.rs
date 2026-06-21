@@ -2,8 +2,12 @@
 //! Sol dialect comparison predicate values.
 //!
 
+use melior::ir::attribute::IntegerAttribute;
+use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::EqualityExpressionOperator;
 use slang_solidity_v2::ast::InequalityExpressionOperator;
+
+use solx_utils::BIT_LENGTH_X64;
 
 /// Sol dialect `sol.cmp` predicate values.
 ///
@@ -44,5 +48,16 @@ impl From<InequalityExpressionOperator> for CmpPredicate {
             InequalityExpressionOperator::GreaterThan(_) => Self::Gt,
             InequalityExpressionOperator::GreaterThanEqual(_) => Self::Ge,
         }
+    }
+}
+
+impl CmpPredicate {
+    /// This predicate's encoding as the `i64` [`IntegerAttribute`] the `sol.cmp`
+    /// predicate operand demands.
+    pub fn attribute(self, context: &melior::Context) -> IntegerAttribute<'_> {
+        IntegerAttribute::new(
+            IntegerType::new(context, BIT_LENGTH_X64 as u32).into(),
+            self as i64,
+        )
     }
 }

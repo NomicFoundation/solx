@@ -666,7 +666,7 @@ impl<'context, 'block> Value<'context, 'block> {
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let predicate_attribute = builder.x64_attribute(predicate as i64);
+        let predicate_attribute = predicate.attribute(builder.context);
         let value: MlirValue<'context, 'block> = mlir_op!(
             builder,
             block,
