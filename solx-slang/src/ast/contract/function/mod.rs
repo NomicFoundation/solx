@@ -95,21 +95,50 @@ impl EmitFunction for FunctionDefinition {
         );
 
         let mut environment = Environment::new();
-        environment.bind_parameters(
-            self,
-            &signature.parameter_types,
-            &function_entry_block,
-            &scope.state.builder,
-        );
+        for (index, parameter) in self.parameters().iter().enumerate() {
+            environment.bind_block_argument(
+                parameter.node_id(),
+                signature.parameter_types[index],
+                index,
+                &function_entry_block,
+                &scope.state.builder,
+            );
+        }
 
-        let mut return_slots = environment.initialize_return_slots(
-            self,
-            &signature.return_types,
-            parameter_count,
-            body_kind == BodyKind::ModifierBody,
-            &function_entry_block,
-            &scope.state.builder,
-        );
+        // Allocate and bind a stack slot for each named return value, pushing
+        // `None` for an unnamed return. A modifier body seeds every slot (named or
+        // not) from the trailing block arguments at the `parameter_count` offset, so
+        // the shared return state survives an empty body or a partial `_` reach;
+        // otherwise only the named slots are default-initialised.
+        let mut return_slots: Vec<Option<Value<'context, '_>>> = Vec::new();
+        if let Some(returns) = self.returns() {
+            for (index, parameter) in returns.iter().enumerate() {
+                let return_type = AstType::new(signature.return_types[index]);
+                if body_kind == BodyKind::ModifierBody {
+                    let pointer = Pointer::from_argument(
+                        return_type,
+                        parameter_count + index,
+                        &function_entry_block,
+                        &scope.state.builder,
+                    );
+                    if parameter.name().is_some() {
+                        environment.define_variable(parameter.node_id(), pointer.into_mlir());
+                    }
+                    return_slots.push(Some(pointer.into_mlir()));
+                } else if parameter.name().is_none() {
+                    return_slots.push(None);
+                } else {
+                    let pointer = Pointer::default_initialized(
+                        return_type,
+                        &scope.state.builder,
+                        &function_entry_block,
+                    )
+                    .into_mlir();
+                    environment.define_variable(parameter.node_id(), pointer);
+                    return_slots.push(Some(pointer));
+                }
+            }
+        }
 
         let region = function_entry_block
             .parent_region()

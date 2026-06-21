@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use melior::ir::BlockRef;
 use melior::ir::Type as MlirType;
 use melior::ir::Value;
-use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Parameter;
 
@@ -89,32 +88,10 @@ impl<'context, 'block> Environment<'context, 'block> {
         self.define_variable(parameter.node_id(), pointer.into_mlir());
     }
 
-    /// Binds each of `function`'s parameters from its incoming entry-block
-    /// argument: a fresh stack slot holding the argument, defined by node id. The
-    /// block arguments already carry the parameter types, so — unlike
-    /// [`Self::bind_parameter`] — no coercion is needed.
-    pub fn bind_parameters(
-        &mut self,
-        function: &FunctionDefinition,
-        parameter_types: &[MlirType<'context>],
-        entry_block: &BlockRef<'context, 'block>,
-        builder: &Builder<'context>,
-    ) {
-        for (index, parameter) in function.parameters().iter().enumerate() {
-            self.bind_block_argument(
-                parameter.node_id(),
-                parameter_types[index],
-                index,
-                entry_block,
-                builder,
-            );
-        }
-    }
-
     /// Spills the entry block's argument at `argument_index` into a fresh stack
     /// slot of `mlir_type` and binds `declaration` to it. The block argument
-    /// already carries the type, so no coercion is needed. The atomic binding
-    /// [`Self::bind_parameters`] and a modifier-stage func are each built from.
+    /// already carries the type, so no coercion is needed. The atomic binding the
+    /// function parameter loop and a modifier-stage func are each built from.
     pub fn bind_block_argument(
         &mut self,
         declaration: NodeId,
@@ -126,50 +103,6 @@ impl<'context, 'block> Environment<'context, 'block> {
         let pointer =
             Pointer::from_argument(Type::new(mlir_type), argument_index, entry_block, builder);
         self.define_variable(declaration, pointer.into_mlir());
-    }
-
-    /// Allocates and binds a stack slot for each named return value, pushing
-    /// `None` for an unnamed return. A `modifier_body` seeds every slot (named or
-    /// not) from the trailing block arguments at the `parameter_count` offset, so
-    /// the shared return state survives an empty body or a partial `_` reach;
-    /// otherwise only the named slots are default-initialised. Returns the slot
-    /// places, parallel to the returns.
-    pub fn initialize_return_slots(
-        &mut self,
-        function: &FunctionDefinition,
-        result_types: &[MlirType<'context>],
-        parameter_count: usize,
-        modifier_body: bool,
-        entry_block: &BlockRef<'context, 'block>,
-        builder: &Builder<'context>,
-    ) -> Vec<Option<Value<'context, 'block>>> {
-        let mut return_slots: Vec<Option<Value<'context, 'block>>> = Vec::new();
-        let Some(returns) = function.returns() else {
-            return return_slots;
-        };
-        for (index, parameter) in returns.iter().enumerate() {
-            let return_type = Type::new(result_types[index]);
-            if modifier_body {
-                let pointer = Pointer::from_argument(
-                    return_type,
-                    parameter_count + index,
-                    entry_block,
-                    builder,
-                );
-                if parameter.name().is_some() {
-                    self.define_variable(parameter.node_id(), pointer.into_mlir());
-                }
-                return_slots.push(Some(pointer.into_mlir()));
-            } else if parameter.name().is_none() {
-                return_slots.push(None);
-            } else {
-                let pointer =
-                    Pointer::default_initialized(return_type, builder, entry_block).into_mlir();
-                self.define_variable(parameter.node_id(), pointer);
-                return_slots.push(Some(pointer));
-            }
-        }
-        return_slots
     }
 
     /// Looks up a variable's place by its declaration's [`NodeId`] (from
