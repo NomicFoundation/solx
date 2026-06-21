@@ -8,7 +8,6 @@ use num::BigInt;
 use num::Signed;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
-use slang_solidity_v2::ast::FunctionType;
 use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -256,14 +255,17 @@ impl<'context> Type<'context> {
         (element_type, location)
     }
 
-    /// Resolves a function-pointer type's `(parameter_types, result_types)` from
-    /// Slang to MLIR: a void return is zero results, a tuple expands per element.
-    /// The function-TYPE peer of [`Self::resolve_signature`], which resolves a
-    /// function DEFINITION's signature.
+    /// Resolves a function-pointer callee type's `(parameter_types, result_types)`
+    /// from Slang to MLIR: a void return is zero results, a tuple expands per
+    /// element. The function-TYPE peer of [`Self::resolve_signature`], which
+    /// resolves a function DEFINITION's signature.
     pub fn function_pointer_signature(
-        function_type: &FunctionType,
+        callee_type: &SlangType,
         builder: &Builder<'context>,
     ) -> (Vec<MlirType<'context>>, Vec<MlirType<'context>>) {
+        let SlangType::Function(function_type) = callee_type else {
+            unreachable!("an indirect-call callee is always a function type");
+        };
         let parameter_types = function_type
             .parameter_types()
             .iter()

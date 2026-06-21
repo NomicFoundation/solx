@@ -26,7 +26,6 @@ use slang_solidity_v2::ast::FunctionCallExpression;
 use slang_solidity_v2::ast::FunctionMutability;
 use slang_solidity_v2::ast::IndexAccessKind;
 use slang_solidity_v2::ast::NodeId;
-use slang_solidity_v2::ast::PositionalArguments;
 use slang_solidity_v2::ast::Type as SlangType;
 use slang_solidity_v2::ast::TypeName as SlangTypeName;
 use solx_mlir::ods::sol::AddModOperation;
@@ -63,49 +62,6 @@ use crate::ast::contract::function::expression::call_options::CallOptions;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 use crate::ast::contract::getter::StructGetterLayout;
 use crate::ast::pending_queries::MemberAccessOperand;
-
-/// The shared call-emission primitives the call kinds dispatch through
-/// (argument coercion, call-options capture, indirect calls, struct
-/// construction, external-library link resolution).
-impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Emits an indirect call through the function-pointer value `callee`
-    /// yields, returning the result values. Parameter and result types come
-    /// from the pointer's function type (a void return is zero results; a tuple
-    /// return expands per element). Internal pointers dispatch through
-    /// `sol.icall`; external ones through `sol.ext_icall`, forwarding
-    /// `call_value` (or zero) as `msg.value`.
-    fn emit_indirect_call_results(
-        &self,
-        callee: &Expression,
-        function_slang_type: &SlangType,
-        positional_arguments: &PositionalArguments,
-        call_value: Option<Value<'context, 'block>>,
-        block: BlockRef<'context, 'block>,
-    ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
-        let SlangType::Function(function_type) = function_slang_type else {
-            unreachable!("an indirect-call callee is always a function type");
-        };
-        let (parameter_types, result_types) =
-            AstType::function_pointer_signature(function_type, &self.state.builder);
-        let BlockAnd {
-            value: callee_value,
-            block,
-        } = callee.emit(self, block);
-        let arguments: Vec<Expression> = positional_arguments.iter().collect();
-        let BlockAnd {
-            value: argument_values,
-            block: current_block,
-        } = arguments.emit_as(&parameter_types, self, block);
-        let results = callee_value.call_indirect(
-            &argument_values,
-            &result_types,
-            call_value,
-            &self.state.builder,
-            &current_block,
-        );
-        (results, current_block)
-    }
-}
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCallExpression {
     type Output = (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>);
@@ -1329,35 +1285,42 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         (results, block)
                     }
                 }
-                // `C.x(args)`: a function-pointer state variable read then called.
-                Some(Definition::StateVariable(_))
-                    if matches!(&operand, Expression::Identifier(identifier)
-                        if matches!(identifier.resolve_to_definition(), Some(Definition::Contract(_))))
-                        && matches!(access.get_type(), Some(SlangType::Function(_))) =>
+                // `C.x(args)` (a function-pointer state variable, reached only
+                // through a contract namespace — an instance `i.x` is the getter
+                // below) and `s.f(...)` (a function-pointer struct field) both call
+                // through the pointer the member access yields.
+                Some(definition @ (Definition::StateVariable(_) | Definition::StructMember(_)))
+                    if matches!(access.get_type(), Some(SlangType::Function(_)))
+                        && (matches!(definition, Definition::StructMember(_))
+                            || matches!(&operand, Expression::Identifier(identifier)
+                            if matches!(
+                                identifier.resolve_to_definition(),
+                                Some(Definition::Contract(_))
+                            ))) =>
                 {
                     let callee = Expression::MemberAccessExpression(access.clone());
                     let function_slang_type = access.get_type().expect("slang validated");
-                    context.emit_indirect_call_results(
-                        &callee,
+                    let (parameter_types, result_types) = AstType::function_pointer_signature(
                         &function_slang_type,
-                        positional,
-                        call_value,
+                        &context.state.builder,
+                    );
+                    let BlockAnd {
+                        value: callee_value,
                         block,
-                    )
-                }
-                // `s.f(...)` through a function-pointer struct field.
-                Some(Definition::StructMember(_))
-                    if matches!(access.get_type(), Some(SlangType::Function(_))) =>
-                {
-                    let callee = Expression::MemberAccessExpression(access.clone());
-                    let function_slang_type = access.get_type().expect("slang validated");
-                    context.emit_indirect_call_results(
-                        &callee,
-                        &function_slang_type,
-                        positional,
-                        call_value,
+                    } = callee.emit(context, block);
+                    let argument_expressions: Vec<Expression> = positional.iter().collect();
+                    let BlockAnd {
+                        value: argument_values,
                         block,
-                    )
+                    } = argument_expressions.emit_as(&parameter_types, context, block);
+                    let results = callee_value.call_indirect(
+                        &argument_values,
+                        &result_types,
+                        call_value,
+                        &context.state.builder,
+                        &block,
+                    );
+                    (results, block)
                 }
                 // `this.f` / `instance.f` (an external call) and `this.x` /
                 // `instance.x` (a getter) converge on one `sol.ext_icall`: they
@@ -1733,13 +1696,27 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     unimplemented!("named arguments on an indirect call are not supported");
                 };
                 let function_slang_type = callee.get_type().expect("slang validated");
-                return context.emit_indirect_call_results(
-                    &callee,
+                let (parameter_types, result_types) = AstType::function_pointer_signature(
                     &function_slang_type,
-                    positional,
-                    call_value,
-                    block,
+                    &context.state.builder,
                 );
+                let BlockAnd {
+                    value: callee_value,
+                    block,
+                } = callee.emit(context, block);
+                let argument_expressions: Vec<Expression> = positional.iter().collect();
+                let BlockAnd {
+                    value: argument_values,
+                    block,
+                } = argument_expressions.emit_as(&parameter_types, context, block);
+                let results = callee_value.call_indirect(
+                    &argument_values,
+                    &result_types,
+                    call_value,
+                    &context.state.builder,
+                    &block,
+                );
+                return (results, block);
             }
             unimplemented!("unsupported callee expression");
         };
@@ -1783,13 +1760,27 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     unimplemented!("named arguments on an indirect call are not supported");
                 };
                 let function_slang_type = callee.get_type().expect("slang validated");
-                context.emit_indirect_call_results(
-                    &callee,
+                let (parameter_types, result_types) = AstType::function_pointer_signature(
                     &function_slang_type,
-                    positional,
-                    call_value,
+                    &context.state.builder,
+                );
+                let BlockAnd {
+                    value: callee_value,
                     block,
-                )
+                } = callee.emit(context, block);
+                let argument_expressions: Vec<Expression> = positional.iter().collect();
+                let BlockAnd {
+                    value: argument_values,
+                    block,
+                } = argument_expressions.emit_as(&parameter_types, context, block);
+                let results = callee_value.call_indirect(
+                    &argument_values,
+                    &result_types,
+                    call_value,
+                    &context.state.builder,
+                    &block,
+                );
+                (results, block)
             }
             _ => unimplemented!(
                 "callee '{}' does not resolve to a function",
