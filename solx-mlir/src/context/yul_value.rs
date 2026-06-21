@@ -11,11 +11,9 @@ use melior::ir::BlockRef;
 use melior::ir::Value as MlirValue;
 use melior::ir::attribute::IntegerAttribute;
 use melior::ir::attribute::TypeAttribute;
-use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::TypeLike;
 use num::BigInt;
 use solx_utils::BIT_LENGTH_FIELD;
-use solx_utils::BIT_LENGTH_X64;
 
 use crate::Builder;
 use crate::IntoOds;
@@ -98,7 +96,7 @@ impl<'context, 'block> YulValue<'context, 'block> {
                     pointer,
                     Type::signless(builder.context, BIT_LENGTH_FIELD).into_mlir(),
                     builder.unknown_location,
-                    LoadStoreOptions::new().align(Some(Self::word_alignment(builder.context))),
+                    LoadStoreOptions::new().align(Some(Self::word_alignment(builder))),
                 ))
                 .result(0)
                 .expect("llvm.load always produces one result")
@@ -120,7 +118,7 @@ impl<'context, 'block> YulValue<'context, 'block> {
                 Type::llvm_ptr(builder.context).into_mlir(),
                 builder.unknown_location,
                 AllocaOptions::new()
-                    .align(Some(Self::word_alignment(builder.context)))
+                    .align(Some(Self::word_alignment(builder)))
                     .elem_type(Some(TypeAttribute::new(
                         Type::signless(builder.context, BIT_LENGTH_FIELD).into_mlir(),
                     ))),
@@ -139,10 +137,7 @@ impl<'context, 'block> YulValue<'context, 'block> {
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let predicate_attribute = IntegerAttribute::new(
-            IntegerType::new(builder.context, BIT_LENGTH_X64 as u32).into(),
-            predicate as i64,
-        );
+        let predicate_attribute = builder.x64_attribute(predicate as i64);
         Self::new(mlir_op!(
             builder,
             block,
@@ -166,16 +161,13 @@ impl<'context, 'block> YulValue<'context, 'block> {
             self.inner,
             pointer,
             builder.unknown_location,
-            LoadStoreOptions::new().align(Some(Self::word_alignment(builder.context))),
+            LoadStoreOptions::new().align(Some(Self::word_alignment(builder))),
         ));
     }
 
     /// The `alignment = 32 : i64` attribute every Yul-word `llvm` slot op carries.
-    fn word_alignment(context: &'context melior::Context) -> IntegerAttribute<'context> {
-        IntegerAttribute::new(
-            IntegerType::new(context, BIT_LENGTH_X64 as u32).into(),
-            Self::WORD_ALIGNMENT,
-        )
+    fn word_alignment(builder: &Builder<'context>) -> IntegerAttribute<'context> {
+        builder.x64_attribute(Self::WORD_ALIGNMENT)
     }
 }
 

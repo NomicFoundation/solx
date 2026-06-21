@@ -19,7 +19,6 @@ use melior::ir::r#type::TypeLike;
 use num::BigInt;
 use slang_solidity_v2::ast::DataLocation;
 use slang_solidity_v2::ast::Type as SlangType;
-use solx_utils::BIT_LENGTH_X64;
 
 use crate::Builder;
 use crate::CmpPredicate;
@@ -658,10 +657,7 @@ impl<'context, 'block> Value<'context, 'block> {
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let predicate_attribute = IntegerAttribute::new(
-            IntegerType::new(builder.context, BIT_LENGTH_X64 as u32).into(),
-            predicate as i64,
-        );
+        let predicate_attribute = builder.x64_attribute(predicate as i64);
         let value: MlirValue<'context, 'block> = mlir_op!(
             builder,
             block,
