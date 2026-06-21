@@ -425,7 +425,7 @@ impl EmitConstructor for ContractDefinition {
                     parameters: modifier_stage_params,
                     index: 0,
                 };
-                match emitter.emit_inline_modifier_chain(current_block) {
+                match ModifierStrategy::emit_placeholder(&mut emitter, current_block) {
                     Some(next) => current_block = next,
                     None => terminated = true,
                 }

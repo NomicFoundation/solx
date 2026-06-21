@@ -121,50 +121,6 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
             arithmetic_mode: ArithmeticMode::Checked,
         }
     }
-
-    /// Emits the inline modifier chain for a constructor body from the current
-    /// stage. Stage 0 is the outermost modifier body; each `_;` recurses to the
-    /// next stage, and the constructor body (final stage) runs at the innermost
-    /// `_;`. A stage's parameters are bound in a scope bracketing the whole stage
-    /// — including the `_;` tail — so a repeated modifier keeps a distinct binding
-    /// per use. A constructor has no return value, so the chain unwinds past the
-    /// last stage (no separate body call).
-    pub fn emit_inline_modifier_chain(
-        &mut self,
-        block: BlockRef<'context, 'block>,
-    ) -> Option<BlockRef<'context, 'block>> {
-        let ModifierStrategy::InlineChain {
-            stages,
-            parameters,
-            index,
-        } = &self.modifier_strategy
-        else {
-            return Some(block);
-        };
-        let stage = *index;
-        let Some(stage_block) = stages.get(stage).cloned() else {
-            return Some(block);
-        };
-        let params = parameters.get(stage).cloned().unwrap_or_default(); // recut-lint-allow: fail01 — a modifier stage may declare no parameters
-        // Advance the cursor for the recursive `_;` (the borrow of the strategy
-        // ended once `stage_block` / `params` were cloned out), restore it after.
-        if let ModifierStrategy::InlineChain { index, .. } = &mut self.modifier_strategy {
-            *index = stage + 1;
-        }
-        // The stage's parameters bracket the whole stage — including the `_;`
-        // tail — in their own scope; the stage block opens its own inner scope.
-        self.environment.enter_scope();
-        for binding in params {
-            self.environment
-                .define_variable(binding.declaration, binding.pointer);
-        }
-        let result = stage_block.emit(self, block);
-        self.environment.exit_scope();
-        if let ModifierStrategy::InlineChain { index, .. } = &mut self.modifier_strategy {
-            *index = stage;
-        }
-        result
-    }
 }
 
 // A multi-element tuple expression in the return position is unpacked into one
@@ -304,20 +260,11 @@ statement_emit!(ContinueStatement; |context, block| {
 // expression is emitted and its value discarded.
 statement_emit!(ExpressionStatement; |node, context, block| {
     match ExpressionStatementKind::from_statement(node) {
-        // A constructor's modifiers run as an inline chain, where `_;`
-        // recurses to the next stage / the constructor body; a regular
-        // function's modifiers are separate `sol.func`s, where `_;` hands off
-        // through the body call.
+        // The placeholder hands off per the active modifier strategy: an inline
+        // chain (a constructor) recurses to the next stage, a body call (a regular
+        // function) calls the wrapped body / next stage `sol.func`.
         ExpressionStatementKind::ModifierPlaceholder => {
-            if matches!(context.modifier_strategy, ModifierStrategy::InlineChain { .. }) {
-                context.emit_inline_modifier_chain(block)
-            } else {
-                // A regular function's `_;` calls the wrapped body / next stage.
-                if let ModifierStrategy::BodyCall(body_call) = &context.modifier_strategy {
-                    body_call.emit(&context.state.builder, &block);
-                }
-                Some(block)
-            }
+            ModifierStrategy::emit_placeholder(context, block)
         }
         ExpressionStatementKind::RevertCall(call) => {
             let ArgumentsDeclaration::PositionalArguments(positional_arguments) = &call.arguments()
