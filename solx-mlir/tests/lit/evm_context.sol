@@ -34,9 +34,6 @@
 // CHECK: sol.func @{{.*get_blobbasefee.*}}
 // CHECK:   sol.blobbasefee : ui256
 
-// CHECK: sol.func @{{.*get_difficulty.*}}
-// CHECK:   sol.difficulty : ui256
-
 // CHECK: sol.func @{{.*get_prevrandao.*}}
 // CHECK:   sol.prevrandao : ui256
 
@@ -86,10 +83,6 @@ contract C {
 
     function get_blobbasefee() public view returns (uint256) {
         return block.blobbasefee;
-    }
-
-    function get_difficulty() public view returns (uint256) {
-        return block.difficulty;
     }
 
     function get_prevrandao() public view returns (uint256) {

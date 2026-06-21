@@ -12,6 +12,7 @@ use slang_solidity_v2::compilation::CompilationBuilder;
 use slang_solidity_v2::compilation::CompilationUnit;
 use slang_solidity_v2::diagnostics::DiagnosticExtensions;
 use slang_solidity_v2::utils::LanguageVersion;
+use slang_solidity_v2_common::evm_targets::EvmTarget;
 
 use solx_core::Frontend;
 use solx_standard_json::CollectableError;
@@ -60,7 +61,9 @@ impl Slang {
                     self.version.default
                 )
             })?;
-        let mut builder = CompilationBuilder::create(version, configuration);
+        // The Slang frontend gates EVM built-in availability on the target; solx
+        // handles EVM-version targeting downstream, so admit every built-in here.
+        let mut builder = CompilationBuilder::create(version, EvmTarget::LATEST, configuration);
 
         for path in paths.iter() {
             builder.add_file(path.clone());
