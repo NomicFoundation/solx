@@ -8,7 +8,6 @@ use std::collections::HashSet;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
-use melior::ir::attribute::FlatSymbolRefAttribute;
 use slang_solidity_v2::ast::ContractBase;
 use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Expression;
@@ -17,7 +16,6 @@ use slang_solidity_v2::ast::NodeId;
 use solx_mlir::Environment;
 use solx_mlir::Function;
 use solx_mlir::StateMutability;
-use solx_mlir::ods::sol::AddrOfOperation;
 use solx_mlir::ods::sol::CopyOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 
@@ -186,16 +184,10 @@ impl EmitConstructor for ContractDefinition {
             let builder = &scope.state.builder;
             let element_type =
                 AstType::resolve(&declared_type, LocationPolicy::Declared(None), builder);
-            let address_type = AstType::new(element_type)
-                .address_type(slot.location, builder.context)
-                .into_mlir();
-            let storage_ref = mlir_op!(
-                builder,
-                &block,
-                AddrOfOperation
-                    .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
-                    .addr(address_type)
-            );
+            let address_type =
+                AstType::new(element_type).address_type(slot.location, builder.context);
+            let storage_ref =
+                Pointer::addr_of(&slot.name, address_type, builder, &block).into_mlir();
             let BlockAnd {
                 value,
                 block: next_block,

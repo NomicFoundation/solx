@@ -9,12 +9,14 @@ use melior::ir::Type as MlirType;
 use melior::ir::TypeLike;
 use melior::ir::Value as MlirValue;
 use melior::ir::ValueLike;
+use melior::ir::attribute::FlatSymbolRefAttribute;
 use melior::ir::attribute::TypeAttribute;
 use solx_utils::DataLocation;
 
 use crate::Builder;
 use crate::Type;
 use crate::Value;
+use crate::ods::sol::AddrOfOperation;
 use crate::ods::sol::AllocaOperation;
 use crate::ods::sol::GepOperation;
 use crate::ods::sol::LoadOperation;
@@ -83,6 +85,28 @@ impl<'context, 'block> Pointer<'context, 'block> {
             AllocaOperation
                 .alloc_type(TypeAttribute::new(address_type))
                 .addr(address_type)
+        ))
+    }
+
+    /// The place a named contract symbol denotes: `sol.addr_of @symbol` of
+    /// `place_type`. The place type is the caller's — a state-variable slot's
+    /// [`Type::address_type`], or an aggregate getter's container type.
+    pub fn addr_of<B>(
+        symbol: &str,
+        place_type: Type<'context>,
+        builder: &Builder<'context>,
+        block: &B,
+    ) -> Self
+    where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        Self::new(mlir_op!(
+            builder,
+            block,
+            AddrOfOperation
+                .var(FlatSymbolRefAttribute::new(builder.context, symbol))
+                .addr(place_type.into_mlir())
         ))
     }
 

@@ -12,7 +12,6 @@ use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::attribute::FlatSymbolRefAttribute;
 use num_bigint::BigInt;
 use slang_solidity_v2::abi::AbiEntry;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
@@ -29,7 +28,6 @@ use solx_mlir::Builder;
 use solx_mlir::CmpPredicate;
 use solx_mlir::Function;
 use solx_mlir::StateMutability;
-use solx_mlir::ods::sol::AddrOfOperation;
 use solx_mlir::ods::sol::LengthOperation;
 use solx_mlir::ods::sol::RequireOperation;
 use solx_mlir::ods::sol::ReturnOperation;
@@ -373,13 +371,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 builder,
                 &block,
             );
-            let mut base = mlir_op!(
-                builder,
-                &entry,
-                AddrOfOperation
-                    .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
-                    .addr(container_type)
-            );
+            let mut base =
+                Pointer::addr_of(&slot.name, AstType::new(container_type), builder, &entry)
+                    .into_mlir();
             // Re-walk the nesting, stepping the access over each parameter: a
             // `sol.map` for a mapping key, a bounds-checked `sol.gep` for an array
             // index (out-of-bounds bare-revert via a no-message `sol.require`,
@@ -512,13 +506,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                     builder,
                     &block,
                 );
-                let base = mlir_op!(
-                    builder,
-                    &entry,
-                    AddrOfOperation
-                        .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
-                        .addr(container_type)
-                );
+                let base =
+                    Pointer::addr_of(&slot.name, AstType::new(container_type), builder, &entry)
+                        .into_mlir();
                 return_loaded(base, &Some(plan), struct_mlir_type, builder, &entry);
                 return;
             }
@@ -548,13 +538,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             builder,
             &block,
         );
-        let storage_ref = mlir_op!(
-            builder,
-            &entry,
-            AddrOfOperation
-                .var(FlatSymbolRefAttribute::new(builder.context, &slot.name))
-                .addr(address_type)
-        );
+        let storage_ref =
+            Pointer::addr_of(&slot.name, AstType::new(address_type), builder, &entry).into_mlir();
         let value = if declared_type.is_reference_type() {
             storage_ref
         } else {

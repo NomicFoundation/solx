@@ -8,13 +8,11 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use melior::ir::ValueLike;
-use melior::ir::attribute::FlatSymbolRefAttribute;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::AssignmentExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
-use solx_mlir::ods::sol::AddrOfOperation;
 use solx_mlir::ods::sol::CopyOperation;
 use solx_mlir::ods::sol::DeleteOperation;
 use solx_mlir::ods::sol::MallocOperation;
@@ -163,18 +161,10 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         );
         if declared_type.is_reference_type() && !matches!(declared_type, ast::Type::Mapping(_)) {
             let address_type = AstType::new(element_type)
-                .address_type(slot.location, context.state.builder.context)
-                .into_mlir();
-            let storage_ref = mlir_op!(
-                &context.state.builder,
-                &block,
-                AddrOfOperation
-                    .var(FlatSymbolRefAttribute::new(
-                        context.state.builder.context,
-                        &slot.name,
-                    ))
-                    .addr(address_type)
-            );
+                .address_type(slot.location, context.state.builder.context);
+            let storage_ref =
+                Pointer::addr_of(&slot.name, address_type, &context.state.builder, &block)
+                    .into_mlir();
             return (Self::ReferenceCopy(storage_ref), block);
         }
         (Self::Storage(slot, element_type), block)

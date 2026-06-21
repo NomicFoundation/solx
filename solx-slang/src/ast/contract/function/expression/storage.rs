@@ -2,14 +2,11 @@
 //! Storage load/store expression emission via Sol dialect.
 //!
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::attribute::FlatSymbolRefAttribute;
 
 use solx_mlir::Builder;
-use solx_mlir::ods::sol::AddrOfOperation;
 
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
@@ -63,15 +60,7 @@ impl StorageSlot {
     where
         'context: 'block,
     {
-        let pointer_type = AstType::new(element_type)
-            .address_type(self.location, builder.context)
-            .into_mlir();
-        Pointer::new(mlir_op!(
-            builder,
-            block,
-            AddrOfOperation
-                .var(FlatSymbolRefAttribute::new(builder.context, &self.name))
-                .addr(pointer_type)
-        ))
+        let place_type = AstType::new(element_type).address_type(self.location, builder.context);
+        Pointer::addr_of(&self.name, place_type, builder, block)
     }
 }
