@@ -340,7 +340,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 return;
             }
 
-            let container_type = AstType::resolve_state_variable(state_variable, builder);
+            let container_type = AstType::resolve_state_variable(
+                &state_variable.get_type().expect("slang validated"),
+                builder,
+            );
             let result_type =
                 AstType::resolve(&terminal, LocationPolicy::Declared(Some(location)), builder);
             // A struct terminal expands into its flattened returnable members;
@@ -493,7 +496,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             if let Some(plan) = struct_definition.struct_getter_layout(struct_mlir_type, builder) {
                 let result_types: Vec<Type<'context>> =
                     plan.iter().map(|(_, _, result)| *result).collect();
-                let container_type = AstType::resolve_state_variable(state_variable, builder);
+                let container_type = AstType::resolve_state_variable(
+                    &state_variable.get_type().expect("slang validated"),
+                    builder,
+                );
                 let signature = state_variable
                     .compute_canonical_signature()
                     .expect("slang validated");
@@ -523,7 +529,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             .compute_canonical_signature()
             .expect("slang validated");
         let selector = state_variable.compute_selector().expect("slang validated");
-        let element_type = AstType::resolve_state_variable(state_variable, builder);
+        let element_type = AstType::resolve_state_variable(
+            &state_variable.get_type().expect("slang validated"),
+            builder,
+        );
         // A reference-typed variable is addressed by the reference type itself in
         // storage; a value type by a `!sol.ptr<T, _>`.
         let address_type = if declared_type.is_reference_type() {

@@ -450,8 +450,10 @@ impl Operator {
                     .unwrap_or_else(|| {
                         unimplemented!("unregistered state variable {:?}", state_variable.node_id())
                     });
-                let element_type =
-                    AstType::resolve_state_variable(&state_variable, &context.state.builder);
+                let element_type = AstType::resolve_state_variable(
+                    &state_variable.get_type().expect("slang validated"),
+                    &context.state.builder,
+                );
                 let old = slot.load(&context.state.builder, element_type, block);
                 let new_value = self.emit_step(context, old, element_type, block);
                 slot.store(&context.state.builder, new_value, element_type, block);

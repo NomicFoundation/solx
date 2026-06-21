@@ -13,7 +13,6 @@ use melior::ir::BlockRef;
 use melior::ir::Type as MlirType;
 use melior::ir::TypeLike;
 use melior::ir::r#type::IntegerType;
-use slang_solidity_v2::ast::StateVariableDefinition;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::Builder;
@@ -78,16 +77,13 @@ impl<'context> Type<'context> {
         ))
     }
 
-    /// Resolves the declared type of a state variable, which Slang always types.
+    /// Resolves a state variable's declared type (Slang always types one) in its
+    /// declared location.
     pub fn resolve_state_variable(
-        state_variable: &StateVariableDefinition,
+        slang_type: &SlangType,
         builder: &Builder<'context>,
     ) -> MlirType<'context> {
-        Self::resolve(
-            &state_variable.get_type().expect("slang validated"),
-            LocationPolicy::Declared(None),
-            builder,
-        )
+        Self::resolve(slang_type, LocationPolicy::Declared(None), builder)
     }
 
     /// An unsigned integer type of `bits` width (`ui<bits>`) — `ui256` (the field

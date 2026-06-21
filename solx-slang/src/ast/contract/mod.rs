@@ -155,7 +155,10 @@ impl EmitObject for ContractDefinition {
             let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
                 continue;
             };
-            let element_type = AstType::resolve_state_variable(&state_variable, &context.builder);
+            let element_type = AstType::resolve_state_variable(
+                &state_variable.get_type().expect("slang validated"),
+                &context.builder,
+            );
             let builder = &context.builder;
             let slot_attribute: IntegerAttribute =
                 Attribute::parse(builder.context, &format!("{} : i256", slot.slot))
