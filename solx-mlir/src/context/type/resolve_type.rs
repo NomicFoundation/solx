@@ -231,6 +231,32 @@ impl<'context> Type<'context> {
         (element_type, location)
     }
 
+    /// Resolves a return-position Slang type to its MLIR result types: a `void`
+    /// return is zero results, a tuple expands to one type per element, and any
+    /// other type is a single result. Shared by [`Self::function_pointer_signature`]
+    /// and the `abi.decode` out-types, which expand a call's binder-assigned type
+    /// the same way.
+    pub fn resolve_result_types(
+        return_type: &SlangType,
+        builder: &Builder<'context>,
+    ) -> Vec<MlirType<'context>> {
+        match return_type {
+            SlangType::Void(_) => Vec::new(),
+            SlangType::Tuple(tuple_type) => tuple_type
+                .types()
+                .iter()
+                .map(|element_type| {
+                    Type::resolve(element_type, LocationPolicy::Declared(None), builder)
+                })
+                .collect(),
+            other => vec![Type::resolve(
+                other,
+                LocationPolicy::Declared(None),
+                builder,
+            )],
+        }
+    }
+
     /// Resolves a function-pointer callee type's `(parameter_types, result_types)`
     /// from Slang to MLIR: a void return is zero results, a tuple expands per
     /// element. The function-TYPE peer of [`Self::resolve_signature`], which
@@ -249,21 +275,7 @@ impl<'context> Type<'context> {
                 Type::resolve(parameter_type, LocationPolicy::Declared(None), builder)
             })
             .collect();
-        let result_types = match function_type.return_type() {
-            SlangType::Void(_) => Vec::new(),
-            SlangType::Tuple(tuple_type) => tuple_type
-                .types()
-                .iter()
-                .map(|element_type| {
-                    Type::resolve(element_type, LocationPolicy::Declared(None), builder)
-                })
-                .collect(),
-            other => vec![Type::resolve(
-                &other,
-                LocationPolicy::Declared(None),
-                builder,
-            )],
-        };
+        let result_types = Type::resolve_result_types(&function_type.return_type(), builder);
         (parameter_types, result_types)
     }
 
