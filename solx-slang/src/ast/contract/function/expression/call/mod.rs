@@ -40,7 +40,6 @@ use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::ExtCallOperation;
 use solx_mlir::ods::sol::ExtFuncSelectorOperation;
-use solx_mlir::ods::sol::ExtICallOperation;
 use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::PopOperation;
@@ -205,6 +204,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 &argument_values,
                 &result_types,
                 call_value,
+                false,
                 &context.state.builder,
                 &block,
             );
@@ -583,16 +583,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     let operation = match kind {
                         BuiltIn::AddressCall => {
                             let value = call_value.unwrap_or_else(|| {
-                                AstValue::constant(
-                                    0,
-                                    AstType::unsigned(
-                                        builder.context,
-                                        solx_utils::BIT_LENGTH_FIELD,
-                                    ),
-                                    builder,
-                                    &block,
-                                )
-                                .into_mlir()
+                                AstValue::field_zero(builder, &block).into_mlir()
                             });
                             mlir_op_build!(
                                 builder,
@@ -1516,46 +1507,18 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         &return_types,
                         builder,
                         &block,
-                    )
-                    .into_mlir();
-                    // `fp{value: v}(args)` forwards `v`; a plain call sends zero wei.
-                    let value = call_value.unwrap_or_else(|| {
-                        AstValue::constant(
-                            0,
-                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                            builder,
-                            &block,
-                        )
-                        .into_mlir()
-                    });
-                    // `sol.ext_icall` returns `(i1 status, decoded returns…)`; the
-                    // status is dropped (a non-`try` call reverts internally on failure).
-                    let mut out_types = Vec::with_capacity(return_types.len() + 1);
-                    out_types.push(
-                        AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN)
-                            .into_mlir(),
                     );
-                    out_types.extend_from_slice(&return_types);
-                    let mut operation_builder =
-                        ExtICallOperation::builder(builder.context, builder.unknown_location)
-                            .outs(&out_types)
-                            .callee(callee)
-                            .callee_operands(&argument_values)
-                            .gas(AstValue::gas_left(builder, &block).into_mlir())
-                            .value(value);
-                    if is_static {
-                        operation_builder =
-                            operation_builder.static_call(Attribute::unit(builder.context));
-                    }
-                    let operation = block.append_operation(operation_builder.build().into());
-                    let results = (0..return_types.len())
-                        .map(|index| {
-                            operation
-                                .result(index + 1)
-                                .expect("sol.ext_icall produces a status plus its declared results")
-                                .into()
-                        })
-                        .collect();
+                    // A `view`/`pure` callee lowers to a STATICCALL; `{value: v}`
+                    // forwards `v`, a plain call sends zero — both handled by
+                    // `call_indirect` (the callee is an `ext_func_ref`).
+                    let results = callee.call_indirect(
+                        &argument_values,
+                        &return_types,
+                        call_value,
+                        is_static,
+                        builder,
+                        &block,
+                    );
                     (results, block)
                 }
                 other => unimplemented!(
@@ -1672,12 +1635,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             // `new C{value: v}()` forwards `v` wei; a plain `new C()` sends zero.
             let val = match call_value {
                 Some(value) => AstValue::from(value),
-                None => AstValue::constant(
-                    0,
-                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                    builder,
-                    &block,
-                ),
+                None => AstValue::field_zero(builder, &block),
             };
             let value = AstValue::create_contract(
                 &contract_name,

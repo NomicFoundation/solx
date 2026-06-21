@@ -288,6 +288,18 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
+    /// The field-width unsigned zero (`ui256` `0`) — the value a call forwards
+    /// when it carries no explicit `{value: …}` option. One home for the constant
+    /// rather than re-materialising the same `(0, ui256)` pair at each call site.
+    pub fn field_zero(builder: &Builder<'context>, block: &BlockRef<'context, 'block>) -> Self {
+        Self::constant(
+            0,
+            Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+            builder,
+            block,
+        )
+    }
+
     /// `sol.ext_func_constant` packing a callee `address` and a 4-byte
     /// `selector` into an `!sol.ext_func_ref<…>` of `result_type` — the callee
     /// value of an external call, and the zero of an external function type.
@@ -539,39 +551,35 @@ impl<'context, 'block> Value<'context, 'block> {
     /// for a `public` function used as a bare value) dispatches through `sol.icall`;
     /// an external one (`ext_func_ref`) through `sol.ext_icall`, forwarding
     /// `call_value` (or zero) as `msg.value` and dropping the status (a non-`try`
-    /// call reverts internally on failure; an external function-pointer value
-    /// carries no `view`/`pure` mutability, so the call is never a STATICCALL).
+    /// call reverts internally on failure). A `view`/`pure` callee lowers to a
+    /// STATICCALL via `is_static` (a function-pointer value carries no mutability,
+    /// so it passes `false`).
     pub fn call_indirect(
         self,
         argument_values: &[MlirValue<'context, 'block>],
         result_types: &[MlirType<'context>],
         call_value: Option<MlirValue<'context, 'block>>,
+        is_static: bool,
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Vec<MlirValue<'context, 'block>> {
         if self.r#type().is_ext_function_ref() {
-            let value = call_value.unwrap_or_else(|| {
-                Self::constant(
-                    0,
-                    Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                    builder,
-                    block,
-                )
-                .into_mlir()
-            });
+            let value = call_value.unwrap_or_else(|| Self::field_zero(builder, block).into_mlir());
             let mut out_types = Vec::with_capacity(result_types.len() + 1);
             out_types
                 .push(Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
             out_types.extend_from_slice(result_types);
-            let operation = block.append_operation(mlir_op_build!(
-                builder,
-                ExtICallOperation
+            let mut operation_builder =
+                ExtICallOperation::builder(builder.context, builder.unknown_location)
                     .outs(&out_types)
                     .callee(self.into_mlir())
                     .callee_operands(argument_values)
                     .gas(Self::gas_left(builder, block).into_mlir())
-                    .value(value)
-            ));
+                    .value(value);
+            if is_static {
+                operation_builder = operation_builder.static_call(Attribute::unit(builder.context));
+            }
+            let operation = block.append_operation(operation_builder.build().into());
             (0..result_types.len())
                 .map(|index| {
                     operation
