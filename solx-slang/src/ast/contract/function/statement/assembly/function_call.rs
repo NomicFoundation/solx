@@ -13,6 +13,7 @@ use solx_mlir::YulCmpPredicate;
 use solx_mlir::YulValue;
 use solx_mlir::ods::yul::*;
 
+use crate::ast::BlockAnd;
 use crate::ast::EmitYul;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::statement::assembly::YulContext;
@@ -24,7 +25,7 @@ use crate::ast::contract::function::statement::assembly::YulContext;
 // (all of its declared return slots). An effect op with no Yul result (a store,
 // copy, log, or terminator) yields its first operand so the statement has a
 // value to discard; `stop`/`invalid` (no operands) yield a fresh zero word.
-yul_emit!(YulFunctionCallExpression => (Vec<YulValue<'context, 'block>>, BlockRef<'context, 'block>); |call, context, block| {
+yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'context, 'block>>>; |call, context, block| {
     let YulExpression::YulPath(path) = call.operand() else {
         unimplemented!("unsupported yul callee expression");
     };
@@ -33,7 +34,7 @@ yul_emit!(YulFunctionCallExpression => (Vec<YulValue<'context, 'block>>, BlockRe
     let mut arguments: Vec<Option<YulValue<'context, 'block>>> = vec![None; argument_nodes.len()];
     let mut current = block;
     for (index, argument) in argument_nodes.iter().enumerate().rev() {
-        let (value, next) = argument.emit(context, current);
+        let BlockAnd { value, block: next } = argument.emit(context, current);
         arguments[index] = Some(value);
         current = next;
     }
@@ -115,7 +116,7 @@ yul_emit!(YulFunctionCallExpression => (Vec<YulValue<'context, 'block>>, BlockRe
         if let Some(depth) = context.yul_inline_depth.get_mut(&name) {
             *depth = depth.saturating_sub(1);
         }
-        return (return_values, current);
+        return BlockAnd { value: return_values, block: current };
     };
 
     let builder = &context.state.builder;
@@ -303,5 +304,5 @@ yul_emit!(YulFunctionCallExpression => (Vec<YulValue<'context, 'block>>, BlockRe
 
         _ => unimplemented!("unsupported yul intrinsic: {opcode:?}"),
     };
-    (vec![value], current)
+    BlockAnd { value: vec![value], block: current }
 });

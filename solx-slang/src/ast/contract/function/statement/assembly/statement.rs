@@ -18,6 +18,7 @@ use slang_solidity_v2::ast::YulSwitchCase;
 use solx_mlir::YulValue;
 use solx_mlir::ods::yul::*;
 
+use crate::ast::BlockAnd;
 use crate::ast::EmitYul;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
@@ -33,13 +34,14 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             let expression = assignment.expression();
             let paths: Vec<_> = assignment.variables().iter().collect();
             let (values, current) = if paths.len() == 1 {
-                let (value, current) = expression.emit(context, block);
+                let BlockAnd { value, block: current } = expression.emit(context, block);
                 (vec![value], current)
             } else {
                 let YulExpression::YulFunctionCallExpression(call) = &expression else {
                     unreachable!("multi-value yul assignment requires a call right-hand side");
                 };
-                call.emit(context, block)
+                let BlockAnd { value, block } = call.emit(context, block);
+                (value, block)
             };
             for (path, value) in paths.iter().zip(values) {
                 let declaration = path
@@ -70,11 +72,11 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                         let YulExpression::YulFunctionCallExpression(call) = &expression else {
                             unreachable!("multi-value yul declaration requires a call right-hand side");
                         };
-                        let (values, next) = call.emit(context, current);
+                        let BlockAnd { value: values, block: next } = call.emit(context, current);
                         current = next;
                         values.into_iter().map(Some).collect()
                     } else {
-                        let (value, next) = expression.emit(context, current);
+                        let BlockAnd { value, block: next } = expression.emit(context, current);
                         current = next;
                         vec![Some(value)]
                     }
@@ -92,12 +94,12 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             Some(current)
         }
         YulStatement::YulExpression(expression) => {
-            let (_value, current) = expression.emit(context, block);
+            let BlockAnd { block: current, .. } = expression.emit(context, block);
             Some(current)
         }
         YulStatement::YulIfStatement(if_statement) => {
             let condition = if_statement.condition();
-            let (condition_value, block) = condition.emit(context, block);
+            let BlockAnd { value: condition_value, block } = condition.emit(context, block);
             // Yul `if` has no `else`, so the else region stays empty —
             // `mlir_region_op!` would append a block to it, so build by hand.
             let then_region = Region::new();
@@ -146,7 +148,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                 .expect("yul.for cond block has a parent region");
             let saved_region = context.region_pointer;
             context.region_pointer = &*cond_region as *const _;
-            let (cond_value, cond_end) = for_statement.condition().emit(context, cond_block);
+            let BlockAnd { value: cond_value, block: cond_end } = for_statement.condition().emit(context, cond_block);
             mlir_op_void!(
                 &context.state.builder,
                 &cond_end,
@@ -184,7 +186,7 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
             None
         }
         YulStatement::YulSwitchStatement(switch_statement) => {
-            let (selector, current) = switch_statement.expression().emit(context, block);
+            let BlockAnd { value: selector, block: current } = switch_statement.expression().emit(context, block);
             let mut value_cases = Vec::new();
             let mut default_body = None;
             for case in switch_statement.cases().iter() {

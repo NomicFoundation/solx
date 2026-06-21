@@ -22,19 +22,19 @@ use crate::ast::contract::function::statement::assembly::YulContext;
 // A Yul expression produces an `i256` word; a call collapses to its first result
 // (`0` for a no-return user function), the value a statement-position call
 // discards.
-yul_emit!(YulExpression => (YulValue<'context, 'block>, BlockRef<'context, 'block>); |expression, context, block| {
+yul_emit!(YulExpression => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |expression, context, block| {
     match expression {
         YulExpression::YulLiteral(literal) => {
-            (YulValue::constant(&literal.value(), &context.state.builder, &block), block)
+            BlockAnd { value: YulValue::constant(&literal.value(), &context.state.builder, &block), block }
         }
         YulExpression::YulPath(path) => path.emit(context, block),
         YulExpression::YulFunctionCallExpression(call) => {
-            let (values, block) = call.emit(context, block);
+            let BlockAnd { value: values, block } = call.emit(context, block);
             let value = match values.into_iter().next() {
                 Some(value) => value,
                 None => YulValue::constant(&BigInt::from(0u32), &context.state.builder, &block),
             };
-            (value, block)
+            BlockAnd { value, block }
         }
     }
 });
@@ -44,7 +44,7 @@ yul_emit!(YulExpression => (YulValue<'context, 'block>, BlockRef<'context, 'bloc
 // a two-segment `x.slot` / `x.offset` (keyed by the typed `BuiltIn::YulSlot` /
 // `BuiltIn::YulOffset` suffix — never the member name string) resolves to a state
 // variable's slot index / in-slot byte offset.
-yul_emit!(YulPath => (YulValue<'context, 'block>, BlockRef<'context, 'block>); |path, context, block| {
+yul_emit!(YulPath => BlockAnd<'context, 'block, YulValue<'context, 'block>>; |path, context, block| {
     let identifier = path.iter().next().expect("empty yul path");
     let builder = &context.state.builder;
 
@@ -67,7 +67,7 @@ yul_emit!(YulPath => (YulValue<'context, 'block>, BlockRef<'context, 'block>); |
             builder,
             &block,
         );
-        return (YulValue::new(widened.into_mlir()), block);
+        return BlockAnd { value: YulValue::new(widened.into_mlir()), block };
     }
 
     if path.len() == 2 {
@@ -81,13 +81,13 @@ yul_emit!(YulPath => (YulValue<'context, 'block>, BlockRef<'context, 'block>); |
                 Some(BuiltIn::YulSlot) => {
                     let slot_word =
                         BigInt::from_bytes_be(num_bigint::Sign::Plus, &slot.slot.to_be_bytes_vec());
-                    return (YulValue::constant(&slot_word, builder, &block), block);
+                    return BlockAnd { value: YulValue::constant(&slot_word, builder, &block), block };
                 }
                 Some(BuiltIn::YulOffset) => {
-                    return (
-                        YulValue::constant(&BigInt::from(slot.byte_offset), builder, &block),
+                    return BlockAnd {
+                        value: YulValue::constant(&BigInt::from(slot.byte_offset), builder, &block),
                         block,
-                    );
+                    };
                 }
                 _ => {}
             }
@@ -111,10 +111,10 @@ yul_emit!(YulPath => (YulValue<'context, 'block>, BlockRef<'context, 'block>); |
                     let slot = AstValue::from(context.environment.variable(declaration))
                         .reinterpret(AstType::llvm_ptr(builder.context), builder, &block)
                         .into_mlir();
-                    return (YulValue::load(slot, builder, &block), block);
+                    return BlockAnd { value: YulValue::load(slot, builder, &block), block };
                 }
                 Some(BuiltIn::YulOffset) => {
-                    return (YulValue::constant(&BigInt::from(0u32), builder, &block), block);
+                    return BlockAnd { value: YulValue::constant(&BigInt::from(0u32), builder, &block), block };
                 }
                 _ => {}
             }
@@ -128,5 +128,5 @@ yul_emit!(YulPath => (YulValue<'context, 'block>, BlockRef<'context, 'block>); |
     let slot = AstValue::from(context.environment.variable(declaration))
         .reinterpret(AstType::llvm_ptr(builder.context), builder, &block)
         .into_mlir();
-    (YulValue::load(slot, builder, &block), block)
+    BlockAnd { value: YulValue::load(slot, builder, &block), block }
 });
