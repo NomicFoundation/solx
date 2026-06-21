@@ -25,7 +25,6 @@ use crate::ast::EmitFunction;
 use crate::ast::EmitStatement;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
-use crate::ast::Value as AstValue;
 use crate::ast::contract::function::FunctionScope;
 use crate::ast::contract::function::body_kind::BodyKind;
 use crate::ast::contract::function::expression::ExpressionContext;
@@ -264,15 +263,12 @@ impl EmitModifierChain for FunctionDefinition {
         let mut return_slots: Vec<Option<Value<'context, '_>>> =
             Vec::with_capacity(result_types.len());
         for (index, &return_type) in result_types.iter().enumerate() {
-            let pointer =
-                Pointer::stack_slot(AstType::new(return_type), &scope.state.builder, &entry);
-            let incoming = AstValue::new(
-                entry
-                    .argument(return_offset + index)
-                    .expect("argument index is within the block signature")
-                    .into(),
+            let pointer = Pointer::from_argument(
+                AstType::new(return_type),
+                return_offset + index,
+                &entry,
+                &scope.state.builder,
             );
-            pointer.store(incoming, &scope.state.builder, &entry);
             return_slots.push(Some(pointer.into_mlir()));
         }
 

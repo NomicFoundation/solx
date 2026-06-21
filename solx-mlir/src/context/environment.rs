@@ -4,7 +4,6 @@
 
 use std::collections::HashMap;
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type as MlirType;
 use melior::ir::Value;
@@ -124,14 +123,8 @@ impl<'context, 'block> Environment<'context, 'block> {
         entry_block: &BlockRef<'context, 'block>,
         builder: &Builder<'context>,
     ) {
-        let argument = crate::Value::new(
-            entry_block
-                .argument(argument_index)
-                .expect("argument index is within the block signature")
-                .into(),
-        );
-        let pointer = Pointer::stack_slot(Type::new(mlir_type), builder, entry_block);
-        pointer.store(argument, builder, entry_block);
+        let pointer =
+            Pointer::from_argument(Type::new(mlir_type), argument_index, entry_block, builder);
         self.define_variable(declaration, pointer.into_mlir());
     }
 
@@ -157,14 +150,12 @@ impl<'context, 'block> Environment<'context, 'block> {
         for (index, parameter) in returns.iter().enumerate() {
             let return_type = Type::new(result_types[index]);
             if modifier_body {
-                let pointer = Pointer::stack_slot(return_type, builder, entry_block);
-                let incoming = crate::Value::new(
-                    entry_block
-                        .argument(parameter_count + index)
-                        .expect("argument index is within the block signature")
-                        .into(),
+                let pointer = Pointer::from_argument(
+                    return_type,
+                    parameter_count + index,
+                    entry_block,
+                    builder,
                 );
-                pointer.store(incoming, builder, entry_block);
                 if parameter.name().is_some() {
                     self.define_variable(parameter.node_id(), pointer.into_mlir());
                 }

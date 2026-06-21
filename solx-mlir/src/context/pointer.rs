@@ -118,6 +118,27 @@ impl<'context, 'block> Pointer<'context, 'block> {
         slot
     }
 
+    /// A stack slot of `pointee` seeded from the entry block's argument at
+    /// `argument_index`. The block argument already carries the type, so the
+    /// incoming value is spilled verbatim. The place each incoming parameter or
+    /// threaded return value is spilled into.
+    pub fn from_argument(
+        pointee: Type<'context>,
+        argument_index: usize,
+        entry_block: &BlockRef<'context, 'block>,
+        builder: &Builder<'context>,
+    ) -> Self {
+        let slot = Self::stack_slot(pointee, builder, entry_block);
+        let argument = Value::new(
+            entry_block
+                .argument(argument_index)
+                .expect("argument index is within the block signature")
+                .into(),
+        );
+        slot.store(argument, builder, entry_block);
+        slot
+    }
+
     /// Loads the value of type `result_type` from this place (`sol.load`).
     /// Short-circuits when the place already *is* the value (the gep result for a
     /// reference-typed element in `Storage` / `CallData`), returning it unchanged.
