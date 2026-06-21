@@ -288,12 +288,16 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// The field-width unsigned zero (`ui256` `0`) — the value a call forwards
-    /// when it carries no explicit `{value: …}` option. One home for the constant
-    /// rather than re-materialising the same `(0, ui256)` pair at each call site.
-    pub fn field_zero(builder: &Builder<'context>, block: &BlockRef<'context, 'block>) -> Self {
+    /// A `uint256` constant — Solidity's default integer width, and the width of
+    /// selectors, sizes, enum ordinals, and the value a call forwards. Spells the
+    /// `(value, ui256)` constant once instead of repeating the type at each site.
+    pub fn uint256(
+        value: i64,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
         Self::constant(
-            0,
+            value,
             Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
             builder,
             block,
@@ -564,7 +568,7 @@ impl<'context, 'block> Value<'context, 'block> {
         block: &BlockRef<'context, 'block>,
     ) -> Vec<MlirValue<'context, 'block>> {
         if self.r#type().is_ext_function_ref() {
-            let value = call_value.unwrap_or_else(|| Self::field_zero(builder, block).into_mlir());
+            let value = call_value.unwrap_or_else(|| Self::uint256(0, builder, block).into_mlir());
             let mut out_types = Vec::with_capacity(result_types.len() + 1);
             out_types
                 .push(Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());

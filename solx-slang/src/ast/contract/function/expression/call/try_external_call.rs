@@ -122,7 +122,7 @@ impl TryExternalCall {
         .into_mlir();
         let builder = &context.state.builder;
         let value =
-            call_value.unwrap_or_else(|| AstValue::field_zero(builder, &current_block).into_mlir());
+            call_value.unwrap_or_else(|| AstValue::uint256(0, builder, &current_block).into_mlir());
         // `sol.ext_icall` results are `(i1 status, decoded-returns...)`; the `try`
         // form yields the status instead of reverting on failure, so the caller
         // can run a `catch` handler.

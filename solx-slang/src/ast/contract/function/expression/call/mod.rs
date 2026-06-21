@@ -566,7 +566,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     let operation = match kind {
                         BuiltIn::AddressCall => {
                             let value = call_value.unwrap_or_else(|| {
-                                AstValue::field_zero(builder, &block).into_mlir()
+                                AstValue::uint256(0, builder, &block).into_mlir()
                             });
                             mlir_op_build!(
                                 builder,
@@ -1220,20 +1220,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 let callee_type =
                     FunctionType::new(builder.context, &parameter_types, &return_types);
                 let gas = AstValue::gas_left(builder, &current_block).into_mlir();
-                let value = AstValue::constant(
-                    0,
-                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                    builder,
-                    &current_block,
-                )
-                .into_mlir();
-                let selector_value = AstValue::constant(
-                    i64::from(selector),
-                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                    builder,
-                    &current_block,
-                )
-                .into_mlir();
+                let value = AstValue::uint256(0, builder, &current_block).into_mlir();
+                let selector_value =
+                    AstValue::uint256(i64::from(selector), builder, &current_block).into_mlir();
                 // `sol.ext_call` yields the `i1` success status (result 0) then the
                 // decoded outs; its conversion reverts internally on failure, so the
                 // status is dropped and only the decoded results return.
@@ -1618,7 +1607,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             // `new C{value: v}()` forwards `v` wei; a plain `new C()` sends zero.
             let val = match call_value {
                 Some(value) => AstValue::from(value),
-                None => AstValue::field_zero(builder, &block),
+                None => AstValue::uint256(0, builder, &block),
             };
             let value = AstValue::create_contract(
                 &contract_name,

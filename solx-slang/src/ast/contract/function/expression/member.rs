@@ -199,13 +199,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 _ => unreachable!("dispatched on TypeEnumMin / TypeEnumMax"),
             };
             let builder = &context.state.builder;
-            let value = AstValue::constant(
-                ordinal,
-                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                builder,
-                &block,
-            )
-            .cast(AstType::new(result_type), builder, &block);
+            let value = AstValue::uint256(ordinal, builder, &block)
+                .cast(AstType::new(result_type), builder, &block);
             return BlockAnd { block, value };
         }
         Some(BuiltIn::TypeInterfaceId) => {
@@ -412,12 +407,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 block,
             } = node.operand().emit(context, block);
             let builder = &context.state.builder;
-            let value = AstValue::constant(
-                0,
-                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                builder,
-                &block,
-            );
+            let value = AstValue::uint256(0, builder, &block);
             return BlockAnd { block, value };
         }
         // `abi.encode;` / `T.wrap;` named without a call are no-ops: the operand
@@ -434,12 +424,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             | BuiltIn::Unwrap,
         ) => {
             let builder = &context.state.builder;
-            let value = AstValue::constant(
-                0,
-                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                builder,
-                &block,
-            );
+            let value = AstValue::uint256(0, builder, &block);
             return BlockAnd { block, value };
         }
         _ => {}
@@ -556,13 +541,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
         let result_type = AstType::resolve_optional(node.get_type(), &context.state.builder)
             .expect("slang validated");
         let builder = &context.state.builder;
-        let value = AstValue::constant(
-            ordinal as i64,
-            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-            builder,
-            &block,
-        )
-        .cast(AstType::new(result_type), builder, &block);
+        let value = AstValue::uint256(ordinal as i64, builder, &block)
+            .cast(AstType::new(result_type), builder, &block);
         BlockAnd { block, value }
     } else {
         // A value-position member built-in over a non-struct base: `.selector` /

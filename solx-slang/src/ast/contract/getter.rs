@@ -457,13 +457,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                             LocationPolicy::Declared(Some(location)),
                             builder,
                         );
-                        let length = AstValue::constant(
-                            array_type.size() as i64,
-                            AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                            builder,
-                            &entry,
-                        )
-                        .into_mlir();
+                        let length = AstValue::uint256(array_type.size() as i64, builder, &entry)
+                            .into_mlir();
                         let in_bounds = AstValue::new(arg)
                             .compare(AstValue::new(length), CmpPredicate::Lt, builder, &entry)
                             .into_mlir();

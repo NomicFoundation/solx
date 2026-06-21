@@ -313,15 +313,7 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             .fold(None, |_, (target, value)| {
                 Some(target.store(context, value, &block))
             })
-            .unwrap_or_else(|| {
-                AstValue::constant(
-                    0,
-                    AstType::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD),
-                    &context.state.builder,
-                    &block,
-                )
-                .into_mlir()
-            });
+            .unwrap_or_else(|| AstValue::uint256(0, &context.state.builder, &block).into_mlir());
         (result, block)
     }
 
