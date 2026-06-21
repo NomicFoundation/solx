@@ -102,17 +102,37 @@ impl<'context, 'block> Environment<'context, 'block> {
         builder: &Builder<'context>,
     ) {
         for (index, parameter) in function.parameters().iter().enumerate() {
-            let parameter_value = crate::Value::new(
-                entry_block
-                    .argument(index)
-                    .expect("argument index is within the block signature")
-                    .into(),
+            self.bind_block_argument(
+                parameter.node_id(),
+                parameter_types[index],
+                index,
+                entry_block,
+                builder,
             );
-            let pointer =
-                Pointer::stack_slot(Type::new(parameter_types[index]), builder, entry_block);
-            pointer.store(parameter_value, builder, entry_block);
-            self.define_variable(parameter.node_id(), pointer.into_mlir());
         }
+    }
+
+    /// Spills the entry block's argument at `argument_index` into a fresh stack
+    /// slot of `mlir_type` and binds `declaration` to it. The block argument
+    /// already carries the type, so no coercion is needed. The atomic binding
+    /// [`Self::bind_parameters`] and a modifier-stage func are each built from.
+    pub fn bind_block_argument(
+        &mut self,
+        declaration: NodeId,
+        mlir_type: MlirType<'context>,
+        argument_index: usize,
+        entry_block: &BlockRef<'context, 'block>,
+        builder: &Builder<'context>,
+    ) {
+        let argument = crate::Value::new(
+            entry_block
+                .argument(argument_index)
+                .expect("argument index is within the block signature")
+                .into(),
+        );
+        let pointer = Pointer::stack_slot(Type::new(mlir_type), builder, entry_block);
+        pointer.store(argument, builder, entry_block);
+        self.define_variable(declaration, pointer.into_mlir());
     }
 
     /// Allocates and binds a stack slot for each named return value, pushing

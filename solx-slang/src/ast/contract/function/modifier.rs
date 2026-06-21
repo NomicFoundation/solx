@@ -238,19 +238,13 @@ impl EmitModifierChain for FunctionDefinition {
         // Bind this modifier's parameters from the leading arguments.
         let mut environment = Environment::new();
         for (index, binding) in modifier_params.iter().enumerate() {
-            let value = AstValue::new(
-                entry
-                    .argument(index)
-                    .expect("argument index is within the block signature")
-                    .into(),
-            );
-            let pointer = Pointer::stack_slot(
-                AstType::new(binding.element_type),
-                &scope.state.builder,
+            environment.bind_block_argument(
+                binding.declaration,
+                binding.element_type,
+                index,
                 &entry,
+                &scope.state.builder,
             );
-            pointer.store(value, &scope.state.builder, &entry);
-            environment.define_variable(binding.declaration, pointer.into_mlir());
         }
 
         // Downstream values (later modifiers' arguments ++ `f`'s parameters) are
