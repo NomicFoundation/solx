@@ -5,7 +5,6 @@
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
-use slang_solidity_v2::ast::DataLocation;
 pub mod body_kind;
 pub mod expression;
 pub mod function_scope;
@@ -16,18 +15,15 @@ pub mod modifier_parameter_binding;
 pub mod signature;
 pub mod statement;
 
-use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::FunctionKind;
-use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Environment;
 use solx_mlir::Function;
-use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 
 use self::body_kind::BodyKind;
@@ -308,66 +304,12 @@ impl EmitFunction for FunctionDefinition {
                         let slang_type = returns
                             .get(index)
                             .and_then(|parameter| parameter.get_type());
-                        self.default_return_value(scope, slang_type.as_ref(), return_type, block)
+                        AstValue::type_default(slang_type.as_ref(), return_type, builder, block)
+                            .into_mlir()
                     }
                 },
             )
             .collect();
         mlir_op_void!(builder, block, ReturnOperation.operands(&values));
-    }
-
-    fn default_return_value<'state, 'context, 'block>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
-        slang_type: Option<&SlangType>,
-        return_type: Type<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block> {
-        let builder = &scope.state.builder;
-        let is_memory = |location| matches!(location, DataLocation::Memory);
-        match slang_type {
-            Some(SlangType::FixedSizeArray(array)) if is_memory(array.location()) => {
-                mlir_op!(
-                    builder,
-                    block,
-                    MallocOperation
-                        .addr(return_type)
-                        .zero_init(Attribute::unit(builder.context))
-                )
-            }
-            Some(SlangType::Struct(structure)) if is_memory(structure.location()) => {
-                mlir_op!(
-                    builder,
-                    block,
-                    MallocOperation
-                        .addr(return_type)
-                        .zero_init(Attribute::unit(builder.context))
-                )
-            }
-            Some(SlangType::Array(array)) if is_memory(array.location()) => {
-                mlir_op!(
-                    builder,
-                    block,
-                    MallocOperation
-                        .addr(return_type)
-                        .zero_init(Attribute::unit(builder.context))
-                )
-            }
-            Some(SlangType::String(_) | SlangType::Bytes(_)) => {
-                // A fresh zero-length buffer (plain `sol.malloc`, matching solc),
-                // not a sized `new bytes(0)`.
-                mlir_op!(builder, block, MallocOperation.addr(return_type))
-            }
-            Some(
-                SlangType::Address(_)
-                | SlangType::ByteArray(_)
-                | SlangType::Enum(_)
-                | SlangType::UserDefinedValue(_)
-                | SlangType::Function(_)
-                | SlangType::Contract(_)
-                | SlangType::Interface(_),
-            ) => AstValue::zero(AstType::new(return_type), builder, block).into_mlir(),
-            _ => AstValue::constant(0, AstType::new(return_type), builder, block).into_mlir(),
-        }
     }
 }

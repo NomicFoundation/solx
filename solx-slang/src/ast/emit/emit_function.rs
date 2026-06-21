@@ -7,8 +7,6 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 
-use slang_solidity_v2::ast::Type as SlangType;
-
 use solx_mlir::Environment;
 
 use crate::ast::contract::function::FunctionScope;
@@ -77,15 +75,4 @@ pub trait EmitFunction {
         return_slots: &[Option<Value<'context, 'block>>],
         block: &BlockRef<'context, 'block>,
     );
-
-    /// The default value of a return position reached without an explicit
-    /// `return <value>` — a zeroed buffer for a memory aggregate, an empty buffer
-    /// for dynamic `string` / `bytes`, the representation's own zero otherwise.
-    fn default_return_value<'state, 'context, 'block>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
-        slang_type: Option<&SlangType>,
-        return_type: Type<'context>,
-        block: &BlockRef<'context, 'block>,
-    ) -> Value<'context, 'block>;
 }

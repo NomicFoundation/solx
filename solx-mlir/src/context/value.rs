@@ -17,6 +17,8 @@ use melior::ir::operation::OperationMutLike;
 use melior::ir::r#type::IntegerType;
 use melior::ir::r#type::TypeLike;
 use num::BigInt;
+use slang_solidity_v2::ast::DataLocation;
+use slang_solidity_v2::ast::Type as SlangType;
 use solx_utils::BIT_LENGTH_X64;
 
 use crate::Builder;
@@ -33,6 +35,7 @@ use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
 use crate::ods::sol::Keccak256Operation;
 use crate::ods::sol::LibAddrOperation;
+use crate::ods::sol::MallocOperation;
 use crate::ods::sol::NewOperation;
 
 /// An MLIR value in the Sol dialect.
@@ -205,6 +208,62 @@ impl<'context, 'block> Value<'context, 'block> {
             Self::constant(0, r#type, builder, block)
         } else {
             unreachable!("Value::zero handles only scalar value types")
+        }
+    }
+
+    /// The default value of a return position reached without an explicit
+    /// `return <value>` — a zeroed buffer for a memory aggregate, an empty buffer
+    /// for dynamic `string` / `bytes`, the representation's own zero otherwise.
+    /// The kind is keyed on the Slang type; the scalar fallbacks reuse
+    /// [`Self::zero`] / [`Self::constant`].
+    pub fn type_default(
+        slang_type: Option<&SlangType>,
+        mlir_type: MlirType<'context>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        let is_memory = |location| matches!(location, DataLocation::Memory);
+        match slang_type {
+            Some(SlangType::FixedSizeArray(array)) if is_memory(array.location()) => {
+                Self::new(mlir_op!(
+                    builder,
+                    block,
+                    MallocOperation
+                        .addr(mlir_type)
+                        .zero_init(Attribute::unit(builder.context))
+                ))
+            }
+            Some(SlangType::Struct(structure)) if is_memory(structure.location()) => {
+                Self::new(mlir_op!(
+                    builder,
+                    block,
+                    MallocOperation
+                        .addr(mlir_type)
+                        .zero_init(Attribute::unit(builder.context))
+                ))
+            }
+            Some(SlangType::Array(array)) if is_memory(array.location()) => Self::new(mlir_op!(
+                builder,
+                block,
+                MallocOperation
+                    .addr(mlir_type)
+                    .zero_init(Attribute::unit(builder.context))
+            )),
+            Some(SlangType::String(_) | SlangType::Bytes(_)) => {
+                // A fresh zero-length buffer (plain `sol.malloc`, matching solc),
+                // not a sized `new bytes(0)`.
+                Self::new(mlir_op!(builder, block, MallocOperation.addr(mlir_type)))
+            }
+            Some(
+                SlangType::Address(_)
+                | SlangType::ByteArray(_)
+                | SlangType::Enum(_)
+                | SlangType::UserDefinedValue(_)
+                | SlangType::Function(_)
+                | SlangType::Contract(_)
+                | SlangType::Interface(_),
+            ) => Self::zero(Type::new(mlir_type), builder, block),
+            _ => Self::constant(0, Type::new(mlir_type), builder, block),
         }
     }
 
