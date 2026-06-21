@@ -618,24 +618,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     // The MLIR result types — one per requested type: `abi.decode(data, T)`
                     // yields one, `abi.decode(data, (A, B, …))` one per tuple element —
                     // resolved from the call's binder-assigned type.
-                    let result_types: Vec<Type> = match self.get_type().expect("slang validated") {
-                        SlangType::Tuple(tuple) => tuple
-                            .types()
-                            .iter()
-                            .map(|slang_type| {
-                                AstType::resolve(
-                                    slang_type,
-                                    LocationPolicy::Declared(None),
-                                    &context.state.builder,
-                                )
-                            })
-                            .collect(),
-                        other => vec![AstType::resolve(
-                            &other,
-                            LocationPolicy::Declared(None),
-                            &context.state.builder,
-                        )],
-                    };
+                    let result_types: Vec<Type> = AstType::resolve_result_types(
+                        &self.get_type().expect("slang validated"),
+                        &context.state.builder,
+                    );
                     let builder = &context.state.builder;
                     // `sol.decode` requires a memory or calldata byte buffer; a
                     // storage `bytes` / `string` is a reference, so copy it to memory
