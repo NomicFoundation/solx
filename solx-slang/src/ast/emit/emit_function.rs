@@ -7,8 +7,6 @@ use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
 
-use solx_mlir::Environment;
-
 use crate::ast::contract::function::FunctionScope;
 use crate::ast::contract::function::body_kind::BodyKind;
 
@@ -42,19 +40,6 @@ pub trait EmitFunction {
         contract_body: &BlockRef<'context, '_>,
         body_kind: BodyKind,
     );
-
-    /// Allocates and binds a stack slot for each named return value, pushing
-    /// `None` for an unnamed return. A modifier body seeds every slot from the
-    /// trailing block arguments instead.
-    fn initialize_return_slots<'state, 'context, 'block>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
-        result_types: &[Type<'context>],
-        parameter_count: usize,
-        body_kind: BodyKind,
-        entry_block: &BlockRef<'context, 'block>,
-        environment: &mut Environment<'context, 'block>,
-    ) -> Vec<Option<Value<'context, 'block>>>;
 
     /// Emits a default `sol.return` when the block lacks a terminator, loading
     /// named-return slots and materialising a typed default for the rest.

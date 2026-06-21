@@ -102,13 +102,13 @@ impl EmitFunction for FunctionDefinition {
             &scope.state.builder,
         );
 
-        let mut return_slots = self.initialize_return_slots(
-            scope,
+        let mut return_slots = environment.initialize_return_slots(
+            self,
             &signature.return_types,
             parameter_count,
-            body_kind,
+            body_kind == BodyKind::ModifierBody,
             &function_entry_block,
-            &mut environment,
+            &scope.state.builder,
         );
 
         let region = function_entry_block
@@ -187,65 +187,6 @@ impl EmitFunction for FunctionDefinition {
                 &current_block,
             );
         }
-    }
-
-    fn initialize_return_slots<'state, 'context, 'block>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
-        result_types: &[Type<'context>],
-        parameter_count: usize,
-        body_kind: BodyKind,
-        entry_block: &BlockRef<'context, 'block>,
-        environment: &mut Environment<'context, 'block>,
-    ) -> Vec<Option<Value<'context, 'block>>> {
-        // A modifier body seeds every return slot (named or not) from the values
-        // threaded in as trailing block arguments at the `parameter_count` offset,
-        // rather than zero-initialising only the named ones, so the shared return
-        // state survives an empty body or a partial `_` reach.
-        if body_kind == BodyKind::ModifierBody {
-            let mut return_slots: Vec<Option<Value<'context, 'block>>> = Vec::new();
-            if let Some(returns) = self.returns() {
-                for (index, parameter) in returns.iter().enumerate() {
-                    let return_type = result_types[index];
-                    let pointer = Pointer::stack_slot(
-                        AstType::new(return_type),
-                        &scope.state.builder,
-                        entry_block,
-                    );
-                    let incoming = AstValue::new(
-                        entry_block
-                            .argument(parameter_count + index)
-                            .expect("argument index is within the block signature")
-                            .into(),
-                    );
-                    pointer.store(incoming, &scope.state.builder, entry_block);
-                    if parameter.name().is_some() {
-                        environment.define_variable(parameter.node_id(), pointer.into_mlir());
-                    }
-                    return_slots.push(Some(pointer.into_mlir()));
-                }
-            }
-            return return_slots;
-        }
-        let mut return_slots: Vec<Option<Value<'context, 'block>>> = Vec::new();
-        if let Some(returns) = self.returns() {
-            for (index, parameter) in returns.iter().enumerate() {
-                if parameter.name().is_none() {
-                    return_slots.push(None);
-                    continue;
-                }
-                let return_type = result_types[index];
-                let pointer = Pointer::default_initialized(
-                    AstType::new(return_type),
-                    &scope.state.builder,
-                    entry_block,
-                )
-                .into_mlir();
-                environment.define_variable(parameter.node_id(), pointer);
-                return_slots.push(Some(pointer));
-            }
-        }
-        return_slots
     }
 
     fn emit_default_return<'state, 'context, 'block>(

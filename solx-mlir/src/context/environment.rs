@@ -121,6 +121,52 @@ impl<'context, 'block> Environment<'context, 'block> {
         }
     }
 
+    /// Allocates and binds a stack slot for each named return value, pushing
+    /// `None` for an unnamed return. A `modifier_body` seeds every slot (named or
+    /// not) from the trailing block arguments at the `parameter_count` offset, so
+    /// the shared return state survives an empty body or a partial `_` reach;
+    /// otherwise only the named slots are default-initialised. Returns the slot
+    /// places, parallel to the returns.
+    pub fn initialize_return_slots(
+        &mut self,
+        function: &FunctionDefinition,
+        result_types: &[MlirType<'context>],
+        parameter_count: usize,
+        modifier_body: bool,
+        entry_block: &BlockRef<'context, 'block>,
+        builder: &Builder<'context>,
+    ) -> Vec<Option<Value<'context, 'block>>> {
+        let mut return_slots: Vec<Option<Value<'context, 'block>>> = Vec::new();
+        let Some(returns) = function.returns() else {
+            return return_slots;
+        };
+        for (index, parameter) in returns.iter().enumerate() {
+            let return_type = Type::new(result_types[index]);
+            if modifier_body {
+                let pointer = Pointer::stack_slot(return_type, builder, entry_block);
+                let incoming = crate::Value::new(
+                    entry_block
+                        .argument(parameter_count + index)
+                        .expect("argument index is within the block signature")
+                        .into(),
+                );
+                pointer.store(incoming, builder, entry_block);
+                if parameter.name().is_some() {
+                    self.define_variable(parameter.node_id(), pointer.into_mlir());
+                }
+                return_slots.push(Some(pointer.into_mlir()));
+            } else if parameter.name().is_none() {
+                return_slots.push(None);
+            } else {
+                let pointer =
+                    Pointer::default_initialized(return_type, builder, entry_block).into_mlir();
+                self.define_variable(parameter.node_id(), pointer);
+                return_slots.push(Some(pointer));
+            }
+        }
+        return_slots
+    }
+
     /// Looks up a variable's place by its declaration's [`NodeId`] (from
     /// `resolve_to_definition().node_id()`).
     ///
