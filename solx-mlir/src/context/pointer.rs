@@ -3,7 +3,6 @@
 //! loads, stores, and steps it supports.
 //!
 
-use melior::ir::Attribute;
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type as MlirType;
@@ -19,7 +18,6 @@ use crate::Value;
 use crate::ods::sol::AllocaOperation;
 use crate::ods::sol::GepOperation;
 use crate::ods::sol::LoadOperation;
-use crate::ods::sol::MallocOperation;
 use crate::ods::sol::MapOperation;
 use crate::ods::sol::StoreOperation;
 
@@ -99,19 +97,13 @@ impl<'context, 'block> Pointer<'context, 'block> {
     ) -> Self {
         let slot = Self::stack_slot(pointee, builder, block);
         if pointee.is_string() {
-            let buffer = mlir_op!(builder, block, MallocOperation.addr(pointee.into_mlir()));
-            slot.store(Value::new(buffer), builder, block);
+            let buffer = Value::malloc(pointee.into_mlir(), false, builder, block);
+            slot.store(buffer, builder, block);
         } else if (pointee.is_array() || pointee.is_struct())
             && matches!(pointee.data_location(), DataLocation::Memory)
         {
-            let buffer = mlir_op!(
-                builder,
-                block,
-                MallocOperation
-                    .addr(pointee.into_mlir())
-                    .zero_init(Attribute::unit(builder.context))
-            );
-            slot.store(Value::new(buffer), builder, block);
+            let buffer = Value::malloc(pointee.into_mlir(), true, builder, block);
+            slot.store(buffer, builder, block);
         } else if !pointee.is_reference() {
             slot.store(Value::zero(pointee, builder, block), builder, block);
         }
