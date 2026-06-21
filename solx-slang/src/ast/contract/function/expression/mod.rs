@@ -2,7 +2,6 @@
 //! Expression emission to MLIR SSA values.
 //!
 
-use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 pub mod arithmetic;
@@ -24,11 +23,9 @@ pub mod unary;
 
 use std::collections::HashMap;
 
-use melior::ir::BlockLike;
 use melior::ir::BlockRef;
 use melior::ir::Type;
 use melior::ir::Value;
-use melior::ir::attribute::FlatSymbolRefAttribute;
 use slang_solidity_v2::ast;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::NodeId;
@@ -36,7 +33,6 @@ use slang_solidity_v2::ast::StateVariableMutability;
 
 use solx_mlir::Context;
 use solx_mlir::Environment;
-use solx_mlir::ods::sol::AddrOfOperation;
 
 use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
@@ -119,26 +115,7 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
             .unwrap_or_else(|| {
                 unimplemented!("unregistered state variable {:?}", state_variable.node_id())
             });
-        let value = if declared_type.is_reference_type() {
-            let address_type = AstType::new(element_type)
-                .address_type(slot.location, self.state.builder.context)
-                .into_mlir();
-            let address = mlir_op!(
-                &self.state.builder,
-                &block,
-                AddrOfOperation
-                    .var(FlatSymbolRefAttribute::new(
-                        self.state.builder.context,
-                        &slot.name,
-                    ))
-                    .addr(address_type)
-            );
-            Pointer::new(address)
-                .load(AstType::new(element_type), &self.state.builder, &block)
-                .into_mlir()
-        } else {
-            slot.load(&self.state.builder, element_type, &block)
-        };
+        let value = slot.load(&self.state.builder, element_type, &block);
         (value, block)
     }
 }
