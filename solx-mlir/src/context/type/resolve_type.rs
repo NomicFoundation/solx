@@ -8,6 +8,7 @@ use num::BigInt;
 use num::Signed;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
+use slang_solidity_v2::ast::FunctionType;
 use slang_solidity_v2::ast::LiteralKind;
 use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::Type as SlangType;
@@ -253,6 +254,39 @@ impl<'context> Type<'context> {
             other => solx_utils::DataLocation::from_slang(other, None),
         };
         (element_type, location)
+    }
+
+    /// Resolves a function-pointer type's `(parameter_types, result_types)` from
+    /// Slang to MLIR: a void return is zero results, a tuple expands per element.
+    /// The function-TYPE peer of [`Self::resolve_signature`], which resolves a
+    /// function DEFINITION's signature.
+    pub fn function_pointer_signature(
+        function_type: &FunctionType,
+        builder: &Builder<'context>,
+    ) -> (Vec<MlirType<'context>>, Vec<MlirType<'context>>) {
+        let parameter_types = function_type
+            .parameter_types()
+            .iter()
+            .map(|parameter_type| {
+                Type::resolve(parameter_type, LocationPolicy::Declared(None), builder)
+            })
+            .collect();
+        let result_types = match function_type.return_type() {
+            SlangType::Void(_) => Vec::new(),
+            SlangType::Tuple(tuple_type) => tuple_type
+                .types()
+                .iter()
+                .map(|element_type| {
+                    Type::resolve(element_type, LocationPolicy::Declared(None), builder)
+                })
+                .collect(),
+            other => vec![Type::resolve(
+                &other,
+                LocationPolicy::Declared(None),
+                builder,
+            )],
+        };
+        (parameter_types, result_types)
     }
 
     /// Resolves a function or modifier parameter's declared MLIR type. An untyped

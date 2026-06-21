@@ -42,7 +42,6 @@ use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::ExtCallOperation;
 use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 use solx_mlir::ods::sol::ExtICallOperation;
-use solx_mlir::ods::sol::ICallOperation;
 use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::PopOperation;
@@ -83,103 +82,27 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
         call_value: Option<Value<'context, 'block>>,
         block: BlockRef<'context, 'block>,
     ) -> (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>) {
+        let SlangType::Function(function_type) = function_slang_type else {
+            unreachable!("an indirect-call callee is always a function type");
+        };
+        let (parameter_types, result_types) =
+            AstType::function_pointer_signature(function_type, &self.state.builder);
         let BlockAnd {
             value: callee_value,
             block,
         } = callee.emit(self, block);
-        let SlangType::Function(function_type) = function_slang_type else {
-            unreachable!("an indirect-call callee is always a function type");
-        };
-        let builder = &self.state.builder;
-        let parameter_types: Vec<Type<'context>> = function_type
-            .parameter_types()
-            .iter()
-            .map(|parameter_type| {
-                AstType::resolve(parameter_type, LocationPolicy::Declared(None), builder)
-            })
-            .collect();
-        let result_types: Vec<Type<'context>> = match function_type.return_type() {
-            SlangType::Void(_) => Vec::new(),
-            SlangType::Tuple(tuple_type) => tuple_type
-                .types()
-                .iter()
-                .map(|element_type| {
-                    AstType::resolve(element_type, LocationPolicy::Declared(None), builder)
-                })
-                .collect(),
-            other => vec![AstType::resolve(
-                &other,
-                LocationPolicy::Declared(None),
-                builder,
-            )],
-        };
         let arguments: Vec<Expression> = positional_arguments.iter().collect();
         let BlockAnd {
             value: argument_values,
             block: current_block,
         } = arguments.emit_as(&parameter_types, self, block);
-        let builder = &self.state.builder;
-        // Dispatch internal (`sol.icall`) vs external (`sol.ext_icall`) on the
-        // callee value's actual reference kind, not slang's
-        // `is_externally_visible`: a bare function name used as a value is an
-        // INTERNAL pointer (`func_ref`) even for a `public` function, but slang
-        // reports the function type as externally visible — so an inline
-        // `(cond ? g : h)(args)` over public functions yields an internal
-        // `func_ref` value that an `ext_icall` would mis-cast to `ext_func_ref`.
-        let results = if callee_value.r#type().is_ext_function_ref() {
-            // `fp{value: v}(args)` forwards `v`; a plain `fp(args)` sends zero.
-            let value = call_value.unwrap_or_else(|| {
-                AstValue::constant(
-                    0,
-                    AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                    builder,
-                    &current_block,
-                )
-                .into_mlir()
-            });
-            // `sol.ext_icall` returns `(i1 status, decoded returns…)`; the status
-            // is dropped (a non-`try` call reverts internally on failure). An
-            // external function-pointer value carries no `view`/`pure` mutability,
-            // so the call is never a STATICCALL.
-            let mut out_types = Vec::with_capacity(result_types.len() + 1);
-            out_types.push(
-                AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir(),
-            );
-            out_types.extend_from_slice(&result_types);
-            let operation = current_block.append_operation(mlir_op_build!(
-                builder,
-                ExtICallOperation
-                    .outs(&out_types)
-                    .callee(callee_value)
-                    .callee_operands(&argument_values)
-                    .gas(AstValue::gas_left(builder, &current_block))
-                    .value(value)
-            ));
-            (0..result_types.len())
-                .map(|index| {
-                    operation
-                        .result(index + 1)
-                        .expect("sol.ext_icall produces a status plus its declared results")
-                        .into()
-                })
-                .collect()
-        } else {
-            let operation = current_block.append_operation(mlir_op_build!(
-                builder,
-                ICallOperation
-                    .outs(&result_types)
-                    .callee(callee_value)
-                    .callee_operands(&argument_values)
-            ));
-            (0..result_types.len())
-                .map(|index| {
-                    operation
-                        .result(index)
-                        .expect("sol.icall produces its declared result count")
-                        .into()
-                })
-                .collect()
-        };
+        let results = callee_value.call_indirect(
+            &argument_values,
+            &result_types,
+            call_value,
+            &self.state.builder,
+            &current_block,
+        );
         (results, current_block)
     }
 }

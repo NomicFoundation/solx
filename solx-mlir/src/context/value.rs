@@ -31,8 +31,10 @@ use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::EncodeOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
+use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
+use crate::ods::sol::ICallOperation;
 use crate::ods::sol::Keccak256Operation;
 use crate::ods::sol::LibAddrOperation;
 use crate::ods::sol::MallocOperation;
@@ -529,6 +531,72 @@ impl<'context, 'block> Value<'context, 'block> {
             PushOperation.inp(self.into_mlir()).addr(push_result_type)
         ));
         (new_slot, element_type)
+    }
+
+    /// Calls this function-pointer value with `argument_values`, returning the
+    /// decoded result values. Dispatch is on the value's actual reference kind,
+    /// not slang's `is_externally_visible`: an internal pointer (`func_ref`, even
+    /// for a `public` function used as a bare value) dispatches through `sol.icall`;
+    /// an external one (`ext_func_ref`) through `sol.ext_icall`, forwarding
+    /// `call_value` (or zero) as `msg.value` and dropping the status (a non-`try`
+    /// call reverts internally on failure; an external function-pointer value
+    /// carries no `view`/`pure` mutability, so the call is never a STATICCALL).
+    pub fn call_indirect(
+        self,
+        argument_values: &[MlirValue<'context, 'block>],
+        result_types: &[MlirType<'context>],
+        call_value: Option<MlirValue<'context, 'block>>,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Vec<MlirValue<'context, 'block>> {
+        if self.r#type().is_ext_function_ref() {
+            let value = call_value.unwrap_or_else(|| {
+                Self::constant(
+                    0,
+                    Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
+                    builder,
+                    block,
+                )
+                .into_mlir()
+            });
+            let mut out_types = Vec::with_capacity(result_types.len() + 1);
+            out_types
+                .push(Type::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());
+            out_types.extend_from_slice(result_types);
+            let operation = block.append_operation(mlir_op_build!(
+                builder,
+                ExtICallOperation
+                    .outs(&out_types)
+                    .callee(self.into_mlir())
+                    .callee_operands(argument_values)
+                    .gas(Self::gas_left(builder, block).into_mlir())
+                    .value(value)
+            ));
+            (0..result_types.len())
+                .map(|index| {
+                    operation
+                        .result(index + 1)
+                        .expect("sol.ext_icall produces a status plus its declared results")
+                        .into()
+                })
+                .collect()
+        } else {
+            let operation = block.append_operation(mlir_op_build!(
+                builder,
+                ICallOperation
+                    .outs(result_types)
+                    .callee(self.into_mlir())
+                    .callee_operands(argument_values)
+            ));
+            (0..result_types.len())
+                .map(|index| {
+                    operation
+                        .result(index)
+                        .expect("sol.icall produces its declared result count")
+                        .into()
+                })
+                .collect()
+        }
     }
 
     /// Casts to `target_type`, handing the value to the target type's cast router
