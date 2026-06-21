@@ -63,7 +63,7 @@ use crate::ast::contract::getter::StructGetterLayout;
 use crate::ast::pending_queries::MemberAccessOperand;
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCallExpression {
-    type Output = (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>);
+    type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;
 
     /// Emits a function call, yielding its result values in declaration order —
     /// none for a void callee, one for the common case, several for a
@@ -138,7 +138,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 let stored = argument_value.cast(AstType::new(field_type), builder, &block);
                 field_address.store(stored, builder, &block);
             }
-            return (vec![struct_address], block);
+            return BlockAnd {
+                value: vec![struct_address],
+                block,
+            };
         }
 
         // `T(x)` / `bytesN("…")`: an explicit 1-argument type conversion coerces
@@ -151,7 +154,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
             let target_type = AstType::resolve_optional(self.get_type(), &context.state.builder)
                 .expect("slang validated");
             let BlockAnd { value, block } = first.emit_as(target_type, context, block);
-            return (vec![value.into_mlir()], block);
+            return BlockAnd {
+                value: vec![value.into_mlir()],
+                block,
+            };
         }
 
         // A call through a function-pointer VALUE — a local / parameter / contract-
@@ -208,7 +214,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 &context.state.builder,
                 &block,
             );
-            return (results, block);
+            return BlockAnd {
+                value: results,
+                block,
+            };
         }
 
         // An identifier-callee built-in (`keccak256`, `require`, …).
@@ -249,7 +258,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         &block,
                         AssertOperation.cond(condition_boolean)
                     );
-                    (vec![], block)
+                    BlockAnd {
+                        value: vec![],
+                        block,
+                    }
                 }
                 BuiltIn::Require => {
                     let mut iter = positional.iter();
@@ -375,12 +387,15 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             block
                         }
                     };
-                    (vec![], block)
+                    BlockAnd {
+                        value: vec![],
+                        block,
+                    }
                 }
-                BuiltIn::Gasleft => (
-                    vec![AstValue::gas_left(&context.state.builder, &block).into_mlir()],
+                BuiltIn::Gasleft => BlockAnd {
+                    value: vec![AstValue::gas_left(&context.state.builder, &block).into_mlir()],
                     block,
-                ),
+                },
                 BuiltIn::Blockhash => {
                     let BlockAnd {
                         value: values,
@@ -403,7 +418,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             .block_number(block_number)
                             .val(AstType::fixed_bytes(builder.context, 32))
                     );
-                    (vec![value], block)
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
                 }
                 BuiltIn::Keccak256 => {
                     let BlockAnd {
@@ -416,7 +434,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         &block,
                     )
                     .into_mlir();
-                    (vec![value], block)
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
                 }
                 BuiltIn::Sha256 => {
                     let BlockAnd {
@@ -431,7 +452,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             .data(values[0])
                             .result(AstType::fixed_bytes(builder.context, 32))
                     );
-                    (vec![value], block)
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
                 }
                 BuiltIn::Ripemd160 => {
                     let BlockAnd {
@@ -446,7 +470,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             .data(values[0])
                             .result(AstType::fixed_bytes(builder.context, 20))
                     );
-                    (vec![value], block)
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
                 }
                 BuiltIn::Ecrecover => {
                     let BlockAnd {
@@ -482,7 +509,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             .s(s)
                             .result(AstType::address(builder.context, false))
                     );
-                    (vec![value], block)
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
                 }
                 BuiltIn::Addmod | BuiltIn::Mulmod => {
                     let BlockAnd {
@@ -510,7 +540,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     } else {
                         mlir_op!(builder, block, MulModOperation.x(x).y(y).r#mod(modulus))
                     };
-                    (vec![value], block)
+                    BlockAnd {
+                        value: vec![value],
+                        block,
+                    }
                 }
                 _ => unreachable!("only emittable identifier built-ins are gated into this arm"),
             };
@@ -602,7 +635,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         .result(1)
                         .expect("a bare call always produces return data")
                         .into();
-                    return (vec![status, ret_data], block);
+                    return BlockAnd {
+                        value: vec![status, ret_data],
+                        block,
+                    };
                 }
                 // `abi.decode(payload, (T))` — `sol.decode` to the result types the
                 // call's slang type resolves to (one per requested type).
@@ -656,7 +692,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 .into()
                         })
                         .collect();
-                    return (values, block);
+                    return BlockAnd {
+                        value: values,
+                        block,
+                    };
                 }
                 // `T.wrap(x)` / `T.unwrap(x)`: a single conversion to the result type.
                 Some(BuiltIn::Wrap | BuiltIn::Unwrap) => {
@@ -672,7 +711,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                 .into_mlir(),
                             None => value.into_mlir(),
                         };
-                    return (vec![result], block);
+                    return BlockAnd {
+                        value: vec![result],
+                        block,
+                    };
                 }
                 // Any other member built-in in call position: an ABI encode, a
                 // dynamic-array `push`/`pop`, an address value transfer, or a
@@ -1019,7 +1061,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                     let loaded = Pointer::new(new_slot)
                                         .load(AstType::new(element_type), builder, &block)
                                         .into_mlir();
-                                    return (vec![loaded], block);
+                                    return BlockAnd {
+                                        value: vec![loaded],
+                                        block,
+                                    };
                                 };
                                 if AstType::new(element_type).is_reference() {
                                     // A reference-typed element (nested array / struct
@@ -1076,7 +1121,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             access.member().name()
                         ),
                     };
-                    return (value.into_iter().collect(), block);
+                    return BlockAnd {
+                        value: value.into_iter().collect(),
+                        block,
+                    };
                 }
                 None => {}
             }
@@ -1103,7 +1151,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     block,
                 } = argument_expressions.emit_as(&function.parameter_types, context, block);
                 let results = function.call(&argument_values, &context.state.builder, &block);
-                return (results, block);
+                return BlockAnd {
+                    value: results,
+                    block,
+                };
             }
 
             let member_definition = access.member().resolve_to_definition();
@@ -1222,7 +1273,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             .into()
                     })
                     .collect();
-                return (results, current_block);
+                return BlockAnd {
+                    value: results,
+                    block: current_block,
+                };
             }
 
             // Every other member call is positional.
@@ -1246,7 +1300,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         } = arguments.emit_as(&resolved.parameter_types, context, block);
                         let results =
                             resolved.call(&argument_values, &context.state.builder, &block);
-                        (results, block)
+                        BlockAnd {
+                            value: results,
+                            block,
+                        }
                     } else {
                         let (parameter_self, parameter_rest) = resolved
                             .parameter_types
@@ -1271,7 +1328,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         argument_values.insert(0, self_value);
                         let results =
                             resolved.call(&argument_values, &context.state.builder, &block);
-                        (results, block)
+                        BlockAnd {
+                            value: results,
+                            block,
+                        }
                     }
                 }
                 // `this.f` / `instance.f` (an external call) and `this.x` /
@@ -1461,7 +1521,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                         builder,
                         &block,
                     );
-                    (results, block)
+                    BlockAnd {
+                        value: results,
+                        block,
+                    }
                 }
                 other => unimplemented!(
                     "unsupported member call: {:?}",
@@ -1535,7 +1598,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                             .zero_init(Attribute::unit(builder.context))
                     ),
                 };
-                return (vec![address], current_block);
+                return BlockAnd {
+                    value: vec![address],
+                    block: current_block,
+                };
             }
 
             // Contract creation: `new C(args)` lowers to `sol.new`, which embeds
@@ -1589,7 +1655,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 &block,
             )
             .into_mlir();
-            return (vec![value], block);
+            return BlockAnd {
+                value: vec![value],
+                block,
+            };
         }
 
         let Expression::Identifier(identifier) = &callee else {
@@ -1607,7 +1676,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     AstType::resolve_optional(self.get_type(), &context.state.builder)
                         .expect("slang validated");
                 let BlockAnd { value, block } = first.emit_as(target_type, context, block);
-                return (vec![value.into_mlir()], block);
+                return BlockAnd {
+                    value: vec![value.into_mlir()],
+                    block,
+                };
             }
             // A function-pointer value callee (`arr[i]`, `(cond ? f : g)`) was
             // dispatched above; any other non-identifier callee is unsupported.
@@ -1642,7 +1714,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     block,
                 } = ordered.emit_as(&function.parameter_types, context, block);
                 let results = function.call(&argument_values, &context.state.builder, &block);
-                (results, block)
+                BlockAnd {
+                    value: results,
+                    block,
+                }
             }
             _ => unimplemented!(
                 "callee '{}' does not resolve to a function",

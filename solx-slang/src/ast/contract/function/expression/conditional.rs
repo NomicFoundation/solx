@@ -26,7 +26,7 @@ use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalExpression {
-    type Output = (Vec<Value<'context, 'block>>, BlockRef<'context, 'block>);
+    type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;
 
     /// Emits `cond ? a : b`, yielding one value per result: a scalar ternary
     /// yields a single value, a tuple-valued conditional (`cond ? (x, y) : (z, w)`,
@@ -110,8 +110,14 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
                         }
                         (values, current)
                     }
-                    Expression::FunctionCallExpression(call) => call.emit(context, branch_block),
-                    Expression::ConditionalExpression(nested) => nested.emit(context, branch_block),
+                    Expression::FunctionCallExpression(call) => {
+                        let BlockAnd { value, block } = call.emit(context, branch_block);
+                        (value, block)
+                    }
+                    Expression::ConditionalExpression(nested) => {
+                        let BlockAnd { value, block } = nested.emit(context, branch_block);
+                        (value, block)
+                    }
                     other => unimplemented!(
                         "multi-value conditional branch of this expression kind is not supported: {:?}",
                         std::mem::discriminant(other)
@@ -135,7 +141,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
                         .into_mlir(),
                 );
             }
-            return (values, block);
+            return BlockAnd {
+                value: values,
+                block,
+            };
         }
 
         // A scalar ternary yields a single value. A branch of bare function names
@@ -201,7 +210,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
         }
 
         let result = result_slot.load(AstType::new(result_type), &context.state.builder, &block);
-        (vec![result.into_mlir()], block)
+        BlockAnd {
+            value: vec![result.into_mlir()],
+            block,
+        }
     }
 }
 

@@ -270,7 +270,10 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 }
             }
             _ => {
-                let (values, next) = match rhs {
+                let BlockAnd {
+                    value: values,
+                    block: next,
+                } = match rhs {
                     Expression::FunctionCallExpression(call) => call.emit(context, block),
                     Expression::ConditionalExpression(conditional) => {
                         conditional.emit(context, block)

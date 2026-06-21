@@ -12,8 +12,8 @@ use crate::ast::contract::function::expression::ExpressionContext;
 /// inherent method). The context is always the shared `&ExpressionContext` — an
 /// expression declares no variables, so it never needs `&mut`. `Output` stays
 /// associated because the expression family is not uniform: a value expression
-/// yields a `BlockAnd<Value>`, a tuple-returning call or conditional a
-/// `(Vec<Value>, BlockRef)`, an argument list a `BlockAnd<Vec<Value>>`.
+/// yields a `BlockAnd<Value>`, a tuple-returning call or conditional and an
+/// argument list a `BlockAnd<Vec<Value>>`.
 ///
 /// `'context` (MLIR context) and `'block` (block region) are trait parameters
 /// because `Output` names them — with `'context: 'block`, since a produced value

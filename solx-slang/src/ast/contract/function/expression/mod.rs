@@ -136,17 +136,17 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
             Expression::BitwiseXorExpression(inner) => inner.emit(context, block),
             Expression::ShiftExpression(inner) => inner.emit(context, block),
             Expression::FunctionCallExpression(inner) => {
-                let (mut values, block) = inner.emit(context, block);
+                let BlockAnd { mut value, block } = inner.emit(context, block);
                 BlockAnd {
-                    value: AstValue::from(values.remove(0)),
+                    value: AstValue::from(value.remove(0)),
                     block,
                 }
             }
             Expression::TupleExpression(inner) => inner.emit(context, block),
             Expression::ConditionalExpression(inner) => {
-                let (mut values, block) = inner.emit(context, block);
+                let BlockAnd { mut value, block } = inner.emit(context, block);
                 BlockAnd {
-                    value: AstValue::from(values.remove(0)),
+                    value: AstValue::from(value.remove(0)),
                     block,
                 }
             }
@@ -199,7 +199,7 @@ impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
         block: BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
         match self {
-            Expression::FunctionCallExpression(call) => call.emit(context, block).1,
+            Expression::FunctionCallExpression(call) => call.emit(context, block).block,
             Expression::PrefixExpression(prefix)
                 if matches!(
                     prefix.operator(),

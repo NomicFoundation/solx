@@ -178,7 +178,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
         // `sol.call` with N results, or a conditional with tuple branches
         // (`return cond ? (1, 2) : (3, 4);`). Expand its full result list so
         // the `sol.return` arity matches rather than taking the first value.
-        let (values, block) = match &expression {
+        let BlockAnd { value: values, block } = match &expression {
             Expression::FunctionCallExpression(call) => {
                 call.emit(&emitter, block)
             }
@@ -352,7 +352,7 @@ statement_emit!(ExpressionStatement; |node, context, block| {
         }
         ExpressionStatementKind::TupleConditional(conditional) => {
             let emitter = ExpressionContext::from(&*context);
-            let (_values, block) = conditional.emit(&emitter, block);
+            let BlockAnd { block, .. } = conditional.emit(&emitter, block);
             Some(block)
         }
         ExpressionStatementKind::Value(expression) => {
