@@ -4,8 +4,11 @@
 
 use std::collections::HashMap;
 
+use melior::ir::BlockLike;
 use melior::ir::BlockRef;
+use melior::ir::Type as MlirType;
 use melior::ir::Value;
+use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Parameter;
 
@@ -91,6 +94,31 @@ impl<'context, 'block> Environment<'context, 'block> {
         let pointer = Pointer::stack_slot(Type::new(parameter_type), builder, block);
         pointer.store(cast, builder, block);
         self.define_variable(parameter.node_id(), pointer.into_mlir());
+    }
+
+    /// Binds each of `function`'s parameters from its incoming entry-block
+    /// argument: a fresh stack slot holding the argument, defined by node id. The
+    /// block arguments already carry the parameter types, so — unlike
+    /// [`Self::bind_parameter`] — no coercion is needed.
+    pub fn bind_parameters(
+        &mut self,
+        function: &FunctionDefinition,
+        parameter_types: &[MlirType<'context>],
+        entry_block: &BlockRef<'context, 'block>,
+        builder: &Builder<'context>,
+    ) {
+        for (index, parameter) in function.parameters().iter().enumerate() {
+            let parameter_value = crate::Value::new(
+                entry_block
+                    .argument(index)
+                    .expect("argument index is within the block signature")
+                    .into(),
+            );
+            let pointer =
+                Pointer::stack_slot(Type::new(parameter_types[index]), builder, entry_block);
+            pointer.store(parameter_value, builder, entry_block);
+            self.define_variable(parameter.node_id(), pointer.into_mlir());
+        }
     }
 
     /// Looks up a variable's place by its declaration's [`NodeId`] (from

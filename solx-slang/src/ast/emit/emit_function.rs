@@ -43,16 +43,6 @@ pub trait EmitFunction {
         body_kind: BodyKind,
     );
 
-    /// Allocates a stack slot for each parameter, stores the incoming argument
-    /// into it, and binds the slot to the parameter name in `environment`.
-    fn bind_parameters<'state, 'context, 'block>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
-        parameter_types: &[Type<'context>],
-        entry_block: &BlockRef<'context, 'block>,
-        environment: &mut Environment<'context, 'block>,
-    );
-
     /// Allocates and binds a stack slot for each named return value, pushing
     /// `None` for an unnamed return. A modifier body seeds every slot from the
     /// trailing block arguments instead.

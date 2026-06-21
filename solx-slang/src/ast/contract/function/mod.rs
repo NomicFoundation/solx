@@ -95,11 +95,11 @@ impl EmitFunction for FunctionDefinition {
         );
 
         let mut environment = Environment::new();
-        self.bind_parameters(
-            scope,
+        environment.bind_parameters(
+            self,
             &signature.parameter_types,
             &function_entry_block,
-            &mut environment,
+            &scope.state.builder,
         );
 
         let mut return_slots = self.initialize_return_slots(
@@ -186,31 +186,6 @@ impl EmitFunction for FunctionDefinition {
                 &return_slots,
                 &current_block,
             );
-        }
-    }
-
-    fn bind_parameters<'state, 'context, 'block>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
-        parameter_types: &[Type<'context>],
-        entry_block: &BlockRef<'context, 'block>,
-        environment: &mut Environment<'context, 'block>,
-    ) {
-        for (index, parameter) in self.parameters().iter().enumerate() {
-            let parameter_type = parameter_types[index];
-            let parameter_value = AstValue::new(
-                entry_block
-                    .argument(index)
-                    .expect("argument index is within the block signature")
-                    .into(),
-            );
-            let pointer = Pointer::stack_slot(
-                AstType::new(parameter_type),
-                &scope.state.builder,
-                entry_block,
-            );
-            pointer.store(parameter_value, &scope.state.builder, entry_block);
-            environment.define_variable(parameter.node_id(), pointer.into_mlir());
         }
     }
 
