@@ -35,7 +35,6 @@ use solx_mlir::ods::sol::BareDelegateCallOperation;
 use solx_mlir::ods::sol::BareStaticCallOperation;
 use solx_mlir::ods::sol::BlockHashOperation;
 use solx_mlir::ods::sol::ConcatOperation;
-use solx_mlir::ods::sol::CopyOperation;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::ExtCallOperation;
@@ -1069,10 +1068,10 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                     // emits, as the lvalue `arr.push() = v` does.
                                     let BlockAnd { value, block } =
                                         value_argument.emit(context, block);
-                                    mlir_op_void!(
+                                    Pointer::new(new_slot).copy_from(
+                                        value,
                                         &context.state.builder,
                                         &block,
-                                        CopyOperation.src(value).dst(new_slot)
                                     );
                                     (None, block)
                                 } else {

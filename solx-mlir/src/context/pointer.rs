@@ -18,6 +18,7 @@ use crate::Type;
 use crate::Value;
 use crate::ods::sol::AddrOfOperation;
 use crate::ods::sol::AllocaOperation;
+use crate::ods::sol::CopyOperation;
 use crate::ods::sol::GepOperation;
 use crate::ods::sol::LoadOperation;
 use crate::ods::sol::MapOperation;
@@ -188,6 +189,27 @@ impl<'context, 'block> Pointer<'context, 'block> {
             builder,
             block,
             StoreOperation.val(value.into_mlir()).addr(self.inner)
+        );
+    }
+
+    /// Deep-copies the reference `value`'s pointee into this place (`sol.copy`) —
+    /// the reference-to-reference counterpart of the scalar [`Self::store`], used
+    /// when the source is already a reference of the destination's type (no scalar
+    /// coercion): a memory aggregate into a storage slot, a state-variable
+    /// initialiser, a reference assignment.
+    pub fn copy_from<B>(
+        self,
+        value: Value<'context, 'block>,
+        builder: &Builder<'context>,
+        block: &B,
+    ) where
+        B: BlockLike<'context, 'block>,
+        'context: 'block,
+    {
+        mlir_op_void!(
+            builder,
+            block,
+            CopyOperation.src(value.into_mlir()).dst(self.inner)
         );
     }
 

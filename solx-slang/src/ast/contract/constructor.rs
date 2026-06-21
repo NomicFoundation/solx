@@ -16,7 +16,6 @@ use slang_solidity_v2::ast::NodeId;
 use solx_mlir::Environment;
 use solx_mlir::Function;
 use solx_mlir::StateMutability;
-use solx_mlir::ods::sol::CopyOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 
 use crate::ast::BlockAnd;
@@ -194,7 +193,7 @@ impl EmitConstructor for ContractDefinition {
             } = initializer.emit(&emitter, block);
             block = next_block;
             if declared_type.is_reference_type() {
-                mlir_op_void!(builder, &block, CopyOperation.src(value).dst(storage_ref));
+                Pointer::new(storage_ref).copy_from(value, builder, &block);
             } else {
                 let stored_value = value.cast(AstType::new(element_type), builder, &block);
                 Pointer::new(storage_ref).store(stored_value, builder, &block);

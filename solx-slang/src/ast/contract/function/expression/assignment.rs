@@ -12,7 +12,6 @@ use slang_solidity_v2::ast::AssignmentExpression;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::TupleExpression;
-use solx_mlir::ods::sol::CopyOperation;
 use solx_mlir::ods::sol::DeleteOperation;
 
 use crate::ast::BlockAnd;
@@ -208,10 +207,10 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             Self::ReferenceCopy(address) => {
                 // The RHS is already a reference of the matching type; copy its
                 // contents into the destination reference (no scalar coercion).
-                mlir_op_void!(
+                Pointer::new(*address).copy_from(
+                    AstValue::from(value),
                     &context.state.builder,
                     block,
-                    CopyOperation.src(value).dst(*address)
                 );
                 value
             }
