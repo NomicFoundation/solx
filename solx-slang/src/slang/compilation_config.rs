@@ -7,6 +7,8 @@ use std::path::Component;
 use std::path::Path;
 
 use slang_solidity_v2::compilation::CompilationBuilderConfig;
+use slang_solidity_v2::diagnostics::kinds::compilation::MissingFile;
+use slang_solidity_v2::diagnostics::kinds::compilation::UnresolvedImport;
 
 /// Provides file reading and import resolution for the Slang compilation builder.
 pub struct CompilationConfig {
@@ -21,18 +23,20 @@ impl CompilationConfig {
 }
 
 impl CompilationBuilderConfig for CompilationConfig {
-    fn read_file(&mut self, file_identifier: &str) -> Result<String, String> {
+    fn read_file(&mut self, file_identifier: &str) -> Result<String, MissingFile> {
         self.sources
             .get(file_identifier)
             .cloned()
-            .ok_or(format!("file not found {file_identifier}"))
+            .ok_or_else(|| MissingFile {
+                reason: format!("file not found {file_identifier}"),
+            })
     }
 
     fn resolve_import(
         &mut self,
         source_file_identifier: &str,
         import_path: &str,
-    ) -> Result<String, String> {
+    ) -> Result<String, UnresolvedImport> {
         let path = import_path
             .strip_prefix('"')
             .and_then(|stripped| stripped.strip_suffix('"'))
@@ -70,8 +74,8 @@ impl CompilationBuilderConfig for CompilationConfig {
             }
         }
 
-        Err(format!(
-            "failed to resolve import {import_path} in {source_file_identifier}"
-        ))
+        Err(UnresolvedImport {
+            reason: format!("failed to resolve import {import_path} in {source_file_identifier}"),
+        })
     }
 }

@@ -201,11 +201,13 @@ impl Operator {
                 .build()
                 .into(),
             Self::ShiftLeft => ShlOperation::builder(context, location)
+                .result(lhs.r#type())
                 .lhs(lhs)
                 .rhs(rhs)
                 .build()
                 .into(),
             Self::ShiftRight => ShrOperation::builder(context, location)
+                .result(lhs.r#type())
                 .lhs(lhs)
                 .rhs(rhs)
                 .build()

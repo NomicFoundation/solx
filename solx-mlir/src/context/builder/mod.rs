@@ -189,7 +189,12 @@ impl<'context> Builder<'context> {
             ));
         }
 
-        if selector.is_some() || matches!(kind, Some(crate::FunctionKind::Constructor)) {
+        if selector.is_some()
+            || matches!(
+                kind,
+                Some(crate::FunctionKind::Constructor | crate::FunctionKind::Fallback)
+            )
+        {
             builder = builder.orig_fn_type(TypeAttribute::new(function_type.into()));
         }
 
