@@ -27,18 +27,15 @@ use slang_solidity_v2::ast::Type as SlangType;
 
 use solx_mlir::Environment;
 use solx_mlir::Function;
-use solx_mlir::StateMutability;
 use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::ReturnOperation;
 
 use self::body_kind::BodyKind;
-use self::mlir_symbol_name::MlirSymbolName;
 use self::modifier::ModifiedBody;
 use self::signature::Signature;
 use self::statement::StatementContext;
 use crate::ast::EmitFunction;
 use crate::ast::EmitStatement;
-use crate::ast::LocationPolicy;
 use crate::ast::emit::EmitConstructor;
 use crate::ast::emit::EmitModifierChain;
 
@@ -82,7 +79,7 @@ impl EmitFunction for FunctionDefinition {
             selector,
             state_mutability,
             mlir_kind,
-        } = self.resolve_signature(scope, symbol_override, body_kind);
+        } = Signature::resolve(self, symbol_override, body_kind, &scope.state.builder);
 
         // A regular function (real body, not a constructor/fallback/receive, not a
         // modifier-stage `$body`) can be the target of an internal function pointer,
@@ -193,58 +190,6 @@ impl EmitFunction for FunctionDefinition {
                 &return_slots,
                 &current_block,
             );
-        }
-    }
-
-    fn resolve_signature<'state, 'context>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
-        symbol_override: Option<&str>,
-        body_kind: BodyKind,
-    ) -> Signature<'context> {
-        let mlir_name = symbol_override
-            .map(str::to_owned)
-            .unwrap_or_else(|| self.mlir_function_name());
-
-        let (mut mlir_parameter_types, result_types) =
-            AstType::resolve_signature(self, LocationPolicy::Declared(None), &scope.state.builder);
-
-        // Recorded before the modifier-body extension below.
-        let parameter_count = mlir_parameter_types.len();
-
-        // A modifier body (`$body`) receives the wrapping function's return values
-        // as trailing parameters, so its return slots can be seeded from the body
-        // call and observed by the modifier tail and epilogue.
-        if body_kind == BodyKind::ModifierBody {
-            mlir_parameter_types.extend(result_types.iter().copied());
-        }
-
-        let state_mutability = StateMutability::from(self.mutability());
-
-        let (selector, mlir_kind) = match (symbol_override, body_kind) {
-            (None, BodyKind::Function) => {
-                let mlir_kind = match self.kind() {
-                    FunctionKind::Constructor => Some(solx_mlir::FunctionKind::Constructor),
-                    FunctionKind::Fallback => Some(solx_mlir::FunctionKind::Fallback),
-                    FunctionKind::Receive => Some(solx_mlir::FunctionKind::Receive),
-                    FunctionKind::Regular => None,
-                    FunctionKind::Modifier => {
-                        unreachable!("modifiers are filtered before emission")
-                    }
-                };
-                (self.compute_selector(), mlir_kind)
-            }
-            _ => (None, None),
-        };
-
-        Signature {
-            mlir_name,
-            mlir_parameter_types,
-            parameter_count,
-            result_types,
-            selector,
-            state_mutability,
-            mlir_kind,
         }
     }
 

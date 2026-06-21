@@ -13,7 +13,6 @@ use solx_mlir::Environment;
 
 use crate::ast::contract::function::FunctionScope;
 use crate::ast::contract::function::body_kind::BodyKind;
-use crate::ast::contract::function::signature::Signature;
 
 /// Lowers a function definition to a `sol.func`. A contract / library threads the
 /// emission via the shared [`FunctionScope`]; the node carries the projection.
@@ -45,16 +44,6 @@ pub trait EmitFunction {
         contract_body: &BlockRef<'context, '_>,
         body_kind: BodyKind,
     );
-
-    /// Resolves the MLIR signature — symbol, parameter and result types, selector,
-    /// mutability, and kind. A symbol-override or modifier body carries no public
-    /// selector or special function kind.
-    fn resolve_signature<'state, 'context>(
-        &self,
-        scope: &FunctionScope<'state, 'context>,
-        symbol_override: Option<&str>,
-        body_kind: BodyKind,
-    ) -> Signature<'context>;
 
     /// Allocates a stack slot for each parameter, stores the incoming argument
     /// into it, and binds the slot to the parameter name in `environment`.
