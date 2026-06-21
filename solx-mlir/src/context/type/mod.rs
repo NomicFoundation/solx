@@ -346,14 +346,9 @@ impl<'context> Type<'context> {
         } else {
             unsafe { crate::ffi::solxReferenceTypeDataLocation(raw) }
         };
-        match ordinal {
-            0 => solx_utils::DataLocation::Storage,
-            1 => solx_utils::DataLocation::CallData,
-            2 => solx_utils::DataLocation::Memory,
-            3 => solx_utils::DataLocation::Stack,
-            5 => solx_utils::DataLocation::Transient,
-            other => unreachable!("unexpected !sol.ptr data-location ordinal {other}"),
-        }
+        solx_utils::DataLocation::try_from(ordinal).unwrap_or_else(|ordinal| {
+            unreachable!("unexpected !sol.ptr data-location ordinal {ordinal}")
+        })
     }
 
     /// The element / field type reached by stepping into this aggregate: a
