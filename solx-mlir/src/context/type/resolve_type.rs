@@ -9,7 +9,6 @@ use num::Signed;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::LiteralKind;
-use slang_solidity_v2::ast::Parameter;
 use slang_solidity_v2::ast::Type as SlangType;
 
 use crate::ArraySize;
@@ -279,13 +278,16 @@ impl<'context> Type<'context> {
         (parameter_types, result_types)
     }
 
-    /// Resolves a function or modifier parameter's declared MLIR type. An untyped
-    /// parameter — a `catch (...)` payload with no declared type — defaults to the
-    /// field-width unsigned integer (`ui256`).
-    pub fn parameter(parameter: &Parameter, builder: &Builder<'context>) -> MlirType<'context> {
-        parameter
-            .get_type()
-            .map(|slang_type| Type::resolve(&slang_type, LocationPolicy::Declared(None), builder))
+    /// Resolves a function or modifier parameter's declared MLIR type from its
+    /// bound Slang type. An untyped parameter — a `catch (...)` payload with no
+    /// declared type, passed as `None` — defaults to the field-width unsigned
+    /// integer (`ui256`).
+    pub fn parameter(
+        slang_type: Option<&SlangType>,
+        builder: &Builder<'context>,
+    ) -> MlirType<'context> {
+        slang_type
+            .map(|slang_type| Type::resolve(slang_type, LocationPolicy::Declared(None), builder))
             .unwrap_or_else(|| {
                 Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
             })

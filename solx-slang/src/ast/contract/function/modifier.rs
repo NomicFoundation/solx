@@ -379,7 +379,8 @@ impl EmitModifierChain for FunctionDefinition {
                 if parameter.name().is_none() {
                     continue;
                 }
-                let parameter_type = AstType::parameter(&parameter, &scope.state.builder);
+                let parameter_type =
+                    AstType::parameter(parameter.get_type().as_ref(), &scope.state.builder);
                 let cast = value.cast(AstType::new(parameter_type), &scope.state.builder, &block);
                 let pointer =
                     Pointer::stack_slot(AstType::new(parameter_type), &scope.state.builder, &block);

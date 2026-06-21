@@ -36,9 +36,13 @@ statement_emit!(CatchClause; |node, context, block| {
             .argument(0)
             .expect("argument index is within the block signature")
             .into();
-        context
-            .environment
-            .bind_parameter(&parameter, decoded, &context.state.builder, &block);
+        context.environment.bind_parameter(
+            parameter.node_id(),
+            AstType::parameter(parameter.get_type().as_ref(), &context.state.builder),
+            decoded,
+            &context.state.builder,
+            &block,
+        );
     }
     node.body().emit(context, block)
 });
@@ -60,7 +64,8 @@ statement_emit!(TryStatement; |node, context, block| {
             && parameter.name().is_some()
         {
             context.environment.bind_parameter(
-                &parameter,
+                parameter.node_id(),
+                AstType::parameter(parameter.get_type().as_ref(), &context.state.builder),
                 value.into_mlir(),
                 &context.state.builder,
                 &current_block,
@@ -191,7 +196,8 @@ statement_emit!(TryStatement; |node, context, block| {
                 continue;
             }
             context.environment.bind_parameter(
-                &parameter,
+                parameter.node_id(),
+                AstType::parameter(parameter.get_type().as_ref(), &context.state.builder),
                 *result,
                 &context.state.builder,
                 &success_block,
