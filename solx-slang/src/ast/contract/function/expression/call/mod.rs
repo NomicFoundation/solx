@@ -1701,13 +1701,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 // redirect holds only shadowed-override nodes, so a non-virtual callee
                 // passes through unchanged. (`super`/`Base.f` bypass this — they
                 // resolve the exact linearised target by id through `super_redirect`.)
-                let node_id = function_definition.node_id();
-                let call_id = context
-                    .state
-                    .virtual_redirect
-                    .get(&node_id)
-                    .copied()
-                    .unwrap_or(node_id);
+                let call_id = context.state.resolve_virtual(function_definition.node_id());
                 let function = context.state.resolve_function(call_id);
                 let BlockAnd {
                     value: argument_values,

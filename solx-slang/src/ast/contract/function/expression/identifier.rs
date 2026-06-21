@@ -78,13 +78,9 @@ expression_emit!(Identifier; |node, context, block| {
             // dispatch): the lexical base version is shadowed and unregistered
             // when the derived contract is compiled. An explicit `Base.f` skips
             // this redirect (see member access emission).
-            let node_id = function_definition.node_id();
             let target_id = context
                 .state
-                .virtual_redirect
-                .get(&node_id)
-                .copied()
-                .unwrap_or(node_id);
+                .resolve_virtual(function_definition.node_id());
             let value = context
                 .state
                 .resolve_function(target_id)

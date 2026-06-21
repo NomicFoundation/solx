@@ -238,6 +238,18 @@ impl<'context> Context<'context> {
             .unwrap_or_else(|| panic!("undefined function for definition {definition_id:?}"))
     }
 
+    /// Redirects a virtual callee to its most-derived override. `virtual_redirect`
+    /// holds only shadowed-override nodes, so a non-virtual callee (or one already
+    /// most-derived) passes through unchanged. Kept distinct from
+    /// [`Self::resolve_function`]: `super` / `Base.f` resolve an exact linearised
+    /// target by id and must NOT be redirected.
+    pub fn resolve_virtual(&self, definition_id: NodeId) -> NodeId {
+        self.virtual_redirect
+            .get(&definition_id)
+            .copied()
+            .unwrap_or(definition_id)
+    }
+
     /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
     ///
     /// The pass pipeline is:
