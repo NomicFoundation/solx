@@ -44,7 +44,7 @@ statement_emit!(EmitStatementNode; |node, context, block| {
             block: next_block,
         } = argument.emit(&emitter, current_block);
         current_block = next_block;
-        let indexed = parameter.indexed();
+        let indexed = parameter.is_indexed();
         let parameter_type = AstType::resolve(
             &parameter
                 .get_type()
@@ -59,7 +59,7 @@ statement_emit!(EmitStatementNode; |node, context, block| {
                 &current_block,
             )
             .into_mlir();
-        if indexed.is_some() {
+        if indexed {
             // TODO: indexed reference-type parameters (string, bytes,
             // arrays, structs) must store the keccak256 hash of their
             // encoded value as the topic, not the value itself. That
@@ -70,7 +70,7 @@ statement_emit!(EmitStatementNode; |node, context, block| {
         }
     }
 
-    let signature = if event_definition.anonymous_keyword().is_some() {
+    let signature = if event_definition.is_anonymous() {
         None
     } else {
         Some(

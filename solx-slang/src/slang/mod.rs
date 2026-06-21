@@ -244,7 +244,7 @@ impl Frontend for Slang {
                 // An `abstract contract` cannot be instantiated and is never
                 // deployed by the harness; skip it (its bodyless functions have
                 // no code to lower anyway).
-                if contract.abstract_keyword().is_some() {
+                if contract.is_abstract() {
                     continue;
                 }
                 let emitted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(

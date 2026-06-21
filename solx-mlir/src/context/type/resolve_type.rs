@@ -34,7 +34,7 @@ impl<'context> Type<'context> {
         match slang_type {
             SlangType::Integer(integer_type) => {
                 let bits = integer_type.bits();
-                if integer_type.signed() {
+                if integer_type.is_signed() {
                     MlirType::from(IntegerType::signed(builder.context, bits))
                 } else {
                     MlirType::from(IntegerType::unsigned(builder.context, bits))
