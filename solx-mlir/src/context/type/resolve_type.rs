@@ -185,32 +185,8 @@ impl<'context> Type<'context> {
             SlangType::Function(function_type) => {
                 // A function pointer lowers to `!sol.func_ref<fnTy>` (internal)
                 // or `!sol.ext_func_ref<fnTy>` (external — address + selector).
-                // A void return contributes zero result types; a tuple return
-                // expands to one result per element.
-                let parameter_types: Vec<_> = function_type
-                    .parameter_types()
-                    .iter()
-                    .map(|parameter_type| {
-                        Type::resolve(parameter_type, LocationPolicy::Declared(None), builder)
-                    })
-                    .collect();
-                let result_types: Vec<_> = match function_type.return_type() {
-                    SlangType::Void(_) => Vec::new(),
-                    SlangType::Tuple(tuple_type) => tuple_type
-                        .types()
-                        .iter()
-                        .map(|element_type| {
-                            Type::resolve(element_type, LocationPolicy::Declared(None), builder)
-                        })
-                        .collect(),
-                    other => {
-                        vec![Type::resolve(
-                            &other,
-                            LocationPolicy::Declared(None),
-                            builder,
-                        )]
-                    }
-                };
+                let (parameter_types, result_types) =
+                    Type::function_pointer_signature(slang_type, builder);
                 if function_type.is_externally_visible() {
                     Type::ext_func_ref(builder.context, &parameter_types, &result_types).into_mlir()
                 } else {

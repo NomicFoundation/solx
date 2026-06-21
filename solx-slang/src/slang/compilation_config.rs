@@ -75,9 +75,7 @@ impl CompilationBuilderConfig for CompilationConfig {
         }
 
         Err(UnresolvedImport {
-            reason: format!(
-                "failed to resolve import {import_path} in {source_file_identifier}"
-            ),
+            reason: format!("failed to resolve import {import_path} in {source_file_identifier}"),
         })
     }
 }
