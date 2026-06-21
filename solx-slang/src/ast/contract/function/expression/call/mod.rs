@@ -1137,13 +1137,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 // library function, its `solx_utils::ContractName`, and the `self`
                 // receiver (`None` for a namespace-qualified `L.f`, the operand value
                 // for a `using for` `x.f`).
-                let Some(Definition::Function(library_function)) =
-                    access.member().resolve_to_definition()
-                else {
-                    unreachable!("an external library call resolves to a function");
-                };
-                let Some(Definition::Library(library)) = library_function.enclosing_definition()
-                else {
+                let Some(Definition::Library(library)) = function.enclosing_definition() else {
                     unreachable!("an external library call's target is a library member");
                 };
                 let library_operand = access.operand();
@@ -1154,7 +1148,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                     library.get_file_id().to_owned(),
                     Some(library.name().name()),
                 );
-                let parameter_ids: Vec<NodeId> = library_function
+                let parameter_ids: Vec<NodeId> = function
                     .parameters()
                     .iter()
                     .map(|parameter| parameter.node_id())
@@ -1173,14 +1167,12 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 // `sol.lib_addr` link placeholder; a `using for` receiver becomes
                 // the implicit leading `self` argument.
                 let (parameter_types, return_types) = AstType::resolve_signature(
-                    &library_function,
+                    function,
                     LocationPolicy::Declared(None),
                     &context.state.builder,
                 );
-                let selector = library_function
-                    .compute_selector()
-                    .expect("slang validated");
-                let mlir_name = library_function.mlir_function_name();
+                let selector = function.compute_selector().expect("slang validated");
+                let mlir_name = function.mlir_function_name();
                 let (argument_values, current_block) = match &self_receiver {
                     Some(receiver) => {
                         let (parameter_self, parameter_rest) =

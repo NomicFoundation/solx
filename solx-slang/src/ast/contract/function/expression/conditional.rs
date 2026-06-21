@@ -186,31 +186,19 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
             IfOperation.cond(condition_boolean); then_region, else_region
         );
 
-        let BlockAnd {
-            value: then_value,
-            block: then_end,
-        } = if let Expression::StringExpression(string_literal) = &true_expression {
-            string_literal.emit_as(result_type, context, then_block)
-        } else {
-            true_expression.emit(context, then_block)
-        };
-        let then_cast =
-            then_value.cast(AstType::new(result_type), &context.state.builder, &then_end);
-        result_slot.store(then_cast, &context.state.builder, &then_end);
-        mlir_op_void!(&context.state.builder, &then_end, YieldOperation.ins(&[]));
-
-        let BlockAnd {
-            value: else_value,
-            block: else_end,
-        } = if let Expression::StringExpression(string_literal) = &false_expression {
-            string_literal.emit_as(result_type, context, else_block)
-        } else {
-            false_expression.emit(context, else_block)
-        };
-        let else_cast =
-            else_value.cast(AstType::new(result_type), &context.state.builder, &else_end);
-        result_slot.store(else_cast, &context.state.builder, &else_end);
-        mlir_op_void!(&context.state.builder, &else_end, YieldOperation.ins(&[]));
+        // `emit_as` already routes a string literal to its target representation and
+        // casts the value to `result_type`, so both branches share one body.
+        for (branch_block, branch_expression) in [
+            (then_block, &true_expression),
+            (else_block, &false_expression),
+        ] {
+            let BlockAnd {
+                value: branch_value,
+                block: branch_end,
+            } = branch_expression.emit_as(result_type, context, branch_block);
+            result_slot.store(branch_value, &context.state.builder, &branch_end);
+            mlir_op_void!(&context.state.builder, &branch_end, YieldOperation.ins(&[]));
+        }
 
         let result = result_slot.load(AstType::new(result_type), &context.state.builder, &block);
         (vec![result.into_mlir()], block)

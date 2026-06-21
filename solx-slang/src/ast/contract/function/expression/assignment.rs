@@ -430,10 +430,8 @@ expression_emit!(AssignmentExpression; |node, context, block| {
             ast::AssignmentExpressionOperator::Equal(_) => {
                 unreachable!("should already be handled")
             }
-            ast::AssignmentExpressionOperator::GreaterThanGreaterThanEqual(_) => {
-                Operator::ShiftRight
-            }
-            ast::AssignmentExpressionOperator::GreaterThanGreaterThanGreaterThanEqual(_) => {
+            ast::AssignmentExpressionOperator::GreaterThanGreaterThanEqual(_)
+            | ast::AssignmentExpressionOperator::GreaterThanGreaterThanGreaterThanEqual(_) => {
                 Operator::ShiftRight
             }
             ast::AssignmentExpressionOperator::LessThanLessThanEqual(_) => Operator::ShiftLeft,
