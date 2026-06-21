@@ -34,20 +34,12 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         // `b == "d"`: the string literal materialises toward the non-string
         // sibling's fixed-bytes type, the sibling emitted first to learn it.
         let BlockAnd { value: rhs, block } =
-            if let Expression::StringExpression(string_literal) = &right {
-                string_literal.emit_as(lhs.r#type().into_mlir(), context, block)
-            } else {
-                right.emit(context, block)
-            };
+            right.emit_as(lhs.r#type().into_mlir(), context, block);
         (lhs, rhs, block)
     } else if left_is_string && !right_is_string {
         let BlockAnd { value: rhs, block } = right.emit(context, block);
         let BlockAnd { value: lhs, block } =
-            if let Expression::StringExpression(string_literal) = &left {
-                string_literal.emit_as(rhs.r#type().into_mlir(), context, block)
-            } else {
-                left.emit(context, block)
-            };
+            left.emit_as(rhs.r#type().into_mlir(), context, block);
         (lhs, rhs, block)
     } else {
         let BlockAnd { value: lhs, block } = left.emit(context, block);

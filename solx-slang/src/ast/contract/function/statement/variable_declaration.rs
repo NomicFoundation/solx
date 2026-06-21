@@ -48,22 +48,9 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
     // solc's emission order (constant → cast → alloca → store).
     // For implicit zero-initialization, alloca is emitted first.
     let (block, initial_value) = if let Some(ref initializer_expression) = node.value() {
-        let BlockAnd {
-            value: initial_value,
-            block,
-        } = if let Expression::StringExpression(string_literal) = initializer_expression {
-            string_literal.emit_as(declared_type, &emitter, block)
-        } else {
-            initializer_expression.emit(&emitter, block)
-        };
-        let cast_value = initial_value
-            .cast(
-                AstType::new(declared_type),
-                &context.state.builder,
-                &block,
-            )
-            .into_mlir();
-        (block, Some(cast_value))
+        let BlockAnd { value, block } =
+            initializer_expression.emit_as(declared_type, &emitter, block);
+        (block, Some(value.into_mlir()))
     } else {
         (block, None)
     };

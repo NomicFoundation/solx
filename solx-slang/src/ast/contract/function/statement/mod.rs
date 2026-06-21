@@ -198,12 +198,7 @@ statement_emit!(ReturnStatement; |node, context, block| {
         // declared return type (a `bytesN`/`byte` constant), not a runtime
         // string the cast below would reject.
         let return_type = context.return_types[0];
-        let BlockAnd { value, block } =
-            if let Expression::StringExpression(string_literal) = &expression {
-                string_literal.emit_as(return_type, &emitter, block)
-            } else {
-                expression.emit(&emitter, block)
-            };
+        let BlockAnd { value, block } = expression.emit_as(return_type, &emitter, block);
         (vec![value], block)
     };
 

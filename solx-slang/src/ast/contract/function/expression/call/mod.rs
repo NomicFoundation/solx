@@ -1015,17 +1015,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                     AstType::fixed_bytes(context.state.builder.context, 1)
                                         .into_mlir();
                                 let BlockAnd { value, block } =
-                                    if let Expression::StringExpression(string_literal) =
-                                        value_argument
-                                    {
-                                        string_literal.emit_as(byte_target, context, block)
-                                    } else {
-                                        value_argument.emit(context, block)
-                                    };
+                                    value_argument.emit_as(byte_target, context, block);
                                 let builder = &context.state.builder;
-                                let byte_value = value
-                                    .cast(AstType::new(byte_target), builder, &block)
-                                    .into_mlir();
+                                let byte_value = value.into_mlir();
                                 mlir_op_void!(
                                     builder,
                                     &block,
@@ -1076,17 +1068,12 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                     (None, block)
                                 } else {
                                     let BlockAnd { value, block } =
-                                        if let Expression::StringExpression(string_literal) =
-                                            &value_argument
-                                        {
-                                            string_literal.emit_as(element_type, context, block)
-                                        } else {
-                                            value_argument.emit(context, block)
-                                        };
-                                    let builder = &context.state.builder;
-                                    let cast_value =
-                                        value.cast(AstType::new(element_type), builder, &block);
-                                    Pointer::new(new_slot).store(cast_value, builder, &block);
+                                        value_argument.emit_as(element_type, context, block);
+                                    Pointer::new(new_slot).store(
+                                        value,
+                                        &context.state.builder,
+                                        &block,
+                                    );
                                     (None, block)
                                 }
                             }

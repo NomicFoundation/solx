@@ -268,15 +268,12 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             let BlockAnd {
                 value,
                 block: entry,
-            } = if let Expression::StringExpression(string_literal) = &initializer {
-                string_literal.emit_as(element_type, context, entry)
-            } else {
-                initializer.emit(context, entry)
-            };
-            let value = value
-                .cast(AstType::new(element_type), builder, &entry)
-                .into_mlir();
-            mlir_op_void!(builder, &entry, ReturnOperation.operands(&[value]));
+            } = initializer.emit_as(element_type, context, entry);
+            mlir_op_void!(
+                builder,
+                &entry,
+                ReturnOperation.operands(&[value.into_mlir()])
+            );
             return;
         }
 

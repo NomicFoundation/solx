@@ -399,12 +399,7 @@ expression_emit!(AssignmentExpression; |node, context, block| {
         match &target {
             AssignmentTarget::Pointer(_, element_type)
             | AssignmentTarget::Storage(_, element_type) => {
-                let BlockAnd { value, block } =
-                    if let Expression::StringExpression(string_literal) = &right {
-                        string_literal.emit_as(*element_type, context, block)
-                    } else {
-                        right.emit(context, block)
-                    };
+                let BlockAnd { value, block } = right.emit_as(*element_type, context, block);
                 (value, block)
             }
             AssignmentTarget::ReferenceCopy(_) => {
