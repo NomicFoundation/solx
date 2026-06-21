@@ -22,6 +22,7 @@ use crate::ast::LocationPolicy;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call_options::CallOptions;
 
 /// A `try recv.f(args)` external call, resolved from the `try` expression. Only
 /// this shape carries a real catch path; classification is a pure precondition,
@@ -90,7 +91,7 @@ impl TryExternalCall {
         let mut current_block = block;
         let mut call_value = None;
         if let Some(options) = &self.options {
-            let (value, _salt, next_block) = context.capture_call_options(options, current_block);
+            let (value, _salt, next_block) = CallOptions(options).capture(context, current_block);
             current_block = next_block;
             call_value = value;
         }

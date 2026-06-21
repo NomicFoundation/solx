@@ -19,7 +19,6 @@ use melior::ir::r#type::IntegerType;
 use num_bigint::BigInt;
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::BuiltIn;
-use slang_solidity_v2::ast::CallOptionsExpression;
 use slang_solidity_v2::ast::DataLocation as SlangDataLocation;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
@@ -61,6 +60,7 @@ use crate::ast::EmitExpression;
 use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::contract::function::expression::ExpressionContext;
+use crate::ast::contract::function::expression::call_options::CallOptions;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 use crate::ast::contract::getter::StructGetterLayout;
 use crate::ast::pending_queries::MemberAccessOperand;
@@ -69,88 +69,6 @@ use crate::ast::pending_queries::MemberAccessOperand;
 /// (argument coercion, call-options capture, indirect calls, struct
 /// construction, external-library link resolution).
 impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
-    /// Evaluates a `{value: …, gas: …, salt: …}` option list in source order
-    /// (each value emitted for its side effects) and returns the captured
-    /// `value` (as `msg.value`, coerced to `ui256`) and `salt` (the CREATE2 salt
-    /// for `new`, cast from `bytes32`). The option KIND comes from slang's typed
-    /// `BuiltIn::CallOption*` classification, never from comparing the option
-    /// name as text. The `{gas: …}` option is not yet threaded into the
-    /// call op and is deferred loudly.
-    fn capture_call_options(
-        &self,
-        call_options: &CallOptionsExpression,
-        block: BlockRef<'context, 'block>,
-    ) -> (
-        Option<Value<'context, 'block>>,
-        Option<Value<'context, 'block>>,
-        BlockRef<'context, 'block>,
-    ) {
-        let mut value = None;
-        let mut salt = None;
-        let mut current_block = block;
-        for option in call_options.options().iter() {
-            // Emit each option toward the type that option expects, so a literal
-            // folds correctly: `value`/`gas` are `ui256`, the CREATE2 `salt` is
-            // `bytes32` (a hex/string literal `salt: hex"00"` must fold to a
-            // fixedbytes constant, NOT a memory string the salt bridge can't take).
-            match option.name().resolve_to_built_in() {
-                Some(BuiltIn::CallOptionValue) => {
-                    let BlockAnd {
-                        value: option_value,
-                        block: next_block,
-                    } = option.value().emit(self, current_block);
-                    current_block = next_block;
-                    let builder = &self.state.builder;
-                    value = Some(
-                        option_value
-                            .cast(
-                                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                                builder,
-                                &current_block,
-                            )
-                            .into_mlir(),
-                    );
-                }
-                Some(BuiltIn::CallOptionSalt) => {
-                    let bytes32 = AstType::fixed_bytes(self.state.builder.context, 32).into_mlir();
-                    let salt_expression = option.value();
-                    let BlockAnd {
-                        value: salt_bytes,
-                        block: next_block,
-                    } = if let Expression::StringExpression(string_literal) = &salt_expression {
-                        string_literal.emit_as(bytes32, self, current_block)
-                    } else {
-                        salt_expression.emit(self, current_block)
-                    };
-                    current_block = next_block;
-                    let builder = &self.state.builder;
-                    salt = Some(
-                        salt_bytes
-                            .cast(
-                                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD),
-                                builder,
-                                &current_block,
-                            )
-                            .into_mlir(),
-                    );
-                }
-                Some(BuiltIn::CallOptionGas) => {
-                    // The gas limit is evaluated for its side effects but not
-                    // threaded into the call: the call forwards all remaining gas
-                    // (the `sol.ext_icall` default). A `{gas: …}`
-                    // that must actually cap the forwarded gas is not yet modelled.
-                    let BlockAnd {
-                        value: _gas,
-                        block: next_block,
-                    } = option.value().emit(self, current_block);
-                    current_block = next_block;
-                }
-                _ => unreachable!("a call option resolves to a value, gas, or salt built-in"),
-            }
-        }
-        (value, salt, current_block)
-    }
-
     /// Emits an indirect call through the function-pointer value `callee`
     /// yields, returning the result values. Parameter and result types come
     /// from the pointer's function type (a void return is zero results; a tuple
@@ -285,7 +203,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
         // salt. The inner callee drives the dispatch below.
         let (call_value, salt, block, callee) = match self.operand().unwrap_parentheses() {
             Expression::CallOptionsExpression(options) => {
-                let (value, salt, block) = context.capture_call_options(&options, block);
+                let (value, salt, block) = CallOptions(&options).capture(context, block);
                 (value, salt, block, options.operand().unwrap_parentheses())
             }
             other => (None, None, block, other),
