@@ -310,35 +310,27 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                         "named arguments in a require custom error are not yet supported"
                                     );
                                 };
-                                let mut current_block = block;
-                                let mut argument_values = Vec::new();
-                                for argument in error_arguments.iter() {
-                                    let BlockAnd {
-                                        value,
-                                        block: next_block,
-                                    } = argument.emit(context, current_block);
-                                    current_block = next_block;
-                                    argument_values.push(value);
-                                }
-                                let builder = &context.state.builder;
-                                let argument_values: Vec<_> = argument_values
-                                    .into_iter()
-                                    .zip(parameters.iter())
-                                    .map(|(value, parameter)| {
-                                        let parameter_type = AstType::resolve(
+                                let parameter_types: Vec<_> = parameters
+                                    .iter()
+                                    .map(|parameter| {
+                                        AstType::resolve(
                                             &parameter.get_type().expect("slang validated"),
                                             LocationPolicy::Declared(None),
-                                            builder,
-                                        );
-                                        value
-                                            .cast(
-                                                AstType::new(parameter_type),
-                                                builder,
-                                                &current_block,
-                                            )
-                                            .into_mlir()
+                                            &context.state.builder,
+                                        )
                                     })
                                     .collect();
+                                let error_argument_expressions: Vec<Expression> =
+                                    error_arguments.iter().collect();
+                                let BlockAnd {
+                                    value: argument_values,
+                                    block: current_block,
+                                } = error_argument_expressions.emit_as(
+                                    &parameter_types,
+                                    context,
+                                    block,
+                                );
+                                let builder = &context.state.builder;
                                 mlir_op_void!(
                                     builder,
                                     &current_block,
