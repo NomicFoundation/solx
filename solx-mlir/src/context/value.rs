@@ -29,7 +29,9 @@ use crate::ods::sol::ConstantOperation;
 use crate::ods::sol::ConvCastOperation;
 use crate::ods::sol::DefaultFuncConstantOperation;
 use crate::ods::sol::EncodeOperation;
+use crate::ods::sol::ExtFuncAddrOperation;
 use crate::ods::sol::ExtFuncConstantOperation;
+use crate::ods::sol::ExtFuncSelectorOperation;
 use crate::ods::sol::ExtICallOperation;
 use crate::ods::sol::FuncConstantOperation;
 use crate::ods::sol::GasLeftOperation;
@@ -337,6 +339,41 @@ impl<'context, 'block> Value<'context, 'block> {
                     selector as i64,
                 ))
                 .result(result_type.into_mlir())
+        ))
+    }
+
+    /// The 4-byte selector of this external function-pointer value, pulled out of
+    /// its `!sol.ext_func_ref<…>` at runtime via `sol.ext_func_selector` — the
+    /// `f.selector` projection and the selector an `abi.encodeCall` over a runtime
+    /// pointer prepends.
+    pub fn ext_func_selector(
+        self,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            builder,
+            block,
+            ExtFuncSelectorOperation
+                .func(self.inner)
+                .result(Type::fixed_bytes(builder.context, 4).into_mlir())
+        ))
+    }
+
+    /// The `address` component of this external function-pointer value, pulled out
+    /// of its `!sol.ext_func_ref<…>` via `sol.ext_func_addr` — the `f.address`
+    /// projection.
+    pub fn ext_func_address(
+        self,
+        builder: &Builder<'context>,
+        block: &BlockRef<'context, 'block>,
+    ) -> Self {
+        Self::new(mlir_op!(
+            builder,
+            block,
+            ExtFuncAddrOperation
+                .func(self.inner)
+                .result(Type::address(builder.context, false).into_mlir())
         ))
     }
 

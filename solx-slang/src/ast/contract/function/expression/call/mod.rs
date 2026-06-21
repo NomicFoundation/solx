@@ -39,7 +39,6 @@ use solx_mlir::ods::sol::CopyOperation;
 use solx_mlir::ods::sol::DecodeOperation;
 use solx_mlir::ods::sol::EcrecoverOperation;
 use solx_mlir::ods::sol::ExtCallOperation;
-use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 use solx_mlir::ods::sol::MallocOperation;
 use solx_mlir::ods::sol::MulModOperation;
 use solx_mlir::ods::sol::PopOperation;
@@ -937,13 +936,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                                         value: function_value,
                                         block: current,
                                     } = function_expression.emit(context, block);
-                                    let selector_value = mlir_op!(
-                                        builder,
-                                        &current,
-                                        ExtFuncSelectorOperation
-                                            .func(function_value)
-                                            .result(AstType::fixed_bytes(builder.context, 4))
-                                    );
+                                    let selector_value = function_value
+                                        .ext_func_selector(builder, &current)
+                                        .into_mlir();
                                     let SlangType::Function(function_type) =
                                         function_expression.get_type().expect("slang validated")
                                     else {

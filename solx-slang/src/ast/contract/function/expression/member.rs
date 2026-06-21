@@ -31,8 +31,6 @@ use solx_mlir::ods::sol::CodeHashOperation;
 use solx_mlir::ods::sol::CodeOperation;
 use solx_mlir::ods::sol::CoinbaseOperation;
 use solx_mlir::ods::sol::DifficultyOperation;
-use solx_mlir::ods::sol::ExtFuncAddrOperation;
-use solx_mlir::ods::sol::ExtFuncSelectorOperation;
 use solx_mlir::ods::sol::GasLimitOperation;
 use solx_mlir::ods::sol::GasPriceOperation;
 use solx_mlir::ods::sol::GetCallDataOperation;
@@ -595,17 +593,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     value: operand_value,
                     block,
                 } = node.operand().emit(context, block);
-                let value: MlirValue<'context, 'block> = mlir_op!(
-                    &context.state.builder,
-                    &block,
-                    ExtFuncSelectorOperation
-                        .func(operand_value)
-                        .result(AstType::fixed_bytes(context.state.builder.context, 4))
-                );
-                BlockAnd {
-                    block,
-                    value: value.into(),
-                }
+                let value = operand_value.ext_func_selector(&context.state.builder, &block);
+                BlockAnd { block, value }
             }
             // `f.address` — the address component of an external function-pointer
             // VALUE, pulled out of its `!sol.ext_func_ref` via `sol.ext_func_addr`.
@@ -614,17 +603,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     value: operand_value,
                     block,
                 } = node.operand().emit(context, block);
-                let value: MlirValue<'context, 'block> = mlir_op!(
-                    &context.state.builder,
-                    &block,
-                    ExtFuncAddrOperation
-                        .func(operand_value)
-                        .result(AstType::address(context.state.builder.context, false))
-                );
-                BlockAnd {
-                    block,
-                    value: value.into(),
-                }
+                let value = operand_value.ext_func_address(&context.state.builder, &block);
+                BlockAnd { block, value }
             }
             // A member resolving to a function used as a value (not called) is a
             // function pointer: an externally-visible function with a selector
