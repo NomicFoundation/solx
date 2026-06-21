@@ -13,7 +13,6 @@ use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::Parameter;
 
 use crate::Builder;
-use crate::LocationPolicy;
 use crate::Pointer;
 use crate::Type;
 
@@ -84,12 +83,7 @@ impl<'context, 'block> Environment<'context, 'block> {
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) {
-        let parameter_type = parameter
-            .get_type()
-            .map(|slang_type| Type::resolve(&slang_type, LocationPolicy::Declared(None), builder))
-            .unwrap_or_else(|| {
-                Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
-            });
+        let parameter_type = Type::parameter(parameter, builder);
         let cast = crate::Value::new(value).cast(Type::new(parameter_type), builder, block);
         let pointer = Pointer::stack_slot(Type::new(parameter_type), builder, block);
         pointer.store(cast, builder, block);

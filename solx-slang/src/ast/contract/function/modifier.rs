@@ -23,7 +23,6 @@ use crate::ast::BlockAnd;
 use crate::ast::EmitExpression;
 use crate::ast::EmitFunction;
 use crate::ast::EmitStatement;
-use crate::ast::LocationPolicy;
 use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
@@ -390,19 +389,7 @@ impl EmitModifierChain for FunctionDefinition {
                 if parameter.name().is_none() {
                     continue;
                 }
-                let parameter_type = parameter
-                    .get_type()
-                    .map(|slang_type| {
-                        AstType::resolve(
-                            &slang_type,
-                            LocationPolicy::Declared(None),
-                            &scope.state.builder,
-                        )
-                    })
-                    .unwrap_or_else(|| {
-                        AstType::unsigned(scope.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
-                            .into_mlir()
-                    });
+                let parameter_type = AstType::parameter(&parameter, &scope.state.builder);
                 let cast = value.cast(AstType::new(parameter_type), &scope.state.builder, &block);
                 let pointer =
                     Pointer::stack_slot(AstType::new(parameter_type), &scope.state.builder, &block);
