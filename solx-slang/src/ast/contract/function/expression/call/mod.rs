@@ -1162,10 +1162,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCall
                 let self_receiver = (!MemberAccessOperand(&library_operand)
                     .is_namespace_qualifier())
                 .then_some(library_operand);
-                let library_name = solx_utils::ContractName::new(
-                    library.get_file_id().to_owned(),
-                    Some(library.name().name()),
-                );
+                let library_name = solx_utils::ContractName::from_library(&library);
                 let parameter_ids: Vec<NodeId> = function
                     .parameters()
                     .iter()

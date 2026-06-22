@@ -48,3 +48,18 @@ impl ContractName {
         path.replace(Self::FILENAME_SANITIZE_CHARS, "_")
     }
 }
+
+#[cfg(feature = "slang")]
+impl ContractName {
+    ///
+    /// The compound name of a Slang library definition — its file id as the path
+    /// and the library identifier as the name. The link target shared by a library
+    /// deploy address (`address(L)`) and an external library call (`L.f`).
+    ///
+    pub fn from_library(library: &slang_solidity_v2::ast::LibraryDefinition) -> Self {
+        Self::new(
+            library.get_file_id().to_owned(),
+            Some(library.name().name()),
+        )
+    }
+}

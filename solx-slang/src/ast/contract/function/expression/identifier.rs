@@ -90,10 +90,7 @@ expression_emit!(Identifier; |node, context, block| {
         Some(Definition::Library(library)) => {
             // A library name used as a value (`address(L)`) is its linked deploy
             // address, placed by its link symbol.
-            let name = solx_utils::ContractName::new(
-                library.get_file_id().to_owned(),
-                Some(library.name().name()),
-            );
+            let name = solx_utils::ContractName::from_library(&library);
             let value = AstValue::library_address(&name, &context.state.builder, &block);
             BlockAnd { block, value }
         }
