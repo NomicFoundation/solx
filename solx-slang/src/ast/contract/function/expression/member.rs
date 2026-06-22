@@ -48,7 +48,7 @@ use crate::ast::Pointer;
 use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
-use crate::ast::pending_queries::MemberAccessOperand;
+use crate::ast::analysis::query::MemberAccessOperand;
 
 impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpression {
     /// Emits the address `s.field` denotes with the field's element type (`sol.gep`), without the load. Struct base only.

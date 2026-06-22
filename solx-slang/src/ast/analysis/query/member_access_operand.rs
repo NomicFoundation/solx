@@ -1,5 +1,5 @@
 //!
-//! Member-access operand classification (a pure-Slang query pending a permanent home).
+//! Member-access operand classification (a pure-Slang query).
 //!
 
 use slang_solidity_v2::ast::Definition;

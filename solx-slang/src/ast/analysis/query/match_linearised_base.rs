@@ -1,5 +1,5 @@
 //!
-//! `is Base` / base-constructor path resolution against the C3 linearisation (pure-Slang, pending a home).
+//! `is Base` / base-constructor path resolution against the C3 linearisation (pure-Slang).
 //!
 
 use std::collections::HashSet;

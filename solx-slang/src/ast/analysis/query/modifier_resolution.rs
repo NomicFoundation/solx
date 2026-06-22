@@ -1,5 +1,5 @@
 //!
-//! Modifier C3-resolution queries (pure-Slang, pending a permanent home).
+//! Modifier C3-resolution queries (pure-Slang).
 //!
 
 use std::collections::HashMap;

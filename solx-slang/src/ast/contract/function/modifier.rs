@@ -32,8 +32,8 @@ use crate::ast::contract::function::modifier_parameter_binding::ModifierParamete
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::contract::function::statement::modifier_strategy::ModifierStrategy;
 use crate::ast::emit::EmitModifierChain;
-use crate::ast::pending_queries::ModifierResolution;
-use crate::ast::pending_queries::PositionalArguments;
+use crate::ast::analysis::query::ModifierResolution;
+use crate::ast::analysis::query::PositionalArguments;
 
 /// The evaluated arguments of one modifier stage: one
 /// [`ModifierParameterBinding`] per bound modifier parameter.

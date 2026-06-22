@@ -1,5 +1,5 @@
 //!
-//! ABI `method_identifiers` map query (pure-Slang, pending a permanent home).
+//! ABI `method_identifiers` map query (pure-Slang).
 //!
 
 use std::collections::BTreeMap;

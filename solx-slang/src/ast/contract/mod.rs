@@ -2,7 +2,6 @@
 //! Contract / library definition emission to Sol dialect MLIR.
 //!
 
-pub mod analysis;
 pub mod constructor;
 pub mod function;
 pub mod getter;
@@ -32,8 +31,8 @@ use solx_mlir::Environment;
 use solx_mlir::ods::sol::StateVarOperation;
 use solx_utils::DataLocation;
 
-use self::analysis::free_function::FreeCallCollector;
-use self::analysis::library::LibraryCallCollector;
+use crate::ast::analysis::walk::free_function::FreeCallCollector;
+use crate::ast::analysis::walk::library::LibraryCallCollector;
 use self::function::FunctionScope;
 use self::function::expression::ExpressionContext;
 use self::function::expression::arithmetic_mode::ArithmeticMode;
@@ -44,7 +43,7 @@ use crate::ast::EmitFunction;
 use crate::ast::EmitObject;
 use crate::ast::Type as AstType;
 use crate::ast::emit::EmitConstructor;
-use crate::ast::pending_queries::StorageLayout;
+use crate::ast::analysis::query::StorageLayout;
 
 impl EmitObject for ContractDefinition {
     fn emit(&self, context: &mut Context, scope: &ObjectScope) {
@@ -52,7 +51,7 @@ impl EmitObject for ContractDefinition {
 
         // Re-resolve `super.f(...)` / `Base.f(...)` against the C3 linearisation (slang resolves them
         // lexically, wrong in a diamond). Shadowed base overrides are emitted internal-only below.
-        let super_dispatch = self::analysis::super_call::SuperDispatch::build_super_dispatch(self);
+        let super_dispatch = crate::ast::analysis::walk::super_call::SuperDispatch::build_super_dispatch(self);
         context.super_redirect = super_dispatch.redirect.clone();
         context.virtual_redirect = super_dispatch.virtual_redirect.clone();
         let shadowed_functions: Vec<_> = super_dispatch

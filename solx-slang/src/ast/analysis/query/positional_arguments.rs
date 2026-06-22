@@ -1,5 +1,5 @@
 //!
-//! Positional-arguments query for an argument list (pure-Slang, pending a permanent home).
+//! Positional-arguments query for an argument list (pure-Slang).
 //!
 
 use slang_solidity_v2::ast::ArgumentsDeclaration;

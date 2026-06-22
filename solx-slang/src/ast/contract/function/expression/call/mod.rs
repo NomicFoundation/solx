@@ -57,7 +57,7 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call_options::CallOptions;
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 use crate::ast::contract::getter::StructGetterLayout;
-use crate::ast::pending_queries::MemberAccessOperand;
+use crate::ast::analysis::query::MemberAccessOperand;
 
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for FunctionCallExpression {
     type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;

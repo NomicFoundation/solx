@@ -33,8 +33,8 @@ use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::contract::function::statement::modifier_strategy::ModifierStrategy;
 use crate::ast::emit::EmitConstructor;
 use crate::ast::emit::EmitModifierChain;
-use crate::ast::pending_queries::MatchLinearisedBase;
-use crate::ast::pending_queries::PositionalArguments;
+use crate::ast::analysis::query::MatchLinearisedBase;
+use crate::ast::analysis::query::PositionalArguments;
 
 impl EmitConstructor for ContractDefinition {
     fn emit_constructor<'state, 'context>(
