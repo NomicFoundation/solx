@@ -4,9 +4,8 @@
 
 use slang_solidity_v2::ast::FunctionDefinition;
 
-/// The compilation-unit function inputs threaded into object emission, alongside
-/// the MLIR `Context`. Kept here rather than on `solx_mlir::Context` so the Slang
-/// AST stays off the MLIR builder context. Pure data — `pub` fields, no methods.
+/// The compilation-unit function inputs threaded into object emission, kept off `solx_mlir::Context`
+/// so the Slang AST stays off the MLIR builder.
 pub struct ObjectScope<'state> {
     /// The unit's file-level (free) functions; the object emits the ones it
     /// transitively reaches.

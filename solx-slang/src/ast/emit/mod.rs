@@ -1,13 +1,7 @@
 //!
-//! Slang AST emission traits: each node emits its own MLIR through a per-family
-//! trait implemented directly on the Slang AST type.
+//! Slang AST emission traits: each node emits its own MLIR through a per-family trait implemented
+//! directly on the Slang AST type (one trait per emission mode, threading the scope and current block).
 //!
-//! Each emission mode is one trait, threading the shared emission scope and the
-//! current block: [`EmitExpression`] (a value), [`EmitStatement`] (a control-flow
-//! continuation), [`EmitYul`] (inline assembly), [`EmitForEffect`] (an expression
-//! in statement position), [`EmitPlace`] (an lvalue), and [`EmitAs`] (an expression
-//! coerced to an expected type). The shared result types [`BlockAnd`](crate::ast::BlockAnd)
-//! and [`Place`](crate::ast::Place) live beside this module.
 
 pub mod emit_as;
 pub mod emit_constructor;

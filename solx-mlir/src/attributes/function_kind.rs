@@ -5,10 +5,7 @@
 use melior::Context;
 use melior::ir::Attribute;
 
-/// Sol dialect function kind.
-///
-/// Maps to the `FunctionKindAttr` values in the C++ Sol dialect.
-/// Regular functions do not carry a kind attribute.
+/// Sol dialect function kind (maps to the C++ `FunctionKindAttr` values; regular functions carry none).
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FunctionKind {
@@ -21,8 +18,7 @@ pub enum FunctionKind {
 }
 
 impl FunctionKind {
-    /// Builds the Sol-dialect `FunctionKindAttr` for this kind — the dialect
-    /// representation a `sol.func` carries (a regular function carries none).
+    /// Builds the Sol-dialect `FunctionKindAttr` for this kind.
     pub fn attribute(self, context: &Context) -> Attribute<'_> {
         unsafe {
             Attribute::from_raw(crate::ffi::solxCreateFunctionKindAttr(

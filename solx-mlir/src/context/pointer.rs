@@ -1,6 +1,5 @@
 //!
-//! A `!sol.ptr<T, Loc>` place in the Sol dialect: a typed address, and the
-//! loads, stores, and steps it supports.
+//! A `!sol.ptr<T, Loc>` place in the Sol dialect: a typed address, and the loads, stores, and steps it supports.
 //!
 
 use melior::ir::BlockLike;
@@ -24,24 +23,16 @@ use crate::ods::sol::LoadOperation;
 use crate::ods::sol::MapOperation;
 use crate::ods::sol::StoreOperation;
 
-/// A `!sol.ptr<T, Loc>` place: a typed address into stack / memory / storage /
-/// calldata, carrying its pointee type and data location in its own MLIR type.
-///
-/// A newtype over the melior value (whose type is the pointer type) that is the
-/// home for the place operations — load, store, and element stepping — mirroring
-/// how [`Value`] homes the conversions a value undergoes. A `!sol.ptr` is itself
-/// a first-class SSA value (a `storage` / `calldata` reference is the place, not
-/// a loaded copy), so it converts to and from [`Value`] freely. The operations
-/// take the [`Builder`] and the current block by parameter, exactly as a node's
-/// emission does.
+/// A `!sol.ptr<T, Loc>` place: a typed address into stack / memory / storage / calldata, and the
+/// load, store, and element-stepping operations it supports. A `!sol.ptr` is itself a first-class
+/// SSA value (a `storage` / `calldata` reference is the place), so it converts to and from [`Value`] freely.
 #[derive(Clone, Copy)]
 pub struct Pointer<'context, 'block> {
     inner: MlirValue<'context, 'block>,
 }
 
 impl<'context, 'block> Pointer<'context, 'block> {
-    /// Wraps a place value — a `!sol.ptr<…>`, or a by-reference aggregate in
-    /// `Storage` / `CallData`, which is its own place ([`Type::address_type`]).
+    /// Wraps a place value — a `!sol.ptr<…>`, or a by-reference `Storage` / `CallData` aggregate (its own place).
     pub fn new(inner: MlirValue<'context, 'block>) -> Self {
         Self { inner }
     }
@@ -89,9 +80,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         ))
     }
 
-    /// The place a named contract symbol denotes: `sol.addr_of @symbol` of
-    /// `place_type`. The place type is the caller's — a state-variable slot's
-    /// [`Type::address_type`], or an aggregate getter's container type.
+    /// The place a named contract symbol denotes: `sol.addr_of @symbol` of `place_type`.
     pub fn addr_of<B>(
         symbol: &str,
         place_type: Type<'context>,
@@ -111,10 +100,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         ))
     }
 
-    /// A stack slot default-initialised to the zero of `pointee`: a fresh
-    /// zero-filled buffer for a memory aggregate, an empty buffer for `string` /
-    /// `bytes`, the scalar/integer zero otherwise, and a bare slot for a
-    /// reference the body binds before reading.
+    /// A stack slot default-initialised to the zero of `pointee`.
     pub fn default_initialized(
         pointee: Type<'context>,
         builder: &Builder<'context>,
@@ -135,10 +121,7 @@ impl<'context, 'block> Pointer<'context, 'block> {
         slot
     }
 
-    /// A stack slot of `pointee` seeded from the entry block's argument at
-    /// `argument_index`. The block argument already carries the type, so the
-    /// incoming value is spilled verbatim. The place each incoming parameter or
-    /// threaded return value is spilled into.
+    /// A stack slot of `pointee` seeded from the entry block's argument at `argument_index`.
     pub fn from_argument(
         pointee: Type<'context>,
         argument_index: usize,
@@ -156,9 +139,8 @@ impl<'context, 'block> Pointer<'context, 'block> {
         slot
     }
 
-    /// Loads the value of type `result_type` from this place (`sol.load`).
-    /// Short-circuits when the place already *is* the value (the gep result for a
-    /// reference-typed element in `Storage` / `CallData`), returning it unchanged.
+    /// Loads the value of `result_type` from this place (`sol.load`). Short-circuits when the
+    /// place already *is* the value (a reference element in `Storage` / `CallData`).
     pub fn load<B>(
         self,
         result_type: Type<'context>,
@@ -192,11 +174,8 @@ impl<'context, 'block> Pointer<'context, 'block> {
         );
     }
 
-    /// Deep-copies the reference `value`'s pointee into this place (`sol.copy`) —
-    /// the reference-to-reference counterpart of the scalar [`Self::store`], used
-    /// when the source is already a reference of the destination's type (no scalar
-    /// coercion): a memory aggregate into a storage slot, a state-variable
-    /// initialiser, a reference assignment.
+    /// Deep-copies the reference `value`'s pointee into this place (`sol.copy`) — the
+    /// reference-to-reference counterpart of the scalar [`Self::store`].
     pub fn copy_from<B>(
         self,
         value: Value<'context, 'block>,
@@ -213,10 +192,8 @@ impl<'context, 'block> Pointer<'context, 'block> {
         );
     }
 
-    /// Steps to the place of an element / field of type `element_type` at `index`
-    /// within this aggregate place (`sol.gep`). The result pointer type is derived
-    /// from `(this pointer type, element_type)` by `sol::GepOp::getResultType` on
-    /// the C++ side.
+    /// Steps to the place of element `element_type` at `index` within this aggregate place (`sol.gep`).
+    /// The result pointer type is derived C-side by `sol::GepOp::getResultType`.
     pub fn gep<B>(
         self,
         index: Value<'context, 'block>,
@@ -244,14 +221,8 @@ impl<'context, 'block> Pointer<'context, 'block> {
         ))
     }
 
-    /// Steps to the place of the mapping entry for `key` (`sol.map`). The dialect
-    /// derives no map result type C-side (unlike [`gep`]), so the caller supplies
-    /// the entry place type `entry_type` — the value type in the mapping's data
-    /// location, or, for a reference value in `Storage` / `CallData`, the value
-    /// type itself (the gep/map result-type rule returns a reference element
-    /// unwrapped).
-    ///
-    /// [`gep`]: Self::gep
+    /// Steps to the place of the mapping entry for `key` (`sol.map`). The dialect derives no map
+    /// result type C-side, so the caller supplies the entry place type `entry_type`.
     pub fn entry<B>(
         self,
         key: Value<'context, 'block>,

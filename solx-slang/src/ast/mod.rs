@@ -3,7 +3,6 @@
 //!
 
 pub mod block_and;
-/// Contract definition emission to Sol dialect MLIR.
 pub mod contract;
 pub mod emit;
 pub mod operator_binding;
@@ -20,9 +19,6 @@ pub use self::emit::EmitPlace;
 pub use self::emit::EmitStatement;
 pub use self::emit::EmitYul;
 pub use self::place::Place;
-// The `Type`/`Value` entities live in `solx-mlir` (with the Builder and ODS
-// ops), mirroring how `solx-yul` uses `solx-codegen-evm`'s `Value`/`Pointer`;
-// re-exported here so slang code names them as `crate::ast::{Pointer, Type, Value}`.
 pub use solx_mlir::LocationPolicy;
 pub use solx_mlir::Pointer;
 pub use solx_mlir::Type;

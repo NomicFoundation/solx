@@ -2,7 +2,6 @@
 //! Slang Solidity frontend implementation.
 //!
 
-/// Compilation builder configuration for the Slang frontend.
 use crate::ast::EmitObject;
 use crate::ast::contract::ObjectScope;
 use crate::ast::operator_binding::OperatorBindings;
@@ -48,8 +47,6 @@ impl Slang {
     pub const NAME: &'static str = "Slang";
 
     /// Builds a Slang compilation unit from the given source files.
-    ///
-    /// Uses the `CompilationBuilder` to parse all sources and resolve imports.
     pub fn compile(&self, sources: BTreeMap<String, String>) -> anyhow::Result<CompilationUnit> {
         let paths: Vec<String> = sources.keys().cloned().collect();
         let configuration = CompilationConfig::new(sources);
@@ -60,8 +57,8 @@ impl Slang {
                     self.version.default
                 )
             })?;
-        // The Slang frontend gates EVM built-in availability on the target; solx
-        // handles EVM-version targeting downstream, so admit every built-in here.
+        // Slang gates EVM built-in availability on the target; solx targets the EVM version
+        // downstream, so admit every built-in here.
         let mut builder = CompilationBuilder::create(version, EvmTarget::LATEST, configuration);
 
         for path in paths.iter() {
@@ -71,11 +68,8 @@ impl Slang {
         Ok(builder.build())
     }
 
-    /// Gathers every file-level (free) function across the compilation unit.
-    ///
-    /// Free functions are not part of any contract's linearised function set,
-    /// so they are collected once per unit and handed to each contract emitter,
-    /// which pre-registers and emits the ones that contract reaches.
+    /// Gathers every file-level (free) function — not part of any contract's linearised set, so
+    /// collected once and handed to each contract emitter.
     fn gather_free_functions(unit: &CompilationUnit) -> Vec<FunctionDefinition> {
         unit.file_ids()
             .iter()
@@ -230,27 +224,18 @@ impl Frontend for Slang {
             };
             let source_unit = file.ast();
 
-            // Emit every contract in the file as its own deployable object. A
-            // file commonly defines several contracts (bases plus the deployed,
-            // most-derived one); the test harness deploys any of them by name, so
-            // each must be present — not just the first. Each contract gets its
-            // own MLIR context/module, with its C3-linearised bases pulled in by
-            // the contract emitter. A contract the recut cannot yet lower is
-            // simply absent from the artifacts — exactly as when only the first
-            // contract was emitted — so a sibling's gap (an `Err` or a `panic!`
-            // in emission) never aborts the file or the other contracts; the
-            // missing object instead surfaces as that contract's failing tests.
+            // Emit every contract in the file as its own deployable object (the harness deploys any
+            // by name). The `catch_unwind` isolates each: a contract the recut cannot yet lower is
+            // simply absent from the artifacts, so its gap never aborts the file's other contracts.
             for contract in source_unit.contracts().iter() {
-                // An `abstract contract` cannot be instantiated and is never
-                // deployed by the harness; skip it (its bodyless functions have
-                // no code to lower anyway).
+                // An `abstract contract` is never deployed; skip it.
                 if contract.is_abstract() {
                     continue;
                 }
                 let emitted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(
                     || -> anyhow::Result<()> {
                         let melior_context = solx_mlir::Context::create_mlir_context();
-                        let evm_version = input_json.settings.evm_version.unwrap_or_default(); // recut-lint-allow: fail01 — optional setting; absent => default target
+                        let evm_version = input_json.settings.evm_version.unwrap_or_default();
                         let mut context = solx_mlir::Context::new(&melior_context, evm_version);
                         context.operator_bindings = operator_bindings.map.clone();
                         let scope = ObjectScope::new(&free_functions, &operator_bindings.functions);
@@ -268,21 +253,16 @@ impl Frontend for Slang {
                 let _ = emitted;
             }
 
-            // Emit every library as its own deployable object, including
-            // internal-only ones. solc emits a (call-protected stub) object for
-            // every library regardless of visibility, and the test harness's
-            // `// library:` directive deploys and links it by name — so the
-            // object must exist in the build artifacts even when all functions
-            // are `internal`. Each library gets its own MLIR context / module,
-            // emitted like a contract: an unsupported construct propagates the
-            // same way any contract's would.
+            // Emit every library as its own deployable object, including internal-only ones: solc
+            // emits a call-protected stub per library, and the harness's `// library:` directive
+            // deploys and links it by name, so the object must exist even when all functions are internal.
             for member in source_unit.members().iter() {
                 let SourceUnitMember::LibraryDefinition(library) = member else {
                     continue;
                 };
 
                 let melior_context = solx_mlir::Context::create_mlir_context();
-                let evm_version = input_json.settings.evm_version.unwrap_or_default(); // recut-lint-allow: fail01 — optional setting; absent => default target
+                let evm_version = input_json.settings.evm_version.unwrap_or_default();
                 let mut context = solx_mlir::Context::new(&melior_context, evm_version);
                 let scope = ObjectScope::new(&[], &[]);
                 library.emit(&mut context, &scope);

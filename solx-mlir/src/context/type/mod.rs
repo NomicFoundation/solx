@@ -1,6 +1,5 @@
 //!
-//! An MLIR type in the Sol dialect: its construction, predicates, and the casts
-//! it routes.
+//! An MLIR type in the Sol dialect: its construction, predicates, and the casts it routes.
 //!
 
 pub mod array_size;
@@ -29,14 +28,7 @@ use crate::ods::sol::EnumCastOperation;
 use self::array_size::ArraySize;
 use self::location_policy::LocationPolicy;
 
-/// An MLIR type in the Sol dialect.
-///
-/// A newtype over the melior type: the home for type construction, the
-/// Sol-dialect kind predicates, and the cast a value undergoes to *reach* this
-/// type. [`Self::cast`] is the one router: keyed on source and target kinds, it
-/// selects the dialect cast op each pair needs (`sol.cast`, `sol.bytes_cast`,
-/// `sol.enum_cast`, `sol.contract_cast`, `sol.address_cast`, `sol.data_loc_cast`).
-/// [`Value::cast`] delegates here, so kind classification lives in one place.
+/// An MLIR type in the Sol dialect: type construction, the kind predicates, and the cast router [`Self::cast`].
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Type<'context> {
     inner: MlirType<'context>,
@@ -56,10 +48,7 @@ impl<'context> Type<'context> {
         self.inner
     }
 
-    /// Resolves a possibly-absent Slang type — `node.get_type()` on a node the
-    /// binder left untyped (an unresolved reference or a semantic error) — under
-    /// a `None` inherited location, yielding `None` when the Slang type is
-    /// absent. The `Option`-lift over [`Self::resolve`].
+    /// Resolves a possibly-absent Slang type (the `Option`-lift over [`Self::resolve`]).
     // TODO: slang's binder does not fold binary expressions of literal operands —
     // its typing rules return the type of one operand (e.g. type of the left
     // operand for shifts), so `1 << 100` gets typed as ui8 (the type of `1`) and
@@ -86,20 +75,17 @@ impl<'context> Type<'context> {
         Self::resolve(slang_type, LocationPolicy::Declared(None), builder)
     }
 
-    /// An unsigned integer type of `bits` width (`ui<bits>`) — `ui256` (the field
-    /// width), `ui160` (address), `ui64` (struct / array field-index).
+    /// An unsigned integer type of `bits` width (`ui<bits>`).
     pub fn unsigned(context: &'context melior::Context, bits: usize) -> Self {
         Self::new(MlirType::from(IntegerType::unsigned(context, bits as u32)))
     }
 
-    /// A signless integer type of `bits` width (`i<bits>`) — the boolean `i1` and
-    /// the Yul-dialect word `i256`.
+    /// A signless integer type of `bits` width (`i<bits>`) — the boolean `i1` and the Yul word `i256`.
     pub fn signless(context: &'context melior::Context, bits: usize) -> Self {
         Self::new(MlirType::from(IntegerType::new(context, bits as u32)))
     }
 
-    /// The opaque LLVM pointer type (`!llvm.ptr`) — a Yul-local slot and the
-    /// target of a `sol.conv_cast` at the inline-assembly boundary.
+    /// The opaque LLVM pointer type (`!llvm.ptr`) — a Yul-local slot.
     pub fn llvm_ptr(context: &'context melior::Context) -> Self {
         Self::new(melior::dialect::llvm::r#type::pointer(context, 0))
     }
@@ -217,8 +203,7 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// A `sol::FuncRefType` — an internal function pointer over a signature
-    /// `parameter_types -> result_types`. The callee value of a `sol.icall`.
+    /// A `sol::FuncRefType` — an internal function pointer over `parameter_types -> result_types`.
     pub fn func_ref(
         context: &'context melior::Context,
         parameter_types: &[MlirType<'context>],
@@ -237,9 +222,7 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// A `sol::ExtFuncRefType` — an external function reference (callee address +
-    /// selector) over a signature `parameter_types -> result_types`. The callee
-    /// value of an external call.
+    /// A `sol::ExtFuncRefType` — an external function reference (address + selector) over `parameter_types -> result_types`.
     pub fn ext_func_ref(
         context: &'context melior::Context,
         parameter_types: &[MlirType<'context>],
@@ -278,14 +261,12 @@ impl<'context> Type<'context> {
         unsafe { crate::ffi::solxIsFixedBytesType(self.inner.to_raw()) }
     }
 
-    /// Whether this is the single-byte `!sol.byte` — the element type of
-    /// `bytes`/`string`, distinct from `!sol.fixedbytes<1>`.
+    /// Whether this is the single-byte `!sol.byte` (distinct from `!sol.fixedbytes<1>`).
     pub fn is_byte(self) -> bool {
         unsafe { crate::ffi::solxIsByteType(self.inner.to_raw()) }
     }
 
-    /// Whether this is the dynamic-bytes type `!sol.string`, shared by `string`
-    /// and `bytes`.
+    /// Whether this is the dynamic-bytes type `!sol.string` (shared by `string` and `bytes`).
     pub fn is_string(self) -> bool {
         unsafe { crate::ffi::solxIsStringType(self.inner.to_raw()) }
     }
@@ -305,21 +286,18 @@ impl<'context> Type<'context> {
         unsafe { crate::ffi::solxIsMappingType(self.inner.to_raw()) }
     }
 
-    /// Whether this is a Sol reference type: array, struct, string/`bytes`, or
-    /// mapping (`bytes` and `string` share `!sol.string`).
+    /// Whether this is a Sol reference type: array, struct, string/`bytes`, or mapping.
     pub fn is_reference(self) -> bool {
         self.is_string() || self.is_array() || self.is_struct() || self.is_mapping()
     }
 
-    /// Whether this is a Sol function reference of either kind — internal
-    /// (`!sol.func_ref<…>`) or external (`!sol.ext_func_ref<…>`).
+    /// Whether this is a Sol function reference of either kind (internal or external).
     pub fn is_function_ref(self) -> bool {
         let raw = self.inner.to_raw();
         unsafe { crate::ffi::solxIsFuncRefType(raw) || crate::ffi::solxIsExtFuncRefType(raw) }
     }
 
-    /// Whether this is a Sol external function reference (`!sol.ext_func_ref<…>`)
-    /// — the runtime address+selector value of a `function (...) external`.
+    /// Whether this is a Sol external function reference (`!sol.ext_func_ref<…>`).
     pub fn is_ext_function_ref(self) -> bool {
         unsafe { crate::ffi::solxIsExtFuncRefType(self.inner.to_raw()) }
     }
@@ -329,8 +307,7 @@ impl<'context> Type<'context> {
         unsafe { crate::ffi::solxIsPointerType(self.inner.to_raw()) }
     }
 
-    /// The pointee type `T` of a `!sol.ptr<T, Loc>` (the caller must ensure this
-    /// is a pointer type).
+    /// The pointee type `T` of a `!sol.ptr<T, Loc>` (the caller must ensure this is a pointer).
     pub fn pointee(self) -> Self {
         Self::new(unsafe {
             MlirType::from_raw(crate::ffi::solxPointerTypePointeeType(self.inner.to_raw()))
@@ -351,11 +328,7 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// The element / field type reached by stepping into this aggregate: a
-    /// struct's field at `field_index`, or an array / `bytes` / `string`'s
-    /// element (the index is ignored for a non-struct aggregate). The single
-    /// home for `sol::getEltType` — every `sol.gep` element-type query routes
-    /// here rather than re-spelling the FFI at each access site.
+    /// The element / field type reached by stepping into this aggregate (the index is ignored for non-structs).
     pub fn element_type(self, field_index: usize) -> Self {
         Self::new(unsafe {
             MlirType::from_raw(crate::ffi::mlirSolGetEltType(
@@ -365,11 +338,8 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// The place type addressing an element of `self` at `location` yields: a
-    /// reference element in `Storage` / `CallData` is the place itself (its own
-    /// type), every other element a `!sol.ptr<self, location>`. Mirrors
-    /// `Sol_GepOp::build`'s non-pointer-reference-in-storage rule, so a
-    /// `sol.gep` / `sol.map` / `sol.addr_of` result type is derived in one place.
+    /// The place type addressing an element of `self` at `location`: a reference element in `Storage` /
+    /// `CallData` is its own place, every other element a `!sol.ptr<self, location>`.
     pub fn address_type(
         self,
         location: solx_utils::DataLocation,
@@ -406,15 +376,10 @@ impl<'context> Type<'context> {
         })
     }
 
-    /// Casts `value` to this (target) type, returning it unchanged when it
-    /// already has this type.
+    /// Casts `value` to this (target) type, returning it unchanged when it already has this type.
     ///
-    /// `sol.cast` is integer-only — its verifier rejects enum, address,
-    /// contract, and fixed-bytes operands/results, each of which has a dedicated
-    /// cast op. This is the single place that classifies the source/target kinds
-    /// and routes to the right op, so every caller (value transfers, comparisons,
-    /// ABI/event encoders, explicit conversions) gets the correct cast without
-    /// repeating the dispatch.
+    /// `sol.cast` is integer-only, so each non-integer kind (enum, address, contract, fixed-bytes,
+    /// reference) routes to its dedicated cast op; this is the single place that classifies and dispatches.
     pub fn cast<'block>(
         self,
         value: Value<'context, 'block>,
@@ -474,13 +439,8 @@ impl<'context> Type<'context> {
                     .out(self.inner)
             ));
         }
-        // byte / bytesN ↔ {byte, bytesN, integer}. `sol.bytes_cast` connects
-        // `fixedbytes<N>` ↔ `ui(N*8)` (and `byte` ↔ `ui8`) and resizes
-        // fixedbytes↔fixedbytes / fixedbytes↔byte directly (right-aligned byte
-        // padding, NOT integer sign/zero extension). Only an integer counterpart
-        // whose width differs from the fixed-bytes partner width must first be
-        // resized through that partner integer (e.g. `fixedbytes<1>` → `ui256`
-        // via `ui8`); same-width and fixedbytes/byte counterparts stay direct.
+        // byte / bytesN ↔ {byte, bytesN, integer}. `sol.bytes_cast` connects `fixedbytes<N>` ↔ `ui(N*8)`
+        // directly; an integer counterpart of a different width is first resized through that partner integer.
         if source.is_fixed_bytes() || source.is_byte() {
             let partner_bits = Self::partner_bits(source);
             if let Ok(integer) = IntegerType::try_from(self.inner)
@@ -520,10 +480,7 @@ impl<'context> Type<'context> {
         ))
     }
 
-    /// Emits a `sol.bytes_cast` casting `value` to this byte / fixed-bytes /
-    /// integer target — the single construction site the [`Self::cast`] router
-    /// reaches for every byte-flavoured pair (directly and through its partner
-    /// integer bridge).
+    /// Emits a `sol.bytes_cast` casting `value` to this byte / fixed-bytes / integer target.
     fn bytes_cast<'block>(
         self,
         value: Value<'context, 'block>,
@@ -540,9 +497,7 @@ impl<'context> Type<'context> {
         ))
     }
 
-    /// The leaf `sol.address_cast` to this (address-side) type: the router's
-    /// address arm bridges every address↔{integer, contract, fixedbytes<20>} pair
-    /// through it, and a `BigInt` `address` constant casts up from `ui160` with it.
+    /// Emits a `sol.address_cast` to this (address-side) type.
     fn address_cast<'block>(
         self,
         value: Value<'context, 'block>,
@@ -559,8 +514,7 @@ impl<'context> Type<'context> {
         ))
     }
 
-    /// The bit width of the integer a `sol.bytes_cast` pairs with a fixed-bytes
-    /// type: `8 * N` for `!sol.fixedbytes<N>`, and 8 for the single `!sol.byte`.
+    /// The bit width of the integer a `sol.bytes_cast` pairs with a fixed-bytes type (`8 * N`, or 8 for `!sol.byte`).
     fn partner_bits(r#type: Type<'context>) -> u32 {
         r#type
             .fixed_bytes_or_byte_width()

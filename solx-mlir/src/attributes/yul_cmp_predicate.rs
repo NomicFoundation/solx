@@ -7,12 +7,8 @@ use melior::ir::r#type::IntegerType;
 
 use solx_utils::BIT_LENGTH_X64;
 
-/// Yul dialect `yul.cmp` predicate values.
-///
-/// Unlike `sol.cmp` (which carries signedness in the operand type), the Yul
-/// predicate names the comparison directly because every Yul word is the
-/// signless `i256`. Numeric values match the Yul MLIR dialect
-/// `CmpPredicate` encoding (`YulBase.td`).
+/// Yul dialect `yul.cmp` predicate values — the predicate names the comparison directly,
+/// since every Yul word is the signless `i256`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i64)]
 pub enum YulCmpPredicate {

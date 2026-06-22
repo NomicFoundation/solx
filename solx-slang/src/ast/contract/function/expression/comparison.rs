@@ -1,8 +1,5 @@
 //!
-//! Comparison expression emission: equality and inequality (`sol.cmp`). Each
-//! node's `Emit` projects its typed slang operator enum to the [`CmpPredicate`]
-//! it applies — via `CmpPredicate::from`, homed on the predicate in solx-mlir —
-//! and emits `sol.cmp`, reconciling the operand types first.
+//! Comparison expression emission: equality and inequality (`sol.cmp`), reconciling the operand types first.
 //!
 
 use melior::ir::BlockRef;
@@ -23,16 +20,12 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
     let left = node.left_operand();
     let right = node.right_operand();
     let predicate = CmpPredicate::from(node.operator());
-    // A string literal compared with a `bytesN` / `byte` sibling (`b == "d"`)
-    // materialises toward the sibling's fixed-bytes type rather than emitting a
-    // runtime `sol.string`; the non-string operand is emitted first to learn
-    // that type. With neither (or both) a string literal, both emit naturally.
+    // A string literal compared with a `bytesN` sibling materialises toward the sibling's fixed-bytes
+    // type (the non-string operand is emitted first to learn it).
     let left_is_string = matches!(left, Expression::StringExpression(_));
     let right_is_string = matches!(right, Expression::StringExpression(_));
     let (lhs, rhs, block) = if right_is_string && !left_is_string {
         let BlockAnd { value: lhs, block } = left.emit(context, block);
-        // `b == "d"`: the string literal materialises toward the non-string
-        // sibling's fixed-bytes type, the sibling emitted first to learn it.
         let BlockAnd { value: rhs, block } =
             right.emit_as(lhs.r#type().into_mlir(), context, block);
         (lhs, rhs, block)
@@ -50,14 +43,9 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         let comparison = lhs.compare(rhs, predicate, &context.state.builder, &block);
         return BlockAnd { block, value: comparison };
     }
-    // Two fixed-bytes operands of different widths (`bytes3("abc") ==
-    // bytes4("abc")`): `bytesN` are LEFT-aligned, so the operands share a
-    // word once the narrower is zero-extended on the right. Widen the
-    // smaller to the larger fixed-bytes width with a `sol.bytes_cast` and
-    // compare AS fixed-bytes, matching solc. Bridging each through its own
-    // width integer (the mixed-integer path below) right-aligns the values
-    // — `bytes3("abc")` as `ui24` (0x616263) differs from `bytes4("abc")` as
-    // `ui32` (0x61626300) — yielding the wrong result.
+    // Two fixed-bytes operands of different widths: `bytesN` are LEFT-aligned, so widen the smaller
+    // and compare AS fixed-bytes (matching solc). The mixed-integer path below would right-align them,
+    // yielding the wrong result.
     if let (Some(lhs_width), Some(rhs_width)) = (
         lhs.r#type().fixed_bytes_or_byte_width(),
         rhs.r#type().fixed_bytes_or_byte_width(),
@@ -78,13 +66,9 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         let comparison = lhs_common.compare(rhs_common, predicate, builder, &block);
         return BlockAnd { block, value: comparison };
     }
-    // Mixed-type comparison (`i < 10` with `i : int8`, `10 : uint8`): widen
-    // each operand to 256 bits preserving ITS OWN signedness — a signed
-    // operand sign-extends, an unsigned one zero-extends — so a signed
-    // negative value is not reinterpreted as a huge unsigned one. Then pick
-    // the common type: signed if either operand is signed, mirroring solc's
-    // promoted comparison type; a plain `ui256` default would make
-    // `(-10) < 10` an unsigned comparison (false), skipping the loop.
+    // Mixed-type comparison: widen each operand to 256 bits preserving ITS OWN signedness (so a
+    // negative isn't reinterpreted as a huge unsigned), then compare as signed if either is signed
+    // — a plain `ui256` default would make `(-10) < 10` an unsigned (false) comparison.
     let signed_lhs =
         IntegerType::try_from(lhs.r#type().into_mlir()).is_ok_and(|integer| integer.is_signed());
     let signed_rhs =
@@ -105,8 +89,6 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         &context.state.builder,
         &block,
     );
-    // Both are now 256 bits. Retype each to the common signedness with a
-    // bit-preserving `sol.cast` (same width), then compare.
     let common = if signed_lhs || signed_rhs {
         signed_256
     } else {

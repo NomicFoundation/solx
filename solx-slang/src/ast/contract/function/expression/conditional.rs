@@ -28,12 +28,8 @@ use crate::ast::contract::function::expression::ExpressionContext;
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalExpression {
     type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;
 
-    /// Emits `cond ? a : b`, yielding one value per result: a scalar ternary
-    /// yields a single value, a tuple-valued conditional (`cond ? (x, y) : (z, w)`,
-    /// reached only from a multi-value position) one per tuple element. Both
-    /// branches store into shared result slots and the loads after the `sol.if`
-    /// yield the result(s). In value position a scalar conditional is dispatched
-    /// through [`Expression`]'s emit, which takes the sole value.
+    /// Emits `cond ? a : b`, yielding one value per result (a scalar yields one, a tuple-valued
+    /// conditional one per element). Both branches store into shared slots loaded after the `sol.if`.
     fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -42,12 +38,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
         let true_expression = self.true_expression();
         let false_expression = self.false_expression();
 
-        // A tuple-valued conditional yields one value per tuple element. A branch
-        // is either a literal tuple (`(a, b, c)`) whose element types come from its
-        // items, or a multi-value expression — a tuple-returning call (`this.f(a)`)
-        // or a nested conditional — whose element types come from the conditional's
-        // own tuple type. Each branch is expanded to one value per result slot;
-        // both branches store into the shared slots before the loads.
+        // A tuple-valued conditional yields one value per element. A branch is a literal tuple (types
+        // from its items) or a multi-value expression (types from the conditional's own tuple type).
         if let Some(SlangType::Tuple(tuple_type)) = self.get_type() {
             let result_types: Vec<Type<'context>> = match (&true_expression, &false_expression) {
                 (Expression::TupleExpression(true_tuple), Expression::TupleExpression(_)) => {
@@ -93,9 +85,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
                 (then_block, &true_expression),
                 (else_block, &false_expression),
             ] {
-                // Expand the branch to one value per result slot: a literal tuple
-                // yields each item's value; a tuple-returning call its full result
-                // list (like `return f();`); a nested conditional its own values.
+                // Expand the branch to one value per result slot (literal tuple, call result list, or nested conditional).
                 let (values, current) = match branch_expression {
                     Expression::TupleExpression(tuple) => {
                         let mut values = Vec::new();
@@ -147,16 +137,9 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
             };
         }
 
-        // A scalar ternary yields a single value. A branch of bare function names
-        // yields an *internal* function pointer, but slang types it from the
-        // function's visibility — a `Public` function as its return type — not the
-        // pointer type. The branches emit `func_ref` values, so recover the
-        // internal-pointer type (built from the function's declared signature, the
-        // target routed through the virtual redirect exactly as a direct call) from
-        // a branch when present; otherwise the conditional's own type is
-        // authoritative, falling back to a branch's type when the binder leaves the
-        // conditional untyped, rather than silently defaulting to `ui256` (which
-        // masked the mismatch and `sol.cast`-ed a `func_ref` to integer).
+        // A scalar ternary yields a single value. A branch of bare function names yields an internal
+        // `func_ref`, but slang types it from the function's visibility, not the pointer type — so
+        // recover the internal-pointer type from a branch when present, else use the conditional's own type.
         let func_ref_type = |expression: &Expression| {
             let Expression::Identifier(identifier) = expression else {
                 return None;
@@ -238,24 +221,13 @@ expression_emit!(ArrayExpression; |node, context, block| {
         ),
     };
     let builder = &context.state.builder;
-    // An array literal is always a memory aggregate, so its reference
-    // elements live in memory — a `calldata`/`storage` reference element
-    // (e.g. a calldata slice `[b[i:j]]`) is copied in. Resolve the element
-    // and result types in their memory representation so the per-element
-    // coercion below is a `data_loc_cast` into memory (matching solc),
-    // rather than leaving a calldata element inside a memory `sol.array_lit`
-    // that the backend cannot lower.
+    // An array literal is always a memory aggregate, so resolve element and result types in their
+    // memory representation — the per-element coercion is then a `data_loc_cast` into memory (matching solc).
     let declared_element_type =
         AstType::resolve(&element_slang_type, LocationPolicy::ForceMemory, builder);
-    // Emit the element values before fixing the element type: for a
-    // function-pointer array literal the emitted values are authoritative.
-    // A bare function name lowers to an internal `func_ref`, but slang types
-    // the literal from the function's `Public` visibility, which resolves to
-    // `ext_func_ref` — so the declared element type disagrees with the value.
-    // Adopt the value's function-ref type when it does, and rebuild the
-    // array type to match (otherwise the per-element coercion casts a
-    // function ref through the integer-only `sol.cast`, which the verifier
-    // rejects).
+    // Emit element values before fixing the element type: for a function-pointer array literal the
+    // emitted values are authoritative (slang types the literal from visibility, which can disagree),
+    // so adopt the value's function-ref type when it differs and rebuild the array type to match.
     let mut element_values = Vec::new();
     let mut current = block;
     for item in node.items().iter() {

@@ -19,12 +19,8 @@ use crate::Type;
 impl<'context> Type<'context> {
     /// Resolves a Slang semantic type to its MLIR (Sol dialect) type.
     ///
-    /// `policy` picks each reference type's data location: [`LocationPolicy::Declared`]
-    /// uses the type's own Slang location (with an inherited fallback for
-    /// struct-field-relative `Inherited`), [`LocationPolicy::ForceMemory`] forces
-    /// the external (ABI) representation where `calldata` cannot cross the call
-    /// boundary. Top-level callers pass `LocationPolicy::Declared(None)`; the
-    /// `Struct` arm carries the parent struct's location into member resolution.
+    /// `policy` picks each reference type's data location (declared location, or forced to memory
+    /// for the external ABI representation); the `Struct` arm carries the parent's location into members.
     pub fn resolve(
         slang_type: &SlangType,
         policy: LocationPolicy,
@@ -71,10 +67,8 @@ impl<'context> Type<'context> {
                 )
                 .into_mlir(),
                 LiteralKind::Rational { .. } => {
-                    // Sentinel: a rational appears only as a compile-time
-                    // intermediate that constant folding consumes (see the folding
-                    // gate in `ExpressionContext::emit`); a rational that survived
-                    // to runtime would fail downstream, not at type resolution.
+                    // A rational appears only as a compile-time intermediate that constant
+                    // folding consumes; one surviving to runtime would fail downstream, not here.
                     Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
                 }
             },
@@ -196,9 +190,7 @@ impl<'context> Type<'context> {
         }
     }
 
-    /// The MLIR element type and data location of a dynamic-array / `bytes` base —
-    /// an `arr.push` receiver: an array's resolved element type at its own
-    /// location, or `byte` for `bytes`. Used to type the pushed slot.
+    /// The MLIR element type and data location of a dynamic-array / `bytes` base (the `.push` receiver).
     pub fn dynamic_array_element(
         base_type: &SlangType,
         builder: &Builder<'context>,
@@ -230,11 +222,7 @@ impl<'context> Type<'context> {
         (element_type, location)
     }
 
-    /// Resolves a return-position Slang type to its MLIR result types: a `void`
-    /// return is zero results, a tuple expands to one type per element, and any
-    /// other type is a single result. Shared by [`Self::function_pointer_signature`]
-    /// and the `abi.decode` out-types, which expand a call's binder-assigned type
-    /// the same way.
+    /// Resolves a return-position Slang type to MLIR result types: `void` is zero, a tuple expands per element.
     pub fn resolve_result_types(
         return_type: &SlangType,
         builder: &Builder<'context>,
@@ -256,10 +244,7 @@ impl<'context> Type<'context> {
         }
     }
 
-    /// Resolves a function-pointer callee type's `(parameter_types, result_types)`
-    /// from Slang to MLIR: a void return is zero results, a tuple expands per
-    /// element. The function-TYPE peer of [`Self::resolve_signature`], which
-    /// resolves a function DEFINITION's signature.
+    /// Resolves a function-pointer callee type's `(parameter_types, result_types)` from Slang to MLIR.
     pub fn function_pointer_signature(
         callee_type: &SlangType,
         builder: &Builder<'context>,
@@ -278,10 +263,7 @@ impl<'context> Type<'context> {
         (parameter_types, result_types)
     }
 
-    /// Resolves a function or modifier parameter's declared MLIR type from its
-    /// bound Slang type. An untyped parameter — a `catch (...)` payload with no
-    /// declared type, passed as `None` — defaults to the field-width unsigned
-    /// integer (`ui256`).
+    /// Resolves a parameter's declared MLIR type from its Slang type; an untyped `catch (...)` payload defaults to `ui256`.
     pub fn parameter(
         slang_type: Option<&SlangType>,
         builder: &Builder<'context>,

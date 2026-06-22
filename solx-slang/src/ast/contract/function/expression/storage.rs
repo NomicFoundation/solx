@@ -44,13 +44,8 @@ impl StorageSlot {
         pointer.store(AstValue::new(value), builder, block);
     }
 
-    /// Returns the place denoting this slot via `sol.addr_of`. The address type is
-    /// the element's own [`address_type`] for the slot's location: a value-typed
-    /// element addresses as `!sol.ptr<element, location>`, a storage/calldata
-    /// reference addresses AS the reference itself (the single `address_type`
-    /// rule), so a subsequent `load` short-circuits to the reference place.
-    ///
-    /// [`address_type`]: crate::ast::Type::address_type
+    /// Returns the place denoting this slot via `sol.addr_of`, typed by the element's `address_type`
+    /// for the slot's location (a reference element addresses AS itself, so a later `load` short-circuits).
     fn addr_of<'context, 'block>(
         &self,
         builder: &Builder<'context>,

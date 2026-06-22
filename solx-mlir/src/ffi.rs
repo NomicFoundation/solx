@@ -1,9 +1,5 @@
 //!
-//! FFI bindings for Sol and Yul dialect C API functions.
-//!
-//! These functions are provided by the `libMLIRCAPISol`, `libMLIRSolTransforms`,
-//! `libMLIRSolToYul`, `libMLIRYulToStandard`, and `libMLIRCAPIYul` static
-//! libraries built from solx-llvm.
+//! FFI bindings for the Sol and Yul dialect C API, provided by the solx-llvm static libraries.
 //!
 
 use mlir_sys::MlirBlock;
@@ -29,7 +25,7 @@ unsafe extern "C" {
     pub fn mlirCreateTransformsCanonicalizer() -> MlirPass;
 
     /// Creates the Sol modifier-op pass.
-    pub fn mlirCreateSolModifierOpLoweringPass() -> MlirPass; // recut-lint-allow: nam02-ffi
+    pub fn mlirCreateSolModifierOpLoweringPass() -> MlirPass;
 
     /// Creates the `convert-sol-to-yul` pass.
     pub fn mlirCreateConversionConvertSolToYulPass() -> MlirPass;

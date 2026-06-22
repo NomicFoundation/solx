@@ -18,17 +18,10 @@ use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 expression_emit!(Identifier; |node, context, block| {
-    // A bare name resolves to exactly one definition (slang's binder is total),
-    // and each definition kind reads differently: a state variable through
-    // storage, a local / parameter through its stack slot, a constant by
-    // inlining its initializer, a function as an internal function pointer, and
-    // a library name as its linked deploy address.
+    // A bare name resolves to exactly one definition (slang's binder is total); each kind reads differently.
     match node.resolve_to_definition() {
         Some(Definition::StateVariable(state_variable)) => {
-            // A `constant` inlines its compile-time initializer (it has no storage
-            // slot); any other state variable loads from its slot. A value-typed
-            // slot reads its value, a reference-typed one its storage reference
-            // (both through the slot's reference-aware address).
+            // A `constant` inlines its compile-time initializer (no slot); any other state variable loads its slot.
             let declared_type = state_variable.get_type().expect("slang validated");
             let element_type = AstType::resolve(
                 &declared_type,
@@ -74,10 +67,8 @@ expression_emit!(Identifier; |node, context, block| {
             initializer.emit(context, block)
         }
         Some(Definition::Function(function_definition)) => {
-            // A bare function name binds the most-derived override (virtual
-            // dispatch): the lexical base version is shadowed and unregistered
-            // when the derived contract is compiled. An explicit `Base.f` skips
-            // this redirect (see member access emission).
+            // A bare function name binds the most-derived override (virtual dispatch); an explicit
+            // `Base.f` skips this redirect.
             let target_id = context
                 .state
                 .resolve_virtual(function_definition.node_id());

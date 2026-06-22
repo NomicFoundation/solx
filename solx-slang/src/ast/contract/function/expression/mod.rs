@@ -48,11 +48,7 @@ pub struct ExpressionContext<'state, 'context, 'block> {
     pub environment: &'state Environment<'context, 'block>,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
-    /// Arithmetic overflow-checking mode for binary operations.
-    ///
-    /// [`ArithmeticMode::Checked`] by default (Solidity 0.8+);
-    /// [`ArithmeticMode::Unchecked`] inside `unchecked {}` blocks and for-loop
-    /// step expressions.
+    /// Arithmetic overflow-checking mode (Checked by default, Unchecked inside `unchecked {}` and for-loop steps).
     pub arithmetic_mode: ArithmeticMode,
 }
 
@@ -76,21 +72,16 @@ impl<'state, 'context, 'block> ExpressionContext<'state, 'context, 'block> {
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
     type Output = BlockAnd<'context, 'block, AstValue<'context, 'block>>;
 
-    /// Dispatches an expression to its variant's emission, first folding a
-    /// compile-time-constant arithmetic/bitwise expression straight to a constant:
-    /// slang assigns it a `Literal` type carrying the exact computed value, which
-    /// matches solc's exact rational arithmetic (`1/2*2 == 1`, `2**256-1` without
-    /// 256-bit wraparound) and is the only way to lower a rational intermediate,
-    /// which has no runtime type.
+    /// Dispatches an expression to its variant's emission, first folding a compile-time-constant
+    /// arithmetic/bitwise expression to a constant (slang records the exact value, matching solc's
+    /// rational arithmetic — the only way to lower a rational intermediate, which has no runtime type).
     fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
     ) -> Self::Output {
-        // A COMPUTED constant expression (arithmetic / bitwise / shift / prefix)
-        // folds to its exact integer — slang records the value on its `Literal`
-        // type — and is emitted as that constant directly. A bare literal is
-        // excluded so it keeps its own emit arm.
+        // A COMPUTED constant expression folds to its exact integer (a bare literal is excluded
+        // so it keeps its own emit arm).
         let folds = matches!(
             self,
             Expression::AdditiveExpression(_)
@@ -168,10 +159,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for Expression {
 impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Expression {
     type Output = AstValue<'context, 'block>;
 
-    /// Emits this expression coerced to `target_type`: a string literal
-    /// materialises in the target representation (a `bytesN` / `byte` constant),
-    /// every other expression emits naturally; the result then casts to the target
-    /// — a no-op when the literal already materialised at it.
+    /// Emits this expression coerced to `target_type` (a string literal materialises in the target
+    /// representation directly; every other expression emits then casts).
     fn emit_as<'state>(
         &self,
         target_type: Type<'context>,
@@ -190,9 +179,7 @@ impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Expr
 }
 
 impl<'context: 'block, 'block> EmitForEffect<'context, 'block> for Expression {
-    /// Emits this expression for its side effects, discarding the value: a void
-    /// call and `delete` lower directly (they reach no value position), every other
-    /// expression emits naturally and drops its value, yielding the continuation.
+    /// Emits this expression for its side effects, discarding the value.
     fn emit_for_effect<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,

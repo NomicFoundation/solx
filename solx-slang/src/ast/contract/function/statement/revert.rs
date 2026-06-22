@@ -1,4 +1,6 @@
+//!
 //! Revert statement emission.
+//!
 
 use melior::ir::Attribute;
 use melior::ir::BlockLike;

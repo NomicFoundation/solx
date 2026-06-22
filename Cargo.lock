@@ -4525,7 +4525,6 @@ dependencies = [
  "anyhow",
  "cc",
  "clap",
- "hex",
  "inkwell",
  "melior",
  "mlir-sys",

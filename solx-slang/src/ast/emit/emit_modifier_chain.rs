@@ -15,18 +15,11 @@ use crate::ast::contract::function::FunctionScope;
 use crate::ast::contract::function::modifier::ModifiedBody;
 use crate::ast::contract::function::modifier::ModifierStageParams;
 
-/// Lowers a function's modifier invocations to the modifier-stage `sol.func`
-/// chain. Carried by the wrapped function; consumed by [`EmitFunction`] (a
-/// modified function body) and by constructor emission (a constructor's
-/// modifiers). The split from [`EmitFunction`] keeps the modifier-chain concern
-/// in its own home rather than swelling the core function emitter.
-///
-/// [`EmitFunction`]: crate::ast::EmitFunction
+/// Lowers a function's modifier invocations to the modifier-stage `sol.func` chain, consumed by
+/// function emission (a modified body) and constructor emission (a constructor's modifiers).
 pub trait EmitModifierChain {
-    /// Emits a modifier-wrapped function as a chain of internal `sol.func`s —
-    /// each stage and the wrapped body their own func, so a `return` inside a
-    /// modifier exits only that stage and the parent stage's `_;` site resumes.
-    /// Returns the block the public entry falls through to.
+    /// Emits a modifier-wrapped function as a chain of internal `sol.func`s (each stage its own func,
+    /// so a `return` in a modifier exits only that stage). Returns the entry's fall-through block.
     fn emit_modified_body<'state, 'context, 'frame, 'block>(
         &self,
         scope: &FunctionScope<'state, 'context>,

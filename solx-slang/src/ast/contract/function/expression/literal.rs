@@ -26,9 +26,8 @@ use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
-// A decimal and a hex integer literal lower identically: slang has already
-// computed the integer value (decimals after unit/denomination scaling, hex
-// verbatim), so both materialise a typed constant at the binder's literal type.
+// A decimal and a hex integer literal lower identically: slang has already computed the integer
+// value, so both materialise a typed constant at the binder's literal type.
 expression_emit!(DecimalNumberExpression, HexNumberExpression; |node, context, block| {
     let value = node
         .integer_value()
@@ -75,18 +74,14 @@ expression_emit!(StringExpression; |node, context, block| {
     // A string literal's bytes are emitted verbatim — they need not be valid
     // UTF-8 (`hex"..."`, `"\xff"`).
     let bytes = node.value();
-    // the `&str` is only consumed by `StringAttribute::new`, which hands it
-    // to `StringRef::new` — that reads `.as_ptr()`/`.len()` and never assumes UTF-8
-    // validity, so the non-UTF-8 literal bytes are sound here.
+    // SAFETY: the `&str` is only read as bytes by `StringAttribute::new` (never assumed UTF-8).
     let literal = unsafe { std::str::from_utf8_unchecked(&bytes) };
     let value = AstValue::string_literal(literal, &context.state.builder, &block);
     BlockAnd { block, value }
 });
 
-// A string literal used where `bytesN` / `byte` is expected materialises toward
-// that type as a compile-time fixed-bytes / byte constant rather than the runtime
-// `sol.string` its natural `EmitExpression` produces. The impl lives here, beside
-// that `EmitExpression`, because both read `ExpressionContext`'s private state.
+// A string literal used where `bytesN` / `byte` is expected materialises as a compile-time
+// fixed-bytes / byte constant rather than the runtime `sol.string` its natural emit produces.
 impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for StringExpression {
     type Output = AstValue<'context, 'block>;
 
@@ -100,7 +95,7 @@ impl<'context: 'block, 'block> EmitAs<'context, 'block, Type<'context>> for Stri
         // A string literal toward a single `byte` (an element of `bytes` /
         // `string`) materialises as a `!sol.byte` constant.
         if AstType::new(target_type).is_byte() {
-            let byte = self.value().first().copied().unwrap_or(0); // recut-lint-allow: fail01 — an empty string literal toward a byte is 0x00 (zero-padding)
+            let byte = self.value().first().copied().unwrap_or(0);
             let ui8 = Type::from(IntegerType::unsigned(
                 builder.context,
                 BIT_LENGTH_BYTE as u32,

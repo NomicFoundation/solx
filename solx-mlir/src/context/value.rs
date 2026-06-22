@@ -44,14 +44,7 @@ use crate::ods::sol::NewOperation;
 use crate::ods::sol::PushOperation;
 use crate::ods::sol::StringLitOperation;
 
-/// An MLIR value in the Sol dialect.
-///
-/// A newtype over the melior value — which already carries its own MLIR type, so
-/// the entity stays thin — that is the home for the conversions a value undergoes:
-/// coercion, casting, and the truthiness test live on the value itself, not on a
-/// context or a type-conversion god-object. The conversion methods take the
-/// [`Builder`] and the current block by parameter, exactly as a node's emission
-/// does.
+/// An MLIR value in the Sol dialect; the home for the conversions a value undergoes.
 #[derive(Clone, Copy)]
 pub struct Value<'context, 'block> {
     inner: MlirValue<'context, 'block>,
@@ -79,10 +72,7 @@ impl<'context, 'block> Value<'context, 'block> {
         Type::new(self.inner.r#type())
     }
 
-    /// Materialises a `sol.constant` of `result_type` from an `i64`-sized value —
-    /// the common path for sizes, indices, and selectors whose magnitude is known
-    /// to fit. Generic over the block because it is also emitted from inside the
-    /// `Builder`'s own composite primitives, which carry a generic block.
+    /// Materialises a `sol.constant` of `result_type` from an `i64`-sized value.
     pub fn constant<B>(
         value: i64,
         result_type: Type<'context>,
@@ -103,12 +93,7 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// Materialises a `sol.constant` from an arbitrary-width [`BigInt`] — the path
-    /// for literals that overflow `i64`. An `address` constant is built at the
-    /// `ui160` address width and cast through the router; a boolean is an `i1`
-    /// attribute; every other integer width is carried by the FFI big-integer
-    /// attribute (the one primitive a `BigInt` constant cannot express through the
-    /// fixed-width `IntegerAttribute`).
+    /// Materialises a `sol.constant` from an arbitrary-width [`BigInt`] (literals that overflow `i64`).
     pub fn constant_from_bigint(
         value: &BigInt,
         result_type: Type<'context>,
@@ -162,10 +147,8 @@ impl<'context, 'block> Value<'context, 'block> {
         )
     }
 
-    /// A `string memory` value holding `text` verbatim, via `sol.string_lit` — the
-    /// runtime materialisation of a string literal and of `type(C).name`. The bytes
-    /// are taken as-is: a string literal need not be valid UTF-8 (`hex"..."`,
-    /// `"\xff"`), and the caller is responsible for that invariant.
+    /// A `string memory` value holding `text` verbatim, via `sol.string_lit`.
+    /// The bytes are taken as-is — a string literal need not be valid UTF-8.
     pub fn string_literal(
         text: &str,
         builder: &Builder<'context>,
@@ -180,10 +163,7 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// The zero of a scalar value type, built at its own representation width and
-    /// bridged through the type's cast — never a narrowed wider constant (the
-    /// `sol.cast` fold mishandles that). A UDVT arrives as its underlying type; a
-    /// reference type is default-initialised through [`crate::Pointer`] instead.
+    /// The zero of a scalar value type, built at its own representation width and cast through the type.
     pub fn zero(
         r#type: Type<'context>,
         builder: &Builder<'context>,
@@ -235,13 +215,8 @@ impl<'context, 'block> Value<'context, 'block> {
         }
     }
 
-    /// `sol.malloc` — a fresh memory buffer typed as `mlir_type`. A `Some` `size`
-    /// allocates a dynamically-sized buffer (`new T[](n)`, `new bytes(n)`); `None`
-    /// sizes it from the type alone. `zero_init` zero-fills it (a memory
-    /// aggregate's default-initialised contents); without it the buffer is left
-    /// uninitialised, the zero-length form a dynamic `string` / `bytes` starts
-    /// from. The allocation primitive behind a memory type default, a `new`
-    /// dynamic allocation, and a `string` / `bytes` / aggregate stack-slot seed.
+    /// `sol.malloc` — a fresh memory buffer typed as `mlir_type`. `Some` `size`
+    /// allocates a dynamically-sized buffer; `zero_init` zero-fills it.
     pub fn malloc(
         mlir_type: MlirType<'context>,
         size: Option<MlirValue<'context, 'block>>,
@@ -249,34 +224,24 @@ impl<'context, 'block> Value<'context, 'block> {
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,
     ) -> Self {
-        let zero_init = zero_init.then(|| Attribute::unit(builder.context));
-        let value = match (size, zero_init) {
-            (Some(size), Some(zero_init)) => mlir_op!(
-                builder,
-                block,
-                MallocOperation
-                    .addr(mlir_type)
-                    .size(size)
-                    .zero_init(zero_init)
-            ),
-            (Some(size), None) => {
-                mlir_op!(builder, block, MallocOperation.addr(mlir_type).size(size))
-            }
-            (None, Some(zero_init)) => mlir_op!(
-                builder,
-                block,
-                MallocOperation.addr(mlir_type).zero_init(zero_init)
-            ),
-            (None, None) => mlir_op!(builder, block, MallocOperation.addr(mlir_type)),
-        };
-        Self::new(value)
+        let mut op_builder =
+            MallocOperation::builder(builder.context, builder.unknown_location).addr(mlir_type);
+        if let Some(size) = size {
+            op_builder = op_builder.size(size);
+        }
+        if zero_init {
+            op_builder = op_builder.zero_init(Attribute::unit(builder.context));
+        }
+        Self::new(
+            block
+                .append_operation(op_builder.build().into())
+                .result(0)
+                .expect("sol.malloc produces one result")
+                .into(),
+        )
     }
 
-    /// The default value of a return position reached without an explicit
-    /// `return <value>` — a zeroed buffer for a memory aggregate, an empty buffer
-    /// for dynamic `string` / `bytes`, the representation's own zero otherwise.
-    /// The kind is keyed on the Slang type; the scalar fallbacks reuse
-    /// [`Self::zero`] / [`Self::constant`].
+    /// The default value of a return position reached without an explicit `return <value>`, keyed on the Slang type.
     pub fn type_default(
         slang_type: Option<&SlangType>,
         mlir_type: MlirType<'context>,
@@ -295,8 +260,7 @@ impl<'context, 'block> Value<'context, 'block> {
                 Self::malloc(mlir_type, None, true, builder, block)
             }
             Some(SlangType::String(_) | SlangType::Bytes(_)) => {
-                // A fresh zero-length buffer (plain `sol.malloc`, matching solc),
-                // not a sized `new bytes(0)`.
+                // A fresh zero-length buffer (plain `sol.malloc`), not a sized `new bytes(0)`.
                 Self::malloc(mlir_type, None, false, builder, block)
             }
             Some(
@@ -312,11 +276,7 @@ impl<'context, 'block> Value<'context, 'block> {
         }
     }
 
-    /// `sol.gasleft` — all remaining gas as a `ui256`. The default gas an
-    /// external call forwards without an explicit `{gas: …}`, the gas of a bare
-    /// low-level call, and the value of the `gasleft()` built-in: one home for
-    /// the op rather than a Builder method and a built-in arm. Generic over the
-    /// block because the call ops emit it from inside composite primitives.
+    /// `sol.gasleft` — all remaining gas as a `ui256` (the `gasleft()` built-in and the default forwarded call gas).
     pub fn gas_left<B>(builder: &Builder<'context>, block: &B) -> Self
     where
         B: BlockLike<'context, 'block>,
@@ -330,9 +290,7 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// A `uint256` constant — Solidity's default integer width, and the width of
-    /// selectors, sizes, enum ordinals, and the value a call forwards. Spells the
-    /// `(value, ui256)` constant once instead of repeating the type at each site.
+    /// A `uint256` constant — Solidity's default integer width.
     pub fn uint256(
         value: i64,
         builder: &Builder<'context>,
@@ -346,9 +304,7 @@ impl<'context, 'block> Value<'context, 'block> {
         )
     }
 
-    /// `sol.ext_func_constant` packing a callee `address` and a 4-byte
-    /// `selector` into an `!sol.ext_func_ref<…>` of `result_type` — the callee
-    /// value of an external call, and the zero of an external function type.
+    /// `sol.ext_func_constant` packing a callee `address` and 4-byte `selector` into an `!sol.ext_func_ref<…>`.
     pub fn ext_func_constant<B>(
         address: Self,
         selector: u32,
@@ -373,10 +329,7 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// The 4-byte selector of this external function-pointer value, pulled out of
-    /// its `!sol.ext_func_ref<…>` at runtime via `sol.ext_func_selector` — the
-    /// `f.selector` projection and the selector an `abi.encodeCall` over a runtime
-    /// pointer prepends.
+    /// The 4-byte selector of this external function-pointer value, via `sol.ext_func_selector` (`f.selector`).
     pub fn ext_func_selector(
         self,
         builder: &Builder<'context>,
@@ -391,9 +344,7 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// The `address` component of this external function-pointer value, pulled out
-    /// of its `!sol.ext_func_ref<…>` via `sol.ext_func_addr` — the `f.address`
-    /// projection.
+    /// The `address` component of this external function-pointer value, via `sol.ext_func_addr` (`f.address`).
     pub fn ext_func_address(
         self,
         builder: &Builder<'context>,
@@ -408,10 +359,7 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// The `!sol.ext_func_ref<…>` callee of an external interaction: `receiver`
-    /// cast to `address`, packed with `selector` over the signature
-    /// `(parameter_types) -> (return_types)`. Shared by CALL / STATICCALL, the
-    /// `try`-call, and a `this.f` / `instance.f` external function-pointer value.
+    /// The `!sol.ext_func_ref<…>` callee of an external interaction: `receiver` cast to `address`, packed with `selector`.
     pub fn external_callee(
         receiver: Self,
         selector: u32,
@@ -425,9 +373,7 @@ impl<'context, 'block> Value<'context, 'block> {
         Self::ext_func_constant(address, selector, ext_func_ref_type, builder, block)
     }
 
-    /// `sol.func_constant` — an internal function pointer (`!sol.func_ref<…>`)
-    /// to the symbol `name`, the value a bare internal-function reference lowers
-    /// to. The null-pointer sibling is [`Self::zero`]'s function-ref arm.
+    /// `sol.func_constant` — an internal function pointer (`!sol.func_ref<…>`) to the symbol `name`.
     pub fn function_constant(
         name: &str,
         result_type: Type<'context>,
@@ -443,11 +389,7 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// `sol.lib_addr` — a library's linked deploy address: a placeholder the LLVM
-    /// linker resolves by the library's [`solx_utils::ContractName`] full path
-    /// (`<file>:<Library>`), the one key it shares with
-    /// [`solx_utils::Libraries::as_linker_symbols`]. The value of `address(L)` and
-    /// the callee address of an external library call.
+    /// `sol.lib_addr` — a library's linked deploy address, a placeholder the linker resolves by the library's full path.
     pub fn library_address(
         name: &solx_utils::ContractName,
         builder: &Builder<'context>,
@@ -462,14 +404,10 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// `sol.new` — contract creation embedding `obj_name`'s deploy bytecode,
-    /// yielding the new instance. `val` is the forwarded wei; a `salt` selects
-    /// CREATE2 over CREATE. The operands are appended in ODS order (val, salt,
-    /// ctorArgs) and `operand_segment_sizes` is set by hand because melior's ODS
-    /// builder does not synthesize it for this `AttrSizedOperandSegments` op, so
-    /// the verifier rejects the op without it. The optional salt must be appended
-    /// before the variadic ctor args — appending it after would transpose the salt
-    /// and the first constructor argument.
+    /// `sol.new` — contract creation embedding `obj_name`'s deploy bytecode. `val`
+    /// is the forwarded wei; a `salt` selects CREATE2. `operand_segment_sizes` is
+    /// set by hand (melior's ODS builder doesn't synthesize it); the salt must be
+    /// appended before the variadic ctor args or the two transpose.
     pub fn create_contract(
         obj_name: &str,
         val: Self,
@@ -504,11 +442,7 @@ impl<'context, 'block> Value<'context, 'block> {
         )
     }
 
-    /// `sol.keccak256` over a byte buffer, yielding the 32-byte hash. The buffer
-    /// is coerced to memory first — a storage / calldata `bytes` is a reference,
-    /// which solc copies to memory before hashing — a no-op when already memory.
-    /// Shared by the `keccak256` built-in and `abi.encodeWithSignature`'s
-    /// runtime-signature hash.
+    /// `sol.keccak256` over a byte buffer, yielding the 32-byte hash. The buffer is coerced to memory first.
     pub fn keccak256(
         buffer: Self,
         builder: &Builder<'context>,
@@ -530,15 +464,8 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// `sol.encode` — the ABI-encoded `bytes memory` payload of `ins`. A
-    /// `selector`, when present, is prepended as the leading 4 bytes and must
-    /// already be `!sol.fixed_bytes<4>`. `packed` selects the packed encoding (no
-    /// per-element padding, `abi.encodePacked`). Shared by every `abi.encode*`
-    /// arm — the standard / packed encode, the selector / signature / call forms.
-    ///
-    /// Sets `operand_segment_sizes` by hand because melior's ODS-generated builder
-    /// does not synthesize the attribute for this `AttrSizedOperandSegments` op;
-    /// the dialect verifier rejects the op without it.
+    /// `sol.encode` — the ABI-encoded `bytes memory` payload of `ins`. A `selector`,
+    /// when present, is prepended as the leading 4 bytes; `packed` selects `abi.encodePacked`.
     pub fn abi_encode(
         ins: &[MlirValue<'context, 'block>],
         selector: Option<MlirValue<'context, 'block>>,
@@ -574,9 +501,7 @@ impl<'context, 'block> Value<'context, 'block> {
         )
     }
 
-    /// A function/error selector or event topic as a `bytesN` value: the integer
-    /// `value` at `width_bytes` width cast to `fixedbytes<width_bytes>` (4 bytes
-    /// for a selector, 32 for an event topic).
+    /// A selector or event topic as a `bytesN` value: `value` at `width_bytes` width cast to `fixedbytes<width_bytes>`.
     pub fn selector_constant(
         value: &BigInt,
         width_bytes: u32,
@@ -599,13 +524,8 @@ impl<'context, 'block> Value<'context, 'block> {
         )
     }
 
-    /// Appends a default element to this dynamic-array / `bytes` value (typed by
-    /// its `base_type`) and returns the new element's place together with its
-    /// element MLIR type (`sol.push`). A reference-typed element yields its
-    /// reference directly (the caller copies into it via `sol.copy`); a value-typed
-    /// one yields a `!sol.ptr` to the slot at the array's location (stored into via
-    /// `sol.store`) — a reference element pushed as a pointer would force a
-    /// memory→storage data-location cast the backend cannot lower.
+    /// Appends a default element to this dynamic array / `bytes` (`sol.push`), returning the element's
+    /// place and MLIR type. A reference element yields its reference directly; a value element a `!sol.ptr`.
     pub fn push_slot(
         self,
         base_type: &SlangType,
@@ -624,15 +544,9 @@ impl<'context, 'block> Value<'context, 'block> {
         (new_slot, element_type)
     }
 
-    /// Calls this function-pointer value with `argument_values`, returning the
-    /// decoded result values. Dispatch is on the value's actual reference kind,
-    /// not slang's `is_externally_visible`: an internal pointer (`func_ref`, even
-    /// for a `public` function used as a bare value) dispatches through `sol.icall`;
-    /// an external one (`ext_func_ref`) through `sol.ext_icall`, forwarding
-    /// `call_value` (or zero) as `msg.value` and dropping the status (a non-`try`
-    /// call reverts internally on failure). A `view`/`pure` callee lowers to a
-    /// STATICCALL via `is_static` (a function-pointer value carries no mutability,
-    /// so it passes `false`).
+    /// Calls this function-pointer value, returning the decoded results. Dispatch is on the value's
+    /// reference kind: an internal `func_ref` through `sol.icall`, an external `ext_func_ref` through
+    /// `sol.ext_icall` (forwarding `call_value` as `msg.value` and dropping the status).
     pub fn call_indirect(
         self,
         argument_values: &[MlirValue<'context, 'block>],
@@ -686,11 +600,7 @@ impl<'context, 'block> Value<'context, 'block> {
         }
     }
 
-    /// Casts to `target_type`, handing the value to the target type's cast router
-    /// ([`Type::cast`]) — the kind-dispatch that selects the dialect cast op
-    /// (`sol.cast` / `sol.bytes_cast` / `sol.address_cast` / …), and a no-op when
-    /// the value already has `target_type`. A cast to `i1` is a plain
-    /// representation cast; truthiness (`x != 0`) is [`Self::is_nonzero`], not a cast.
+    /// Casts to `target_type` via the target type's cast router ([`Type::cast`]); a no-op when already that type.
     pub fn cast(
         self,
         target_type: Type<'context>,
@@ -700,12 +610,8 @@ impl<'context, 'block> Value<'context, 'block> {
         target_type.cast(self, builder, block)
     }
 
-    /// Reinterprets the value's representation as `target_type` via
-    /// `sol.conv_cast` — a representation-preserving cast the conversion pipeline
-    /// rewrites to the remapped value. It crosses the inline-assembly boundary: a
-    /// Solidity local's `!sol.ptr<T, Stack>` is reinterpreted as the `!llvm.ptr`
-    /// that Yul `llvm.load`/`llvm.store` operate on. Returns the value unchanged
-    /// when it already has `target_type`.
+    /// Reinterprets the value's representation as `target_type` via `sol.conv_cast` (e.g. across the
+    /// inline-assembly boundary: a `!sol.ptr<T, Stack>` as the `!llvm.ptr` Yul operates on).
     pub fn reinterpret(
         self,
         target_type: Type<'context>,
@@ -760,9 +666,7 @@ impl<'context, 'block> Value<'context, 'block> {
         ))
     }
 
-    /// Tests the value against zero, producing an `i1`. Short-circuits when the
-    /// value is already `i1` (e.g. from a `sol.cmp`), avoiding a redundant
-    /// `sol.cmp ne, %i1, %zero`.
+    /// Tests the value against zero, producing an `i1`. Short-circuits when already `i1`.
     pub fn is_nonzero(
         self,
         builder: &Builder<'context>,

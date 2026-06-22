@@ -1,6 +1,5 @@
 //!
-//! TODO: pure-Slang query pending a home (Slang dev-solx vs solx vs fold) —
-//! query-sorting pass. Lifted verbatim from `FunctionEmitter::match_linearised_base`.
+//! `is Base` / base-constructor path resolution against the C3 linearisation (pure-Slang, pending a home).
 //!
 
 use std::collections::HashSet;
@@ -13,12 +12,8 @@ use slang_solidity_v2::ast::NodeId;
 /// Resolves an `is Base` / base-constructor `Base(args)` path reference to its
 /// contract in the C3 linearisation.
 pub trait MatchLinearisedBase {
-    /// The `mro` entry this path names, or `None` when it does not resolve to a
-    /// linearised base contract. Resolves the whole path (`Base`), else its final
-    /// segment (`M.Base` — an import-aliased path does not resolve as a whole, but
-    /// its last segment names the contract). Matching by the resolved node id
-    /// needs no name comparison and keys the entry to the linearisation-driven
-    /// body walk.
+    /// The `mro` entry this path names (the whole path `Base`, else its final segment `M.Base`),
+    /// or `None` if it does not resolve to a linearised base.
     fn match_linearised_base(
         &self,
         mro: &[ContractDefinition],

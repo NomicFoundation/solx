@@ -1,9 +1,8 @@
 //!
 //! Super / C3 virtual-dispatch precompute pass.
 //!
-//! Re-resolves a contract's `super.f(...)` and virtual internal calls against
-//! its C3 linearisation, producing the `redirect` / `shadowed` /
-//! `virtual_redirect` maps the frozen [`Context`](solx_mlir::Context) carries.
+//! Re-resolves a contract's `super.f(...)` and virtual internal calls against its C3 linearisation,
+//! producing the `redirect` / `shadowed` / `virtual_redirect` maps the `Context` carries.
 //!
 
 use std::collections::HashMap;
@@ -22,9 +21,8 @@ use slang_solidity_v2::ast::visitor::accept_inheritance_type;
 
 use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 
-/// The result of re-resolving a contract's `super` and virtual calls against
-/// its C3 linearisation, plus the pass-local visitor state that gathers the
-/// `super.f` / `Base.f` accesses.
+/// The result of re-resolving a contract's `super` / virtual calls against its C3 linearisation,
+/// plus the pass-local visitor state gathering the `super.f` / `Base.f` accesses.
 #[derive(Default)]
 pub struct SuperDispatch {
     /// `super` member-access node id -> target function node id.
@@ -61,10 +59,8 @@ impl SuperDispatch {
 
         let mut dispatch = SuperDispatch::default();
 
-        // Virtual dispatch: map every shadowed (overridden) base function to the
-        // most-derived implementation of its signature, so a plain `g()` call in
-        // a base body reaches the override. The most-derived version of each
-        // signature is exactly the one kept by `linearised_functions`.
+        // Virtual dispatch: map every shadowed base function to the most-derived implementation of its
+        // signature (the one kept by `linearised_functions`), so a plain `g()` in a base body reaches the override.
         let mut most_derived_by_signature: HashMap<String, NodeId> = HashMap::new();
         for function in contract.linearised_functions() {
             most_derived_by_signature
@@ -88,9 +84,8 @@ impl SuperDispatch {
         let mut shadowed_ids: HashSet<NodeId> = HashSet::new();
         let mut walked: HashSet<NodeId> = HashSet::new();
 
-        // Seed with every function the most-derived contract actually runs (its
-        // linearised functions and the constructors along the chain), each tagged
-        // with the mro index of the contract whose body it is.
+        // Seed with every function the most-derived contract runs (linearised functions + chain constructors),
+        // each tagged with the mro index of the contract whose body it is.
         let mut to_walk: Vec<(usize, FunctionDefinition)> = Vec::new();
         for function in contract.linearised_functions() {
             let index = Self::defining_index(&mro, function.node_id())
@@ -103,13 +98,9 @@ impl SuperDispatch {
             }
         }
 
-        // A base-qualified call can also appear in an inheritance-specifier
-        // argument (`contract C is Base(Other.f())`), which no function body
-        // contains — the per-function walk below never visits it. Collect those
-        // `Base.f()` calls up front so each gets a `redirect` entry like an
-        // in-body base call; `super.f()` cannot appear here (no instance
-        // context), so only `base_calls` are processed. The target's own body is
-        // pushed onto `to_walk` by `record_target`, so its calls are walked too.
+        // A base-qualified call can also appear in an inheritance-specifier argument
+        // (`contract C is Base(Other.f())`), which no function body contains — collect those `Base.f()`
+        // calls up front so each gets a `redirect` entry (no `super` here, so only `base_calls`).
         for base_contract in mro.iter() {
             let mut collector = SuperDispatch::default();
             for inheritance in base_contract.inheritance_types().iter() {
@@ -189,10 +180,8 @@ impl SuperDispatch {
         })
     }
 
-    /// Finds the `super` target of `signature` for a call in a function defined
-    /// at `from_index`: the first *implemented* function with that signature in a
-    /// strictly more-base contract (`mro[from_index + 1 ..]`). An unimplemented
-    /// (bodyless) interface / abstract declaration is skipped, like solc.
+    /// Finds the `super` target of `signature` for a call at `from_index`: the first *implemented*
+    /// function with that signature in a strictly more-base contract (a bodyless declaration is skipped).
     fn resolve_super_target(
         mro: &[ContractDefinition],
         from_index: usize,

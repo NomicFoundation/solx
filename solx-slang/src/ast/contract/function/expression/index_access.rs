@@ -24,9 +24,8 @@ use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpression {
-    /// Emits the address `a[i]` / `m[k]` denotes together with the element MLIR
-    /// type — `sol.map` over a mapping key, `sol.gep` over a sequential index —
-    /// without the trailing `sol.load`.
+    /// Emits the address `a[i]` / `m[k]` denotes with the element type (`sol.map` for a mapping key,
+    /// `sol.gep` for a sequential index), without the load.
     fn emit_place<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -99,19 +98,12 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for IndexAccessExpres
     }
 }
 
-// `a[i]` / `m[k]` for arrays, dynamic `bytes`, mappings, and strings address the
-// element (`sol.gep` for sequential containers, `sol.map` for mappings) and
-// `sol.load` it. For dynamic `bytes` the C++ element type is `!sol.byte`; a
-// `sol.bytes_cast` widens it to `!sol.fixedbytes<1>` to match `bytes1` typing
-// (a no-op for matching types). A slice `a[start:end]` instead produces a
-// sub-array VALUE via `sol.slice`.
+// `a[i]` / `m[k]` address the element and `sol.load` it; a slice `a[start:end]` instead produces
+// a sub-array VALUE via `sol.slice`. A dynamic-`bytes` element widens `!sol.byte` to `bytes1`.
 expression_emit!(IndexAccessExpression; |node, context, block| {
-    // A slice `a[start:end]` produces a sub-array VALUE (not an element
-    // address), emitted as `sol.slice`. `kind()` distinguishes every slice form
-    // — including the open-ended `a[i:]`, indistinguishable from the index `a[i]`
-    // by `end()` alone (both `None`) — from a plain index access. `start`
-    // defaults to `0` when omitted (`a[:end]`); both indices widen to `ui256`.
-    // The upper bound of an open-ended `a[start:]` is the operand's length.
+    // A slice `a[start:end]` produces a sub-array VALUE via `sol.slice`, distinguished by `kind()`
+    // (an open-ended `a[i:]` is indistinguishable from `a[i]` by `end()` alone). Omitted `start` is
+    // `0`, omitted `end` the operand's length; both indices widen to `ui256`.
     if matches!(node.kind(), IndexAccessKind::Slice) {
         let base = node.operand();
         let BlockAnd {
@@ -186,13 +178,9 @@ expression_emit!(IndexAccessExpression; |node, context, block| {
         &context.state.builder,
         &block,
     );
-    // A scalar element loaded from a packed slot may need a fixed-bytes
-    // re-alignment toward its declared element type (`sol.bytes_cast`). A
-    // reference-typed element (a nested array / struct) is loaded as its
-    // canonical reference and is authoritative: bytes_cast is undefined on it,
-    // and slang can mis-type the *result* of indexing an array literal whose
-    // element is a calldata reference (`[b[i:j]][0]`) as `calldata` while the
-    // loaded value is the correct memory reference.
+    // A scalar element may need a fixed-bytes re-alignment to its declared type. A reference-typed
+    // element is loaded as its canonical reference and is authoritative (slang can mis-type the
+    // result of indexing an array literal of calldata references, so trust the loaded value's type).
     if value.r#type().is_reference() {
         return BlockAnd { block, value };
     }

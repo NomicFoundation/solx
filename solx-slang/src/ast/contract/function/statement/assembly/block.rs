@@ -13,12 +13,8 @@ use solx_mlir::ods::yul::*;
 use crate::ast::EmitYul;
 use crate::ast::contract::function::statement::assembly::YulContext;
 
-// Yul resolves function calls regardless of textual order, so a block first
-// pre-registers its `function` definitions, then emits each non-definition
-// statement (`None` once a `break`/`continue` diverges), then drops the
-// definitions added here so an enclosing scope's stay intact. The lexical scope
-// is the caller's: the top-level `assembly` block reuses the function scope, a
-// nested `{ … }` brackets its own.
+// Yul resolves function calls regardless of textual order, so a block pre-registers its `function`
+// definitions, emits the rest, then drops the definitions it added (so an enclosing scope's stay intact).
 yul_emit!(YulBlock => Option<BlockRef<'context, 'block>>; |yul_block, context, block| {
     let saved_functions: Vec<String> = context.yul_functions.keys().cloned().collect();
     for statement in yul_block.statements().iter() {
@@ -57,11 +53,8 @@ yul_emit!(YulBlock => Option<BlockRef<'context, 'block>>; |yul_block, context, b
     if diverged { None } else { Some(current) }
 });
 
-/// Emits a Yul block as a control-flow region body — an `if` branch, a `for`
-/// body / step, a `switch` case / default. Switches into the region, walks the
-/// statements, and closes with `yul.yield`; a body that already terminated with
-/// `break`/`continue` puts the required `yul.yield` in a fresh trailing block,
-/// matching solc.
+/// Emits a Yul block as a control-flow region body (an `if` branch, `for` body, `switch` case),
+/// closing with `yul.yield` (in a fresh trailing block if the body already terminated).
 pub trait EmitRegionBody<'context, 'block, 'state, 'scope> {
     /// Emits this block into the region owning `target_block`.
     fn emit_region_body(

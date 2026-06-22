@@ -6,9 +6,7 @@ use melior::Context;
 use melior::ir::Attribute;
 use slang_solidity_v2::ast::FunctionMutability;
 
-/// Sol dialect state mutability.
-///
-/// Maps to the `StateMutabilityAttr` values in the C++ Sol dialect.
+/// Sol dialect state mutability (maps to the C++ `StateMutabilityAttr` values).
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StateMutability {
@@ -22,8 +20,7 @@ pub enum StateMutability {
     Payable = 3,
 }
 
-/// Maps Slang's `FunctionMutability` to the Sol dialect's `StateMutability`; the
-/// dialect defines its own mutability enum independently of the Slang AST.
+/// Maps Slang's `FunctionMutability` to the Sol dialect's `StateMutability`.
 impl From<FunctionMutability> for StateMutability {
     fn from(mutability: FunctionMutability) -> Self {
         match mutability {
@@ -36,9 +33,7 @@ impl From<FunctionMutability> for StateMutability {
 }
 
 impl StateMutability {
-    /// Builds the Sol-dialect `StateMutabilityAttr` for this mutability — the
-    /// dialect representation a `sol.func` carries, owned by the mutability rather
-    /// than spelled at the emission site.
+    /// Builds the Sol-dialect `StateMutabilityAttr` for this mutability.
     pub fn attribute(self, context: &Context) -> Attribute<'_> {
         unsafe {
             Attribute::from_raw(crate::ffi::solxCreateStateMutabilityAttr(

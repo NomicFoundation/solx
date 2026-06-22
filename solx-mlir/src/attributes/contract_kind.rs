@@ -5,9 +5,7 @@
 use melior::Context;
 use melior::ir::Attribute;
 
-/// Sol dialect contract kind.
-///
-/// Maps to the `ContractKindAttr` values in the C++ Sol dialect.
+/// Sol dialect contract kind (maps to the C++ `ContractKindAttr` values).
 #[repr(u32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContractKind {
@@ -20,9 +18,7 @@ pub enum ContractKind {
 }
 
 impl ContractKind {
-    /// Builds the Sol-dialect `ContractKindAttr` for this kind — the dialect
-    /// representation a `sol.contract` carries, owned by the kind itself rather
-    /// than spelled at each emission site.
+    /// Builds the Sol-dialect `ContractKindAttr` for this kind.
     pub fn attribute(self, context: &Context) -> Attribute<'_> {
         unsafe {
             Attribute::from_raw(crate::ffi::solxCreateContractKindAttr(

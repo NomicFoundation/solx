@@ -1,4 +1,6 @@
+//!
 //! Event emit statement emission.
+//!
 
 use melior::ir::BlockLike;
 use melior::ir::BlockRef;
@@ -19,10 +21,8 @@ use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::statement::StatementContext;
 
-// Resolve the event definition, classify each argument as indexed or
-// non-indexed per the event's parameter declaration, evaluate argument
-// expressions in declaration order, and emit `sol.emit` with the canonical
-// signature (`None` for an anonymous event).
+// Classify each argument as indexed or non-indexed per the event's parameters, then emit `sol.emit`
+// with the canonical signature (`None` for an anonymous event).
 statement_emit!(EmitStatementNode; |node, context, block| {
     let Some(Definition::Event(event_definition)) = node.event().resolve_to_definition() else {
         unreachable!("slang resolves an emit target to an event definition");
@@ -60,10 +60,8 @@ statement_emit!(EmitStatementNode; |node, context, block| {
             )
             .into_mlir();
         if indexed {
-            // TODO: indexed reference-type parameters (string, bytes,
-            // arrays, structs) must store the keccak256 hash of their
-            // encoded value as the topic, not the value itself. That
-            // emission is not supported by solc-MLIR yet.
+            // TODO: an indexed reference-type parameter must store the keccak256 hash of its encoded
+            // value as the topic, not the value (not yet supported by solc-MLIR).
             indexed_arguments.push(value);
         } else {
             non_indexed_arguments.push(value);
@@ -79,9 +77,7 @@ statement_emit!(EmitStatementNode; |node, context, block| {
                 .expect("slang validated"),
         )
     };
-    // `sol.emit` carries the indexed topics first, then the data arguments;
-    // EVM events have at most four indexed topics, so the count always fits in
-    // the dialect's `i8` `indexedArgsCount` attribute.
+    // `sol.emit` carries the indexed topics first, then the data arguments (the count fits the dialect's `i8`).
     let builder = &context.state.builder;
     let combined_arguments: Vec<Value<'context, 'block>> = indexed_arguments
         .iter()

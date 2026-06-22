@@ -29,16 +29,11 @@ use crate::ast::contract::storage_layout::StorageSlot;
 
 /// Assignment target resolved from the Slang binder.
 pub enum AssignmentTarget<'context, 'block> {
-    /// Address-typed pointer with its declared element type.
-    ///
-    /// Covers local variables, function parameters, and the result of an
-    /// `a[i]` / `m[k]` index-access expression on the left-hand side.
+    /// Address-typed pointer with its element type — a local, parameter, or `a[i]` / `m[k]` lvalue.
     Pointer(Value<'context, 'block>, Type<'context>),
     /// State variable — storage slot and declared element type.
     Storage(StorageSlot, Type<'context>),
-    /// Reference-typed location (array/struct/`string`/`bytes` addressed by
-    /// reference, in storage or calldata): the destination reference into
-    /// which the RHS reference's contents are copied via `sol.copy`.
+    /// Reference-typed location: the destination into which the RHS reference's contents are copied via `sol.copy`.
     ReferenceCopy(Value<'context, 'block>),
 }
 
@@ -79,9 +74,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                 (Self::from_address(address, element_type), block)
             }
             Expression::MemberAccessExpression(access) => {
-                // A namespace-qualified state-variable lvalue (`C.x = v`) is not a
-                // struct field; resolve it like the bare `x = v`. A genuine struct
-                // field resolves to a `StructMember`, falling through below.
+                // A namespace-qualified state-variable lvalue (`C.x = v`) is not a struct field;
+                // resolve it like the bare `x = v`. A genuine struct field falls through below.
                 if let Some(Definition::StateVariable(state_variable)) =
                     access.member().resolve_to_definition()
                 {
@@ -131,13 +125,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         }
     }
 
-    /// Resolves a state-variable lvalue — bare `x` or namespace-qualified `C.x`
-    /// — to its assignment target.
-    ///
-    /// Reference-typed storage (arrays, `string`, `bytes`, structs) is assigned
-    /// by copying the RHS reference's contents into the slot via `sol.copy` (a
-    /// [`Self::ReferenceCopy`]); a whole mapping is not assignable. Value-typed
-    /// storage stores the coerced scalar directly.
+    /// Resolves a state-variable lvalue (bare `x` or `C.x`) to its target. Reference-typed storage
+    /// is copied via `sol.copy` ([`Self::ReferenceCopy`]); value-typed storage stores the scalar directly.
     fn from_state_variable<'state>(
         context: &ExpressionContext<'state, 'context, 'block>,
         state_variable: &ast::StateVariableDefinition,
@@ -167,11 +156,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         (Self::Storage(slot, element_type), block)
     }
 
-    /// Classifies a computed lvalue `address` (with its `element_type`) into its
-    /// assignment target. A reference-typed element is addressed BY reference —
-    /// the address value's type IS the element type — so it is copied into
-    /// ([`Self::ReferenceCopy`]); any other element is a [`Self::Pointer`] stored
-    /// through. Shared by the index, struct-field, and `push()` lvalue paths.
+    /// Classifies a computed lvalue `address` into its target: a reference element (the address type
+    /// IS the element type) becomes a [`Self::ReferenceCopy`], any other a [`Self::Pointer`].
     fn from_address(address: Value<'context, 'block>, element_type: Type<'context>) -> Self {
         if address.r#type() == element_type {
             Self::ReferenceCopy(address)
@@ -217,12 +203,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         }
     }
 
-    /// Collects the `(lvalue, value)` bindings of a destructuring assignment
-    /// `(a, b, …) = rhs`, evaluating every value before the caller stores any (so
-    /// `(a, b) = (b, a)` swaps). A tuple-literal RHS pairs element-wise and
-    /// recurses into nested tuples; a blank slot discards its RHS — a scalar still
-    /// evaluated for its side effects, a nested tuple wholesale. A call /
-    /// conditional RHS is a flat value list, one value per lvalue.
+    /// Collects the `(lvalue, value)` bindings of a destructuring assignment `(a, b, …) = rhs`,
+    /// evaluating every value before any store (so `(a, b) = (b, a)` swaps). A blank slot discards its RHS.
     fn destructure<'state>(
         context: &ExpressionContext<'state, 'context, 'block>,
         lhs: &TupleExpression,
@@ -280,12 +262,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         (bindings, block)
     }
 
-    /// Resolves each binding's lvalue to a target left-to-right against the
-    /// pre-assignment state, then stores RIGHT-TO-LEFT — so the leftmost write to
-    /// an aliased destination wins (`(y, y, y) = (1, 2, 3)` leaves `y == 1`) and a
-    /// storage-aggregate swap copies references in place. Returns the last stored
-    /// value, or a zero sentinel when every slot was blank (`(, ) = f()` still has
-    /// a value in expression position).
+    /// Resolves each lvalue left-to-right against the pre-assignment state, then stores RIGHT-TO-LEFT
+    /// so the leftmost write to an aliased destination wins. Returns the last stored value, or zero if all blank.
     fn store_all<'state>(
         context: &ExpressionContext<'state, 'context, 'block>,
         bindings: Vec<(Expression, Value<'context, 'block>)>,
@@ -307,10 +285,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
         (result, block)
     }
 
-    /// Emits `delete x` — resets the lvalue `operand` denotes to its zero value.
-    /// A reference-typed storage aggregate is deep-cleared via `sol.delete`; a
-    /// memory aggregate resets to a freshly allocated zero-filled buffer; a value
-    /// lvalue is overwritten with its type's own zero (reusing the store path).
+    /// Emits `delete x` — resets the lvalue to its zero. A storage aggregate is deep-cleared via
+    /// `sol.delete`; a memory aggregate resets to a zero-filled buffer; a value lvalue to its typed zero.
     pub fn delete<'state>(
         context: &ExpressionContext<'state, 'context, 'block>,
         operand: &Expression,
@@ -328,11 +304,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
             Self::Pointer(_, element_type) | Self::Storage(_, element_type) => {
                 let slang_type = operand.get_type().expect("slang validated");
                 let zero = if slang_type.is_reference_type() {
-                    // A memory aggregate (array / struct / `string` / `bytes`)
-                    // resets to a freshly allocated zero-filled buffer
-                    // (`sol.malloc zero_init`), exactly as it is default-
-                    // initialised — not a scalar zero. (A storage aggregate is
-                    // deep-cleared via the `ReferenceCopy` arm above.)
+                    // A memory aggregate resets to a freshly allocated zero-filled buffer, exactly as
+                    // it is default-initialised — not a scalar zero.
                     match &slang_type {
                         ast::Type::String(_) | ast::Type::Bytes(_) => {
                             let size = AstValue::constant(
@@ -364,11 +337,8 @@ impl<'context, 'block> AssignmentTarget<'context, 'block> {
                         .into_mlir(),
                     }
                 } else {
-                    // The zero of a value lvalue is its type's own zero, not a raw
-                    // `ui256` 0: a function pointer resets to `default_func_constant`,
-                    // an address to `address(0)`, a `bytesN`/enum to its typed zero.
-                    // Emitting a `ui256` 0 and letting the store coerce it would
-                    // `sol.cast` it to e.g. a `func_ref` (an ill-typed integer cast).
+                    // The zero of a value lvalue is its type's own zero, not a raw `ui256` 0 — emitting
+                    // a `ui256` 0 and letting the store coerce it would be an ill-typed cast (e.g. to `func_ref`).
                     AstValue::zero(AstType::new(*element_type), &context.state.builder, &block)
                         .into_mlir()
                 };
@@ -444,9 +414,8 @@ expression_emit!(AssignmentExpression; |node, context, block| {
             ),
         };
         let BlockAnd { value: rhs, block } = right.emit(context, block);
-        // Shares the binary-operation emitter with `a op b` so a compound
-        // bitwise assignment (`a ^= b`, `a <<= b`) on a `bytesN` / `byte`
-        // lvalue gets the same fixed-bytes bridge.
+        // Shares the binary-operation emitter with `a op b` so a compound bitwise assignment
+        // on a `bytesN` / `byte` lvalue gets the same fixed-bytes bridge.
         let result = operator.emit_value_binary(
             context.arithmetic_mode,
             &context.state.builder,

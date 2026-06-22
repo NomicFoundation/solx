@@ -1,10 +1,8 @@
 //!
 //! Collection of library functions inlined into a contract.
 //!
-//! Internal (no-selector) library functions are inlined into the calling
-//! contract's MLIR module under the library's linker symbol. This pass returns
-//! every such function reached transitively from a contract's functions, so the
-//! contract emitter can pre-register and emit them.
+//! Internal (no-selector) library functions are inlined into the calling contract's module. This pass
+//! returns every such function reached transitively from a contract's functions, for the emitter to register.
 //!
 
 use std::collections::HashSet;
@@ -13,7 +11,6 @@ use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::Definition;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::FunctionDefinition;
-use slang_solidity_v2::ast::FunctionVisibility;
 use slang_solidity_v2::ast::MemberAccessExpression;
 use slang_solidity_v2::ast::NodeId;
 use slang_solidity_v2::ast::visitor::Visitor;
@@ -37,14 +34,8 @@ pub struct LibraryCallCollector {
 }
 
 impl LibraryCallCollector {
-    /// Returns the library functions reachable from `contract`'s own functions,
-    /// including those reached only through other library or free functions. The
-    /// result is deduplicated by node id and contains no contract-own or free
-    /// functions.
-    ///
-    /// `free_functions` is the source unit's full set of free functions (emitted
-    /// separately, so excluded here). `extra_roots` are additional function
-    /// bodies to walk that are not part of the linearised set.
+    /// Returns the library functions reachable from `contract`'s own functions (deduplicated by node
+    /// id, excluding contract-own and free functions). `extra_roots` are extra bodies to walk.
     pub fn reachable_library_functions(
         contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],
@@ -57,9 +48,6 @@ impl LibraryCallCollector {
             .collect();
         let free_ids: HashSet<NodeId> = free_functions.iter().map(|f| f.node_id()).collect();
         let mut walk = ReachabilityWalk::new(contract, extra_roots);
-        // Library functions reached so far — walking one is "inside a library",
-        // enabling bare-identifier sibling-call collection. Contract roots are not
-        // libraries, so they collect only member-access (`L.f`) calls.
         let mut library_ids: HashSet<NodeId> = HashSet::new();
 
         while let Some(function) = walk.next_body() {
@@ -72,11 +60,6 @@ impl LibraryCallCollector {
                 ..LibraryCallCollector::default()
             };
             accept_function_definition(&function, &mut collector);
-            // Member-access references (`L.f` / using-attached `x.f`) are always
-            // library functions; bare-identifier references collected here are
-            // no-selector siblings reached inside a library. Both exclude the
-            // contract's own (inherited) functions reached via `super.f`, and the
-            // free functions emitted separately under their own name.
             let member_reached = collector
                 .functions
                 .into_iter()
@@ -86,16 +69,12 @@ impl LibraryCallCollector {
                 .into_iter()
                 .filter(|f| !own.contains(&f.node_id()) && !free_ids.contains(&f.node_id()));
             for library_function in member_reached.chain(bare_reached) {
-                // Newly seen — also a library function, so mark it before `reach`
-                // queues its body (walked with `inside_library` set).
                 if !walk.is_collected(library_function.node_id()) {
                     library_ids.insert(library_function.node_id());
                 }
                 walk.reach(library_function);
             }
-            // Walk reached free functions for the library calls *they* make,
-            // without collecting them (they emit separately under their own name)
-            // — this catches `function fu() { L.inter(); }` called as `fu()`.
+            // Walk reached free functions for the library calls they make (e.g. `fu() { L.inter(); }`).
             for reached_function in collector.reached {
                 if free_ids.contains(&reached_function.node_id()) {
                     walk.enqueue(reached_function);
@@ -109,9 +88,6 @@ impl LibraryCallCollector {
 
 impl Visitor for LibraryCallCollector {
     fn enter_expression(&mut self, node: &Expression) -> bool {
-        // A bare-identifier reference inside a library body is a sibling library
-        // function; a no-selector one is inlined here. Every bare reference is
-        // also recorded so the caller can walk a reached free function's body.
         if let Expression::Identifier(identifier) = node
             && let Some(Definition::Function(function)) = identifier.resolve_to_definition()
         {
@@ -120,14 +96,10 @@ impl Visitor for LibraryCallCollector {
             }
             self.reached.push(function);
         }
-        // Descend so nested references are also recorded.
         true
     }
 
     fn enter_member_access_expression(&mut self, node: &MemberAccessExpression) -> bool {
-        // A member access resolving to a no-selector library function is an
-        // internal library call, inlined here — unless the operand is a contract /
-        // `super` / `this`, which dispatches through the super/base/virtual mechanism.
         let operand_is_contract_or_keyword = match node.operand() {
             Expression::Identifier(identifier) => matches!(
                 identifier.resolve_to_definition(),
@@ -138,18 +110,10 @@ impl Visitor for LibraryCallCollector {
         };
         if !operand_is_contract_or_keyword
             && let Some(Definition::Function(function)) = node.member().resolve_to_definition()
-            && matches!(
-                function.visibility(),
-                FunctionVisibility::Internal
-                    | FunctionVisibility::Private
-                    | FunctionVisibility::Public
-                    | FunctionVisibility::External
-            )
             && function.compute_selector().is_none()
         {
             self.functions.push(function);
         }
-        // Descend so nested calls (e.g. `L.f(L.g(x))`) are also recorded.
         true
     }
 }

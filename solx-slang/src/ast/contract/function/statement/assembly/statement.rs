@@ -25,9 +25,7 @@ use crate::ast::Value as AstValue;
 use crate::ast::contract::function::statement::assembly::YulContext;
 use crate::ast::contract::function::statement::assembly::block::EmitRegionBody;
 
-// Yul never diverges solx control flow at the source level, but a `break`/
-// `continue` terminates its region — that is the `None` continuation, threaded
-// like a Sol statement's.
+// A Yul `break`/`continue` terminates its region — the `None` continuation, threaded like a Sol statement's.
 yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, context, block| {
     match statement {
         YulStatement::YulVariableAssignmentStatement(assignment) => {
@@ -136,23 +134,23 @@ yul_emit!(YulStatement => Option<BlockRef<'context, 'block>>; |statement, contex
                 }
             }
 
-            let (cond_block, body_block, step_block) = mlir_region_op!(
+            let (condition_block, body_block, step_block) = mlir_region_op!(
                 &context.state.builder,
                 &current,
                 ForOperation.init_args(&[]).results(&[]);
                 cond, body, step
             );
 
-            let cond_region = cond_block
+            let condition_region = condition_block
                 .parent_region()
                 .expect("yul.for cond block has a parent region");
             let saved_region = context.region_pointer;
-            context.region_pointer = &*cond_region as *const _;
-            let BlockAnd { value: cond_value, block: cond_end } = for_statement.condition().emit(context, cond_block);
+            context.region_pointer = &*condition_region as *const _;
+            let BlockAnd { value: condition_value, block: condition_end } = for_statement.condition().emit(context, condition_block);
             mlir_op_void!(
                 &context.state.builder,
-                &cond_end,
-                ConditionOperation.condition(cond_value).args(&[])
+                &condition_end,
+                ConditionOperation.condition(condition_value).args(&[])
             );
             context.region_pointer = saved_region;
 

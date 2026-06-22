@@ -1,11 +1,7 @@
 //!
 //! Public state-variable getter synthesis.
 //!
-//! Solidity synthesises an external accessor for every `public` state variable.
-//! The state variable emits its own accessor: a `constant` folds to a pure
-//! literal getter, a scalar reads its slot, a mapping/array chains a
-//! `sol.map`/bounds-checked `sol.gep` per key/index, and a struct expands to its
-//! flattened returnable members.
+//! Solidity synthesises an external accessor for every `public` state variable; the variable emits its own.
 //!
 
 use melior::ir::BlockLike;
@@ -43,13 +39,8 @@ use crate::ast::contract::function::expression::ExpressionContext;
 
 /// The field-layout plan for a struct's `public` accessor return tuple.
 pub trait StructGetterLayout {
-    /// The destructured returnable members of a `public` struct, as its accessor
-    /// returns them: for each member the accessor yields — every scalar, plus
-    /// `string` / `bytes` returned as a memory copy — its field index, MLIR
-    /// member type, and ABI result type. Nested mappings, arrays, and structs are
-    /// skipped (Solidity omits them from the accessor tuple). `None` when no
-    /// member is returnable or a member is untyped. Shared by the struct getter
-    /// and a struct external-call return.
+    /// The struct's returnable members `(field index, member type, ABI result type)`; nested
+    /// mappings / arrays / structs are skipped (Solidity omits them). `None` if none are returnable.
     fn struct_getter_layout<'context>(
         &self,
         struct_mlir_type: Type<'context>,
@@ -79,9 +70,6 @@ impl StructGetterLayout for StructDefinition {
             let member_type = AstType::new(struct_mlir_type)
                 .element_type(member_index)
                 .into_mlir();
-            // A `string`/`bytes` member returns a memory copy; every other member
-            // reaching here is a value type (mapping/array/struct are skipped
-            // above).
             let result_member_type = if is_string_or_bytes {
                 AstType::string(builder.context, DataLocation::Memory).into_mlir()
             } else {
@@ -99,10 +87,7 @@ impl StructGetterLayout for StructDefinition {
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariableDefinition {
     type Output = ();
 
-    /// Emits the auto-generated external accessor for this `public` state variable
-    /// into the contract body. A variable with no accessor, or whose accessor is
-    /// not yet supported (a non-struct reference terminal), is left ungenerated —
-    /// the rest of the contract still compiles.
+    /// Emits the auto-generated external accessor for this `public` state variable into the contract body.
     fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -169,9 +154,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             }
         }
 
-        /// Emits the terminal `sol.return` from the addressed `base`: a struct
-        /// expands into its flattened returnable members (each loaded and coerced
-        /// to its ABI result type), a scalar loads the single value.
+        /// Emits the terminal `sol.return` from `base` (a struct expands to its members, a scalar loads one value).
         fn return_loaded<'context, 'block>(
             base: Value<'context, 'block>,
             struct_plan: &Option<Vec<(u64, Type<'context>, Type<'context>)>>,
@@ -217,14 +200,11 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
         let state_variable = self;
         let builder = &context.state.builder;
 
-        // A variable with no ABI accessor has no getter.
         let abi = match state_variable.compute_abi_entry() {
             Some(AbiEntry::Function(abi)) => abi,
             _ => return,
         };
 
-        // A `constant` getter folds its compile-time initializer (no slot, no
-        // inputs), exactly as a file-level `constant`.
         if matches!(
             state_variable.mutability(),
             StateVariableMutability::Constant
@@ -239,8 +219,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 .compute_canonical_signature()
                 .expect("slang validated");
             let selector = state_variable.compute_selector().expect("slang validated");
-            // Reference types (`string` / `bytes`) return in `Memory` — what an
-            // external getter call hands back — not their declared storage location.
+            // Reference types return in `Memory` (the external ABI), not their declared storage location.
             let slang_type = state_variable.get_type().expect("slang validated");
             let element_type = AstType::resolve(&slang_type, LocationPolicy::ForceMemory, builder);
             let entry = Function::new(signature, Vec::new(), vec![element_type]).define(
@@ -262,9 +241,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 mlir_op_void!(builder, &entry, ReturnOperation.operands(&[constant]));
                 return;
             }
-            // A non-integer constant (`string` / `bytesN` literal) materialises its
-            // initializer toward the return type, as an explicit `return <const>`
-            // would; the getter's empty scope is the threaded context itself.
             let BlockAnd {
                 value,
                 block: entry,
@@ -283,9 +259,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
         let location = slot.location;
         let declared_type = state_variable.get_type().expect("slang validated");
 
-        // An indexed (mapping/array) getter: each key/index is a parameter. Walk
-        // the nesting once to collect the parameter types and reach the terminal
-        // type — needed to define the function before its entry block exists.
         if !abi.inputs().is_empty() {
             let signature = state_variable
                 .compute_canonical_signature()
@@ -298,9 +271,7 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                 match &terminal {
                     SlangType::Mapping(mapping_type) => {
                         let key_slang = mapping_type.key_type();
-                        // A reference-typed key (`string` / `bytes`) is an ABI input
-                        // decoded into memory; slang reports it with the mapping's
-                        // storage location, so build the memory type directly.
+                        // A reference-typed key is an ABI input decoded into memory (not its storage location).
                         let key_type = if key_slang.is_reference_type() {
                             AstType::string(builder.context, DataLocation::Memory).into_mlir()
                         } else {
@@ -340,8 +311,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             );
             let result_type =
                 AstType::resolve(&terminal, LocationPolicy::Declared(Some(location)), builder);
-            // A struct terminal expands into its flattened returnable members;
-            // another reference terminal is not yet handled (left ungenerated).
             let struct_plan = match &terminal {
                 SlangType::Struct(struct_type) => {
                     let Definition::Struct(struct_definition) = struct_type.definition() else {
@@ -370,10 +339,8 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             let mut base =
                 Pointer::addr_of(&slot.name, AstType::new(container_type), builder, &entry)
                     .into_mlir();
-            // Re-walk the nesting, stepping the access over each parameter: a
-            // `sol.map` for a mapping key, a bounds-checked `sol.gep` for an array
-            // index (out-of-bounds bare-revert via a no-message `sol.require`,
-            // matching solc's accessor — not `sol.gep`'s `Panic(0x32)`).
+            // Re-walk the nesting; an array index is bounds-checked with a no-message `sol.require`
+            // (matching solc's accessor, not `sol.gep`'s `Panic(0x32)`).
             let mut current = declared_type.clone();
             let mut index = 0usize;
             loop {
@@ -389,8 +356,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
                             LocationPolicy::Declared(Some(location)),
                             builder,
                         );
-                        // Intermediate containers are addressed by their reference;
-                        // a value terminal by a `!sol.ptr<V>`.
                         let level_type = AstType::new(resolved_value)
                             .address_type(location, builder.context)
                             .into_mlir();
@@ -465,7 +430,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             return;
         }
 
-        // A no-argument struct getter expands the struct's returnable members.
         if let SlangType::Struct(struct_type) = &declared_type
             && let Definition::Struct(struct_definition) = struct_type.definition()
         {
@@ -501,7 +465,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             }
         }
 
-        // A scalar / reference getter reads the variable's slot directly.
         let signature = state_variable
             .compute_canonical_signature()
             .expect("slang validated");
@@ -510,8 +473,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for StateVariabl
             &state_variable.get_type().expect("slang validated"),
             builder,
         );
-        // A reference-typed variable is addressed by the reference type itself in
-        // storage; a value type by a `!sol.ptr<T, _>`.
         let address_type = AstType::new(element_type)
             .address_type(location, builder.context)
             .into_mlir();

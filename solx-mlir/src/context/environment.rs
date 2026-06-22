@@ -15,24 +15,10 @@ use crate::Type;
 
 /// Tracks variable places (alloca'd pointers) for lexical scoping.
 ///
-/// Each variable maps to the place holding it — a `!sol.ptr<T, Stack>` for a
-/// Solidity local, parameter, or named return, an `!llvm.ptr` for a Yul
-/// inline-assembly local. A Solidity read reconstructs the [`Pointer`] from the
-/// place and loads its `pointee()`; a Yul read reinterprets the place to an
-/// `!llvm.ptr`. The element type is the place's own pointee, so it is not stored
-/// separately.
-///
-/// [`Pointer`]: crate::Pointer
-///
-/// Bindings are keyed by the declaration's Slang [`NodeId`], not its textual
-/// name, so same-named locals across scopes (shadowing) are distinct by
-/// construction and identifier references resolve through the binder
-/// (`resolve_to_definition().node_id()`) rather than by name. Lexical scoping is
-/// still tracked: lookups search from the innermost scope outward, and
-/// `enter_scope()` / `exit_scope()` bracket blocks that introduce new variables.
+/// Bindings are keyed by the declaration's Slang `NodeId`, not its textual name, so same-named
+/// locals across scopes (shadowing) are distinct. Lookups search from the innermost scope outward.
 pub struct Environment<'context, 'block> {
-    /// Stack of scopes, each mapping a declaration's [`NodeId`] to its place.
-    /// The outermost scope (index 0) holds function parameters.
+    /// Stack of scopes, each mapping a declaration's `NodeId` to its place (scope 0 holds parameters).
     scopes: Vec<HashMap<NodeId, Value<'context, 'block>>>,
 }
 
@@ -60,8 +46,7 @@ impl<'context, 'block> Environment<'context, 'block> {
         self.scopes.pop();
     }
 
-    /// Registers a variable, keyed by its declaration's [`NodeId`], with its
-    /// place (alloca'd pointer) in the current scope.
+    /// Registers a variable's place in the current scope, keyed by its declaration's `NodeId`.
     pub fn define_variable(&mut self, declaration: NodeId, pointer: Value<'context, 'block>) {
         self.scopes
             .last_mut()
@@ -69,9 +54,7 @@ impl<'context, 'block> Environment<'context, 'block> {
             .insert(declaration, pointer);
     }
 
-    /// Coerces `value` to `parameter_type`, spills it to a fresh stack slot, and
-    /// binds `declaration` to the slot. Shared by the `try` success returns and the
-    /// `catch` clause payload.
+    /// Coerces `value` to `parameter_type`, spills it to a fresh stack slot, and binds `declaration` to it.
     pub fn bind_parameter(
         &mut self,
         declaration: NodeId,
@@ -86,10 +69,7 @@ impl<'context, 'block> Environment<'context, 'block> {
         self.define_variable(declaration, pointer.into_mlir());
     }
 
-    /// Spills the entry block's argument at `argument_index` into a fresh stack
-    /// slot of `mlir_type` and binds `declaration` to it. The block argument
-    /// already carries the type, so no coercion is needed. The atomic binding the
-    /// function parameter loop and a modifier-stage func are each built from.
+    /// Spills the entry block's argument at `argument_index` into a fresh stack slot and binds `declaration` to it.
     pub fn bind_block_argument(
         &mut self,
         declaration: NodeId,
@@ -103,10 +83,7 @@ impl<'context, 'block> Environment<'context, 'block> {
         self.define_variable(declaration, pointer.into_mlir());
     }
 
-    /// Looks up a variable's place by its declaration's [`NodeId`] (from
-    /// `resolve_to_definition().node_id()`).
-    ///
-    /// Searches from the innermost scope outward.
+    /// Looks up a variable's place by its declaration's `NodeId`, searching from the innermost scope outward.
     pub fn variable(&self, declaration: NodeId) -> Value<'context, 'block> {
         for scope in self.scopes.iter().rev() {
             if let Some(pointer) = scope.get(&declaration) {

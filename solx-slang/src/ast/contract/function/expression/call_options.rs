@@ -16,9 +16,8 @@ use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 expression_emit!(CallOptionsExpression; |node, context, block| {
-    // A call-options expression in value position (decorated but not immediately
-    // called) contributes only its options' side effects; its value is that of
-    // the wrapped operand.
+    // In value position (decorated but not called), contributes only its options' side effects;
+    // its value is the wrapped operand's.
     let mut current_block = block;
     for option in node.options().iter() {
         let BlockAnd { value: _value, block: next } = option.value().emit(context, current_block);
@@ -27,18 +26,12 @@ expression_emit!(CallOptionsExpression; |node, context, block| {
     node.operand().emit(context, current_block)
 });
 
-/// A `f{value: v, gas: g, salt: s}` call-options layer, viewed for the call
-/// modifiers it captures from the option list. `CallOptionsExpression` is a
-/// foreign Slang node, so the capture lives on this local lens over it.
+/// A local lens over a foreign `CallOptionsExpression`, capturing the call modifiers (`value` / `salt`).
 pub struct CallOptions<'node>(pub &'node CallOptionsExpression);
 
 impl CallOptions<'_> {
-    /// Evaluates the option list in source order (each value emitted for its side
-    /// effects) and returns the captured `value` (as `msg.value`, coerced to
-    /// `ui256`) and `salt` (the CREATE2 salt for `new`, cast from `bytes32`). The
-    /// option KIND comes from slang's typed `BuiltIn::CallOption*` classification,
-    /// never from comparing the option name as text. The `{gas: …}` option is not
-    /// yet threaded into the call op and is deferred loudly.
+    /// Evaluates the option list in source order and returns the captured `value` (as `msg.value`,
+    /// coerced to `ui256`) and `salt` (CREATE2 salt, from `bytes32`). `{gas: …}` is not yet threaded.
     pub fn capture<'state, 'context, 'block>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -52,10 +45,8 @@ impl CallOptions<'_> {
         let mut salt = None;
         let mut current_block = block;
         for option in self.0.options().iter() {
-            // Emit each option toward the type that option expects, so a literal
-            // folds correctly: `value`/`gas` are `ui256`, the CREATE2 `salt` is
-            // `bytes32` (a hex/string literal `salt: hex"00"` must fold to a
-            // fixedbytes constant, NOT a memory string the salt bridge can't take).
+            // Emit each option toward its expected type so a literal folds correctly (the CREATE2
+            // `salt` is `bytes32`, so `salt: hex"00"` folds to a fixedbytes constant, not a memory string).
             match option.name().resolve_to_built_in() {
                 Some(BuiltIn::CallOptionValue) => {
                     let BlockAnd {
@@ -99,10 +90,8 @@ impl CallOptions<'_> {
                     );
                 }
                 Some(BuiltIn::CallOptionGas) => {
-                    // The gas limit is evaluated for its side effects but not
-                    // threaded into the call: the call forwards all remaining gas
-                    // (the `sol.ext_icall` default). A `{gas: …}` that must actually
-                    // cap the forwarded gas is not yet modelled.
+                    // The gas limit is evaluated for its side effects but not threaded into the call
+                    // (which forwards all remaining gas); a `{gas: …}` that caps gas is not yet modelled.
                     let BlockAnd {
                         value: _gas,
                         block: next_block,

@@ -52,41 +52,29 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::contract::storage_layout::StorageSlot;
 
-/// Lowers Solidity statements to MLIR operations with control flow.
-///
-/// Returns `Some(block)` as the continuation block, or `None` when control
-/// flow has been terminated (by `return`, `break`, or `continue`).
+/// Lowers Solidity statements to MLIR operations; threads `Some(block)` or `None` when control diverges.
 pub struct StatementContext<'state, 'context, 'block> {
     /// The shared MLIR context.
     pub state: &'state Context<'context>,
     /// Variable environment (mutable for new declarations and loop targets).
     pub environment: &'state mut Environment<'context, 'block>,
-    /// The current region for creating new blocks. A raw pointer to allow
-    /// switching between Sol op regions without lifetime conflicts; re-pointed
-    /// by direct assignment (`context.region_pointer = &region as *const _`).
+    /// The current region for new blocks. A raw pointer to switch between Sol op regions without
+    /// lifetime conflicts; re-pointed by direct assignment.
     pub region_pointer: *const Region<'context>,
     /// State variable node ID to storage slot mapping.
     pub storage_layout: &'state HashMap<NodeId, StorageSlot>,
     /// The function's declared return types, for `emit_return` to cast to.
     pub return_types: &'state [Type<'context>],
-    /// The function's return slots, parallel to `return_types` (`None` for an
-    /// unnamed return). A bare `return;` and the fall-through epilogue load these
-    /// so the `sol.return` arity matches the declared returns.
+    /// The function's return slots, parallel to `return_types` (`None` for an unnamed return); a bare
+    /// `return;` and the epilogue load these so the `sol.return` arity matches.
     pub return_slots: &'state [Option<Value<'context, 'block>>],
-    /// How the `_;` placeholder lowers: a regular function's body-call hand-off,
-    /// a constructor's inline modifier chain, or nothing outside a modifier.
-    /// Set by direct assignment (`context.modifier_strategy = …`).
+    /// How the `_;` placeholder lowers (body-call hand-off, inline modifier chain, or nothing). Set by direct assignment.
     pub modifier_strategy: ModifierStrategy<'context, 'block>,
-    /// Arithmetic overflow-checking mode for binary operations.
-    ///
-    /// [`ArithmeticMode::Checked`] by default; [`ArithmeticMode::Unchecked`]
-    /// inside `unchecked {}` blocks.
+    /// Arithmetic overflow-checking mode (Checked by default, Unchecked inside `unchecked {}`).
     pub arithmetic_mode: ArithmeticMode,
 }
 
-/// Builds an [`ExpressionContext`] from a statement context. The unchecked
-/// loop-step is the one site that builds its context explicitly instead, with
-/// [`ArithmeticMode::Unchecked`].
+/// Builds an [`ExpressionContext`] from a statement context (propagating its arithmetic mode).
 impl<'state, 'context, 'block> From<&'state StatementContext<'_, 'context, 'block>>
     for ExpressionContext<'state, 'context, 'block>
 {
@@ -123,17 +111,12 @@ impl<'state, 'context, 'block> StatementContext<'state, 'context, 'block> {
     }
 }
 
-// A multi-element tuple expression in the return position is unpacked into one
-// value per declared return slot; any other expression yields a single value.
-// Each value is cast to its declared return type before the `sol.return`.
+// A multi-element tuple return is unpacked into one value per declared slot; any other expression
+// yields a single value. Each is cast to its declared return type before the `sol.return`.
 statement_emit!(ReturnStatement; |node, context, block| {
     let Some(expression) = node.expression() else {
-        // A bare `return;` returns the current values of the return slots
-        // (zero for an unnamed/unset slot), so its `sol.return` arity matches
-        // the enclosing function — like the fall-through epilogue. This
-        // matters for a `return;` in a modifier stage of a value-returning
-        // function, where a 0-operand return would fail verification; a void
-        // function has no slots and returns nothing.
+        // A bare `return;` returns the current return-slot values (zero for an unset slot) so the
+        // `sol.return` arity matches the function — a 0-operand return would otherwise fail verification.
         let builder = &context.state.builder;
         let mut values = Vec::with_capacity(context.return_types.len());
         for (index, &return_type) in context.return_types.iter().enumerate() {
@@ -173,11 +156,8 @@ statement_emit!(ReturnStatement; |node, context, block| {
         }
         (values, current)
     } else if context.return_types.len() > 1 {
-        // A single expression that yields multiple values is either a
-        // tuple-returning call (`return f();`), where solc emits one
-        // `sol.call` with N results, or a conditional with tuple branches
-        // (`return cond ? (1, 2) : (3, 4);`). Expand its full result list so
-        // the `sol.return` arity matches rather than taking the first value.
+        // A single expression yielding multiple values (a tuple-returning call or a tuple-branch
+        // conditional) expands its full result list so the `sol.return` arity matches.
         let BlockAnd { value: values, block } = match &expression {
             Expression::FunctionCallExpression(call) => {
                 call.emit(&emitter, block)
@@ -194,9 +174,8 @@ statement_emit!(ReturnStatement; |node, context, block| {
             block,
         )
     } else {
-        // A single-value return materialises a string literal toward the
-        // declared return type (a `bytesN`/`byte` constant), not a runtime
-        // string the cast below would reject.
+        // A single-value return materialises a string literal toward the declared return type
+        // (a `bytesN`/`byte` constant), not a runtime string the cast would reject.
         let return_type = context.return_types[0];
         let BlockAnd { value, block } = expression.emit_as(return_type, &emitter, block);
         (vec![value], block)
@@ -246,18 +225,11 @@ statement_emit!(ContinueStatement; |context, block| {
     None
 });
 
-// A bare expression statement discards its value but keeps its side effects.
-// The shape is classified once ([`ExpressionStatementKind`]) and emitted by
-// kind: the modifier `_;` placeholder hands off to the wrapped body / next
-// stage, a `revert(...)` call diverges, a value-less type / `super` reference
-// emits nothing, a type reference runs only its subexpressions' side effects, a
-// tuple-valued conditional routes through the tuple path, and any other
-// expression is emitted and its value discarded.
+// A bare expression statement discards its value but keeps its side effects, classified once
+// ([`ExpressionStatementKind`]) and emitted by kind.
 statement_emit!(ExpressionStatement; |node, context, block| {
     match ExpressionStatementKind::from_statement(node) {
-        // The placeholder hands off per the active modifier strategy: an inline
-        // chain (a constructor) recurses to the next stage, a body call (a regular
-        // function) calls the wrapped body / next stage `sol.func`.
+        // The placeholder hands off per the active modifier strategy (inline chain or body call).
         ExpressionStatementKind::ModifierPlaceholder => {
             ModifierStrategy::emit_placeholder(context, block)
         }
@@ -298,10 +270,8 @@ statement_emit!(ExpressionStatement; |node, context, block| {
                     );
                     block
                 }
-                // A non-literal message (`revert(expr)`) or an empty literal
-                // (`revert("")`, i.e. `Error("")`) is evaluated at runtime and
-                // ABI-encoded under the `Error(string)` selector, like
-                // `require(cond, expr)`.
+                // A non-literal message or empty literal is evaluated at runtime and ABI-encoded
+                // under the `Error(string)` selector.
                 Some(expression) => {
                     let emitter = ExpressionContext::from(&*context);
                     let BlockAnd {
@@ -330,10 +300,8 @@ statement_emit!(ExpressionStatement; |node, context, block| {
         }
         ExpressionStatementKind::TypeOrSuperNoop => Some(block),
         ExpressionStatementKind::TypeReference(expression) => {
-            // A discarded type / selector reference (`C.f.selector;`) is a
-            // compile-time value; only a runtime receiver buried under the
-            // member-access chain — a conditional, `(c ? a : b).f.selector` —
-            // carries side effects, so peel to the base and run just that.
+            // A discarded type / selector reference is compile-time; only a runtime receiver under the
+            // member-access chain (a conditional) has side effects, so peel to the base and run just that.
             let mut current = expression.unwrap_parentheses();
             while let Expression::MemberAccessExpression(access) = current {
                 current = access.operand().unwrap_parentheses();

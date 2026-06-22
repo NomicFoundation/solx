@@ -47,9 +47,7 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::arithmetic_mode::ArithmeticMode;
 use crate::ast::operator_binding::OperatorBindings;
 
-/// Solidity operator, bridged from slang's typed per-expression operator enums
-/// (`AdditiveExpressionOperator`, `ShiftExpressionOperator`, …) — never parsed
-/// from source text.
+/// Solidity operator, bridged from slang's typed per-expression operator enums (never parsed from text).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operator {
     /// `+` (binary)
@@ -88,11 +86,7 @@ pub enum Operator {
 }
 
 impl Operator {
-    /// The function bound to `user_operator` for `operand`'s user-defined value
-    /// type via `using {f as op} for T global;`, or `None` when `operand` is not
-    /// such a type or the operator carries no binding. The shared UDVT lookup
-    /// behind the binary ([`Self::emit_binary`]) and unary ([`Self::emit_prefix`])
-    /// operator dispatch.
+    /// The function bound to `user_operator` for `operand`'s user-defined value type, or `None` if unbound.
     fn user_defined_operator<'context, 'block>(
         context: &ExpressionContext<'_, 'context, 'block>,
         operand: &Expression,
@@ -111,10 +105,7 @@ impl Operator {
             .copied()
     }
 
-    /// Calls the bound user-defined-operator function `function_id` with the
-    /// already-evaluated `argument_values`, each coerced to its parameter type,
-    /// and returns the operator's single result value. Shared by the binary
-    /// ([`Self::emit_binary`]) and unary ([`Self::emit_prefix`]) operator dispatch.
+    /// Calls the bound user-defined-operator function `function_id`, coercing each argument to its parameter type.
     fn emit_operator_call<'context, 'block>(
         context: &ExpressionContext<'_, 'context, 'block>,
         function_id: NodeId,
@@ -135,12 +126,8 @@ impl Operator {
         results.into_iter().next().expect("slang validated")
     }
 
-    /// Builds a Sol dialect binary operation via ODS-generated builders.
-    ///
-    /// In [`ArithmeticMode::Checked`] mode, uses checked variants (`sol.cadd`,
-    /// `sol.csub`, `sol.cmul`, `sol.cdiv`, `sol.cexp`) for arithmetic operators.
-    /// Modulo, bitwise, and shift operators are always unchecked. Result type is
-    /// inferred from `lhs` (`SameOperandsAndResultType`).
+    /// Builds a Sol dialect binary operation. Checked mode uses the `sol.c*` arithmetic variants;
+    /// modulo, bitwise, and shift are always unchecked.
     pub fn emit_sol_binary_operation<'context>(
         self,
         mode: ArithmeticMode,
@@ -177,10 +164,8 @@ impl Operator {
             Self::BitwiseAnd => mlir_op_build!(builder, AndOperation.lhs(lhs).rhs(rhs)),
             Self::BitwiseOr => mlir_op_build!(builder, OrOperation.lhs(lhs).rhs(rhs)),
             Self::BitwiseXor => mlir_op_build!(builder, XorOperation.lhs(lhs).rhs(rhs)),
-            // `sol.shl`/`sol.shr` now accept a `bytesN` (or integer) value with an
-            // independent integer shift amount (`AllTypesMatch<lhs, result>`, rhs
-            // free), so the result type is no longer inferable from both operands
-            // and must be set explicitly — it follows the shifted value (`lhs`).
+            // `sol.shl`/`sol.shr` have a free `rhs` (independent shift amount), so the result
+            // type is not inferable from both operands and is set explicitly to follow `lhs`.
             Self::ShiftLeft => {
                 mlir_op_build!(builder, ShlOperation.result(lhs.r#type()).lhs(lhs).rhs(rhs))
             }
@@ -193,14 +178,8 @@ impl Operator {
         }
     }
 
-    /// Lowers a binary expression `left <op> right` to its result value.
-    ///
-    /// A user-defined value type bound via `using {f as op} for T global;`
-    /// dispatches to the bound function (which carries its own
-    /// checked/unchecked context), with operands evaluated left-to-right as
-    /// Solidity requires. Otherwise both operands are materialised and combined
-    /// by [`Self::emit_value_binary`]. With no `target_type`, the wider operand
-    /// type (by bit width) is selected.
+    /// Lowers a binary expression `left <op> right` to its result value (dispatching to a bound
+    /// user-defined operator when present). With no `target_type`, the wider operand type is selected.
     pub fn emit_binary<'context, 'block>(
         self,
         context: &ExpressionContext<'_, 'context, 'block>,
@@ -241,14 +220,9 @@ impl Operator {
     }
 
     /// Combines already-materialised `lhs`/`rhs` into a value of `result_type`.
-    /// Shared by [`Self::emit_binary`] (the expression path) and the
-    /// compound-assignment path, so both get the fixed-bytes bitwise bridge.
     ///
-    /// `sol.and`/`or`/`xor`/`shl`/`shr` are integer-only, but Solidity allows
-    /// them on `bytesN` / `byte` (bitwise on the raw bytes). Bridge the fixed-
-    /// bytes operand(s) through the equivalent unsigned integer `ui(8*N)` and
-    /// cast the result back. A shift amount is a plain integer, so on a shift
-    /// only the shifted value is bridged.
+    /// The integer-only bitwise/shift ops bridge a `bytesN` / `byte` operand through `ui(8*N)`
+    /// and cast back; on a shift only the shifted value is bridged.
     pub fn emit_value_binary<'context, 'block>(
         self,
         mode: ArithmeticMode,
@@ -285,11 +259,8 @@ impl Operator {
             let lhs = lhs
                 .cast(AstType::new(result_type), builder, block)
                 .into_mlir();
-            // `**` keeps its exponent its own (unsigned) type: `sol.exp`/`sol.cexp`
-            // take an unsigned exponent of any width alongside a possibly-signed
-            // base, so the exponent must NOT be coerced to the (signed) result
-            // type the way a symmetric operator's operands are. (solc: `cexp
-            // si256, ui8`.)
+            // `**` keeps its exponent's own (unsigned) type: `sol.exp`/`sol.cexp` take an unsigned
+            // exponent alongside a possibly-signed base, so it must NOT be coerced to the result type.
             let rhs = if matches!(self, Operator::Exponentiation) {
                 rhs.into_mlir()
             } else {
@@ -327,13 +298,8 @@ impl Operator {
         (old.into(), block)
     }
 
-    /// Emits prefix operators: `!`, `-`, `~`, `++`, `--`.
-    ///
-    /// A `-` / `~` prefix on a user-defined value type bound via
-    /// `using {f as op} for T global;` dispatches to the bound function rather
-    /// than emitting native negation / bitwise-not. When `target_type` is `Some`,
-    /// the operation uses that type (matching solc's typed MLIR); otherwise it
-    /// falls back to the operand's own type / ui256.
+    /// Emits prefix operators (`!`, `-`, `~`, `++`, `--`), dispatching a `-` / `~` on a bound
+    /// user-defined value type to its function. `target_type`, when set, types the operation.
     pub fn emit_prefix<'context, 'block>(
         self,
         context: &ExpressionContext<'_, 'context, 'block>,
@@ -363,9 +329,7 @@ impl Operator {
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.unwrap_or_else(|| value.r#type().into_mlir());
                 let value = value.cast(AstType::new(operand_type), &context.state.builder, &block);
-                // `sol.not` is integer-only; for a `bytesN` / `byte` operand
-                // bridge through the equivalent unsigned integer `ui(8*N)` and
-                // cast the result back to the fixed-bytes type.
+                // `sol.not` is integer-only; bridge a `bytesN` / `byte` operand through `ui(8*N)` and cast back.
                 let builder = &context.state.builder;
                 let (value, restore_type) =
                     match AstType::new(operand_type).fixed_bytes_or_byte_width() {
@@ -403,10 +367,8 @@ impl Operator {
                 (result, block)
             }
             Operator::Subtract => {
-                // Unary negation uses unchecked subtraction. Checked negation
-                // requires signed-type awareness (e.g. -INT_MIN should revert
-                // in checked mode) which needs a dedicated op — not sol.csub,
-                // since the operand may be in an unsigned literal type.
+                // Unary negation uses unchecked subtraction: checked negation (e.g. -INT_MIN reverting)
+                // needs signed-type awareness and a dedicated op, not sol.csub.
                 let BlockAnd { value, block } = operand.emit(context, block);
                 let operand_type = target_type.unwrap_or_else(|| value.r#type().into_mlir());
                 let value = value
@@ -476,9 +438,7 @@ impl Operator {
         }
     }
 
-    /// Emits `++` / `--` on a *computed* lvalue — an `a[i]` element or a struct
-    /// field — returning `Some((old, new, block))`, or `None` for any other
-    /// operand so the caller falls through to the identifier path.
+    /// Emits `++` / `--` on a *computed* lvalue (`a[i]` or a struct field); `None` for any other operand.
     fn emit_increment_decrement_indexed<'context, 'block>(
         self,
         context: &ExpressionContext<'_, 'context, 'block>,
@@ -523,9 +483,7 @@ impl Operator {
         Some((old, new_value, block))
     }
 
-    /// Applies the `++` / `--` step to a loaded value: adds or subtracts a typed
-    /// `1` through this operator's binary operation, honoring the arithmetic
-    /// mode. Both lvalue kinds (storage slot and stack pointer) share this step.
+    /// Applies the `++` / `--` step to a loaded value: adds or subtracts a typed `1`, honoring the arithmetic mode.
     fn emit_step<'context, 'block>(
         self,
         context: &ExpressionContext<'_, 'context, 'block>,

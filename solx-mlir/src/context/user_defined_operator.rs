@@ -2,13 +2,10 @@
 //! User-defined operator binding key.
 //!
 
-/// A Solidity operator that can be bound to a function via a
-/// `using {f as op} for T global;` directive (user-defined operators).
+/// A Solidity operator bindable to a function via `using {f as op} for T global;`.
 ///
-/// Used as the operator component of [`super::Context::operator_bindings`]'s key.
-/// Binary `-` ([`Self::Sub`]) and unary `-` ([`Self::Neg`]) are distinct
-/// variants because the same `-` token binds to a two-parameter function as a
-/// subtraction operator and to a one-parameter function as a negation operator.
+/// Binary `-` ([`Self::Sub`]) and unary `-` ([`Self::Neg`]) are distinct variants — the same token
+/// binds to a two-parameter function as subtraction and a one-parameter function as negation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UserDefinedOperator {
     /// Binary `+`.

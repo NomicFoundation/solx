@@ -63,7 +63,6 @@ impl EmitFunction for FunctionDefinition {
         body_kind: BodyKind,
     ) {
         let Some(ref body) = self.body() else {
-            // Abstract or interface function — no codegen needed.
             return;
         };
 
@@ -77,10 +76,8 @@ impl EmitFunction for FunctionDefinition {
             mlir_kind,
         } = Signature::resolve(self, symbol_override, body_kind, &scope.state.builder);
 
-        // A regular function (real body, not a constructor/fallback/receive, not a
-        // modifier-stage `$body`) can be the target of an internal function pointer,
-        // so it carries a unique dispatch tag. Includes free/library functions
-        // (`p(libFn)`); only modifier bodies and synthetic dispatchers are excluded.
+        // A regular function can be the target of an internal function pointer, so it carries a
+        // unique dispatch tag (modifier bodies and synthetic dispatchers are excluded).
         let function_id = (body_kind == BodyKind::Function && mlir_kind.is_none())
             .then(|| scope.state.next_function_id());
 
@@ -105,11 +102,8 @@ impl EmitFunction for FunctionDefinition {
             );
         }
 
-        // Allocate and bind a stack slot for each named return value, pushing
-        // `None` for an unnamed return. A modifier body seeds every slot (named or
-        // not) from the trailing block arguments at the `parameter_count` offset, so
-        // the shared return state survives an empty body or a partial `_` reach;
-        // otherwise only the named slots are default-initialised.
+        // A stack slot per named return (`None` for unnamed). A modifier body instead seeds every slot
+        // from the trailing block arguments at the `parameter_count` offset.
         let mut return_slots: Vec<Option<Value<'context, '_>>> = Vec::new();
         if let Some(returns) = self.returns() {
             for (index, parameter) in returns.iter().enumerate() {
@@ -145,9 +139,8 @@ impl EmitFunction for FunctionDefinition {
             .expect("entry block belongs to a region");
         let mut current_block = function_entry_block;
 
-        // State variable initializers run at the top of the constructor body. The
-        // wrapping modified function already runs them, so a `$body` emission must
-        // not run them again.
+        // State-variable initializers run at the top of the constructor body, but not in a `$body`
+        // emission (the wrapping modified function already ran them).
         if matches!(self.kind(), FunctionKind::Constructor) && body_kind == BodyKind::Function {
             current_block = scope
                 .contract
@@ -155,9 +148,8 @@ impl EmitFunction for FunctionDefinition {
                 .emit_state_var_initializers(scope, current_block);
         }
 
-        // Collect the modifier bodies that wrap this function
-        // (`function f() onlyOwner {...}`). In modifier-body mode the stages are
-        // emitted by the wrapping call, so a raw `$body` emission collects none.
+        // Collect the modifier bodies wrapping this function (none in `$body` mode — the wrapping
+        // call emits the stages).
         let (modifier_stages, modifier_stage_params) = if body_kind == BodyKind::ModifierBody {
             (Vec::new(), Vec::new())
         } else {
@@ -228,14 +220,12 @@ impl EmitFunction for FunctionDefinition {
         if block.terminator().is_some() {
             return;
         }
-        // Named returns load from their slot; an unnamed return (no slot) reached on
-        // this fall-through path materialises its type's own default. The default
-        // must be type-correct: a string/bytes/aggregate/address/fixed-bytes type is
-        // not an integer, so an integer-attribute zero of that type is ill-typed.
+        // Named returns load from their slot; an unnamed return materialises its type's own default
+        // (a type-correct one, not an ill-typed integer zero).
         let returns: Vec<_> = self
             .returns()
             .map(|params| params.iter().collect::<Vec<_>>())
-            .unwrap_or_default(); // recut-lint-allow: fail01 — a function may declare no returns
+            .unwrap_or_default();
         let builder = &scope.state.builder;
         let values: Vec<Value<'context, 'block>> = result_types
             .iter()

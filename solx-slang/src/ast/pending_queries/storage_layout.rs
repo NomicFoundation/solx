@@ -1,7 +1,5 @@
 //!
-//! TODO: pure-Slang query pending a home (Slang dev-solx vs solx vs fold) —
-//! query-sorting pass. Re-keys Slang's ABI storage layout by node ID (the spec's
-//! "solx re-keys, never re-packs"); lifted from `ContractEmitter::compute_storage_layout`.
+//! Storage-layout query: re-keys Slang's ABI storage layout by node id (pure-Slang, pending a home).
 //!
 
 use std::collections::HashMap;
@@ -54,9 +52,8 @@ impl StorageLayout for ContractDefinition {
                 ),
             );
         }
-        // `immutable` variables have no native storage; slang lays them out as
-        // storage slots after the persistent layout, and the recut lowers them as
-        // ordinary storage so a read after the constructor's write observes it.
+        // `immutable` variables are laid out as storage slots after the persistent layout and lowered
+        // as ordinary storage, so a read after the constructor's write observes it.
         for item in abi.immutable_storage_layout() {
             layout.insert(
                 item.node_id(),

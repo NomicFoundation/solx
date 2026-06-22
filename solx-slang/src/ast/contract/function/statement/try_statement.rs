@@ -77,9 +77,8 @@ statement_emit!(TryStatement; |node, context, block| {
     let (status, results, current_block) =
         try_call.emit(&ExpressionContext::from(&*context), block);
 
-    // Bucket the catch clauses: parameter-less `catch {}` and unnamed `catch
-    // (bytes r)` are fallbacks; typed clauses are told apart by parameter type
-    // (`Error(string)` vs `Panic(uint256)`), never by identifier text.
+    // Bucket the catch clauses: parameter-less and unnamed `catch (bytes r)` are fallbacks; typed
+    // clauses are told apart by parameter type (`Error(string)` vs `Panic(uint256)`).
     let mut panic_clause: Option<CatchClause> = None;
     let mut error_clause: Option<CatchClause> = None;
     let mut fallback_clause: Option<CatchClause> = None;

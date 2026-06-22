@@ -18,13 +18,9 @@ use crate::ast::EmitYul;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::statement::assembly::YulContext;
 
-// A Yul function call producing its result words. Yul evaluates arguments
-// right-to-left; a callee resolving to a `BuiltIn::Yul*` is an EVM intrinsic (a
-// one-to-one `yul.*` op, every operand and result the signless `i256` word, no
-// Sol-dialect crossing — one word), otherwise a user-defined function, inlined
-// (all of its declared return slots). An effect op with no Yul result (a store,
-// copy, log, or terminator) yields its first operand so the statement has a
-// value to discard; `stop`/`invalid` (no operands) yield a fresh zero word.
+// A Yul function call producing its result words. Yul evaluates arguments right-to-left; a
+// `BuiltIn::Yul*` callee is a one-to-one `yul.*` EVM intrinsic, otherwise a user-defined function
+// is inlined. An effect op (store/copy/log/terminator) yields its first operand for the statement to discard.
 yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'context, 'block>>>; |call, context, block| {
     let YulExpression::YulPath(path) = call.operand() else {
         unimplemented!("unsupported yul callee expression");
@@ -44,10 +40,8 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
         .collect();
 
     let Some(opcode) = callee.resolve_to_built_in() else {
-        // A user-defined Yul function: `solc`'s own MLIR backend asserts on these,
-        // so there is no ground truth to mirror; inlining keeps behavioural parity
-        // while staying within the Yul dialect. Recursion is rejected (it would
-        // loop the compiler).
+        // A user-defined Yul function is inlined (solc's MLIR backend asserts on these, so there is no
+        // ground truth to mirror). Recursion is rejected.
         let name = callee.name();
         let depth = context.yul_inline_depth.entry(name.clone()).or_insert(0);
         if *depth >= 1 {
@@ -63,7 +57,7 @@ yul_emit!(YulFunctionCallExpression => BlockAnd<'context, 'block, Vec<YulValue<'
         let returns: Vec<_> = definition
             .returns()
             .map(|names| names.iter().collect::<Vec<_>>())
-            .unwrap_or_default(); // recut-lint-allow: fail01 — a yul function may declare no returns
+            .unwrap_or_default();
 
         let builder = &context.state.builder;
         context.environment.enter_scope();

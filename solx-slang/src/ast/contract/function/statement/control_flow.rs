@@ -47,11 +47,9 @@ statement_emit!(IfStatement; |node, context, block| {
         IfOperation.cond(condition_boolean); then_region, else_region
     );
 
-    // Get the inner regions for creating blocks in the right scope.
     let then_region = solx_mlir::ffi::block_parent_region(&then_block);
     let else_region = solx_mlir::ffi::block_parent_region(&else_block);
 
-    // Emit then body.
     let saved_region = context.region_pointer;
     context.region_pointer = &*then_region as *const _;
     let then_end = node.body().emit(context, then_block);
@@ -63,7 +61,6 @@ statement_emit!(IfStatement; |node, context, block| {
         then_region.append_block(dead_block);
     }
 
-    // Emit else body (or empty yield).
     if let Some(ref else_statement) = node.else_branch() {
         context.region_pointer = &*else_region as *const _;
         let else_end = else_statement.emit(context, else_block);
@@ -86,7 +83,6 @@ statement_emit!(IfStatement; |node, context, block| {
 statement_emit!(ForStatement; |node, context, block| {
     context.environment.enter_scope();
 
-    // Emit initialization in the current block.
     let block = match node.initialization() {
         ForStatementInitialization::VariableDeclarationStatement(declaration) => {
             let statement = Statement::VariableDeclarationStatement(declaration.clone());
@@ -116,7 +112,6 @@ statement_emit!(ForStatement; |node, context, block| {
     let body_region = solx_mlir::ffi::block_parent_region(&body_block);
     let saved_region = context.region_pointer;
 
-    // Condition region.
     match node.condition() {
         ForStatementCondition::ExpressionStatement(expression_statement) => {
             let emitter = ExpressionContext::from(&*context);
@@ -145,7 +140,6 @@ statement_emit!(ForStatement; |node, context, block| {
         }
     }
 
-    // Body region.
     context.region_pointer = &*body_region as *const _;
     let body_end = node.body().emit(context, body_block);
     if let Some(body_end) = body_end {
@@ -158,11 +152,8 @@ statement_emit!(ForStatement; |node, context, block| {
             context.state,
             context.environment,
             context.storage_layout,
-            // The loop step is always unchecked; solc emits `sol.add` for `i++`.
             ArithmeticMode::Unchecked,
         );
-        // The step is in statement position: its value is discarded and it
-        // may be a value-less producer (a void call or `delete`).
         let step_end = iterator_expression.emit_for_effect(&emitter, step_block);
         mlir_op_void!(&context.state.builder, &step_end, YieldOperation.ins(&[]));
     } else {
@@ -180,7 +171,6 @@ statement_emit!(WhileStatement; |node, context, block| {
     let body_region = solx_mlir::ffi::block_parent_region(&body_block);
     let saved_region = context.region_pointer;
 
-    // Condition region.
     let emitter = ExpressionContext::from(&*context);
     let BlockAnd {
         value: condition_value,
@@ -195,7 +185,6 @@ statement_emit!(WhileStatement; |node, context, block| {
         ConditionOperation.condition(condition_boolean)
     );
 
-    // Body region.
     context.region_pointer = &*body_region as *const _;
     let body_end = node.body().emit(context, body_block);
     if let Some(body_end) = body_end {
@@ -219,7 +208,6 @@ statement_emit!(DoWhileStatement; |node, context, block| {
         mlir_op_void!(&context.state.builder, &body_end, YieldOperation.ins(&[]));
     }
 
-    // Condition region.
     let emitter = ExpressionContext::from(&*context);
     let BlockAnd {
         value: condition_value,

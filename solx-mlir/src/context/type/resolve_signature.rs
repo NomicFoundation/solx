@@ -11,13 +11,8 @@ use crate::LocationPolicy;
 use crate::Type;
 
 impl<'context> Type<'context> {
-    /// Resolves a function's `(parameter_types, return_types)` from Slang to MLIR
-    /// under `policy`: [`LocationPolicy::Declared`] for the declared signature
-    /// (used inside the callee's own body), [`LocationPolicy::ForceMemory`] for
-    /// the external (ABI) signature — an external call ABI-encodes its arguments
-    /// and decodes its results into memory (`calldata` cannot cross the call
-    /// boundary), so solc shows a `bytes calldata` parameter as
-    /// `!sol.string<Memory>` in the call's `callee_type`.
+    /// Resolves a function's `(parameter_types, return_types)` from Slang to MLIR under `policy`
+    /// (the declared signature, or the external ABI signature that forces reference types to memory).
     pub fn resolve_signature(
         function: &FunctionDefinition,
         policy: LocationPolicy,

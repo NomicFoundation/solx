@@ -7,18 +7,11 @@ use melior::ir::BlockRef;
 use crate::ast::BlockAnd;
 use crate::ast::contract::function::expression::ExpressionContext;
 
-/// Emits a node coerced to an expected MLIR type — the projection's argument /
-/// initialiser coercion, a superset of [`EmitExpression`](crate::ast::EmitExpression).
+/// Emits a node coerced to an expected MLIR type (a node's argument / initialiser coercion).
 ///
-/// Most expressions emit naturally and then cast to the target. The exception is
-/// a string literal: slang types it `Literal(String)` context-free, so toward
-/// `bytesN` / `byte` it must materialise as a compile-time, left-aligned
-/// fixed-bytes / byte constant — the literal in the high bytes, zero-padded right
-/// — rather than a runtime `sol.string` the integer-only verifier rejects; the
-/// target reaches the literal only from the use site. `Target` is a single
-/// [`Type`](melior::ir::Type) for one expression and a `&[Type]` signature for an
-/// ordered argument list, each element coerced to its parameter type — hence the
-/// generic `Target` and associated `Output`.
+/// Most expressions emit then cast to the target. The exception is a string literal, which toward
+/// `bytesN` / `byte` materialises as a compile-time fixed-bytes constant rather than a runtime
+/// `sol.string`. `Target` is one `Type` for an expression or a `&[Type]` signature for an argument list.
 pub trait EmitAs<'context: 'block, 'block, Target> {
     /// The coerced result — a single value, or the coerced argument vector.
     type Output;

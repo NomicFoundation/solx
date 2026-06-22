@@ -13,10 +13,8 @@ use crate::ast::Value as AstValue;
 use solx_mlir::Builder;
 use solx_mlir::ods::sol::CallOperation;
 
-/// The hand-off from a modifier stage to the wrapped function body: a modifier
-/// stage's `_` placeholder emits a call of the internal `$body` (or next-stage)
-/// `sol.func`, forwarding the wrapping function's parameters and storing the
-/// call results into its return slots.
+/// The hand-off from a modifier stage's `_` placeholder to the next-stage / `$body` `sol.func`:
+/// forwards the wrapping function's parameters and stores the call results into its return slots.
 pub struct ModifierBodyCall<'context, 'block> {
     /// Symbol of the internal `sol.func` holding the wrapped body / next stage.
     pub symbol: String,
@@ -30,14 +28,8 @@ pub struct ModifierBodyCall<'context, 'block> {
 }
 
 impl<'context, 'block> ModifierBodyCall<'context, 'block> {
-    /// Emits the hand-off: call the downstream `sol.func` ([`symbol`](Self::symbol))
-    /// with the forwarded parameters followed by the *current* return-slot values,
-    /// then store the call's results back into the return slots so the modifier
-    /// tail and the epilogue observe them. The single source for this sequence,
-    /// shared by the `_;` placeholder ([`StatementContext`]) and the public
-    /// entry's outermost-stage call (`EmitModifierChain::emit_modified_body`).
-    ///
-    /// [`StatementContext`]: crate::ast::contract::function::statement::StatementContext
+    /// Emits the hand-off: call the downstream `sol.func` with the forwarded parameters followed by
+    /// the current return-slot values, then store the results back into the return slots.
     pub fn emit<Block>(&self, builder: &Builder<'context>, block: &Block)
     where
         Block: BlockLike<'context, 'block>,

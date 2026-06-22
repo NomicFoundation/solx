@@ -3,13 +3,10 @@
 //!
 
 pub mod analysis;
-/// Contract constructor synthesis to Sol dialect MLIR.
 pub mod constructor;
-/// Function definition emission to Sol dialect MLIR.
 pub mod function;
 pub mod getter;
 pub mod object_scope;
-/// Contract storage layout: the slot assignment of state variables.
 pub mod storage_layout;
 
 pub use self::object_scope::ObjectScope;
@@ -53,12 +50,8 @@ impl EmitObject for ContractDefinition {
     fn emit(&self, context: &mut Context, scope: &ObjectScope) {
         let contract_name = self.name().name();
 
-        // Re-resolve `super.f(...)` / `Base.f(...)` against the C3 linearisation
-        // (slang resolves them lexically, which is wrong in a diamond). The
-        // redirect drives the call site; the shadowed base overrides reached
-        // through `super` are emitted internal-only under contract-qualified
-        // symbols below, and their bodies are walked by the free / library
-        // collectors so the internals they call also register.
+        // Re-resolve `super.f(...)` / `Base.f(...)` against the C3 linearisation (slang resolves them
+        // lexically, wrong in a diamond). Shadowed base overrides are emitted internal-only below.
         let super_dispatch = self::analysis::super_call::SuperDispatch::build_super_dispatch(self);
         context.super_redirect = super_dispatch.redirect.clone();
         context.virtual_redirect = super_dispatch.virtual_redirect.clone();
@@ -68,9 +61,8 @@ impl EmitObject for ContractDefinition {
             .map(|(_, function)| function.clone())
             .collect();
 
-        // Pre-register the C3-linearised function set (override-resolved, one
-        // entry per signature) so an inherited method called by its bare name in a
-        // derived contract resolves to its registered symbol.
+        // Pre-register the C3-linearised function set (override-resolved) so an inherited method
+        // called by bare name in a derived contract resolves to its registered symbol.
         self.register_signatures(
             context,
             self.linearised_functions()
@@ -91,19 +83,16 @@ impl EmitObject for ContractDefinition {
                 .map(|(symbol, function)| (function.clone(), symbol.clone())),
         );
 
-        // Free functions (`f(...)` declared at file level) reachable from this
-        // contract, transitively — not in the linearised set, so registered here
-        // and emitted as ordinary internal functions below.
+        // Free functions reachable from this contract, transitively — not in the linearised set,
+        // so registered here and emitted as ordinary internal functions below.
         let mut reached_free_functions = FreeCallCollector::reachable_free_functions(
             self,
             scope.free_functions,
             &shadowed_functions,
         );
 
-        // Out-of-band function sources the reachability walk does not reach by
-        // name, appended through one growing `seen` set so each dedup is against
-        // everything appended so far: operator-bound functions (invoked only
-        // through an operator) and internal library functions (`L.f(...)`).
+        // Out-of-band sources the reachability walk misses by name, deduped against one growing `seen`
+        // set: operator-bound functions and internal library functions (`L.f(...)`).
         let mut seen: HashSet<NodeId> = reached_free_functions
             .iter()
             .map(|function| function.node_id())
@@ -124,9 +113,8 @@ impl EmitObject for ContractDefinition {
             }
         }
 
-        // Register each reached free function under its node-id-qualified symbol so
-        // calls resolve regardless of emission order, even when a same-named
-        // function is reached together.
+        // Register each reached free function under its node-id-qualified symbol so calls resolve
+        // regardless of emission order, even for same-named functions.
         self.register_signatures(
             context,
             reached_free_functions
@@ -147,10 +135,8 @@ impl EmitObject for ContractDefinition {
             &module_body,
         );
 
-        // Declare every state variable in the C3-linearised hierarchy (inherited +
-        // own): a derived contract owns the FULL layout, and inherited getters /
-        // bodies emit `sol.addr_of @var` against inherited slots the backend
-        // resolves by `lookupSymbol` (asserts if the `sol.state_var` is absent).
+        // Declare every state variable in the C3-linearised hierarchy (inherited + own): a derived
+        // contract owns the FULL layout, and inherited getters / bodies address inherited slots by symbol.
         for state_variable in self.linearised_state_variables() {
             let Some(slot) = storage_layout.get(&state_variable.node_id()) else {
                 continue;
@@ -190,21 +176,16 @@ impl EmitObject for ContractDefinition {
         );
         context.current_contract_type = None;
 
-        // An overridden public function whose signature matches an inherited
-        // public state variable's auto-getter would emit a second function under
-        // the getter's selector symbol (`redefinition of symbol`); the getter
-        // (emitted last) wins, so skip such functions here.
+        // An overridden public function matching an inherited public state variable's auto-getter
+        // would collide on the getter's selector symbol; the getter (emitted last) wins, so skip it here.
         let getter_selectors: HashSet<u32> = self
             .linearised_state_variables()
             .iter()
             .filter_map(|state_variable| state_variable.compute_selector())
             .collect();
 
-        // Walk the C3-linearised function set so a derived contract emits inherited
-        // methods too, override-resolved. Constructors and modifiers go through
-        // their own paths, so skip them. The linearisation lists the most-derived
-        // override first; emit the first fallback / receive and skip inherited base
-        // versions — a second `sol.func` of either makes the backend assert.
+        // Walk the C3-linearised function set so a derived contract emits inherited methods too
+        // (override-resolved). The most-derived override is first; emit the first fallback / receive only.
         let mut fallback_emitted = false;
         let mut receive_emitted = false;
         for function in self.linearised_functions() {
@@ -269,16 +250,10 @@ impl EmitObject for ContractDefinition {
 }
 
 impl EmitObject for LibraryDefinition {
-    /// Emits a deployable library object — its externally-dispatchable functions
-    /// as `sol.func`s under a `sol.contract`.
+    /// Emits a deployable library object — its `external` / `public` functions as `sol.func`s.
     ///
-    /// A `delegatecall`ed library dispatches only `external` / `public` functions;
-    /// `internal` / `private` ones and modifiers are inlined into callers. A library
-    /// with no externally-visible function is emitted as an empty, call-protected
-    /// stub (matching solc) — emitting its inlined-only functions standalone would
-    /// panic on the absent caller context. The stub stays in the artifacts so the
-    /// harness's `// library:` directive can deploy and link it. A library has no
-    /// free-function inputs, so the object scope is unused.
+    /// A library with no externally-visible function is emitted as an empty, call-protected stub
+    /// (matching solc), kept in the artifacts so the `// library:` directive can deploy and link it.
     fn emit(&self, context: &mut Context, _scope: &ObjectScope) {
         let library_name = self.name().name();
 
@@ -293,9 +268,8 @@ impl EmitObject for LibraryDefinition {
                         )
             )
         });
-        // When the library is deployable, emit all of its `Regular` functions (the
-        // internal ones the dispatched functions call included); the backend DCEs
-        // any left unreferenced. When it is not, emit none — the empty stub.
+        // A deployable library emits all `Regular` functions (the backend DCEs unreferenced ones);
+        // a non-deployable one emits none — the empty stub.
         let functions: Vec<_> = if has_deployable_function {
             self.members()
                 .iter()
@@ -326,9 +300,8 @@ impl EmitObject for LibraryDefinition {
         let library_type =
             AstType::contract(context.builder.context, &library_name, false).into_mlir();
         let module_body = context.module.body();
-        // A library is `ContractKind::Library`: the backend dispatcher passes a
-        // `storage` reference parameter as its slot (instead of ABI-decoding it) and
-        // emits the library-address self-reference as a `llvm.setimmutable`.
+        // A library is `ContractKind::Library`: the dispatcher passes a `storage` reference parameter
+        // as its slot, and the library-address self-reference lowers to `llvm.setimmutable`.
         let contract_body = self.emit_contract_shell(
             context,
             &library_name,

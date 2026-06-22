@@ -1,13 +1,8 @@
 //!
 //! Collection of free functions referenced by a contract.
 //!
-//! Free functions (file-level `function f(...) {...}` declared outside any
-//! contract) are not part of any contract's linearised function set, so the
-//! per-contract MLIR module does not emit them unless a contract calls one.
-//! This module walks a contract's functions (transitively through the free
-//! functions they reach) and returns every free function called by name
-//! (`f(...)`), so the contract emitter can pre-register and emit them into the
-//! contract body, where they lower like ordinary internal functions.
+//! Free functions are not part of any contract's linearised set, so this walks a contract's functions
+//! (transitively) and returns every free function it calls by name, for the emitter to register.
 //!
 
 use std::collections::HashSet;
@@ -33,14 +28,8 @@ pub struct FreeCallCollector {
 }
 
 impl FreeCallCollector {
-    /// Returns the free functions reachable from `contract`'s own functions and
-    /// constructor, including those reached only through other free functions.
-    ///
-    /// `free_functions` is the source unit's full set of free functions.
-    /// `extra_roots` are additional function bodies to walk that are not part of
-    /// the linearised set — the shadowed base overrides reached only through
-    /// `super` (which are emitted into this module and may call free functions
-    /// of their own). The result is deduplicated by node id.
+    /// Returns the free functions reachable from `contract`'s functions and constructor (deduplicated
+    /// by node id). `extra_roots` are extra bodies to walk (e.g. `super`-reached base overrides).
     pub fn reachable_free_functions(
         contract: &ContractDefinition,
         free_functions: &[FunctionDefinition],
@@ -79,7 +68,6 @@ impl Visitor for FreeCallCollector {
         {
             self.reached.push(function);
         }
-        // Descend so nested calls (e.g. `f(g(x))`) are also recorded.
         true
     }
 }

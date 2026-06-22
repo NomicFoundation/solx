@@ -17,9 +17,7 @@ use crate::ast::contract::function::expression::ExpressionContext;
 impl<'context: 'block, 'block> EmitExpression<'context, 'block> for PositionalArguments {
     type Output = BlockAnd<'context, 'block, Vec<Value<'context, 'block>>>;
 
-    /// Evaluates each positional argument left-to-right into its raw value. The
-    /// values are uncoerced — a call coerces each to its callee's parameter type,
-    /// a built-in to its operand type.
+    /// Evaluates each positional argument left-to-right into its raw (uncoerced) value.
     fn emit<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -44,10 +42,8 @@ impl<'types, 'context: 'block, 'block> EmitAs<'context, 'block, &'types [Type<'c
 {
     type Output = Vec<Value<'context, 'block>>;
 
-    /// Evaluates an ordered argument list, coercing each argument to its declared
-    /// parameter type. The single eval-and-coerce primitive every call site
-    /// (internal, external, library, constructor) shares; the list arrives already
-    /// in parameter order, so positional and named calls converge here.
+    /// Evaluates an ordered argument list, coercing each argument to its declared parameter type
+    /// (the shared eval-and-coerce primitive; the list arrives already in parameter order).
     fn emit_as<'state>(
         &self,
         parameter_types: &'types [Type<'context>],

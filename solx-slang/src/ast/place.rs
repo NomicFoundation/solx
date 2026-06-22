@@ -5,9 +5,7 @@
 use melior::ir::Type;
 use melior::ir::Value;
 
-/// The lvalue an assignable expression denotes — the `!sol.ptr` address and the
-/// MLIR element type loaded from or stored to it, without any `sol.load` /
-/// `sol.store`.
+/// The lvalue an assignable expression denotes — the `!sol.ptr` address and its MLIR element type.
 pub struct Place<'context, 'block> {
     /// The address the element lives at.
     pub address: Value<'context, 'block>,

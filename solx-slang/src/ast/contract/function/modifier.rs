@@ -1,10 +1,8 @@
 //!
 //! Function-modifier emission (modifier-stage `sol.func` chain).
 //!
-//! A modified function `f` is lowered as a chain of internal `sol.func`s —
-//! `$mod0 … $modN` (one per modifier invocation, in order) and `$body` (the
-//! function's own statements) — each calling the next at its `_` placeholder.
-//! The public entry `f` evaluates the modifier arguments and calls `$mod0`.
+//! A modified function `f` is lowered as a chain of internal `sol.func`s — `$mod0 … $modN` (one per
+//! modifier) and `$body` — each calling the next at its `_` placeholder; the entry `f` calls `$mod0`.
 //!
 
 use melior::ir::BlockLike;
@@ -41,10 +39,7 @@ use crate::ast::pending_queries::PositionalArguments;
 /// [`ModifierParameterBinding`] per bound modifier parameter.
 pub type ModifierStageParams<'context, 'env> = Vec<ModifierParameterBinding<'context, 'env>>;
 
-/// The frame threaded through the modifier-wrapped emission of one function —
-/// the references the modifier-chain emission needs in common, bundled so
-/// `emit_modified_body` takes one frame. The wrapped function itself is the
-/// `EmitModifierChain` receiver, so it is not carried here.
+/// The references the modifier-chain emission of one function threads in common, bundled into one frame.
 pub struct ModifiedBody<'body, 'context, 'block> {
     /// The public entry symbol.
     mlir_name: &'body str,
@@ -88,8 +83,7 @@ impl EmitModifierChain for FunctionDefinition {
         modifier_stage_params: Vec<ModifierStageParams<'context, 'block>>,
         current_block: BlockRef<'context, 'block>,
     ) -> Option<BlockRef<'context, 'block>> {
-        // Unused: `f`'s parameters are read straight from the entry block's
-        // arguments, not from the variable environment.
+        // Unused: `f`'s parameters are read from the entry block's arguments, not the environment.
         let _ = environment;
         let mlir_name = frame.mlir_name;
         let mlir_parameter_types = frame.mlir_parameter_types;
@@ -97,9 +91,8 @@ impl EmitModifierChain for FunctionDefinition {
         let contract_body = frame.contract_body;
         let function_entry_block = frame.function_entry_block;
 
-        // The wrapped body is the innermost func, reached by the last modifier's
-        // `_;`. It takes `f`'s parameters plus the threaded-in return values
-        // (`BodyKind::ModifierBody`).
+        // The wrapped body is the innermost func, reached by the last modifier's `_;`; it takes
+        // `f`'s parameters plus the threaded-in return values.
         let body_symbol = format!("{mlir_name}$body");
         self.emit_inner(
             scope,
@@ -108,9 +101,8 @@ impl EmitModifierChain for FunctionDefinition {
             BodyKind::ModifierBody,
         );
 
-        // Every return needs a slot so the chain's results can be captured and
-        // read back by the epilogue; an unnamed return gets a default-initialised
-        // one (a never-reached `_;` then yields the zero default).
+        // Every return needs a slot so the chain's results can be read back by the epilogue;
+        // an unnamed return gets a default-initialised one.
         for (index, slot) in return_slots.iter_mut().enumerate() {
             if slot.is_none() {
                 *slot = Some(
@@ -134,10 +126,8 @@ impl EmitModifierChain for FunctionDefinition {
             })
             .collect();
 
-        // Emit each stage as its own `sol.func`. Stage `i`'s `_;` calls stage
-        // `i + 1` (or `$body` for the last). Stage `i`'s "downstream" parameters
-        // are every later modifier's argument types followed by `f`'s parameter
-        // types — exactly what the next stage binds, so the forward aligns.
+        // Emit each stage as its own `sol.func`: stage `i`'s `_;` calls stage `i+1` (or `$body`). Its
+        // downstream parameters are every later modifier's argument types then `f`'s, so the forward aligns.
         let stage_count = modifier_stages.len();
         let stage_symbols: Vec<String> = (0..stage_count)
             .map(|index| format!("{mlir_name}$mod{index}"))
@@ -170,10 +160,8 @@ impl EmitModifierChain for FunctionDefinition {
             );
         }
 
-        // `f`'s body: call the outermost stage with [all modifier arguments ++
-        // f's parameters], threading the current return values (appended by
-        // `ModifierBodyCall::emit`) and capturing the results back into the
-        // shared return slots, then fall through to `f`'s epilogue.
+        // `f`'s body: call the outermost stage with [all modifier arguments ++ f's parameters],
+        // threading the return values and capturing results back into the shared slots.
         let mut forward_params: Vec<Value<'context, 'block>> = Vec::new();
         for params in modifier_stage_params.iter() {
             for binding in params {
@@ -287,12 +275,8 @@ impl EmitModifierChain for FunctionDefinition {
             return_slots: return_slots.clone(),
         });
 
-        // A regular-function modifier stage iterates the body statements
-        // directly rather than through `Block::emit`: the stage func owns the
-        // `terminated` / `emit_default_return` interleaving (mirroring
-        // `emit_inner`), which a plain block descent does not express. The
-        // constructor inline path has no such epilogue and so routes its stage
-        // blocks through `Block::emit`.
+        // A regular-function modifier stage iterates the body statements directly (not via `Block::emit`):
+        // the stage func owns the `terminated` / `emit_default_return` interleaving a block descent can't express.
         let mut current_block = entry;
         let mut terminated = false;
         for statement in modifier_body.statements().iter() {
@@ -322,9 +306,8 @@ impl EmitModifierChain for FunctionDefinition {
         let mut modifier_stages: Vec<Block> = Vec::new();
         let mut modifier_params: Vec<ModifierStageParams<'context, 'env>> = Vec::new();
         for invocation in self.modifier_invocations().iter() {
-            // Resolve the invocation lexically (a plain `m`), else by its final
-            // path segment (a namespace-qualified `M.C.m`); a base-constructor
-            // invocation `Base(args)` resolves to neither and is skipped here.
+            // Resolve the invocation lexically (`m`) or by its final path segment (`M.C.m`);
+            // a base-constructor invocation `Base(args)` resolves to neither and is skipped.
             let resolved_modifier = match invocation.name().resolve_to_definition() {
                 Some(Definition::Modifier(modifier)) => modifier,
                 _ => match scope
@@ -335,9 +318,8 @@ impl EmitModifierChain for FunctionDefinition {
                     None => continue,
                 },
             };
-            // Re-dispatch to the most-derived override of this modifier (a
-            // `virtual` modifier overridden in a derived contract); a non-virtual
-            // or library modifier keeps its lexical resolution.
+            // Re-dispatch to the most-derived override (a `virtual` modifier overridden in a derived
+            // contract); a non-virtual or library modifier keeps its lexical resolution.
             let modifier_definition = scope
                 .contract
                 .and_then(|contract| {
@@ -350,16 +332,14 @@ impl EmitModifierChain for FunctionDefinition {
             let argument_expressions = invocation
                 .arguments()
                 .and_then(|argument_list| argument_list.positional_arguments())
-                .unwrap_or_default(); // recut-lint-allow: fail01 — a modifier invocation may carry no arguments
+                .unwrap_or_default();
             let mut stage_params: ModifierStageParams<'context, 'env> = Vec::new();
             for (parameter, argument) in modifier_definition
                 .parameters()
                 .iter()
                 .zip(argument_expressions)
             {
-                // Evaluate the argument even when the parameter is unnamed
-                // (`modifier m(uint) {...}`) — the evaluation may have side
-                // effects (`m(f(x))`) that must still run.
+                // Evaluate the argument even for an unnamed parameter — the evaluation may have side effects.
                 let BlockAnd {
                     value,
                     block: next_block,
@@ -373,9 +353,7 @@ impl EmitModifierChain for FunctionDefinition {
                     argument.emit(&emitter, block)
                 };
                 block = next_block;
-                // An unnamed modifier parameter is never referenced in the body,
-                // so it gets no binding (the argument was still evaluated above
-                // for its side effects).
+                // An unnamed modifier parameter is never referenced, so it gets no binding.
                 if parameter.name().is_none() {
                     continue;
                 }

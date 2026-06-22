@@ -8,8 +8,7 @@
 pub enum BodyKind {
     /// A normal function emission: public selector and modifier wrapping.
     Function,
-    /// The unwrapped body of a modified function, emitted as a separate internal
-    /// `sol.func` (the `$body` symbol) — no selector, no modifier wrapping, with
-    /// the return values threaded in as trailing parameters.
+    /// The unwrapped body of a modified function (the `$body` `sol.func`): no selector, no wrapping,
+    /// with return values threaded in as trailing parameters.
     ModifierBody,
 }

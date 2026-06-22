@@ -53,11 +53,8 @@ impl EmitConstructor for ContractDefinition {
             })
             .collect();
 
-        // When no base contributes a constructor, the contract's own constructor
-        // (or an empty one running just the state-variable initializers) is the
-        // entire construction. A chain that DOES have a base constructor takes the
-        // chain path below, where `emit_constructor_bodies` runs every base body in
-        // C3 order and applies each constructor's modifiers as an inline chain.
+        // With no base constructor, the contract's own constructor (or an empty one running just the
+        // state-variable initializers) is the entire construction; otherwise take the chain path below.
         let has_base_constructor = mro.iter().skip(1).any(|base| base.constructor().is_some());
         if !has_base_constructor {
             if let Some(constructor) = self.constructor() {
@@ -77,10 +74,8 @@ impl EmitConstructor for ContractDefinition {
             return;
         }
 
-        // Inheritance chain: one `constructor()` runs every base constructor
-        // (base-first), each in its own parameter scope, after the linearised
-        // state-variable initializers. The deployed constructor takes the
-        // most-derived contract's own constructor parameters.
+        // Inheritance chain: one `constructor()` runs every base constructor (base-first), each in its
+        // own parameter scope, after the initializers; it takes the most-derived contract's parameters.
         let derived_constructor = self.constructor();
         let (parameter_types, mutability) = match &derived_constructor {
             Some(constructor) => {
@@ -106,9 +101,8 @@ impl EmitConstructor for ContractDefinition {
             contract_body,
         );
 
-        // Per-contract constructor scopes, keyed by contract node id. Base
-        // constructors routinely reuse the derived contract's parameter names, so a
-        // single flat scope would clobber them.
+        // Per-contract constructor scopes, keyed by contract node id — base constructors reuse the
+        // derived contract's parameter names, so a single flat scope would clobber them.
         let mut root_environment = Environment::new();
         if let Some(constructor) = &derived_constructor {
             for (index, parameter) in constructor.parameters().iter().enumerate() {
@@ -168,10 +162,8 @@ impl EmitConstructor for ContractDefinition {
             scope.storage_layout,
             ArithmeticMode::Checked,
         );
-        // Run initializers for the whole C3-linearised hierarchy (inherited + own)
-        // in linearisation order, so a derived contract's construction executes its
-        // base contracts' state-variable initializers — including their side
-        // effects (`uint y = f();`) — exactly as solc does.
+        // Run initializers for the whole C3-linearised hierarchy in order, so a derived contract executes
+        // its bases' state-variable initializers (including side effects) exactly as solc does.
         for state_variable in self.linearised_state_variables() {
             let Some(slot) = scope.storage_layout.get(&state_variable.node_id()) else {
                 continue;
@@ -212,10 +204,8 @@ impl EmitConstructor for ContractDefinition {
         mut current_block: BlockRef<'context, 'block>,
     ) -> BlockRef<'context, 'block> {
         for contract in mro.iter() {
-            // A contract whose constructor takes no externally-supplied
-            // parameters evaluates its own base-argument expressions in a fresh
-            // empty scope; one with parameters was already bound by a more-derived
-            // contract (this leaves that scope untouched).
+            // A contract whose constructor takes no parameters evaluates its base-argument expressions
+            // in a fresh empty scope; one with parameters was already bound by a more-derived contract.
             scopes.entry(contract.node_id()).or_default();
 
             let mut base_argument_specs: Vec<(ContractDefinition, Vec<Expression>)> = Vec::new();
@@ -249,20 +239,16 @@ impl EmitConstructor for ContractDefinition {
                 }
             }
 
-            // solc evaluates base-constructor arguments in C3-linearisation order
-            // (most-derived base first), not source order, so a side-effecting
-            // argument runs in the right order. Pure arguments are
-            // order-insensitive, so this is invisible to value-only base-ctor
-            // tests.
+            // solc evaluates base-constructor arguments in C3-linearisation order (most-derived first),
+            // not source order, so a side-effecting argument runs in the right order.
             base_argument_specs.sort_by_key(|(base, _)| {
                 mro.iter()
                     .position(|contract| contract.node_id() == base.node_id())
                     .unwrap_or(usize::MAX)
             });
 
-            // Evaluate the arguments in this contract's scope and build each
-            // base's parameter scope. The immutable borrow of the evaluating
-            // scope must end before the new scopes are inserted, so collect first.
+            // Evaluate the arguments in this contract's scope and build each base's parameter scope.
+            // The borrow of the evaluating scope must end before inserting the new scopes, so collect first.
             let evaluated: Vec<(NodeId, Environment<'context, '_>)> = {
                 let evaluating_scope = scopes
                     .get(&contract.node_id())
@@ -282,9 +268,8 @@ impl EmitConstructor for ContractDefinition {
                     for (parameter, argument) in
                         base_constructor.parameters().iter().zip(arguments.iter())
                     {
-                        // Evaluate the argument even when the parameter is unnamed
-                        // (`constructor(uint)`) — the evaluation may have side
-                        // effects that must still run, in base-linearisation order.
+                        // Evaluate the argument even for an unnamed parameter — the evaluation may have
+                        // side effects that must still run, in base-linearisation order.
                         let BlockAnd {
                             value,
                             block: next_block,
@@ -325,9 +310,8 @@ impl EmitConstructor for ContractDefinition {
                             &current_block,
                         );
                         pointer.store(cast, &scope.state.builder, &current_block);
-                        // Bind by the parameter's node id (the recut keys variables
-                        // by declaration id, so an unnamed parameter binds harmlessly
-                        // and a reference resolves through `resolve_to_definition`).
+                        // Bind by the parameter's node id (variables are keyed by declaration id, so
+                        // an unnamed parameter binds harmlessly).
                         base_environment.define_variable(parameter.node_id(), pointer.into_mlir());
                     }
                     evaluated.push((base_id, base_environment));
@@ -369,12 +353,8 @@ impl EmitConstructor for ContractDefinition {
             let environment = scopes.entry(contract.node_id()).or_default();
             environment.enter_scope();
 
-            // A constructor may carry modifiers (`constructor() mod1`). They are
-            // virtually dispatched against the *deployed* contract (resolved by
-            // `build_modifier_stages`, so an overridden modifier runs its
-            // most-derived body even while a base constructor executes). Base
-            // invocations in the same list (`Base(args)`) resolve to no modifier
-            // and are skipped — their arguments were already bound above.
+            // A constructor may carry modifiers, virtually dispatched against the *deployed* contract
+            // (an overridden modifier runs its most-derived body). Base invocations resolve to no modifier.
             let (mut modifier_stages, mut modifier_stage_params, next_block) =
                 base_constructor.build_modifier_stages(scope, environment, current_block);
             current_block = next_block;
@@ -398,9 +378,8 @@ impl EmitConstructor for ContractDefinition {
                     }
                 }
             } else {
-                // The constructor body is the innermost stage: the last modifier's
-                // `_;` runs it inline. A constructor has no return value, so the
-                // body need not be a separate `sol.func`.
+                // The constructor body is the innermost stage, run inline at the last modifier's `_;`
+                // (a constructor has no return value, so the body need not be a separate `sol.func`).
                 modifier_stages.push(body.clone());
                 modifier_stage_params.push(Vec::new());
                 let mut emitter = StatementContext::new(

@@ -19,17 +19,10 @@ use crate::ast::contract::function::mlir_symbol_name::MlirSymbolName;
 pub struct Signature<'context> {
     /// The MLIR symbol the `sol.func` is emitted under.
     pub mlir_name: String,
-    /// The Sol-typed parameter types, parallel to the function's parameters.
-    ///
-    /// For a [`BodyKind::ModifierBody`] emission these are extended with the
-    /// result types (the wrapped body receives its return values as trailing
-    /// parameters); [`Self::parameter_count`] records the original count before
-    /// that extension.
+    /// The Sol-typed parameter types. A [`BodyKind::ModifierBody`] emission extends these with the
+    /// result types (the wrapped body receives its returns as trailing parameters).
     pub mlir_parameter_types: Vec<Type<'context>>,
-    /// The number of the function's own parameters — the length of
-    /// [`Self::mlir_parameter_types`] before any modifier-body trailing-return
-    /// extension. The modifier-body return slots are seeded from the block
-    /// arguments at this offset.
+    /// The number of the function's own parameters, before any modifier-body trailing-return extension.
     pub parameter_count: usize,
     /// The Sol-typed result types, parallel to the function's returns.
     pub result_types: Vec<Type<'context>>,
@@ -59,12 +52,9 @@ impl<'context> Signature<'context> {
         let (mut mlir_parameter_types, result_types) =
             AstType::resolve_signature(function, LocationPolicy::Declared(None), builder);
 
-        // Recorded before the modifier-body extension below.
         let parameter_count = mlir_parameter_types.len();
 
-        // A modifier body (`$body`) receives the wrapping function's return values
-        // as trailing parameters, so its return slots can be seeded from the body
-        // call and observed by the modifier tail and epilogue.
+        // A modifier body (`$body`) receives the wrapping function's return values as trailing parameters.
         if body_kind == BodyKind::ModifierBody {
             mlir_parameter_types.extend(result_types.iter().copied());
         }

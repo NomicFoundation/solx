@@ -11,15 +11,11 @@ use solx_mlir::Context;
 
 use crate::ast::contract::storage_layout::StorageSlot;
 
-/// The pure-data scope threaded through function and constructor emission, the
-/// peer of `ExpressionContext` / `StatementContext` at the function level: `new`
-/// plus `pub` fields, no emission behaviour.
+/// The pure-data scope threaded through function and constructor emission.
 pub struct FunctionScope<'state, 'context> {
     /// The shared MLIR context.
     pub state: &'state Context<'context>,
-    /// Containing contract, when emitting a contract's functions. `None` for a
-    /// library's functions — libraries have no constructor / state variables /
-    /// inheritance, so the constructor-only uses of this field never run.
+    /// Containing contract (`None` for a library's functions, which have no constructor / state).
     pub contract: Option<&'state ContractDefinition>,
     /// State variable node ID to `(slot, byte_offset)` mapping.
     pub storage_layout: &'state HashMap<NodeId, StorageSlot>,

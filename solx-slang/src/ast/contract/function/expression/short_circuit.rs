@@ -12,10 +12,6 @@ use crate::ast::EmitExpression;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::logical_operator::LogicalOperator;
 
-// Each slang short-circuit node projects to the [`LogicalOperator`] it applies,
-// homed on `LogicalOperator` (a slang-local enum) via `From`, the conversion's
-// concept, rather than a bespoke extension trait.
-
 impl From<&AndExpression> for LogicalOperator {
     fn from(_node: &AndExpression) -> Self {
         Self::And

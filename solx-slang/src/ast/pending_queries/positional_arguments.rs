@@ -1,14 +1,11 @@
 //!
-//! TODO: pure-Slang query pending a home (Slang dev-solx vs solx vs fold) —
-//! query-sorting pass. Lifted verbatim from `FunctionEmitter::positional_arguments`.
+//! Positional-arguments query for an argument list (pure-Slang, pending a permanent home).
 //!
 
 use slang_solidity_v2::ast::ArgumentsDeclaration;
 use slang_solidity_v2::ast::Expression;
 
-/// The positional arguments of a modifier / base invocation's argument list, or
-/// `None` when the list is empty. Named (`{...}`) and call-option argument forms
-/// are not positional and yield `None`.
+/// The positional arguments of an argument list, or `None` when empty or non-positional (named / call-option).
 pub trait PositionalArguments {
     /// This argument list's positional expressions, or `None` when there are none.
     fn positional_arguments(&self) -> Option<Vec<Expression>>;

@@ -1,17 +1,9 @@
 //!
 //! User-defined operator bindings (`using {f as op} for T global;`).
 //!
-//! A `using {f as op} for T global;` directive binds a function to an operator
-//! on a user-defined value type. An operation such as `a + b` on a `T`-typed
-//! operand then calls `f(a, b)` rather than emitting native arithmetic — `f`
-//! carries its own checked/unchecked context, so an `unchecked` body wraps on
-//! overflow while a checked caller stays checked (and vice versa).
-//!
-//! Bindings are always file-level and `global`, so they are gathered once per
-//! compilation unit and shared across every contract. The gathered map is keyed
-//! by `(udvt_definition_id, operator)`; the operand's UDVT definition id is read
-//! from the operator function's first parameter, which Solidity requires to be
-//! the bound type.
+//! A `using {f as op} for T global;` directive binds a function to an operator on a user-defined
+//! value type, so `a + b` on a `T` calls `f(a, b)` rather than emitting native arithmetic. Bindings
+//! are file-level and gathered once per unit, keyed by `(udvt_definition_id, operator)`.
 //!
 
 use std::collections::HashMap;
@@ -34,9 +26,7 @@ use slang_solidity_v2::ast::SourceUnitMember;
 pub struct OperatorBindings {
     /// Maps `(udvt_definition_id, operator)` to the bound function's node id.
     pub map: HashMap<(NodeId, UserDefinedOperator), NodeId>,
-    /// The bound operator functions, to be registered and emitted so the
-    /// dispatched calls resolve. A function bound to several operators (e.g.
-    /// `using {foo as +, foo as -}`) appears once.
+    /// The bound operator functions, to be registered and emitted (deduplicated).
     pub functions: Vec<FunctionDefinition>,
 }
 
@@ -104,9 +94,7 @@ impl OperatorBindings {
         Self { map, functions }
     }
 
-    /// Maps the typed [`UsingOperator`] token → [`UserDefinedOperator`]; `arity
-    /// == 1` disambiguates `Minus` → `Neg` vs `Sub`. Exhaustive over the 15
-    /// `UsingOperator` variants (16 arms — `Minus` arity-split).
+    /// Maps the typed [`UsingOperator`] token → [`UserDefinedOperator`] (`arity == 1` splits `Minus` into `Neg` vs `Sub`).
     pub fn map_using_operator(operator: &UsingOperator, arity: usize) -> UserDefinedOperator {
         match operator {
             UsingOperator::Plus(_) => UserDefinedOperator::Add,
@@ -128,9 +116,7 @@ impl OperatorBindings {
         }
     }
 
-    /// The user-defined binary operator for an [`Operator`], when one exists
-    /// (`Add`/`Subtract`/`Multiply`/`Divide`/`Remainder`/`BitwiseAnd`/`Or`/`Xor`
-    /// → `Some`; else `None`). `Option` is a genuine domain answer.
+    /// The user-defined binary operator for an [`Operator`], when one exists (else `None`).
     pub fn binary_operator(operator: Operator) -> Option<UserDefinedOperator> {
         Some(match operator {
             Operator::Add => UserDefinedOperator::Add,

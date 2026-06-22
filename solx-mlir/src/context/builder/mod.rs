@@ -1,10 +1,5 @@
 //!
-//! The dialect construction handle the `mlir_op!` macros read.
-//!
-//! [`Builder`] is the `{context, location}` pair every op construction needs —
-//! the `mlir_op!` family of macros read these two fields. The dialect emission
-//! methods all live on their owning nodes and entities ([`crate::Value`] for Sol,
-//! [`crate::YulValue`] for Yul).
+//! The `{context, location}` dialect-construction handle the `mlir_op!` macros read.
 //!
 
 pub mod try_fallback_kind;

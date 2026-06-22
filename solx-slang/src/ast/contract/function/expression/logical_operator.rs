@@ -16,8 +16,7 @@ use crate::ast::Type as AstType;
 use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 
-/// A short-circuit logical operator. Replaces a `default: bool` flag so `&&` and
-/// `||` lower through one method that branches on the operator.
+/// A short-circuit logical operator (`&&` / `||`).
 pub enum LogicalOperator {
     /// `&&` — evaluates the RHS only when the LHS is true.
     And,
@@ -33,11 +32,8 @@ impl LogicalOperator {
         matches!(self, LogicalOperator::Or)
     }
 
-    /// Emits this short-circuit operator via `sol.if` over an `i1` result slot,
-    /// matching solc's pattern. The RHS is evaluated and stored only in the
-    /// branch the LHS does NOT short-circuit — the `then` branch for `&&` (LHS
-    /// true), the `else` branch for `||` (LHS false); the other branch keeps the
-    /// short-circuit value.
+    /// Emits this short-circuit operator via `sol.if` over an `i1` result slot. The RHS is evaluated
+    /// only in the branch the LHS does NOT short-circuit; the other branch keeps the short-circuit value.
     pub fn emit<'context, 'block>(
         self,
         emitter: &ExpressionContext<'_, 'context, 'block>,
@@ -67,7 +63,6 @@ impl LogicalOperator {
             (then_block, else_block)
         };
 
-        // The non-short-circuiting branch evaluates the RHS and stores it.
         let BlockAnd {
             value: rhs,
             block: rhs_end,
@@ -75,7 +70,6 @@ impl LogicalOperator {
         let rhs_bool = rhs.is_nonzero(&emitter.state.builder, &rhs_end);
         result_ptr.store(rhs_bool, &emitter.state.builder, &rhs_end);
         mlir_op_void!(&emitter.state.builder, &rhs_end, YieldOperation.ins(&[]));
-        // The short-circuiting branch keeps the default.
         mlir_op_void!(
             &emitter.state.builder,
             &short_circuit_block,

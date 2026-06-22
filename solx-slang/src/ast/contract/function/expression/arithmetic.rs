@@ -1,7 +1,5 @@
 //!
-//! Arithmetic expression emission: binary additive, multiplicative,
-//! exponentiation, bitwise, and shift operations. Each node bridges to the
-//! [`Operator`] it applies, which lowers itself.
+//! Arithmetic expression emission: additive, multiplicative, exponentiation, bitwise, and shift operations.
 //!
 
 use melior::ir::BlockRef;
@@ -21,12 +19,6 @@ use crate::ast::EmitExpression;
 use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::operator::Operator;
-
-// Each slang binary-expression node projects to the [`Operator`] it applies —
-// from its typed slang operator enum (or its single fixed operator), never
-// source text — so the shared binary emission body handles them uniformly. The
-// projection is homed on `Operator` (a slang-local enum) via `From`, the
-// conversion's concept, rather than a bespoke extension trait.
 
 impl From<&AdditiveExpression> for Operator {
     fn from(node: &AdditiveExpression) -> Self {
@@ -90,8 +82,7 @@ expression_emit!(
     BitwiseXorExpression,
     ShiftExpression;
     |node, context, block| {
-        // The result type slang assigns the expression annotates the operands and
-        // result (matching solc); a `None` lets `emit_binary` pick the wider one.
+        // The result type slang assigns annotates the operands; `None` lets `emit_binary` pick the wider.
         let result_type =
             AstType::resolve_optional(node.get_type(), &context.state.builder);
         let (value, block) = Operator::from(node).emit_binary(

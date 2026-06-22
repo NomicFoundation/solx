@@ -1,10 +1,6 @@
 //!
 //! MLIR compilation context for EVM code generation.
 //!
-//! Provides the [`Context`] type that owns the MLIR module, builds common MLIR
-//! types, manages SSA naming, and registers functions. Emission methods live in
-//! the [`builder`] child module.
-//!
 
 pub mod builder;
 pub mod environment;
@@ -41,12 +37,6 @@ use self::builder::Builder;
 use self::function::Function;
 
 /// Accumulated MLIR state threaded through the AST visitors.
-///
-/// Owns a `melior::ir::Module` being populated; builds common MLIR types,
-/// manages SSA naming, and registers functions.
-/// Also provides pass pipeline execution and LLVM translation.
-///
-/// Mirrors the single-context pattern used by `solx-codegen-evm`.
 pub struct Context<'context> {
     /// The MLIR module being built.
     pub module: Module<'context>,
@@ -54,37 +44,17 @@ pub struct Context<'context> {
     pub builder: Builder<'context>,
     /// Resolution metadata keyed by the AST definition id of each function.
     pub function_signatures: HashMap<NodeId, Function<'context>>,
-    /// The MLIR type of the contract currently being emitted, used to type
-    /// `this` expressions. Frontends set this before emitting function bodies.
+    /// MLIR type of the contract being emitted (types `this`); set by the frontend before bodies.
     pub current_contract_type: Option<Type<'context>>,
-    /// User-defined operator bindings (`using {f as op} for T global;`), keyed
-    /// by `(udvt_definition_id, operator)` and mapping to the bound function's
-    /// definition id. Frontends populate this before emitting bodies; a binary
-    /// or unary operation on a bound user-defined value type then dispatches to
-    /// the function rather than emitting native arithmetic.
+    /// User-defined operator bindings, keyed by `(udvt_definition_id, operator)` → bound function id.
     pub operator_bindings: HashMap<(NodeId, UserDefinedOperator), NodeId>,
-    /// Redirect for `super` calls: maps a `super` member-access node id to the
-    /// function node id it dispatches to under the most-derived contract's C3
-    /// linearisation. Slang resolves `super` lexically, which is wrong in a
-    /// diamond, so the frontend pre-resolves every `super` call against the
-    /// linearised bases and records the result here. Empty unless the contract
-    /// uses `super`.
+    /// `super` call redirect (member-access node id → C3-linearised target); frontend pre-resolves diamonds.
     pub super_redirect: HashMap<NodeId, NodeId>,
-    /// Virtual dispatch redirect: maps an overridden base function's node id to
-    /// the most-derived override of the same signature. A plain internal call
-    /// resolving (lexically) to a shadowed base function is routed through this
-    /// so it reaches the override, matching Solidity's virtual semantics. Empty
-    /// unless the contract overrides an inherited function.
+    /// Virtual dispatch redirect: overridden base function id → most-derived override.
     pub virtual_redirect: HashMap<NodeId, NodeId>,
-    /// Cross-contract references collected during emission, in encounter order
-    /// — populated when an emitter reaches into another contract (`new C(...)`
-    /// → `sol.new`) and drained into the MLIR output for the linker. Empty
-    /// unless the contract deploys another.
+    /// Cross-contract references in encounter order, drained into the linker output.
     pub dependencies: RefCell<Vec<String>>,
-    /// Monotonic source of internal-function-pointer dispatch tags: the `id` a
-    /// referenceable `sol.func` carries, materialised by `sol.func_constant` and
-    /// switched over by `sol.icall`. Starts at 1 — 0 is the null pointer
-    /// (`sol.default_func_constant`).
+    /// Monotonic internal-function-pointer dispatch tag; starts at 1 (0 is the null pointer).
     function_id_counter: Cell<i64>,
 }
 
@@ -92,20 +62,11 @@ impl<'context> Context<'context> {
     /// MLIR `builtin.module` operation name used to locate nested modules.
     const BUILTIN_MODULE: &'static str = "builtin.module";
 
-    /// Creates a fully-initialized `melior::Context` with all upstream
-    /// dialects, Sol dialect, Yul dialect, and LLVM translation interfaces
-    /// registered.
-    ///
-    /// `register_all_llvm_translations` MUST be called before any
-    /// MLIR-to-LLVM translation. Without it, `mlirTranslateModuleToLLVMIR`
-    /// returns null. This function enforces that invariant.
+    /// Creates a `melior::Context` with all upstream, Sol, and Yul dialects plus LLVM translations registered.
     pub fn create_mlir_context() -> melior::Context {
         let registry = DialectRegistry::new();
         melior::utility::register_all_dialects(&registry);
 
-        // FFI calls to register Sol and Yul dialects into the
-        // registry. The registry and dialect handles are valid C objects
-        // produced by the MLIR C API; no aliasing or lifetime issues.
         unsafe {
             crate::ffi::mlirDialectHandleInsertDialect(
                 crate::ffi::mlirGetDialectHandle__sol__(),
@@ -122,12 +83,8 @@ impl<'context> Context<'context> {
         context.load_all_available_dialects();
         melior::utility::register_all_llvm_translations(&context);
 
-        // Register Sol dialect passes so they can be added to a PassManager.
-        // `Once` guarantees single-threaded, one-time execution.
+        // Register Sol dialect passes once.
         static REGISTER_PASSES: Once = Once::new();
-        // `mlirRegisterSolPasses` is idempotent within a single
-        // call but must not be called concurrently. `Once` provides full
-        // happens-before ordering and guards against concurrent execution.
         REGISTER_PASSES.call_once(|| unsafe {
             crate::ffi::mlirRegisterSolPasses();
         });
@@ -135,25 +92,17 @@ impl<'context> Context<'context> {
         context
     }
 
-    /// Creates a new MLIR state with an empty module.
-    ///
-    /// Sets the `sol.evm_version` module attribute required by the
-    /// `convert-sol-to-yul` pass.
+    /// Creates a new MLIR state with an empty module carrying the EVM-version, data-layout, and target-triple attributes.
     pub fn new(context: &'context melior::Context, evm_version: solx_utils::EVMVersion) -> Self {
         let location = Location::unknown(context);
         let module = Module::new(location);
 
-        // Set the EVM version attribute on the module — required by the
-        // Sol-to-Yul conversion pass.
         let evm_version_attribute = unsafe {
             Attribute::from_raw(crate::ffi::solxCreateEvmVersionAttr(
                 context.to_raw(),
                 evm_version.into_sol_dialect_identifier(),
             ))
         };
-        // Setting a named attribute on the module operation. Both
-        // the operation and attribute are valid MLIR objects owned by this
-        // context.
         unsafe {
             mlir_sys::mlirOperationSetAttributeByName(
                 module.as_operation().to_raw(),
@@ -167,10 +116,6 @@ impl<'context> Context<'context> {
             StringAttribute::new(context, target.data_layout()).into();
         let target_triple_attr: Attribute<'_> =
             StringAttribute::new(context, target.triple()).into();
-        // Setting llvm.data_layout and llvm.target_triple on the
-        // module. Both are string attributes required by the LLVM translation
-        // layer. The module operation and attribute values are valid MLIR
-        // objects owned by this context.
         unsafe {
             mlir_sys::mlirOperationSetAttributeByName(
                 module.as_operation().to_raw(),
@@ -197,17 +142,14 @@ impl<'context> Context<'context> {
         }
     }
 
-    /// Allocates the next internal-function-pointer dispatch tag (see
-    /// [`Self::function_id_counter`]); each referenceable function takes one.
+    /// Allocates the next internal-function-pointer dispatch tag.
     pub fn next_function_id(&self) -> i64 {
         let id = self.function_id_counter.get();
         self.function_id_counter.set(id + 1);
         id
     }
 
-    /// Records a cross-contract reference (e.g. the object name passed to
-    /// `sol.new`). Duplicates are ignored. The accumulated list is drained
-    /// into [`crate::output::MlirOutput::dependencies`] at finalize time.
+    /// Records a cross-contract reference (object name); duplicates ignored.
     pub fn add_dependency(&self, name: String) {
         let mut dependencies = self.dependencies.borrow_mut();
         if !dependencies.iter().any(|existing| existing == &name) {
@@ -229,20 +171,14 @@ impl<'context> Context<'context> {
         );
     }
 
-    /// Resolves a registered function to its mangled MLIR name and declared
-    /// parameter / return types. A miss is a solx-internal invariant failure:
-    /// every reachable function is registered before any body is emitted.
+    /// Resolves a registered function by definition id (panics if unregistered — an internal invariant).
     pub fn resolve_function(&self, definition_id: NodeId) -> &Function<'context> {
         self.function_signatures
             .get(&definition_id)
             .unwrap_or_else(|| panic!("undefined function for definition {definition_id:?}"))
     }
 
-    /// Redirects a virtual callee to its most-derived override. `virtual_redirect`
-    /// holds only shadowed-override nodes, so a non-virtual callee (or one already
-    /// most-derived) passes through unchanged. Kept distinct from
-    /// [`Self::resolve_function`]: `super` / `Base.f` resolve an exact linearised
-    /// target by id and must NOT be redirected.
+    /// Redirects a virtual callee to its most-derived override (pass-through if not shadowed).
     pub fn resolve_virtual(&self, definition_id: NodeId) -> NodeId {
         self.virtual_redirect
             .get(&definition_id)
@@ -250,35 +186,21 @@ impl<'context> Context<'context> {
             .unwrap_or(definition_id)
     }
 
-    /// Run the Sol-to-LLVM conversion pass pipeline on a module in-place.
-    ///
-    /// The pass pipeline is:
-    /// 1. `convert-sol-to-yul` — Sol → Yul
-    /// 2. `convert-yul-to-std` — Yul → func/arith/scf/cf/LLVM
-    /// 3. `convert-scf-to-cf`
-    /// 4. `convert-func-to-llvm`
-    /// 5. `convert-arith-to-llvm`
-    /// 6. `convert-cf-to-llvm`
-    /// 7. `reconcile-unrealized-casts`
-    ///
-    /// Modifier-op and LICM passes are skipped — they operate on `sol.modifier`
-    /// and `sol.while`/`sol.for` ops which are not yet emitted.
+    /// Runs the Sol-to-LLVM conversion pass pipeline on `module` in place:
+    /// canonicalize, modifier-op lowering, sol→yul, yul→std, canonicalize,
+    /// scf→cf, func→llvm, arith→llvm, cf→llvm, reconcile-unrealized-casts.
     pub fn run_sol_passes(context: &melior::Context, module: &mut Module) -> anyhow::Result<()> {
         let pass_manager = PassManager::new(context);
         pass_manager.enable_verifier(true);
 
-        // TODO: the canonicalizer pass causes an infinite loop on complex
-        // loop tests (e.g. loop/complex/1.sol) at the -Oz optimization level.
-        //
-        // Each `mlirCreate*Pass` returns a freshly allocated pass
-        // object. `Pass::from_raw` takes ownership. The pass manager runs
-        // them sequentially on the module. No aliasing or use-after-free.
+        // TODO: the canonicalizer causes an infinite loop on complex loop tests
+        // (e.g. loop/complex/1.sol) at the -Oz optimization level.
         unsafe {
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateTransformsCanonicalizer(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
-                crate::ffi::mlirCreateSolModifierOpLoweringPass(), // recut-lint-allow: nam02-ffi
+                crate::ffi::mlirCreateSolModifierOpLoweringPass(),
             ));
             pass_manager.add_pass(melior::pass::Pass::from_raw(
                 crate::ffi::mlirCreateConversionConvertSolToYulPass(),
@@ -311,20 +233,9 @@ impl<'context> Context<'context> {
             .map_err(|error| anyhow::anyhow!("Sol pass pipeline failed: {error}"))
     }
 
-    /// Consumes the context, runs the Sol-to-LLVM pass pipeline, and returns
-    /// the deploy and runtime modules as separate LLVM dialect strings.
-    ///
-    /// The Sol conversion pass produces a nested module:
-    /// ```text
-    /// module @Contract { deploy __entry + module @Contract_deployed { runtime __entry } }
-    /// ```
-    /// The inner module (matched by `runtime_code_identifier`) is detached
-    /// from the outer and stringified separately, so each can be translated
-    /// to its own LLVM IR module by `solx-codegen-evm` and emit its own
-    /// bytecode segment. The Sol-pass-generated outer carries the deploy
-    /// entry that runs the constructor and returns the runtime bytecode —
-    /// it replaces the synthetic `minimal_deploy_code` wrapper that
-    /// `solx-core` uses for non-MLIR pipelines.
+    /// Runs the Sol-to-LLVM pipeline and splits the nested deploy/runtime modules
+    /// into separate LLVM-dialect strings (the inner module matched by
+    /// `runtime_code_identifier` is detached and stringified on its own).
     pub fn finalize_module(
         self,
         runtime_code_identifier: &str,
@@ -332,17 +243,12 @@ impl<'context> Context<'context> {
     ) -> anyhow::Result<crate::output::MlirOutput> {
         let mut module = self.module;
 
-        // Capture the Sol dialect MLIR before conversion, if requested.
         let sol_source = capture_sol.then(|| module.as_operation().to_string());
 
-        // Lower Sol → LLVM dialect.
         Self::run_sol_passes(self.builder.context, &mut module)?;
 
-        // Detach the inner runtime module so the deploy text doesn't carry
-        // a duplicate copy and the deploy LLVM IR translation doesn't redo
-        // runtime codegen. The deploy entry still references the runtime
-        // via `evm.datasize`/`evm.dataoffset` metadata, which the linker
-        // resolves through the runtime object's identifier.
+        // Detach the runtime module so the deploy text doesn't duplicate it; the
+        // deploy entry still references it via `evm.datasize`/`evm.dataoffset`.
         let runtime_llvm = Self::take_nested_module_text(&mut module, runtime_code_identifier)?;
         let deploy_llvm = module.as_operation().to_string();
 
@@ -384,17 +290,11 @@ impl<'context> Context<'context> {
         .ok_or_else(|| anyhow::anyhow!("no module with sym_name `{target}` in Sol pass output"))
     }
 
-    /// Translate MLIR source text (LLVM dialect) to raw LLVM pointers.
+    /// Parses, verifies, and translates LLVM-dialect MLIR text to a raw LLVM module.
     ///
-    /// Parses the source, verifies it, and translates to LLVM IR.
-    /// Returns owned `(LLVMContextRef, LLVMModuleRef)`.
-    ///
-    /// `immutables` (the deploy segment's id -> reserved-offsets map, harvested
-    /// from the runtime object) lowers every `llvm.setimmutable` to heap stores
-    /// at those offsets before translation — `llvm.setimmutable` has no LLVM-IR
-    /// translation, so a `ContractKind::Library`'s library-address immutable must
-    /// be lowered here. `None` (the runtime segment, or a non-library) leaves the
-    /// module unchanged (the runtime carries no `setimmutable`).
+    /// `immutables` lowers `llvm.setimmutable` (a library's library-address
+    /// immutable, which has no LLVM-IR translation) to heap stores at the given
+    /// offsets before translation; `None` leaves the module unchanged.
     pub fn translate_source_to_llvm(
         context: &melior::Context,
         source: &str,
@@ -411,11 +311,6 @@ impl<'context> Context<'context> {
             Self::lower_set_immutables(&module, immutables);
         }
 
-        // `raw_operation` is a valid MlirOperation from a verified
-        // module. `LLVMContextCreate` returns a fresh context. The LLVM
-        // translation is safe because `register_all_llvm_translations` was
-        // called in `create_mlir_context()`. Null-check guards the module
-        // pointer.
         unsafe {
             let raw_operation = module.as_operation().to_raw();
             let llvm_context = inkwell::llvm_sys::core::LLVMContextCreate();
@@ -438,10 +333,7 @@ impl<'context> Context<'context> {
         }
     }
 
-    /// Lowers every `llvm.setimmutable` in `module` to heap stores at its
-    /// immutable's reserved offsets (then erases it), via the solx-llvm C-API.
-    /// The id -> offsets map is flattened to parallel arrays (one (id, offset)
-    /// entry per pair), which the C-API rebuilds.
+    /// Lowers every `llvm.setimmutable` to heap stores at its reserved offsets via the solx-llvm C-API.
     fn lower_set_immutables(
         module: &Module,
         immutables: &std::collections::BTreeMap<String, std::collections::BTreeSet<u64>>,
@@ -458,9 +350,6 @@ impl<'context> Context<'context> {
         }
         let id_pointers: Vec<*const std::ffi::c_char> =
             id_cstrings.iter().map(|id| id.as_ptr()).collect();
-        // `id_pointers` and `offsets` (parallel, length `offsets.len()`)
-        // outlive the call; `id_cstrings` keeps the pointed-to bytes alive. The
-        // module is a valid, verified MLIR module.
         unsafe {
             crate::ffi::mlirEvmLowerSetImmutables(
                 module.to_raw(),

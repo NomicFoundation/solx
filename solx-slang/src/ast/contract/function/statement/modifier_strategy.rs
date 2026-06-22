@@ -12,12 +12,8 @@ use crate::ast::contract::function::statement::StatementContext;
 
 /// How the `_;` placeholder in a modifier-wrapped body is lowered.
 ///
-/// A regular function's modifiers are emitted as separate `sol.func`s reached
-/// through a [`ModifierBodyCall`] hand-off; a constructor's modifiers run as an
-/// inline chain over the body statements. Replaces four parallel fields
-/// (`modifier_body_call`, `modifier_stages`, `modifier_stage_params`,
-/// `modifier_stage_index`) whose combination encoded these mutually exclusive
-/// modes.
+/// A regular function's modifiers are separate `sol.func`s reached through a [`ModifierBodyCall`];
+/// a constructor's run as an inline chain over the body statements.
 #[derive(Default)]
 pub enum ModifierStrategy<'context, 'block> {
     /// Not emitting a modifier-wrapped body: `_;` has no hand-off and emits
@@ -41,14 +37,8 @@ pub enum ModifierStrategy<'context, 'block> {
 }
 
 impl<'context, 'block> ModifierStrategy<'context, 'block> {
-    /// Emits the `_;` placeholder hand-off for the active strategy, taking the
-    /// statement scope by parameter (the strategy lives inside it, so this cannot
-    /// be a `&self` method without a borrow conflict). An inline chain binds the
-    /// current stage's parameters in their own scope and recurses through the
-    /// stage body — whose own `_;` advances to the next stage, the constructor
-    /// body running as the innermost stage; a body call hands off to the wrapped
-    /// `sol.func`; `None` falls through. Also the chain's entry point, with the
-    /// strategy seeded at `index: 0`.
+    /// Emits the `_;` placeholder hand-off for the active strategy (also the inline chain's entry
+    /// point). Taken by parameter rather than `&self` because the strategy lives inside `context`.
     pub fn emit_placeholder<'state>(
         context: &mut StatementContext<'state, 'context, 'block>,
         block: BlockRef<'context, 'block>,
@@ -65,9 +55,8 @@ impl<'context, 'block> ModifierStrategy<'context, 'block> {
                 let Some(stage_block) = stages.get(stage).cloned() else {
                     return Some(block);
                 };
-                let params = parameters.get(stage).cloned().unwrap_or_default(); // recut-lint-allow: fail01 — a modifier stage may declare no parameters
-                // Advance the cursor for the recursive `_;` (the borrow of the
-                // strategy ended once the stage was cloned out), restore it after.
+                let params = parameters.get(stage).cloned().unwrap_or_default();
+                // Advance the cursor for the recursive `_;`, restore it after.
                 if let Self::InlineChain { index, .. } = &mut context.modifier_strategy {
                     *index = stage + 1;
                 }

@@ -1,4 +1,6 @@
+//!
 //! Variable declaration statement emission.
+//!
 
 use melior::ir::BlockRef;
 
@@ -44,9 +46,7 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
 
     let emitter = ExpressionContext::from(&*context);
 
-    // For explicit initializers, evaluate and cast before alloca to match
-    // solc's emission order (constant → cast → alloca → store).
-    // For implicit zero-initialization, alloca is emitted first.
+    // Explicit initializers evaluate and cast before alloca, matching solc's order (cast → alloca → store).
     let (block, initial_value) = if let Some(ref initializer_expression) = node.value() {
         let BlockAnd { value, block } =
             initializer_expression.emit_as(declared_type, &emitter, block);
@@ -64,10 +64,6 @@ statement_emit!(SingleTypedDeclaration; |node, context, block| {
         pointer.store(AstValue::new(value), &context.state.builder, &block);
         pointer.into_mlir()
     } else {
-        // No initializer: default-initialise the slot to the type's zero
-        // through the shared primitive (memory aggregates malloc'd, empty
-        // `string`/`bytes` a plain malloc, scalar value types their own
-        // zero, integers a zeroed slot, references a bare slot).
         Pointer::default_initialized(
             AstType::new(declared_type),
             &context.state.builder,
@@ -120,7 +116,6 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
 
     for (member, value) in elements.iter().zip(values) {
         let Some(declaration) = member.member() else {
-            // Discard the value; nothing to bind.
             continue;
         };
         let builder = &context.state.builder;

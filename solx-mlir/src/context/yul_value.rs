@@ -23,11 +23,8 @@ use crate::Type;
 use crate::YulCmpPredicate;
 use crate::ods::yul::*;
 
-/// A Yul value — the signless `i256` word every inline-assembly computation
-/// produces. The peer of [`crate::Value`] for the Yul dialect: Yul is untyped, so
-/// there is no coercion, only the word primitives that are not a fixed ODS method
-/// chain — the FFI-built `yul.constant`, `yul.cmp`, and the `llvm` local slot.
-/// Every other `yul.*` op builds through `mlir_op!` at its node.
+/// A Yul value — the signless `i256` word every inline-assembly computation produces;
+/// the peer of [`crate::Value`] for the untyped Yul dialect.
 #[derive(Clone, Copy)]
 pub struct YulValue<'context, 'block> {
     inner: MlirValue<'context, 'block>,
@@ -47,9 +44,7 @@ impl<'context, 'block> YulValue<'context, 'block> {
         self.inner
     }
 
-    /// The signless `i256` integer attribute for a Yul word — the FFI big-integer
-    /// attribute, since a 256-bit value exceeds `IntegerAttribute::new`'s `i64`.
-    /// The `yul.constant` value and each `yul.switch` case label.
+    /// The signless `i256` integer attribute for a Yul word, via the FFI big-integer attribute (exceeds `i64`).
     pub fn word_attribute(
         value: &BigInt,
         context: &'context melior::Context,
@@ -106,8 +101,7 @@ impl<'context, 'block> YulValue<'context, 'block> {
         )
     }
 
-    /// Allocates a 256-bit stack slot for a Yul local: a `yul.constant 1` count
-    /// followed by an `llvm.alloca` of one `i256`. Returns the `!llvm.ptr` slot.
+    /// Allocates a 256-bit `!llvm.ptr` stack slot for a Yul local.
     pub fn alloca(
         builder: &Builder<'context>,
         block: &BlockRef<'context, 'block>,

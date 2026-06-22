@@ -1,7 +1,5 @@
 //!
-//! TODO: pure-Slang query pending a home (Slang dev-solx vs solx vs fold) —
-//! query-sorting pass. Lifted verbatim from `FunctionEmitter`'s modifier
-//! C3-resolution methods.
+//! Modifier C3-resolution queries (pure-Slang, pending a permanent home).
 //!
 
 use std::collections::HashMap;
@@ -18,31 +16,19 @@ pub trait ModifierResolution {
     /// first).
     fn linearised_modifiers(&self) -> Vec<FunctionDefinition>;
 
-    /// The most-derived modifier with a body, per name, across the contract's C3
-    /// linearisation. Modifiers cannot be overloaded, so the name uniquely keys an
-    /// override chain; `linearised_bases` is most-derived first, so the first
-    /// body-bearing modifier of each name is the active override. The name is only
-    /// ever a map key — never string-compared.
+    /// The most-derived body-bearing modifier per name, across the C3 linearisation (modifiers can't
+    /// be overloaded, so the name uniquely keys an override chain).
     fn most_derived_modifiers_by_name(&self) -> HashMap<String, FunctionDefinition>;
 
-    /// Re-dispatches a virtual modifier invocation to its most-derived
-    /// implementation with a body (qualified invocations resolve directly).
-    ///
-    /// Returns `None` — keep the lexical resolution — when the invocation is
-    /// qualified (`Base.m`, which names a specific modifier and bypasses virtual
-    /// dispatch) or when the resolved modifier is not part of this contract's
-    /// hierarchy (e.g. a library modifier reached through `using L for *`, which
-    /// must not be virtual-dispatched against a same-named modifier of the using
-    /// contract).
+    /// Re-dispatches a virtual modifier invocation to its most-derived body-bearing implementation.
+    /// `None` (keep lexical resolution) for a qualified `Base.m` or a modifier outside this hierarchy.
     fn resolve_modifier_override(
         &self,
         invocation: &ModifierInvocation,
         resolved: &FunctionDefinition,
     ) -> Option<FunctionDefinition>;
 
-    /// Resolves a qualified modifier invocation by last-segment name against the
-    /// C3 modifiers; `None` marks a base-constructor invocation, whose final
-    /// segment is a contract name.
+    /// Resolves a qualified modifier invocation by last-segment name; `None` for a base-constructor invocation.
     fn resolve_qualified_modifier(
         &self,
         invocation: &ModifierInvocation,

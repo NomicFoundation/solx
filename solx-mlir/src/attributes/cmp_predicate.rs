@@ -9,11 +9,7 @@ use slang_solidity_v2::ast::InequalityExpressionOperator;
 
 use solx_utils::BIT_LENGTH_X64;
 
-/// Sol dialect `sol.cmp` predicate values.
-///
-/// Signedness is carried by the operand type (`ui256` vs `si256`),
-/// not the predicate. Numeric values match the Sol MLIR dialect
-/// `CmpPredicate` encoding.
+/// Sol dialect `sol.cmp` predicate values (signedness is carried by the operand type, not the predicate).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i64)]
 pub enum CmpPredicate {

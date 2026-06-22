@@ -9,19 +9,9 @@ use slang_solidity_v2::ast::ContractDefinition;
 use slang_solidity_v2::ast::FunctionDefinition;
 use slang_solidity_v2::ast::NodeId;
 
-/// A breadth-first worklist that walks a contract's function bodies and
-/// accumulates a deduplicated set of reached functions.
-///
-/// The walk is seeded with the contract's linearised functions, its
-/// constructor, and any caller-supplied extra roots. The caller drives it:
-/// [`next_body`](Self::next_body) yields each not-yet-walked body in turn (each
-/// at most once), the caller runs its own [`Visitor`](slang_solidity_v2::ast::visitor::Visitor)
-/// over that body and reports what it reaches through [`reach`](Self::reach),
-/// and [`into_reached`](Self::into_reached) returns the accumulated result.
-///
-/// Owns the BFS scaffolding — worklist, walked/collected dedup sets, root-seeding
-/// — so each reachability pass (free functions, library functions) supplies only
-/// its own per-body Visitor and decides what counts as reached.
+/// A breadth-first worklist over a contract's function bodies, accumulating a deduplicated set of
+/// reached functions. The caller drives it: `next_body` yields each body, the caller's own `Visitor`
+/// reports what it reaches via `reach`, and `into_reached` returns the result.
 pub struct ReachabilityWalk {
     /// Reached functions, deduplicated by node id — the result set.
     collected: HashMap<NodeId, FunctionDefinition>,
@@ -32,10 +22,8 @@ pub struct ReachabilityWalk {
 }
 
 impl ReachabilityWalk {
-    /// Seeds the walk with the contract's linearised functions, its constructor
-    /// (not part of the linearised set, yet able to reach functions of its own),
-    /// and `extra_roots` — bodies emitted into this contract's module that are
-    /// outside the linearised set (e.g. `super`-reached base overrides).
+    /// Seeds the walk with the contract's linearised functions, its constructor, and `extra_roots`
+    /// (bodies outside the linearised set, e.g. `super`-reached base overrides).
     pub fn new(contract: &ContractDefinition, extra_roots: &[FunctionDefinition]) -> Self {
         let mut to_walk = contract.linearised_functions();
         if let Some(constructor) = contract.constructor() {
@@ -72,16 +60,13 @@ impl ReachabilityWalk {
         }
     }
 
-    /// Whether `node_id` is already in the reached result set. Lets a caller
-    /// decide one-time bookkeeping (e.g. marking a newly-reached function) before
-    /// it calls [`reach`](Self::reach), which is idempotent.
+    /// Whether `node_id` is already in the reached result set (for one-time bookkeeping before `reach`).
     pub fn is_collected(&self, node_id: NodeId) -> bool {
         self.collected.contains_key(&node_id)
     }
 
-    /// Queues `function`'s body to be walked without adding it to the result set
-    /// — for a function reached only to follow the calls *it* makes (e.g. a free
-    /// function emitted elsewhere). A no-op if the body was already walked.
+    /// Queues `function`'s body to be walked WITHOUT adding it to the result set (to follow the calls
+    /// it makes, e.g. a free function emitted elsewhere).
     pub fn enqueue(&mut self, function: FunctionDefinition) {
         if !self.walked.contains(&function.node_id()) {
             self.to_walk.push(function);

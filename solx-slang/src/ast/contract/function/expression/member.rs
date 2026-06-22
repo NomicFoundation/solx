@@ -1,8 +1,5 @@
 //!
-//! Member access expression emission: `base.member`. Routes a namespace-
-//! qualified state-variable / constant read, a struct field read, and a
-//! built-in member access; the struct-field address routine is shared with the
-//! lvalue write path.
+//! Member access expression emission: `base.member` — namespace-qualified reads, struct fields, and built-ins.
 //!
 
 use melior::ir::BlockLike;
@@ -54,9 +51,7 @@ use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::pending_queries::MemberAccessOperand;
 
 impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpression {
-    /// Emits the address `s.field` denotes together with the field's element MLIR
-    /// type (`sol.gep` to the field offset), without the trailing `sol.load`.
-    /// Only valid for a struct base.
+    /// Emits the address `s.field` denotes with the field's element type (`sol.gep`), without the load. Struct base only.
     fn emit_place<'state>(
         &self,
         context: &ExpressionContext<'state, 'context, 'block>,
@@ -70,10 +65,8 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpre
             unreachable!("slang StructType always references a Struct definition");
         };
 
-        // Resolve the accessed field to its `StructMember` definition and locate
-        // it by node-id identity — slang exposes struct fields as an ordered list
-        // with no direct field-index lookup, but the binder resolves the access,
-        // so no name-string comparison is needed.
+        // Locate the accessed field by node-id identity — slang exposes fields as an ordered list
+        // with no direct index lookup, and the binder resolves the access (no name comparison).
         let Some(Definition::StructMember(member_definition)) =
             self.member().resolve_to_definition()
         else {
@@ -114,11 +107,8 @@ impl<'context: 'block, 'block> EmitPlace<'context, 'block> for MemberAccessExpre
 }
 
 expression_emit!(MemberAccessExpression; |node, context, block| {
-    // A namespace-qualified state-variable / constant read — `C.x`, `L.CONST`,
-    // `M.a` — reads the named member exactly like the bare identifier would,
-    // disambiguating from a shadowing local. The operand must be a namespace name
-    // (a contract / library / import alias); `this.x` keeps the external-getter
-    // path since its operand is the `this` keyword, not an identifier.
+    // A namespace-qualified read (`C.x`, `L.CONST`, `M.a`) reads the named member like the bare
+    // identifier would. `this.x` keeps the external-getter path (its operand is `this`, not an identifier).
     if let Expression::Identifier(operand) = node.operand()
         && matches!(
             operand.resolve_to_definition(),
@@ -130,11 +120,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             )
         )
     {
-        // A state-variable or `constant` member reads exactly as the bare member
-        // identifier would — storage layout and the binder are keyed by node id, so
-        // the `C.` / `L.` / `M.` access path is irrelevant. A `Function` member is
-        // NOT delegated: it would pick up the virtual-dispatch redirect that
-        // `Identifier::emit` applies, which an explicit `Base.f` must skip.
+        // A state-variable / `constant` member reads as the bare identifier would (keyed by node id).
+        // A `Function` member is NOT delegated — it would pick up the virtual redirect `Base.f` must skip.
         match node.member().resolve_to_definition() {
             Some(Definition::StateVariable(_) | Definition::Constant(_)) => {
                 return node.member().emit(context, block);
@@ -142,9 +129,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             _ => {}
         }
     }
-    // `type(T).min/max/interfaceId/name/creationCode/runtimeCode`: a
-    // compile-time property of the named type, dispatched on slang's typed
-    // built-in classification of the member.
+    // `type(T).min/max/interfaceId/name/creationCode/runtimeCode`: a compile-time property of the named type.
     match node.member().resolve_to_built_in() {
         Some(builtin @ (BuiltIn::TypeMin | BuiltIn::TypeMax)) => {
             // `type(T).min/max` for an integer type is a compile-time integer
@@ -200,11 +185,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             return BlockAnd { block, value };
         }
         Some(BuiltIn::TypeInterfaceId) => {
-            // `type(I).interfaceId` (EIP-165): the XOR of the selectors of the
-            // functions declared *directly* in interface `I` (inherited ones are
-            // excluded, matching solc), a compile-time `bytes4`. `sol.fixedbytes<4>`
-            // rejects a bare integer attribute, so emit a `uint32` constant and
-            // bridge to `bytes4` (the `f.selector` pattern).
+            // `type(I).interfaceId` (EIP-165): the XOR of the selectors of `I`'s *directly*-declared
+            // functions, a compile-time `bytes4` (emitted as a `uint32` constant bridged to `bytes4`).
             let Expression::TypeExpression(type_expression) = node.operand() else {
                 unreachable!("type(I).interfaceId operand is a type expression");
             };
@@ -255,12 +237,9 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             return BlockAnd { block, value };
         }
         Some(builtin @ (BuiltIn::TypeCreationCode | BuiltIn::TypeRuntimeCode)) => {
-            // `type(C).creationCode/runtimeCode` — the contract's deploy / deployed
-            // bytecode (`bytes memory`) via `sol.object_code`, referencing the object
-            // by name (`C` / `C_deployed`). The reference is a linker dependency so
-            // the assembler pulls the object in; the deployed object is distinct, so
-            // `runtimeCode` must depend on `C_deployed` (depending on `C` alone leaves
-            // its `__datasize__`/`__dataoffset__` symbols unresolved).
+            // `type(C).creationCode/runtimeCode` — the deploy / deployed bytecode (`bytes memory`) via
+            // `sol.object_code`. The reference is a linker dependency; `runtimeCode` must depend on
+            // `C_deployed` (depending on `C` alone leaves its data symbols unresolved).
             let Expression::TypeExpression(type_expression) = node.operand() else {
                 unreachable!("type(C).creationCode/runtimeCode operand is a type expression");
             };
@@ -366,11 +345,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 block,
             };
         }
-        // A function-like built-in member named WITHOUT a call —
-        // `addr.transfer`/`send`/`call`/`delegatecall`/`staticcall`, `data.pop`/
-        // `push`, e.g. a discarded `data.pop;` — is a reference, not the action
-        // (which the call dispatch handles). solc only binds the function;
-        // evaluate the operand for its side effects and yield a placeholder.
+        // A function-like built-in member named WITHOUT a call (`addr.transfer`, `data.pop`, …) is a
+        // reference, not the action: evaluate the operand for side effects and yield a placeholder.
         Some(
             BuiltIn::AddressTransfer
             | BuiltIn::AddressSend
@@ -388,9 +364,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             let value = AstValue::uint256(0, builder, &block);
             return BlockAnd { block, value };
         }
-        // `abi.encode;` / `T.wrap;` named without a call are no-ops: the operand
-        // is the `abi` namespace keyword or the type, not a value (binding it
-        // would fail), so nothing is evaluated. Yield a placeholder.
+        // `abi.encode;` / `T.wrap;` named without a call are no-ops (the operand is a namespace / type,
+        // not a value), so nothing is evaluated; yield a placeholder.
         Some(
             BuiltIn::AbiEncode
             | BuiltIn::AbiEncodePacked
@@ -407,8 +382,7 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
         }
         _ => {}
     }
-    // EVM environment globals (`block`/`tx`/`msg`): nullary `sol.*` intrinsics.
-    // Built eagerly (each is a distinct op type), then appended once.
+    // EVM environment globals (`block`/`tx`/`msg`): nullary `sol.*` intrinsics, built then appended once.
     let builder = &context.state.builder;
     let environment_op = match node.member().resolve_to_built_in() {
         Some(BuiltIn::TxOrigin) => {
@@ -523,13 +497,9 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             .cast(AstType::new(result_type), builder, &block);
         BlockAnd { block, value }
     } else {
-        // A value-position member built-in over a non-struct base: `.selector` /
-        // `.address`, or an external function pointer.
-        // `f.selector` (statically named), `MyError.selector`, and
-        // `MyEvent.selector` are compile-time constants reached the same way: the
-        // (4-byte function/error selector, or 32-byte event topic hash) constant,
-        // preceded by the runtime receiver's side effects. `f.selector` on an
-        // external function-pointer VALUE has no static selector and falls through.
+        // A value-position member built-in over a non-struct base: `.selector` / `.address`, or an
+        // external function pointer. Static `.selector` constants (function/error 4-byte, event 32-byte
+        // topic) are reached the same way, preceded by the receiver's side effects.
         let selector_constant = match node.member().resolve_to_built_in() {
             Some(BuiltIn::FunctionSelector) => match MemberAccessOperand(&node.operand()).resolve() {
                 Some(Definition::Function(function)) => {
@@ -559,10 +529,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
             _ => None,
         };
         if let Some((selector, byte_width)) = selector_constant {
-            // The runtime receiver of a `<receiver>.member.selector` (e.g. the call
-            // in `h().f.selector`) still runs for its side effects, through
-            // `emit_for_effect`; a namespace / type qualifier (`C.f.selector`) is no
-            // value and runs nothing.
+            // The runtime receiver of `<receiver>.member.selector` still runs for its side effects;
+            // a namespace / type qualifier (`C.f.selector`) is no value and runs nothing.
             let block = if let Expression::MemberAccessExpression(inner) = node.operand()
                 && !MemberAccessOperand(&inner.operand()).is_namespace_or_type()
             {
@@ -607,11 +575,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     unimplemented!("unsupported member access: {}", node.member().name());
                 };
                 if let Some(selector) = function_definition.compute_selector() {
-                    // An external function pointer's ABI representation (address +
-                    // selector) types its reference parameters as `Memory`, not their
-                    // declared `calldata`/`storage` location — calldata cannot cross
-                    // the call boundary, and solc emits the pointer at this memory
-                    // signature.
+                    // An external function pointer's ABI representation types its reference parameters
+                    // as `Memory` (calldata cannot cross the call boundary), matching solc.
                     let (parameter_types, return_types) = AstType::resolve_signature(
                         &function_definition,
                         LocationPolicy::ForceMemory,
@@ -631,9 +596,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                     );
                     BlockAnd { block, value }
                 } else {
-                    // The literal target lowers (no virtual redirect): an explicit
-                    // `Base.f` names Base's own implementation, not the most-derived
-                    // override a bare `f` would bind.
+                    // The literal target lowers with no virtual redirect: `Base.f` names Base's own
+                    // implementation, not the most-derived override a bare `f` would bind.
                     let value = context
                         .state
                         .resolve_function(function_definition.node_id())

@@ -4,16 +4,10 @@
 
 use solx_utils::DataLocation;
 
-/// How Slang→MLIR type resolution ([`Type::resolve`]) picks the data location
-/// of each reference type it resolves.
-///
-/// [`Type::resolve`]: crate::Type::resolve
+/// How Slang→MLIR type resolution picks the data location of each reference type.
 #[derive(Clone, Copy)]
 pub enum LocationPolicy {
-    /// Use each reference type's declared data location, substituting the carried
-    /// location wherever Slang reports `Inherited` (struct-field-relative). Top
-    /// level passes `None`; struct-member resolution carries the parent struct's
-    /// resolved location.
+    /// Use each reference type's declared location, substituting the carried location for `Inherited` members.
     Declared(Option<DataLocation>),
     /// Force every reference type to `Memory` — the external (ABI) representation,
     /// where `calldata` cannot cross the call boundary.
@@ -33,9 +27,7 @@ impl LocationPolicy {
         }
     }
 
-    /// The policy for a struct's members given the struct's own resolved
-    /// `location`: declared resolution inherits it for `Inherited` members;
-    /// forced-memory stays forced.
+    /// The policy for a struct's members, given the struct's own resolved `location`.
     pub fn within_struct(self, location: DataLocation) -> Self {
         match self {
             Self::Declared(_) => Self::Declared(Some(location)),

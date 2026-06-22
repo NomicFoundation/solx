@@ -2,13 +2,9 @@
 //! Inline-assembly (Yul) statement emission.
 //!
 
-/// Yul block emission: function-definition hoisting and the statement walk.
 pub mod block;
-/// Yul expression emission: literals, path reads, calls.
 pub mod expression;
-/// Yul function-call emission: EVM-opcode intrinsics and user-defined inlining.
 pub mod function_call;
-/// Yul statement emission.
 pub mod statement;
 
 use std::collections::HashMap;
@@ -26,11 +22,7 @@ use crate::ast::EmitYul;
 use crate::ast::contract::function::statement::StatementContext;
 use crate::ast::contract::storage_layout::StorageSlot;
 
-/// The threaded scope of inline-assembly emission: the Yul-dialect peer of
-/// [`StatementContext`], pure data. Carries only what Yul emission reads — the
-/// shared MLIR context, the variable environment (Sol locals and Yul locals
-/// coexist), the region pointer, the storage layout (for `stateVar.slot`/`.offset`),
-/// and the in-scope user-defined Yul functions with their inline-recursion guard.
+/// The threaded scope of inline-assembly emission: the Yul-dialect peer of [`StatementContext`], pure data.
 pub struct YulContext<'frame, 'context, 'block> {
     /// The shared MLIR context.
     pub state: &'frame Context<'context>,
@@ -68,9 +60,7 @@ impl<'frame, 'context, 'block> YulContext<'frame, 'context, 'block> {
     }
 }
 
-// An `assembly { … }` block is the top-level Yul block, emitted with
-// function-definition hoisting while reusing the enclosing function scope (no
-// nested lexical scope).
+// An `assembly { … }` block is the top-level Yul block, reusing the enclosing function scope.
 statement_emit!(AssemblyStatement; |node, context, block| {
     let mut yul_context = YulContext::new(
         context.state,

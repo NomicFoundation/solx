@@ -48,10 +48,7 @@ impl<'context> Function<'context> {
         }
     }
 
-    /// Emits a `sol.call` to this function — an internal call by symbol — and
-    /// returns its result values in declaration order. Calling the function is
-    /// the resolution metadata's own behavior, so the op homes here rather than
-    /// on a builder method.
+    /// Emits a `sol.call` to this function (an internal call by symbol), returning its results in order.
     pub fn call<'block, B>(
         &self,
         operands: &[Value<'context, 'block>],
@@ -88,9 +85,7 @@ impl<'context> Function<'context> {
         crate::Type::func_ref(builder.context, &self.parameter_types, &self.return_types)
     }
 
-    /// `sol.func_constant` — the internal function pointer to this function, the
-    /// value a bare function reference lowers to. Emitting the pointer is the
-    /// function metadata's own behavior, beside `call` and `define`.
+    /// `sol.func_constant` — the internal function pointer to this function.
     pub fn pointer_constant<'block>(
         &self,
         builder: &Builder<'context>,
@@ -104,12 +99,8 @@ impl<'context> Function<'context> {
         )
     }
 
-    /// Emits this function's `sol.func` definition with an empty entry block and
-    /// returns that block for appending the body. `selector` / `kind` / `id` are
-    /// the optional dispatch attributes; a selector-bearing function, constructor,
-    /// or fallback also carries `orig_fn_type` (the SolToYul fallback dispatcher
-    /// reads it to recover the pre-conversion signature). Emitting a function's
-    /// definition is its own behavior, so the op homes here alongside calling it.
+    /// Emits this function's `sol.func` definition with an empty entry block, returned for the body.
+    /// `selector` / `kind` / `id` are the optional dispatch attributes.
     pub fn define<'block>(
         &self,
         selector: Option<u32>,
@@ -146,18 +137,15 @@ impl<'context> Function<'context> {
                 selector_value as i64,
             ));
         }
-        // A referenceable function carries a unique `id` (its slang node id): the
-        // `sol.func_constant` pointer lowers to that i256, and the `sol.icall`
-        // dispatch switches over every same-signature function's `id`.
+        // A referenceable function carries a unique `id`: `sol.icall` dispatch switches over it.
         if let Some(function_id) = id {
             operation_builder = operation_builder.id(IntegerAttribute::new(
                 IntegerType::new(builder.context, 64).into(),
                 function_id,
             ));
         }
-        // A selector-bearing function, constructor, or fallback carries
-        // `orig_fn_type`: the SolToYul fallback dispatcher reads it to recover the
-        // pre-conversion Sol signature, else it dereferences a null type.
+        // A selector-bearing function, constructor, or fallback carries `orig_fn_type`:
+        // the SolToYul fallback dispatcher reads it to recover the pre-conversion Sol signature.
         if selector.is_some()
             || matches!(
                 kind,

@@ -24,10 +24,8 @@ use crate::ast::Value as AstValue;
 use crate::ast::contract::function::expression::ExpressionContext;
 use crate::ast::contract::function::expression::call_options::CallOptions;
 
-/// A `try recv.f(args)` external call, resolved from the `try` expression. Only
-/// this shape carries a real catch path; classification is a pure precondition,
-/// so [`Self::emit`] is an exact (infallible) emitter rather than an emitter that
-/// returns `Option`-as-"not applicable".
+/// A `try recv.f(args)` external call, resolved from the `try` expression (the only shape with a
+/// real catch path), so [`Self::emit`] is an infallible emitter.
 pub struct TryExternalCall {
     /// The `{value: v}` / `{gas: g}` options layer, if any (`recv.f{value: v}(args)`).
     options: Option<CallOptionsExpression>,
@@ -42,9 +40,8 @@ pub struct TryExternalCall {
 }
 
 impl TryExternalCall {
-    /// A `try` expression is lowerable only when it wraps an external call —
-    /// `recv.f(args)`, optionally inside a `{value: v}` / `{gas: g}` call-options
-    /// layer. Any other shape yields `None` and runs only the success body.
+    /// Lowerable only when the `try` wraps an external call `recv.f(args)` (optionally in a call-options
+    /// layer); any other shape yields `None`.
     pub fn from_expression(expression: &Expression) -> Option<Self> {
         let Expression::FunctionCallExpression(call) = expression else {
             return None;
@@ -123,9 +120,8 @@ impl TryExternalCall {
         let builder = &context.state.builder;
         let value =
             call_value.unwrap_or_else(|| AstValue::uint256(0, builder, &current_block).into_mlir());
-        // `sol.ext_icall` results are `(i1 status, decoded-returns...)`; the `try`
-        // form yields the status instead of reverting on failure, so the caller
-        // can run a `catch` handler.
+        // `sol.ext_icall` results are `(i1 status, decoded-returns...)`; the `try` form yields the
+        // status instead of reverting, so the caller can run a `catch` handler.
         let mut out_types = Vec::with_capacity(return_types.len() + 1);
         out_types
             .push(AstType::signless(builder.context, solx_utils::BIT_LENGTH_BOOLEAN).into_mlir());

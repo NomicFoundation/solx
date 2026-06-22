@@ -1,10 +1,6 @@
 //!
-//! PROVISIONAL holding for pure-Slang queries (no MLIR) lifted off the dissolved
-//! god-emitters. Their real home — a Slang `dev-solx` node_extension, a solx
-//! concept, or folded into a caller — is decided in a dedicated query-sorting
-//! pass, not here. They live as traits only because the orphan rule requires a
-//! trait to attach a method to a foreign Slang node; the trait is a parking spot,
-//! not a design claim.
+//! Provisional home for pure-Slang queries (no MLIR), kept as traits only because the orphan rule
+//! requires a trait to attach a method to a foreign Slang node.
 //!
 
 pub mod match_linearised_base;
