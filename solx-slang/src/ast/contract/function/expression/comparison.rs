@@ -6,6 +6,8 @@
 //!
 
 use melior::ir::BlockRef;
+use melior::ir::Type;
+use melior::ir::r#type::IntegerType;
 use slang_solidity_v2::ast::EqualityExpression;
 use slang_solidity_v2::ast::Expression;
 use slang_solidity_v2::ast::InequalityExpression;
@@ -14,6 +16,7 @@ use solx_mlir::CmpPredicate;
 use crate::ast::BlockAnd;
 use crate::ast::EmitAs;
 use crate::ast::EmitExpression;
+use crate::ast::Type as AstType;
 use crate::ast::contract::function::expression::ExpressionContext;
 
 expression_emit!(EqualityExpression, InequalityExpression; |node, context, block| {
@@ -43,8 +46,82 @@ expression_emit!(EqualityExpression, InequalityExpression; |node, context, block
         let BlockAnd { value: rhs, block } = right.emit(context, block);
         (lhs, rhs, block)
     };
-    // Reconcile the operand types (fixed-bytes width / mixed integer signedness)
-    // and emit `sol.cmp`, homed on the value.
-    let comparison = lhs.compare_coerced(rhs, predicate, &context.state.builder, &block);
+    if lhs.r#type() == rhs.r#type() {
+        let comparison = lhs.compare(rhs, predicate, &context.state.builder, &block);
+        return BlockAnd { block, value: comparison };
+    }
+    // Two fixed-bytes operands of different widths (`bytes3("abc") ==
+    // bytes4("abc")`): `bytesN` are LEFT-aligned, so the operands share a
+    // word once the narrower is zero-extended on the right. Widen the
+    // smaller to the larger fixed-bytes width with a `sol.bytes_cast` and
+    // compare AS fixed-bytes, matching solc. Bridging each through its own
+    // width integer (the mixed-integer path below) right-aligns the values
+    // — `bytes3("abc")` as `ui24` (0x616263) differs from `bytes4("abc")` as
+    // `ui32` (0x61626300) — yielding the wrong result.
+    if let (Some(lhs_width), Some(rhs_width)) = (
+        lhs.r#type().fixed_bytes_or_byte_width(),
+        rhs.r#type().fixed_bytes_or_byte_width(),
+    ) {
+        let builder = &context.state.builder;
+        let common_width = lhs_width.max(rhs_width);
+        let common = AstType::fixed_bytes(builder.context, common_width).into_mlir();
+        let lhs_common = if lhs_width == common_width {
+            lhs
+        } else {
+            lhs.cast(AstType::new(common), builder, &block)
+        };
+        let rhs_common = if rhs_width == common_width {
+            rhs
+        } else {
+            rhs.cast(AstType::new(common), builder, &block)
+        };
+        let comparison = lhs_common.compare(rhs_common, predicate, builder, &block);
+        return BlockAnd { block, value: comparison };
+    }
+    // Mixed-type comparison (`i < 10` with `i : int8`, `10 : uint8`): widen
+    // each operand to 256 bits preserving ITS OWN signedness — a signed
+    // operand sign-extends, an unsigned one zero-extends — so a signed
+    // negative value is not reinterpreted as a huge unsigned one. Then pick
+    // the common type: signed if either operand is signed, mirroring solc's
+    // promoted comparison type; a plain `ui256` default would make
+    // `(-10) < 10` an unsigned comparison (false), skipping the loop.
+    let signed_lhs =
+        IntegerType::try_from(lhs.r#type().into_mlir()).is_ok_and(|integer| integer.is_signed());
+    let signed_rhs =
+        IntegerType::try_from(rhs.r#type().into_mlir()).is_ok_and(|integer| integer.is_signed());
+    let mlir_context = context.state.builder.context;
+    let signed_256 = Type::from(IntegerType::signed(mlir_context, 256));
+    let unsigned_256 =
+        AstType::unsigned(mlir_context, solx_utils::BIT_LENGTH_FIELD).into_mlir();
+    let lhs_wide_type = if signed_lhs { signed_256 } else { unsigned_256 };
+    let rhs_wide_type = if signed_rhs { signed_256 } else { unsigned_256 };
+    let lhs_wide = lhs.cast(
+        AstType::new(lhs_wide_type),
+        &context.state.builder,
+        &block,
+    );
+    let rhs_wide = rhs.cast(
+        AstType::new(rhs_wide_type),
+        &context.state.builder,
+        &block,
+    );
+    // Both are now 256 bits. Retype each to the common signedness with a
+    // bit-preserving `sol.cast` (same width), then compare.
+    let common = if signed_lhs || signed_rhs {
+        signed_256
+    } else {
+        unsigned_256
+    };
+    let lhs_common = if lhs_wide.r#type().into_mlir() == common {
+        lhs_wide
+    } else {
+        lhs_wide.cast(AstType::new(common), &context.state.builder, &block)
+    };
+    let rhs_common = if rhs_wide.r#type().into_mlir() == common {
+        rhs_wide
+    } else {
+        rhs_wide.cast(AstType::new(common), &context.state.builder, &block)
+    };
+    let comparison = lhs_common.compare(rhs_common, predicate, &context.state.builder, &block);
     BlockAnd { block, value: comparison }
 });
