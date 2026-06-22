@@ -327,7 +327,7 @@ impl Operator {
             }
             Operator::BitwiseNot => {
                 let BlockAnd { value, block } = operand.emit(context, block);
-                let operand_type = target_type.unwrap_or_else(|| value.r#type().into_mlir());
+                let operand_type = target_type.expect("slang validated");
                 let value = value.cast(AstType::new(operand_type), &context.state.builder, &block);
                 // `sol.not` is integer-only; bridge a `bytesN` / `byte` operand through `ui(8*N)` and cast back.
                 let builder = &context.state.builder;
@@ -370,7 +370,7 @@ impl Operator {
                 // Unary negation uses unchecked subtraction: checked negation (e.g. -INT_MIN reverting)
                 // needs signed-type awareness and a dedicated op, not sol.csub.
                 let BlockAnd { value, block } = operand.emit(context, block);
-                let operand_type = target_type.unwrap_or_else(|| value.r#type().into_mlir());
+                let operand_type = target_type.expect("slang validated");
                 let value = value
                     .cast(AstType::new(operand_type), &context.state.builder, &block)
                     .into_mlir();

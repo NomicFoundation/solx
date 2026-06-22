@@ -57,11 +57,6 @@ impl<'context, 'block> Pointer<'context, 'block> {
         self.r#type().pointee()
     }
 
-    /// The data location `Loc`.
-    pub fn data_location(self) -> DataLocation {
-        self.r#type().data_location()
-    }
-
     /// Allocates a stack slot for `pointee` and returns the place — a
     /// `sol.alloca` yielding `!sol.ptr<pointee, Stack>`.
     pub fn stack_slot<B>(pointee: Type<'context>, builder: &Builder<'context>, block: &B) -> Self

@@ -156,12 +156,6 @@ impl<'context: 'block, 'block> EmitExpression<'context, 'block> for ConditionalE
         let result_type = func_ref_type(&true_expression)
             .or_else(|| func_ref_type(&false_expression))
             .or_else(|| AstType::resolve_optional(self.get_type(), &context.state.builder))
-            .or_else(|| {
-                AstType::resolve_optional(true_expression.get_type(), &context.state.builder)
-            })
-            .or_else(|| {
-                AstType::resolve_optional(false_expression.get_type(), &context.state.builder)
-            })
             .expect("slang validated");
         let BlockAnd {
             value: condition_value,

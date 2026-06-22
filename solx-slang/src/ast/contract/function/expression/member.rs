@@ -260,12 +260,8 @@ expression_emit!(MemberAccessExpression; |node, context, block| {
                 _ => contract_name,
             };
             context.state.add_dependency(object_name.clone());
-            let result_type =
-                AstType::resolve_optional(node.get_type(), &context.state.builder)
-                    .unwrap_or_else(|| {
-                        AstType::string(context.state.builder.context, DataLocation::Memory)
-                            .into_mlir()
-                    });
+            let result_type = AstType::resolve_optional(node.get_type(), &context.state.builder)
+                .expect("slang validated");
             let builder = &context.state.builder;
             let value: MlirValue<'context, 'block> = mlir_op!(
                 builder,

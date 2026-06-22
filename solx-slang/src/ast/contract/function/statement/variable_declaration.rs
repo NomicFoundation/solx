@@ -33,16 +33,12 @@ statement_emit!(VariableDeclarationStatement; |node, context, block| {
 });
 
 statement_emit!(SingleTypedDeclaration; |node, context, block| {
-    let slang_declared_type = node.declaration().get_type();
-    let declared_type = slang_declared_type
-        .as_ref()
-        .map(|slang_type| {
-            AstType::resolve(slang_type, LocationPolicy::Declared(None), &context.state.builder)
-        })
-        .unwrap_or_else(|| {
-            AstType::unsigned(context.state.builder.context, solx_utils::BIT_LENGTH_FIELD)
-                .into_mlir()
-        });
+    let slang_declared_type = node.declaration().get_type().expect("slang validated");
+    let declared_type = AstType::resolve(
+        &slang_declared_type,
+        LocationPolicy::Declared(None),
+        &context.state.builder,
+    );
 
     let emitter = ExpressionContext::from(&*context);
 
@@ -119,12 +115,11 @@ statement_emit!(MultiTypedDeclaration; |node, context, block| {
             continue;
         };
         let builder = &context.state.builder;
-        let declared_type = declaration
-            .get_type()
-            .map(|slang_type| AstType::resolve(&slang_type, LocationPolicy::Declared(None), builder))
-            .unwrap_or_else(|| {
-                AstType::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
-            });
+        let declared_type = AstType::resolve(
+            &declaration.get_type().expect("slang validated"),
+            LocationPolicy::Declared(None),
+            builder,
+        );
         let cast = AstValue::from(value).cast(
             AstType::new(declared_type),
             builder,

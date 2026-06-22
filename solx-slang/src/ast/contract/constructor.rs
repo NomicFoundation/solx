@@ -283,22 +283,11 @@ impl EmitConstructor for ContractDefinition {
                             argument.emit(&emitter, current_block)
                         };
                         current_block = next_block;
-                        let parameter_type = parameter
-                            .get_type()
-                            .map(|slang_type| {
-                                AstType::resolve(
-                                    &slang_type,
-                                    LocationPolicy::Declared(None),
-                                    &scope.state.builder,
-                                )
-                            })
-                            .unwrap_or_else(|| {
-                                AstType::unsigned(
-                                    scope.state.builder.context,
-                                    solx_utils::BIT_LENGTH_FIELD,
-                                )
-                                .into_mlir()
-                            });
+                        let parameter_type = AstType::resolve(
+                            &parameter.get_type().expect("slang validated"),
+                            LocationPolicy::Declared(None),
+                            &scope.state.builder,
+                        );
                         let cast = value.cast(
                             AstType::new(parameter_type),
                             &scope.state.builder,

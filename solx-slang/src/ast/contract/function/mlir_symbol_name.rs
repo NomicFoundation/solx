@@ -23,14 +23,10 @@ pub trait MlirSymbolName {
 
 impl MlirSymbolName for FunctionDefinition {
     fn mlir_function_name(&self) -> String {
-        if let Some(AbiEntry::Function(abi_function)) = self.compute_abi_entry() {
-            if let Some(signature) = self.compute_canonical_signature() {
-                return signature;
-            }
-            let name = self.mlir_base_name();
-            let inputs = abi_function.inputs();
-            let types: Vec<&str> = inputs.iter().map(|input| input.type_name()).collect();
-            return format!("{name}({})", types.join(","));
+        if let Some(AbiEntry::Function(_)) = self.compute_abi_entry() {
+            return self
+                .compute_canonical_signature()
+                .expect("an ABI function entry carries a canonical signature");
         }
 
         if let Some(signature) = self.compute_internal_signature() {

@@ -170,12 +170,6 @@ impl<'context, 'block> YulValue<'context, 'block> {
     }
 }
 
-impl<'context, 'block> From<MlirValue<'context, 'block>> for YulValue<'context, 'block> {
-    fn from(inner: MlirValue<'context, 'block>) -> Self {
-        Self::new(inner)
-    }
-}
-
 impl<'context, 'block> IntoOds<MlirValue<'context, 'block>> for YulValue<'context, 'block> {
     fn into_ods(self) -> MlirValue<'context, 'block> {
         self.into_mlir()

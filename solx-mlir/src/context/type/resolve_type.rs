@@ -263,16 +263,16 @@ impl<'context> Type<'context> {
         (parameter_types, result_types)
     }
 
-    /// Resolves a parameter's declared MLIR type from its Slang type; an untyped `catch (...)` payload defaults to `ui256`.
+    /// Resolves a parameter's declared MLIR type from its Slang type.
     pub fn parameter(
         slang_type: Option<&SlangType>,
         builder: &Builder<'context>,
     ) -> MlirType<'context> {
-        slang_type
-            .map(|slang_type| Type::resolve(slang_type, LocationPolicy::Declared(None), builder))
-            .unwrap_or_else(|| {
-                Type::unsigned(builder.context, solx_utils::BIT_LENGTH_FIELD).into_mlir()
-            })
+        Type::resolve(
+            slang_type.expect("slang validated"),
+            LocationPolicy::Declared(None),
+            builder,
+        )
     }
 }
 
